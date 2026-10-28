@@ -1,0 +1,23 @@
+# 基础卫生检查；类型检查和测试在 GitHub Actions 里跑。
+ci:
+  autofix_commit_msg: 'style: apply pre-commit fixes'
+  autoupdate_commit_msg: 'chore: pre-commit autoupdate'
+  autoupdate_schedule: monthly
+
+exclude: ^(pnpm-lock\.yaml|src-tauri/Cargo\.lock|src-tauri/icons/.*|docs/.*\.png|public/.*\.png)$
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]

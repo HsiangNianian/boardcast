@@ -16,8 +16,8 @@ interface Line extends Utterance {
   ops?: string
 }
 
-const LIGHT: Look = { ink: '#1e1e1e', pencil: '#868e96', highlight: '#ffec99', group: '#1971c2' }
-const DARK: Look = { ink: '#e9ecef', pencil: '#868e96', highlight: '#5c4a00', group: '#74c0fc' }
+const LIGHT: Look = { ink: '#1e1e1e', pencil: '#868e96', highlight: '#ffec99', group: '#1971c2', question: '#e03131', note: '#1971c2' }
+const DARK: Look = { ink: '#e9ecef', pencil: '#868e96', highlight: '#5c4a00', group: '#74c0fc', question: '#ff8787', note: '#74c0fc' }
 
 function load(key: string, fallback: string): string {
   try {
@@ -113,11 +113,7 @@ export default function App() {
       api.current.updateScene({ elements: scene(graph, l, hot, look) })
       if (!graph.nodes.length) return
       // 自己算缩放和居中：内容少时不放大到 100% 以上，内容多时整张图塞进画面
-      const boxes = [...l.nodes, ...l.groups]
-      const x0 = Math.min(...boxes.map((b) => b.x))
-      const y0 = Math.min(...boxes.map((b) => b.y))
-      const x1 = Math.max(...boxes.map((b) => b.x + b.w))
-      const y1 = Math.max(...boxes.map((b) => b.y + b.h))
+      const { x0, y0, x1, y1 } = l.bounds
       const { width, height, zoom } = api.current.getAppState()
       const z = Math.min(1, (0.85 * width) / (x1 - x0), (0.8 * height) / (y1 - y0))
       api.current.updateScene({

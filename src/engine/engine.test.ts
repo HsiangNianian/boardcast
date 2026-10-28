@@ -73,6 +73,45 @@ test('mentions find labels and aliases', () => {
   assert.deepEqual(mentions(g, '那 Stock 这边怎么扣？'), ['n1'])
 })
 
+test('topics, items, sub-items, questions, formulas, notes and marks', () => {
+  let g = applyOps(
+    emptyGraph(),
+    parseOps(
+      'T 「爬虫」\nL 「爬虫」 「监控任务」\nL 「监控任务」 「定时拉取」\nQ 「爬虫」 「要不要上 MQ」\nF 「T_now − T_display」\nK 「监控任务」 「先做抖音」\nM 「监控任务」 星标\nI 「爬虫」 服务器',
+    ),
+  )
+  const by = (l: string) => g.nodes.find((n) => n.label === l)!
+  assert.equal(by('爬虫').kind, 'topic')
+  assert.equal(by('爬虫').icon, '服务器')
+  assert.equal(by('监控任务').parent, by('爬虫').id)
+  assert.equal(by('定时拉取').parent, by('监控任务').id)
+  assert.equal(by('要不要上 MQ').kind, 'question')
+  assert.equal(by('要不要上 MQ').parent, by('爬虫').id)
+  assert.equal(by('T_now − T_display').kind, 'formula')
+  assert.equal(by('T_now − T_display').parent, undefined)
+  assert.equal(by('先做抖音').kind, 'note')
+  assert.deepEqual(by('监控任务').marks, ['星标'])
+  // 删话题会连带删掉挂在下面的所有东西
+  g = applyOps(g, parseOps(`D ${by('爬虫').id}`))
+  assert.deepEqual(
+    g.nodes.map((n) => n.label),
+    ['T_now − T_display'],
+  )
+})
+
+test('L moves an existing node under a new parent', () => {
+  let g = applyOps(emptyGraph(), parseOps('T 「方案」\nN 「Redis」'))
+  g = applyOps(g, parseOps('L n1 「Redis」'))
+  const r = g.nodes.find((n) => n.label === 'Redis')!
+  assert.equal(r.parent, 'n1')
+  assert.equal(r.kind, 'item')
+})
+
+test('format round-trips the board ops', () => {
+  const text = 'T 「爬虫」\nL n1 「监控任务」\nQ n1 「要不要上 MQ」\nF 「a+b」\nK n2 「先做」\nM n2 划掉\nI n1 数据库'
+  assert.equal(formatOps(parseOps(text)), text)
+})
+
 test('grammar only allows existing ids', () => {
   const g = applyOps(emptyGraph(), parseOps('E 「甲」 「乙」'))
   const gbnf = grammar(g)

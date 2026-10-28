@@ -1,13 +1,31 @@
-// 板书的状态：一张由节点、连线、分组组成的图。
+// 板书的状态。不只是流程图：一块板上可以同时有
+// - 话题（topic）和挂在它下面的条目（item，可以再挂子条目），用来记要点、分工、方案；
+// - 普通节点（node）和连线，用来画流程、调用、因果，这部分走自动排版；
+// - 问题（question）、公式（formula）、备注（note），可以挂在别的东西上，也可以单独存在；
+// - 标记：划掉、圈出、下划线、星标。纠正时更像真实板书的做法是划掉，而不是擦掉。
 // 模型从不直接画东西，只发出操作（见 ops.ts），由这里落到状态上。
 
 export type Ink = 'draft' | 'ink'
+
+export type Kind = 'node' | 'topic' | 'item' | 'question' | 'formula' | 'note'
+
+export const MARKS = ['划掉', '圈出', '下划线', '星标'] as const
+export type Mark = (typeof MARKS)[number]
+
+/** 图标库：模型只能从这里挑，画法见 board/icons.ts */
+export const ICONS = ['数据库', '表格', '手机', '人', '服务器', '文档', '云', '图表', '消息'] as const
+export type Icon = (typeof ICONS)[number]
 
 export interface Node {
   id: string
   label: string
   aliases: string[]
+  kind: Kind
+  /** 条目挂在话题或条目下；问题、公式、备注可以挂在任何东西上 */
+  parent?: string
   group?: string
+  marks: Mark[]
+  icon?: Icon
   ink: Ink
 }
 
@@ -37,7 +55,7 @@ export function emptyGraph(): Graph {
 
 export function cloneGraph(g: Graph): Graph {
   return {
-    nodes: g.nodes.map((n) => ({ ...n, aliases: [...n.aliases] })),
+    nodes: g.nodes.map((n) => ({ ...n, aliases: [...n.aliases], marks: [...n.marks] })),
     edges: g.edges.map((e) => ({ ...e })),
     groups: g.groups.map((x) => ({ ...x })),
     nextNode: g.nextNode,
@@ -47,7 +65,7 @@ export function cloneGraph(g: Graph): Graph {
 
 /** 名字比较时忽略大小写、空白和常见标点。 */
 export function norm(s: string): string {
-  return s.toLowerCase().replace(/[\s·・,，。.、"“”'‘’「」『』()（）]/g, '')
+  return s.toLowerCase().replace(/[\s·・,，。.、"“”'‘’「」『』()（）?？!！]/g, '')
 }
 
 /** 按名字或别名找节点。实体表的指代消解先靠这个，再交给模型。 */
@@ -57,17 +75,50 @@ export function findNode(g: Graph, name: string): Node | undefined {
   return g.nodes.find((n) => norm(n.label) === k || n.aliases.some((a) => norm(a) === k))
 }
 
+export function children(g: Graph, id: string): Node[] {
+  return g.nodes.filter((n) => n.parent === id)
+}
+
+/** 自己和所有后代，删除时一起删 */
+export function subtree(g: Graph, id: string): Set<string> {
+  const out = new Set([id])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const n of g.nodes) {
+      if (n.parent && out.has(n.parent) && !out.has(n.id)) {
+        out.add(n.id)
+        grew = true
+      }
+    }
+  }
+  return out
+}
+
+const TAG: Record<Kind, string> = {
+  node: '',
+  topic: '[话题] ',
+  item: '',
+  question: '[问题] ',
+  formula: '[公式] ',
+  note: '[备注] ',
+}
+
 /** 给模型看的紧凑实体表。越短越好：它决定了每次要重新读入多少 token。 */
 export function describe(g: Graph): string {
   if (g.nodes.length === 0 && g.groups.length === 0) return '（空）'
   const lines: string[] = []
   for (const x of g.groups) lines.push(`${x.id} [组] ${x.label}`)
-  for (const n of g.nodes) {
+  const line = (n: Node, depth: number) => {
     const extra: string[] = []
     if (n.aliases.length) extra.push(`又称 ${n.aliases.join('/')}`)
     if (n.group) extra.push(`在 ${n.group}`)
-    lines.push(`${n.id} ${n.label}${extra.length ? `（${extra.join('，')}）` : ''}`)
+    if (n.marks.length) extra.push(n.marks.join('、'))
+    if (n.icon) extra.push(`图标 ${n.icon}`)
+    lines.push(`${'  '.repeat(depth)}${n.id} ${TAG[n.kind]}${n.label}${extra.length ? `（${extra.join('，')}）` : ''}`)
+    for (const c of children(g, n.id)) line(c, depth + 1)
   }
+  for (const n of g.nodes) if (!n.parent || !g.nodes.some((p) => p.id === n.parent)) line(n, 0)
   // 连线带上名字：只给编号时，小模型经常删错线
   const name = (id: string) => g.nodes.find((n) => n.id === id)?.label ?? ''
   for (const e of g.edges)

@@ -43,7 +43,8 @@ const prefill: number[] = []
 const outTokens: number[] = []
 const rows: string[] = []
 const details: string[] = []
-const totals = { nodeF: 0, edgeF: 0, violations: 0, groups: [] as number[] }
+const metric = { node: [] as number[], edge: [] as number[], topic: [] as number[], item: [] as number[], mark: [] as number[], group: [] as number[] }
+let totalViolations = 0
 
 // 先打一枪暖机，把系统提示词放进 KV 缓存，第一句的延迟才有代表性
 {
@@ -78,20 +79,24 @@ for (const c of cases) {
     await s.drain()
   }
   const sc = score(s.graph, c.gold)
-  const nf = f1(sc.nodeP, sc.nodeR)
-  const ef = f1(sc.edgeP, sc.edgeR)
-  totals.nodeF += nf
-  totals.edgeF += ef
-  totals.violations += sc.violations.length
-  if (sc.groupAcc !== null) totals.groups.push(sc.groupAcc)
+  const cell = (v: number | null) => (v === null ? '' : v.toFixed(2))
+  const nf = c.gold.nodes?.length ? f1(sc.nodeP, sc.nodeR) : null
+  const ef = c.gold.edges?.length ? f1(sc.edgeP, sc.edgeR) : null
+  const itf = sc.itemP !== null && sc.itemR !== null ? f1(sc.itemP, sc.itemR) : null
+  const put = (k: keyof typeof metric, v: number | null) => v !== null && metric[k].push(v)
+  put('node', nf)
+  put('edge', ef)
+  put('topic', sc.topicR)
+  put('item', itf)
+  put('mark', sc.markAcc)
+  put('group', sc.groupAcc)
+  totalViolations += sc.violations.length
   rows.push(
-    `| ${c.id} | ${nf.toFixed(2)} | ${ef.toFixed(2)} | ${sc.groupAcc === null ? '' : sc.groupAcc.toFixed(2)} | ${sc.violations.length} | ${pct(turnMs, 50).toFixed(0)} |`,
+    `| ${c.id} | ${cell(nf)} | ${cell(ef)} | ${cell(sc.topicR)} | ${cell(itf)} | ${cell(sc.markAcc)} | ${cell(sc.groupAcc)} | ${sc.violations.length} | ${pct(turnMs, 50).toFixed(0)} |`,
   )
   const miss = [
-    sc.missingNodes.length && `缺节点：${sc.missingNodes.join('、')}`,
-    sc.extraNodes.length && `多节点：${sc.extraNodes.join('、')}`,
-    sc.missingEdges.length && `缺连线：${sc.missingEdges.join('、')}`,
-    sc.extraEdges.length && `多连线：${sc.extraEdges.join('、')}`,
+    sc.missing.length && `缺：${sc.missing.join('、')}`,
+    sc.extra.length && `多：${sc.extra.join('、')}`,
     ...sc.violations,
   ].filter(Boolean)
   details.push(
@@ -99,25 +104,30 @@ for (const c of cases) {
       `<details><summary>逐句操作与最终板书</summary>\n\n\`\`\`\n${log.join('\n')}\n\n${describe(s.graph)}\n\`\`\`\n</details>\n`,
   )
   if (args.verbose) console.error(`${c.id}\n${log.join('\n')}\n${describe(s.graph)}\n`)
-  console.error(`${c.id}: 节点 F1 ${nf.toFixed(2)}，连线 F1 ${ef.toFixed(2)}，违规 ${sc.violations.length}`)
+  console.error(
+    `${c.id}: 节点 ${cell(nf) || '-'}，连线 ${cell(ef) || '-'}，话题 ${cell(sc.topicR) || '-'}，要点 ${cell(itf) || '-'}，标记 ${cell(sc.markAcc) || '-'}，违规 ${sc.violations.length}`,
+  )
 }
 
-const n = cases.length
+const avg = (xs: number[]) => (xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(3) + ` (${xs.length} 段)` : '-')
 const summary = [
   `## 板书评测 · ${args.label}`,
   '',
   `| 指标 | 值 |`,
   `|---|---|`,
-  `| 节点 F1（平均） | ${(totals.nodeF / n).toFixed(3)} |`,
-  `| 连线 F1（平均） | ${(totals.edgeF / n).toFixed(3)} |`,
-  `| 分组正确率 | ${totals.groups.length ? (totals.groups.reduce((a, b) => a + b, 0) / totals.groups.length).toFixed(3) : '-'} |`,
-  `| 违规（该删没删、纠正没生效） | ${totals.violations} |`,
+  `| 节点 F1 | ${avg(metric.node)} |`,
+  `| 连线 F1 | ${avg(metric.edge)} |`,
+  `| 话题召回 | ${avg(metric.topic)} |`,
+  `| 要点 F1（条目挂在对的话题下） | ${avg(metric.item)} |`,
+  `| 标记命中（划掉、强调、问题、公式） | ${avg(metric.mark)} |`,
+  `| 分组正确率 | ${avg(metric.group)} |`,
+  `| 违规（该删没删、纠正没生效） | ${totalViolations} |`,
   `| 单句延迟 p50 / p95 | ${pct(latencies, 50).toFixed(0)} / ${pct(latencies, 95).toFixed(0)} ms |`,
   `| 每句实际读入 token p50（扣掉前缀缓存） | ${pct(prefill, 50)} |`,
   `| 每句输出 token p50 | ${pct(outTokens, 50)} |`,
   '',
-  '| 用例 | 节点 F1 | 连线 F1 | 分组 | 违规 | 延迟 p50 ms |',
-  '|---|---|---|---|---|---|',
+  '| 用例 | 节点 | 连线 | 话题 | 要点 | 标记 | 分组 | 违规 | 延迟 p50 ms |',
+  '|---|---|---|---|---|---|---|---|---|',
   ...rows,
   '',
   ...details,
@@ -127,4 +137,4 @@ mkdirSync(new URL('./reports/', import.meta.url), { recursive: true })
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
 writeFileSync(new URL(`./reports/${args.label}-${stamp}.md`, import.meta.url), summary)
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\n')
-console.log(summary.split('\n').slice(0, 26).join('\n'))
+console.log(summary.split('\n').slice(0, 18 + cases.length).join('\n'))

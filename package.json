@@ -12,7 +12,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/engine/",
+    "test": "node --test \"src/engine/*.test.ts\"",
     "eval": "node eval/run.ts",
     "tauri": "tauri"
   },

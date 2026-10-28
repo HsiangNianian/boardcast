@@ -212,13 +212,18 @@ export default function App() {
             setText('')
           }}
         >
-          <input className="who" value={speaker} onChange={(e) => setSpeaker(e.target.value)} aria-label="说话人" />
+          <input className="who" value={speaker} onChange={(e) => setSpeaker(e.target.value)} aria-label="说话人" autoComplete="off" />
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="说一句…（回车）"
             aria-label="说的话"
+            autoComplete="off"
           />
+          {/* 表单里有两个输入框时，没有提交按钮回车就不会提交 */}
+          <button type="submit" disabled={!text.trim()}>
+            说
+          </button>
         </form>
         <button className="ghost" onClick={reset}>
           清空白板

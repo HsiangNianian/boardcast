@@ -1,0 +1,7 @@
+# 安全修复：这些都是 @excalidraw/excalidraw 带进来的间接依赖（经 mermaid、chevrotain 等），
+# 上游锁死了有漏洞的版本，Dependabot 改不动，只能在这里强制升级到已修复的版本。
+overrides:
+  'katex@<0.18.2': 0.18.11
+  'lodash-es@<=4.17.23': 4.18.1
+  'nanoid@<3.3.18': 3.3.20
+  'nanoid@>=4.0.0 <5.1.16': 5.1.16

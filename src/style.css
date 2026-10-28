@@ -172,7 +172,7 @@ button.ghost {
   width: 56px;
   flex: none;
 }
-.say input:last-child {
+.say input:not(.who) {
   flex: 1;
 }
 

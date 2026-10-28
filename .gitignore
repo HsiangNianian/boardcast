@@ -6,3 +6,4 @@ src-tauri/gen/
 models/
 eval/reports/
 *.log
+.playwright-mcp/

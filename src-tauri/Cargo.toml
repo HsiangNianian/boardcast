@@ -1,0 +1,19 @@
+[package]
+name = "boardcast"
+version = "0.1.0"
+description = "Talk, and the whiteboard draws itself."
+authors = ["HsiangNianian"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+name = "boardcast_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

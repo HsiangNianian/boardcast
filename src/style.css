@@ -1,0 +1,193 @@
+:root {
+  --bg: #fdfcf8;
+  --panel: #f4f2ec;
+  --ink: #1e1e1e;
+  --muted: #6c6a64;
+  --line: #dedbd2;
+  --accent: #1971c2;
+  --ok: #2f9e44;
+  --bad: #e03131;
+  color-scheme: light;
+  font-family:
+    'Noto Sans SC',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --panel: #1b1b1d;
+    --ink: #e9ecef;
+    --muted: #9a9890;
+    --line: #2e2e32;
+    --accent: #74c0fc;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  height: 100%;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  min-height: 0;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.02em;
+}
+
+.sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  margin-left: 4px;
+}
+.dot.ok {
+  background: var(--ok);
+}
+.dot.bad {
+  background: var(--bad);
+}
+
+input,
+select,
+button {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  min-width: 0;
+}
+
+button {
+  cursor: pointer;
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  white-space: nowrap;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button.ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+.row select {
+  flex: 1;
+}
+
+.transcript {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.line {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+.meta pre {
+  margin: 2px 0 0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.say {
+  display: flex;
+  gap: 6px;
+}
+.say .who {
+  width: 56px;
+  flex: none;
+}
+.say input:last-child {
+  flex: 1;
+}
+
+.board {
+  position: relative;
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 45% 55%;
+  }
+  .side {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}

@@ -1,0 +1,75 @@
+name: Board eval
+
+# 用 llama.cpp 跑一遍合成会议评测，结果写进 job summary。
+# CI 机器只有 CPU，默认用小模型做回归对比；分数看趋势，不看绝对值。
+on:
+  push:
+    branches: [main]
+    paths: ['src/engine/**', 'eval/**', '.github/workflows/eval.yml']
+  pull_request:
+    paths: ['src/engine/**', 'eval/**', '.github/workflows/eval.yml']
+  workflow_dispatch:
+    inputs:
+      model_url:
+        description: GGUF 下载地址
+        default: https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-UD-Q4_K_XL.gguf
+      label:
+        description: 报告里的模型名
+        default: qwen3.5-2b-q4-cpu
+
+env:
+  LLAMA_BUILD: b11954
+  MODEL_URL: ${{ inputs.model_url || 'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-UD-Q4_K_XL.gguf' }}
+  LABEL: ${{ inputs.label || 'qwen3.5-2b-q4-cpu' }}
+
+jobs:
+  eval:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Cache llama.cpp and model
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/llama
+            ~/models
+          key: eval-${{ env.LLAMA_BUILD }}-${{ hashFiles('.github/workflows/eval.yml') }}-${{ env.MODEL_URL }}
+
+      - name: Download llama.cpp and model
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/llama ~/models
+          curl -fsSL "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_BUILD}/llama-${LLAMA_BUILD}-bin-ubuntu-x64.tar.gz" | tar -xz -C ~/llama
+          curl -fL --retry 3 -o ~/models/model.gguf "$MODEL_URL"
+
+      - name: Start llama-server
+        run: |
+          server=$(find ~/llama -type f -name llama-server | head -1)
+          chmod +x "$server"
+          export LD_LIBRARY_PATH="$(dirname "$server"):${LD_LIBRARY_PATH:-}"
+          nohup "$server" -m ~/models/model.gguf --host 127.0.0.1 --port 8080 -c 4096 --jinja -np 1 > ~/llama-server.log 2>&1 &
+          for i in $(seq 1 120); do
+            curl -sf http://127.0.0.1:8080/health && exit 0
+            sleep 2
+          done
+          cat ~/llama-server.log
+          exit 1
+
+      - run: node eval/run.ts --label "$LABEL"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: |
+            eval/reports/
+            ~/llama-server.log

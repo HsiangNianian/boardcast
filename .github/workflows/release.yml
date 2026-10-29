@@ -35,6 +35,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          # setup-node 看到 package.json 的 packageManager 会自动给 pnpm 建缓存，可这一步没装 pnpm、也不需要
+          package-manager-cache: false
       - name: Write the release notes
         run: |
           # 手动重跑早期的 tag 时，那时候还没有这个脚本，用 main 上的

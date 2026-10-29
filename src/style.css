@@ -1306,3 +1306,13 @@ kbd {
 button.icon:disabled {
   opacity: 0.35;
 }
+
+/* 铅笔白板按需加载时的占位 */
+.board-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+  font-size: 13px;
+}

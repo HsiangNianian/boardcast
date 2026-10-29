@@ -1,10 +1,8 @@
-import { Excalidraw } from '@excalidraw/excalidraw'
-import '@excalidraw/excalidraw/index.css'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import cases from '../eval/cases.json'
 import { board } from './board/layout.ts'
-import { type Look, scene } from './board/scene.ts'
+import type { Look } from './board/scene.ts'
 import {
   type Heard,
   type LlmStatus,
@@ -27,7 +25,7 @@ import ModelPanel from './ModelPanel.tsx'
 import { type RemoteView, remote } from './remote.ts'
 import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
 import Composer from './ui/Composer.tsx'
-import { type ExportKind, build, saveFile } from './exporter.ts'
+import type { ExportKind } from './exporter.ts'
 import { Auto, Close, Download, Eraser, Gear, Moon, Pen, Pencil, Sun, Tidy, Transcript as TranscriptIcon } from './ui/icons.tsx'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
@@ -48,6 +46,9 @@ const LIGHT: Look = { ink: '#1e1e1e', pencil: '#868e96', highlight: '#ffec99', g
 
 const THEMES: Theme[] = ['system', 'light', 'dark']
 const THEME_LABEL: Record<Theme, string> = { system: '跟随系统', light: '浅色', dark: '深色' }
+// Excalidraw 很大（连同 mermaid、katex 好几 MB），只在切到铅笔模式时才加载
+const PencilBoard = lazy(() => import('./board/PencilBoard.tsx'))
+
 // 铅笔模式的纸色，和界面的浅色底一致；深色模式下 Excalidraw 会自己反色
 const PAPER_LIGHT = '#fbfbf9'
 
@@ -323,8 +324,11 @@ export default function App() {
   const pencilView = useRef({ had: false, tidy: 0 })
   useEffect(() => {
     let stale = false
-    void board.layout(graph).then((l) => {
+    void board.layout(graph).then(async (l) => {
       if (stale || !api) return
+      // 只有铅笔模式用得到；跟着 Excalidraw 一起按需加载
+      const { scene } = await import('./board/scene.ts')
+      if (stale) return
       // Excalidraw 的深色模式是给整块画布加反色滤镜，所以永远按浅色画，深色由它反过来
       const look = LIGHT
       api.updateScene({
@@ -431,6 +435,7 @@ export default function App() {
     try {
       const ink = document.querySelector('.ink')
       const paper = mode === 'ink' && ink ? getComputedStyle(ink).backgroundColor : PAPER_LIGHT
+      const { build, saveFile } = await import('./exporter.ts')
       const { name, blob } = await build(kind, { graph, lines, mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
       const where = await saveFile(name, blob)
       if (where) setToast({ ok: true, text: isDesktop ? `已保存：${where}` : `已下载：${where}` })
@@ -584,12 +589,9 @@ export default function App() {
         {mode === 'ink' ? (
           <InkBoard graph={graph} hot={hot} dark={dark} messy={messyLater / 100} bottomInset={inset} tidy={tidy} weight={weightLater / 100} />
         ) : (
-          <Excalidraw
-            excalidrawAPI={setApi}
-            theme={dark ? 'dark' : 'light'}
-            initialData={{ appState: { viewBackgroundColor: PAPER_LIGHT, currentItemFontFamily: 1 } }}
-            UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false } }}
-          />
+          <Suspense fallback={<div className="board-loading">正在打开铅笔白板…</div>}>
+            <PencilBoard onApi={setApi} dark={dark} paper={PAPER_LIGHT} />
+          </Suspense>
         )}
 
         {empty && !splash && (

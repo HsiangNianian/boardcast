@@ -12,10 +12,12 @@
 //   两端都没动的连线沿用原来的走线；
 // - 「整理排版」时清掉记忆，整块重新排。
 
-import ELK, { type ElkExtendedEdge, type ElkNode } from 'elkjs/lib/elk.bundled.js'
+import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk.bundled.js'
 import { type Graph, type Node, children } from '../engine/graph.ts'
 
-const elk = new ELK()
+// ELK 打包后有一百多万字节，只有出现流程图时才用得到：第一次要排流程图时再加载
+let elkReady: Promise<{ layout: (g: ElkNode) => Promise<ElkNode> }> | undefined
+const elk = () => (elkReady ??= import('elkjs/lib/elk.bundled.js').then((m) => new m.default()))
 
 export const FONT = 20
 export const TITLE = 28
@@ -167,7 +169,7 @@ async function diagramLayout(g: Graph, ids: Set<string>) {
   for (const n of nodes) if (!n.group || !g.groups.some((x) => x.id === n.group)) kids.push(leaf(n))
   const inner = g.edges.filter((e) => ids.has(e.from) && ids.has(e.to))
   const edges: ElkExtendedEdge[] = inner.map((e, i) => ({ id: `e${i}`, sources: [e.from], targets: [e.to] }))
-  const out = await elk.layout({
+  const out = await (await elk()).layout({
     id: 'root',
     layoutOptions: {
       'elk.algorithm': 'layered',

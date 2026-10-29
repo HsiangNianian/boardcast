@@ -32,7 +32,8 @@ pub struct Gpu {
 #[derive(Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LlmStatus {
-    /// starting | ready | no-model | error
+    /// idle | starting | ready | no-model | error
+    /// idle：远程模型优先，内置模型先不启动，用到（远程不可用、某句要兜底）时再拉起
     pub state: String,
     pub url: Option<String>,
     pub model: Option<String>,
@@ -306,12 +307,51 @@ fn wait_ready(child: &mut Child, port: u16, timeout: Duration, alive: impl Fn() 
     false
 }
 
+/// 换了模型之后重新加载；原来在待命就继续待命，只刷新状态
 pub fn restart(app: &AppHandle) {
-    app.state::<Llm>().shutdown();
-    start(app.clone());
+    let llm = app.state::<Llm>();
+    let idle = llm.status.lock().unwrap().state == "idle";
+    llm.shutdown();
+    launch(app.clone(), !idle);
 }
 
+/// 拉起内置模型
 pub fn start(app: AppHandle) {
+    launch(app, true);
+}
+
+/// 不拉起，只把 GPU、模型这些信息准备好，状态记成 idle（远程模型优先时）
+pub fn stand_by(app: AppHandle) {
+    launch(app, false);
+}
+
+/// 前端要用内置模型了（远程连不上、某一句要兜底）：还在待命就拉起来，已经在跑就什么都不做
+#[tauri::command]
+pub fn llm_ensure(app: AppHandle) -> LlmStatus {
+    // 在锁里先改成 starting：连着来两次也只拉起一个
+    let llm = app.state::<Llm>();
+    let was_idle = {
+        let mut s = llm.status.lock().unwrap();
+        let idle = s.state == "idle";
+        if idle {
+            s.state = "starting".into();
+        }
+        idle
+    };
+    if was_idle {
+        start(app.clone());
+    }
+    app.state::<Llm>().status.lock().unwrap().clone()
+}
+
+/// 远程模型启用并连上了：停掉内置模型，把显存和内存让出来
+#[tauri::command]
+pub fn llm_stop(app: AppHandle) {
+    app.state::<Llm>().shutdown();
+    stand_by(app);
+}
+
+fn launch(app: AppHandle, run: bool) {
     let generation = app.state::<Llm>().generation.fetch_add(1, Ordering::SeqCst) + 1;
     thread::spawn(move || {
         let llm = app.state::<Llm>();
@@ -348,6 +388,18 @@ pub fn start(app: AppHandle) {
             return;
         };
         let model_name = model.file_name().map(|n| n.to_string_lossy().to_string());
+        if !run {
+            llm.set(
+                generation,
+                LlmStatus {
+                    state: "idle".into(),
+                    model: model_name,
+                    message: Some("正在用远程模型，内置模型用到时再启动".into()),
+                    ..base
+                },
+            );
+            return;
+        }
 
         let Some(exe) = exe else {
             llm.set(

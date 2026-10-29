@@ -21,12 +21,19 @@ pub fn run() {
         .manage(models::Downloads::default())
         .manage(voice::Voice::default())
         .setup(|app| {
-            llm::start(app.handle().clone());
+            // 启用了远程模型就先不拉起内置模型（不占显存、不预热），远程不可用时前端再叫它起来
+            if remote::enabled(app.handle()) {
+                llm::stand_by(app.handle().clone());
+            } else {
+                llm::start(app.handle().clone());
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             llm::llm_status,
             llm::llm_restart,
+            llm::llm_ensure,
+            llm::llm_stop,
             models::models_list,
             models::model_download,
             models::model_cancel,

@@ -10,7 +10,8 @@ export interface Gpu {
 }
 
 export interface LlmStatus {
-  state: 'starting' | 'ready' | 'no-model' | 'error'
+  /** idle：远程模型优先，内置模型还没启动 */
+  state: 'idle' | 'starting' | 'ready' | 'no-model' | 'error'
   url?: string
   model?: string
   device?: string
@@ -68,6 +69,24 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 
 export async function llmStatus(): Promise<LlmStatus | null> {
   return isDesktop ? call<LlmStatus>('llm_status') : null
+}
+
+/** 内置模型在待命就拉起来，已经在跑就什么都不做 */
+export const llmEnsure = () => call<LlmStatus>('llm_ensure')
+/** 停掉内置模型（远程模型能用时，把显存让出来） */
+export const llmStop = () => call<void>('llm_stop')
+
+/** 拉起内置模型并等它就绪，返回它的地址；没有模型或者起不来就抛错 */
+export async function localReady(timeoutMs = 240_000): Promise<string> {
+  let s = await llmEnsure()
+  const t0 = Date.now()
+  while (Date.now() - t0 < timeoutMs) {
+    if (s.state === 'ready' && s.url) return s.url
+    if (s.state === 'no-model' || s.state === 'error') throw new Error(s.message ?? '内置模型不可用')
+    await new Promise((r) => setTimeout(r, 700))
+    s = await call<LlmStatus>('llm_status')
+  }
+  throw new Error('内置模型启动超时')
 }
 
 export const models = {

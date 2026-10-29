@@ -120,6 +120,7 @@ export default function SettingsPanel(p: Props) {
             <>
               <p className="hint">
                 {b?.state === 'ready' && `内置：${b.model} · ${b.device}${p.warming ? ' · 预热中…' : ''}`}
+                {b?.state === 'idle' && `内置：${b.model} · 待命（正在用远程模型，远程出错时自动启动兜底）`}
                 {b?.state === 'starting' && `正在启动 ${b.model ?? ''}（${b.device ?? ''}）…`}
                 {(b?.state === 'no-model' || b?.state === 'error') && b.message}
                 {!b && '读取中…'}

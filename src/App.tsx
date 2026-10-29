@@ -5,7 +5,18 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import cases from '../eval/cases.json'
 import { board } from './board/layout.ts'
 import { type Look, scene } from './board/scene.ts'
-import { type Heard, type LlmStatus, type VoiceStatus, isDesktop, llmStatus, on, voice } from './desktop.ts'
+import {
+  type Heard,
+  type LlmStatus,
+  type VoiceStatus,
+  isDesktop,
+  llmEnsure,
+  llmStatus,
+  llmStop,
+  localReady,
+  on,
+  voice,
+} from './desktop.ts'
 import { type Graph, emptyGraph } from './engine/graph.ts'
 import { type LlmConfig, proposeOps } from './engine/llm.ts'
 import { formatOps } from './engine/ops.ts'
@@ -95,6 +106,8 @@ export default function App() {
   // 模型管理面板：第一次发现没有模型时自动打开（已经启用了能用的远程模型就不打扰）
   const askedForModel = useRef(false)
   const warmed = useRef<string | null>(null)
+  // 正在用远程模型时不预热内置模型（它这时只是兜底）；轮询的闭包里拿不到最新的 state，用 ref
+  const remoteFirst = useRef(false)
   useEffect(() => {
     if (!isDesktop) return
     let alive = true
@@ -105,7 +118,7 @@ export default function App() {
       setBuiltin(s)
       if (s?.state === 'ready' && s.url) {
         setBaseUrl(s.url)
-        if (warmed.current !== s.url) {
+        if (warmed.current !== s.url && !remoteFirst.current) {
           warmed.current = s.url
           setWarming(true)
           void proposeOps({ baseUrl: s.url, noThink: true }, emptyGraph(), [], { text: '大家好。' })
@@ -130,15 +143,26 @@ export default function App() {
     const v = await remote.get().catch(() => null)
     setRemoteView(v)
     if (!v?.enabled) {
+      remoteFirst.current = false
       setRemoteState({ state: 'off' })
+      // 没有远程模型：内置模型要起来（启动时是待命的话）
+      if (isDesktop) void llmEnsure().catch(() => undefined)
       return
     }
     setRemoteState({ state: 'checking' })
     try {
       const t = await remote.test()
+      remoteFirst.current = true
       setRemoteState({ state: 'ok', ms: t.ms })
+      // 远程能用：内置模型停下来，把显存让出来；某一句远程出错时再临时拉起
+      if (isDesktop) {
+        const b = await llmStatus().catch(() => null)
+        if (b && (b.state === 'ready' || b.state === 'starting')) await llmStop().catch(() => undefined)
+      }
     } catch (e) {
+      remoteFirst.current = false
       setRemoteState({ state: 'fail', message: errText(e) })
+      if (isDesktop) void llmEnsure().catch(() => undefined)
     }
   }, [])
   useEffect(() => {
@@ -157,13 +181,32 @@ export default function App() {
   const llm = useMemo<LlmConfig>(() => {
     const local: LlmConfig = { baseUrl, noThink: true, label: isDesktop ? '内置' : '本地' }
     if (!useRemote || !remoteView) return local
+    // 桌面版的内置模型这时多半在待命：某一句远程失败了，先把它拉起来、等就绪，再用它画这一句
+    const fallback: LlmConfig | undefined = isDesktop
+      ? {
+          ...local,
+          baseUrl: 'builtin',
+          send: async (body) => {
+            const url = await localReady()
+            const res = await fetch(`${url}/v1/chat/completions`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(body),
+            })
+            if (!res.ok) throw new Error(`内置模型 ${res.status}: ${await res.text()}`)
+            return res.json()
+          },
+        }
+      : baseUrl
+        ? local
+        : undefined
     return {
       baseUrl: remoteView.baseUrl,
       model: remoteView.model,
       flavor: 'openai',
       send: remote.send,
       label: `远程 ${remoteView.model}`,
-      fallback: baseUrl ? local : undefined,
+      fallback,
     }
   }, [baseUrl, useRemote, remoteView])
 
@@ -419,6 +462,8 @@ export default function App() {
     status = '正在检查远程模型…'
   } else if (builtin?.state === 'ready') {
     status = `内置 · ${localName}${warming ? ' · 预热中' : ''}`
+  } else if (builtin?.state === 'idle') {
+    status = `内置 · ${localName ?? ''} · 待命`
   } else if (builtin?.state === 'starting') {
     status = `正在启动 ${localName ?? '内置模型'}…`
   } else if (builtin) {

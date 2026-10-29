@@ -141,6 +141,12 @@ async fn post(base: &str, key: &str, body: &Value) -> Result<Value, String> {
     })
 }
 
+/// 用户启用了远程模型（不管现在连不连得上）
+pub fn enabled(app: &AppHandle) -> bool {
+    let c = load(app);
+    c.enabled && !c.base_url.trim().is_empty() && !c.model.trim().is_empty()
+}
+
 #[tauri::command]
 pub fn remote_get(app: AppHandle) -> RemoteView {
     view(&load(&app))

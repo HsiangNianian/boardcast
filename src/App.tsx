@@ -47,7 +47,8 @@ function useDark(): boolean {
 
 export default function App() {
   const dark = useDark()
-  const [baseUrl, setBaseUrl] = useState(() => load('boardcast.llm', 'http://127.0.0.1:8080'))
+  // 桌面版一开始留空，等内置模型就绪后由外壳告诉我们地址；网页版用上次填的
+  const [baseUrl, setBaseUrl] = useState(() => (isDesktop ? '' : load('boardcast.llm', 'http://127.0.0.1:8080')))
   const [online, setOnline] = useState<boolean | null>(null)
   // 桌面版：内置的 llama-server 由外壳拉起，就绪后自动用它的地址
   const [builtin, setBuiltin] = useState<LlmStatus | null>(null)
@@ -141,10 +142,17 @@ export default function App() {
   )
 
   useEffect(() => {
-    try {
-      localStorage.setItem('boardcast.llm', baseUrl)
-    } catch {
-      /* 存不了就算了 */
+    // 桌面版的地址是内置服务每次启动时随机分配的端口，记下来下次也用不上
+    if (!isDesktop) {
+      try {
+        localStorage.setItem('boardcast.llm', baseUrl)
+      } catch {
+        /* 存不了就算了 */
+      }
+    }
+    if (!baseUrl) {
+      setOnline(false)
+      return
     }
     let alive = true
     const ping = () =>
@@ -283,7 +291,12 @@ export default function App() {
           <span>
             本地模型 <i className={`dot ${online === null ? '' : online ? 'ok' : 'bad'}`} />
           </span>
-          <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value.trim())} spellCheck={false} />
+          <input
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value.trim())}
+            placeholder={isDesktop ? '等内置模型就绪…' : 'http://127.0.0.1:8080'}
+            spellCheck={false}
+          />
           {builtin && (
             <small className={`builtin ${builtin.state}`}>
               {builtin.state === 'ready' && `内置：${builtin.model} · ${builtin.device}${warming ? ' · 预热中…' : ''}`}

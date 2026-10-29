@@ -4,7 +4,7 @@
 
 > Talk, and the whiteboard draws itself. Local-first live meeting diagrams: speech → a small local LLM emitting graph edits → deterministic layout → hand-drawn Excalidraw board. Runs on Linux, Windows (x64 / ARM64), and later macOS.
 
-现在是早期原型：文字输入和示例会议回放已经能用，语音输入还在做。
+现在是早期原型：桌面版可以直接对着麦克风说话出板书，也可以打字或回放示例会议。
 
 板书有两种风格，左下角切换：
 
@@ -99,6 +99,17 @@
 
 llama-server 的日志在应用的日志目录里（Linux 是 `~/.local/share/games.mmstudio.boardcast/logs/llama-server.log`）。
 
+下载前会先看模型目录所在的盘还剩多少空间，不够就直接提示还差多少，不会下到一半才报错。
+
+### 语音输入
+
+在「本地模型」面板里下载「语音识别」（0.2 GB），然后点「开始收音」直接说话：
+
+- 麦克风由桌面外壳用 cpal 采集，转成 16 kHz 后交给 Silero VAD 断句；停顿约 0.45 秒算一句话说完。
+- 每句话交给 SenseVoice（中英日韩粤，自带标点和数字规整）识别，结果直接进板书；说话过程中每 0.6 秒刷新一次灰色的临时字幕。
+- 一句 5.6 秒的话，识别只要两三百毫秒（三个平台的 CI 上实测）。
+- 目前只收麦克风；线上会议里别人的声音（系统声音）和区分说话人还没做，说话人用输入框左边那个名字。
+
 ## 本地运行
 
 需要 Node 24+、pnpm 和 Rust（打包桌面版时）。
@@ -134,7 +145,8 @@ pnpm test                              # 引擎单元测试，不需要模型
 - [x] 要点板：话题、多层条目、问题、公式、备注、划掉 / 圈出 / 星标、小图标
 - [x] 手写模式：按笔顺逐笔书写，白板马克笔 / 黑板粉笔，潦草度可调
 - [ ] 手写模式里的小图标、导出 PNG / SVG
-- [ ] sherpa-onnx 流式转写（麦克风 + 系统声音）
+- [x] 语音输入：麦克风 → Silero 断句 → SenseVoice 识别（带标点），说话时有临时字幕
+- [ ] 系统声音（线上会议里别人的声音）、区分说话人
 - [x] Tauri 外壳拉起打包进来的 llama-server（#2）
 - [x] 首次启动下载模型（#3）
 - [ ] 不参与调参的测试集；合成数据 + LoRA 微调小模型

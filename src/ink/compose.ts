@@ -5,6 +5,7 @@ import { labelSpot } from '../board/labels.ts'
 import { FONT, TITLE } from '../board/layout.ts'
 import type { Graph, Node } from '../engine/graph.ts'
 import { type Pt, type Stroke, glyph } from './glyphs.ts'
+import { inkIcon } from './icons.ts'
 import { type Inked, arrow, box, ink, line, loop, placeGlyph, rng, strike } from './pen.ts'
 
 export interface InkLook {
@@ -136,6 +137,7 @@ export async function compose(
       const head = reg.head
       const tx = reg.x + reg.title.x
       const c = head ? colorOf(head) : look.blue
+      if (head?.icon) add(`${head.id}|icon|${head.icon}`, c, alpha(head), inkIcon(head.icon, reg.x, reg.y - 2, 36, rng(`${head.id}i`)), penFor(FONT) * 0.85)
       await text(head, head?.id ?? reg.id, reg.title.text, tx, reg.y, TITLE, c, reg.title.w)
       const r = rng(`${reg.id}ul`)
       add(`${reg.id}|${reg.title.text}|ul`, c, alpha(head), [line([tx - 6, reg.y + TITLE + 10], [tx + reg.title.w + 14, reg.y + TITLE + 13], r, 0.03)], penFor(TITLE))
@@ -155,6 +157,7 @@ export async function compose(
       add(`${n.id}|f|${row.text}`, c, alpha(n), [loop(x + pre + row.w / 2, y + row.size / 2, row.w / 2 + 16, row.size / 2 + 10, r)], penFor(row.size) * 0.9)
     }
     await text(n, n.id, row.text, x + pre, y, row.size, c, row.w)
+    if (n.icon) add(`${n.id}|icon|${n.icon}`, c, alpha(n), inkIcon(n.icon, x + pre + row.w + 10, y - 2, row.size + 6, rng(`${n.id}i`)), penFor(row.size) * 0.85)
   }
 
   // —— 流程图区域 ——
@@ -171,7 +174,10 @@ export async function compose(
       const r = rng(n.id)
       add(`${n.id}|box`, colorOf(n), alpha(n), box(b.x + 4, b.y + 4, b.w - 8, b.h - 8, r), penFor(FONT))
       const tw = [...n.label].reduce((s, ch) => s + (ch.charCodeAt(0) < 128 ? 0.55 : 1), 0) * FONT
-      await text(n, n.id, n.label, b.x + (b.w - tw) / 2, b.y + (b.h - FONT) / 2 - 2, FONT, colorOf(n), tw)
+      if (n.icon) {
+        add(`${n.id}|icon|${n.icon}`, colorOf(n), alpha(n), inkIcon(n.icon, b.x + 14, b.y + (b.h - 30) / 2, 30, rng(`${n.id}i`)), penFor(FONT) * 0.85)
+        await text(n, n.id, n.label, b.x + 54, b.y + (b.h - FONT) / 2 - 2, FONT, colorOf(n), tw)
+      } else await text(n, n.id, n.label, b.x + (b.w - tw) / 2, b.y + (b.h - FONT) / 2 - 2, FONT, colorOf(n), tw)
     }
     for (const rt of d.edges) {
       const e = g.edges.find((x) => x.from === rt.from && x.to === rt.to)

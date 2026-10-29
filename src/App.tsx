@@ -560,6 +560,10 @@ export default function App() {
                   <span>PNG 图片</span>
                   <small>{mode === 'ink' ? '手写板书，和画面上一样' : '铅笔板书，含手动改动'}</small>
                 </button>
+                <button type="button" role="menuitem" onClick={() => void exportAs('svg')}>
+                  <span>SVG 矢量图</span>
+                  <small>放大不糊，可以插进文档或者接着改</small>
+                </button>
                 <button type="button" role="menuitem" onClick={() => void exportAs('excalidraw')}>
                   <span>Excalidraw</span>
                   <small>.excalidraw，可以在 excalidraw.com 接着改</small>

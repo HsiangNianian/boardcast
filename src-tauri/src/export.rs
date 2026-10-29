@@ -22,6 +22,7 @@ pub async fn export_save(
         .to_string();
     let label = match ext.as_str() {
         "png" => "PNG 图片",
+        "svg" => "SVG 矢量图",
         "md" => "Markdown",
         "excalidraw" => "Excalidraw",
         _ => "文件",

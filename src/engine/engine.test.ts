@@ -44,6 +44,15 @@ test('bad lines are skipped, bare names fall back to lookup', () => {
   assert.equal(g.edges.length, 1)
 })
 
+test('made-up ids are dropped instead of becoming nodes named "n12"', () => {
+  const g = applyOps(emptyGraph(), parseOps('L n12 「先做手机号登录」\nE n7 「网关」\nT 「爬虫」\nL n1 「监控任务」'))
+  assert.deepEqual(
+    g.nodes.map((n) => n.label),
+    ['网关', '爬虫', '监控任务'],
+  )
+  assert.ok(!g.nodes.some((n) => /^[ng]\d+$/.test(n.label)))
+})
+
 test('format round-trips', () => {
   const text = 'E n1 -> 「网关」 : 「转发」\nG 「交易域」 n1 n2\nD n4'
   assert.equal(formatOps(parseOps(text)), text)

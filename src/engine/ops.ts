@@ -183,6 +183,8 @@ function resolve(g: Graph, r: Ref, create: Kind | false, ink: Ink): string | und
   if ('id' in r) {
     const id = r.id
     if (g.nodes.some((n) => n.id === id)) return id
+    // 长得像编号却不存在（远程模型没有语法约束，会编出 n12 这种编号）：不能当名字建一个叫「n12」的节点
+    if (/^[ng]\d+$/.test(id)) return undefined
     // 模型偶尔会把名字写成裸词，当名字再找一次
     name = id
   } else {

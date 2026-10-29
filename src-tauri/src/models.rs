@@ -137,11 +137,16 @@ pub struct Downloads {
 }
 
 fn entry(id: &str) -> Result<&'static Entry, String> {
-    CATALOG.iter().find(|e| e.id == id).ok_or_else(|| format!("没有这个模型：{id}"))
+    CATALOG
+        .iter()
+        .find(|e| e.id == id)
+        .ok_or_else(|| format!("没有这个模型：{id}"))
 }
 
 fn selected(dir: &Path) -> Option<String> {
-    std::fs::read_to_string(dir.join(llm::SELECTED)).ok().map(|s| s.trim().to_string())
+    std::fs::read_to_string(dir.join(llm::SELECTED))
+        .ok()
+        .map(|s| s.trim().to_string())
 }
 
 /// 推荐：独显显存够得着的最大那一档；没有独显就推荐最小的（清单按从小到大排）
@@ -154,7 +159,12 @@ fn recommended(app: &AppHandle) -> &'static str {
         .map(|g| g.total_mib)
         .max()
         .unwrap_or(0);
-    CATALOG.iter().rev().find(|e| e.vram_mib <= vram).unwrap_or(&CATALOG[0]).id
+    CATALOG
+        .iter()
+        .rev()
+        .find(|e| e.vram_mib <= vram)
+        .unwrap_or(&CATALOG[0])
+        .id
 }
 
 #[tauri::command]
@@ -188,7 +198,12 @@ pub fn models_list(app: AppHandle, downloads: tauri::State<'_, Downloads>) -> Ca
     Catalog {
         models,
         dir: dir.map(|d| d.display().to_string()),
-        downloading: downloads.current.lock().unwrap().as_ref().map(|c| c.0.clone()),
+        downloading: downloads
+            .current
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|c| c.0.clone()),
     }
 }
 
@@ -199,7 +214,11 @@ fn part_of(path: &Path) -> PathBuf {
 }
 
 #[tauri::command]
-pub fn model_download(app: AppHandle, downloads: tauri::State<'_, Downloads>, id: String) -> Result<(), String> {
+pub fn model_download(
+    app: AppHandle,
+    downloads: tauri::State<'_, Downloads>,
+    id: String,
+) -> Result<(), String> {
     let e = entry(&id)?;
     let dir = llm::models_dir(&app).ok_or("找不到应用数据目录")?;
     let cancel = {
@@ -222,11 +241,15 @@ pub fn model_download(app: AppHandle, downloads: tauri::State<'_, Downloads>, id
                 llm::restart(&app);
             }
             Err(DlError::Canceled) => {
-                let have = std::fs::metadata(part_of(&path)).map(|m| m.len()).unwrap_or(0);
+                let have = std::fs::metadata(part_of(&path))
+                    .map(|m| m.len())
+                    .unwrap_or(0);
                 emit(&app, e, "canceled", have, 0, None, None);
             }
             Err(DlError::Failed(msg)) => {
-                let have = std::fs::metadata(part_of(&path)).map(|m| m.len()).unwrap_or(0);
+                let have = std::fs::metadata(part_of(&path))
+                    .map(|m| m.len())
+                    .unwrap_or(0);
                 emit(&app, e, "error", have, 0, None, Some(msg));
             }
         }
@@ -254,9 +277,19 @@ pub fn model_select(app: AppHandle, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn model_delete(app: AppHandle, downloads: tauri::State<'_, Downloads>, id: String) -> Result<(), String> {
+pub fn model_delete(
+    app: AppHandle,
+    downloads: tauri::State<'_, Downloads>,
+    id: String,
+) -> Result<(), String> {
     let e = entry(&id)?;
-    if downloads.current.lock().unwrap().as_ref().is_some_and(|c| c.0 == id) {
+    if downloads
+        .current
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|c| c.0 == id)
+    {
         return Err("正在下载，先取消".into());
     }
     let dir = llm::models_dir(&app).ok_or("找不到应用数据目录")?;
@@ -280,7 +313,15 @@ enum DlError {
     Failed(String),
 }
 
-fn emit(app: &AppHandle, e: &Entry, state: &'static str, downloaded: u64, speed: u64, source: Option<&str>, message: Option<String>) {
+fn emit(
+    app: &AppHandle,
+    e: &Entry,
+    state: &'static str,
+    downloaded: u64,
+    speed: u64,
+    source: Option<&str>,
+    message: Option<String>,
+) {
     let _ = app.emit(
         "model-progress",
         Progress {
@@ -310,12 +351,30 @@ fn client(direct: bool) -> Result<reqwest::Client, String> {
 /// 进度回调：(状态, 已下载字节, 速度, 下载源, 说明)
 type Report<'a> = dyn FnMut(&'static str, u64, u64, Option<&str>, Option<String>) + Send + 'a;
 
-async fn download(app: &AppHandle, e: &Entry, dir: &Path, cancel: &AtomicBool) -> Result<(), DlError> {
-    fetch(e, dir, cancel, &mut |state, have, speed, source, message| emit(app, e, state, have, speed, source, message)).await
+async fn download(
+    app: &AppHandle,
+    e: &Entry,
+    dir: &Path,
+    cancel: &AtomicBool,
+) -> Result<(), DlError> {
+    fetch(
+        e,
+        dir,
+        cancel,
+        &mut |state, have, speed, source, message| {
+            emit(app, e, state, have, speed, source, message)
+        },
+    )
+    .await
 }
 
 /// 真正的下载逻辑，不依赖 Tauri，方便单独测试
-async fn fetch(e: &Entry, dir: &Path, cancel: &AtomicBool, report: &mut Report<'_>) -> Result<(), DlError> {
+async fn fetch(
+    e: &Entry,
+    dir: &Path,
+    cancel: &AtomicBool,
+    report: &mut Report<'_>,
+) -> Result<(), DlError> {
     let path = dir.join(e.file);
     if path.is_file() {
         return Ok(());
@@ -329,7 +388,10 @@ async fn fetch(e: &Entry, dir: &Path, cancel: &AtomicBool, report: &mut Report<'
         report("verifying", 0, 0, None, Some("核对已下载的部分".into()));
         let mut buf = vec![0u8; 8 << 20];
         loop {
-            let n = f.read(&mut buf).await.map_err(|err| DlError::Failed(err.to_string()))?;
+            let n = f
+                .read(&mut buf)
+                .await
+                .map_err(|err| DlError::Failed(err.to_string()))?;
             if n == 0 {
                 break;
             }
@@ -352,7 +414,9 @@ async fn fetch(e: &Entry, dir: &Path, cancel: &AtomicBool, report: &mut Report<'
         if have >= e.size {
             break;
         }
-        let Ok(http) = client(src.direct) else { continue };
+        let Ok(http) = client(src.direct) else {
+            continue;
+        };
         let mut req = http.get(src.url);
         if have > 0 {
             req = req.header(reqwest::header::RANGE, format!("bytes={have}-"));
@@ -374,7 +438,12 @@ async fn fetch(e: &Entry, dir: &Path, cancel: &AtomicBool, report: &mut Report<'
             last_error = format!("{}：HTTP {status}", src.name);
             continue;
         }
-        let mut file = match tokio::fs::OpenOptions::new().create(true).append(true).open(&part).await {
+        let mut file = match tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&part)
+            .await
+        {
             Ok(f) => f,
             Err(err) => return Err(DlError::Failed(format!("写不进模型目录：{err}"))),
         };
@@ -428,9 +497,13 @@ async fn fetch(e: &Entry, dir: &Path, cancel: &AtomicBool, report: &mut Report<'
     let got = format!("{:x}", hasher.finalize());
     if got != e.sha256 {
         let _ = tokio::fs::remove_file(&part).await;
-        return Err(DlError::Failed(format!("校验失败（sha256 {got}），已删除，请重新下载")));
+        return Err(DlError::Failed(format!(
+            "校验失败（sha256 {got}），已删除，请重新下载"
+        )));
     }
-    tokio::fs::rename(&part, &path).await.map_err(|err| DlError::Failed(err.to_string()))?;
+    tokio::fs::rename(&part, &path)
+        .await
+        .map_err(|err| DlError::Failed(err.to_string()))?;
     Ok(())
 }
 

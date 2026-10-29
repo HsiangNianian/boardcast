@@ -98,9 +98,15 @@ pub const SELECTED: &str = "selected.txt";
 const PREFERRED: &[&str] = &["qwen3.5-9b", "qwen3.5-4b"];
 
 fn is_model(p: &Path) -> bool {
-    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
+    let name = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_lowercase();
     // 分片模型只认第一片，llama-server 会自己找其余的
-    name.ends_with(".gguf") && !name.contains("mmproj") && (!name.contains("-of-") || name.contains("-00001-of-"))
+    name.ends_with(".gguf")
+        && !name.contains("mmproj")
+        && (!name.contains("-of-") || name.contains("-00001-of-"))
 }
 
 fn pick_model(dir: &Path) -> Option<PathBuf> {
@@ -122,28 +128,44 @@ fn pick_model(dir: &Path) -> Option<PathBuf> {
         .filter(|p| is_model(p))
         .collect();
     files.sort_by_key(|p| {
-        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
-        let rank = PREFERRED.iter().position(|k| name.starts_with(k)).unwrap_or(PREFERRED.len());
+        let name = p
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let rank = PREFERRED
+            .iter()
+            .position(|k| name.starts_with(k))
+            .unwrap_or(PREFERRED.len());
         (rank, name)
     });
     files.into_iter().next()
 }
 
 fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0").and_then(|l| l.local_addr()).map(|a| a.port()).unwrap_or(18080)
+    TcpListener::bind("127.0.0.1:0")
+        .and_then(|l| l.local_addr())
+        .map(|a| a.port())
+        .unwrap_or(18080)
 }
 
 fn healthy(port: u16) -> bool {
-    let Ok(mut s) = TcpStream::connect_timeout(&([127, 0, 0, 1], port).into(), Duration::from_millis(300)) else {
+    let Ok(mut s) =
+        TcpStream::connect_timeout(&([127, 0, 0, 1], port).into(), Duration::from_millis(300))
+    else {
         return false;
     };
     let _ = s.set_read_timeout(Some(Duration::from_millis(800)));
-    if s.write_all(b"GET /health HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n").is_err() {
+    if s.write_all(b"GET /health HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
+        .is_err()
+    {
         return false;
     }
     let mut buf = [0u8; 64];
     let n = s.read(&mut buf).unwrap_or(0);
-    std::str::from_utf8(&buf[..n]).map(|h| h.contains(" 200")).unwrap_or(false)
+    std::str::from_utf8(&buf[..n])
+        .map(|h| h.contains(" 200"))
+        .unwrap_or(false)
 }
 
 fn command(exe: &Path) -> Command {
@@ -164,11 +186,23 @@ fn command(exe: &Path) -> Command {
 
 /// 解析 `--list-devices`，比如 `Vulkan1: NVIDIA GeForce RTX 3060 Laptop GPU (6144 MiB, 5822 MiB free)`
 fn list_devices(exe: &Path) -> Vec<Gpu> {
-    let Ok(out) = command(exe).arg("--list-devices").stdin(Stdio::null()).output() else {
+    let Ok(out) = command(exe)
+        .arg("--list-devices")
+        .stdin(Stdio::null())
+        .output()
+    else {
         return vec![];
     };
-    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
-    let discrete = ["nvidia", "geforce", "radeon rx", "radeon pro", " arc", "adreno"];
+    let text =
+        String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    let discrete = [
+        "nvidia",
+        "geforce",
+        "radeon rx",
+        "radeon pro",
+        " arc",
+        "adreno",
+    ];
     text.lines()
         .filter_map(|l| {
             let (id, rest) = l.trim().split_once(": ")?;
@@ -176,7 +210,11 @@ fn list_devices(exe: &Path) -> Vec<Gpu> {
                 return None;
             }
             let (name, mem) = rest.rsplit_once(" (").unwrap_or((rest, ""));
-            let total_mib = mem.split(" MiB").next().and_then(|n| n.trim().parse().ok()).unwrap_or(0);
+            let total_mib = mem
+                .split(" MiB")
+                .next()
+                .and_then(|n| n.trim().parse().ok())
+                .unwrap_or(0);
             let lower = name.to_lowercase();
             Some(Gpu {
                 id: id.to_string(),
@@ -188,7 +226,13 @@ fn list_devices(exe: &Path) -> Vec<Gpu> {
         .collect()
 }
 
-fn spawn(exe: &Path, model: &Path, port: u16, device: Option<&str>, log: &Path) -> std::io::Result<Child> {
+fn spawn(
+    exe: &Path,
+    model: &Path,
+    port: u16,
+    device: Option<&str>,
+    log: &Path,
+) -> std::io::Result<Child> {
     let out = File::create(log)?;
     let err = out.try_clone()?;
     let mut cmd = command(exe);
@@ -224,8 +268,9 @@ fn spawn(exe: &Path, model: &Path, port: u16, device: Option<&str>, log: &Path) 
 fn kill_on_close(child: &Child) {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     unsafe {
         let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
@@ -271,15 +316,32 @@ pub fn start(app: AppHandle) {
         let models_dir = models_dir(&app);
         let dir_str = models_dir.as_ref().map(|d| d.display().to_string());
 
-        let exe_name = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
-        let exe = app.path().resource_dir().map(|d| d.join("llama").join(exe_name)).ok().filter(|p| p.is_file());
+        let exe_name = if cfg!(windows) {
+            "llama-server.exe"
+        } else {
+            "llama-server"
+        };
+        let exe = app
+            .path()
+            .resource_dir()
+            .map(|d| d.join("llama").join(exe_name))
+            .ok()
+            .filter(|p| p.is_file());
         let gpus = exe.as_deref().map(list_devices).unwrap_or_default();
-        let base = LlmStatus { models_dir: dir_str, gpus: gpus.clone(), ..Default::default() };
+        let base = LlmStatus {
+            models_dir: dir_str,
+            gpus: gpus.clone(),
+            ..Default::default()
+        };
 
         let Some(model) = models_dir.as_deref().and_then(pick_model) else {
             llm.set(
                 generation,
-                LlmStatus { state: "no-model".into(), message: Some("还没有模型，先下载一个".into()), ..base },
+                LlmStatus {
+                    state: "no-model".into(),
+                    message: Some("还没有模型，先下载一个".into()),
+                    ..base
+                },
             );
             return;
         };
@@ -308,7 +370,11 @@ pub fn start(app: AppHandle) {
             .unwrap_or_else(|_| std::env::temp_dir().join("boardcast-llama-server.log"));
 
         // 先试 GPU（优先独显），不行再试纯 CPU
-        let gpu = gpus.iter().find(|g| g.discrete).or_else(|| gpus.first()).cloned();
+        let gpu = gpus
+            .iter()
+            .find(|g| g.discrete)
+            .or_else(|| gpus.first())
+            .cloned();
         let mut attempts: Vec<Option<Gpu>> = vec![];
         if gpu.is_some() {
             attempts.push(gpu);
@@ -320,7 +386,10 @@ pub fn start(app: AppHandle) {
                 return;
             }
             let port = free_port();
-            let device_name = dev.as_ref().map(|d| d.name.clone()).unwrap_or_else(|| "CPU".into());
+            let device_name = dev
+                .as_ref()
+                .map(|d| d.name.clone())
+                .unwrap_or_else(|| "CPU".into());
             llm.set(
                 generation,
                 LlmStatus {
@@ -330,11 +399,19 @@ pub fn start(app: AppHandle) {
                     ..base.clone()
                 },
             );
-            let Ok(mut child) = spawn(&exe, &model, port, dev.as_ref().map(|d| d.id.as_str()), &log) else {
+            let Ok(mut child) = spawn(
+                &exe,
+                &model,
+                port,
+                dev.as_ref().map(|d| d.id.as_str()),
+                &log,
+            ) else {
                 continue;
             };
             // 大模型第一次加载可能比较久
-            if wait_ready(&mut child, port, Duration::from_secs(180), || llm.current(generation)) {
+            if wait_ready(&mut child, port, Duration::from_secs(180), || {
+                llm.current(generation)
+            }) {
                 if !llm.current(generation) {
                     let _ = child.kill();
                     let _ = child.wait();
@@ -366,7 +443,10 @@ pub fn start(app: AppHandle) {
                             LlmStatus {
                                 state: "error".into(),
                                 model: model_name,
-                                message: Some(format!("llama-server 意外退出（{code}），日志在 {}", log.display())),
+                                message: Some(format!(
+                                    "llama-server 意外退出（{code}），日志在 {}",
+                                    log.display()
+                                )),
                                 ..base
                             },
                         );

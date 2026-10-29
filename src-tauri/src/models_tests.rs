@@ -17,7 +17,9 @@ enum Mode {
 
 fn data() -> Vec<u8> {
     // 3 MB 的确定性数据
-    (0..3_000_000u32).map(|i| (i.wrapping_mul(2654435761) >> 13) as u8).collect()
+    (0..3_000_000u32)
+        .map(|i| (i.wrapping_mul(2654435761) >> 13) as u8)
+        .collect()
 }
 
 /// 起一个假服务，返回地址；`ranges` 记下收到过的 Range 请求头
@@ -27,7 +29,9 @@ async fn serve(mode: Mode, ranges: Arc<Mutex<Vec<String>>>) -> String {
     tokio::spawn(async move {
         let body = data();
         loop {
-            let Ok((mut s, _)) = l.accept().await else { return };
+            let Ok((mut s, _)) = l.accept().await else {
+                return;
+            };
             let body = body.clone();
             let ranges = ranges.clone();
             tokio::spawn(async move {
@@ -44,10 +48,13 @@ async fn serve(mode: Mode, ranges: Arc<Mutex<Vec<String>>>) -> String {
                     .unwrap_or(0);
                 match mode {
                     Mode::Fail => {
-                        let _ = s.write_all(b"HTTP/1.1 500 Oops\r\ncontent-length: 0\r\n\r\n").await;
+                        let _ = s
+                            .write_all(b"HTTP/1.1 500 Oops\r\ncontent-length: 0\r\n\r\n")
+                            .await;
                     }
                     Mode::Half => {
-                        let head = format!("HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n", body.len());
+                        let head =
+                            format!("HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n", body.len());
                         let _ = s.write_all(head.as_bytes()).await;
                         let _ = s.write_all(&body[..body.len() / 2]).await;
                         // 剩下的不发，直接断开
@@ -83,7 +90,11 @@ fn entry(urls: Vec<String>, sha256: &'static str) -> &'static Entry {
     let sources: Vec<Source> = urls
         .into_iter()
         .enumerate()
-        .map(|(i, u)| Source { name: leak(format!("源{i}")), url: leak(u), direct: true })
+        .map(|(i, u)| Source {
+            name: leak(format!("源{i}")),
+            url: leak(u),
+            direct: true,
+        })
         .collect();
     Box::leak(Box::new(Entry {
         id: "test",
@@ -121,12 +132,22 @@ async fn real_download_of_the_small_model() {
     let dir = tmp("real");
     let start = std::time::Instant::now();
     let mut last = 0u64;
-    let r = fetch(e, &dir, &AtomicBool::new(false), &mut |state, have, speed, source, _| {
-        if have >= last + 500_000_000 || state != "downloading" {
-            last = have;
-            eprintln!("{state} {:.2} GB {:.1} MB/s {}", have as f64 / 1e9, speed as f64 / 1e6, source.unwrap_or(""));
-        }
-    })
+    let r = fetch(
+        e,
+        &dir,
+        &AtomicBool::new(false),
+        &mut |state, have, speed, source, _| {
+            if have >= last + 500_000_000 || state != "downloading" {
+                last = have;
+                eprintln!(
+                    "{state} {:.2} GB {:.1} MB/s {}",
+                    have as f64 / 1e9,
+                    speed as f64 / 1e6,
+                    source.unwrap_or("")
+                );
+            }
+        },
+    )
     .await;
     assert!(r.is_ok(), "download failed");
     eprintln!("done in {:.0}s", start.elapsed().as_secs_f64());
@@ -180,11 +201,12 @@ async fn cancel_keeps_progress_and_resume_finishes() {
     let e = entry(vec![good], sha_of_data());
     let cancel = Arc::new(AtomicBool::new(false));
     let flag = cancel.clone();
-    let mut stop = move |state: &'static str, _: u64, _: u64, _: Option<&str>, _: Option<String>| {
-        if state == "verifying" {
-            flag.store(true, Ordering::SeqCst);
-        }
-    };
+    let mut stop =
+        move |state: &'static str, _: u64, _: u64, _: Option<&str>, _: Option<String>| {
+            if state == "verifying" {
+                flag.store(true, Ordering::SeqCst);
+            }
+        };
     let r = fetch(e, &dir, &cancel, &mut stop).await;
     assert!(matches!(r, Err(DlError::Canceled)));
     assert_eq!(std::fs::metadata(&part).unwrap().len(), 1_500_000);

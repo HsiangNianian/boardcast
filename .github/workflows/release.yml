@@ -94,13 +94,13 @@ jobs:
         with:
           workspaces: src-tauri
           key: ${{ matrix.name }}
-          cache-directories: src-tauri/target/sherpa-onnx-prebuilt
-      # sherpa-onnx-sys 把下载的预编译库放在 target/sherpa-onnx-prebuilt/，rust-cache 默认不缓存这里，
-      # 却会恢复它的构建脚本结果，于是 cargo 以为库已经就位、链接时找不到。
-      # 先清掉这个包，让构建脚本每次都确认一遍库在不在（在就不重新下载）。
-      - name: Make sure the sherpa-onnx prebuilt libs are present
+      # sherpa-onnx-sys 把下载的预编译库解压在 target/sherpa-onnx-prebuilt/<版本>/lib，只要这个目录在就不再下载。
+      # rust-cache 保存前会清理 target/，目录留下了、里面的 .a / .lib 却没了，于是链接时找不到库。
+      # 所以每次都删掉这个目录、清掉这个包，让构建脚本重新下载解压（在 Actions 里只要几秒）。
+      - name: Fetch the sherpa-onnx prebuilt libs fresh
         shell: bash
         run: |
+          rm -rf src-tauri/target/sherpa-onnx-prebuilt
           cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys
           cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys --release
       - run: pnpm install --frozen-lockfile

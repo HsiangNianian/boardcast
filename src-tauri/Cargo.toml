@@ -25,6 +25,10 @@ reqwest = { version = "0.13", features = ["stream"] }
 futures-util = "0.3"
 sha2 = "0.10"
 tokio = { version = "1", features = ["fs", "io-util", "time"] }
+fs4 = "1"
+# 语音输入：麦克风采集 + 断句 + 识别（sherpa-onnx 静态链接，构建时下载官方预编译库）
+cpal = "0.18"
+sherpa-onnx = "2.0.1"
 
 # 应用崩溃或被强制结束时，让 llama-server 跟着退出，不留下占着显存的孤儿进程
 [target.'cfg(target_os = "linux")'.dependencies]

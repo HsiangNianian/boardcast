@@ -86,7 +86,7 @@ fn leak(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }
 
-fn entry(urls: Vec<String>, sha256: &'static str) -> &'static Entry {
+fn entry(urls: Vec<String>, sha256: &'static str) -> &'static FileSpec {
     let sources: Vec<Source> = urls
         .into_iter()
         .enumerate()
@@ -96,16 +96,46 @@ fn entry(urls: Vec<String>, sha256: &'static str) -> &'static Entry {
             direct: true,
         })
         .collect();
-    Box::leak(Box::new(Entry {
-        id: "test",
-        label: "test",
-        note: "",
-        file: "model.gguf",
+    Box::leak(Box::new(FileSpec {
+        name: "model.gguf",
         size: 3_000_000,
         sha256,
-        vram_mib: 0,
         sources: Box::leak(sources.into_boxed_slice()),
     }))
+}
+
+#[test]
+fn refuses_to_start_without_enough_space() {
+    let dir = tmp("space");
+    let e = CATALOG.iter().find(|e| e.id == "qwen3.5-4b").unwrap();
+    // 2.7 GB 的模型，盘上只剩 1 GB：拒绝，并且说清楚差多少
+    let err = check_space(e, &dir, 1_000_000_000).unwrap_err();
+    assert!(
+        err.contains("磁盘空间不够") && err.contains("2.7 GB"),
+        "{err}"
+    );
+    // 已经下了 2 GB：只需要再下 0.7 GB，加余量 1 GB 够了
+    std::fs::write(part_of(&dir.join(e.main_file())), vec![0u8; 0]).unwrap();
+    let f = std::fs::OpenOptions::new()
+        .write(true)
+        .open(part_of(&dir.join(e.main_file())))
+        .unwrap();
+    f.set_len(2_000_000_000).unwrap();
+    assert!(check_space(e, &dir, 1_100_000_000).is_ok());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn voice_entry_points_at_the_files_the_engine_loads() {
+    let e = CATALOG.iter().find(|e| e.id == "voice").unwrap();
+    let names: Vec<_> = e.files.iter().map(|f| f.name).collect();
+    for want in [
+        voice_files::SENSE_VOICE,
+        voice_files::TOKENS,
+        voice_files::VAD,
+    ] {
+        assert!(names.contains(&want), "{want}");
+    }
 }
 
 fn sha_of_data() -> &'static str {
@@ -128,7 +158,7 @@ fn quiet() -> impl FnMut(&'static str, u64, u64, Option<&str>, Option<String>) +
 #[tokio::test]
 #[ignore]
 async fn real_download_of_the_small_model() {
-    let e = &CATALOG[0];
+    let e = &CATALOG[0].files[0];
     let dir = tmp("real");
     let start = std::time::Instant::now();
     let mut last = 0u64;

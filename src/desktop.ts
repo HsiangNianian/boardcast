@@ -23,7 +23,7 @@ export interface ModelInfo {
   id: string
   label: string
   note: string
-  file: string
+  kind: 'llm' | 'voice'
   size: number
   installed: boolean
   partial: number
@@ -35,6 +35,20 @@ export interface Catalog {
   models: ModelInfo[]
   dir?: string
   downloading?: string
+  freeBytes?: number
+}
+
+export interface VoiceStatus {
+  installed: boolean
+  listening: boolean
+  device?: string
+  message?: string
+}
+
+export interface Heard {
+  text: string
+  start: number
+  end: number
 }
 
 export interface Progress {
@@ -64,9 +78,19 @@ export const models = {
   remove: (id: string) => call<void>('model_delete', { id }),
 }
 
-/** 订阅下载进度，返回取消订阅的函数 */
-export async function onProgress(cb: (p: Progress) => void): Promise<() => void> {
+export const voice = {
+  status: () => call<VoiceStatus>('voice_status'),
+  devices: () => call<string[]>('voice_devices'),
+  start: (device?: string) => call<void>('voice_start', { device: device ?? null }),
+  stop: () => call<void>('voice_stop'),
+}
+
+/** 订阅外壳推来的事件，返回取消订阅的函数 */
+export async function on<T>(event: string, cb: (payload: T) => void): Promise<() => void> {
   if (!isDesktop) return () => {}
   const { listen } = await import('@tauri-apps/api/event')
-  return listen<Progress>('model-progress', (e) => cb(e.payload))
+  return listen<T>(event, (e) => cb(e.payload))
 }
+
+/** 订阅下载进度 */
+export const onProgress = (cb: (p: Progress) => void) => on<Progress>('model-progress', cb)

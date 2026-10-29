@@ -1,0 +1,458 @@
+//! 语音输入：麦克风 → 16 kHz → Silero VAD 断句 → SenseVoice 识别 → 事件推给前端。
+//!
+//! - 说话过程中，每隔 `PARTIAL_EVERY` 把这句已经说了的部分重新识别一遍，作为临时字幕（`voice-partial`）；
+//!   SenseVoice 不是流式模型，但几秒钟的音频识别只要几十毫秒，这样做代价很小。
+//! - VAD 判断一句话说完（停顿 `MIN_SILENCE` 秒），就用这一整段识别出定稿（`voice-final`），前端拿去出板书。
+//! - 音量每 100 ms 推一次（`voice-level`），界面上画一个电平条，让人知道麦克风在收音。
+//! - 采集在 Rust 里用 cpal 做，不走浏览器的 getUserMedia：各平台 WebView 的麦克风权限处理不一致。
+//!
+//! 识别部分（`Engine`）不依赖 Tauri 和声卡，可以直接喂 wav 测试。
+
+use crate::llm;
+use crate::models::voice_files;
+use serde::Serialize;
+use sherpa_onnx::{
+    LinearResampler, OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig,
+    SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
+};
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter, Manager};
+
+pub const SAMPLE_RATE: i32 = 16_000;
+/// Silero VAD 在 16 kHz 下一次吃 512 个样本
+const WINDOW: usize = 512;
+/// 停顿多久算一句话说完。越短出字越快，但一句话中间换气也可能被切开
+const MIN_SILENCE: f32 = 0.45;
+/// 一句话最长多少秒，超过就强制切开，免得一直说不停时字幕迟迟不定稿
+const MAX_SPEECH: f32 = 12.0;
+/// 说话过程中多久刷新一次临时字幕
+const PARTIAL_EVERY: Duration = Duration::from_millis(600);
+/// 检测到开口时往前多带一点，免得吃掉第一个字
+const PREROLL: usize = SAMPLE_RATE as usize / 4;
+
+#[derive(Clone, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceStatus {
+    /// 语音模型下好了没有
+    pub installed: bool,
+    pub listening: bool,
+    pub device: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Heard {
+    pub text: String,
+    /// 这句话在本次收音里的起止时间（秒）
+    pub start: f32,
+    pub end: f32,
+}
+
+/// 识别核心：喂 16 kHz 的单声道样本，吐出临时结果和定稿
+pub struct Engine {
+    vad: VoiceActivityDetector,
+    asr: OfflineRecognizer,
+    pending: Vec<f32>,
+    /// 当前这句话（从检测到开口开始，带一点前置）
+    speech: Vec<f32>,
+    recent: Vec<f32>,
+    in_speech: bool,
+    last_partial: Instant,
+    partial_text: String,
+    /// 已经喂进来的样本总数，用来算时间
+    fed: usize,
+}
+
+pub enum Event {
+    Partial(String),
+    Final(Heard),
+}
+
+impl Engine {
+    pub fn load(models: &Path) -> Result<Self, String> {
+        let path = |p: &str| models.join(p).to_string_lossy().to_string();
+        let vad_config = VadModelConfig {
+            silero_vad: SileroVadModelConfig {
+                model: Some(path(voice_files::VAD)),
+                threshold: 0.5,
+                min_silence_duration: MIN_SILENCE,
+                min_speech_duration: 0.25,
+                window_size: WINDOW as i32,
+                max_speech_duration: MAX_SPEECH,
+            },
+            sample_rate: SAMPLE_RATE,
+            num_threads: 1,
+            ..Default::default()
+        };
+        let vad = VoiceActivityDetector::create(&vad_config, 60.0).ok_or("断句模型加载失败")?;
+
+        let mut asr_config = OfflineRecognizerConfig::default();
+        asr_config.model_config.sense_voice = OfflineSenseVoiceModelConfig {
+            model: Some(path(voice_files::SENSE_VOICE)),
+            language: Some("auto".into()),
+            // 数字、日期规整成阿拉伯数字，带标点
+            use_itn: true,
+        };
+        asr_config.model_config.tokens = Some(path(voice_files::TOKENS));
+        asr_config.model_config.num_threads = 2;
+        let asr = OfflineRecognizer::create(&asr_config).ok_or("识别模型加载失败")?;
+
+        Ok(Self {
+            vad,
+            asr,
+            pending: vec![],
+            speech: vec![],
+            recent: vec![],
+            in_speech: false,
+            last_partial: Instant::now(),
+            partial_text: String::new(),
+            fed: 0,
+        })
+    }
+
+    fn recognize(&self, samples: &[f32]) -> String {
+        let stream = self.asr.create_stream();
+        stream.accept_waveform(SAMPLE_RATE, samples);
+        self.asr.decode(&stream);
+        stream
+            .get_result()
+            .map(|r| r.text.trim().to_string())
+            .unwrap_or_default()
+    }
+
+    /// 喂一段 16 kHz 单声道样本
+    pub fn feed(&mut self, samples: &[f32], out: &mut Vec<Event>) {
+        self.pending.extend_from_slice(samples);
+        while self.pending.len() >= WINDOW {
+            let chunk: Vec<f32> = self.pending.drain(..WINDOW).collect();
+            self.fed += WINDOW;
+            self.vad.accept_waveform(&chunk);
+
+            if self.in_speech {
+                self.speech.extend_from_slice(&chunk);
+            } else {
+                self.recent.extend_from_slice(&chunk);
+                let n = self.recent.len();
+                if n > PREROLL {
+                    self.recent.drain(..n - PREROLL);
+                }
+            }
+            if self.vad.detected() && !self.in_speech {
+                self.in_speech = true;
+                self.speech = std::mem::take(&mut self.recent);
+                self.last_partial = Instant::now();
+            }
+            self.drain_segments(out);
+        }
+        // 正在说：定时刷新临时字幕
+        if self.in_speech
+            && self.last_partial.elapsed() >= PARTIAL_EVERY
+            && self.speech.len() > SAMPLE_RATE as usize / 2
+        {
+            self.last_partial = Instant::now();
+            let text = self.recognize(&self.speech);
+            if !text.is_empty() && text != self.partial_text {
+                self.partial_text = text.clone();
+                out.push(Event::Partial(text));
+            }
+        }
+    }
+
+    /// 停止收音时调用：没说完的那句也定稿
+    pub fn finish(&mut self, out: &mut Vec<Event>) {
+        if !self.pending.is_empty() {
+            let mut rest = std::mem::take(&mut self.pending);
+            rest.resize(WINDOW, 0.0);
+            self.vad.accept_waveform(&rest);
+        }
+        self.vad.flush();
+        self.drain_segments(out);
+    }
+
+    fn drain_segments(&mut self, out: &mut Vec<Event>) {
+        while let Some(seg) = self.vad.front() {
+            let text = self.recognize(seg.samples());
+            let start = seg.start() as f32 / SAMPLE_RATE as f32;
+            let end = start + seg.n() as f32 / SAMPLE_RATE as f32;
+            self.vad.pop();
+            if !text.is_empty() {
+                out.push(Event::Final(Heard { text, start, end }));
+            }
+            self.in_speech = self.vad.detected();
+            self.speech.clear();
+            self.partial_text.clear();
+        }
+        if !self.vad.detected() && self.in_speech && self.vad.is_empty() {
+            // VAD 已经不认为在说话，但还没给出段落（太短被丢弃了），收尾
+            self.in_speech = false;
+            self.speech.clear();
+            self.partial_text.clear();
+        }
+    }
+}
+
+// —— 采集和生命周期 ——
+
+struct Running {
+    stop: Arc<AtomicBool>,
+    thread: JoinHandle<()>,
+}
+
+#[derive(Default)]
+pub struct Voice {
+    running: Mutex<Option<Running>>,
+    status: Mutex<VoiceStatus>,
+}
+
+fn installed(app: &AppHandle) -> bool {
+    llm::models_dir(app).is_some_and(|d| crate::models::installed("voice", &d))
+}
+
+fn set_status(app: &AppHandle, s: VoiceStatus) {
+    *app.state::<Voice>().status.lock().unwrap() = s.clone();
+    let _ = app.emit("voice-status", s);
+}
+
+#[tauri::command]
+pub fn voice_status(app: AppHandle) -> VoiceStatus {
+    let mut s = app.state::<Voice>().status.lock().unwrap().clone();
+    s.installed = installed(&app);
+    s
+}
+
+#[tauri::command]
+pub fn voice_devices() -> Vec<String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    let host = cpal::default_host();
+    host.input_devices()
+        .map(|ds| {
+            ds.filter_map(|d| d.description().ok().map(|x| x.name().to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn voice_start(app: AppHandle, device: Option<String>) -> Result<(), String> {
+    if !installed(&app) {
+        return Err("语音模型还没下载".into());
+    }
+    let voice = app.state::<Voice>();
+    let mut running = voice.running.lock().unwrap();
+    if running.is_some() {
+        return Ok(());
+    }
+    let models = llm::models_dir(&app).ok_or("找不到模型目录")?;
+    let stop = Arc::new(AtomicBool::new(false));
+    let flag = stop.clone();
+    let handle = app.clone();
+    // 模型加载和 cpal 的流都放在这个线程里：有些平台上 cpal 的 Stream 不能跨线程
+    let (ready_tx, ready_rx) = mpsc::channel::<Result<String, String>>();
+    let thread = thread::spawn(move || run(handle, models, device, flag, ready_tx));
+    match ready_rx.recv_timeout(Duration::from_secs(30)) {
+        Ok(Ok(name)) => {
+            *running = Some(Running { stop, thread });
+            set_status(
+                &app,
+                VoiceStatus {
+                    installed: true,
+                    listening: true,
+                    device: Some(name),
+                    message: None,
+                },
+            );
+            Ok(())
+        }
+        Ok(Err(msg)) => {
+            let _ = thread.join();
+            set_status(
+                &app,
+                VoiceStatus {
+                    installed: true,
+                    message: Some(msg.clone()),
+                    ..Default::default()
+                },
+            );
+            Err(msg)
+        }
+        Err(_) => {
+            stop.store(true, Ordering::SeqCst);
+            Err("打开麦克风超时".into())
+        }
+    }
+}
+
+#[tauri::command]
+pub fn voice_stop(app: AppHandle) {
+    let taken = app.state::<Voice>().running.lock().unwrap().take();
+    if let Some(r) = taken {
+        r.stop.store(true, Ordering::SeqCst);
+        let _ = r.thread.join();
+    }
+    set_status(
+        &app,
+        VoiceStatus {
+            installed: installed(&app),
+            ..Default::default()
+        },
+    );
+}
+
+/// 模型文件变了（下完或删了）：停掉正在进行的收音，让界面重新读状态
+pub fn reload(app: &AppHandle) {
+    voice_stop(app.clone());
+}
+
+pub fn unload(app: &AppHandle) {
+    voice_stop(app.clone());
+}
+
+fn run(
+    app: AppHandle,
+    models: std::path::PathBuf,
+    device: Option<String>,
+    stop: Arc<AtomicBool>,
+    ready: mpsc::Sender<Result<String, String>>,
+) {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+    let mut engine = match Engine::load(&models) {
+        Ok(e) => e,
+        Err(msg) => {
+            let _ = ready.send(Err(msg));
+            return;
+        }
+    };
+
+    let host = cpal::default_host();
+    let dev = match &device {
+        Some(name) => host.input_devices().ok().and_then(|mut ds| {
+            ds.find(|d| d.description().is_ok_and(|x| x.name() == name.as_str()))
+        }),
+        None => host.default_input_device(),
+    };
+    let Some(dev) = dev else {
+        let _ = ready.send(Err("没有找到麦克风".into()));
+        return;
+    };
+    let name = dev
+        .description()
+        .map(|d| d.name().to_string())
+        .unwrap_or_else(|_| "麦克风".into());
+    let supported = match dev.default_input_config() {
+        Ok(c) => c,
+        Err(err) => {
+            let _ = ready.send(Err(format!("麦克风打不开：{err}")));
+            return;
+        }
+    };
+    let channels = supported.channels() as usize;
+    let rate = supported.sample_rate() as i32;
+    let config = supported.config();
+
+    // 声卡回调里只做一件事：转成单声道 f32 丢进通道，重活都在下面的循环里做
+    let (tx, rx) = mpsc::channel::<Vec<f32>>();
+    let err_app = app.clone();
+    let on_err = move |err: cpal::Error| {
+        let _ = err_app.emit("voice-error", format!("麦克风出错：{err}"));
+    };
+    macro_rules! stream_of {
+        ($t:ty, $to_f32:expr) => {{
+            let tx = tx.clone();
+            dev.build_input_stream::<$t, _, _>(
+                config.clone(),
+                move |data: &[$t], _| {
+                    let mono: Vec<f32> = data
+                        .chunks(channels)
+                        .map(|frame| {
+                            frame.iter().map(|&s| $to_f32(s)).sum::<f32>() / channels as f32
+                        })
+                        .collect();
+                    let _ = tx.send(mono);
+                },
+                on_err.clone(),
+                None,
+            )
+        }};
+    }
+    let stream = match supported.sample_format() {
+        cpal::SampleFormat::F32 => stream_of!(f32, |s: f32| s),
+        cpal::SampleFormat::I16 => stream_of!(i16, |s: i16| s as f32 / 32768.0),
+        cpal::SampleFormat::U16 => stream_of!(u16, |s: u16| (s as f32 - 32768.0) / 32768.0),
+        cpal::SampleFormat::I32 => stream_of!(i32, |s: i32| s as f32 / 2147483648.0),
+        other => {
+            let _ = ready.send(Err(format!("不支持的采样格式 {other:?}")));
+            return;
+        }
+    };
+    let stream = match stream {
+        Ok(s) => s,
+        Err(err) => {
+            let _ = ready.send(Err(format!("麦克风打不开：{err}")));
+            return;
+        }
+    };
+    if let Err(err) = stream.play() {
+        let _ = ready.send(Err(format!("麦克风打不开：{err}")));
+        return;
+    }
+    let resampler = if rate != SAMPLE_RATE {
+        LinearResampler::create(rate, SAMPLE_RATE)
+    } else {
+        None
+    };
+    let _ = ready.send(Ok(name));
+
+    let mut events = vec![];
+    let mut level_sum = 0.0f32;
+    let mut level_n = 0usize;
+    let mut last_level = Instant::now();
+    while !stop.load(Ordering::SeqCst) {
+        let Ok(chunk) = rx.recv_timeout(Duration::from_millis(100)) else {
+            continue;
+        };
+        for s in &chunk {
+            level_sum += s * s;
+        }
+        level_n += chunk.len();
+        let samples = match &resampler {
+            Some(r) => r.resample(&chunk, false),
+            None => chunk,
+        };
+        engine.feed(&samples, &mut events);
+        if last_level.elapsed() >= Duration::from_millis(100) && level_n > 0 {
+            let rms = (level_sum / level_n as f32).sqrt();
+            let _ = app.emit("voice-level", rms);
+            level_sum = 0.0;
+            level_n = 0;
+            last_level = Instant::now();
+        }
+        emit_events(&app, &mut events);
+    }
+    drop(stream);
+    engine.finish(&mut events);
+    emit_events(&app, &mut events);
+}
+
+fn emit_events(app: &AppHandle, events: &mut Vec<Event>) {
+    for e in events.drain(..) {
+        match e {
+            Event::Partial(text) => {
+                let _ = app.emit("voice-partial", text);
+            }
+            Event::Final(heard) => {
+                let _ = app.emit("voice-final", heard);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "voice_tests.rs"]
+mod tests;

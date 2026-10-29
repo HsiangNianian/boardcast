@@ -1,7 +1,7 @@
 // 模型管理（桌面版）：下载、切换、删除。没有模型时自动弹出。
 
 import { useCallback, useEffect, useState } from 'react'
-import { type Catalog, type LlmStatus, type Progress, models, onProgress } from './desktop.ts'
+import { type Catalog, type LlmStatus, type ModelInfo, type Progress, models, onProgress } from './desktop.ts'
 
 const gb = (n: number) => `${(n / 1e9).toFixed(1)} GB`
 const mbps = (n: number) => `${(n / 1e6).toFixed(1)} MB/s`
@@ -46,6 +46,9 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
 
   const gpu = status?.gpus.find((g) => g.discrete) ?? status?.gpus[0]
   const busy = catalog?.downloading
+  /** 还差多少空间（和外壳的检查一致：要另外留 0.3 GB 余量）；不知道剩余空间时不拦 */
+  const lacking = (m: ModelInfo) =>
+    catalog?.freeBytes === undefined ? 0 : Math.max(0, m.size - m.partial + 300_000_000 - catalog.freeBytes)
 
   return (
     <div className="modal" role="dialog" aria-label="本地模型">
@@ -73,6 +76,7 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
                 <b>{m.label}</b>
                 {m.recommended && <span className="tag rec">推荐</span>}
                 {m.selected && status?.state === 'ready' && <span className="tag on">正在使用</span>}
+                {m.kind === 'voice' && m.installed && <span className="tag on">已就绪</span>}
                 <span className="size">{gb(m.size)}</span>
               </div>
               <div className="note">{m.note}</div>
@@ -94,7 +98,7 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
               <div className="actions">
                 {m.installed ? (
                   <>
-                    {!m.selected && (
+                    {m.kind === 'llm' && !m.selected && (
                       <button onClick={() => act(() => models.select(m.id))} disabled={!!busy}>
                         使用这个
                       </button>
@@ -108,9 +112,12 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
                     暂停
                   </button>
                 ) : (
-                  <button onClick={() => act(() => models.download(m.id))} disabled={!!busy}>
-                    {m.partial > 0 ? `继续下载（已下 ${gb(m.partial)}）` : '下载'}
-                  </button>
+                  <>
+                    {lacking(m) > 0 && <span className="meta err">磁盘还差 {gb(lacking(m))}</span>}
+                    <button onClick={() => act(() => models.download(m.id))} disabled={!!busy || lacking(m) > 0}>
+                      {m.partial > 0 ? `继续下载（已下 ${gb(m.partial)}）` : '下载'}
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -119,7 +126,8 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
 
         {error && <p className="meta err">{error}</p>}
         <p className="fine">
-          下载源依次是 ModelScope、hf-mirror、Hugging Face，断点续传，下完用官方登记的 sha256 校验。模型目录：
+          下载源依次是 ModelScope、hf-mirror、Hugging Face，断点续传，下完用官方登记的 sha256 校验。
+          {catalog?.freeBytes !== undefined && `模型目录所在的盘还剩 ${gb(catalog.freeBytes)}。`}模型目录：
           <code>{catalog?.dir}</code>
         </p>
       </div>

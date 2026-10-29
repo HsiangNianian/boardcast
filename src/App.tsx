@@ -10,7 +10,7 @@ import { proposeOps } from './engine/llm.ts'
 import { formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { Session } from './engine/session.ts'
-import { type LlmStatus, isDesktop, llmStatus } from './desktop.ts'
+import { type Heard, type LlmStatus, type VoiceStatus, isDesktop, llmStatus, on, voice } from './desktop.ts'
 import InkBoard from './ink/InkBoard.tsx'
 import ModelPanel from './ModelPanel.tsx'
 
@@ -203,6 +203,55 @@ export default function App() {
     session.say(u)
   }
 
+  // —— 语音输入（桌面版）：外壳负责收音、断句、识别，这里只接结果 ——
+  const [listening, setListening] = useState(false)
+  const [level, setLevel] = useState(0)
+  const [partial, setPartial] = useState('')
+  const [mic, setMic] = useState<string | undefined>()
+  const [voiceErr, setVoiceErr] = useState<string | null>(null)
+  // 监听器只注册一次，用 ref 拿最新的 say 和说话人
+  const sayRef = useRef(say)
+  sayRef.current = say
+  const speakerRef = useRef(speaker)
+  speakerRef.current = speaker
+  useEffect(() => {
+    if (!isDesktop) return
+    const offs: Promise<() => void>[] = [
+      on<Heard>('voice-final', (h) => {
+        setPartial('')
+        sayRef.current({ speaker: speakerRef.current.trim() || undefined, text: h.text })
+      }),
+      on<string>('voice-partial', setPartial),
+      on<number>('voice-level', setLevel),
+      on<VoiceStatus>('voice-status', (s) => {
+        setListening(s.listening)
+        setMic(s.device)
+        if (!s.listening) {
+          setLevel(0)
+          setPartial('')
+        }
+        if (s.message) setVoiceErr(s.message)
+      }),
+      on<string>('voice-error', setVoiceErr),
+    ]
+    return () => offs.forEach((p) => void p.then((off) => off()))
+  }, [])
+
+  async function toggleMic() {
+    setVoiceErr(null)
+    if (listening) {
+      await voice.stop()
+      return
+    }
+    const s = await voice.status()
+    if (!s.installed) {
+      setVoiceErr('先下载语音识别模型')
+      setShowModels(true)
+      return
+    }
+    await voice.start().catch((e) => setVoiceErr(String(e)))
+  }
+
   function reset() {
     session.graph = emptyGraph()
     session.history = []
@@ -262,7 +311,13 @@ export default function App() {
         </div>
 
         <div className="transcript">
-          {lines.length === 0 && <p className="empty">在下面输入一句话，或者播放一段示例会议。语音输入还在做。</p>}
+          {lines.length === 0 && !partial && (
+            <p className="empty">
+              {isDesktop
+                ? '点「开始收音」直接说话，也可以在下面打字，或者播放一段示例会议。'
+                : '在下面输入一句话，或者播放一段示例会议。语音输入要用桌面版。'}
+            </p>
+          )}
           {lines.map((l, i) => (
             <div key={i} className="line">
               <div>
@@ -275,8 +330,27 @@ export default function App() {
               </div>
             </div>
           ))}
+          {partial && (
+            <div className="line partial" aria-live="polite">
+              {speaker.trim() && <b>{speaker.trim()}：</b>}
+              {partial}…
+            </div>
+          )}
           <div ref={listEnd} />
         </div>
+
+        {isDesktop && (
+          <div className="mic">
+            <button type="button" className={listening ? 'on' : ''} onClick={() => void toggleMic()} aria-pressed={listening}>
+              {listening ? '停止收音' : '开始收音'}
+            </button>
+            <span className="meter" aria-hidden>
+              {/* 说话时 RMS 大概在 0.02～0.2，放大一点再开根号，小声也看得见 */}
+              <i style={{ width: `${Math.min(100, Math.sqrt(level * 8) * 100).toFixed(0)}%` }} />
+            </span>
+            <small>{voiceErr ?? (listening ? mic : '')}</small>
+          </div>
+        )}
 
         <form
           className="say"

@@ -57,6 +57,15 @@ jobs:
         with:
           workspaces: src-tauri
           key: ${{ matrix.name }}
+          cache-directories: src-tauri/target/sherpa-onnx-prebuilt
+      # sherpa-onnx-sys 把下载的预编译库放在 target/sherpa-onnx-prebuilt/，rust-cache 默认不缓存这里，
+      # 却会恢复它的构建脚本结果，于是 cargo 以为库已经就位、链接时找不到。
+      # 先清掉这个包，让构建脚本每次都确认一遍库在不在（在就不重新下载）。
+      - name: Make sure the sherpa-onnx prebuilt libs are present
+        shell: bash
+        run: |
+          cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys
+          cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys --release
       - run: pnpm install --frozen-lockfile
       - run: pnpm tauri build
       # 冒烟测试：打进安装包的 llama-server 在这个平台上能跑起来、能列出设备

@@ -270,3 +270,122 @@ button.ghost {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   word-break: break-all;
 }
+
+button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* —— 模型管理 —— */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.35);
+}
+.panel {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.2);
+}
+.panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.panel h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.panel .hint,
+.panel .fine {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.panel .fine {
+  font-size: 11px;
+}
+.panel .fine code {
+  display: block;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  word-break: break-all;
+}
+.model {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.model.current {
+  border-color: var(--ok);
+}
+.model .row1 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.model .size {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.model .note {
+  font-size: 13px;
+  color: var(--muted);
+}
+.tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid currentColor;
+}
+.tag.rec {
+  color: var(--accent);
+}
+.tag.on {
+  color: var(--ok);
+}
+.bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s;
+}
+.model .meta {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.meta.err {
+  color: var(--bad);
+}
+.model .actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

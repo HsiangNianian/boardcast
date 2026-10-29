@@ -12,6 +12,7 @@ import type { Utterance } from './engine/prompt.ts'
 import { Session } from './engine/session.ts'
 import { type LlmStatus, isDesktop, llmStatus } from './desktop.ts'
 import InkBoard from './ink/InkBoard.tsx'
+import ModelPanel from './ModelPanel.tsx'
 
 type Mode = 'pencil' | 'ink'
 
@@ -52,6 +53,15 @@ export default function App() {
   const [builtin, setBuiltin] = useState<LlmStatus | null>(null)
   // 第一次请求很慢（Vulkan 现场编译着色器，提示词前缀也还没进缓存），就绪后先空跑一次
   const [warming, setWarming] = useState(false)
+  // 模型管理面板：第一次发现没有模型时自动打开
+  const [showModels, setShowModels] = useState(false)
+  const askedForModel = useRef(false)
+  useEffect(() => {
+    if (builtin?.state === 'no-model' && !askedForModel.current) {
+      askedForModel.current = true
+      setShowModels(true)
+    }
+  }, [builtin?.state])
   const warmed = useRef<string | null>(null)
   useEffect(() => {
     if (!isDesktop) return
@@ -229,14 +239,11 @@ export default function App() {
             <small className={`builtin ${builtin.state}`}>
               {builtin.state === 'ready' && `内置：${builtin.model} · ${builtin.device}${warming ? ' · 预热中…' : ''}`}
               {builtin.state === 'starting' && `正在启动内置模型 ${builtin.model ?? ''}（${builtin.device ?? ''}）…`}
-              {builtin.state === 'no-model' && (
-                <>
-                  {builtin.message}
-                  <br />
-                  <code>{builtin.modelsDir}</code>
-                </>
-              )}
-              {builtin.state === 'error' && builtin.message}
+              {builtin.state === 'no-model' && builtin.message}
+              {builtin.state === 'error' && builtin.message}{' '}
+              <button type="button" className="link" onClick={() => setShowModels(true)}>
+                管理模型
+              </button>
             </small>
           )}
         </label>
@@ -341,6 +348,7 @@ export default function App() {
           />
         )}
       </main>
+      {showModels && <ModelPanel status={builtin} onClose={() => setShowModels(false)} />}
     </div>
   )
 }

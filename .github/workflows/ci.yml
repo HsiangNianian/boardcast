@@ -68,6 +68,8 @@ jobs:
           "$exe" --version
           "$exe" --list-devices
           du -sh src-tauri/llama
+      # 模型下载器的离线测试（假的 HTTP 服务：换源、断线续传、校验失败、取消）
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
       - uses: actions/upload-artifact@v4
         with:
           name: boardcast-${{ matrix.name }}

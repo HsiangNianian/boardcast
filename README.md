@@ -79,14 +79,25 @@
 - 应用崩溃或被强制结束时，llama-server 会跟着退出，不会留下占着显存的进程。
 - 首次加载后会先空跑一次预热。每台机器第一次启动时 Vulkan 要编译着色器，可能要等几十秒，之后会被驱动缓存。
 
-模型还没有下载界面（#3），需要先手动放一个 `.gguf` 进模型目录，然后重启应用：
+第一次打开时会弹出「本地模型」面板，按显卡推荐一档：
+
+| 模型 | 大小 | 适合 |
+|---|---|---|
+| Qwen3.5-4B（Q4_K_M） | 2.7 GB | 轻薄本、核显、纯 CPU |
+| Qwen3.5-9B（Q4_K_M） | 5.7 GB | 6 GB 以上显存的独显 |
+
+下载依次尝试 ModelScope（直连，不走系统代理）、hf-mirror、Hugging Face；断点续传，可以暂停；下完用 Hugging Face 上登记的 sha256 校验，然后自动切换过去。之后随时可以点「管理模型」切换或删除。
+
+![本地模型面板](docs/screenshot-models.png)
+
+也可以手动把任意 `.gguf` 放进模型目录，或者用环境变量 `BOARDCAST_MODEL=/path/to/model.gguf` 指定：
 
 | 系统 | 模型目录 |
 |---|---|
 | Linux | `~/.local/share/games.mmstudio.boardcast/models/` |
 | Windows | `%APPDATA%\games.mmstudio.boardcast\models\` |
 
-推荐 [Qwen3.5-9B](https://modelscope.cn/models/unsloth/Qwen3.5-9B-GGUF)（独显）或 [Qwen3.5-4B](https://modelscope.cn/models/unsloth/Qwen3.5-4B-GGUF)（轻薄本）的 `Q4_K_M`，国内从 ModelScope 下载快得多。目录里有多个模型时，优先用 9B，其次 4B；也可以用环境变量 `BOARDCAST_MODEL=/path/to/model.gguf` 指定。llama-server 的日志在应用的日志目录里（Linux 是 `~/.local/share/games.mmstudio.boardcast/logs/llama-server.log`）。
+llama-server 的日志在应用的日志目录里（Linux 是 `~/.local/share/games.mmstudio.boardcast/logs/llama-server.log`）。
 
 ## 本地运行
 
@@ -125,7 +136,7 @@ pnpm test                              # 引擎单元测试，不需要模型
 - [ ] 手写模式里的小图标、导出 PNG / SVG
 - [ ] sherpa-onnx 流式转写（麦克风 + 系统声音）
 - [x] Tauri 外壳拉起打包进来的 llama-server（#2）
-- [ ] 首次启动下载模型（#3）
+- [x] 首次启动下载模型（#3）
 - [ ] 不参与调参的测试集；合成数据 + LoRA 微调小模型
 - [ ] 增量排版，新节点出现时旧节点不跳
 - [ ] 导出 Markdown / PNG / `.excalidraw`

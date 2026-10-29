@@ -50,6 +50,7 @@ export default function InkBoard({
   messy,
   bottomInset = 0,
   tidy = 0,
+  weight = 1,
 }: {
   graph: Graph
   hot: Set<string>
@@ -59,6 +60,8 @@ export default function InkBoard({
   bottomInset?: number
   /** 每点一次「整理排版」加一：排完以后重新适配画面 */
   tidy?: number
+  /** 笔画粗细的倍数 */
+  weight?: number
 }) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
@@ -82,7 +85,7 @@ export default function InkBoard({
     let stale = false
     void (async () => {
       const l = await board.layout(graph)
-      const ps = await compose(graph, l, hot, look, messy)
+      const ps = await compose(graph, l, hot, look, messy, weight)
       if (stale) return
       // 给第一次出现的笔画排上写字的时间：接在正在写的东西后面。
       // 板书不能落后于讨论：一轮新内容最多写 BUDGET 毫秒，写不完就整体加速；
@@ -132,7 +135,7 @@ export default function InkBoard({
     return () => {
       stale = true
     }
-  }, [graph, hot, look, messy, tidy, bottomInset])
+  }, [graph, hot, look, messy, weight, tidy, bottomInset])
 
   // 画布尺寸放进 state：第一次渲染时 ref 还没挂上，窗口缩放时也要重新适配
   const [[W, H], setSize] = useState<[number, number]>([1000, 700])

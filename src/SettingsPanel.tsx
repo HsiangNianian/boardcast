@@ -26,6 +26,9 @@ interface Props {
   inkMode: boolean
   messy: number
   setMessy: (n: number) => void
+  /** 笔画粗细，百分比 */
+  weight: number
+  setWeight: (n: number) => void
 }
 
 /** 错误对象只要它的消息，不要前面的「Error: 」 */
@@ -234,6 +237,21 @@ export default function SettingsPanel(p: Props) {
                 value={p.messy}
                 onChange={(e) => p.setMessy(Number(e.target.value))}
                 aria-label="潦草度"
+              />
+            </label>
+            <label className="messy">
+              <span>
+                笔画粗细 <b>{p.weight}%</b>
+                <i>{p.weight < 80 ? '细' : p.weight <= 120 ? '适中' : p.weight <= 160 ? '粗' : '很粗'}</i>
+              </span>
+              <input
+                type="range"
+                min={50}
+                max={200}
+                step={5}
+                value={p.weight}
+                onChange={(e) => p.setWeight(Number(e.target.value))}
+                aria-label="笔画粗细"
               />
             </label>
           </section>

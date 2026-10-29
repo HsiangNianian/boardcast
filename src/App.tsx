@@ -253,8 +253,14 @@ export default function App() {
     const v = Number(load('boardcast.messy', '30'))
     return Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 30
   })
+  // 笔画粗细：百分比，100 是默认
+  const [weight, setWeight] = useState(() => {
+    const v = Number(load('boardcast.weight', '100'))
+    return Number.isFinite(v) ? Math.min(200, Math.max(50, v)) : 100
+  })
   // 拖滑杆时每一格都要重算全部笔画，让它慢半拍，拖动本身不卡
   const messyLater = useDeferredValue(messy)
+  const weightLater = useDeferredValue(weight)
   const [micChoice, setMicChoice] = useState(() => load('boardcast.mic', ''))
   const listEnd = useRef<HTMLDivElement>(null)
 
@@ -356,9 +362,10 @@ export default function App() {
   useEffect(() => {
     save('boardcast.mode', mode)
     save('boardcast.messy', String(messy))
+    save('boardcast.weight', String(weight))
     save('boardcast.mic', micChoice)
     save('boardcast.log', showLog ? 'open' : 'closed')
-  }, [mode, messy, micChoice, showLog])
+  }, [mode, messy, weight, micChoice, showLog])
 
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
   useEffect(() => {
@@ -575,7 +582,7 @@ export default function App() {
 
       <main className="board">
         {mode === 'ink' ? (
-          <InkBoard graph={graph} hot={hot} dark={dark} messy={messyLater / 100} bottomInset={inset} tidy={tidy} />
+          <InkBoard graph={graph} hot={hot} dark={dark} messy={messyLater / 100} bottomInset={inset} tidy={tidy} weight={weightLater / 100} />
         ) : (
           <Excalidraw
             excalidrawAPI={setApi}
@@ -693,6 +700,8 @@ export default function App() {
           inkMode={mode === 'ink'}
           messy={messy}
           setMessy={setMessy}
+          weight={weight}
+          setWeight={setWeight}
         />
       )}
       {showModels && <ModelPanel status={builtin} onClose={() => setShowModels(false)} />}

@@ -88,7 +88,15 @@ function edgePoint(b: { x: number; y: number; w: number; h: number }, c: Pt, p: 
   return [c[0] + dx * t, c[1] + dy * t]
 }
 
-export async function compose(g: Graph, l: Layout, hot: Set<string>, look: InkLook, messy = 0.3): Promise<Piece[]> {
+/** `weight`：笔画粗细的倍数，1 是默认粗细 */
+export async function compose(
+  g: Graph,
+  l: Layout,
+  hot: Set<string>,
+  look: InkLook,
+  messy = 0.3,
+  weight = 1,
+): Promise<Piece[]> {
   const pieces: Piece[] = []
   const colorOf = (n: Node | undefined, fallback = look.ink) =>
     n?.ink === 'draft' ? look.pencil : n?.kind === 'question' ? look.red : n?.kind === 'note' ? look.blue : fallback
@@ -96,8 +104,10 @@ export async function compose(g: Graph, l: Layout, hot: Set<string>, look: InkLo
 
   const add = (key: string, color: string, opacity: number, strokes: (Stroke | Mark)[], size: number, extra: Partial<Piece> = {}) => {
     const r = rng(key)
+    const wobble = size * (0.12 + 0.5 * messy)
+    const pen = size * weight
     const inked = strokes.map((s) =>
-      Array.isArray(s) ? ink(s, size, r, { messy }) : ink(s.pts, s.thin ? size * 0.45 : size, r, { messy }),
+      Array.isArray(s) ? ink(s, pen, r, { messy, wobble }) : ink(s.pts, s.thin ? pen * 0.45 : pen, r, { messy, wobble }),
     )
     pieces.push({ key, color, opacity, strokes: inked, ...extra })
   }

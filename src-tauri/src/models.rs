@@ -236,8 +236,7 @@ fn recommended(app: &AppHandle) -> &'static str {
         .unwrap_or(0);
     let llms = || CATALOG.iter().filter(|e| e.kind == Kind::Llm);
     llms()
-        .filter(|e| e.vram_mib <= vram)
-        .last()
+        .rfind(|e| e.vram_mib <= vram)
         .or_else(|| llms().next())
         .map(|e| e.id)
         .unwrap_or("")

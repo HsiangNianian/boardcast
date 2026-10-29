@@ -100,6 +100,10 @@ jobs:
       - name: Rust tests
         shell: bash
         run: BOARDCAST_VOICE_DIR="$PWD/voice-models" cargo test --manifest-path src-tauri/Cargo.toml --lib -- --nocapture
+      # 只在 Linux 上跑一次就够：clippy 的告警和平台无关
+      - name: Clippy
+        if: runner.os == 'Linux'
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --lib --release -- -D warnings
       - uses: actions/upload-artifact@v4
         with:
           name: boardcast-${{ matrix.name }}

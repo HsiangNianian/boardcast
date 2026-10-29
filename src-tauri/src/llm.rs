@@ -241,7 +241,9 @@ fn spawn(
         .args(["--host", "127.0.0.1", "--port", &port.to_string()])
         .args(["-c", "4096", "-np", "1", "--jinja"]);
     match device {
-        Some(d) => cmd.args(["--device", d, "-ngl", "99", "-fa", "auto"]),
+        // 不写死 -ngl 99：显存不够放下整个模型时（6 GB 卡跑 9B，或者显存被别的程序占了），
+        // 让 llama.cpp 按剩余显存放尽量多的层，其余留在 CPU，而不是整个启动失败退回纯 CPU
+        Some(d) => cmd.args(["--device", d, "-ngl", "auto", "--fit", "on", "-fa", "auto"]),
         None => cmd.args(["--device", "none", "-ngl", "0"]),
     };
     #[cfg(target_os = "linux")]

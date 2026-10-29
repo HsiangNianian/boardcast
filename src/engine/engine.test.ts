@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { emptyGraph, findNode } from './graph.ts'
 import { applyOps, eraseDrafts, formatOps, markDrafts, parseOps } from './ops.ts'
+import { type LlmConfig, chatUrl, proposeOps, stripThinking } from './llm.ts'
 import { grammar } from './prompt.ts'
 import { mentions, quickOps } from './rules.ts'
 
@@ -110,6 +111,76 @@ test('L moves an existing node under a new parent', () => {
 test('format round-trips the board ops', () => {
   const text = 'T 「爬虫」\nL n1 「监控任务」\nQ n1 「要不要上 MQ」\nF 「a+b」\nK n2 「先做」\nM n2 划掉\nI n1 数据库'
   assert.equal(formatOps(parseOps(text)), text)
+})
+
+test('remote endpoints: think blocks are stripped, both URL forms work, standard fields only', async () => {
+  assert.equal(stripThinking('<think>先想想……</think>\nE 「甲」 -> 「乙」'), 'E 「甲」 -> 「乙」')
+  assert.equal(stripThinking('<think>没想完就被截断'), '')
+  assert.equal(chatUrl('https://api.openai.com/v1/'), 'https://api.openai.com/v1/chat/completions')
+  assert.equal(chatUrl('https://x.ai/v1/chat/completions'), 'https://x.ai/v1/chat/completions')
+
+  let sent: Record<string, unknown> = {}
+  const cfg: LlmConfig = {
+    baseUrl: 'https://example.invalid/v1',
+    flavor: 'openai',
+    send: async (b) => {
+      sent = b
+      return { choices: [{ message: { content: '<think>嗯</think>T 「爬虫」' } }] }
+    },
+  }
+  const r = await proposeOps(cfg, emptyGraph(), [], { text: '爬虫' })
+  assert.equal(r.text, 'T 「爬虫」')
+  // 远程接口不发 llama.cpp 专有的语法约束和前缀缓存
+  assert.equal(sent.grammar, undefined)
+  assert.equal(sent.cache_prompt, undefined)
+  // 但会试着关掉思考模式，否则推理模型会把 token 全花在思考上
+  assert.deepEqual(sent.chat_template_kwargs, { enable_thinking: false })
+  assert.ok((sent.max_tokens as number) >= 1024)
+})
+
+test('a strict server that rejects unknown fields gets a plain request, and is remembered', async () => {
+  const bodies: Record<string, unknown>[] = []
+  const cfg: LlmConfig = {
+    baseUrl: 'https://strict.example/v1',
+    flavor: 'openai',
+    send: async (b) => {
+      bodies.push(b)
+      if ('chat_template_kwargs' in b || 'enable_thinking' in b)
+        throw new Error("HTTP 400：Unrecognized request argument supplied: chat_template_kwargs")
+      return { choices: [{ message: { content: 'N 「网关」' } }] }
+    },
+  }
+  const r = await proposeOps(cfg, emptyGraph(), [], { text: '网关' })
+  assert.equal(r.text, 'N 「网关」')
+  assert.equal(bodies.length, 2)
+  await proposeOps(cfg, emptyGraph(), [], { text: '网关' })
+  // 第二次直接发干净的请求，不再白挨一次 400
+  assert.equal(bodies.length, 3)
+  assert.equal('chat_template_kwargs' in bodies[2], false)
+})
+
+test('a failing remote falls back to the local model for that sentence', async () => {
+  const local: LlmConfig = {
+    baseUrl: 'local',
+    label: '内置',
+    send: async (b) => {
+      assert.ok(b.grammar, '本地 llama.cpp 要带语法约束')
+      return { choices: [{ message: { content: 'N 「网关」' } }] }
+    },
+  }
+  const remote: LlmConfig = {
+    baseUrl: 'remote',
+    flavor: 'openai',
+    label: '远程',
+    fallback: local,
+    send: async () => {
+      throw new Error('HTTP 401：key 不对')
+    },
+  }
+  const r = await proposeOps(remote, emptyGraph(), [], { text: '网关' })
+  assert.equal(r.text, 'N 「网关」')
+  assert.equal(r.via, '内置')
+  assert.match(r.fellBack ?? '', /401/)
 })
 
 test('grammar only allows existing ids', () => {

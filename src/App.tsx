@@ -1,29 +1,38 @@
 import { Excalidraw } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import cases from '../eval/cases.json'
 import { layout } from './board/layout.ts'
 import { type Look, scene } from './board/scene.ts'
+import { type Heard, type LlmStatus, type VoiceStatus, isDesktop, llmStatus, on, voice } from './desktop.ts'
 import { type Graph, emptyGraph } from './engine/graph.ts'
-import { proposeOps } from './engine/llm.ts'
+import { type LlmConfig, proposeOps } from './engine/llm.ts'
 import { formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { Session } from './engine/session.ts'
-import { type Heard, type LlmStatus, type VoiceStatus, isDesktop, llmStatus, on, voice } from './desktop.ts'
 import InkBoard from './ink/InkBoard.tsx'
 import ModelPanel from './ModelPanel.tsx'
+import { type RemoteView, remote } from './remote.ts'
+import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
 
 type Mode = 'pencil' | 'ink'
+type Theme = 'system' | 'light' | 'dark'
 
 interface Line extends Utterance {
   /** 模型处理这句话用了多久；undefined 表示还在排队 */
   ms?: number
   ops?: string
+  /** 哪个模型画的；远程失败改用本地时标出来 */
+  via?: string
+  fellBack?: boolean
 }
 
 const LIGHT: Look = { ink: '#1e1e1e', pencil: '#868e96', highlight: '#ffec99', group: '#1971c2', question: '#e03131', note: '#1971c2' }
 const DARK: Look = { ink: '#e9ecef', pencil: '#868e96', highlight: '#5c4a00', group: '#74c0fc', question: '#ff8787', note: '#74c0fc' }
+
+const THEMES: Theme[] = ['system', 'light', 'dark']
+const THEME_LABEL: Record<Theme, string> = { system: '◐ 跟随系统', light: '☀ 浅色', dark: '☾ 深色' }
 
 function load(key: string, fallback: string): string {
   try {
@@ -33,7 +42,15 @@ function load(key: string, fallback: string): string {
   }
 }
 
-function useDark(): boolean {
+function save(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* 存不了就算了 */
+  }
+}
+
+function useSystemDark(): boolean {
   const q = '(prefers-color-scheme: dark)'
   const [dark, setDark] = useState(() => matchMedia(q).matches)
   useEffect(() => {
@@ -46,7 +63,20 @@ function useDark(): boolean {
 }
 
 export default function App() {
-  const dark = useDark()
+  // —— 主题：跟随系统 / 浅色 / 深色，写在 <html data-theme> 上，CSS 变量跟着变 ——
+  const [theme, setTheme] = useState<Theme>(() => {
+    const t = load('boardcast.theme', 'system')
+    return (THEMES as string[]).includes(t) ? (t as Theme) : 'system'
+  })
+  const systemDark = useSystemDark()
+  const dark = theme === 'dark' || (theme === 'system' && systemDark)
+  useEffect(() => {
+    const el = document.documentElement
+    if (theme === 'system') delete el.dataset.theme
+    else el.dataset.theme = theme
+    save('boardcast.theme', theme)
+  }, [theme])
+
   // 桌面版一开始留空，等内置模型就绪后由外壳告诉我们地址；网页版用上次填的
   const [baseUrl, setBaseUrl] = useState(() => (isDesktop ? '' : load('boardcast.llm', 'http://127.0.0.1:8080')))
   const [online, setOnline] = useState<boolean | null>(null)
@@ -54,15 +84,10 @@ export default function App() {
   const [builtin, setBuiltin] = useState<LlmStatus | null>(null)
   // 第一次请求很慢（Vulkan 现场编译着色器，提示词前缀也还没进缓存），就绪后先空跑一次
   const [warming, setWarming] = useState(false)
-  // 模型管理面板：第一次发现没有模型时自动打开
   const [showModels, setShowModels] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  // 模型管理面板：第一次发现没有模型时自动打开（已经启用了能用的远程模型就不打扰）
   const askedForModel = useRef(false)
-  useEffect(() => {
-    if (builtin?.state === 'no-model' && !askedForModel.current) {
-      askedForModel.current = true
-      setShowModels(true)
-    }
-  }, [builtin?.state])
   const warmed = useRef<string | null>(null)
   useEffect(() => {
     if (!isDesktop) return
@@ -91,6 +116,51 @@ export default function App() {
       clearTimeout(timer)
     }
   }, [])
+
+  // —— 远程模型：启用了就先确认能连上，能连上才优先用 ——
+  const [remoteView, setRemoteView] = useState<RemoteView | null>(null)
+  const [remoteState, setRemoteState] = useState<RemoteState>({ state: 'off' })
+  const checkRemote = useCallback(async () => {
+    const v = await remote.get().catch(() => null)
+    setRemoteView(v)
+    if (!v?.enabled) {
+      setRemoteState({ state: 'off' })
+      return
+    }
+    setRemoteState({ state: 'checking' })
+    try {
+      const t = await remote.test()
+      setRemoteState({ state: 'ok', ms: t.ms })
+    } catch (e) {
+      setRemoteState({ state: 'fail', message: errText(e) })
+    }
+  }, [])
+  useEffect(() => {
+    void checkRemote()
+  }, [checkRemote])
+  const useRemote = remoteState.state === 'ok' && !!remoteView
+
+  useEffect(() => {
+    if (builtin?.state === 'no-model' && !askedForModel.current && remoteState.state !== 'checking' && !useRemote) {
+      askedForModel.current = true
+      setShowModels(true)
+    }
+  }, [builtin?.state, remoteState.state, useRemote])
+
+  // 实际用来出板书的接口：远程优先，本地兜底
+  const llm = useMemo<LlmConfig>(() => {
+    const local: LlmConfig = { baseUrl, noThink: true, label: isDesktop ? '内置' : '本地' }
+    if (!useRemote || !remoteView) return local
+    return {
+      baseUrl: remoteView.baseUrl,
+      model: remoteView.model,
+      flavor: 'openai',
+      send: remote.send,
+      label: `远程 ${remoteView.model}`,
+      fallback: baseUrl ? local : undefined,
+    }
+  }, [baseUrl, useRemote, remoteView])
+
   const [lines, setLines] = useState<Line[]>([])
   const [graph, setGraph] = useState<Graph>(emptyGraph)
   const [hot, setHot] = useState<Set<string>>(new Set())
@@ -107,49 +177,47 @@ export default function App() {
   })
   // 拖滑杆时每一格都要重算全部笔画，让它慢半拍，拖动本身不卡
   const messyLater = useDeferredValue(messy)
+  const [micChoice, setMicChoice] = useState(() => load('boardcast.mic', ''))
   const listEnd = useRef<HTMLDivElement>(null)
 
   const session = useMemo(
     () =>
-      new Session(
-        { baseUrl, noThink: true },
-        {
-          graph: (g) => setGraph(g),
-          mention: (ids) => {
-            setHot(new Set(ids))
-            if (ids.length) setTimeout(() => setHot(new Set()), 1500)
-          },
-          llm: (r) =>
-            setLines((ls) => {
-              // 一批里的每句都标上这一轮的耗时
-              const out = [...ls]
-              let left = r.batch.length
-              for (let i = out.length - 1; i >= 0 && left > 0; i--) {
-                if (out[i].ms === undefined) {
-                  out[i] = { ...out[i], ms: r.ms, ops: left === r.batch.length ? formatOps(r.ops) || '-' : '' }
-                  left--
-                }
-              }
-              return out
-            }),
-          error: (e) => {
-            console.error(e)
-            setOnline(false)
-          },
+      new Session(llm, {
+        graph: (g) => setGraph(g),
+        mention: (ids) => {
+          setHot(new Set(ids))
+          if (ids.length) setTimeout(() => setHot(new Set()), 1500)
         },
-      ),
-    [baseUrl],
+        llm: (r) =>
+          setLines((ls) => {
+            // 一批里的每句都标上这一轮的耗时
+            const out = [...ls]
+            let left = r.batch.length
+            for (let i = out.length - 1; i >= 0 && left > 0; i--) {
+              if (out[i].ms === undefined) {
+                out[i] = {
+                  ...out[i],
+                  ms: r.ms,
+                  ops: left === r.batch.length ? formatOps(r.ops) || '-' : '',
+                  via: r.via,
+                  fellBack: !!r.fellBack,
+                }
+                left--
+              }
+            }
+            return out
+          }),
+        error: (e) => {
+          console.error(e)
+          setOnline(false)
+        },
+      }),
+    [llm],
   )
 
   useEffect(() => {
     // 桌面版的地址是内置服务每次启动时随机分配的端口，记下来下次也用不上
-    if (!isDesktop) {
-      try {
-        localStorage.setItem('boardcast.llm', baseUrl)
-      } catch {
-        /* 存不了就算了 */
-      }
-    }
+    if (!isDesktop) save('boardcast.llm', baseUrl)
     if (!baseUrl) {
       setOnline(false)
       return
@@ -173,7 +241,10 @@ export default function App() {
     void layout(graph).then((l) => {
       if (stale || !api) return
       const look = dark ? DARK : LIGHT
-      api.updateScene({ elements: scene(graph, l, hot, look) })
+      api.updateScene({
+        elements: scene(graph, l, hot, look),
+        appState: { viewBackgroundColor: dark ? '#121212' : '#fdfcf8' },
+      })
       if (!graph.nodes.length) return
       // 自己算缩放和居中：内容少时不放大到 100% 以上，内容多时整张图塞进画面
       const { x0, y0, x1, y1 } = l.bounds
@@ -193,13 +264,10 @@ export default function App() {
   }, [graph, hot, dark, api])
 
   useEffect(() => {
-    try {
-      localStorage.setItem('boardcast.mode', mode)
-      localStorage.setItem('boardcast.messy', String(messy))
-    } catch {
-      /* 存不了就算了 */
-    }
-  }, [mode, messy])
+    save('boardcast.mode', mode)
+    save('boardcast.messy', String(messy))
+    save('boardcast.mic', micChoice)
+  }, [mode, messy, micChoice])
 
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
   useEffect(() => {
@@ -257,7 +325,7 @@ export default function App() {
       setShowModels(true)
       return
     }
-    await voice.start().catch((e) => setVoiceErr(String(e)))
+    await voice.start(micChoice || undefined).catch((e) => setVoiceErr(errText(e)))
   }
 
   function reset() {
@@ -279,56 +347,52 @@ export default function App() {
     setPlaying(false)
   }
 
+  // 顶上那一行：现在是哪个模型在画
+  const ready = useRemote || !!online
+  let status: string
+  if (useRemote) status = `远程：${remoteView?.model}`
+  else if (remoteState.state === 'checking') status = '正在检查远程模型…'
+  else if (builtin?.state === 'ready') status = `内置：${builtin.model?.replace(/\.gguf$/, '')}${warming ? ' · 预热中' : ''}`
+  else if (builtin?.state === 'starting') status = `正在启动 ${builtin.model?.replace(/\.gguf$/, '') ?? '内置模型'}…`
+  else if (builtin) status = builtin.message ?? '内置模型不可用'
+  else status = online ? `本地：${baseUrl}` : '没有连上模型'
+  const remoteBroken = remoteView?.enabled && remoteState.state === 'fail'
+
   return (
     <div className="app">
       <aside className="side">
-        <header>
-          <h1>boardcast</h1>
-          <p className="sub">说话，板书自己长出来</p>
+        <header className="top">
+          <div>
+            <h1>boardcast</h1>
+            <p className="sub">说话，板书自己长出来</p>
+          </div>
+          <div className="tools">
+            <button
+              className="ghost"
+              onClick={() => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
+              title="切换主题"
+              aria-label={`主题：${THEME_LABEL[theme]}，点一下切换`}
+            >
+              {THEME_LABEL[theme]}
+            </button>
+            <button className="ghost" onClick={() => setShowSettings(true)} aria-label="设置">
+              ⚙ 设置
+            </button>
+          </div>
         </header>
 
-        <label className="field">
-          <span>
-            本地模型 <i className={`dot ${online === null ? '' : online ? 'ok' : 'bad'}`} />
-          </span>
-          <input
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value.trim())}
-            placeholder={isDesktop ? '等内置模型就绪…' : 'http://127.0.0.1:8080'}
-            spellCheck={false}
-          />
-          {builtin && (
-            <small className={`builtin ${builtin.state}`}>
-              {builtin.state === 'ready' && `内置：${builtin.model} · ${builtin.device}${warming ? ' · 预热中…' : ''}`}
-              {builtin.state === 'starting' && `正在启动内置模型 ${builtin.model ?? ''}（${builtin.device ?? ''}）…`}
-              {builtin.state === 'no-model' && builtin.message}
-              {builtin.state === 'error' && builtin.message}{' '}
-              <button type="button" className="link" onClick={() => setShowModels(true)}>
-                管理模型
-              </button>
-            </small>
-          )}
-        </label>
-
-        <div className="row">
-          <select value={demo} onChange={(e) => setDemo(e.target.value)} disabled={playing}>
-            {cases.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <button onClick={play} disabled={playing || !online}>
-            {playing ? '播放中…' : '播放示例会议'}
-          </button>
-        </div>
+        <button type="button" className={`status ${ready ? 'ok' : ''}`} onClick={() => setShowSettings(true)}>
+          <i className={`dot ${ready ? 'ok' : online === false ? 'bad' : ''}`} />
+          <span>{status}</span>
+          {remoteBroken && <em>远程连不上，暂用本地</em>}
+        </button>
 
         <div className="transcript">
           {lines.length === 0 && !partial && (
             <p className="empty">
               {isDesktop
-                ? '点「开始收音」直接说话，也可以在下面打字，或者播放一段示例会议。'
-                : '在下面输入一句话，或者播放一段示例会议。语音输入要用桌面版。'}
+                ? '点「开始收音」直接说话，也可以在下面打字。示例会议在设置里。'
+                : '在下面输入一句话。示例会议在设置里；语音输入要用桌面版。'}
             </p>
           )}
           {lines.map((l, i) => (
@@ -339,6 +403,8 @@ export default function App() {
               </div>
               <div className="meta">
                 {l.ms === undefined ? '画着…' : `${Math.round(l.ms)} ms`}
+                {l.ms !== undefined && useRemote && l.via && ` · ${l.via}`}
+                {l.fellBack && ' · 远程失败，这句用了本地模型'}
                 {l.ops ? <pre>{l.ops}</pre> : null}
               </div>
             </div>
@@ -405,22 +471,6 @@ export default function App() {
             清空白板
           </button>
         </div>
-        {mode === 'ink' && (
-          <label className="messy">
-            <span>
-              潦草度 <b>{messy}</b>
-              <i>{messy < 25 ? '工整' : messy < 45 ? '随手' : messy < 70 ? '连写' : '龙飞凤舞'}</i>
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={messy}
-              onChange={(e) => setMessy(Number(e.target.value))}
-              aria-label="潦草度"
-            />
-          </label>
-        )}
       </aside>
 
       <main className="board">
@@ -435,6 +485,33 @@ export default function App() {
           />
         )}
       </main>
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          builtin={builtin}
+          warming={warming}
+          localUrl={baseUrl}
+          setLocalUrl={setBaseUrl}
+          localOnline={online}
+          onManageModels={() => {
+            setShowSettings(false)
+            setShowModels(true)
+          }}
+          remoteView={remoteView}
+          remoteState={remoteState}
+          onRemoteChanged={() => void checkRemote()}
+          mic={micChoice}
+          setMic={setMicChoice}
+          inkMode={mode === 'ink'}
+          messy={messy}
+          setMessy={setMessy}
+          demo={demo}
+          setDemo={setDemo}
+          playing={playing}
+          canPlay={ready}
+          play={() => void play()}
+        />
+      )}
       {showModels && <ModelPanel status={builtin} onClose={() => setShowModels(false)} />}
     </div>
   )

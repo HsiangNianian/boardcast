@@ -130,3 +130,37 @@ fn silence_produces_nothing() {
     let (partials, finals) = run(&mut engine, &vec![0.0; SAMPLE_RATE as usize * 3]);
     assert!(partials.is_empty() && finals.is_empty());
 }
+
+/// 列出这台机器上能选的麦克风，看有没有混进 ALSA 插件或扬声器回采。要声卡，默认跳过：
+///   cargo test --lib list_microphones -- --ignored --nocapture
+#[test]
+#[ignore]
+fn list_microphones() {
+    let names = voice_devices();
+    println!("{names:#?}");
+    assert!(names
+        .iter()
+        .all(|n| !n.starts_with("Monitor of") && !n.contains("Plugin")));
+    // 默认麦克风真的能收到声音帧
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    let dev = audio_host().default_input_device().expect("没有麦克风");
+    let cfg = dev.default_input_config().expect("读不到麦克风参数");
+    let got = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let n = got.clone();
+    let stream = dev
+        .build_input_stream_raw(
+            cfg.config(),
+            cfg.sample_format(),
+            move |d: &cpal::Data, _: &_| {
+                n.fetch_add(d.len(), Ordering::SeqCst);
+            },
+            |e| panic!("{e}"),
+            None,
+        )
+        .expect("打不开麦克风");
+    stream.play().unwrap();
+    thread::sleep(Duration::from_secs(1));
+    drop(stream);
+    println!("{:?} 1 秒收到 {} 个采样", cfg, got.load(Ordering::SeqCst));
+    assert!(got.load(Ordering::SeqCst) > 1000);
+}

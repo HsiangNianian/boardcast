@@ -226,16 +226,44 @@ pub fn voice_status(app: AppHandle) -> VoiceStatus {
     s
 }
 
+/// Linux 上优先用 PulseAudio（PipeWire 自带兼容层）：ALSA 直接列出来的是 null、jack、oss、
+/// 重采样之类的插件，看不出哪个是麦克风
+fn audio_host() -> cpal::Host {
+    #[cfg(target_os = "linux")]
+    {
+        if cpal::available_hosts().contains(&cpal::HostId::PulseAudio) {
+            if let Ok(h) = cpal::host_from_id(cpal::HostId::PulseAudio) {
+                return h;
+            }
+        }
+    }
+    cpal::default_host()
+}
+
+/// 能拿来收音的输入设备：去掉扬声器的回采（PulseAudio 的 `.monitor`）和 ALSA 的插件设备
+fn usable(d: &cpal::Device) -> Option<String> {
+    use cpal::traits::DeviceTrait;
+    let id = d.id().map(|i| i.to_string()).unwrap_or_default();
+    let name = d.description().ok()?.name().to_string();
+    let plugin = id.starts_with("alsa")
+        && !["default", "pipewire", "pulse"]
+            .iter()
+            .any(|k| id.ends_with(k))
+        && !id.contains("hw:")
+        && !id.contains("plughw:")
+        && !id.contains("sysdefault");
+    (!id.ends_with(".monitor") && !name.starts_with("Monitor of") && !plugin).then_some(name)
+}
+
 #[tauri::command]
 pub fn voice_devices() -> Vec<String> {
-    use cpal::traits::{DeviceTrait, HostTrait};
-    let host = cpal::default_host();
-    host.input_devices()
-        .map(|ds| {
-            ds.filter_map(|d| d.description().ok().map(|x| x.name().to_string()))
-                .collect()
-        })
-        .unwrap_or_default()
+    use cpal::traits::HostTrait;
+    let mut names: Vec<String> = audio_host()
+        .input_devices()
+        .map(|ds| ds.filter_map(|d| usable(&d)).collect())
+        .unwrap_or_default();
+    names.dedup();
+    names
 }
 
 #[tauri::command]
@@ -330,13 +358,17 @@ fn run(
         }
     };
 
-    let host = cpal::default_host();
-    let dev = match &device {
-        Some(name) => host.input_devices().ok().and_then(|mut ds| {
-            ds.find(|d| d.description().is_ok_and(|x| x.name() == name.as_str()))
-        }),
-        None => host.default_input_device(),
-    };
+    let host = audio_host();
+    // 设置里选的麦克风拔掉了就退回系统默认的，不让收音直接失败
+    let chosen = device
+        .as_deref()
+        .filter(|n| !n.is_empty())
+        .and_then(|name| {
+            host.input_devices()
+                .ok()
+                .and_then(|mut ds| ds.find(|d| d.description().is_ok_and(|x| x.name() == name)))
+        });
+    let dev = chosen.or_else(|| host.default_input_device());
     let Some(dev) = dev else {
         let _ = ready.send(Err("没有找到麦克风".into()));
         return;

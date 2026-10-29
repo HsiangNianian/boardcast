@@ -2,9 +2,11 @@
 // - 拉起打包进来的 llama-server（llm.rs），前端用 `llm_status` 拿地址
 // - 下载和管理模型（models.rs）
 // - 语音输入：麦克风 → 断句 → 识别（voice.rs）
+// - 用户自己填的 OpenAI 兼容远程模型（remote.rs）
 
 mod llm;
 mod models;
+mod remote;
 mod voice;
 
 use tauri::{Manager, RunEvent};
@@ -31,6 +33,10 @@ pub fn run() {
             voice::voice_devices,
             voice::voice_start,
             voice::voice_stop,
+            remote::remote_get,
+            remote::remote_save,
+            remote::remote_test,
+            remote::remote_chat,
         ])
         .build(tauri::generate_context!())
         .expect("error while building boardcast")

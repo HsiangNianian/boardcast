@@ -16,8 +16,9 @@
     sans-serif;
 }
 
+/* 主题：跟随系统时看 prefers-color-scheme；手动选了浅色或深色时，<html data-theme> 说了算 */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #121212;
     --panel: #1b1b1d;
     --ink: #e9ecef;
@@ -26,6 +27,15 @@
     --accent: #74c0fc;
     color-scheme: dark;
   }
+}
+:root[data-theme='dark'] {
+  --bg: #121212;
+  --panel: #1b1b1d;
+  --ink: #e9ecef;
+  --muted: #9a9890;
+  --line: #2e2e32;
+  --accent: #74c0fc;
+  color-scheme: dark;
 }
 
 * {
@@ -269,6 +279,97 @@ button.ghost {
 .builtin code {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   word-break: break-all;
+}
+
+/* —— 顶栏和状态 —— */
+header.top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+header.top .tools {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+header.top .tools button {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+button.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--muted);
+  border-color: var(--line);
+}
+button.status.ok {
+  color: var(--ink);
+}
+button.status span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.status em {
+  margin-left: auto;
+  flex: none;
+  font-style: normal;
+  color: var(--bad);
+}
+
+/* —— 设置面板 —— */
+.panel.settings {
+  gap: 4px;
+}
+.settings section {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.settings section:first-of-type {
+  border-top: 0;
+}
+.settings h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+}
+.settings .actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.settings select {
+  width: 100%;
+}
+.settings .row select {
+  width: auto;
+}
+.addr {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+}
+.tag.err {
+  color: var(--bad);
+}
+.meta.okmsg {
+  color: var(--ok);
 }
 
 /* —— 语音输入 —— */

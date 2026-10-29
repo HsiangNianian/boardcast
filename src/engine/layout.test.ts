@@ -15,6 +15,8 @@ test('incremental layout: old nodes and regions stay put as the board grows', as
     'E 「登录接口」 「用户库」\nL 「爬虫」 「视频搜索」',
     'Q 「爬虫」 「要不要上 MQ」\nE 「网关」 「登录接口」',
     'T 「情感打分」\nL 「情感打分」 「Go 或 Rust」',
+    // 同一行最左连到最右：直着连会穿过中间的节点
+    'E 「用户」 「用户库」',
   ]
   let g = emptyGraph()
   let prev = new Map<string, Box>()
@@ -31,6 +33,19 @@ test('incremental layout: old nodes and regions stay put as the board grows', as
     const nodes = l.diagram?.nodes ?? []
     for (let i = 0; i < nodes.length; i++)
       for (let j = i + 1; j < nodes.length; j++) assert.ok(!overlap(nodes[i], nodes[j]), `${nodes[i].id} 和 ${nodes[j].id} 重叠`)
+    // 流程图连线不穿过别的节点
+    for (const e of l.diagram?.edges ?? []) {
+      for (let i = 1; i < e.points.length; i++) {
+        const [[x1, y1], [x2, y2]] = [e.points[i - 1], e.points[i]]
+        const seg = { id: '', x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) }
+        for (const n of nodes) {
+          if (n.id === e.from || n.id === e.to) continue
+          const inner = { ...n, x: n.x + 4, y: n.y + 4, w: n.w - 8, h: n.h - 8 }
+          const hit = seg.x < inner.x + inner.w && inner.x < seg.x + seg.w && seg.y < inner.y + inner.h && inner.y < seg.y + seg.h
+          assert.ok(!hit, `${e.from}→${e.to} 穿过了 ${n.id}（第 ${steps.indexOf(step) + 1} 步）`)
+        }
+      }
+    }
     // 区域之间不重叠
     const areas = [...l.regions, ...(l.diagram ? [l.diagram.box] : [])]
     for (let i = 0; i < areas.length; i++)

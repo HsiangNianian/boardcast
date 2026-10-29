@@ -224,45 +224,77 @@ type Diagram = Awaited<ReturnType<typeof diagramLayout>>
 const overlaps = (a: Box, b: Box, m: number) =>
   a.x < b.x + b.w + m && b.x < a.x + a.w + m && a.y < b.y + b.h + m && b.y < a.y + a.h + m
 
-/** 增量放进来的连线：顺着往右走折线，往回连从下面绕，上下摆着就竖着连 */
-function route(a: Box, b: Box): [number, number][] {
+type P = [number, number]
+
+/** 折线的某一段（横的或竖的）有没有穿过别的节点 */
+function crosses(points: P[], boxes: Box[]): boolean {
+  for (let i = 1; i < points.length; i++) {
+    const [x1, y1] = points[i - 1]
+    const [x2, y2] = points[i]
+    const seg = { id: '', x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) }
+    if (boxes.some((b) => overlaps(seg, { ...b, x: b.x + 4, y: b.y + 4, w: b.w - 8, h: b.h - 8 }, 0))) return true
+  }
+  return false
+}
+
+/**
+ * 增量放进来的连线：顺着往右走折线，往回连从下面绕，上下摆着就竖着连；
+ * 路上压到别的节点时，改从这些节点的下方（或上方）绕过去。
+ */
+function route(a: Box, b: Box, others: Box[] = []): P[] {
   const ay = a.y + a.h / 2
   const by = b.y + b.h / 2
+  const ax = a.x + a.w / 2
+  const bx = b.x + b.w / 2
+  const cands: P[][] = []
   if (b.x >= a.x + a.w + 20) {
     const sx = a.x + a.w
     const mx = (sx + b.x) / 2
-    return Math.abs(ay - by) < 2
-      ? [
-          [sx, ay],
-          [b.x, by],
-        ]
-      : [
-          [sx, ay],
-          [mx, ay],
-          [mx, by],
-          [b.x, by],
-        ]
+    cands.push(
+      Math.abs(ay - by) < 2
+        ? [
+            [sx, ay],
+            [b.x, by],
+          ]
+        : [
+            [sx, ay],
+            [mx, ay],
+            [mx, by],
+            [b.x, by],
+          ],
+    )
+  } else if (b.y >= a.y + a.h + 20 || a.y >= b.y + b.h + 20) {
+    // 上下摆着：从一个的底边（或顶边）竖着连到另一个
+    const [top, bottom] = b.y >= a.y ? [a.y + a.h, b.y] : [a.y, b.y + b.h]
+    const mid = (top + bottom) / 2
+    cands.push([
+      [ax, top],
+      [ax, mid],
+      [bx, mid],
+      [bx, bottom],
+    ])
   }
-  const ax = a.x + a.w / 2
-  const bx = b.x + b.w / 2
-  if (a.x >= b.x + b.w + 20) {
-    const low = Math.max(a.y + a.h, b.y + b.h) + 30
-    return [
+  // 绕行：从两端节点之间所有挡路节点的下面（或上面）走一条通道
+  const x0 = Math.min(a.x, b.x)
+  const x1 = Math.max(a.x + a.w, b.x + b.w)
+  const between = others.filter((o) => o.x < x1 && o.x + o.w > x0)
+  const low = Math.max(a.y + a.h, b.y + b.h, ...between.map((o) => o.y + o.h)) + 28
+  const high = Math.min(a.y, b.y, ...between.map((o) => o.y)) - 28
+  cands.push(
+    [
       [ax, a.y + a.h],
       [ax, low],
       [bx, low],
       [bx, b.y + b.h],
-    ]
-  }
-  // 上下摆着：从一个的底边（或顶边）竖着连到另一个
-  const [top, bottom] = b.y >= a.y ? [a.y + a.h, b.y] : [a.y, b.y + b.h]
-  const mid = (top + bottom) / 2
-  return [
-    [ax, top],
-    [ax, mid],
-    [bx, mid],
-    [bx, bottom],
-  ]
+    ],
+    [
+      [ax, a.y],
+      [ax, high],
+      [bx, high],
+      [bx, b.y],
+    ],
+  )
+  return cands.find((c) => !crosses(c, others)) ?? cands[cands.length - 2]
 }
 
 const GAP = 90
@@ -391,7 +423,10 @@ export class StableLayout {
       const key = `${e.from}>${e.to}`
       const s = sig(e, placed)
       const old = this.routeAt.get(key)
-      const points = old && old.sig === s ? old.points : route(placed.get(e.from)!, placed.get(e.to)!)
+      const others = [...placed.values()].filter((b) => b.id !== e.from && b.id !== e.to)
+      // 沿用旧走线的前提：两端没动，而且没有新节点压在线上
+      const keep = old && old.sig === s && !crosses(old.points, others)
+      const points = keep ? old.points : route(placed.get(e.from)!, placed.get(e.to)!, others)
       this.routeAt.set(key, { sig: s, points })
       return { from: e.from, to: e.to, points }
     })

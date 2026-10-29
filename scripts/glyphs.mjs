@@ -5,10 +5,11 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, copyFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const require = createRequire(import.meta.url)
-const root = new URL('..', import.meta.url).pathname
+const root = fileURLToPath(new URL('..', import.meta.url))
 
 const hanziSrc = dirname(require.resolve('hanzi-writer-data/package.json'))
 const hanziOut = join(root, 'public/hanzi')
@@ -34,6 +35,6 @@ if (!existsSync(hersheyOut)) {
   const fonts = JSON.parse(readFileSync(join(hersheyDir, 'hersheytext.min.json'), 'utf8'))
   const chars = fonts.futural.chars.map((c) => [c.d, Number(c.o)])
   mkdirSync(dirname(hersheyOut), { recursive: true })
-  writeFileSync(hersheyOut, JSON.stringify(chars))
+  writeFileSync(hersheyOut, JSON.stringify(chars) + '\n')
   console.log('glyphs: Hershey futural → src/ink/hershey.json')
 }

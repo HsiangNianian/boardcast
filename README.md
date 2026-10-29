@@ -2,7 +2,7 @@
 
 **说话，板书自己长出来。** 会议里大家只管讨论，白板上的手绘示意图跟着对话实时生长。全部在本机运行，不上传音频，不调用云端模型。
 
-> Talk, and the whiteboard draws itself. Local-first live meeting diagrams: speech → a small local LLM emitting graph edits → deterministic layout → hand-drawn Excalidraw board. Runs on Linux, Windows (x64 / ARM64), and later macOS.
+> Talk, and the whiteboard draws itself. Local-first live meeting diagrams: speech → a small local LLM emitting graph edits → deterministic layout → hand-drawn Excalidraw board. Runs on Linux, Windows (x64 / ARM64) and macOS (Apple Silicon).
 
 现在是早期原型：桌面版可以直接对着麦克风说话出板书，也可以打字或回放示例会议。
 
@@ -175,7 +175,7 @@ pnpm test                              # 引擎单元测试，不需要模型
 
 ## CI
 
-- `CI`：类型检查、单元测试、网页构建，然后在 Linux x64、Windows x64、Windows ARM64 上打桌面安装包。
+- `CI`：类型检查、单元测试、网页构建，然后在 Linux x64、Windows x64、Windows ARM64、macOS（Apple Silicon）上打桌面安装包。
 - `Board eval`：改了 `src/engine` 或 `eval` 时，在 CPU 机器上用 llama.cpp 跑一遍评测，分数写进 job summary，用来看回归。
 - `Release`：推 `v*` tag 时，用 CHANGELOG.md 里这个版本的那一节当 Release 正文，三平台打包并把安装包传上去，全部成功后正式发布。
 
@@ -210,7 +210,7 @@ pnpm release 0.2.0 --push      # 同上，再推送提交和 tag，触发 Releas
 - [ ] 不参与调参的测试集；合成数据 + LoRA 微调小模型
 - [x] 增量排版，新节点出现时旧节点不跳
 - [x] 导出 Markdown / PNG / `.excalidraw`
-- [ ] macOS 构建
+- [x] macOS 构建（Apple Silicon，Metal 版 llama-server）；安装包还没签名，第一次打开要在「系统设置 → 隐私与安全性」里允许
 
 ## 许可
 

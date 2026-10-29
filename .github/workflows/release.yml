@@ -76,6 +76,9 @@ jobs:
             os: windows-latest
           - name: windows-arm64
             os: windows-11-arm
+          # Apple Silicon；llama-server 用官方的 Metal 版
+          - name: macos-arm64
+            os: macos-15
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5

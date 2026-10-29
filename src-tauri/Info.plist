@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- macOS：Tauri 打包时把这里的键合并进 .app 的 Info.plist。没有麦克风用途说明，系统会直接拒绝收音。 -->
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>boardcast 需要用麦克风听会上说的话，把它变成板书。声音只在这台电脑上识别，不会上传。</string>
+</dict>
+</plist>

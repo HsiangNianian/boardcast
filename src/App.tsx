@@ -177,7 +177,7 @@ export default function App() {
   // 悬浮输入框挡住了白板底部多高：自动适配画面时让开（输入框展开、收起、换屏幕尺寸时都会变）
   const [inset, setInset] = useState(170)
   useEffect(() => {
-    const el = document.querySelector('.composer')
+    const el = document.querySelector('.dock')
     if (!el) return
     const board = el.parentElement!
     // 用布局尺寸算，不用 getBoundingClientRect：手机上转过来横屏时后者是屏幕方向的
@@ -374,26 +374,19 @@ export default function App() {
   // 现在是哪个模型在画
   const ready = useRemote || !!online
   let status: string
-  let modelLabel: string
   const localName = builtin?.model?.replace(/\.gguf$/, '')
   if (useRemote) {
     status = `远程 · ${remoteView?.model}`
-    modelLabel = remoteView?.model ?? '远程'
   } else if (remoteState.state === 'checking') {
     status = '正在检查远程模型…'
-    modelLabel = '检查中…'
   } else if (builtin?.state === 'ready') {
     status = `内置 · ${localName}${warming ? ' · 预热中' : ''}`
-    modelLabel = localName ?? '内置'
   } else if (builtin?.state === 'starting') {
     status = `正在启动 ${localName ?? '内置模型'}…`
-    modelLabel = '启动中…'
   } else if (builtin) {
     status = builtin.message ?? '内置模型不可用'
-    modelLabel = '没有模型'
   } else {
     status = online ? `本地 · ${baseUrl.replace(/^https?:\/\//, '')}` : '没有连上模型'
-    modelLabel = online ? '本地' : '没有模型'
   }
   const remoteBroken = remoteView?.enabled && remoteState.state === 'fail'
 
@@ -494,15 +487,25 @@ export default function App() {
                   开始收音
                 </button>
               )}
-              <button type="button" className={isDesktop ? 'secondary' : 'primary'} onClick={() => void play()} disabled={!ready}>
+              <button type="button" className={isDesktop ? 'secondary' : 'primary'} onClick={() => void play()} disabled={!ready || playing}>
                 {ready ? '播放示例会议' : '等模型就绪…'}
               </button>
             </div>
+            <label className="demo-pick">
+              <span>示例</span>
+              <select value={demo} onChange={(e) => setDemo(e.target.value)} aria-label="示例会议">
+                {cases.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         )}
 
         <Composer
-          onSend={(t) => say({ speaker: speaker.trim() || undefined, text: t })}
+          onSend={(t, who) => say({ speaker: who.trim() || undefined, text: t })}
           speaker={speaker}
           setSpeaker={setSpeaker}
           speakers={speakers}
@@ -513,12 +516,6 @@ export default function App() {
           micName={mic}
           voiceErr={voiceErr}
           toggleMic={() => void toggleMic()}
-          modelLabel={modelLabel}
-          ready={ready}
-          demo={demo}
-          setDemo={setDemo}
-          play={() => void play()}
-          playing={playing}
         />
       </main>
 

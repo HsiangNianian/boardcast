@@ -1,14 +1,16 @@
-// 悬浮在白板下方正中的输入框：收起时是一颗药丸，展开后是可以打字、收音、换说话人、放示例的卡片。
+// 白板底部的一条输入栏：[收音 + 实时波形] │ 说话人 · 打字 │ 发送。
+// 说话人只占一个小标签：点一下轮换，或者在句首写「@名字 」直接换人（新名字也行）。
+// 收起时只剩收音按钮和一行提示；说话时的临时字幕浮在栏上方。
 
 import { useEffect, useRef, useState } from 'react'
-import cases from '../../eval/cases.json'
-import { ArrowUp, ChevronDown, ChevronUp, Mic, Play, Plus, Stop } from './icons.tsx'
+import { ArrowUp, ChevronDown, ChevronUp, Mic, Stop } from './icons.tsx'
 
 interface Props {
-  onSend: (text: string) => void
+  /** 发一句话；speaker 是这句的说话人（句首的 @名字 已经拆出来了） */
+  onSend: (text: string, speaker: string) => void
   speaker: string
   setSpeaker: (s: string) => void
-  /** 已经出现过的说话人，加上默认的几个 */
+  /** 已经出现过的说话人，加上默认的几个；顺序决定颜色 */
   speakers: string[]
   // 收音（只有桌面版有）
   canListen: boolean
@@ -18,14 +20,6 @@ interface Props {
   micName?: string
   voiceErr: string | null
   toggleMic: () => void
-  // 现在是哪个模型在画
-  modelLabel: string
-  ready: boolean
-  // 示例会议
-  demo: string
-  setDemo: (id: string) => void
-  play: () => void
-  playing: boolean
 }
 
 function load(key: string, fallback: string) {
@@ -38,23 +32,35 @@ function load(key: string, fallback: string) {
 
 /** 说话时 RMS 大概在 0.02～0.2，放大一点再开根号，小声也看得见 */
 const loud = (level: number) => Math.min(1, Math.sqrt(level * 8))
+const N = 32
 
-function Wave({ level, on }: { level: number; on: boolean }) {
-  const v = on ? loud(level) : 0
+/** 最近一段音量画成一排细竖条，新的在右边 */
+function Waveform({ level }: { level: number }) {
+  const [hist, setHist] = useState<number[]>(() => Array(N).fill(0))
+  useEffect(() => {
+    setHist((h) => [...h.slice(1), loud(level)])
+  }, [level])
   return (
-    <span className="wave" aria-hidden>
-      {[0.55, 0.85, 1, 0.75, 0.5].map((k, i) => (
-        <i key={i} style={{ transform: `scaleY(${(0.18 + 0.82 * v * k).toFixed(2)})` }} />
-      ))}
-    </span>
+    <svg className="waveform" viewBox={`0 0 ${N * 3} 24`} aria-hidden>
+      {hist.map((v, i) => {
+        const h = Math.max(1.5, v * 22)
+        return <rect key={i} x={i * 3} y={12 - h / 2} width={1.6} height={h} rx={0.8} />
+      })}
+    </svg>
   )
+}
+
+/** 句首的「@名字 」：换说话人。名字里不能有空格，最长 12 个字 */
+export function splitSpeaker(line: string): { speaker?: string; text: string } {
+  const m = /^[@＠](\S{1,12})\s+([\s\S]+)$/.exec(line.trim())
+  return m ? { speaker: m[1], text: m[2].trim() } : { text: line.trim() }
 }
 
 export default function Composer(p: Props) {
   const [open, setOpen] = useState(() => load('boardcast.composer', 'open') === 'open')
   const [text, setText] = useState('')
-  const [adding, setAdding] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
+  const color = (s: string) => `c${Math.max(0, p.speakers.indexOf(s)) % 6}`
 
   useEffect(() => {
     try {
@@ -77,163 +83,108 @@ export default function Composer(p: Props) {
     return () => removeEventListener('keydown', onKey)
   }, [])
 
-  // 输入框跟着内容长高，最多五六行
+  // 输入框跟着内容长高，最多四五行
   useEffect(() => {
     const el = area.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 140)}px`
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`
   }, [text, open])
 
   function send() {
-    const t = text.trim()
+    const { speaker, text: t } = splitSpeaker(text)
     if (!t) return
-    p.onSend(t)
+    const who = speaker ?? p.speaker
+    if (speaker && speaker !== p.speaker) p.setSpeaker(speaker)
+    p.onSend(t, who)
     setText('')
   }
 
-  const micButton = p.canListen && (
-    <button
-      type="button"
-      className={`mic-btn${p.listening ? ' on' : ''}`}
-      onClick={p.toggleMic}
-      aria-pressed={p.listening}
-      aria-label={p.listening ? '停止收音' : '开始收音'}
-      title={p.listening ? '停止收音' : '开始收音'}
-      style={{ ['--lv' as string]: loud(p.level).toFixed(2) }}
-    >
-      {p.listening ? <Stop size={16} /> : <Mic size={18} />}
-    </button>
-  )
-
-  const caption = p.partial && (
-    <div className="caption" aria-live="polite">
-      {p.speaker.trim() && <b>{p.speaker.trim()}</b>}
-      <span>{p.partial}</span>
-    </div>
-  )
-
-  if (!open) {
-    return (
-      <div className="composer closed">
-        {caption}
-        <div className="pill">
-          {micButton || <span className="orb" aria-hidden />}
-          <button type="button" className="pill-text" onClick={() => setOpen(true)}>
-            {p.listening ? (
-              <>
-                <Wave level={p.level} on />
-                <span>正在听… {p.micName}</span>
-              </>
-            ) : (
-              <span>{p.canListen ? '点麦克风说话，或者打字…' : '说一句话，板书自己长出来…'}</span>
-            )}
-          </button>
-        </div>
-        <button type="button" className="tab" onClick={() => setOpen(true)} aria-label="展开输入框">
-          <ChevronUp size={14} />
-        </button>
-      </div>
-    )
+  // 点说话人标签轮换到下一个
+  const nextSpeaker = () => {
+    const i = p.speakers.indexOf(p.speaker)
+    p.setSpeaker(p.speakers[(i + 1) % p.speakers.length])
   }
 
   return (
-    <div className="composer">
-      {caption}
-      <form
-        className="card"
-        onSubmit={(e) => {
-          e.preventDefault()
-          send()
-        }}
-      >
-        <textarea
-          ref={area}
-          rows={1}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            // 输入法正在选字时的回车不算发送
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    <div className={`dock ${color(p.speaker)}${open ? '' : ' closed'}`}>
+      {p.partial ? (
+        <p className="caption" aria-live="polite">
+          {p.speaker.trim() && <b>{p.speaker.trim()}</b>}
+          {p.partial}
+        </p>
+      ) : (
+        p.voiceErr && <p className="caption err">{p.voiceErr}</p>
+      )}
+
+      <div className="bar">
+        {p.canListen && (
+          <div className={`listen${p.listening ? ' on' : ''}`}>
+            <button
+              type="button"
+              className="mic"
+              onClick={p.toggleMic}
+              aria-pressed={p.listening}
+              aria-label={p.listening ? '停止收音' : '开始收音'}
+              title={p.listening ? `正在收音：${p.micName ?? ''}` : '开始收音'}
+            >
+              {p.listening ? <Stop size={14} /> : <Mic size={17} />}
+            </button>
+            {p.listening && <Waveform level={p.level} />}
+          </div>
+        )}
+
+        {open ? (
+          <form
+            className="write"
+            onSubmit={(e) => {
               e.preventDefault()
               send()
-            }
-          }}
-          placeholder={p.listening ? '正在听，也可以接着打字…' : '说一句会上的话，回车发送'}
-          aria-label="说的话"
-          autoFocus
-        />
-        <div className="row-bar">
-          {micButton}
-          {p.canListen && (
-            <span className="listen-state">
-              <Wave level={p.level} on={p.listening} />
-              <small>{p.voiceErr ? <em>{p.voiceErr}</em> : p.listening ? p.micName : '没在收音'}</small>
-            </span>
-          )}
-          <span className="spacer" />
-          <span className={`engine${p.ready ? '' : ' off'}`} title="出板书的模型，在设置里换">
-            <i />
-            {p.modelLabel}
-          </span>
-          <button type="submit" className="send" disabled={!text.trim()} aria-label="发送">
-            <ArrowUp size={17} />
-          </button>
-        </div>
-      </form>
-      <div className="tray">
-        <span className="label">说话人</span>
-        <div className="chips" role="radiogroup" aria-label="说话人">
-          {p.speakers.map((s) => (
+            }}
+          >
             <button
-              key={s}
               type="button"
-              role="radio"
-              aria-checked={p.speaker === s}
-              className={p.speaker === s ? 'on' : ''}
-              onClick={() => p.setSpeaker(s)}
+              className={`who ${color(p.speaker)}`}
+              onClick={nextSpeaker}
+              title="当前说话人：点一下换下一个，也可以在句首写 @名字"
+              aria-label={`说话人 ${p.speaker}，点一下换下一个`}
             >
-              {s}
+              {p.speaker.slice(0, 2)}
             </button>
-          ))}
-          {adding ? (
-            <input
-              className="chip-input"
-              autoFocus
-              placeholder="名字"
-              onBlur={(e) => {
-                const v = e.target.value.trim()
-                if (v) p.setSpeaker(v)
-                setAdding(false)
-              }}
+            <textarea
+              ref={area}
+              rows={1}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing) (e.target as HTMLInputElement).blur()
-                if (e.key === 'Escape') setAdding(false)
+                // 输入法正在选字时的回车不算发送
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  send()
+                }
               }}
+              placeholder={p.listening ? '正在听，也可以接着打字' : '说一句会上的话，回车写上白板；@名字 换人'}
+              aria-label="说的话"
+              autoFocus
             />
-          ) : (
-            <button type="button" className="add" onClick={() => setAdding(true)} aria-label="加一个说话人">
-              <Plus size={13} />
-            </button>
-          )}
-        </div>
-        <span className="sep" />
-        <span className="label">示例</span>
-        <select value={p.demo} onChange={(e) => p.setDemo(e.target.value)} disabled={p.playing} aria-label="示例会议">
-          {cases.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <button type="button" className="play" onClick={p.play} disabled={p.playing || !p.ready} title="把这段示例会议一句句念给白板">
-          <Play size={12} />
-          {p.playing ? '播放中' : '播放'}
+          </form>
+        ) : (
+          <button type="button" className="write idle" onClick={() => setOpen(true)}>
+            <span>{p.listening ? `正在听 · ${p.micName ?? ''}` : '说一句会上的话…'}</span>
+            <kbd>/</kbd>
+          </button>
+        )}
+
+        {open && (
+          <button type="button" className="send" onClick={send} disabled={!text.trim()} aria-label="写上白板" title="写上白板（回车）">
+            <ArrowUp size={16} />
+          </button>
+        )}
+
+        <button type="button" className="fold" onClick={() => setOpen(!open)} aria-label={open ? '收起' : '展开'} title={open ? '收起' : '展开'}>
+          {open ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
       </div>
-      <button type="button" className="tab" onClick={() => setOpen(false)} aria-label="收起输入框">
-        <ChevronDown size={14} />
-      </button>
     </div>
   )
 }

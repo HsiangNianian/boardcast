@@ -385,350 +385,258 @@ button.link {
   }
 }
 
-/* —— 悬浮输入框 —— */
-.composer {
+/* —— 输入栏：白板底部的一条细栏 —— */
+/* 说话人的颜色；记录里的头像用同一色系的浅色底 */
+.c0 {
+  --pen: #e0559a;
+}
+.c1 {
+  --pen: #3b7cf6;
+}
+.c2 {
+  --pen: #12a37a;
+}
+.c3 {
+  --pen: #e8920c;
+}
+.c4 {
+  --pen: #8b5cf6;
+}
+.c5 {
+  --pen: #64748b;
+}
+
+.dock {
   position: absolute;
   left: 50%;
-  bottom: 14px;
+  bottom: 16px;
   z-index: 5;
   transform: translateX(-50%);
   width: min(720px, calc(100% - 32px));
-  display: grid;
-  justify-items: center;
+  animation: bc-pop 0.24s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
-.composer.closed {
-  width: auto;
+.dock.closed {
+  width: min(420px, calc(100% - 32px));
 }
 
-.composer .card {
-  position: relative;
-  width: 100%;
-  display: grid;
-  gap: 6px;
-  padding: 14px 14px 10px 18px;
+.dock .bar {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 6px;
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: 14px;
   background: var(--surface);
   box-shadow: var(--shadow);
-  animation: bc-pop 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition: border-color 0.2s;
 }
-/* 光晕：聚焦或者正在收音时，卡片后面亮起一圈彩色 */
-.composer .card::before,
-.composer .pill::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  z-index: -1;
-  border-radius: inherit;
-  background: var(--glow);
-  filter: blur(18px);
-  opacity: 0;
-  transition: opacity 0.4s;
+.dock .bar:focus-within {
+  border-color: var(--line-strong);
 }
-.composer .card:focus-within::before {
-  opacity: 0.28;
-}
-.composer:has(.mic-btn.on) .card::before,
-.composer:has(.mic-btn.on) .pill::before {
-  opacity: 0.5;
-  animation: bc-breathe 2.4s ease-in-out infinite;
+/* 竖着的细线分隔各段 */
+.dock .bar > * + * {
+  margin-left: 6px;
 }
 
-.composer textarea {
-  width: 100%;
-  resize: none;
-  border: 0;
-  outline: none;
-  padding: 2px 0;
-  background: transparent;
-  font-size: 15px;
-  line-height: 1.6;
-  max-height: 140px;
-}
-.composer textarea::placeholder {
-  color: var(--faint);
-}
-
-.composer .row-bar {
+/* 收音：一个圆钮，收音时右边展开一段实时波形 */
+.dock .listen {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.composer .spacer {
-  flex: 1;
-}
-.composer .listen-state {
-  display: flex;
-  align-items: center;
+  flex: none;
   gap: 8px;
-  min-width: 0;
-  color: var(--muted);
+  padding-right: 10px;
+  border-right: 1px solid var(--line);
 }
-.composer .listen-state small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-}
-.composer .listen-state em {
-  font-style: normal;
-  color: var(--bad);
-}
-.composer .engine {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 12px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.composer .engine i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ok);
-  flex: none;
-}
-.composer .engine.off i {
-  background: var(--faint);
-}
-
-.composer .send {
+.dock .mic {
   display: grid;
   place-items: center;
-  flex: none;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-}
-.composer .send:disabled {
-  background: var(--surface-2);
-  border-color: var(--line);
-  color: var(--faint);
-  opacity: 1;
-}
-
-.mic-btn {
-  --lv: 0;
-  position: relative;
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   padding: 0;
   border: 1px solid var(--line);
+  border-radius: 10px;
   background: var(--surface-2);
   color: var(--ink);
 }
-.mic-btn:hover {
+.dock .mic:hover {
   border-color: var(--line-strong);
 }
-.mic-btn.on {
-  border-color: var(--bad);
-  background: var(--bad);
-  color: #fff;
-}
-/* 收音时外圈跟着音量放大 */
-.mic-btn.on::after {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 2px solid var(--bad);
-  opacity: calc(0.15 + var(--lv) * 0.6);
-  transform: scale(calc(1 + var(--lv) * 0.35));
-  transition:
-    transform 0.08s,
-    opacity 0.08s;
-}
-
-.wave {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  height: 16px;
-  flex: none;
-}
-.wave i {
-  width: 3px;
-  height: 16px;
-  border-radius: 2px;
-  background: currentColor;
-  transform-origin: center;
-  transition: transform 0.09s;
-}
-
-/* 收起时的药丸 */
-.composer .pill {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 320px;
-  padding: 5px 18px 5px 5px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  animation: bc-pop 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-.composer .pill .mic-btn {
-  width: 34px;
-  height: 34px;
-}
-.composer .orb {
-  width: 34px;
-  height: 34px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--glow);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.4);
-}
-.composer .pill-text {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  padding: 6px 6px 6px 8px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--faint);
-  font-size: 14px;
-  font-weight: 400;
-  text-align: left;
-}
-.composer .pill-text span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 卡片下面的托盘：说话人和示例会议 */
-.composer .tray {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: calc(100% - 36px);
-  padding: 8px 14px;
-  margin-top: -1px;
-  border: 1px solid var(--line);
-  border-top: 0;
-  border-radius: 0 0 16px 16px;
-  background: var(--surface-2);
-  font-size: 12px;
-  color: var(--muted);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.composer .tray .label {
-  flex: none;
-}
-.composer .tray .sep {
-  flex: none;
-  width: 1px;
-  height: 16px;
-  margin: 0 4px;
-  background: var(--line-strong);
-}
-.composer .chips {
-  display: flex;
-  gap: 4px;
-  flex: none;
-}
-.composer .chips button {
-  min-width: 26px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 12px;
-}
-.composer .chips button.on {
+.dock .listen.on .mic {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--bg);
 }
-.composer .chips .add {
-  display: grid;
-  place-items: center;
-  padding: 0;
-  width: 24px;
-}
-.composer .chip-input {
+.dock .waveform {
   width: 72px;
   height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 12px;
+  overflow: visible;
 }
-.composer .tray select {
-  min-width: 0;
-  max-width: 220px;
-  height: 26px;
-  padding: 0 8px;
-  border-radius: 8px;
-  font-size: 12px;
-  background: var(--surface);
-}
-.composer .tray .play {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  height: 26px;
-  padding: 0 10px;
-  font-size: 12px;
+.dock .waveform rect {
+  fill: var(--ink);
+  transition:
+    height 0.08s,
+    y 0.08s;
 }
 
-.composer .tab {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 18px;
-  margin-top: 6px;
-  padding: 0;
-  border: 1px solid var(--line);
-  background: var(--surface);
+.dock .write {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 0 8px;
+}
+.dock textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 6px 0;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1.55;
+  max-height: 120px;
+}
+.dock textarea::placeholder {
+  color: var(--faint);
+}
+.dock .write.idle {
+  gap: 8px;
+  height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+  font-weight: 400;
+  text-align: left;
+}
+.dock .write.idle span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dock .write.idle:hover {
   color: var(--muted);
 }
-.composer .tab:hover {
+kbd {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+/* 说话人：输入框前面一个小标签，点一下轮换 */
+.dock .who {
+  display: grid;
+  place-items: center;
+  flex: none;
+  align-self: center;
+  min-width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  color: #1f2937;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.dock .who:hover {
+  box-shadow: 0 0 0 1.5px var(--pen);
+}
+
+.dock .send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 10px;
+}
+.dock .send:disabled {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--faint);
+  opacity: 1;
+}
+.dock .fold {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+}
+.dock .fold:hover {
   color: var(--ink);
 }
 
-/* 说话时的临时字幕：浮在输入框上面 */
-.composer .caption {
-  /* 不占布局：出现、消失时白板不用重新适配 */
+/* 说话时的临时字幕：栏上方一行，左边一道说话人颜色的细线；不占布局 */
+.dock .caption {
   position: absolute;
-  bottom: calc(100% + 10px);
   left: 0;
   right: 0;
+  bottom: calc(100% + 10px);
   width: fit-content;
-  margin: 0 auto;
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
   max-width: 100%;
-  padding: 8px 14px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--ink) 86%, transparent);
-  color: var(--bg);
+  margin: 0 auto;
+  padding: 8px 14px 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--pen);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(8px);
+  color: var(--ink);
   font-size: 15px;
   line-height: 1.5;
-  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow);
   animation: bc-pop 0.18s ease-out;
 }
-.composer .caption b {
-  flex: none;
+.dock .caption b {
+  margin-right: 8px;
+  color: var(--pen);
+  font-family: var(--mono);
+  font-size: 12px;
   font-weight: 600;
-  opacity: 0.7;
+}
+.dock .caption.err {
+  border-left-color: var(--bad);
+  color: var(--bad);
+  font-size: 13px;
+}
+
+/* 空白板引导里的示例选择 */
+.hero .demo-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.hero .demo-pick select {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--muted);
 }
 
 @keyframes bc-pop {
@@ -902,10 +810,6 @@ button.link {
 @media (max-width: 640px) {
   .topbar .status {
     display: none;
-  }
-  .composer .pill {
-    min-width: 0;
-    width: calc(100vw - 32px);
   }
 }
 
@@ -1322,25 +1226,22 @@ button.link {
   .hero .cta button {
     padding: 8px 16px;
   }
-  .composer {
+  .dock {
     bottom: 6px;
   }
-  .composer .card {
-    padding: 8px 10px 6px 14px;
-    border-radius: 18px;
+  .dock .bar {
+    min-height: 44px;
+    padding: 4px;
   }
-  .composer textarea {
+  .dock .mic,
+  .dock .send {
+    width: 34px;
+    height: 34px;
+  }
+  .dock textarea {
     font-size: 14px;
   }
-  .composer .tray {
-    padding: 5px 10px;
-  }
-  .composer .tab {
-    height: 14px;
-    margin-top: 3px;
-  }
-  .composer .pill {
-    min-width: 280px;
-    width: auto;
+  .hero .demo-pick {
+    display: none;
   }
 }

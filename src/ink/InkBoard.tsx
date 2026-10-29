@@ -222,17 +222,20 @@ export default function InkBoard({
     >
       <svg width="100%" height="100%" viewBox={`${v.x} ${v.y} ${W / v.k} ${H / v.k}`} data-messy={drawn}>
         <defs>
+          {/* 滤镜的参数都是画板坐标，画面缩放后要换算回屏幕像素：
+              颗粒比一个像素还细时会变成满屏噪点，抖动超过笔画宽度时笔画会散掉，两者叠在一起字就糊了。
+              所以按当前缩放 v.k 算：颗粒固定在屏幕上约 2.5 像素一颗，抖动不超过笔画宽度的四成。 */}
           {/* 粉笔：边缘抖一点，再挖掉一些颗粒 */}
-          <filter id="chalk" x="-5%" y="-5%" width="110%" height="110%">
-            <feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="2" seed="7" result="n" />
-            <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2" result="d" />
-            <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.2 1.7" result="grain" />
+          <filter id="chalk" x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency={(0.4 * v.k).toFixed(3)} numOctaves="2" seed="7" result="n" />
+            <feDisplacementMap in="SourceGraphic" in2="n" scale={Math.min(0.8, 0.9 / v.k).toFixed(2)} result="d" />
+            <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.5 1.55" result="grain" />
             <feComposite in="d" in2="grain" operator="in" />
           </filter>
           {/* 马克笔：墨水边缘稍微洇开 */}
-          <filter id="marker" x="-5%" y="-5%" width="110%" height="110%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="3" result="n" />
-            <feDisplacementMap in="SourceGraphic" in2="n" scale="0.9" />
+          <filter id="marker" x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency={(0.45 * v.k).toFixed(3)} numOctaves="1" seed="3" result="n" />
+            <feDisplacementMap in="SourceGraphic" in2="n" scale={Math.min(0.7, 0.7 / v.k).toFixed(2)} />
           </filter>
         </defs>
         <g>{pieces.filter((p) => p.under).map(render)}</g>

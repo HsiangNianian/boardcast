@@ -92,6 +92,13 @@ export default function Composer(p: Props) {
   }, [text, open])
 
   function send() {
+    // 只写了「@名字」：换人，不发
+    const only = /^[@＠](\S{1,12})$/.exec(text.trim())
+    if (only) {
+      p.setSpeaker(only[1])
+      setText('')
+      return
+    }
     const { speaker, text: t } = splitSpeaker(text)
     if (!t) return
     const who = speaker ?? p.speaker

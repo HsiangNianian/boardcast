@@ -4,7 +4,7 @@
 // 浅色是白板马克笔，深色是黑板粉笔。
 
 import { type PointerEvent, type WheelEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { layout } from '../board/layout.ts'
+import { board } from '../board/layout.ts'
 import type { Graph } from '../engine/graph.ts'
 import { type InkLook, type Piece, compose } from './compose.ts'
 import { localPoint } from '../ui/landscape.ts'
@@ -49,6 +49,7 @@ export default function InkBoard({
   dark,
   messy,
   bottomInset = 0,
+  tidy = 0,
 }: {
   graph: Graph
   hot: Set<string>
@@ -56,6 +57,8 @@ export default function InkBoard({
   messy: number
   /** 画面底部被悬浮控件挡住的高度，自动适配时让开 */
   bottomInset?: number
+  /** 每点一次「整理排版」加一：排完以后重新适配画面 */
+  tidy?: number
 }) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
@@ -68,11 +71,17 @@ export default function InkBoard({
   const cursor = useRef(0)
   const wrap = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number } | null>(null)
+  /** 现在画面上的视角和画布尺寸，排完新内容时判断要不要重新适配 */
+  const shown = useRef<{ x: number; y: number; k: number } | null>(null)
+  const size = useRef<[number, number]>([1000, 700])
+  const tidied = useRef(tidy)
+  /** 上一次板上有没有东西：从空白板开始画第一笔时总是适配一次 */
+  const had = useRef(false)
 
   useEffect(() => {
     let stale = false
     void (async () => {
-      const l = await layout(graph)
+      const l = await board.layout(graph)
       const ps = await compose(graph, l, hot, look, messy)
       if (stale) return
       // 给第一次出现的笔画排上写字的时间：接在正在写的东西后面。
@@ -103,7 +112,19 @@ export default function InkBoard({
       setPieces(ps)
       setDrawn(messy)
       setBounds(l.bounds)
-      setView(null)
+      // 新内容还在画面里就不动视角，免得每说一句整块板缩放一次；跑出画面或者刚整理过才重新适配
+      const cur = shown.current
+      const b = l.bounds
+      const [w, h] = size.current
+      const inside =
+        cur &&
+        b.x0 >= cur.x &&
+        b.y0 >= cur.y &&
+        b.x1 <= cur.x + w / cur.k &&
+        b.y1 <= cur.y + Math.max(120, h - bottomInset) / cur.k
+      setView(inside && had.current && tidied.current === tidy ? cur : null)
+      tidied.current = tidy
+      had.current = graph.nodes.length > 0
       // 写完以后去掉遮罩，换成静态路径
       const wait = cursor.current - now + 100
       setTimeout(() => !stale && setTick((t) => t + 1), wait)
@@ -111,7 +132,7 @@ export default function InkBoard({
     return () => {
       stale = true
     }
-  }, [graph, hot, look, messy])
+  }, [graph, hot, look, messy, tidy, bottomInset])
 
   // 画布尺寸放进 state：第一次渲染时 ref 还没挂上，窗口缩放时也要重新适配
   const [[W, H], setSize] = useState<[number, number]>([1000, 700])
@@ -132,6 +153,8 @@ export default function InkBoard({
     return { k, x: (bounds.x0 + bounds.x1) / 2 - W / (2 * k), y: (bounds.y0 + bounds.y1) / 2 - free / (2 * k) }
   }, [bounds, W, H, bottomInset])
   const v = view ?? fit
+  shown.current = v
+  size.current = [W, H]
 
   // 手机上强制横屏时整个应用是转过的，指针位置都先换回画布自己的坐标
   const at = (e: { clientX: number; clientY: number }) => localPoint(wrap.current!, e.clientX, e.clientY)

@@ -126,3 +126,18 @@ export const Close = (p: P) => (
     <path d="M6 6l12 12M18 6 6 18" />
   </Icon>
 )
+
+export const Download = (p: P) => (
+  <Icon {...p}>
+    <path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14" />
+  </Icon>
+)
+
+export const Tidy = (p: P) => (
+  <Icon {...p}>
+    <rect x="3.5" y="4" width="7" height="6" rx="1.5" />
+    <rect x="13.5" y="4" width="7" height="6" rx="1.5" />
+    <rect x="3.5" y="14" width="7" height="6" rx="1.5" />
+    <path d="M14 17h6M17 14v6" />
+  </Icon>
+)

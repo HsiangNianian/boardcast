@@ -30,6 +30,9 @@ fs4 = "1"
 # Linux 上走 PulseAudio（PipeWire 也兼容）：列出来的是真实的麦克风，而不是一堆 ALSA 插件
 cpal = { version = "0.18", features = ["pulseaudio"] }
 sherpa-onnx = "2.0.1"
+# 导出：系统的另存为对话框；前端把文件内容用 base64 传过来
+tauri-plugin-dialog = "2"
+base64 = "0.22"
 
 # 应用崩溃或被强制结束时，让 llama-server 跟着退出，不留下占着显存的孤儿进程
 [target.'cfg(target_os = "linux")'.dependencies]

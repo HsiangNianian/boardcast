@@ -3,7 +3,7 @@ import '@excalidraw/excalidraw/index.css'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import cases from '../eval/cases.json'
-import { layout } from './board/layout.ts'
+import { board } from './board/layout.ts'
 import { type Look, scene } from './board/scene.ts'
 import { type Heard, type LlmStatus, type VoiceStatus, isDesktop, llmStatus, on, voice } from './desktop.ts'
 import { type Graph, emptyGraph } from './engine/graph.ts'
@@ -16,7 +16,8 @@ import ModelPanel from './ModelPanel.tsx'
 import { type RemoteView, remote } from './remote.ts'
 import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
 import Composer from './ui/Composer.tsx'
-import { Auto, Close, Eraser, Gear, Moon, Pen, Pencil, Sun, Transcript as TranscriptIcon } from './ui/icons.tsx'
+import { type ExportKind, build, saveFile } from './exporter.ts'
+import { Auto, Close, Download, Eraser, Gear, Moon, Pen, Pencil, Sun, Tidy, Transcript as TranscriptIcon } from './ui/icons.tsx'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -174,6 +175,20 @@ export default function App() {
   const [showLog, setShowLog] = useState(() => load('boardcast.log', innerWidth > 1100 ? 'open' : 'closed') === 'open')
   // 启动动画每次打开应用放一次
   const [splash, setSplash] = useState(true)
+  // 「整理排版」：忘掉记住的位置，整块重新排一次
+  const [tidy, setTidy] = useState(0)
+  const tidyUp = () => {
+    board.reset()
+    setTidy((t) => t + 1)
+  }
+  // 导出菜单和保存后的提示
+  const [exportMenu, setExportMenu] = useState(false)
+  const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null)
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [toast])
   // 悬浮输入框挡住了白板底部多高：自动适配画面时让开（输入框展开、收起、换屏幕尺寸时都会变）
   const [inset, setInset] = useState(170)
   useEffect(() => {
@@ -255,10 +270,11 @@ export default function App() {
     }
   }, [baseUrl])
 
-  // 图变了就重新排版、重画
+  // 图变了就重新排版、重画。排版有记忆：旧内容原地不动，新内容找空地（见 board/layout.ts）
+  const pencilView = useRef({ had: false, tidy: 0 })
   useEffect(() => {
     let stale = false
-    void layout(graph).then((l) => {
+    void board.layout(graph).then((l) => {
       if (stale || !api) return
       // Excalidraw 的深色模式是给整块画布加反色滤镜，所以永远按浅色画，深色由它反过来
       const look = LIGHT
@@ -266,12 +282,20 @@ export default function App() {
         elements: scene(graph, l, hot, look),
         appState: { viewBackgroundColor: PAPER_LIGHT },
       })
+      const seen = pencilView.current
+      const first = !seen.had || seen.tidy !== tidy
+      pencilView.current = { had: graph.nodes.length > 0, tidy }
       if (!graph.nodes.length) return
-      // 自己算缩放和居中：内容少时不放大到 100% 以上，内容多时整张图塞进画面
       const { x0, y0, x1, y1 } = l.bounds
-      const { width, height, zoom } = api.getAppState()
+      const { width, height, zoom, scrollX, scrollY } = api.getAppState()
       // 底下留出悬浮输入框的位置
       const free = Math.max(120, height - inset)
+      // 新内容还在画面里就不动视角；跑出画面、第一笔、刚整理过才重新缩放居中
+      const vx = -scrollX
+      const vy = -scrollY
+      const inside = x0 >= vx && y0 >= vy && x1 <= vx + width / zoom.value && y1 <= vy + free / zoom.value
+      if (inside && !first) return
+      // 内容少时不放大到 100% 以上，内容多时整张图塞进画面
       const z = Math.min(1, (0.85 * width) / (x1 - x0), (0.8 * free) / (y1 - y0))
       api.updateScene({
         appState: {
@@ -284,7 +308,7 @@ export default function App() {
     return () => {
       stale = true
     }
-  }, [graph, hot, api, inset])
+  }, [graph, hot, api, inset, tidy])
 
   useEffect(() => {
     save('boardcast.mode', mode)
@@ -352,7 +376,21 @@ export default function App() {
     await voice.start(micChoice || undefined).catch((e) => setVoiceErr(errText(e)))
   }
 
+  async function exportAs(kind: ExportKind) {
+    setExportMenu(false)
+    try {
+      const ink = document.querySelector('.ink')
+      const paper = mode === 'ink' && ink ? getComputedStyle(ink).backgroundColor : PAPER_LIGHT
+      const { name, blob } = await build(kind, { graph, lines, mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
+      const where = await saveFile(name, blob)
+      if (where) setToast({ ok: true, text: isDesktop ? `已保存：${where}` : `已下载：${where}` })
+    } catch (e) {
+      setToast({ ok: false, text: `导出失败：${errText(e)}` })
+    }
+  }
+
   function reset() {
+    board.reset()
     session.graph = emptyGraph()
     session.history = []
     setGraph(session.graph)
@@ -439,6 +477,39 @@ export default function App() {
           >
             <TranscriptIcon />
           </button>
+          <button type="button" className="icon" onClick={tidyUp} disabled={!graph.nodes.length} aria-label="整理排版" title="整理排版：整块重新排一次">
+            <Tidy />
+          </button>
+          <div className="menu-anchor">
+            <button
+              type="button"
+              className={`icon${exportMenu ? ' on' : ''}`}
+              onClick={() => setExportMenu(!exportMenu)}
+              disabled={!graph.nodes.length}
+              aria-haspopup="menu"
+              aria-expanded={exportMenu}
+              aria-label="导出"
+              title="导出"
+            >
+              <Download />
+            </button>
+            {exportMenu && (
+              <div className="menu" role="menu" onMouseLeave={() => setExportMenu(false)}>
+                <button type="button" role="menuitem" onClick={() => void exportAs('md')}>
+                  <span>Markdown</span>
+                  <small>要点、Mermaid 流程图和会议记录</small>
+                </button>
+                <button type="button" role="menuitem" onClick={() => void exportAs('png')}>
+                  <span>PNG 图片</span>
+                  <small>{mode === 'ink' ? '手写板书，和画面上一样' : '铅笔板书，含手动改动'}</small>
+                </button>
+                <button type="button" role="menuitem" onClick={() => void exportAs('excalidraw')}>
+                  <span>Excalidraw</span>
+                  <small>.excalidraw，可以在 excalidraw.com 接着改</small>
+                </button>
+              </div>
+            )}
+          </div>
           <button type="button" className="icon" onClick={reset} aria-label="清空白板" title="清空白板">
             <Eraser />
           </button>
@@ -459,7 +530,7 @@ export default function App() {
 
       <main className="board">
         {mode === 'ink' ? (
-          <InkBoard graph={graph} hot={hot} dark={dark} messy={messyLater / 100} bottomInset={inset} />
+          <InkBoard graph={graph} hot={hot} dark={dark} messy={messyLater / 100} bottomInset={inset} tidy={tidy} />
         ) : (
           <Excalidraw
             excalidrawAPI={setApi}
@@ -580,6 +651,11 @@ export default function App() {
         />
       )}
       {showModels && <ModelPanel status={builtin} onClose={() => setShowModels(false)} />}
+      {toast && (
+        <div className={`toast${toast.ok ? '' : ' err'}`} role="status">
+          {toast.text}
+        </div>
+      )}
     </div>
   )
 }

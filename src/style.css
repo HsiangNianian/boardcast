@@ -1245,3 +1245,64 @@ kbd {
     display: none;
   }
 }
+
+/* —— 导出菜单、提示 —— */
+.menu-anchor {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  min-width: 260px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: bc-pop 0.16s ease-out;
+}
+.menu button {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font-weight: 500;
+}
+.menu button:hover {
+  background: var(--surface-2);
+}
+.menu small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.toast {
+  position: fixed;
+  top: 68px;
+  left: 50%;
+  z-index: 40;
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100% - 32px));
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  overflow-wrap: anywhere;
+  animation: bc-pop 0.18s ease-out;
+}
+.toast.err {
+  color: var(--bad);
+}
+button.icon:disabled {
+  opacity: 0.35;
+}

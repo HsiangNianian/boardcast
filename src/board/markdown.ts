@@ -1,0 +1,116 @@
+// 把一块板导出成 Markdown：话题和条目写成标题加编号列表，流程图写成 Mermaid，最后附上会议记录。
+// 铅笔稿（还没被模型确认的草稿）不导出。
+
+import { type Graph, type Node, children } from '../engine/graph.ts'
+import { isDiagram, isHead } from './layout.ts'
+
+export interface SaidLine {
+  speaker?: string
+  text: string
+}
+
+const isAttach = (n: Node) => n.kind === 'question' || n.kind === 'formula' || n.kind === 'note'
+const LETTERS = 'abcdefghijklmnopqrstuvwxyz'
+
+/** 条目文字加上标记：划掉 → 删除线，圈出 → 加粗，下划线 → 下划线，星标 → ★ */
+function marked(n: Node): string {
+  let t = n.label
+  if (n.marks.includes('划掉')) t = `~~${t}~~`
+  if (n.marks.includes('圈出')) t = `**${t}**`
+  if (n.marks.includes('下划线')) t = `<u>${t}</u>`
+  if (n.marks.includes('星标')) t = `${t} ★`
+  return t
+}
+
+function attachLine(n: Node): string {
+  if (n.kind === 'question') return `？${marked(n)}`
+  if (n.kind === 'formula') return `\`${n.label}\``
+  return `备注：${marked(n)}`
+}
+
+/** Mermaid 里的文字要转义引号 */
+const mm = (s: string) => s.replace(/"/g, '#quot;')
+
+export function toMarkdown(g: Graph, lines: SaidLine[] = [], title = '会议板书', when = new Date()): string {
+  const live = (n: Node) => n.ink !== 'draft'
+  const out: string[] = []
+  const stamp = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')} ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`
+  out.push(`# ${title}`, '', `> ${stamp} · boardcast`, '')
+
+  // 话题：标题 + 编号条目，挂件跟在被挂的东西下面
+  const walk = (parent: Node, depth: number) => {
+    let index = 0
+    const kids = children(g, parent.id)
+      .filter(live)
+      .sort((a, b) => Number(isAttach(a)) - Number(isAttach(b)))
+    for (const c of kids) {
+      const pad = '   '.repeat(Math.max(0, depth - 1))
+      if (isAttach(c)) out.push(`${pad}- ${attachLine(c)}`)
+      else {
+        const prefix = depth === 1 ? `${index + 1}.` : depth === 2 ? `${LETTERS[index % 26]}.` : '-'
+        out.push(`${pad}${depth === 2 ? '- ' + prefix : prefix} ${marked(c)}`)
+        index++
+        walk(c, depth + 1)
+      }
+    }
+  }
+  for (const n of g.nodes.filter(live)) {
+    if (!isHead(g, n)) continue
+    out.push(`## ${marked(n)}`, '')
+    const before = out.length
+    walk(n, 1)
+    if (out.length > before) out.push('')
+  }
+
+  // 流程图：Mermaid
+  const dia = g.nodes.filter((n) => live(n) && isDiagram(g, n))
+  if (dia.length) {
+    const ids = new Set(dia.map((n) => n.id))
+    out.push('## 流程', '', '```mermaid', 'flowchart LR')
+    const grouped = new Set<string>()
+    for (const grp of g.groups) {
+      const members = dia.filter((n) => n.group === grp.id)
+      if (!members.length) continue
+      out.push(`  subgraph ${grp.id}["${mm(grp.label)}"]`)
+      for (const n of members) {
+        out.push(`    ${n.id}["${mm(n.label)}"]`)
+        grouped.add(n.id)
+      }
+      out.push('  end')
+    }
+    for (const n of dia) if (!grouped.has(n.id)) out.push(`  ${n.id}["${mm(n.label)}"]`)
+    for (const e of g.edges) {
+      if (e.ink === 'draft' || !ids.has(e.from) || !ids.has(e.to)) continue
+      out.push(e.label ? `  ${e.from} -->|"${mm(e.label)}"| ${e.to}` : `  ${e.from} --> ${e.to}`)
+    }
+    out.push('```', '')
+    // 挂在流程图节点上的问题、备注、公式
+    const notes = g.nodes.filter((n) => live(n) && isAttach(n) && n.parent && ids.has(n.parent))
+    for (const n of notes) out.push(`- ${g.nodes.find((p) => p.id === n.parent)?.label}：${attachLine(n)}`)
+    if (notes.length) out.push('')
+  }
+
+  // 没有挂靠的问题和公式
+  const loose = g.nodes.filter((n) => live(n) && isAttach(n) && (!n.parent || !g.nodes.some((p) => p.id === n.parent)))
+  if (loose.length) {
+    out.push('## 待定', '')
+    for (const n of loose) out.push(`- ${attachLine(n)}`)
+    out.push('')
+  }
+
+  // 话题、条目之间的连线（跨区域的箭头），写成一句话
+  const cross = g.edges.filter((e) => e.ink !== 'draft' && !(dia.some((n) => n.id === e.from) && dia.some((n) => n.id === e.to)))
+  if (cross.length) {
+    out.push('## 关联', '')
+    const name = (id: string) => g.nodes.find((n) => n.id === id)?.label ?? id
+    for (const e of cross) out.push(`- ${name(e.from)} → ${name(e.to)}${e.label ? `：${e.label}` : ''}`)
+    out.push('')
+  }
+
+  if (lines.length) {
+    out.push('## 会议记录', '')
+    for (const l of lines) out.push(l.speaker ? `- **${l.speaker}**：${l.text}` : `- ${l.text}`)
+    out.push('')
+  }
+  return out.join('\n')
+}

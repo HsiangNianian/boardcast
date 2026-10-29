@@ -3,7 +3,9 @@
 // - 下载和管理模型（models.rs）
 // - 语音输入：麦克风 → 断句 → 识别（voice.rs）
 // - 用户自己填的 OpenAI 兼容远程模型（remote.rs）
+// - 导出文件时的另存为对话框（export.rs）
 
+mod export;
 mod llm;
 mod models;
 mod remote;
@@ -14,6 +16,7 @@ use tauri::{Manager, RunEvent};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(llm::Llm::default())
         .manage(models::Downloads::default())
         .manage(voice::Voice::default())
@@ -37,6 +40,7 @@ pub fn run() {
             remote::remote_save,
             remote::remote_test,
             remote::remote_chat,
+            export::export_save,
         ])
         .build(tauri::generate_context!())
         .expect("error while building boardcast")

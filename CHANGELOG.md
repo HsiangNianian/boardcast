@@ -2,6 +2,48 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.2.0 - 2026-10-29
+
+### Features
+
+- **ink:** Stroke thickness setting for the handwritten board ([`91faf57`](https://github.com/HsiangNianian/boardcast/commit/91faf5761a20bcfd0cfd50ae800d5897f5a20f0f))
+  - a "笔画粗细" slider (50%–200%) next to messiness in settings, remembered across launches
+  - every pen stroke is scaled in one place, while the hand wobble keeps its original amplitude so thicker strokes don't shake more
+
+### Fixes
+
+- **board:** Route new flowchart edges around other nodes ([`6a77f55`](https://github.com/HsiangNianian/boardcast/commit/6a77f55a34b1f034c3d21979a41ee7b4fd0e0546))
+  - the incremental router drew straight or elbow lines that could cut through boxes in between
+  - try the direct route first, then detour through a channel below or above the nodes in the way
+  - re-route kept edges when a newly placed node lands on them
+  - the layout test now checks that no edge crosses another node
+- **ink:** Keep chalk and marker strokes crisp at any zoom ([`4103dd4`](https://github.com/HsiangNianian/boardcast/commit/4103dd42004bf146141f8e3ca965048ecc6f6858))
+  - the texture filters were defined in board units: the chalk grain was finer than a screen pixel and turned into per-pixel noise, and the edge jitter (2.2 units) was wider than the 2-unit strokes, so small text dissolved into a blur
+  - scale the noise frequency and displacement with the current zoom so the grain stays about 2.5 px on screen and the jitter stays under half a stroke width
+  - erode less of each chalk stroke and filter in sRGB so strokes keep their brightness
+- **desktop:** Don't start or warm up the built-in model while a remote API is in use ([`495366b`](https://github.com/HsiangNianian/boardcast/commit/495366b44355a919d2b8b3e25ab00c5dde016ab2))
+  - with a remote endpoint enabled, the shell now leaves llama-server on stand-by (new "idle" state) instead of loading it at launch
+  - the front end warms the built-in model only when it is actually the one drawing
+  - if the remote check fails or the remote is turned off, the built-in model starts then; when the remote connects, a running built-in model is stopped to free VRAM
+  - a sentence the remote fails on starts the built-in model on demand, waits until it is ready and draws with it, so nothing is lost
+  - llm_ensure marks the state as starting under the lock, so two quick calls start only one server
+  - settings and the status chip show the stand-by state
+
+### Build and CI
+
+- **release:** Generate the changelog from Conventional Commits and publish releases with it ([`4933ff0`](https://github.com/HsiangNianian/boardcast/commit/4933ff047fe975062a5b7e36a2a544825b02c824))
+  - add `pnpm release <version> [--push | --dry-run]`: bump the version in package.json, Cargo.toml, Cargo.lock and tauri.conf.json, prepend the new section to CHANGELOG.md, commit `chore(release): vX.Y.Z` and tag
+  - scripts/changelog.mjs groups commits by type (Features, Fixes, Documentation, Build and CI, ...), keeps body bullets as sub-points, links each commit and the compare range
+  - the Release workflow uses the tag's CHANGELOG section as the release body (or generates it when the section is missing), uploads the three platform builds to that release, and publishes it only after all builds succeed
+  - tags can be rebuilt by hand from the Actions page
+  - backfill CHANGELOG.md with the 0.1.0 entry and document the release flow in the README
+- Fetch the sherpa-onnx prebuilt libs fresh on every build ([`842bf4f`](https://github.com/HsiangNianian/boardcast/commit/842bf4fc5c1bb82da8683c51b8d29cd4c72749cb))
+  - rust-cache prunes target/ before saving, so a restored target/sherpa-onnx-prebuilt/<version>/lib directory can exist without the static libraries in it, and the build script then skips the download
+  - stop caching that directory and delete it before building, so sherpa-onnx-sys always downloads and unpacks the libs
+  - same change in the release workflow
+
+**Full diff:** [v0.1.0...v0.2.0](https://github.com/HsiangNianian/boardcast/compare/v0.1.0...v0.2.0)
+
 ## 0.1.0 - 2026-10-29
 
 ### Features

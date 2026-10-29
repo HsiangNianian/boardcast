@@ -15,6 +15,10 @@ import InkBoard from './ink/InkBoard.tsx'
 import ModelPanel from './ModelPanel.tsx'
 import { type RemoteView, remote } from './remote.ts'
 import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
+import Composer from './ui/Composer.tsx'
+import { Auto, Close, Eraser, Gear, Moon, Pen, Pencil, Sun, Transcript as TranscriptIcon } from './ui/icons.tsx'
+import Splash from './ui/Splash.tsx'
+import Wordmark from './ui/Wordmark.tsx'
 
 type Mode = 'pencil' | 'ink'
 type Theme = 'system' | 'light' | 'dark'
@@ -29,10 +33,11 @@ interface Line extends Utterance {
 }
 
 const LIGHT: Look = { ink: '#1e1e1e', pencil: '#868e96', highlight: '#ffec99', group: '#1971c2', question: '#e03131', note: '#1971c2' }
-const DARK: Look = { ink: '#e9ecef', pencil: '#868e96', highlight: '#5c4a00', group: '#74c0fc', question: '#ff8787', note: '#74c0fc' }
 
 const THEMES: Theme[] = ['system', 'light', 'dark']
-const THEME_LABEL: Record<Theme, string> = { system: '◐ 跟随系统', light: '☀ 浅色', dark: '☾ 深色' }
+const THEME_LABEL: Record<Theme, string> = { system: '跟随系统', light: '浅色', dark: '深色' }
+// 铅笔模式的纸色，和界面的浅色底一致；深色模式下 Excalidraw 会自己反色
+const PAPER_LIGHT = '#fbfbf9'
 
 function load(key: string, fallback: string): string {
   try {
@@ -165,7 +170,22 @@ export default function App() {
   const [graph, setGraph] = useState<Graph>(emptyGraph)
   const [hot, setHot] = useState<Set<string>>(new Set())
   const [speaker, setSpeaker] = useState('A')
-  const [text, setText] = useState('')
+  // 会议记录栏：窄屏默认收起
+  const [showLog, setShowLog] = useState(() => load('boardcast.log', innerWidth > 1100 ? 'open' : 'closed') === 'open')
+  // 启动动画每次打开应用放一次
+  const [splash, setSplash] = useState(true)
+  // 悬浮输入框挡住了白板底部多高：自动适配画面时让开（输入框展开、收起、换屏幕尺寸时都会变）
+  const [inset, setInset] = useState(170)
+  useEffect(() => {
+    const el = document.querySelector('.composer')
+    if (!el) return
+    const board = el.parentElement!
+    // 用布局尺寸算，不用 getBoundingClientRect：手机上转过来横屏时后者是屏幕方向的
+    const ro = new ResizeObserver(() => setInset(board.clientHeight - (el as HTMLElement).offsetTop + 12))
+    ro.observe(el)
+    ro.observe(board)
+    return () => ro.disconnect()
+  }, [])
   const [demo, setDemo] = useState(cases[0].id)
   const [playing, setPlaying] = useState(false)
   // 用 state 而不是 ref：切回铅笔模式时 Excalidraw 重新挂载，要让重画的 effect 再跑一次
@@ -240,34 +260,38 @@ export default function App() {
     let stale = false
     void layout(graph).then((l) => {
       if (stale || !api) return
-      const look = dark ? DARK : LIGHT
+      // Excalidraw 的深色模式是给整块画布加反色滤镜，所以永远按浅色画，深色由它反过来
+      const look = LIGHT
       api.updateScene({
         elements: scene(graph, l, hot, look),
-        appState: { viewBackgroundColor: dark ? '#121212' : '#fdfcf8' },
+        appState: { viewBackgroundColor: PAPER_LIGHT },
       })
       if (!graph.nodes.length) return
       // 自己算缩放和居中：内容少时不放大到 100% 以上，内容多时整张图塞进画面
       const { x0, y0, x1, y1 } = l.bounds
       const { width, height, zoom } = api.getAppState()
-      const z = Math.min(1, (0.85 * width) / (x1 - x0), (0.8 * height) / (y1 - y0))
+      // 底下留出悬浮输入框的位置
+      const free = Math.max(120, height - inset)
+      const z = Math.min(1, (0.85 * width) / (x1 - x0), (0.8 * free) / (y1 - y0))
       api.updateScene({
         appState: {
           zoom: { value: z as typeof zoom.value },
           scrollX: width / (2 * z) - (x0 + x1) / 2,
-          scrollY: height / (2 * z) - (y0 + y1) / 2,
+          scrollY: free / (2 * z) - (y0 + y1) / 2,
         },
       })
     })
     return () => {
       stale = true
     }
-  }, [graph, hot, dark, api])
+  }, [graph, hot, api, inset])
 
   useEffect(() => {
     save('boardcast.mode', mode)
     save('boardcast.messy', String(messy))
     save('boardcast.mic', micChoice)
-  }, [mode, messy, micChoice])
+    save('boardcast.log', showLog ? 'open' : 'closed')
+  }, [mode, messy, micChoice, showLog])
 
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
   useEffect(() => {
@@ -347,144 +371,195 @@ export default function App() {
     setPlaying(false)
   }
 
-  // 顶上那一行：现在是哪个模型在画
+  // 现在是哪个模型在画
   const ready = useRemote || !!online
   let status: string
-  if (useRemote) status = `远程：${remoteView?.model}`
-  else if (remoteState.state === 'checking') status = '正在检查远程模型…'
-  else if (builtin?.state === 'ready') status = `内置：${builtin.model?.replace(/\.gguf$/, '')}${warming ? ' · 预热中' : ''}`
-  else if (builtin?.state === 'starting') status = `正在启动 ${builtin.model?.replace(/\.gguf$/, '') ?? '内置模型'}…`
-  else if (builtin) status = builtin.message ?? '内置模型不可用'
-  else status = online ? `本地：${baseUrl}` : '没有连上模型'
+  let modelLabel: string
+  const localName = builtin?.model?.replace(/\.gguf$/, '')
+  if (useRemote) {
+    status = `远程 · ${remoteView?.model}`
+    modelLabel = remoteView?.model ?? '远程'
+  } else if (remoteState.state === 'checking') {
+    status = '正在检查远程模型…'
+    modelLabel = '检查中…'
+  } else if (builtin?.state === 'ready') {
+    status = `内置 · ${localName}${warming ? ' · 预热中' : ''}`
+    modelLabel = localName ?? '内置'
+  } else if (builtin?.state === 'starting') {
+    status = `正在启动 ${localName ?? '内置模型'}…`
+    modelLabel = '启动中…'
+  } else if (builtin) {
+    status = builtin.message ?? '内置模型不可用'
+    modelLabel = '没有模型'
+  } else {
+    status = online ? `本地 · ${baseUrl.replace(/^https?:\/\//, '')}` : '没有连上模型'
+    modelLabel = online ? '本地' : '没有模型'
+  }
   const remoteBroken = remoteView?.enabled && remoteState.state === 'fail'
 
-  return (
-    <div className="app">
-      <aside className="side">
-        <header className="top">
-          <div>
-            <h1>boardcast</h1>
-            <p className="sub">说话，板书自己长出来</p>
-          </div>
-          <div className="tools">
-            <button
-              className="ghost"
-              onClick={() => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
-              title="切换主题"
-              aria-label={`主题：${THEME_LABEL[theme]}，点一下切换`}
-            >
-              {THEME_LABEL[theme]}
-            </button>
-            <button className="ghost" onClick={() => setShowSettings(true)} aria-label="设置">
-              ⚙ 设置
-            </button>
-          </div>
-        </header>
+  const speakers = useMemo(() => {
+    const seen = ['A', 'B', 'C']
+    for (const l of lines) if (l.speaker && !seen.includes(l.speaker)) seen.push(l.speaker)
+    if (speaker.trim() && !seen.includes(speaker.trim())) seen.push(speaker.trim())
+    return seen
+  }, [lines, speaker])
 
-        <button type="button" className={`status ${ready ? 'ok' : ''}`} onClick={() => setShowSettings(true)}>
-          <i className={`dot ${ready ? 'ok' : online === false ? 'bad' : ''}`} />
+  const empty = lines.length === 0 && graph.nodes.length === 0 && !partial
+
+  return (
+    <div className={`app${showLog ? '' : ' no-log'}`}>
+      {splash && <Splash onDone={() => setSplash(false)} />}
+
+      <header className="topbar">
+        <div className="brand">
+          <Wordmark size={24} className="logo" />
+        </div>
+        <button
+          type="button"
+          className={`chip status${ready ? ' ok' : ''}${remoteBroken ? ' warn' : ''}`}
+          onClick={() => setShowSettings(true)}
+          title="出板书的模型，点开设置"
+        >
+          <i className="dot" />
           <span>{status}</span>
           {remoteBroken && <em>远程连不上，暂用本地</em>}
         </button>
-
-        <div className="transcript">
-          {lines.length === 0 && !partial && (
-            <p className="empty">
-              {isDesktop
-                ? '点「开始收音」直接说话，也可以在下面打字。示例会议在设置里。'
-                : '在下面输入一句话。示例会议在设置里；语音输入要用桌面版。'}
-            </p>
-          )}
-          {lines.map((l, i) => (
-            <div key={i} className="line">
-              <div>
-                {l.speaker && <b>{l.speaker}：</b>}
-                {l.text}
-              </div>
-              <div className="meta">
-                {l.ms === undefined ? '画着…' : `${Math.round(l.ms)} ms`}
-                {l.ms !== undefined && useRemote && l.via && ` · ${l.via}`}
-                {l.fellBack && ' · 远程失败，这句用了本地模型'}
-                {l.ops ? <pre>{l.ops}</pre> : null}
-              </div>
-            </div>
-          ))}
-          {partial && (
-            <div className="line partial" aria-live="polite">
-              {speaker.trim() && <b>{speaker.trim()}：</b>}
-              {partial}…
-            </div>
-          )}
-          <div ref={listEnd} />
-        </div>
-
-        {isDesktop && (
-          <div className="mic">
-            <button type="button" className={listening ? 'on' : ''} onClick={() => void toggleMic()} aria-pressed={listening}>
-              {listening ? '停止收音' : '开始收音'}
-            </button>
-            <span className="meter" aria-hidden>
-              {/* 说话时 RMS 大概在 0.02～0.2，放大一点再开根号，小声也看得见 */}
-              <i style={{ width: `${Math.min(100, Math.sqrt(level * 8) * 100).toFixed(0)}%` }} />
-            </span>
-            <small>{voiceErr ?? (listening ? mic : '')}</small>
-          </div>
-        )}
-
-        <form
-          className="say"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (!text.trim()) return
-            say({ speaker: speaker.trim() || undefined, text: text.trim() })
-            setText('')
-          }}
-        >
-          <input className="who" value={speaker} onChange={(e) => setSpeaker(e.target.value)} aria-label="说话人" autoComplete="off" />
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="说一句…（回车）"
-            aria-label="说的话"
-            autoComplete="off"
-          />
-          {/* 表单里有两个输入框时，没有提交按钮回车就不会提交 */}
-          <button type="submit" disabled={!text.trim()}>
-            说
+        <span className="spacer" />
+        <div className="seg" role="radiogroup" aria-label="板书风格">
+          <button role="radio" aria-checked={mode === 'ink'} className={mode === 'ink' ? 'on' : ''} onClick={() => setMode('ink')}>
+            <Pen size={15} />
+            手写
           </button>
-        </form>
-        <div className="row">
-          <div className="seg" role="radiogroup" aria-label="板书风格">
-            <button role="radio" aria-checked={mode === 'ink'} className={mode === 'ink' ? 'on' : ''} onClick={() => setMode('ink')}>
-              手写
-            </button>
-            <button
-              role="radio"
-              aria-checked={mode === 'pencil'}
-              className={mode === 'pencil' ? 'on' : ''}
-              onClick={() => setMode('pencil')}
-            >
-              铅笔 · 可编辑
-            </button>
-          </div>
-          <button className="ghost" onClick={reset}>
-            清空白板
+          <button role="radio" aria-checked={mode === 'pencil'} className={mode === 'pencil' ? 'on' : ''} onClick={() => setMode('pencil')}>
+            <Pencil size={15} />
+            铅笔 · 可编辑
           </button>
         </div>
-      </aside>
+        <div className="icons">
+          <button
+            type="button"
+            className={`icon${showLog ? ' on' : ''}`}
+            onClick={() => setShowLog(!showLog)}
+            aria-pressed={showLog}
+            aria-label="会议记录"
+            title="会议记录"
+          >
+            <TranscriptIcon />
+          </button>
+          <button type="button" className="icon" onClick={reset} aria-label="清空白板" title="清空白板">
+            <Eraser />
+          </button>
+          <button
+            type="button"
+            className="icon"
+            onClick={() => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
+            aria-label={`主题：${THEME_LABEL[theme]}，点一下切换`}
+            title={`主题：${THEME_LABEL[theme]}`}
+          >
+            {theme === 'light' ? <Sun /> : theme === 'dark' ? <Moon /> : <Auto />}
+          </button>
+          <button type="button" className="icon" onClick={() => setShowSettings(true)} aria-label="设置" title="设置">
+            <Gear />
+          </button>
+        </div>
+      </header>
 
       <main className="board">
         {mode === 'ink' ? (
-          <InkBoard graph={graph} hot={hot} dark={dark} messy={messyLater / 100} />
+          <InkBoard graph={graph} hot={hot} dark={dark} messy={messyLater / 100} bottomInset={inset} />
         ) : (
           <Excalidraw
             excalidrawAPI={setApi}
             theme={dark ? 'dark' : 'light'}
-            initialData={{ appState: { viewBackgroundColor: dark ? '#121212' : '#fdfcf8', currentItemFontFamily: 1 } }}
+            initialData={{ appState: { viewBackgroundColor: PAPER_LIGHT, currentItemFontFamily: 1 } }}
             UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false } }}
           />
         )}
+
+        {empty && !splash && (
+          <div className={`hero${mode === 'ink' && dark ? ' on-board' : ''}`}>
+            <span className="kicker">本地优先 · 实时会议板书</span>
+            <h1>
+              开会时只管说，
+              <br />
+              板书自己长出来。
+            </h1>
+            <p>
+              说出来的话会被整理成话题、要点、流程和问题，一笔一笔写在白板上。
+              {isDesktop ? '点下面的麦克风开始，或者先放一段示例会议看看。' : '在下面输入一句话，或者先放一段示例会议看看。'}
+            </p>
+            <div className="cta">
+              {isDesktop && (
+                <button type="button" className="primary" onClick={() => void toggleMic()}>
+                  开始收音
+                </button>
+              )}
+              <button type="button" className={isDesktop ? 'secondary' : 'primary'} onClick={() => void play()} disabled={!ready}>
+                {ready ? '播放示例会议' : '等模型就绪…'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <Composer
+          onSend={(t) => say({ speaker: speaker.trim() || undefined, text: t })}
+          speaker={speaker}
+          setSpeaker={setSpeaker}
+          speakers={speakers}
+          canListen={isDesktop}
+          listening={listening}
+          level={level}
+          partial={partial}
+          micName={mic}
+          voiceErr={voiceErr}
+          toggleMic={() => void toggleMic()}
+          modelLabel={modelLabel}
+          ready={ready}
+          demo={demo}
+          setDemo={setDemo}
+          play={() => void play()}
+          playing={playing}
+        />
       </main>
+
+      <aside className="log" aria-label="会议记录" hidden={!showLog}>
+        <header>
+          <h2>会议记录</h2>
+          <span className="count">{lines.length ? `${lines.length} 句` : ''}</span>
+          <button type="button" className="icon" onClick={() => setShowLog(false)} aria-label="收起会议记录">
+            <Close size={16} />
+          </button>
+        </header>
+        <div className="lines">
+          {lines.length === 0 && !partial && <p className="empty">还没有人说话。说的每一句和它画出来的东西都会记在这里。</p>}
+          {lines.map((l, i) => (
+            <article key={i} className={`line${l.ms === undefined ? ' pending' : ''}`}>
+              {l.speaker && <span className={`who c${speakers.indexOf(l.speaker) % 6}`}>{l.speaker}</span>}
+              <div className="body">
+                <p>{l.text}</p>
+                <details>
+                  <summary>
+                    {l.ms === undefined ? '画着…' : `${Math.round(l.ms)} ms`}
+                    {l.ms !== undefined && useRemote && l.via && ` · ${l.via}`}
+                    {l.fellBack && <em> · 远程失败，这句用了本地模型</em>}
+                  </summary>
+                  {l.ops ? <pre>{l.ops}</pre> : <pre>（没有改动）</pre>}
+                </details>
+              </div>
+            </article>
+          ))}
+          {partial && (
+            <article className="line partial" aria-live="polite">
+              {speaker.trim() && <span className={`who c${speakers.indexOf(speaker.trim()) % 6}`}>{speaker.trim()}</span>}
+              <div className="body">
+                <p>{partial}…</p>
+              </div>
+            </article>
+          )}
+          <div ref={listEnd} />
+        </div>
+      </aside>
+
       {showSettings && (
         <SettingsPanel
           onClose={() => setShowSettings(false)}
@@ -505,11 +580,6 @@ export default function App() {
           inkMode={mode === 'ink'}
           messy={messy}
           setMessy={setMessy}
-          demo={demo}
-          setDemo={setDemo}
-          playing={playing}
-          canPlay={ready}
-          play={() => void play()}
         />
       )}
       {showModels && <ModelPanel status={builtin} onClose={() => setShowModels(false)} />}

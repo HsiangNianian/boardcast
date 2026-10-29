@@ -1,7 +1,6 @@
 // 设置：不常用的东西都放这里，主页面只留说话、收音和板书本身。
 
 import { useEffect, useState } from 'react'
-import cases from '../eval/cases.json'
 import { type LlmStatus, isDesktop, voice } from './desktop.ts'
 import { type RemoteTest, type RemoteView, remote } from './remote.ts'
 
@@ -27,12 +26,6 @@ interface Props {
   inkMode: boolean
   messy: number
   setMessy: (n: number) => void
-  // 示例会议
-  demo: string
-  setDemo: (id: string) => void
-  playing: boolean
-  canPlay: boolean
-  play: () => void
 }
 
 /** 错误对象只要它的消息，不要前面的「Error: 」 */
@@ -245,27 +238,6 @@ export default function SettingsPanel(p: Props) {
           </section>
         )}
 
-        <section>
-          <h3>示例会议</h3>
-          <div className="row">
-            <select value={p.demo} onChange={(e) => p.setDemo(e.target.value)} disabled={p.playing} aria-label="示例会议">
-              {cases.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={() => {
-                p.play()
-                p.onClose()
-              }}
-              disabled={p.playing || !p.canPlay}
-            >
-              {p.playing ? '播放中…' : '播放'}
-            </button>
-          </div>
-        </section>
       </div>
     </div>
   )

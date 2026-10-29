@@ -7,6 +7,7 @@ import { type PointerEvent, type WheelEvent, useEffect, useMemo, useRef, useStat
 import { layout } from '../board/layout.ts'
 import type { Graph } from '../engine/graph.ts'
 import { type InkLook, type Piece, compose } from './compose.ts'
+import { localPoint } from '../ui/landscape.ts'
 
 const WHITEBOARD: InkLook = {
   paper: '#fbfbf8',
@@ -42,7 +43,20 @@ interface Timing {
   end: number
 }
 
-export default function InkBoard({ graph, hot, dark, messy }: { graph: Graph; hot: Set<string>; dark: boolean; messy: number }) {
+export default function InkBoard({
+  graph,
+  hot,
+  dark,
+  messy,
+  bottomInset = 0,
+}: {
+  graph: Graph
+  hot: Set<string>
+  dark: boolean
+  messy: number
+  /** 画面底部被悬浮控件挡住的高度，自动适配时让开 */
+  bottomInset?: number
+}) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
   /** 当前画面是按哪个潦草度算出来的（测试和调试用） */
@@ -109,31 +123,36 @@ export default function InkBoard({ graph, hot, dark, messy }: { graph: Graph; ho
     return () => ro.disconnect()
   }, [])
 
-  // 自动适配画面：内容少时不放大到 1 倍以上
+  // 自动适配画面：内容少时不放大到 1 倍以上；底下留出悬浮输入框的位置
   const fit = useMemo(() => {
+    const free = Math.max(120, H - bottomInset)
     const w = Math.max(1, bounds.x1 - bounds.x0 + 120)
     const h = Math.max(1, bounds.y1 - bounds.y0 + 120)
-    const k = Math.min(1, W / w, H / h)
-    return { k, x: (bounds.x0 + bounds.x1) / 2 - W / (2 * k), y: (bounds.y0 + bounds.y1) / 2 - H / (2 * k) }
-  }, [bounds, W, H])
+    const k = Math.min(1, W / w, free / h)
+    return { k, x: (bounds.x0 + bounds.x1) / 2 - W / (2 * k), y: (bounds.y0 + bounds.y1) / 2 - free / (2 * k) }
+  }, [bounds, W, H, bottomInset])
   const v = view ?? fit
 
+  // 手机上强制横屏时整个应用是转过的，指针位置都先换回画布自己的坐标
+  const at = (e: { clientX: number; clientY: number }) => localPoint(wrap.current!, e.clientX, e.clientY)
   const onWheel = (e: WheelEvent) => {
-    const rect = wrap.current!.getBoundingClientRect()
-    const mx = v.x + (e.clientX - rect.left) / v.k
-    const my = v.y + (e.clientY - rect.top) / v.k
+    const [px, py] = at(e)
+    const mx = v.x + px / v.k
+    const my = v.y + py / v.k
     const k = Math.min(4, Math.max(0.2, v.k * Math.exp(-e.deltaY * 0.0015)))
-    setView({ k, x: mx - (e.clientX - rect.left) / k, y: my - (e.clientY - rect.top) / k })
+    setView({ k, x: mx - px / k, y: my - py / k })
   }
   const onDown = (e: PointerEvent) => {
-    drag.current = { x: e.clientX, y: e.clientY }
+    const [x, y] = at(e)
+    drag.current = { x, y }
     ;(e.target as Element).setPointerCapture(e.pointerId)
   }
   const onMove = (e: PointerEvent) => {
     if (!drag.current) return
-    const dx = (e.clientX - drag.current.x) / v.k
-    const dy = (e.clientY - drag.current.y) / v.k
-    drag.current = { x: e.clientX, y: e.clientY }
+    const [x, y] = at(e)
+    const dx = (x - drag.current.x) / v.k
+    const dy = (y - drag.current.y) / v.k
+    drag.current = { x, y }
     setView({ ...v, x: v.x - dx, y: v.y - dy })
   }
 

@@ -6,9 +6,11 @@ import cases from '../eval/cases.json'
 import { layout } from './board/layout.ts'
 import { type Look, scene } from './board/scene.ts'
 import { type Graph, emptyGraph } from './engine/graph.ts'
+import { proposeOps } from './engine/llm.ts'
 import { formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { Session } from './engine/session.ts'
+import { type LlmStatus, isDesktop, llmStatus } from './desktop.ts'
 import InkBoard from './ink/InkBoard.tsx'
 
 type Mode = 'pencil' | 'ink'
@@ -46,6 +48,38 @@ export default function App() {
   const dark = useDark()
   const [baseUrl, setBaseUrl] = useState(() => load('boardcast.llm', 'http://127.0.0.1:8080'))
   const [online, setOnline] = useState<boolean | null>(null)
+  // 桌面版：内置的 llama-server 由外壳拉起，就绪后自动用它的地址
+  const [builtin, setBuiltin] = useState<LlmStatus | null>(null)
+  // 第一次请求很慢（Vulkan 现场编译着色器，提示词前缀也还没进缓存），就绪后先空跑一次
+  const [warming, setWarming] = useState(false)
+  const warmed = useRef<string | null>(null)
+  useEffect(() => {
+    if (!isDesktop) return
+    let alive = true
+    let timer: ReturnType<typeof setTimeout>
+    const poll = async () => {
+      const s = await llmStatus().catch(() => null)
+      if (!alive) return
+      setBuiltin(s)
+      if (s?.state === 'ready' && s.url) {
+        setBaseUrl(s.url)
+        if (warmed.current !== s.url) {
+          warmed.current = s.url
+          setWarming(true)
+          void proposeOps({ baseUrl: s.url, noThink: true }, emptyGraph(), [], { text: '大家好。' })
+            .catch(() => undefined)
+            .finally(() => alive && setWarming(false))
+        }
+      }
+      // 还在启动就勤快点问；定下来以后慢慢问
+      timer = setTimeout(poll, s?.state === 'starting' ? 700 : 5000)
+    }
+    void poll()
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+  }, [])
   const [lines, setLines] = useState<Line[]>([])
   const [graph, setGraph] = useState<Graph>(emptyGraph)
   const [hot, setHot] = useState<Set<string>>(new Set())
@@ -191,6 +225,20 @@ export default function App() {
             本地模型 <i className={`dot ${online === null ? '' : online ? 'ok' : 'bad'}`} />
           </span>
           <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value.trim())} spellCheck={false} />
+          {builtin && (
+            <small className={`builtin ${builtin.state}`}>
+              {builtin.state === 'ready' && `内置：${builtin.model} · ${builtin.device}${warming ? ' · 预热中…' : ''}`}
+              {builtin.state === 'starting' && `正在启动内置模型 ${builtin.model ?? ''}（${builtin.device ?? ''}）…`}
+              {builtin.state === 'no-model' && (
+                <>
+                  {builtin.message}
+                  <br />
+                  <code>{builtin.modelsDir}</code>
+                </>
+              )}
+              {builtin.state === 'error' && builtin.message}
+            </small>
+          )}
         </label>
 
         <div className="row">

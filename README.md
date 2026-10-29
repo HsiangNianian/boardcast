@@ -71,21 +71,36 @@
 
 下一步：补一套不参与调参的测试集，再用合成数据给 2B–4B 的模型做 LoRA 微调，目标是让小模型接近 9B 的准确率。
 
+## 桌面版和模型
+
+桌面版安装包里自带 llama.cpp 的 llama-server（Vulkan 版，N 卡、A 卡、Intel 核显、骁龙 Adreno 都能用，没有可用显卡时自动退回 CPU），启动时自动拉起，不用开终端：
+
+- 有独显就只用独显；核显和独显同时存在时不会把模型拆到两张卡上。
+- 应用崩溃或被强制结束时，llama-server 会跟着退出，不会留下占着显存的进程。
+- 首次加载后会先空跑一次预热。每台机器第一次启动时 Vulkan 要编译着色器，可能要等几十秒，之后会被驱动缓存。
+
+模型还没有下载界面（#3），需要先手动放一个 `.gguf` 进模型目录，然后重启应用：
+
+| 系统 | 模型目录 |
+|---|---|
+| Linux | `~/.local/share/games.mmstudio.boardcast/models/` |
+| Windows | `%APPDATA%\games.mmstudio.boardcast\models\` |
+
+推荐 [Qwen3.5-9B](https://modelscope.cn/models/unsloth/Qwen3.5-9B-GGUF)（独显）或 [Qwen3.5-4B](https://modelscope.cn/models/unsloth/Qwen3.5-4B-GGUF)（轻薄本）的 `Q4_K_M`，国内从 ModelScope 下载快得多。目录里有多个模型时，优先用 9B，其次 4B；也可以用环境变量 `BOARDCAST_MODEL=/path/to/model.gguf` 指定。llama-server 的日志在应用的日志目录里（Linux 是 `~/.local/share/games.mmstudio.boardcast/logs/llama-server.log`）。
+
 ## 本地运行
 
-需要 Node 24+、pnpm、Rust（打包桌面版时）和 [llama.cpp](https://github.com/ggml-org/llama.cpp)。
+需要 Node 24+、pnpm 和 Rust（打包桌面版时）。
 
 ```sh
 pnpm install
 
-# 1. 起一个本地模型（任意 GGUF；有显卡就加 -ngl 99）
-llama-server -m path/to/model.gguf --port 8080 -c 4096 --jinja -np 1
-
-# 2. 网页版
-pnpm dev            # http://localhost:1420
-
-# 3. 或者桌面版
+# 桌面版：会自动下载对应平台的 llama-server 到 src-tauri/llama/
 pnpm tauri dev
+
+# 只跑网页版时，需要自己起一个 llama.cpp 的服务（任意 GGUF；有显卡就加 -ngl 99）
+llama-server -m path/to/model.gguf --port 8080 -c 4096 --jinja -np 1
+pnpm dev            # http://localhost:1420
 ```
 
 跑评测：
@@ -109,7 +124,8 @@ pnpm test                              # 引擎单元测试，不需要模型
 - [x] 手写模式：按笔顺逐笔书写，白板马克笔 / 黑板粉笔，潦草度可调
 - [ ] 手写模式里的小图标、导出 PNG / SVG
 - [ ] sherpa-onnx 流式转写（麦克风 + 系统声音）
-- [ ] Tauri 外壳拉起 llama-server，首次启动下载模型
+- [x] Tauri 外壳拉起打包进来的 llama-server（#2）
+- [ ] 首次启动下载模型（#3）
 - [ ] 不参与调参的测试集；合成数据 + LoRA 微调小模型
 - [ ] 增量排版，新节点出现时旧节点不跳
 - [ ] 导出 Markdown / PNG / `.excalidraw`

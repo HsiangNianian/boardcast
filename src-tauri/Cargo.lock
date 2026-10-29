@@ -146,10 +146,12 @@ dependencies = [
 name = "boardcast"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

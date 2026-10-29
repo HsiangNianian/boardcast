@@ -254,3 +254,19 @@ button.ghost {
   background: transparent;
   accent-color: var(--ink);
 }
+
+.builtin {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.builtin.ready {
+  color: var(--ok);
+}
+.builtin.error {
+  color: var(--bad);
+}
+.builtin code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  word-break: break-all;
+}

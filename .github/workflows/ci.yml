@@ -59,6 +59,15 @@ jobs:
           key: ${{ matrix.name }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm tauri build
+      # 冒烟测试：打进安装包的 llama-server 在这个平台上能跑起来、能列出设备
+      - name: Smoke-test bundled llama-server
+        shell: bash
+        run: |
+          exe=src-tauri/llama/llama-server
+          [ -f "$exe.exe" ] && exe="$exe.exe"
+          "$exe" --version
+          "$exe" --list-devices
+          du -sh src-tauri/llama
       - uses: actions/upload-artifact@v4
         with:
           name: boardcast-${{ matrix.name }}

@@ -24,7 +24,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm exec vite build
+      - run: pnpm build
 
   desktop:
     name: desktop · ${{ matrix.name }}

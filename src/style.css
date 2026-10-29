@@ -191,3 +191,40 @@ button.ghost {
     border-bottom: 1px solid var(--line);
   }
 }
+
+.seg {
+  display: flex;
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seg button {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 6px;
+}
+.seg button.on {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.ink {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+.ink:active {
+  cursor: grabbing;
+}
+
+@keyframes bc-write {
+  to {
+    stroke-dashoffset: 0;
+  }
+}

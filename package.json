@@ -9,8 +9,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "node scripts/glyphs.mjs && vite",
+    "build": "node scripts/glyphs.mjs && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/engine/*.test.ts\"",
     "eval": "node eval/run.ts",
@@ -20,6 +20,7 @@
     "@excalidraw/excalidraw": "0.18.1",
     "@tauri-apps/api": "2.12.4",
     "elkjs": "0.12.0",
+    "perfect-freehand": "1.2.3",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
@@ -29,6 +30,8 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
+    "hanzi-writer-data": "2.0.1",
+    "hersheytext": "2.0.0",
     "typescript": "7.0.2",
     "vite": "8.3.5"
   },

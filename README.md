@@ -6,9 +6,16 @@
 
 现在是早期原型：文字输入和示例会议回放已经能用，语音输入还在做。
 
-![头脑风暴板书](docs/screenshot-board.png)
+板书有两种风格，左下角切换：
 
-![架构图](docs/screenshot-groups.png)
+- **手写**：像有人拿马克笔在白板上写（深色主题下是黑板粉笔）。汉字按笔顺一笔一笔写出来，每个字有一点随手的歪斜和大小起伏。
+- **铅笔 · 可编辑**：Excalidraw 的手绘风格，可以直接在板上拖动、修改、补画。
+
+![手写 · 白板](docs/screenshot-ink.png)
+
+![手写 · 黑板](docs/screenshot-chalk.png)
+
+![铅笔 · 可编辑](docs/screenshot-board.png)
 
 ## 它怎么工作
 
@@ -24,7 +31,7 @@
               └──────────────► 图状态 ◄────────────────────┘
                      （铅笔稿被模型确认就描成墨线，否则擦掉）
                                     │
-        要点按区域摆放 + 流程图用 ELK 排版 → Excalidraw 手绘渲染
+        要点按区域摆放 + 流程图用 ELK 排版 → 手写笔迹 / Excalidraw 渲染
 ```
 
 关键设计：
@@ -37,6 +44,7 @@
 - **实体表管记忆。** 「它」「那边」「那个服务」靠程序维护的节点表和别名对上，模型只需要在列表里挑编号。
 - **语法约束解码。** 每次调用按当前白板生成 GBNF，编号只能从已有节点里选，小模型写不出不存在的东西。
 - **前缀缓存。** 系统提示词和示例对话固定在最前面，llama-server 复用它们的 KV，每句话只需重新读入一百个左右的 token。
+- **手写是真的「写」出来的。** 不是套手写字体：汉字用 [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data) 里按笔顺排好的骨架线，英文数字用 Hershey 单线字体，再交给 [perfect-freehand](https://github.com/steveruizok/perfect-freehand) 模拟马克笔的压感和收笔。新内容用骨架线做遮罩逐笔描出来；一轮新内容最多写 2.4 秒，写不完就整体加速，板书不会落后于讨论。
 - **忙时合并。** 模型同一时间只跑一个请求，排队的句子下一轮合并处理，板书不会越拖越晚。
 
 ## 目前的评测
@@ -95,6 +103,8 @@ pnpm test                              # 引擎单元测试，不需要模型
 
 - [x] 文字 → 图操作 → 手绘板书，评测和延迟统计
 - [x] 要点板：话题、多层条目、问题、公式、备注、划掉 / 圈出 / 星标、小图标
+- [x] 手写模式：按笔顺逐笔书写，白板马克笔 / 黑板粉笔
+- [ ] 手写模式里的小图标、导出 PNG / SVG
 - [ ] sherpa-onnx 流式转写（麦克风 + 系统声音）
 - [ ] Tauri 外壳拉起 llama-server，首次启动下载模型
 - [ ] 不参与调参的测试集；合成数据 + LoRA 微调小模型
@@ -104,4 +114,6 @@ pnpm test                              # 引擎单元测试，不需要模型
 
 ## 许可
 
-MIT
+代码 MIT。
+
+手写模式用到的汉字笔画数据来自 hanzi-writer-data（源自 Make Me a Hanzi 与 Arphic 字体），使用 Arphic Public License，许可文本会随数据一起放进 `public/hanzi/ARPHICPL.TXT`。Hershey 字体数据来自 hersheytext（MIT）。

@@ -7,3 +7,4 @@ models/
 eval/reports/
 *.log
 .playwright-mcp/
+public/hanzi/

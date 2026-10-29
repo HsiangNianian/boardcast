@@ -9,6 +9,9 @@ import { type Graph, emptyGraph } from './engine/graph.ts'
 import { formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { Session } from './engine/session.ts'
+import InkBoard from './ink/InkBoard.tsx'
+
+type Mode = 'pencil' | 'ink'
 
 interface Line extends Utterance {
   /** 模型处理这句话用了多久；undefined 表示还在排队 */
@@ -50,7 +53,9 @@ export default function App() {
   const [text, setText] = useState('')
   const [demo, setDemo] = useState(cases[0].id)
   const [playing, setPlaying] = useState(false)
-  const api = useRef<ExcalidrawImperativeAPI | null>(null)
+  // 用 state 而不是 ref：切回铅笔模式时 Excalidraw 重新挂载，要让重画的 effect 再跑一次
+  const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
+  const [mode, setMode] = useState<Mode>(() => (load('boardcast.mode', 'ink') === 'pencil' ? 'pencil' : 'ink'))
   const listEnd = useRef<HTMLDivElement>(null)
 
   const session = useMemo(
@@ -108,15 +113,15 @@ export default function App() {
   useEffect(() => {
     let stale = false
     void layout(graph).then((l) => {
-      if (stale || !api.current) return
+      if (stale || !api) return
       const look = dark ? DARK : LIGHT
-      api.current.updateScene({ elements: scene(graph, l, hot, look) })
+      api.updateScene({ elements: scene(graph, l, hot, look) })
       if (!graph.nodes.length) return
       // 自己算缩放和居中：内容少时不放大到 100% 以上，内容多时整张图塞进画面
       const { x0, y0, x1, y1 } = l.bounds
-      const { width, height, zoom } = api.current.getAppState()
+      const { width, height, zoom } = api.getAppState()
       const z = Math.min(1, (0.85 * width) / (x1 - x0), (0.8 * height) / (y1 - y0))
-      api.current.updateScene({
+      api.updateScene({
         appState: {
           zoom: { value: z as typeof zoom.value },
           scrollX: width / (2 * z) - (x0 + x1) / 2,
@@ -127,7 +132,15 @@ export default function App() {
     return () => {
       stale = true
     }
-  }, [graph, hot, dark])
+  }, [graph, hot, dark, api])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('boardcast.mode', mode)
+    } catch {
+      /* 存不了就算了 */
+    }
+  }, [mode])
 
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
   useEffect(() => {
@@ -225,18 +238,37 @@ export default function App() {
             说
           </button>
         </form>
-        <button className="ghost" onClick={reset}>
-          清空白板
-        </button>
+        <div className="row">
+          <div className="seg" role="radiogroup" aria-label="板书风格">
+            <button role="radio" aria-checked={mode === 'ink'} className={mode === 'ink' ? 'on' : ''} onClick={() => setMode('ink')}>
+              手写
+            </button>
+            <button
+              role="radio"
+              aria-checked={mode === 'pencil'}
+              className={mode === 'pencil' ? 'on' : ''}
+              onClick={() => setMode('pencil')}
+            >
+              铅笔 · 可编辑
+            </button>
+          </div>
+          <button className="ghost" onClick={reset}>
+            清空白板
+          </button>
+        </div>
       </aside>
 
       <main className="board">
-        <Excalidraw
-          excalidrawAPI={(a) => (api.current = a)}
-          theme={dark ? 'dark' : 'light'}
-          initialData={{ appState: { viewBackgroundColor: dark ? '#121212' : '#fdfcf8', currentItemFontFamily: 1 } }}
-          UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false } }}
-        />
+        {mode === 'ink' ? (
+          <InkBoard graph={graph} hot={hot} dark={dark} />
+        ) : (
+          <Excalidraw
+            excalidrawAPI={setApi}
+            theme={dark ? 'dark' : 'light'}
+            initialData={{ appState: { viewBackgroundColor: dark ? '#121212' : '#fdfcf8', currentItemFontFamily: 1 } }}
+            UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false } }}
+          />
+        )}
       </main>
     </div>
   )

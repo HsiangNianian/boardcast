@@ -1,6 +1,7 @@
 // 排版结果 → 一笔一笔的墨迹。和 board/scene.ts 吃同一份 Layout，只是换了一支「真的笔」。
 
 import type { Layout, Row } from '../board/layout.ts'
+import { labelSpot } from '../board/labels.ts'
 import { FONT, TITLE } from '../board/layout.ts'
 import type { Graph, Node } from '../engine/graph.ts'
 import { type Pt, type Stroke, glyph } from './glyphs.ts'
@@ -179,8 +180,8 @@ export async function compose(
       const c = e.ink === 'draft' ? look.pencil : look.ink
       add(`${e.from}>${e.to}`, c, e.ink === 'draft' ? 0.55 : 1, arrow(rt.points as Pt[], r), penFor(FONT) * 0.9)
       if (e.label) {
-        const [a, b2] = [rt.points[0], rt.points[rt.points.length - 1]]
-        await text(undefined, `${e.from}>${e.to}l`, e.label, (a[0] + b2[0]) / 2 - 10, (a[1] + b2[1]) / 2 - 24, FONT - 4, c, 0)
+        const [lx, ly] = labelSpot(rt.points as Pt[], e.label, FONT - 4, d.nodes)
+        await text(undefined, `${e.from}>${e.to}l`, e.label, lx, ly, FONT - 4, c, 0)
       }
     }
   }

@@ -1,22 +1,84 @@
 name: Release
 
-# 推 v* tag 时三平台打包，挂到一个草稿 Release 上，确认后手动发布。
+# 推 v* tag（一般用 `pnpm release x.y.z --push`）时：
+# 1. 用 CHANGELOG.md 里这个版本的那一节当 Release 正文（没有就按上一个 tag 以来的约定式提交现生成），先建成草稿；
+# 2. 三个平台各自打包，安装包传到这个 Release 上；
+# 3. 三个平台都成功了才正式发布；有一个失败就留在草稿，修好后可以手动重跑。
+# 也可以在 Actions 页面手动对已有的 tag 重跑。
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to (re)build and publish, e.g. v0.1.0
+        required: true
 
 permissions:
   contents: write
 
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
 jobs:
+  notes:
+    name: release notes
+    runs-on: ubuntu-24.04
+    outputs:
+      release-id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+          # 要完整历史和 tag，才能找到上一个版本、列出中间的提交
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Write the release notes
+        run: |
+          # 手动重跑早期的 tag 时，那时候还没有这个脚本，用 main 上的
+          script=scripts/changelog.mjs
+          if [ ! -f "$script" ]; then
+            mkdir -p "$RUNNER_TEMP/scripts"
+            git show origin/main:scripts/changelog.mjs > "$RUNNER_TEMP/scripts/changelog.mjs"
+            script="$RUNNER_TEMP/scripts/changelog.mjs"
+          fi
+          node "$script" notes "$TAG" > notes.md
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Create or update the draft release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 0.x 和带后缀的版本（-rc.1 之类）标成预发布
+          pre=false
+          case "$TAG" in v0.*|*-*) pre=true ;; esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "boardcast $TAG" --notes-file notes.md --prerelease="$pre"
+          else
+            gh release create "$TAG" --title "boardcast $TAG" --notes-file notes.md --draft --verify-tag --prerelease="$pre"
+          fi
+          echo "id=$(gh release view "$TAG" --json databaseId --jq .databaseId)" >> "$GITHUB_OUTPUT"
+
   build:
+    name: build · ${{ matrix.name }}
+    needs: notes
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest, windows-11-arm]
+        include:
+          - name: linux-x64
+            os: ubuntu-24.04
+          - name: windows-x64
+            os: windows-latest
+          - name: windows-arm64
+            os: windows-11-arm
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
       - name: Linux system deps
         if: runner.os == 'Linux'
         run: |
@@ -31,6 +93,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ matrix.name }}
           cache-directories: src-tauri/target/sherpa-onnx-prebuilt
       # sherpa-onnx-sys 把下载的预编译库放在 target/sherpa-onnx-prebuilt/，rust-cache 默认不缓存这里，
       # 却会恢复它的构建脚本结果，于是 cargo 以为库已经就位、链接时找不到。
@@ -41,11 +104,19 @@ jobs:
           cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys
           cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys --release
       - run: pnpm install --frozen-lockfile
+      # 打包并把安装包传到上一步建好的 Release 上（deb / rpm / AppImage，msi / exe）
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: boardcast ${{ github.ref_name }}
-          releaseDraft: true
-          prerelease: true
+          releaseId: ${{ needs.notes.outputs.release-id }}
+
+  publish:
+    name: publish
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

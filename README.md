@@ -176,7 +176,23 @@ pnpm test                              # 引擎单元测试，不需要模型
 
 - `CI`：类型检查、单元测试、网页构建，然后在 Linux x64、Windows x64、Windows ARM64 上打桌面安装包。
 - `Board eval`：改了 `src/engine` 或 `eval` 时，在 CPU 机器上用 llama.cpp 跑一遍评测，分数写进 job summary，用来看回归。
-- `Release`：推 `v*` tag 时三平台打包，生成草稿 Release。
+- `Release`：推 `v*` tag 时，用 CHANGELOG.md 里这个版本的那一节当 Release 正文，三平台打包并把安装包传上去，全部成功后正式发布。
+
+## 发版
+
+提交信息遵循[约定式提交](https://www.conventionalcommits.org/zh-hans/)（`feat(scope): …`、`fix: …`、`docs: …`），发版时据此自动生成更新日志：
+
+```sh
+pnpm release 0.2.0 --dry-run   # 先看看这一版的更新日志长什么样，不改任何文件
+pnpm release 0.2.0             # 改版本号、把这一版写到 CHANGELOG.md 最前面、提交并打 tag v0.2.0
+pnpm release 0.2.0 --push      # 同上，再推送提交和 tag，触发 Release 工作流
+```
+
+- 版本号同时改 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`src-tauri/tauri.conf.json`。
+- 更新日志按类型分组（Features、Fixes、Documentation、Build and CI……），提交正文里的 `- ` 要点会保留成子条目，每条附提交链接，最后附上和上一版的对比链接。
+- 不加 `--push` 时可以先手动改 CHANGELOG.md 里的措辞再推；Release 正文用的就是推上去的那一节。
+- 直接手推的 tag（CHANGELOG.md 里没有这一版）也能发：正文按上一个 tag 以来的提交现生成。
+- 0.x 和带后缀的版本（如 `-rc.1`）标为预发布。某个平台打包失败时 Release 留在草稿，修好后在 Actions 里对这个 tag 手动重跑。
 
 ## 路线
 

@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/engine/*.test.ts\"",
     "eval": "node eval/run.ts",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.1",

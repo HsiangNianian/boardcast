@@ -228,3 +228,29 @@ button.ghost {
     stroke-dashoffset: 0;
   }
 }
+
+.messy {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.messy span {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.messy b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.messy i {
+  margin-left: auto;
+  font-style: normal;
+}
+.messy input {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--ink);
+}

@@ -4,7 +4,7 @@ import type { Layout, Row } from '../board/layout.ts'
 import { FONT, TITLE } from '../board/layout.ts'
 import type { Graph, Node } from '../engine/graph.ts'
 import { type Pt, type Stroke, glyph } from './glyphs.ts'
-import { type Inked, arrow, box, ink, line, loop, place, rng, strike } from './pen.ts'
+import { type Inked, arrow, box, ink, line, loop, placeGlyph, rng, strike } from './pen.ts'
 
 export interface InkLook {
   paper: string
@@ -29,18 +29,51 @@ export interface Piece {
 
 const penFor = (size: number) => Math.max(1.8, size * 0.1)
 
-async function write(text: string, x: number, y: number, size: number, seed: string): Promise<Stroke[]> {
+/** 一笔；`thin` 是连笔时带出来的细丝，用更细的笔画 */
+type Mark = { pts: Stroke; thin?: boolean }
+
+/** 潦草度超过这个值，英文从印刷体换成连写体 */
+export const SCRIPT_AT = 0.45
+
+const isLower = (ch: string) => /[a-z]/.test(ch)
+const isHan = (ch: string) => /[㐀-鿿]/.test(ch)
+const dist = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1])
+
+async function write(text: string, x: number, y: number, size: number, seed: string, messy: number): Promise<Mark[]> {
   const r = rng(seed)
-  const out: Stroke[] = []
+  const cursive = messy >= SCRIPT_AT
+  const out: Mark[] = []
   let cx = x
+  let prev: { ch: string; end: Pt } | undefined
   for (const ch of text) {
-    const g = await glyph(ch)
+    // 连写体的大写字母是花体，在板上认不出来；真人手写也多是大写印刷、小写连写
+    const latin = cursive && isLower(ch) ? 'script' : 'print'
+    const g = await glyph(ch, latin)
     if (!g) {
       cx += size * 0.6
+      prev = undefined
       continue
     }
-    for (const s of g.strokes) out.push(place(s, cx, y, size, r))
-    cx += g.advance * size * (0.94 + r() * 0.1) + size * 0.04
+    const placed = placeGlyph(g.strokes, cx, y, size, r, messy)
+    // 英文连写：同一个单词里，上一个小写字母的收笔接到这个小写字母的起笔
+    if (latin === 'script' && prev && isLower(prev.ch) && placed[0]?.length) {
+      const start = placed[0][0]
+      if (dist(prev.end, start) < size * 0.7) out.push({ pts: [prev.end, start] })
+    }
+    for (let i = 0; i < placed.length; i++) {
+      out.push({ pts: placed[i] })
+      // 汉字连笔：越潦草，上一笔的收笔越容易带出一根细丝连到下一笔的起笔
+      const next = placed[i + 1]
+      if (isHan(ch) && next && messy > 0.5 && r() < (messy - 0.5) * 1.4) {
+        const a = placed[i][placed[i].length - 1]
+        const b = next[0]
+        if (dist(a, b) < size * 0.55) out.push({ pts: [a, [(a[0] + b[0]) / 2 + (r() - 0.5) * size * 0.1, (a[1] + b[1]) / 2], b], thin: true })
+      }
+    }
+    const last = placed[placed.length - 1]
+    prev = last?.length ? { ch, end: last[last.length - 1] } : undefined
+    // 越潦草字距越挤、越不均匀
+    cx += g.advance * size * (0.96 - 0.1 * messy + r() * (0.08 + 0.22 * messy)) + size * 0.04
   }
   return out
 }
@@ -55,15 +88,18 @@ function edgePoint(b: { x: number; y: number; w: number; h: number }, c: Pt, p: 
   return [c[0] + dx * t, c[1] + dy * t]
 }
 
-export async function compose(g: Graph, l: Layout, hot: Set<string>, look: InkLook): Promise<Piece[]> {
+export async function compose(g: Graph, l: Layout, hot: Set<string>, look: InkLook, messy = 0.3): Promise<Piece[]> {
   const pieces: Piece[] = []
   const colorOf = (n: Node | undefined, fallback = look.ink) =>
     n?.ink === 'draft' ? look.pencil : n?.kind === 'question' ? look.red : n?.kind === 'note' ? look.blue : fallback
   const alpha = (n: Node | undefined) => (n?.ink === 'draft' ? 0.55 : n?.marks.includes('划掉') ? 0.55 : 1)
 
-  const add = (key: string, color: string, opacity: number, strokes: Stroke[], size: number, extra: Partial<Piece> = {}) => {
+  const add = (key: string, color: string, opacity: number, strokes: (Stroke | Mark)[], size: number, extra: Partial<Piece> = {}) => {
     const r = rng(key)
-    pieces.push({ key, color, opacity, strokes: strokes.map((s) => ink(s, size, r)), ...extra })
+    const inked = strokes.map((s) =>
+      Array.isArray(s) ? ink(s, size, r, { messy }) : ink(s.pts, s.thin ? size * 0.45 : size, r, { messy }),
+    )
+    pieces.push({ key, color, opacity, strokes: inked, ...extra })
   }
 
   /** 一段文字连同它的标记 */
@@ -73,14 +109,14 @@ export async function compose(g: Graph, l: Layout, hot: Set<string>, look: InkLo
       const r = rng(`${key}hl`)
       pieces.push({ key: `${key}|hot`, color: look.highlight, opacity: 0.55, under: true, strokes: [ink(line([x - 4, y + size * 0.62], [x + w + 4, y + size * 0.58], r, 0.01), size * 0.9, r, { wobble: 1, taper: 0 })] })
     }
-    add(key, color, alpha(n), await write(str, x, y, size, key), penFor(size))
+    add(key, color, alpha(n), await write(str, x, y, size, key, messy), penFor(size))
     if (!n) return
     const r = rng(`${key}m`)
     const markColor = n.ink === 'draft' ? look.pencil : look.red
     if (n.marks.includes('划掉')) add(`${key}|x`, n.ink === 'draft' ? look.pencil : look.ink, 1, strike(x, y + size * 0.6, w, r), penFor(size) * 1.1)
     if (n.marks.includes('下划线')) add(`${key}|u`, markColor, 1, [line([x - 2, y + size + 7], [x + w + 6, y + size + 5], r, 0.02)], penFor(size))
     if (n.marks.includes('圈出')) add(`${key}|o`, markColor, 1, [loop(x + w / 2, y + size / 2, w / 2 + 18, size / 2 + 14, r)], penFor(size))
-    if (n.marks.includes('星标')) add(`${key}|s`, markColor, 1, await write('★', x + w + 10, y - 2, size, `${key}s`), penFor(size))
+    if (n.marks.includes('星标')) add(`${key}|s`, markColor, 1, await write('★', x + w + 10, y - 2, size, `${key}s`, messy), penFor(size))
   }
 
   // —— 话题区域 ——
@@ -102,7 +138,7 @@ export async function compose(g: Graph, l: Layout, hot: Set<string>, look: InkLo
     const y = oy + row.y
     const c = colorOf(n)
     const pre = row.prefix ? 30 : 0
-    if (row.prefix) add(`${n.id}|pre|${row.prefix}`, c, alpha(n), await write(row.prefix, x, y, row.size, `${n.id}pre`), penFor(row.size))
+    if (row.prefix) add(`${n.id}|pre|${row.prefix}`, c, alpha(n), await write(row.prefix, x, y, row.size, `${n.id}pre`, messy), penFor(row.size))
     if (n.kind === 'formula') {
       const r = rng(`${n.id}f`)
       add(`${n.id}|f|${row.text}`, c, alpha(n), [loop(x + pre + row.w / 2, y + row.size / 2, row.w / 2 + 16, row.size / 2 + 10, r)], penFor(row.size) * 0.9)

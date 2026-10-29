@@ -42,9 +42,11 @@ interface Timing {
   end: number
 }
 
-export default function InkBoard({ graph, hot, dark }: { graph: Graph; hot: Set<string>; dark: boolean }) {
+export default function InkBoard({ graph, hot, dark, messy }: { graph: Graph; hot: Set<string>; dark: boolean; messy: number }) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
+  /** 当前画面是按哪个潦草度算出来的（测试和调试用） */
+  const [drawn, setDrawn] = useState(messy)
   const [bounds, setBounds] = useState({ x0: 0, y0: 0, x1: 800, y1: 600 })
   const [view, setView] = useState<{ x: number; y: number; k: number } | null>(null)
   const [, setTick] = useState(0)
@@ -57,7 +59,7 @@ export default function InkBoard({ graph, hot, dark }: { graph: Graph; hot: Set<
     let stale = false
     void (async () => {
       const l = await layout(graph)
-      const ps = await compose(graph, l, hot, look)
+      const ps = await compose(graph, l, hot, look, messy)
       if (stale) return
       // 给第一次出现的笔画排上写字的时间：接在正在写的东西后面。
       // 板书不能落后于讨论：一轮新内容最多写 BUDGET 毫秒，写不完就整体加速；
@@ -85,6 +87,7 @@ export default function InkBoard({ graph, hot, dark }: { graph: Graph; hot: Set<
         timing.current.set(p.key, { delays, durs, end: cursor.current })
       }
       setPieces(ps)
+      setDrawn(messy)
       setBounds(l.bounds)
       setView(null)
       // 写完以后去掉遮罩，换成静态路径
@@ -94,7 +97,7 @@ export default function InkBoard({ graph, hot, dark }: { graph: Graph; hot: Set<
     return () => {
       stale = true
     }
-  }, [graph, hot, look])
+  }, [graph, hot, look, messy])
 
   // 画布尺寸放进 state：第一次渲染时 ref 还没挂上，窗口缩放时也要重新适配
   const [[W, H], setSize] = useState<[number, number]>([1000, 700])
@@ -175,7 +178,7 @@ export default function InkBoard({ graph, hot, dark }: { graph: Graph; hot: Set<
       onPointerUp={() => (drag.current = null)}
       onDoubleClick={() => setView(null)}
     >
-      <svg width="100%" height="100%" viewBox={`${v.x} ${v.y} ${W / v.k} ${H / v.k}`}>
+      <svg width="100%" height="100%" viewBox={`${v.x} ${v.y} ${W / v.k} ${H / v.k}`} data-messy={drawn}>
         <defs>
           {/* 粉笔：边缘抖一点，再挖掉一些颗粒 */}
           <filter id="chalk" x="-5%" y="-5%" width="110%" height="110%">

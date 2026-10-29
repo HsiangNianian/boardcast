@@ -29,12 +29,14 @@ if (!existsSync(marker)) {
   console.log(`glyphs: ${n} 个汉字 → public/hanzi/`)
 }
 
+// futural：手写印刷体；scripts：单线连写体，潦草度高的时候用
 const hersheyOut = join(root, 'src/ink/hershey.json')
-if (!existsSync(hersheyOut)) {
-  const hersheyDir = dirname(require.resolve('hersheytext/package.json'))
-  const fonts = JSON.parse(readFileSync(join(hersheyDir, 'hersheytext.min.json'), 'utf8'))
-  const chars = fonts.futural.chars.map((c) => [c.d, Number(c.o)])
+const hersheyDir = dirname(require.resolve('hersheytext/package.json'))
+const fonts = JSON.parse(readFileSync(join(hersheyDir, 'hersheytext.min.json'), 'utf8'))
+const pick = (name) => fonts[name].chars.map((c) => [c.d, Number(c.o)])
+const hershey = JSON.stringify({ print: pick('futural'), script: pick('scripts') }) + '\n'
+if (!existsSync(hersheyOut) || readFileSync(hersheyOut, 'utf8') !== hershey) {
   mkdirSync(dirname(hersheyOut), { recursive: true })
-  writeFileSync(hersheyOut, JSON.stringify(chars) + '\n')
-  console.log('glyphs: Hershey futural → src/ink/hershey.json')
+  writeFileSync(hersheyOut, hershey)
+  console.log('glyphs: Hershey futural + scripts → src/ink/hershey.json')
 }

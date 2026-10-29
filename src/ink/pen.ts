@@ -65,8 +65,13 @@ export interface Inked {
   length: number
 }
 
-export function ink(points: Stroke, size: number, r: () => number, opts: { wobble?: number; taper?: number } = {}): Inked {
-  const pts = wobble(densify(points, size * 0.3), opts.wobble ?? size * 0.15, r)
+export function ink(
+  points: Stroke,
+  size: number,
+  r: () => number,
+  opts: { wobble?: number; taper?: number; messy?: number } = {},
+): Inked {
+  const pts = wobble(densify(points, size * 0.3), opts.wobble ?? size * (0.12 + 0.5 * (opts.messy ?? 0)), r)
   let length = 0
   for (let i = 1; i < pts.length; i++) length += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
   // perfect-freehand 的收尖对短笔非常狠（实测 8px 的笔设 1px 收尖，平均宽度就掉一半以上），
@@ -91,17 +96,64 @@ export function ink(points: Stroke, size: number, r: () => number, opts: { wobbl
   }
 }
 
-/** 一个字落到纸上的变换：位置、字号，加上随手写的歪斜 */
-export function place(stroke: Stroke, x: number, y: number, s: number, r: () => number): Stroke {
-  const rot = (r() - 0.5) * 0.09
-  const k = s * (0.92 + r() * 0.14)
-  const dy = (r() - 0.5) * s * 0.08
+/** Chaikin 平滑：把折角磨圆，越潦草磨得越多，笔画就从「写」变成「甩」 */
+function chaikin(s: Stroke, times: number): Stroke {
+  let out = s
+  for (let t = 0; t < times && out.length > 2; t++) {
+    const next: Stroke = [out[0]]
+    for (let i = 0; i < out.length - 1; i++) {
+      const [ax, ay] = out[i]
+      const [bx, by] = out[i + 1]
+      next.push([ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25], [ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75])
+    }
+    next.push(out[out.length - 1])
+    out = next
+  }
+  return out
+}
+
+/** 笔画两头随机出头或缩回一点 */
+function overshoot(s: Stroke, amount: number, r: () => number): Stroke {
+  if (s.length < 2 || amount <= 0) return s
+  const ext = (a: Pt, b: Pt, k: number): Pt => [a[0] + (a[0] - b[0]) * k, a[1] + (a[1] - b[1]) * k]
+  const out = [...s]
+  out[0] = ext(s[0], s[1], (r() - 0.4) * amount)
+  out[out.length - 1] = ext(s[s.length - 1], s[s.length - 2], (r() - 0.3) * amount)
+  return out
+}
+
+/**
+ * 一个字落到纸上：位置、字号，加上随手写的变形。
+ * `messy` 从 0（很工整）到 1（很潦草），同时控制：
+ * 字的歪斜、大小、基线起伏、整体右倾，每一笔的错位和转动，折角磨圆的程度，笔画出头。
+ * 字形坐标以字号为 1，(0.5, 0.5) 是字的中心。
+ */
+export function placeGlyph(strokes: Stroke[], x: number, y: number, s: number, r: () => number, messy: number): Stroke[] {
+  const m = Math.min(1, Math.max(0, messy))
+  const rot = (r() - 0.5) * (0.05 + 0.22 * m)
+  const k = s * (1 + (r() - 0.5) * (0.08 + 0.3 * m))
+  const dy = (r() - 0.5) * s * (0.04 + 0.16 * m)
+  // 右倾：y 越往上 x 越往右
+  const slant = 0.04 + 0.3 * m
   const cos = Math.cos(rot)
   const sin = Math.sin(rot)
-  return stroke.map(([u, v]): Pt => {
-    const px = (u - 0.5) * k
-    const py = (v - 0.5) * k
-    return [x + s * 0.5 + px * cos - py * sin, y + s * 0.5 + dy + px * sin + py * cos]
+  return strokes.map((stroke) => {
+    // 每一笔自己再偏一点、转一点
+    const sx = (r() - 0.5) * 0.08 * m
+    const sy = (r() - 0.5) * 0.08 * m
+    const sr = (r() - 0.5) * 0.35 * m
+    const [cx, cy] = stroke.reduce(([a, b], [u, v]) => [a + u / stroke.length, b + v / stroke.length], [0, 0])
+    const local = stroke.map(([u, v]): Pt => {
+      const du = u - cx
+      const dv = v - cy
+      return [cx + du * Math.cos(sr) - dv * Math.sin(sr) + sx, cy + du * Math.sin(sr) + dv * Math.cos(sr) + sy]
+    })
+    const shaped = overshoot(chaikin(local, Math.round(m * 2.4)), 0.25 * m, r)
+    return shaped.map(([u, v]): Pt => {
+      const px = (u - 0.5 + (0.5 - v) * slant) * k
+      const py = (v - 0.5) * k
+      return [x + s * 0.5 + px * cos - py * sin, y + s * 0.5 + dy + px * sin + py * cos]
+    })
   })
 }
 

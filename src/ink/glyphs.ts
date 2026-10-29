@@ -7,6 +7,9 @@ import hershey from './hershey.json'
 
 export type Pt = [number, number]
 export type Stroke = Pt[]
+/** 拉丁字母的写法：工整时是手写印刷体（futural），潦草时换成连写体（scripts） */
+export type Latin = 'print' | 'script'
+
 export interface Glyph {
   strokes: Stroke[]
   /** 前进宽度（字号 = 1） */
@@ -37,9 +40,9 @@ async function loadHanzi(ch: string): Promise<Glyph | null> {
 
 // Hershey：y 轴朝下，大写字母大约占 1..22，宽度 = o × 1.68
 const H_SCALE = 1 / 30
-function hersheyGlyph(ch: string): Glyph | null {
+function hersheyGlyph(ch: string, latin: Latin): Glyph | null {
   if (ch === ' ') return { strokes: [], advance: 0.35 }
-  const data = (hershey as [string, number][])[ch.charCodeAt(0) - 33]
+  const data = (hershey as Record<Latin, [string, number][]>)[latin][ch.charCodeAt(0) - 33]
   if (!data) return null
   const [d, o] = data
   const strokes: Stroke[] = []
@@ -85,22 +88,18 @@ const PUNCT: Record<string, Glyph> = {
 
 const FULLWIDTH = /[！-～]/
 
-export function glyph(ch: string): Promise<Glyph | null> {
-  let p = cache.get(ch)
+export function glyph(ch: string, latin: Latin = 'print'): Promise<Glyph | null> {
+  const ascii = ch.charCodeAt(0) < 128
+  const full = FULLWIDTH.test(ch)
+  const key = ascii || full ? `${latin}:${ch}` : ch
+  let p = cache.get(key)
   if (!p) {
     if (PUNCT[ch]) p = Promise.resolve(PUNCT[ch])
-    else if (ch.charCodeAt(0) < 128) p = Promise.resolve(hersheyGlyph(ch))
+    else if (ascii) p = Promise.resolve(hersheyGlyph(ch, latin))
     // 全角字母数字转半角，用 Hershey 写
-    else if (FULLWIDTH.test(ch)) p = Promise.resolve(hersheyGlyph(String.fromCharCode(ch.charCodeAt(0) - 0xfee0)))
+    else if (full) p = Promise.resolve(hersheyGlyph(String.fromCharCode(ch.charCodeAt(0) - 0xfee0), latin))
     else p = loadHanzi(ch)
-    cache.set(ch, p)
+    cache.set(key, p)
   }
   return p
-}
-
-/** 预估宽度，加载前用来排版（和 board/layout.ts 的估算保持一致） */
-export function estimate(ch: string): number {
-  if (PUNCT[ch]) return PUNCT[ch].advance
-  if (ch.charCodeAt(0) < 128) return hersheyGlyph(ch)?.advance ?? 0.5
-  return 1
 }

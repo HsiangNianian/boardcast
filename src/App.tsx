@@ -1,7 +1,7 @@
 import { Excalidraw } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import cases from '../eval/cases.json'
 import { layout } from './board/layout.ts'
 import { type Look, scene } from './board/scene.ts'
@@ -56,6 +56,12 @@ export default function App() {
   // 用 state 而不是 ref：切回铅笔模式时 Excalidraw 重新挂载，要让重画的 effect 再跑一次
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
   const [mode, setMode] = useState<Mode>(() => (load('boardcast.mode', 'ink') === 'pencil' ? 'pencil' : 'ink'))
+  const [messy, setMessy] = useState(() => {
+    const v = Number(load('boardcast.messy', '30'))
+    return Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 30
+  })
+  // 拖滑杆时每一格都要重算全部笔画，让它慢半拍，拖动本身不卡
+  const messyLater = useDeferredValue(messy)
   const listEnd = useRef<HTMLDivElement>(null)
 
   const session = useMemo(
@@ -137,10 +143,11 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem('boardcast.mode', mode)
+      localStorage.setItem('boardcast.messy', String(messy))
     } catch {
       /* 存不了就算了 */
     }
-  }, [mode])
+  }, [mode, messy])
 
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
   useEffect(() => {
@@ -256,11 +263,27 @@ export default function App() {
             清空白板
           </button>
         </div>
+        {mode === 'ink' && (
+          <label className="messy">
+            <span>
+              潦草度 <b>{messy}</b>
+              <i>{messy < 25 ? '工整' : messy < 45 ? '随手' : messy < 70 ? '连写' : '龙飞凤舞'}</i>
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={messy}
+              onChange={(e) => setMessy(Number(e.target.value))}
+              aria-label="潦草度"
+            />
+          </label>
+        )}
       </aside>
 
       <main className="board">
         {mode === 'ink' ? (
-          <InkBoard graph={graph} hot={hot} dark={dark} />
+          <InkBoard graph={graph} hot={hot} dark={dark} messy={messyLater / 100} />
         ) : (
           <Excalidraw
             excalidrawAPI={setApi}

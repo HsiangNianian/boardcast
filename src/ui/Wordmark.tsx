@@ -39,16 +39,23 @@ interface Props {
   /** 一笔一笔写出来；总时长大约这么多毫秒 */
   animate?: number
   className?: string
+  /** 字形准备好、开始写的那一刻（启动动画从这时候开始计时） */
+  onReady?: () => void
 }
 
-export default function Wordmark({ size = 28, animate, className }: Props) {
+export default function Wordmark({ size = 28, animate, className, onReady }: Props) {
   const [w, setW] = useState<Written | null>(null)
   useEffect(() => {
     let alive = true
-    void write('boardcast', size).then((x) => alive && setW(x))
+    void write('boardcast', size).then((x) => {
+      if (!alive) return
+      setW(x)
+      onReady?.()
+    })
     return () => {
       alive = false
     }
+    // onReady 只在字形第一次准备好时调用，不跟着回调变化重跑
   }, [size])
   if (!w) return <span className={className} style={{ display: 'inline-block', width: size * 4.6, height: size * 1.3 }} />
 

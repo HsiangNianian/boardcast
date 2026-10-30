@@ -4,9 +4,11 @@
 // - 语音输入：麦克风 → 断句 → 识别（voice.rs）
 // - 用户自己填的 OpenAI 兼容远程模型（remote.rs）
 // - 导出文件时的另存为对话框（export.rs）
+// - 会议的保存和读取（meetings.rs）
 
 mod export;
 mod llm;
+mod meetings;
 mod models;
 mod remote;
 mod voice;
@@ -48,6 +50,10 @@ pub fn run() {
             remote::remote_test,
             remote::remote_chat,
             export::export_save,
+            meetings::meetings_list,
+            meetings::meeting_load,
+            meetings::meeting_save,
+            meetings::meeting_delete,
         ])
         .build(tauri::generate_context!())
         .expect("error while building boardcast")

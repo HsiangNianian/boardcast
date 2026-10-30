@@ -20,27 +20,21 @@ import { type LlmConfig, proposeOps } from './engine/llm.ts'
 import { formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { Session } from './engine/session.ts'
+import { type Meeting, type MeetingLine, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
 import InkBoard from './ink/InkBoard.tsx'
 import ModelPanel from './ModelPanel.tsx'
 import { type RemoteView, remote } from './remote.ts'
 import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
 import Composer from './ui/Composer.tsx'
 import type { ExportKind } from './exporter.ts'
-import { Auto, Close, Download, Eraser, Gear, Moon, Pen, Pencil, Sun, Tidy, Transcript as TranscriptIcon } from './ui/icons.tsx'
+import { Auto, Close, Download, Gear, Moon, Pen, Pencil, Plus, Sun, Tidy, Transcript as TranscriptIcon } from './ui/icons.tsx'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
 type Mode = 'pencil' | 'ink'
 type Theme = 'system' | 'light' | 'dark'
 
-interface Line extends Utterance {
-  /** 模型处理这句话用了多久；undefined 表示还在排队 */
-  ms?: number
-  ops?: string
-  /** 哪个模型画的；远程失败改用本地时标出来 */
-  via?: string
-  fellBack?: boolean
-}
+type Line = MeetingLine
 
 const LIGHT: Look = { ink: '#1e1e1e', pencil: '#868e96', highlight: '#ffec99', group: '#1971c2', question: '#e03131', note: '#1971c2' }
 
@@ -265,9 +259,9 @@ export default function App() {
   const [micChoice, setMicChoice] = useState(() => load('boardcast.mic', ''))
   const listEnd = useRef<HTMLDivElement>(null)
 
-  const session = useMemo(
-    () =>
-      new Session(llm, {
+  // Session 只建一次。以前跟着模型配置重建：远程出错临时拉起本地模型、地址一变，会开到一半板书就被换成空的
+  const sessionRef = useRef<Session | null>(null)
+  sessionRef.current ??= new Session(llm, {
         graph: (g) => setGraph(g),
         mention: (ids) => {
           setHot(new Set(ids))
@@ -296,9 +290,74 @@ export default function App() {
           console.error(e)
           setOnline(false)
         },
-      }),
-    [llm],
+      })
+  const session = sessionRef.current
+  useEffect(() => {
+    session.llm = llm
+  }, [llm, session])
+
+  // —— 会议：自动保存，下次打开接着开 ——
+  type MeetingMeta = Pick<Meeting, 'id' | 'title' | 'titled' | 'createdAt'>
+  const [meeting, setMeeting] = useState<MeetingMeta>(() => ({ id: newMeetingId(), title: '未命名会议', createdAt: Date.now() }))
+  const [restored, setRestored] = useState(false)
+  const linesRef = useRef<Line[]>([])
+  linesRef.current = lines
+
+  /** 把一场存过的会议放回界面上：板书、上下文、会议记录、排版位置 */
+  const openMeeting = useCallback(
+    (m: Meeting) => {
+      board.restore(m.layout)
+      session.graph = m.graph
+      session.history = m.history
+      setGraph(m.graph)
+      setLines(m.lines)
+      setMeeting({ id: m.id, title: m.title, titled: m.titled, createdAt: m.createdAt })
+      save('boardcast.meeting', m.id)
+    },
+    [session],
   )
+
+  // 启动时打开上次那场会
+  useEffect(() => {
+    const last = load('boardcast.meeting', '')
+    void (async () => {
+      const m = last ? await meetings.load(last).catch(() => null) : null
+      if (m) openMeeting(m)
+      setRestored(true)
+    })()
+  }, [openMeeting])
+
+  /** 当前这场会的完整内容（板书以 Session 里的为准） */
+  const snapshot = useCallback(
+    (meta: MeetingMeta): Meeting => ({
+      version: MEETING_VERSION,
+      ...meta,
+      title: meta.titled ? meta.title : autoTitle(session.graph, linesRef.current),
+      updatedAt: Date.now(),
+      graph: session.graph,
+      history: session.history,
+      lines: linesRef.current,
+      layout: board.snapshot(),
+    }),
+    [session],
+  )
+
+  // 板书或会议记录一变，停半秒存一次；空会议不存
+  useEffect(() => {
+    if (!restored) return
+    if (!lines.length && !graph.nodes.length) return
+    const t = setTimeout(() => {
+      const m = snapshot(meeting)
+      void meetings
+        .save(m)
+        .then(() => {
+          save('boardcast.meeting', m.id)
+          if (m.title !== meeting.title) setMeeting((x) => (x.id === m.id ? { ...x, title: m.title } : x))
+        })
+        .catch((e) => console.error('保存会议失败', e))
+    }, 500)
+    return () => clearTimeout(t)
+  }, [graph, lines, meeting, restored, snapshot])
 
   useEffect(() => {
     // 桌面版的地址是内置服务每次启动时随机分配的端口，记下来下次也用不上
@@ -444,12 +503,17 @@ export default function App() {
     }
   }
 
+  /** 新会议：当前这场已经自动存下了，换一个新编号从空板开始 */
   function reset() {
+    if (lines.length || graph.nodes.length) void meetings.save(snapshot(meeting)).catch(() => undefined)
     board.reset()
     session.graph = emptyGraph()
     session.history = []
     setGraph(session.graph)
     setLines([])
+    const id = newMeetingId()
+    setMeeting({ id, title: '未命名会议', createdAt: Date.now() })
+    save('boardcast.meeting', id)
   }
 
   async function play() {
@@ -571,8 +635,8 @@ export default function App() {
               </div>
             )}
           </div>
-          <button type="button" className="icon" onClick={reset} aria-label="清空白板" title="清空白板">
-            <Eraser />
+          <button type="button" className="icon" onClick={reset} aria-label="新会议" title="新会议：这场会已经自动保存了，从一块空板重新开始">
+            <Plus />
           </button>
           <button
             type="button"

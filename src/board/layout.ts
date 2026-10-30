@@ -302,6 +302,14 @@ function route(a: Box, b: Box, others: Box[] = []): P[] {
 const GAP = 90
 const NODE_GAP = 40
 
+/** StableLayout 记住的东西，可以存进会议文件 */
+export interface LayoutMemory {
+  regionAt: [string, { x: number; y: number }][]
+  nodeAt: [string, Box][]
+  routeAt: [string, { sig: string; points: [number, number][] }][]
+  boxAt: [string, Box][]
+}
+
 /** 一次排版：区域位置和流程图节点都记在实例里，下次排同一块板时尽量不动 */
 export class StableLayout {
   /** 区域原点的绝对位置（流程图区域记的是它内部坐标 (0,0) 的位置） */
@@ -322,6 +330,25 @@ export class StableLayout {
     this.routeAt.clear()
     this.boxAt.clear()
     this.cache = new WeakMap()
+  }
+
+  /** 记住的位置，存进会议文件；重新打开时用 restore 放回去，板书不会整块重排 */
+  snapshot(): LayoutMemory {
+    return {
+      regionAt: [...this.regionAt],
+      nodeAt: [...this.nodeAt],
+      routeAt: [...this.routeAt],
+      boxAt: [...this.boxAt],
+    }
+  }
+
+  restore(m: LayoutMemory | undefined) {
+    this.reset()
+    if (!m) return
+    this.regionAt = new Map(m.regionAt)
+    this.nodeAt = new Map(m.nodeAt)
+    this.routeAt = new Map(m.routeAt)
+    this.boxAt = new Map(m.boxAt)
   }
 
   /** 同一个图对象只排一次；排版按调用顺序一个个来，后一次能看到前一次记下的位置 */

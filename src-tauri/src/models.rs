@@ -165,6 +165,8 @@ pub mod voice_files {
     pub const SENSE_VOICE: &str = "voice/sense-voice/model.int8.onnx";
     pub const TOKENS: &str = "voice/sense-voice/tokens.txt";
     pub const VAD: &str = "voice/silero_vad.onnx";
+    /// 声纹模型（CAM++ 中英）：区分说话人用。可选，只随安装包带，没有就不区分
+    pub const SPEAKER: &str = "voice/speaker/campplus_zh_en.onnx";
 }
 
 #[derive(Serialize)]

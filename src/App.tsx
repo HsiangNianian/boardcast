@@ -23,6 +23,7 @@ import { History as EditHistory, type Selection, describe, exists, remove as rem
 import type { Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
 import { summarize } from './engine/summary.ts'
+import { type Voice, identify, renameVoice } from './engine/voices.ts'
 import { type Meeting, type MeetingLine, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
 import InkBoard from './ink/InkBoard.tsx'
 import ModelPanel from './ModelPanel.tsx'
@@ -270,6 +271,13 @@ export default function App() {
   const messyLater = useDeferredValue(messy)
   const weightLater = useDeferredValue(weight)
   const [micChoice, setMicChoice] = useState(() => load('boardcast.mic', ''))
+  // 按声音区分说话人：声纹表跟着会议存
+  const [diarize, setDiarize] = useState(() => load('boardcast.diarize', 'on') === 'on')
+  const diarizeRef = useRef(diarize)
+  diarizeRef.current = diarize
+  const voicesRef = useRef<Voice[]>([])
+  /** 正在给哪个说话人改名 */
+  const [renamingWho, setRenamingWho] = useState<string | null>(null)
   const listEnd = useRef<HTMLDivElement>(null)
 
   // —— 手动修改：撤销历史、选中 ——
@@ -349,6 +357,8 @@ export default function App() {
       setLines(m.lines)
       summingFor.current?.abort()
       setSummary(m.summary ?? '')
+      voicesRef.current = m.voices ?? []
+      setRenamingWho(null)
       setMeeting({ id: m.id, title: m.title, titled: m.titled, createdAt: m.createdAt })
       save('boardcast.meeting', m.id)
     },
@@ -377,6 +387,7 @@ export default function App() {
       lines: linesRef.current,
       layout: board.snapshot(),
       summary: summaryRef.current || undefined,
+      voices: voicesRef.current.length ? voicesRef.current : undefined,
     }),
     [session],
   )
@@ -466,8 +477,9 @@ export default function App() {
     save('boardcast.messy', String(messy))
     save('boardcast.weight', String(weight))
     save('boardcast.mic', micChoice)
+    save('boardcast.diarize', diarize ? 'on' : 'off')
     save('boardcast.log', showLog ? 'open' : 'closed')
-  }, [mode, messy, weight, micChoice, showLog])
+  }, [mode, messy, weight, micChoice, diarize, showLog])
 
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
   useEffect(() => {
@@ -495,7 +507,17 @@ export default function App() {
     const offs: Promise<() => void>[] = [
       on<Heard>('voice-final', (h) => {
         setPartial('')
-        sayRef.current({ speaker: speakerRef.current.trim() || undefined, text: h.text })
+        // 有声纹就认人；没有（句子太短、没带声纹模型、关掉了）就用当前的说话人，也就是上一个说话的人
+        let who = speakerRef.current.trim() || undefined
+        if (diarizeRef.current && h.voiceprint?.length) {
+          const taken = linesRef.current.flatMap((l) => (l.speaker ? [l.speaker] : []))
+          const r = identify(voicesRef.current, h.voiceprint, taken)
+          voicesRef.current = r.voices
+          who = r.name
+          speakerRef.current = r.name
+          setSpeaker(r.name)
+        }
+        sayRef.current({ speaker: who, text: h.text })
       }),
       on<string>('voice-partial', setPartial),
       on<number>('voice-level', setLevel),
@@ -581,6 +603,8 @@ export default function App() {
     setLines([])
     summingFor.current?.abort()
     setSummary('')
+    voicesRef.current = []
+    setRenamingWho(null)
     const id = newMeetingId()
     setMeeting({ id, title: '未命名会议', createdAt: Date.now() })
     save('boardcast.meeting', id)
@@ -637,6 +661,18 @@ export default function App() {
     const n = session.graph.nodes.find((x) => x.id === selection.id)
     const on = n?.marks.includes(mark)
     applyEdit(toggleMark(session.graph, selection.id, mark), `${on ? '去掉了' : '加上了'}${describe(session.graph, selection)}的${mark}`)
+  }
+
+  /** 说话人改名：会议记录、模型看的前文、声纹表一起改；改成已有的名字就是把两个人合成一个 */
+  function renameSpeaker(from: string, to: string) {
+    to = to.trim()
+    setRenamingWho(null)
+    if (!to || to === from) return
+    const fix = <T extends { speaker?: string }>(u: T): T => (u.speaker === from ? { ...u, speaker: to } : u)
+    setLines((ls) => ls.map(fix))
+    session.history = session.history.map(fix)
+    voicesRef.current = renameVoice(voicesRef.current, from, to)
+    if (speakerRef.current.trim() === from) setSpeaker(to)
   }
 
   function commitRename() {
@@ -994,12 +1030,43 @@ export default function App() {
             />
           </Suspense>
         )}
+        {renamingWho && (
+          <form
+            className="rename-who"
+            onSubmit={(e) => {
+              e.preventDefault()
+              renameSpeaker(renamingWho, new FormData(e.currentTarget).get('name') as string)
+            }}
+          >
+            <span>
+              把 <b>{renamingWho}</b> 改成
+            </span>
+            <input name="name" defaultValue={renamingWho} autoFocus onFocus={(e) => e.currentTarget.select()} onKeyDown={(e) => e.key === 'Escape' && setRenamingWho(null)} />
+            <button type="submit" className="small">
+              改名
+            </button>
+            <button type="button" className="ghost small" onClick={() => setRenamingWho(null)}>
+              取消
+            </button>
+          </form>
+        )}
         <div className="lines">
           {lines.length === 0 && !partial && <p className="empty">还没有人说话。说的每一句和它画出来的东西都会记在这里。</p>}
           {lines.map((l, i) => (
             <article key={i} className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}`}>
               {l.manual && <span className="who edit">改</span>}
-              {l.speaker && <span className={`who c${speakers.indexOf(l.speaker) % 6}`}>{l.speaker}</span>}
+              {l.speaker && (
+                <span
+                  className={`who c${speakers.indexOf(l.speaker) % 6}`}
+                  role="button"
+                  tabIndex={0}
+                  title={`给「${l.speaker}」改名`}
+                  onClick={() => setRenamingWho(l.speaker!)}
+                  onKeyDown={(e) => e.key === 'Enter' && setRenamingWho(l.speaker!)}
+                >
+                  {l.speaker}
+                </span>
+              )}
               <div className="body">
                 <p>{l.text}</p>
                 {!l.manual && (
@@ -1044,6 +1111,8 @@ export default function App() {
           onRemoteChanged={() => void checkRemote()}
           mic={micChoice}
           setMic={setMicChoice}
+          diarize={diarize}
+          setDiarize={setDiarize}
           inkMode={mode === 'ink'}
           messy={messy}
           setMessy={setMessy}

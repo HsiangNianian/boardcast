@@ -50,6 +50,8 @@ export interface Heard {
   text: string
   start: number
   end: number
+  /** 这句话的声纹（单位长度）；没有声纹模型或者句子太短时没有 */
+  voiceprint?: number[]
 }
 
 export interface Progress {

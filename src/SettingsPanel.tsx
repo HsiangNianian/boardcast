@@ -22,6 +22,8 @@ interface Props {
   // 语音
   mic: string
   setMic: (m: string) => void
+  diarize: boolean
+  setDiarize: (on: boolean) => void
   // 手写
   inkMode: boolean
   messy: number
@@ -220,6 +222,11 @@ export default function SettingsPanel(p: Props) {
               {p.mic && !devices.includes(p.mic) && <option value={p.mic}>{p.mic}（没找到，会改用系统默认）</option>}
             </select>
             <p className="hint">换了麦克风以后，下次点「开始收音」生效。</p>
+            <label className="check">
+              <input type="checkbox" checked={p.diarize} onChange={(e) => p.setDiarize(e.target.checked)} />
+              <span>按声音自动区分说话人</span>
+            </label>
+            <p className="hint">新出现的声音依次记成 A、B、C；在会议记录里点头像可以改成真名，同一个声音以后都用这个名字。很短的句子（「嗯」「对」）算给上一个说话的人。</p>
           </section>
         )}
 

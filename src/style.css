@@ -683,7 +683,49 @@ kbd {
   font-family: var(--mono);
   font-size: 12px;
 }
+.log .rename-who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  flex: none;
+}
+.rename-who span {
+  white-space: nowrap;
+}
+.rename-who b {
+  color: var(--ink);
+}
+.rename-who input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.line .who[role='button'] {
+  cursor: pointer;
+}
+.line .who[role='button']:hover {
+  box-shadow: 0 0 0 2px var(--line-strong);
+}
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+label.check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
 .log header button.small,
+.rename-who button.small,
 .summary-head button.small {
   height: 26px;
   padding: 0 10px;

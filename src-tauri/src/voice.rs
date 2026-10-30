@@ -6,6 +6,9 @@
 //! - 音量每 100 ms 推一次（`voice-level`），界面上画一个电平条，让人知道麦克风在收音。
 //! - 采集在 Rust 里用 cpal 做，不走浏览器的 getUserMedia：各平台 WebView 的麦克风权限处理不一致。
 //!
+//! - 每句定稿时顺带算一个声纹向量（CAM++，`voiceprint`），前端拿它和这场会已经出现过的声音比，判断是谁在说。
+//!   比对和起名放在前端：声纹跟着会议存，中途关麦再开、过几天接着开都认得人。
+//!
 //! 识别部分（`Engine`）不依赖 Tauri 和声卡，可以直接喂 wav 测试。
 
 use crate::llm;
@@ -13,7 +16,8 @@ use crate::models::voice_files;
 use serde::Serialize;
 use sherpa_onnx::{
     LinearResampler, OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig,
-    SileroVadModelConfig, VadModelConfig, VoiceActivityDetector,
+    SileroVadModelConfig, SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig,
+    VadModelConfig, VoiceActivityDetector,
 };
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -34,6 +38,8 @@ const MAX_SPEECH: f32 = 12.0;
 const PARTIAL_EVERY: Duration = Duration::from_millis(600);
 /// 检测到开口时往前多带一点，免得吃掉第一个字
 const PREROLL: usize = SAMPLE_RATE as usize / 4;
+/// 短于这个长度（样本数）的句子不算声纹：太短的「嗯」「对」声纹不准，前端会归给上一个说话的人
+const MIN_VOICEPRINT: usize = SAMPLE_RATE as usize * 4 / 5;
 
 #[derive(Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -52,12 +58,17 @@ pub struct Heard {
     /// 这句话在本次收音里的起止时间（秒）
     pub start: f32,
     pub end: f32,
+    /// 这句话的声纹（单位长度）；没有声纹模型或者句子太短时为 None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub voiceprint: Option<Vec<f32>>,
 }
 
 /// 识别核心：喂 16 kHz 的单声道样本，吐出临时结果和定稿
 pub struct Engine {
     vad: VoiceActivityDetector,
     asr: OfflineRecognizer,
+    /// 声纹模型；没带就不区分说话人
+    speaker: Option<SpeakerEmbeddingExtractor>,
     pending: Vec<f32>,
     /// 当前这句话（从检测到开口开始，带一点前置）
     speech: Vec<f32>,
@@ -103,9 +114,25 @@ impl Engine {
         asr_config.model_config.num_threads = 2;
         let asr = OfflineRecognizer::create(&asr_config).ok_or("识别模型加载失败")?;
 
+        let speaker_model = models.join(voice_files::SPEAKER);
+        let speaker = if speaker_model.exists() {
+            let s = SpeakerEmbeddingExtractor::create(&SpeakerEmbeddingExtractorConfig {
+                model: Some(speaker_model.to_string_lossy().to_string()),
+                num_threads: 1,
+                ..Default::default()
+            });
+            if s.is_none() {
+                eprintln!("声纹模型加载失败，不区分说话人");
+            }
+            s
+        } else {
+            None
+        };
+
         Ok(Self {
             vad,
             asr,
+            speaker,
             pending: vec![],
             speech: vec![],
             recent: vec![],
@@ -124,6 +151,27 @@ impl Engine {
             .get_result()
             .map(|r| r.text.trim().to_string())
             .unwrap_or_default()
+    }
+
+    /// 一句话的声纹，归一化成单位长度（前端直接点积就是余弦相似度）
+    pub fn voiceprint(&self, samples: &[f32]) -> Option<Vec<f32>> {
+        let ex = self.speaker.as_ref()?;
+        if samples.len() < MIN_VOICEPRINT {
+            return None;
+        }
+        let stream = ex.create_stream()?;
+        stream.accept_waveform(SAMPLE_RATE, samples);
+        stream.input_finished();
+        if !ex.is_ready(&stream) {
+            return None;
+        }
+        let mut v = ex.compute(&stream)?;
+        let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+        if !norm.is_finite() || norm == 0.0 {
+            return None;
+        }
+        v.iter_mut().for_each(|x| *x /= norm);
+        Some(v)
     }
 
     /// 喂一段 16 kHz 单声道样本
@@ -178,11 +226,21 @@ impl Engine {
     fn drain_segments(&mut self, out: &mut Vec<Event>) {
         while let Some(seg) = self.vad.front() {
             let text = self.recognize(seg.samples());
+            let voiceprint = if text.is_empty() {
+                None
+            } else {
+                self.voiceprint(seg.samples())
+            };
             let start = seg.start() as f32 / SAMPLE_RATE as f32;
             let end = start + seg.n() as f32 / SAMPLE_RATE as f32;
             self.vad.pop();
             if !text.is_empty() {
-                out.push(Event::Final(Heard { text, start, end }));
+                out.push(Event::Final(Heard {
+                    text,
+                    start,
+                    end,
+                    voiceprint,
+                }));
             }
             self.in_speech = self.vad.detected();
             self.speech.clear();

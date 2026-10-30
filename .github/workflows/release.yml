@@ -115,7 +115,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: voice-models
-          key: voice-sensevoice-2024-07-17-silero-v4
+          key: voice-sensevoice-2024-07-17-silero-v4-campplus-zh-en
       - name: Download voice models
         if: steps.voice-cache.outputs.cache-hit != 'true'
         shell: bash
@@ -127,6 +127,12 @@ jobs:
           curl -fL --retry 3 -o voice-models/voice/sense-voice/tokens.txt $sv/tokens.txt
           curl -fL --retry 3 -o voice-models/voice/silero_vad.onnx $hf/csukuangfj/vad/resolve/main/silero_vad.onnx
           curl -fL --retry 3 -o voice-models/zh.wav $sv/test_wavs/zh.wav
+          # 声纹模型（区分说话人），和测声纹用的 3D-Speaker 测试音频
+          mkdir -p voice-models/voice/speaker
+          curl -fL --retry 3 -o voice-models/voice/speaker/campplus_zh_en.onnx $hf/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx
+          for f in speaker1_a_cn_16k speaker1_b_cn_16k speaker2_a_cn_16k; do
+            curl -fL --retry 3 -o voice-models/$f.wav https://github.com/csukuangfj/sr-data/raw/main/test/3d-speaker/$f.wav
+          done
       # 打包并把安装包传到上一步建好的 Release 上（deb / rpm / AppImage，msi / exe，dmg）
       - uses: tauri-apps/tauri-action@v0
         env:

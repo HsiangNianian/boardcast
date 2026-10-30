@@ -1,9 +1,10 @@
-// 下载语音识别模型（SenseVoice int8 + tokens + Silero VAD，约 241 MB）到 src-tauri/voice/，
+// 下载语音模型（SenseVoice int8 + tokens + Silero VAD + CAM++ 声纹，约 268 MB）到 src-tauri/voice/，
 // 打包时作为资源带进安装包，用户装完就能直接收音，不用再到「本地模型」里下载。
 //   node scripts/fetch-voice.mjs
 // 已经下好、sha256 也对得上的文件直接跳过。设置了 BOARDCAST_VOICE_DIR 且那里的文件校验通过时，直接从那里复制。
 // 下载顺序和应用内的下载器一样：ModelScope（直连）→ hf-mirror → Hugging Face。
-// 文件清单和 sha256 要和 src-tauri/src/models.rs 里「语音识别」那一项保持一致。
+// 文件清单和 sha256 要和 src-tauri/src/models.rs 里「语音识别」那一项保持一致；
+// 声纹模型（区分说话人）只随安装包带，不在应用内的下载清单里。ModelScope 上没有它，从 hf-mirror、HF、GitHub 取。
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -29,6 +30,12 @@ const FILES = [
     sha256: 'a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28',
     ms: 'pengzhendong/silero-vad/resolve/master/v4/silero_vad.onnx',
     hf: 'csukuangfj/vad/resolve/main/silero_vad.onnx',
+  },
+  {
+    name: 'voice/speaker/campplus_zh_en.onnx',
+    sha256: 'aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2',
+    hf: 'csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+    gh: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
   },
 ]
 
@@ -62,9 +69,10 @@ for (const f of FILES) {
 
   const sources = [
     // ModelScope 在国内直连最快，走代理反而慢
-    { url: `https://modelscope.cn/models/${f.ms}`, direct: true },
+    ...(f.ms ? [{ url: `https://modelscope.cn/models/${f.ms}`, direct: true }] : []),
     { url: `https://hf-mirror.com/${f.hf}`, direct: false },
     { url: `https://huggingface.co/${f.hf}`, direct: false },
+    ...(f.gh ? [{ url: f.gh, direct: false }] : []),
   ]
   const part = `${dest}.part`
   let ok = false
@@ -87,7 +95,7 @@ for (const f of FILES) {
     }
   }
   if (!ok) {
-    console.error(`fetch-voice: ${f.name} 三个源都下载失败`)
+    console.error(`fetch-voice: ${f.name} 所有源都下载失败`)
     process.exit(1)
   }
   fetched++

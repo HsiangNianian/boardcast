@@ -76,7 +76,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: voice-models
-          key: voice-sensevoice-2024-07-17-silero-v4
+          key: voice-sensevoice-2024-07-17-silero-v4-campplus-zh-en
       - name: Download voice models
         if: steps.voice-cache.outputs.cache-hit != 'true'
         shell: bash
@@ -88,6 +88,12 @@ jobs:
           curl -fL --retry 3 -o voice-models/voice/sense-voice/tokens.txt $sv/tokens.txt
           curl -fL --retry 3 -o voice-models/voice/silero_vad.onnx $hf/csukuangfj/vad/resolve/main/silero_vad.onnx
           curl -fL --retry 3 -o voice-models/zh.wav $sv/test_wavs/zh.wav
+          # 声纹模型（区分说话人），和测声纹用的 3D-Speaker 测试音频
+          mkdir -p voice-models/voice/speaker
+          curl -fL --retry 3 -o voice-models/voice/speaker/campplus_zh_en.onnx $hf/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx
+          for f in speaker1_a_cn_16k speaker1_b_cn_16k speaker2_a_cn_16k; do
+            curl -fL --retry 3 -o voice-models/$f.wav https://github.com/csukuangfj/sr-data/raw/main/test/3d-speaker/$f.wav
+          done
       # fetch-voice 发现 BOARDCAST_VOICE_DIR 里的文件校验通过，就直接复制进安装包，不再下载
       # 不要指定 shell: bash：Windows 上会换成 Git Bash 里的 GNU tar，它把 D:\ 当成远程主机
       - run: pnpm tauri build

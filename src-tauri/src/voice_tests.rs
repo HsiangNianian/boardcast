@@ -84,6 +84,38 @@ fn two_sentences_with_a_pause_come_out_separately() {
     let _ = partials;
 }
 
+#[test]
+fn voiceprints_tell_speakers_apart() {
+    let Some(dir) = dir() else {
+        eprintln!("跳过：没有设置 BOARDCAST_VOICE_DIR");
+        return;
+    };
+    // 3D-Speaker 的测试音频：同一个人的两句话，和另一个人的一句话
+    let wav = |n: &str| dir.join(format!("{n}.wav"));
+    if !wav("speaker1_a_cn_16k").exists() || !dir.join(voice_files::SPEAKER).exists() {
+        eprintln!("跳过：没有声纹模型或测试音频");
+        return;
+    }
+    let engine = Engine::load(&dir).expect("模型加载失败");
+    let vp = |n: &str| {
+        let w = Wave::read(&wav(n).to_string_lossy()).expect("读不到测试音频");
+        engine.voiceprint(w.samples()).expect("没算出声纹")
+    };
+    let a1 = vp("speaker1_a_cn_16k");
+    let a2 = vp("speaker1_b_cn_16k");
+    let b = vp("speaker2_a_cn_16k");
+    let dot = |x: &[f32], y: &[f32]| x.iter().zip(y).map(|(p, q)| p * q).sum::<f32>();
+    let len = dot(&a1, &a1).sqrt();
+    assert!((len - 1.0).abs() < 1e-3, "声纹没有归一化：{len}");
+    let same = dot(&a1, &a2);
+    let other = dot(&a1, &b).max(dot(&a2, &b));
+    eprintln!("同一个人 {same:.3}，不同的人 {other:.3}");
+    assert!(same > 0.5, "同一个人的相似度太低：{same}");
+    assert!(other < 0.4, "不同的人相似度太高：{other}");
+    // 太短的句子（「嗯」「对」）不算声纹
+    assert!(engine.voiceprint(&[0.0; 4000]).is_none());
+}
+
 /// 真的打开默认麦克风收 1 秒，看有没有数据进来。需要声卡，默认跳过：
 ///   cargo test --manifest-path src-tauri/Cargo.toml --lib mic -- --ignored --nocapture
 #[test]

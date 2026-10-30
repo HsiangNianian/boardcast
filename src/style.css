@@ -1224,3 +1224,13 @@ button.icon:disabled {
   color: var(--faint);
   font-size: 13px;
 }
+
+/* —— 铅笔白板：去掉 Excalidraw 自带的菜单、素材库、快捷键帮助和底部提示 ——
+   导出、清空、主题这些顶栏都有；留着它们反倒一眼看出是套了个 Excalidraw。绘图工具栏和缩放、撤销保留。 */
+.excalidraw .main-menu-trigger,
+.excalidraw .default-sidebar-trigger,
+.excalidraw .sidebar-trigger,
+.excalidraw .help-icon,
+.excalidraw .HintViewer {
+  display: none !important;
+}

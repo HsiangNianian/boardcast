@@ -17,6 +17,7 @@ export default function PencilBoard({
   return (
     <Excalidraw
       excalidrawAPI={onApi}
+      langCode="zh-CN"
       theme={dark ? 'dark' : 'light'}
       initialData={{ appState: { viewBackgroundColor: paper, currentItemFontFamily: 1 } }}
       UIOptions={{ canvasActions: { loadScene: false, saveToActiveFile: false } }}

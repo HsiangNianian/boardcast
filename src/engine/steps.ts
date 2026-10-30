@@ -19,6 +19,8 @@ export interface Diff {
   groups?: Part<Group>
   nextNode?: number
   nextGroup?: number
+  /** 底图大小变了（导入的时候）；null 表示去掉 */
+  underlay?: Graph['underlay'] | null
 }
 
 export interface Step {
@@ -69,6 +71,7 @@ export function diffGraph(a: Graph, b: Graph): Diff | null {
   if (groups) d.groups = groups
   if (a.nextNode !== b.nextNode) d.nextNode = b.nextNode
   if (a.nextGroup !== b.nextGroup) d.nextGroup = b.nextGroup
+  if (JSON.stringify(a.underlay ?? null) !== JSON.stringify(b.underlay ?? null)) d.underlay = b.underlay ?? null
   return Object.keys(d).length ? d : null
 }
 
@@ -79,6 +82,8 @@ export function patchGraph(g: Graph, d: Diff): Graph {
   out.groups = patchPart(out.groups, d.groups, (x) => x.id)
   if (d.nextNode !== undefined) out.nextNode = d.nextNode
   if (d.nextGroup !== undefined) out.nextGroup = d.nextGroup
+  if (d.underlay === null) delete out.underlay
+  else if (d.underlay) out.underlay = { ...d.underlay }
   return out
 }
 

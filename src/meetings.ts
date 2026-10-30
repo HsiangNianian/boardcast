@@ -58,6 +58,8 @@ export interface Page {
   layout?: LayoutMemory
   steps?: Step[]
   thumb?: Thumb
+  /** 垫在底下的导入页（PDF 的一页、一张图片），data URL */
+  underlay?: string
 }
 
 /** 历史列表里显示的样子 */

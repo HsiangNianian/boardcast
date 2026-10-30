@@ -32,6 +32,8 @@ export function thumbOf(l: Layout): Thumb | undefined {
   const boxes: Thumb['boxes'] = []
   const rows: Thumb['rows'] = []
   const lines: Thumb['lines'] = []
+  // 导入页：画一个页面的框
+  if (l.page) boxes.push([X(l.page.x), Y(l.page.y), L(l.page.w), L(l.page.h)])
   const d = l.diagram
   if (d) {
     for (const n of d.nodes.slice(0, MAX)) boxes.push([X(n.x), Y(n.y), L(n.w), L(n.h)])

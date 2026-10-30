@@ -199,6 +199,8 @@ function resolve(g: Graph, r: Ref, create: Kind | false, ink: Ink): string | und
 /** 把操作落到图上，返回新图（不改原图）。`ink` 决定新内容是铅笔稿还是墨线。 */
 export function applyOps(graph: Graph, ops: Op[], ink: Ink = 'ink'): Graph {
   const g = cloneGraph(graph)
+  // 导入文件上的原文区域是钉死的：模型只能标记、连线、加备注，不能改名、删掉、挪进话题或分组
+  const pinned = new Map(graph.nodes.filter((n) => n.kind === 'region').map((n) => [n.id, n]))
   const get = (id: string | undefined) => (id ? g.nodes.find((x) => x.id === id) : undefined)
   const touch = (id: string | undefined) => {
     const n = get(id)
@@ -316,6 +318,17 @@ export function applyOps(graph: Graph, ops: Op[], ink: Ink = 'ink'): Graph {
         break
       }
     }
+  }
+  if (pinned.size) {
+    const now = new Map(g.nodes.map((n) => [n.id, n]))
+    for (const [id, was] of pinned) {
+      const n = now.get(id)
+      // 被删了就放回去（标记留着），改了的名字、位置、归属都还原
+      if (!n) g.nodes.push({ ...was, aliases: [...was.aliases], marks: [...was.marks], at: was.at && { ...was.at } })
+      else Object.assign(n, { label: was.label, aliases: [...was.aliases], kind: 'region', at: was.at && { ...was.at }, parent: undefined, group: undefined })
+    }
+    // 挂在原文上的只能是备注、问题之类，不能是条目
+    for (const n of g.nodes) if (n.parent && pinned.has(n.parent) && n.kind === 'item') n.kind = 'note'
   }
   // 空分组不留
   g.groups = g.groups.filter((x) => g.nodes.some((n) => n.group === x.id))

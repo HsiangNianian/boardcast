@@ -7,8 +7,15 @@ import { applyOps } from './ops.ts'
 /** 手写板上选中的东西 */
 export type Selection = { kind: 'node'; id: string } | { kind: 'edge'; from: string; to: string }
 
+/** 选中的是导入页上的原文 */
+export function pinned(g: Graph, sel: Selection): boolean {
+  return sel.kind === 'node' && g.nodes.some((n) => n.id === sel.id && n.kind === 'region')
+}
+
 /** 删掉节点（话题连同挂在下面的条目一起删）或者连线 */
 export function remove(g: Graph, sel: Selection): Graph {
+  // 导入页上的原文删不掉、也改不了字（只能标记）
+  if (pinned(g, sel)) return g
   if (sel.kind === 'node') return applyOps(g, [{ op: 'D', target: { id: sel.id } }])
   return applyOps(g, [{ op: 'X', from: { id: sel.from }, to: { id: sel.to } }])
 }
@@ -16,6 +23,7 @@ export function remove(g: Graph, sel: Selection): Graph {
 /** 改字：节点改名（旧名字留作别名，模型还认得它），连线改标签（可以清空） */
 export function rename(g: Graph, sel: Selection, text: string): Graph {
   const t = text.trim()
+  if (pinned(g, sel)) return g
   if (sel.kind === 'node') return t ? applyOps(g, [{ op: 'R', target: { id: sel.id }, name: t }]) : g
   const out = cloneGraph(g)
   const e = out.edges.find((x) => x.from === sel.from && x.to === sel.to)

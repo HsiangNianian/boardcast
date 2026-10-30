@@ -130,6 +130,17 @@ function board(g: Graph, out: string[], h: string) {
     if (notes.length) out.push('')
   }
 
+  // 导入页上被圈画过、写了批注的原文
+  const pins = g.nodes.filter((n) => live(n) && n.kind === 'region' && (n.marks.length || children(g, n.id).some(live)))
+  if (pins.length) {
+    out.push(`${h} 原文标注`, '')
+    for (const n of pins) {
+      out.push(`- ${marked(n)}`)
+      for (const c of children(g, n.id).filter(live)) out.push(`   - ${attachLine(c)}`)
+    }
+    out.push('')
+  }
+
   // 没有挂靠的问题和公式
   const loose = g.nodes.filter((n) => live(n) && isAttach(n) && (!n.parent || !g.nodes.some((p) => p.id === n.parent)))
   if (loose.length) {

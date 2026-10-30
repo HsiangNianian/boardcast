@@ -22,7 +22,7 @@ import { type Graph, emptyGraph } from './engine/graph.ts'
 import { type LlmConfig, proposeOps } from './engine/llm.ts'
 import { formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
-import { History as EditHistory, type Selection, describe, exists, remove as removeSel, rename as renameSel, toggleMark } from './engine/edit.ts'
+import { History as EditHistory, type Selection, describe, exists, pinned, remove as removeSel, rename as renameSel, toggleMark } from './engine/edit.ts'
 import type { Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
 import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
@@ -351,7 +351,13 @@ export default function App() {
   const suggested = useRef(new Set<number>())
   const [suggest, setSuggest] = useState(false)
   /** 当前这张板的完整内容 */
-  const capture = (): Page => ({ graph: session.graph, layout: board.snapshot(), steps: stepsRef.current, thumb: thumbRef.current })
+  const capture = (): Page => ({
+    graph: session.graph,
+    layout: board.snapshot(),
+    steps: stepsRef.current,
+    thumb: thumbRef.current,
+    underlay: pagesRef.current[pageRef.current]?.underlay,
+  })
 
   // Session 只建一次。以前跟着模型配置重建：远程出错临时拉起本地模型、地址一变，会开到一半板书就被换成空的
   const sessionRef = useRef<Session | null>(null)
@@ -946,6 +952,24 @@ export default function App() {
     setSuggest(false)
   }
 
+  /** 导入的几页接在后面（当前这张是空板就从它开始），切到第一张，会议记录里记一笔 */
+  function addPages(add: Page[], note: string) {
+    exitReplay()
+    const all = [...pagesRef.current]
+    all[pageRef.current] = capture()
+    const cur = all[pageRef.current]
+    const blank = !cur.underlay && !cur.graph.nodes.some((n) => n.ink === 'ink')
+    const at = blank ? pageRef.current : all.length
+    all.splice(at, blank ? 1 : 0, ...add)
+    pagesRef.current = all
+    pageRef.current = at
+    showPage(all[at])
+    setPage(at)
+    setThumbs(all.map((p) => p.thumb))
+    setSuggest(false)
+    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: at }])
+  }
+
   // 一张板上的东西太多（自动适配会把字缩得很小），建议新开一张；每张只提一次
   useEffect(() => {
     if (replayRef.current || suggested.current.has(page)) return
@@ -964,7 +988,19 @@ export default function App() {
       return
     }
     try {
-      if (!/\.(excalidraw|json)$/i.test(f.name)) throw new Error('现在只能导入 .excalidraw 文件，PDF 和图片还在做')
+      if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
+        const { importPdf, MAX_PAGES } = await import('./board/importPdf.ts')
+        setToast({ ok: true, text: `正在读 ${f.name}…` })
+        const r = await importPdf(await f.arrayBuffer(), (done, total) => setToast({ ok: true, text: `正在读 ${f.name}：${done}/${total} 页` }))
+        const extra = [
+          r.total > r.pages.length && `只导了前 ${MAX_PAGES} 页`,
+          r.scanned && `${r.scanned} 页是扫描件，没有能指认的文字`,
+        ].filter(Boolean)
+        addPages(r.pages, `导入了 ${f.name}（${r.pages.length} 页${extra.length ? `，${extra.join('，')}` : ''}）`)
+        setToast({ ok: true, text: `${f.name} 导入好了：每页一张板，开会时可以说「把这一段圈出来」` })
+        return
+      }
+      if (!/\.(excalidraw|json)$/i.test(f.name)) throw new Error('现在能导入 PDF 和 .excalidraw，图片还在做')
       const { importExcalidraw } = await import('./board/importExcalidraw.ts')
       const r = importExcalidraw(await f.text())
       // 当前这张板上有东西就新开一张，不和现有的板书搅在一起
@@ -1110,14 +1146,14 @@ export default function App() {
             onClick={() => fileInput.current?.click()}
             disabled={!!replay}
             aria-label="导入"
-            title="导入 .excalidraw：框、连线、分组转成板书，接着往上画（也可以直接拖到白板上）"
+            title="导入 PDF 或 .excalidraw（也可以直接拖到白板上）：PDF 每页垫在一张板下面，开会时在上面圈画批注；.excalidraw 转成板书接着画"
           >
             <Upload />
           </button>
           <input
             ref={fileInput}
             type="file"
-            accept=".excalidraw,application/json,.json"
+            accept=".pdf,application/pdf,.excalidraw,application/json,.json"
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0]
@@ -1209,6 +1245,7 @@ export default function App() {
             weight={weightLater / 100}
             selection={replay ? null : selection}
             layoutRev={layoutRev}
+            underlay={pagesRef.current[page]?.underlay}
             onMoveSel={replay ? undefined : moveSelection}
             onSelect={
               replay
@@ -1242,6 +1279,7 @@ export default function App() {
                 </form>
               ) : (
                 <>
+                  {!pinned(session.graph, selection) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1254,6 +1292,7 @@ export default function App() {
                   >
                     改字
                   </button>
+                  )}
                   {selection.kind === 'node' &&
                     (['划掉', '圈出', '星标'] as const).map((m) => (
                       <button
@@ -1265,9 +1304,11 @@ export default function App() {
                         {m}
                       </button>
                     ))}
-                  <button type="button" className="del" onClick={deleteSelection}>
-                    删除
-                  </button>
+                  {!pinned(session.graph, selection) && (
+                    <button type="button" className="del" onClick={deleteSelection}>
+                      删除
+                    </button>
+                  )}
                 </>
               ))
             }

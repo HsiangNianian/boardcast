@@ -131,6 +131,27 @@ export async function compose(
     if (n.marks.includes('星标')) add(`${key}|s`, markColor, 1, await write('★', x + w + 10, y - 2, size, `${key}s`, messy), penFor(size))
   }
 
+  // —— 导入页上的原文：本身不画（底图上就有），只画勾画——圈、划、下划线、星标，被提到时整块淡淡地涂一下 ——
+  for (const n of g.nodes) {
+    if (n.kind !== 'region' || !n.at) continue
+    const { x, y, w, h } = n.at
+    const r = rng(`${n.id}|pin`)
+    const c = n.ink === 'draft' ? look.pencil : look.red
+    if (hot.has(n.id))
+      pieces.push({ key: `${n.id}|hot`, color: look.highlight, opacity: 0.45, under: true, strokes: [ink(line([x - 4, y + h / 2], [x + w + 4, y + h / 2], r, 0.005), h + 6, r, { wobble: 1, taper: 0 })] })
+    if (n.marks.includes('圈出')) add(`${n.id}|o`, c, 1, [loop(x + w / 2, y + h / 2, w / 2 + 14, h / 2 + 12, r)], penFor(FONT))
+    if (n.marks.includes('下划线')) add(`${n.id}|u`, c, 1, [line([x - 2, y + h + 6], [x + w + 4, y + h + 4], r, 0.01)], penFor(FONT))
+    if (n.marks.includes('划掉')) add(`${n.id}|x`, c, 1, h > 40 ? [line([x, y], [x + w, y + h], r, 0.02), line([x + w, y], [x, y + h], r, 0.02)] : strike(x, y + h / 2, w, r), penFor(FONT) * 1.1)
+    if (n.marks.includes('星标')) add(`${n.id}|s`, c, 1, await write('★', x - FONT - 10, y + (h - FONT) / 2, FONT, `${n.id}s`, messy), penFor(FONT))
+  }
+  // 边栏里的批注：一根细线连回它说的那块原文
+  for (const row of l.regions.find((x) => x.id === '__margin')?.rows ?? []) {
+    const host = g.nodes.find((p) => p.id === row.node.parent)?.at
+    if (!host) continue
+    const r = rng(`${row.id}|tether`)
+    add(`${row.id}|tether`, look.blue, 0.6, [line([host.x + host.w + 6, host.y + Math.min(host.h, 30) / 2], [row.x - 8, row.y + row.size / 2], r, 0.02)], penFor(FONT) * 0.5)
+  }
+
   // —— 话题区域 ——
   for (const reg of l.regions) {
     if (reg.title) {

@@ -57,6 +57,8 @@ export interface Region extends Box {
 
 export interface Layout {
   regions: Region[]
+  /** 垫在底下的导入页（左上角，右边留出写批注的边栏） */
+  page?: Box
   diagram?: { box: Box; nodes: Box[]; groups: (Box & { label: string })[]; edges: Route[] }
   /** 不在流程图内部的连线（话题、条目之间，或跨区域），画成弯曲的手绘箭头 */
   links: { from: string; to: string }[]
@@ -90,6 +92,9 @@ export function isHead(g: Graph, n: Node): boolean {
 export function isDiagram(g: Graph, n: Node): boolean {
   return n.kind === 'node' && !isHead(g, n) && !(n.parent && g.nodes.some((p) => p.id === n.parent))
 }
+
+/** 导入页右边留给批注的边栏宽度 */
+const MARGIN = 320
 
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz'
 
@@ -492,6 +497,11 @@ export class StableLayout {
 
   private async compute(g: Graph): Promise<Layout> {
     const order = new Map(g.nodes.map((n, i) => [n.id, i]))
+    // 导入页：原文区域钉在页面上的位置；挂在原文上的备注、问题写在页面右边的边栏里
+    const pins = g.nodes.filter((n) => n.kind === 'region' && n.at)
+    const pinIds = new Set(pins.map((n) => n.id))
+    const onPins = g.nodes.filter((n) => isAttach(n) && n.parent && pinIds.has(n.parent))
+    const page: Box | undefined = g.underlay ? { id: '__page', x: 0, y: 0, w: g.underlay.w + MARGIN, h: g.underlay.h } : undefined
     const diagramIds = new Set(g.nodes.filter((n) => isDiagram(g, n)).map((n) => n.id))
     const loose = g.nodes.filter(
       (n) =>
@@ -525,8 +535,8 @@ export class StableLayout {
     for (const k of [...this.regionAt.keys()]) if (!live.has(k)) this.regionAt.delete(k)
     for (const k of [...this.boxAt.keys()]) if (!live.has(k)) this.boxAt.delete(k)
 
-    // 摆区域：记得位置的放回原处（被前面长大的区域压到就往下推），新的找一块空地
-    const placed: Box[] = []
+    // 摆区域：记得位置的放回原处（被前面长大的区域压到就往下推），新的找一块空地；导入页先占住左上角
+    const placed: Box[] = page ? [page] : []
     const origin = new Map<string, { x: number; y: number }>()
     for (const s of slots) {
       const was = this.regionAt.get(s.key)
@@ -569,10 +579,27 @@ export class StableLayout {
       }
     }
 
+    if (page) {
+      for (const n of pins) anchors.set(n.id, { id: n.id, ...n.at! })
+      // 边栏：按挂靠的原文从上到下排，挤了就往下错开
+      const at = (n: Node) => g.nodes.find((p) => p.id === n.parent)?.at
+      const rows: Row[] = []
+      let next = -Infinity
+      for (const n of [...onPins].sort((a, b) => (at(a)?.y ?? 0) - (at(b)?.y ?? 0))) {
+        const y = Math.max(at(n)?.y ?? 0, next)
+        rows.push({ id: n.id, node: n, prefix: prefixFor(n, 1, 0), text: n.label, x: g.underlay!.w + 28, y, w: textWidth(n.label, SMALL), size: SMALL })
+        next = y + SMALL + 14
+      }
+      if (rows.length) {
+        regions.push({ id: '__margin', x: 0, y: 0, w: page.w, h: page.h, rows })
+        for (const row of rows) anchors.set(row.id, { id: row.id, x: row.x, y: row.y, w: row.w + 30, h: row.size + 8 })
+      }
+    }
+
     const inDiagram = (e: { from: string; to: string }) => diagramIds.has(e.from) && diagramIds.has(e.to)
     const links = g.edges.filter((e) => !inDiagram(e) && anchors.has(e.from) && anchors.has(e.to))
 
-    const all = [...anchors.values(), ...(diagram ? [diagram.box] : [])]
+    const all = [...anchors.values(), ...(diagram ? [diagram.box] : []), ...(page ? [page] : [])]
     const bounds = all.length
       ? {
           x0: Math.min(...all.map((b) => b.x)),
@@ -581,7 +608,7 @@ export class StableLayout {
           y1: Math.max(...all.map((b) => b.y + b.h)),
         }
       : { x0: 0, y0: 0, x1: 1, y1: 1 }
-    return { regions, diagram, links, anchors, bounds }
+    return { regions, diagram, links, anchors, bounds, page }
   }
 
   /** 新区域的位置：挨着已有区域的右边或下面，挑一个不压别人、整块板最接近横向长方形的 */

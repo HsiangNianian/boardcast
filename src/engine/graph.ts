@@ -7,7 +7,8 @@
 
 export type Ink = 'draft' | 'ink'
 
-export type Kind = 'node' | 'topic' | 'item' | 'question' | 'formula' | 'note'
+/** region：导入的 PDF / 图片上的一块内容，钉在底图上的固定位置，只能被标记、连线、加备注 */
+export type Kind = 'node' | 'topic' | 'item' | 'question' | 'formula' | 'note' | 'region'
 
 export const MARKS = ['划掉', '圈出', '下划线', '星标'] as const
 export type Mark = (typeof MARKS)[number]
@@ -27,6 +28,8 @@ export interface Node {
   marks: Mark[]
   icon?: Icon
   ink: Ink
+  /** region 在底图上的位置（板书坐标） */
+  at?: { x: number; y: number; w: number; h: number }
 }
 
 export interface Edge {
@@ -47,6 +50,8 @@ export interface Graph {
   groups: Group[]
   nextNode: number
   nextGroup: number
+  /** 垫在底下的导入页（PDF 的一页、一张图片）的大小；图片本身存在会议的这张板里 */
+  underlay?: { w: number; h: number }
 }
 
 export function emptyGraph(): Graph {
@@ -55,11 +60,12 @@ export function emptyGraph(): Graph {
 
 export function cloneGraph(g: Graph): Graph {
   return {
-    nodes: g.nodes.map((n) => ({ ...n, aliases: [...n.aliases], marks: [...n.marks] })),
+    nodes: g.nodes.map((n) => ({ ...n, aliases: [...n.aliases], marks: [...n.marks], ...(n.at ? { at: { ...n.at } } : {}) })),
     edges: g.edges.map((e) => ({ ...e })),
     groups: g.groups.map((x) => ({ ...x })),
     nextNode: g.nextNode,
     nextGroup: g.nextGroup,
+    ...(g.underlay ? { underlay: { ...g.underlay } } : {}),
   }
 }
 
@@ -102,6 +108,7 @@ const TAG: Record<Kind, string> = {
   question: '[问题] ',
   formula: '[公式] ',
   note: '[备注] ',
+  region: '[原文] ',
 }
 
 /** 给模型看的紧凑实体表。越短越好：它决定了每次要重新读入多少 token。 */

@@ -58,6 +58,7 @@ export default function InkBoard({
   toolbar,
   onMoveSel,
   layoutRev = 0,
+  underlay,
 }: {
   graph: Graph
   hot: Set<string>
@@ -77,6 +78,8 @@ export default function InkBoard({
   onMoveSel?: (sel: Selection, dx: number, dy: number) => void
   /** 排版记忆变了（拖动、撤销）就加一：重新排版、重画 */
   layoutRev?: number
+  /** 垫在底下的导入页（PDF 的一页、一张图片），左上角对齐板书原点，大小是 graph.underlay */
+  underlay?: string
 }) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
@@ -321,6 +324,9 @@ export default function InkBoard({
             <feDisplacementMap in="SourceGraphic" in2="n" scale={Math.min(0.7, 0.7 / v.k).toFixed(2)} />
           </filter>
         </defs>
+        {underlay && graph.underlay && (
+          <image className="underlay" href={underlay} x={0} y={0} width={graph.underlay.w} height={graph.underlay.h} preserveAspectRatio="none" />
+        )}
         <g>{pieces.filter((p) => p.under).map(render)}</g>
         <g filter={`url(#${look.chalk ? 'chalk' : 'marker'})`}>{pieces.filter((p) => !p.under).map(render)}</g>
         {selBox && (

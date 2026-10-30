@@ -46,7 +46,12 @@ fn summary(v: &Value) -> Option<MeetingInfo> {
             .to_string(),
         created_at: v.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0),
         updated_at: v.get("updatedAt").and_then(Value::as_f64).unwrap_or(0.0),
-        lines: v.get("lines").and_then(Value::as_array).map_or(0, Vec::len),
+        // 句数只算会上说的话，不算手写板上的手动修改
+        lines: v.get("lines").and_then(Value::as_array).map_or(0, |ls| {
+            ls.iter()
+                .filter(|l| !l.get("manual").and_then(Value::as_bool).unwrap_or(false))
+                .count()
+        }),
     })
 }
 
@@ -125,7 +130,7 @@ mod tests {
     fn summary_reads_the_fields_the_list_needs() {
         let v: Value = serde_json::json!({
             "id": "m1", "title": "登录流程", "createdAt": 1.0, "updatedAt": 2.0,
-            "lines": [{"text": "a"}, {"text": "b"}], "graph": {}
+            "lines": [{"text": "a"}, {"text": "b"}, {"text": "删掉了「甲」", "manual": true}], "graph": {}
         });
         let s = summary(&v).unwrap();
         assert_eq!(

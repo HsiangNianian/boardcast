@@ -17,6 +17,8 @@ export interface MeetingLine extends Utterance {
   ops?: string
   via?: string
   fellBack?: boolean
+  /** 手写板上手动改的（删掉、改字、标记），不是会上说的话 */
+  manual?: boolean
 }
 
 export interface Meeting {
@@ -73,7 +75,7 @@ export function normalize(m: Meeting): Meeting {
 }
 
 export function info(m: Meeting): MeetingInfo {
-  return { id: m.id, title: m.title, createdAt: m.createdAt, updatedAt: m.updatedAt, lines: m.lines.length }
+  return { id: m.id, title: m.title, createdAt: m.createdAt, updatedAt: m.updatedAt, lines: m.lines.filter((l) => !l.manual).length }
 }
 
 // —— 网页版：IndexedDB ——

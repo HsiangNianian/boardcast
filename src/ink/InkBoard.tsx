@@ -3,11 +3,13 @@
 // 写过的东西位置变了就直接挪过去，不重写。
 // 浅色是白板马克笔，深色是黑板粉笔。
 
-import { type PointerEvent, type WheelEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { board } from '../board/layout.ts'
+import { type PointerEvent, type ReactNode, type WheelEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type Layout, board } from '../board/layout.ts'
+import type { Selection } from '../engine/edit.ts'
 import type { Graph } from '../engine/graph.ts'
 import { type InkLook, type Piece, compose } from './compose.ts'
 import { localPoint } from '../ui/landscape.ts'
+import { hitTest, selectionBox, selectionLine } from './hit.ts'
 
 const WHITEBOARD: InkLook = {
   paper: '#fbfbf8',
@@ -51,6 +53,9 @@ export default function InkBoard({
   bottomInset = 0,
   tidy = 0,
   weight = 1,
+  selection = null,
+  onSelect,
+  toolbar,
 }: {
   graph: Graph
   hot: Set<string>
@@ -62,6 +67,10 @@ export default function InkBoard({
   tidy?: number
   /** 笔画粗细的倍数 */
   weight?: number
+  /** 手动修改：选中的东西、点选回调、浮在选中物上方的按钮 */
+  selection?: Selection | null
+  onSelect?: (sel: Selection | null) => void
+  toolbar?: ReactNode
 }) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
@@ -74,6 +83,10 @@ export default function InkBoard({
   const cursor = useRef(0)
   const wrap = useRef<HTMLDivElement>(null)
   const drag = useRef<{ x: number; y: number } | null>(null)
+  /** 这次按下以后有没有拖动：没拖动就算点了一下，用来点选 */
+  const press = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  /** 最近一次的排版：点选判定、画高亮框要用 */
+  const [lay, setLay] = useState<Layout | null>(null)
   /** 现在画面上的视角和画布尺寸，排完新内容时判断要不要重新适配 */
   const shown = useRef<{ x: number; y: number; k: number } | null>(null)
   const size = useRef<[number, number]>([1000, 700])
@@ -87,6 +100,7 @@ export default function InkBoard({
       const l = await board.layout(graph)
       const ps = await compose(graph, l, hot, look, messy, weight)
       if (stale) return
+      setLay(l)
       // 给第一次出现的笔画排上写字的时间：接在正在写的东西后面。
       // 板书不能落后于讨论：一轮新内容最多写 BUDGET 毫秒，写不完就整体加速；
       // 上一轮还没写完时，最多再等 MAX_BACKLOG 就开始写这一轮。
@@ -169,22 +183,38 @@ export default function InkBoard({
     setView({ k, x: mx - px / k, y: my - py / k })
   }
   const onDown = (e: PointerEvent) => {
+    // 浮动按钮上的点击不算点白板
+    if ((e.target as Element).closest('.ink-toolbar')) return
     const [x, y] = at(e)
     drag.current = { x, y }
+    press.current = { x, y, moved: false }
     ;(e.target as Element).setPointerCapture(e.pointerId)
+  }
+  const onUp = (e: PointerEvent) => {
+    drag.current = null
+    const p = press.current
+    press.current = null
+    if (!p || p.moved || !onSelect || !lay) return
+    // 点了一下（没拖动）：看点中了什么；点空白就取消选中
+    const [x, y] = at(e)
+    onSelect(hitTest(lay, graph, v.x + x / v.k, v.y + y / v.k, 8 / v.k))
   }
   const onMove = (e: PointerEvent) => {
     if (!drag.current) return
     const [x, y] = at(e)
+    if (press.current && Math.hypot(x - press.current.x, y - press.current.y) > 4) press.current.moved = true
     const dx = (x - drag.current.x) / v.k
     const dy = (y - drag.current.y) / v.k
     drag.current = { x, y }
     setView({ ...v, x: v.x - dx, y: v.y - dy })
   }
 
+  const selBox = selection && lay ? selectionBox(lay, selection) : undefined
+  const selLine = selection && lay ? selectionLine(lay, selection) : undefined
+
   const now = performance.now()
   const render = (p: Piece, i: number) => (
-    <g key={p.key} opacity={p.opacity} fill={p.color} style={p.under ? { mixBlendMode: dark ? 'screen' : 'multiply' } : undefined}>
+    <g key={p.key} data-key={p.key} opacity={p.opacity} fill={p.color} style={p.under ? { mixBlendMode: dark ? 'screen' : 'multiply' } : undefined}>
       {p.strokes.map((s, j) => {
         const t = timing.current.get(p.key)
         const live = t && t.end > now && t.durs[j] > 0
@@ -220,7 +250,7 @@ export default function InkBoard({
       onWheel={onWheel}
       onPointerDown={onDown}
       onPointerMove={onMove}
-      onPointerUp={() => (drag.current = null)}
+      onPointerUp={onUp}
       onDoubleClick={() => setView(null)}
     >
       <svg width="100%" height="100%" viewBox={`${v.x} ${v.y} ${W / v.k} ${H / v.k}`} data-messy={drawn}>
@@ -243,7 +273,28 @@ export default function InkBoard({
         </defs>
         <g>{pieces.filter((p) => p.under).map(render)}</g>
         <g filter={`url(#${look.chalk ? 'chalk' : 'marker'})`}>{pieces.filter((p) => !p.under).map(render)}</g>
+        {selBox && (
+          <g className="ink-selection">
+            {selLine ? (
+              <polyline points={selLine.map((p) => p.join(',')).join(' ')} />
+            ) : (
+              <rect x={selBox.x - 8} y={selBox.y - 6} width={selBox.w + 16} height={selBox.h + 12} rx={8} />
+            )}
+          </g>
+        )}
       </svg>
+      {selBox && toolbar && (
+        <div
+          className="ink-toolbar"
+          style={{
+            left: Math.max(8, Math.min(W - 8, (selBox.x + selBox.w / 2 - v.x) * v.k)),
+            top: Math.max(8, (selBox.y - v.y) * v.k - 12),
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {toolbar}
+        </div>
+      )}
     </div>
   )
 }

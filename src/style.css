@@ -1341,3 +1341,76 @@ button.danger {
   background: var(--bad);
   color: #fff;
 }
+
+/* —— 手写板上的手动修改：选中框、浮动按钮 —— */
+.ink-selection rect,
+.ink-selection polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+.ink-selection polyline {
+  stroke-width: 8;
+  stroke-dasharray: none;
+  stroke-opacity: 0.22;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ink-toolbar {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  animation: bc-pop 0.14s ease-out;
+}
+.ink-toolbar button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+.ink-toolbar button:hover {
+  background: var(--surface-2);
+}
+.ink-toolbar button.on {
+  background: var(--ink);
+  color: var(--bg);
+}
+.ink-toolbar button.del {
+  color: var(--bad);
+}
+.ink-toolbar .rename {
+  display: flex;
+  gap: 4px;
+}
+.ink-toolbar .rename input {
+  width: 180px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+.ink-toolbar .rename button {
+  background: var(--ink);
+  color: var(--bg);
+}
+.line.manual p {
+  color: var(--muted);
+  font-size: 13px;
+}
+.line .who.edit {
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px dashed var(--line-strong);
+}

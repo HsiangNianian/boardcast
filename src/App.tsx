@@ -19,6 +19,8 @@ import { type Graph, emptyGraph } from './engine/graph.ts'
 import { type LlmConfig, proposeOps } from './engine/llm.ts'
 import { formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
+import { History as EditHistory, type Selection, describe, exists, remove as removeSel, rename as renameSel, toggleMark } from './engine/edit.ts'
+import type { Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
 import { type Meeting, type MeetingLine, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
 import InkBoard from './ink/InkBoard.tsx'
@@ -27,7 +29,7 @@ import { type RemoteView, remote } from './remote.ts'
 import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
 import Composer from './ui/Composer.tsx'
 import type { ExportKind } from './exporter.ts'
-import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Sun, Tidy, Transcript as TranscriptIcon } from './ui/icons.tsx'
+import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Sun, Tidy, Transcript as TranscriptIcon, Undo } from './ui/icons.tsx'
 import MeetingsPanel from './ui/MeetingsPanel.tsx'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
@@ -260,10 +262,25 @@ export default function App() {
   const [micChoice, setMicChoice] = useState(() => load('boardcast.mic', ''))
   const listEnd = useRef<HTMLDivElement>(null)
 
+  // —— 手动修改：撤销历史、选中 ——
+  const editHistory = useRef(new EditHistory())
+  /** 最近一张墨线板（不含铅笔稿）：撤销时退回到这里 */
+  const lastInk = useRef<Graph>(emptyGraph())
+  const [, setUndoTick] = useState(0)
+  const [selection, setSelection] = useState<Selection | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+
   // Session 只建一次。以前跟着模型配置重建：远程出错临时拉起本地模型、地址一变，会开到一半板书就被换成空的
   const sessionRef = useRef<Session | null>(null)
   sessionRef.current ??= new Session(llm, {
-        graph: (g) => setGraph(g),
+        graph: (g, why) => {
+          if (why === 'ink') {
+            editHistory.current.record(lastInk.current)
+            lastInk.current = g
+            setUndoTick((t) => t + 1)
+          }
+          setGraph(g)
+        },
         mention: (ids) => {
           setHot(new Set(ids))
           if (ids.length) setTimeout(() => setHot(new Set()), 1500)
@@ -309,6 +326,9 @@ export default function App() {
   const openMeeting = useCallback(
     (m: Meeting) => {
       board.restore(m.layout)
+      editHistory.current.clear()
+      lastInk.current = m.graph
+      setSelection(null)
       session.graph = m.graph
       session.history = m.history
       setGraph(m.graph)
@@ -511,12 +531,90 @@ export default function App() {
     board.reset()
     session.graph = emptyGraph()
     session.history = []
+    editHistory.current.clear()
+    lastInk.current = session.graph
+    setSelection(null)
     setGraph(session.graph)
     setLines([])
     const id = newMeetingId()
     setMeeting({ id, title: '未命名会议', createdAt: Date.now() })
     save('boardcast.meeting', id)
   }
+
+  /** 手动改了板书：记一步撤销，记进会议记录（模型下一句看到的就是改过的板） */
+  function applyEdit(next: Graph, note: string) {
+    if (next === session.graph) return
+    editHistory.current.record(session.graph)
+    session.graph = next
+    lastInk.current = next
+    setGraph(next)
+    setUndoTick((t) => t + 1)
+    setLines((ls) => [...ls, { text: note, manual: true, ms: 0 }])
+    setSelection((sel) => (sel && exists(next, sel) ? sel : null))
+  }
+
+  function stepTo(g: Graph | null, note: string) {
+    if (!g) return
+    session.graph = g
+    lastInk.current = g
+    setGraph(g)
+    setUndoTick((t) => t + 1)
+    setSelection(null)
+    // 也记进会议记录：不然记录里还写着「删掉了……」，看着像没恢复
+    setLines((ls) => [...ls, { text: note, manual: true, ms: 0 }])
+  }
+  const undo = () => stepTo(editHistory.current.undo(session.graph), '撤销了上一步')
+  const redo = () => stepTo(editHistory.current.redo(session.graph), '重做了一步')
+
+  function deleteSelection() {
+    if (!selection) return
+    applyEdit(removeSel(session.graph, selection), `删掉了${describe(session.graph, selection)}`)
+    setSelection(null)
+  }
+
+  function markSelection(mark: Mark) {
+    if (selection?.kind !== 'node') return
+    const n = session.graph.nodes.find((x) => x.id === selection.id)
+    const on = n?.marks.includes(mark)
+    applyEdit(toggleMark(session.graph, selection.id, mark), `${on ? '去掉了' : '加上了'}${describe(session.graph, selection)}的${mark}`)
+  }
+
+  function commitRename() {
+    if (!selection || renaming === null) return
+    const before = describe(session.graph, selection)
+    const next = renameSel(session.graph, selection, renaming)
+    setRenaming(null)
+    if (next !== session.graph) applyEdit(next, `把${before}改成了「${renaming.trim() || '（无标签）'}」`)
+  }
+
+  // 键盘：撤销 / 重做 / 删除 / 取消选中。焦点在输入框里时不管；铅笔模式交给 Excalidraw 自己处理
+  const keys = useRef({ undo, redo, deleteSelection })
+  keys.current = { undo, redo, deleteSelection }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (mode !== 'ink' || (e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        keys.current.undo()
+      } else if (mod && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+        e.preventDefault()
+        keys.current.redo()
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        keys.current.deleteSelection()
+      } else if (e.key === 'Escape') {
+        setSelection(null)
+        setRenaming(null)
+      }
+    }
+    addEventListener('keydown', onKey)
+    return () => removeEventListener('keydown', onKey)
+  }, [mode])
+
+  // 选中的东西被模型改没了（或者撤销掉了），取消选中
+  useEffect(() => {
+    if (selection && !exists(graph, selection)) setSelection(null)
+  }, [graph, selection])
 
   async function openOther(id: string) {
     if (lines.length || graph.nodes.length) await meetings.save(snapshot(meeting)).catch(() => undefined)
@@ -566,6 +664,8 @@ export default function App() {
   }, [lines, speaker])
 
   const empty = lines.length === 0 && graph.nodes.length === 0 && !partial
+  /** 会上说的话（不算手动修改） */
+  const said = lines.filter((l) => !l.manual)
 
   return (
     <div className={`app${showLog ? '' : ' no-log'}`}>
@@ -610,6 +710,12 @@ export default function App() {
             title="会议记录"
           >
             <TranscriptIcon />
+          </button>
+          <button type="button" className="icon" onClick={undo} disabled={!editHistory.current.canUndo} aria-label="撤销" title="撤销（Ctrl+Z）">
+            <Undo />
+          </button>
+          <button type="button" className="icon" onClick={redo} disabled={!editHistory.current.canRedo} aria-label="重做" title="重做（Ctrl+Shift+Z）">
+            <Redo />
           </button>
           <button type="button" className="icon" onClick={tidyUp} disabled={!graph.nodes.length} aria-label="整理排版" title="整理排版：整块重新排一次">
             <Tidy />
@@ -668,7 +774,73 @@ export default function App() {
 
       <main className="board">
         {mode === 'ink' ? (
-          <InkBoard graph={graph} hot={hot} dark={dark} messy={messyLater / 100} bottomInset={inset} tidy={tidy} weight={weightLater / 100} />
+          <InkBoard
+            graph={graph}
+            hot={hot}
+            dark={dark}
+            messy={messyLater / 100}
+            bottomInset={inset}
+            tidy={tidy}
+            weight={weightLater / 100}
+            selection={selection}
+            onSelect={(sel) => {
+              setSelection(sel)
+              setRenaming(null)
+            }}
+            toolbar={
+              selection &&
+              (renaming !== null ? (
+                <form
+                  className="rename"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    commitRename()
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={renaming}
+                    onChange={(e) => setRenaming(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setRenaming(null)
+                    }}
+                    placeholder={selection.kind === 'edge' ? '连线上的字，留空就去掉' : '新的名字'}
+                    aria-label="改字"
+                  />
+                  <button type="submit">好</button>
+                </form>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur =
+                        selection.kind === 'node'
+                          ? session.graph.nodes.find((n) => n.id === selection.id)?.label
+                          : session.graph.edges.find((e) => e.from === selection.from && e.to === selection.to)?.label
+                      setRenaming(cur ?? '')
+                    }}
+                  >
+                    改字
+                  </button>
+                  {selection.kind === 'node' &&
+                    (['划掉', '圈出', '星标'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        className={session.graph.nodes.find((n) => n.id === selection.id)?.marks.includes(m) ? 'on' : ''}
+                        onClick={() => markSelection(m)}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  <button type="button" className="del" onClick={deleteSelection}>
+                    删除
+                  </button>
+                </>
+              ))
+            }
+          />
         ) : (
           <Suspense fallback={<div className="board-loading">正在打开铅笔白板…</div>}>
             <PencilBoard onApi={setApi} dark={dark} paper={PAPER_LIGHT} />
@@ -728,7 +900,7 @@ export default function App() {
       <aside className="log" aria-label="会议记录" hidden={!showLog}>
         <header>
           <h2>会议记录</h2>
-          <span className="count">{lines.length ? `${lines.length} 句` : ''}</span>
+          <span className="count">{said.length ? `${said.length} 句` : ''}</span>
           <button type="button" className="icon" onClick={() => setShowLog(false)} aria-label="收起会议记录">
             <Close size={16} />
           </button>
@@ -736,10 +908,12 @@ export default function App() {
         <div className="lines">
           {lines.length === 0 && !partial && <p className="empty">还没有人说话。说的每一句和它画出来的东西都会记在这里。</p>}
           {lines.map((l, i) => (
-            <article key={i} className={`line${l.ms === undefined ? ' pending' : ''}`}>
+            <article key={i} className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}`}>
+              {l.manual && <span className="who edit">改</span>}
               {l.speaker && <span className={`who c${speakers.indexOf(l.speaker) % 6}`}>{l.speaker}</span>}
               <div className="body">
                 <p>{l.text}</p>
+                {!l.manual && (
                 <details>
                   <summary>
                     {l.ms === undefined ? '画着…' : `${Math.round(l.ms)} ms`}
@@ -748,6 +922,7 @@ export default function App() {
                   </summary>
                   {l.ops ? <pre>{l.ops}</pre> : <pre>（没有改动）</pre>}
                 </details>
+                )}
               </div>
             </article>
           ))}

@@ -148,3 +148,17 @@ export const History = (p: P) => (
     <path d="M3.5 4.5V8h3.5M12 7.5V12l3 2" />
   </Icon>
 )
+
+export const Undo = (p: P) => (
+  <Icon {...p}>
+    <path d="M9 14 4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+  </Icon>
+)
+
+export const Redo = (p: P) => (
+  <Icon {...p}>
+    <path d="m15 14 5-5-5-5" />
+    <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+  </Icon>
+)

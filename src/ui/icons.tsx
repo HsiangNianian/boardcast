@@ -162,3 +162,9 @@ export const Redo = (p: P) => (
     <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
   </Icon>
 )
+
+export const Check = (p: P) => (
+  <Icon {...p}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </Icon>
+)

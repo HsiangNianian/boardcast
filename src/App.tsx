@@ -45,6 +45,8 @@ const LIGHT: Look = { ink: '#1e1e1e', pencil: '#868e96', highlight: '#ffec99', g
 const THEMES: Theme[] = ['system', 'light', 'dark']
 const THEME_LABEL: Record<Theme, string> = { system: '跟随系统', light: '浅色', dark: '深色' }
 // Excalidraw 很大（连同 mermaid、katex 好几 MB），只在切到铅笔模式时才加载
+// 摘要要用 Markdown 渲染库，第一次显示摘要时再加载
+const Summary = lazy(() => import('./ui/Summary.tsx'))
 const PencilBoard = lazy(() => import('./board/PencilBoard.tsx'))
 
 // 铅笔模式的纸色，和界面的浅色底一致；深色模式下 Excalidraw 会自己反色
@@ -981,25 +983,16 @@ export default function App() {
           </button>
         </header>
         {(summing || summary) && (
-          <section className="summary" aria-label="会议摘要">
-            <div className="summary-head">
-              <h3>摘要</h3>
-              <span>{summing ?? (useRemote && remoteView ? `远程 ${remoteView.model}` : '可以直接改')}</span>
-              {!summing && (
-                <button type="button" className="icon" onClick={() => setSummary('')} aria-label="删掉摘要" title="删掉摘要">
-                  <Close size={14} />
-                </button>
-              )}
-            </div>
-            {!summing && (
-              <textarea
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                rows={Math.min(14, summary.split('\n').length + 1)}
-                spellCheck={false}
-              />
-            )}
-          </section>
+          <Suspense fallback={null}>
+            <Summary
+              text={summary}
+              onChange={setSummary}
+              busy={!!summing}
+              status={summing ?? (useRemote && remoteView ? `远程 ${remoteView.model}` : '')}
+              onClear={() => setSummary('')}
+              onToast={setToast}
+            />
+          </Suspense>
         )}
         <div className="lines">
           {lines.length === 0 && !partial && <p className="empty">还没有人说话。说的每一句和它画出来的东西都会记在这里。</p>}

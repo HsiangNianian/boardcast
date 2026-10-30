@@ -683,10 +683,16 @@ kbd {
   font-family: var(--mono);
   font-size: 12px;
 }
-.log header button.small {
+.log header button.small,
+.summary-head button.small {
   height: 26px;
   padding: 0 10px;
   font-size: 12px;
+}
+.summary-head button.small {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
 }
 .log .summary {
   flex: none;
@@ -722,6 +728,57 @@ kbd {
   font-size: 12px;
   line-height: 1.7;
   overflow-y: auto;
+}
+.summary-head .icon {
+  width: 26px;
+  height: 26px;
+}
+.log .summary .md {
+  min-height: 0;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink);
+}
+.summary .md h1,
+.summary .md h2,
+.summary .md h3,
+.summary .md h4 {
+  margin: 10px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.summary .md > :first-child {
+  margin-top: 0;
+}
+.summary .md p {
+  margin: 4px 0;
+}
+.summary .md ul,
+.summary .md ol {
+  margin: 2px 0;
+  padding-left: 18px;
+}
+.summary .md li.task-list-item {
+  list-style: none;
+  margin-left: -18px;
+}
+.summary .md input[type='checkbox'] {
+  margin: 0 6px 0 0;
+  vertical-align: -1px;
+  accent-color: var(--accent);
+}
+.summary .md code {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.summary .md a {
+  color: var(--accent);
 }
 .log .lines {
   flex: 1;

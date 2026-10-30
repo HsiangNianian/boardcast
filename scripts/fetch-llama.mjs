@@ -65,8 +65,10 @@ if (!existsSync(archive)) {
 const tmp = join(cache, `x-${target}`)
 rmSync(tmp, { recursive: true, force: true })
 mkdirSync(tmp, { recursive: true })
-// bsdtar 能解 zip，Windows 自带的 tar 就是 bsdtar
-execFileSync('tar', ['-xf', archive, '-C', tmp], { stdio: 'inherit' })
+// bsdtar 能解 zip，Windows 自带的 tar 就是 bsdtar。
+// Windows 上要明确用系统里那个：从 Git Bash 里跑时 PATH 前面是 GNU tar，它解不了 zip，还会把 D:\ 当成远程主机
+const tar = process.platform === 'win32' ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar'
+execFileSync(tar, ['-xf', archive, '-C', tmp], { stdio: 'inherit' })
 
 // 包里可能有一层目录
 const top = readdirSync(tmp)

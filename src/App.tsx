@@ -27,7 +27,8 @@ import { type RemoteView, remote } from './remote.ts'
 import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
 import Composer from './ui/Composer.tsx'
 import type { ExportKind } from './exporter.ts'
-import { Auto, Close, Download, Gear, Moon, Pen, Pencil, Plus, Sun, Tidy, Transcript as TranscriptIcon } from './ui/icons.tsx'
+import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Sun, Tidy, Transcript as TranscriptIcon } from './ui/icons.tsx'
+import MeetingsPanel from './ui/MeetingsPanel.tsx'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -300,6 +301,7 @@ export default function App() {
   type MeetingMeta = Pick<Meeting, 'id' | 'title' | 'titled' | 'createdAt'>
   const [meeting, setMeeting] = useState<MeetingMeta>(() => ({ id: newMeetingId(), title: '未命名会议', createdAt: Date.now() }))
   const [restored, setRestored] = useState(false)
+  const [showMeetings, setShowMeetings] = useState(false)
   const linesRef = useRef<Line[]>([])
   linesRef.current = lines
 
@@ -503,9 +505,9 @@ export default function App() {
     }
   }
 
-  /** 新会议：当前这场已经自动存下了，换一个新编号从空板开始 */
-  function reset() {
-    if (lines.length || graph.nodes.length) void meetings.save(snapshot(meeting)).catch(() => undefined)
+  /** 新会议：当前这场已经自动存下了，换一个新编号从空板开始；`keepCurrent` 为 false 时当前这场刚被删掉，不再存 */
+  function reset(keepCurrent = true) {
+    if (keepCurrent && (lines.length || graph.nodes.length)) void meetings.save(snapshot(meeting)).catch(() => undefined)
     board.reset()
     session.graph = emptyGraph()
     session.history = []
@@ -514,6 +516,13 @@ export default function App() {
     const id = newMeetingId()
     setMeeting({ id, title: '未命名会议', createdAt: Date.now() })
     save('boardcast.meeting', id)
+  }
+
+  async function openOther(id: string) {
+    if (lines.length || graph.nodes.length) await meetings.save(snapshot(meeting)).catch(() => undefined)
+    const m = await meetings.load(id).catch(() => null)
+    if (m) openMeeting(m)
+    else setToast({ ok: false, text: '打开会议失败：找不到这场会议' })
   }
 
   async function play() {
@@ -566,6 +575,10 @@ export default function App() {
         <div className="brand">
           <Wordmark size={24} className="logo" />
         </div>
+        <button type="button" className="meeting-title" onClick={() => setShowMeetings(true)} title="会议列表：打开、重命名、删除">
+          <History size={15} />
+          <span>{meeting.title}</span>
+        </button>
         <button
           type="button"
           className={`chip status${ready ? ' ok' : ''}${remoteBroken ? ' warn' : ''}`}
@@ -635,7 +648,7 @@ export default function App() {
               </div>
             )}
           </div>
-          <button type="button" className="icon" onClick={reset} aria-label="新会议" title="新会议：这场会已经自动保存了，从一块空板重新开始">
+          <button type="button" className="icon" onClick={() => reset()} aria-label="新会议" title="新会议：这场会已经自动保存了，从一块空板重新开始">
             <Plus />
           </button>
           <button
@@ -775,6 +788,15 @@ export default function App() {
         />
       )}
       {showModels && <ModelPanel status={builtin} onClose={() => setShowModels(false)} />}
+      {showMeetings && (
+        <MeetingsPanel
+          currentId={meeting.id}
+          onClose={() => setShowMeetings(false)}
+          onOpen={(id) => void openOther(id)}
+          onNew={(keep) => reset(keep)}
+          onRenamed={(id, title) => setMeeting((m) => (m.id === id ? { ...m, title, titled: true } : m))}
+        />
+      )}
       {toast && (
         <div className={`toast${toast.ok ? '' : ' err'}`} role="status">
           {toast.text}

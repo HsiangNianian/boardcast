@@ -1234,3 +1234,110 @@ button.icon:disabled {
 .excalidraw .HintViewer {
   display: none !important;
 }
+
+/* —— 会议：顶栏的会议名和会议列表 —— */
+.topbar .meeting-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 260px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.topbar .meeting-title:hover {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.topbar .meeting-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel.meetings header .row {
+  align-items: center;
+}
+.panel.meetings header .row button:not(.icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.meeting-list {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.meeting-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 0;
+  border-radius: 10px;
+}
+.meeting-list li:hover {
+  background: var(--surface-2);
+}
+.meeting-list li.current {
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+.meeting-list .open {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font-weight: 400;
+}
+.meeting-list .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.meeting-list .sub {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.meeting-list .sub em {
+  margin-left: 8px;
+  font-style: normal;
+  color: var(--ok);
+}
+.meeting-list .title-edit {
+  flex: 1;
+  margin-left: 8px;
+}
+.meeting-list .ops {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.meeting-list .ops button {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.meeting-list .ops .sure {
+  color: var(--bad);
+  font-size: 12px;
+}
+button.danger {
+  border-color: var(--bad);
+  background: var(--bad);
+  color: #fff;
+}

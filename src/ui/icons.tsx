@@ -141,3 +141,10 @@ export const Tidy = (p: P) => (
     <path d="M14 17h6M17 14v6" />
   </Icon>
 )
+
+export const History = (p: P) => (
+  <Icon {...p}>
+    <path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" />
+    <path d="M3.5 4.5V8h3.5M12 7.5V12l3 2" />
+  </Icon>
+)

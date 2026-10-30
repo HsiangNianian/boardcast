@@ -26,7 +26,7 @@ export interface LlmConfig {
 export const defaultLlm: LlmConfig = { baseUrl: 'http://127.0.0.1:8080', noThink: true, maxTokens: 160 }
 
 export interface ChatResponse {
-  choices: { message: { content: string } }[]
+  choices: { message: { content: string | null; reasoning_content?: string }; finish_reason?: string }[]
   usage?: { prompt_tokens?: number; completion_tokens?: number }
   timings?: { prompt_n?: number; prompt_ms?: number; predicted_n?: number; predicted_ms?: number }
 }
@@ -45,6 +45,10 @@ export interface LlmResult {
   via?: string
   /** 首选接口失败、改用了 fallback 时，首选接口的错误 */
   fellBack?: string
+  /** 模型为什么停下：length 表示 token 用完了 */
+  finish?: string
+  /** 推理模型的思考过程有多少字（正文为空时用来判断是不是想太久了） */
+  reasoning?: number
 }
 
 /** 有些推理模型会把思考过程放在 <think> 里，去掉再解析 */
@@ -172,8 +176,11 @@ export async function chat(cfg: LlmConfig, msgs: ChatMessage[], maxTokens: numbe
     const r = await chat(cfg.fallback, msgs, maxTokens, signal)
     return { ...r, fellBack: String(e) }
   }
+  const choice = data.choices?.[0]
   return {
-    text: stripThinking(data.choices?.[0]?.message?.content ?? ''),
+    text: stripThinking(choice?.message?.content ?? ''),
+    finish: choice?.finish_reason,
+    reasoning: choice?.message?.reasoning_content?.length,
     ms: performance.now() - t0,
     promptTokens: data.usage?.prompt_tokens,
     outputTokens: data.timings?.predicted_n ?? data.usage?.completion_tokens,

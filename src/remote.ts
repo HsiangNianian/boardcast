@@ -122,7 +122,7 @@ export const remote = {
     )
     const reply = r.choices?.[0]?.message?.content
     if (reply === undefined) throw new Error('返回里没有 choices[0].message.content，不像是 OpenAI 兼容接口')
-    return { ms: Math.round(performance.now() - t0), reply: reply.trim().slice(0, 40) }
+    return { ms: Math.round(performance.now() - t0), reply: (reply ?? '').trim().slice(0, 40) }
   },
 
   /** 用已保存的配置发对话请求，给 LlmConfig.send 用 */

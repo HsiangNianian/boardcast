@@ -4,7 +4,7 @@ import { toMarkdown } from '../board/markdown.ts'
 import { emptyGraph } from './graph.ts'
 import type { ChatResponse, LlmConfig } from './llm.ts'
 import { applyOps, parseOps } from './ops.ts'
-import { chunks, summarize, tidySummary } from './summary.ts'
+import { chunks, plainText, summarize, tidySummary } from './summary.ts'
 
 test('long transcripts are cut between sentences', () => {
   const lines = Array.from({ length: 10 }, (_, i) => ({ text: `${i}`.repeat(40) }))
@@ -40,6 +40,41 @@ test('long meetings are summarized piece by piece, then merged with the board', 
   assert.match(seen.at(-1)!, /白板上的内容：\n.*登录/)
   assert.match(seen.at(-1)!, /逐段记下的要点/)
   assert.match(r.text, /^### 结论\n- 好/)
+})
+
+test('headings written other ways are recognized, and unrecognized text is kept as is', () => {
+  const t = tidySummary('**结论**\n- 用 Go\n## 决定：\n- 上 Redis\n【待办事项】\n- [ ] 写爬虫（负责人：A）\n待讨论：\n- 热度公式')
+  assert.equal(t, '### 结论\n- 用 Go\n### 决定\n- 上 Redis\n### 待办\n- [ ] 写爬虫（负责人：A）\n### 待讨论\n- 热度公式')
+  assert.equal(tidySummary('这场会主要聊了爬虫。'), '这场会主要聊了爬虫。')
+  assert.equal(tidySummary(''), '')
+})
+
+test('an empty answer from a thinking model is retried with more room, then reported', async () => {
+  const asked: number[] = []
+  const reply = (content: string | null): ChatResponse => ({
+    choices: [{ message: { content, reasoning_content: '想了很久' }, finish_reason: 'length' }],
+  })
+  const g = emptyGraph()
+  const lines = [{ text: '先做爬虫' }]
+  const flaky: LlmConfig = {
+    baseUrl: 'x',
+    flavor: 'openai',
+    send: async (b) => {
+      asked.push(b.max_tokens as number)
+      return reply(asked.length === 1 ? null : '### 结论\n- 先做爬虫')
+    },
+  }
+  const r = await summarize(flaky, g, lines)
+  assert.deepEqual(asked, [4096, 8192])
+  assert.match(r.text, /先做爬虫/)
+
+  const mute: LlmConfig = { baseUrl: 'x', flavor: 'openai', send: async () => reply('') }
+  await assert.rejects(summarize(mute, g, lines), /token 都用在思考上/)
+})
+
+test('copying as plain text drops the markdown', () => {
+  assert.equal(plainText('### 结论\n- **用 Go**\n\n\n### 待办\n- [ ] 写爬虫\n- [x] 定方案'), '结论\n• 用 Go\n\n待办\n☐ 写爬虫\n☑ 定方案')
+  assert.equal(plainText('### 结论\n- 好\n### 决定\n- 无'), '结论\n• 好\n\n决定\n• 无')
 })
 
 test('markdown export puts the summary right under the title', () => {

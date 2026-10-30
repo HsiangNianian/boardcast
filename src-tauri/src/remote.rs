@@ -108,7 +108,8 @@ async fn post(base: &str, key: &str, body: &Value) -> Result<Value, String> {
     let url = chat_url(base);
     let mut builder = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(60));
+        // 摘要这种长回答（推理模型还要先想）一分钟可能不够
+        .timeout(Duration::from_secs(180));
     // 远程服务一般要走系统代理；但填的是本机地址（LM Studio、本地 vLLM）时，走代理只会绕一圈失败
     if is_loopback(&url) {
         builder = builder.no_proxy();

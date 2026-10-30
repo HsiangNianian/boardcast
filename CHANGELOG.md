@@ -2,6 +2,31 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.6.0 - 2026-10-30
+
+### Features
+
+- **privacy:** Say what goes to a cloud model and mark cloud vs local (closes #18) ([`8126f7d`](https://github.com/HsiangNianian/boardcast/commit/8126f7d14d94a71d220fdc49fa395d3f29621919))
+  - before a cloud endpoint is enabled for the first time, settings list what will be sent (what is said and by whom, the board's text, the full transcript for summaries) and what is not (audio, meeting files); it is only enabled after the user confirms, once per host
+  - loopback endpoints (LM Studio, local vLLM, Ollama) are not cloud and need no confirmation
+  - the model status in the top bar and the composer show a 云端 / 本地 tag at all times; clicking the composer tag opens settings
+  - "这场会只用本地模型" keeps a meeting on the local model for both the board and summaries, is saved with the meeting, and starts the built-in model if it was idle
+  - the summary button's tooltip names the host the transcript goes to
+  - README states that boardcast is fully local by default and documents the privacy behaviour
+- **pages:** Several boards per meeting with thumbnails (closes #21) ([`1667b7e`](https://github.com/HsiangNianian/boardcast/commit/1667b7e66a1c7f38cbc2c7278c68105ab66e285f))
+  - a strip of board thumbnails in the board's top-left corner: click one to switch, "+" starts a new board and keeps the old one
+  - each board keeps its own graph, layout memory and replay steps; switching saves the current board first, clears undo and refits the view
+  - the model only sees the current board; something from an earlier board mentioned again is drawn anew on this one
+  - once a board holds 30 inked items, a one-time hint suggests starting a new board
+  - transcript lines record their board, and the transcript shows a "第 N 张板" divider that jumps to that board
+  - thumbnails are drawn from the layout (boxes, text rows, lines) rather than rendered, and are saved with the meeting
+  - meetings save all boards and the current one; a meeting is still titled after its first board
+  - Markdown export puts each board in its own section and splits the transcript by board
+  - switching is blocked while the model is still drawing or during replay
+  - the web build's status no longer says 本地 twice
+
+**Full diff:** [v0.5.0...v0.6.0](https://github.com/HsiangNianian/boardcast/compare/v0.5.0...v0.6.0)
+
 ## 0.5.0 - 2026-10-30
 
 ### Features

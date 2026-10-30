@@ -1,7 +1,7 @@
 {
   "name": "boardcast",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "description": "Talk, and the whiteboard draws itself. Local-first live meeting diagrams.",
   "license": "MIT",

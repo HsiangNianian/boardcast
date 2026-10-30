@@ -495,6 +495,22 @@ button.where:hover {
   margin-left: 6px;
 }
 
+/* 拖文件进来：整块白板描一圈虚线 */
+.board.dropping::after {
+  content: '松开导入';
+  position: absolute;
+  inset: 10px;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  color: var(--accent);
+  font-size: 14px;
+  pointer-events: none;
+}
+
 /* 几张板：左上角一排缩略图 */
 .pages {
   position: absolute;

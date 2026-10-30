@@ -36,7 +36,7 @@ import { type RemoteView, remote } from './remote.ts'
 import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
 import Composer from './ui/Composer.tsx'
 import type { ExportKind } from './exporter.ts'
-import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Replay as ReplayIcon, Sun, Tidy, Transcript as TranscriptIcon, Undo } from './ui/icons.tsx'
+import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Replay as ReplayIcon, Sun, Tidy, Upload, Transcript as TranscriptIcon, Undo } from './ui/icons.tsx'
 import MeetingsPanel from './ui/MeetingsPanel.tsx'
 import ReplayBar, { SPEEDS } from './ui/ReplayBar.tsx'
 import PageStrip from './ui/PageStrip.tsx'
@@ -954,6 +954,29 @@ export default function App() {
     setSuggest(true)
   }, [graph, page, session])
 
+  // —— 导入文件：.excalidraw 直接转成板书（PDF、图片在做） ——
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [dropping, setDropping] = useState(false)
+  async function importFile(f: File) {
+    exitReplay()
+    if (waiting) {
+      setToast({ ok: false, text: '模型还在画，画完再导入' })
+      return
+    }
+    try {
+      if (!/\.(excalidraw|json)$/i.test(f.name)) throw new Error('现在只能导入 .excalidraw 文件，PDF 和图片还在做')
+      const { importExcalidraw } = await import('./board/importExcalidraw.ts')
+      const r = importExcalidraw(await f.text())
+      // 当前这张板上有东西就新开一张，不和现有的板书搅在一起
+      if (session.graph.nodes.some((n) => n.ink === 'ink')) newPage()
+      const parts = [`${r.nodes} 个框`, `${r.edges} 条连线`, r.groups && `${r.groups} 个分组`, r.notes && `${r.notes} 段文字`].filter(Boolean)
+      applyEdit(r.graph, `导入了 ${f.name}（${parts.join('、')}）`)
+      setTidy((t) => t + 1)
+    } catch (e) {
+      setToast({ ok: false, text: `导入失败：${errText(e)}` })
+    }
+  }
+
   async function openOther(id: string) {
     exitReplay()
     if (lines.length || graph.nodes.length) await meetings.save(snapshot(meeting)).catch(() => undefined)
@@ -1081,6 +1104,27 @@ export default function App() {
           <button type="button" className="icon" onClick={tidyUp} disabled={!graph.nodes.length} aria-label="整理排版" title="整理排版：整块重新排一次">
             <Tidy />
           </button>
+          <button
+            type="button"
+            className="icon"
+            onClick={() => fileInput.current?.click()}
+            disabled={!!replay}
+            aria-label="导入"
+            title="导入 .excalidraw：框、连线、分组转成板书，接着往上画（也可以直接拖到白板上）"
+          >
+            <Upload />
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".excalidraw,application/json,.json"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              e.target.value = ''
+              if (f) void importFile(f)
+            }}
+          />
           <div className="menu-anchor">
             <button
               type="button"
@@ -1133,7 +1177,27 @@ export default function App() {
         </div>
       </header>
 
-      <main className={`board${replay ? ' replaying' : ''}`}>
+      <main
+        className={`board${replay ? ' replaying' : ''}${dropping ? ' dropping' : ''}`}
+        // 用捕获阶段：铅笔模式下 Excalidraw 自己也接拖进来的文件，会把整块画布换掉
+        onDragOverCapture={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return
+          e.preventDefault()
+          e.stopPropagation()
+          setDropping(true)
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false)
+        }}
+        onDropCapture={(e) => {
+          const f = e.dataTransfer.files[0]
+          if (!f) return
+          e.preventDefault()
+          e.stopPropagation()
+          setDropping(false)
+          void importFile(f)
+        }}
+      >
         {mode === 'ink' ? (
           <InkBoard
             graph={graph}

@@ -133,6 +133,12 @@ export const Download = (p: P) => (
   </Icon>
 )
 
+export const Upload = (p: P) => (
+  <Icon {...p}>
+    <path d="M12 15.5V4.5M7 9l5-5 5 5M5 19.5h14" />
+  </Icon>
+)
+
 export const Tidy = (p: P) => (
   <Icon {...p}>
     <rect x="3.5" y="4" width="7" height="6" rx="1.5" />

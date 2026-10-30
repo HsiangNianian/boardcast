@@ -2,6 +2,22 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.9.0 - 2026-10-30
+
+### Features
+
+- **import:** Import images and mark them up with the local vision model (closes #12) ([`12410b4`](https://github.com/HsiangNianian/boardcast/commit/12410b41364f4a4c65c468e09e188599df951feb))
+  - screenshots, whiteboard photos and diagrams become a board with the image as underlay, marked up the same way as PDF pages
+  - positions come from image processing (segment.ts): ink against the most common background, long straight lines removed with tolerance for hand-drawn wobble, gaps between characters bridged, connected runs merged into lines and lines into paragraphs
+  - each block is cropped and read by the built-in model's vision projector; blocks that read as nothing or only symbols (arrowheads) are dropped
+  - measured on an RTX 3060 with Qwen3.5-4B: the model reads text accurately but its own boxes drift by tens of pixels, which is why it only reads; a document screenshot takes about 5 s, a hand-drawn diagram up to 25 s
+  - the model catalog gets a vision component per LLM (mmproj-F16, 640 MB for 4B, 880 MB for 9B) from ModelScope / hf-mirror / Hugging Face; llama-server starts with --mmproj when the selected model's component is installed, and the status reports it
+  - images are only read locally; import asks for the vision component when it is missing
+  - the prompt tells the model that lines in the source image are not edges and should be changed by striking or annotating the text next to them
+  - tests: block finding on a synthetic page with a framed label and an arrow, reading cleanup, catalog pairing
+
+**Full diff:** [v0.8.0...v0.9.0](https://github.com/HsiangNianian/boardcast/compare/v0.8.0...v0.9.0)
+
 ## 0.8.0 - 2026-10-30
 
 ### Features

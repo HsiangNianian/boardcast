@@ -94,6 +94,10 @@ jobs:
           for f in speaker1_a_cn_16k speaker1_b_cn_16k speaker2_a_cn_16k; do
             curl -fL --retry 3 -o voice-models/$f.wav https://github.com/csukuangfj/sr-data/raw/main/test/3d-speaker/$f.wav
           done
+      # GitHub 的 macOS runner 上，XProtect 偶尔占着刚建好的磁盘镜像，打 .dmg 时 hdiutil 报 Resource busy；先把它停掉
+      - name: Stop XProtect so hdiutil can build the .dmg
+        if: runner.os == 'macOS'
+        run: sudo pkill -9 XProtect >/dev/null 2>&1 || true
       # fetch-voice 发现 BOARDCAST_VOICE_DIR 里的文件校验通过，就直接复制进安装包，不再下载
       # 不要指定 shell: bash：Windows 上会换成 Git Bash 里的 GNU tar，它把 D:\ 当成远程主机
       - run: pnpm tauri build

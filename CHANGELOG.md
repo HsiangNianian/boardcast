@@ -2,6 +2,29 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.8.0 - 2026-10-30
+
+### Features
+
+- **import:** Import PDFs and mark them up during the meeting (refs #12) ([`f3f55d9`](https://github.com/HsiangNianian/boardcast/commit/f3f55d9140544dbb91a8fde2e8fe70669f6d07fa))
+  - each PDF page becomes a board: the page is rendered as an underlay in the top-left corner, and pdf.js's text layer is merged into lines and paragraphs that become pinned "原文" regions
+  - regions are graph nodes of kind region with a fixed position; the model sees them as [原文] in the entity table and can only mark, connect, annotate or attach questions to them, and applyOps restores any rename, delete or move
+  - marks are drawn on the page (circle, strike, underline, star), links between regions reuse the curved arrows, and notes go in a margin to the right of the page with a thin line back to their paragraph
+  - regions can be clicked and marked by hand; rename and delete are hidden for them
+  - other topics and flowcharts are laid out around the page; the page size is part of the graph so replay and thumbnails keep it
+  - PNG / SVG exports include the underlay, and Markdown gets a 原文标注 section
+  - up to 40 pages per import; scanned pages get an underlay but no regions; password-protected PDFs say so
+  - pdf.js loads on demand; a vite plugin serves its cmaps, standard fonts and wasm in dev and copies them into the build, and the desktop CSP allows wasm
+  - a cloud model only receives the text of the regions, never the page image
+
+### Build and CI
+
+- Stop XProtect before building the macOS .dmg ([`8e286a6`](https://github.com/HsiangNianian/boardcast/commit/8e286a6ca845f10e9422fc289dda70dd6367eba7))
+  - GitHub's macOS runners sometimes fail the .dmg with "hdiutil: create failed - Resource busy" because XProtect holds the new disk image; v0.7.0's release hit it
+  - kill XProtect before packaging in both CI and the Release workflow
+
+**Full diff:** [v0.7.0...v0.8.0](https://github.com/HsiangNianian/boardcast/compare/v0.7.0...v0.8.0)
+
 ## 0.7.0 - 2026-10-30
 
 ### Features

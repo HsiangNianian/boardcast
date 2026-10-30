@@ -9,6 +9,8 @@ import {
   type VoiceStatus,
   isDesktop,
   llmEnsure,
+  type UpdateInfo,
+  updates,
   llmStatus,
   llmStop,
   localReady,
@@ -53,6 +55,7 @@ const THEME_LABEL: Record<Theme, string> = { system: '跟随系统', light: '浅
 // Excalidraw 很大（连同 mermaid、katex 好几 MB），只在切到铅笔模式时才加载
 // 摘要要用 Markdown 渲染库，第一次显示摘要时再加载
 const Summary = lazy(() => import('./ui/Summary.tsx'))
+const UpdatePanel = lazy(() => import('./ui/UpdatePanel.tsx'))
 const PencilBoard = lazy(() => import('./board/PencilBoard.tsx'))
 
 // 铅笔模式的纸色，和界面的浅色底一致；深色模式下 Excalidraw 会自己反色
@@ -290,6 +293,16 @@ export default function App() {
   const messyLater = useDeferredValue(messy)
   const weightLater = useDeferredValue(weight)
   const [micChoice, setMicChoice] = useState(() => load('boardcast.mic', ''))
+  // 自动更新：打开应用一会儿以后查一次，有新版本就在顶栏冒一个按钮
+  const [autoUpdate, setAutoUpdate] = useState(() => load('boardcast.autoupdate', 'on') === 'on')
+  const [update, setUpdate] = useState<UpdateInfo | null>(null)
+  const [showUpdate, setShowUpdate] = useState(false)
+  useEffect(() => {
+    if (!isDesktop || !autoUpdate) return
+    // 等启动的这阵忙完（内置模型、语音模型加载）再查；查不到（离线之类）不打扰
+    const t = setTimeout(() => void updates.check().then(setUpdate, () => undefined), 8000)
+    return () => clearTimeout(t)
+  }, [autoUpdate])
   // 按声音区分说话人：声纹表跟着会议存
   const [diarize, setDiarize] = useState(() => load('boardcast.diarize', 'on') === 'on')
   const diarizeRef = useRef(diarize)
@@ -556,8 +569,9 @@ export default function App() {
     save('boardcast.weight', String(weight))
     save('boardcast.mic', micChoice)
     save('boardcast.diarize', diarize ? 'on' : 'off')
+    save('boardcast.autoupdate', autoUpdate ? 'on' : 'off')
     save('boardcast.log', showLog ? 'open' : 'closed')
-  }, [mode, messy, weight, micChoice, diarize, showLog])
+  }, [mode, messy, weight, micChoice, diarize, autoUpdate, showLog])
 
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
   useEffect(() => {
@@ -1013,6 +1027,11 @@ export default function App() {
           {remoteBroken && !localOnly && <em>远程连不上，暂用本地</em>}
           {useRemote && localOnly && <em>这场会只用本地</em>}
         </button>
+        {update && (
+          <button type="button" className="chip new-version" onClick={() => setShowUpdate(true)} title="有新版本，点开看更新说明">
+            新版本 {update.version}
+          </button>
+        )}
         <span className="spacer" />
         <div className="seg" role="radiogroup" aria-label="板书风格">
           <button role="radio" aria-checked={mode === 'ink'} className={mode === 'ink' ? 'on' : ''} onClick={() => setMode('ink')}>
@@ -1373,6 +1392,12 @@ export default function App() {
         </div>
       </aside>
 
+      {showUpdate && update && (
+        <Suspense fallback={null}>
+          <UpdatePanel info={update} onClose={() => setShowUpdate(false)} />
+        </Suspense>
+      )}
+
       {showSettings && (
         <SettingsPanel
           onClose={() => setShowSettings(false)}
@@ -1394,6 +1419,13 @@ export default function App() {
           setMic={setMicChoice}
           diarize={diarize}
           setDiarize={setDiarize}
+          autoUpdate={autoUpdate}
+          setAutoUpdate={setAutoUpdate}
+          onUpdate={(u) => {
+            setUpdate(u)
+            setShowSettings(false)
+            setShowUpdate(true)
+          }}
           inkMode={mode === 'ink'}
           messy={messy}
           setMessy={setMessy}

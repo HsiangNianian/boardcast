@@ -1,7 +1,7 @@
 // 设置：不常用的东西都放这里，主页面只留说话、收音和板书本身。
 
 import { useEffect, useState } from 'react'
-import { type LlmStatus, isDesktop, voice } from './desktop.ts'
+import { type LlmStatus, type UpdateInfo, isDesktop, updates, voice } from './desktop.ts'
 import { KEPT, SENT, hostOf, needsConsent, rememberConsent } from './privacy.ts'
 import { type RemoteTest, type RemoteView, remote } from './remote.ts'
 
@@ -28,6 +28,11 @@ interface Props {
   setMic: (m: string) => void
   diarize: boolean
   setDiarize: (on: boolean) => void
+  // 更新
+  autoUpdate: boolean
+  setAutoUpdate: (on: boolean) => void
+  /** 手动检查到了新版本 */
+  onUpdate: (u: UpdateInfo) => void
   // 手写
   inkMode: boolean
   messy: number
@@ -116,6 +121,27 @@ export default function SettingsPanel(p: Props) {
   useEffect(() => {
     if (isDesktop) void voice.devices().then(setDevices).catch(() => setDevices([]))
   }, [])
+
+  // —— 更新 ——
+  const [version, setVersion] = useState('')
+  const [checking, setChecking] = useState(false)
+  const [checked, setChecked] = useState<{ ok: boolean; text: string } | null>(null)
+  useEffect(() => {
+    if (isDesktop) void updates.version().then(setVersion).catch(() => undefined)
+  }, [])
+  async function checkNow() {
+    setChecking(true)
+    setChecked(null)
+    try {
+      const u = await updates.check()
+      if (u) p.onUpdate(u)
+      else setChecked({ ok: true, text: '已经是最新版' })
+    } catch (e) {
+      setChecked({ ok: false, text: errText(e) })
+    } finally {
+      setChecking(false)
+    }
+  }
 
   const b = p.builtin
   const rs = p.remoteState
@@ -280,6 +306,25 @@ export default function SettingsPanel(p: Props) {
               <span>按声音自动区分说话人</span>
             </label>
             <p className="hint">新出现的声音依次记成 A、B、C；在会议记录里点头像可以改成真名，同一个声音以后都用这个名字。很短的句子（「嗯」「对」）算给上一个说话的人。</p>
+          </section>
+        )}
+
+        {isDesktop && (
+          <section>
+            <h3>更新</h3>
+            <p className="hint">
+              当前版本 {version || '…'}。新版本从 GitHub Release 下载，装之前会校验签名。
+            </p>
+            <label className="check">
+              <input type="checkbox" checked={p.autoUpdate} onChange={(e) => p.setAutoUpdate(e.target.checked)} />
+              <span>打开应用时自动检查更新</span>
+            </label>
+            {checked && <p className={`meta ${checked.ok ? 'okmsg' : 'err'}`}>{checked.text}</p>}
+            <div className="actions">
+              <button className="ghost" onClick={() => void checkNow()} disabled={checking}>
+                {checking ? '检查中…' : '检查更新'}
+              </button>
+            </div>
           </section>
         )}
 

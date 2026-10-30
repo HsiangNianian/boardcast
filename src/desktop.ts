@@ -115,3 +115,24 @@ export async function on<T>(event: string, cb: (payload: T) => void): Promise<()
 
 /** 订阅下载进度 */
 export const onProgress = (cb: (p: Progress) => void) => on<Progress>('model-progress', cb)
+
+export interface UpdateInfo {
+  version: string
+  current: string
+  /** 更新说明（Release 正文） */
+  notes?: string
+  date?: string
+}
+
+export interface UpdateProgress {
+  done: number
+  total?: number
+}
+
+/** 自动更新：检查、下载安装并重启（成功的话 install 不会返回） */
+export const updates = {
+  version: async () => (await import('@tauri-apps/api/app')).getVersion(),
+  check: () => call<UpdateInfo | null>('update_check'),
+  install: () => call<void>('update_install'),
+  onProgress: (cb: (p: UpdateProgress) => void) => on<UpdateProgress>('update-progress', cb),
+}

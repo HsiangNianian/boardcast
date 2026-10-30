@@ -5,12 +5,14 @@
 // - 用户自己填的 OpenAI 兼容远程模型（remote.rs）
 // - 导出文件时的另存为对话框（export.rs）
 // - 会议的保存和读取（meetings.rs）
+// - 自动更新（updater.rs）
 
 mod export;
 mod llm;
 mod meetings;
 mod models;
 mod remote;
+mod updater;
 mod voice;
 
 use tauri::{Manager, RunEvent};
@@ -19,6 +21,8 @@ use tauri::{Manager, RunEvent};
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updater::Pending::default())
         .manage(llm::Llm::default())
         .manage(models::Downloads::default())
         .manage(voice::Voice::default())
@@ -54,6 +58,8 @@ pub fn run() {
             meetings::meeting_load,
             meetings::meeting_save,
             meetings::meeting_delete,
+            updater::update_check,
+            updater::update_install,
         ])
         .build(tauri::generate_context!())
         .expect("error while building boardcast")

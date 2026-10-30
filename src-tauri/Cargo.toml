@@ -33,6 +33,7 @@ sherpa-onnx = "2.0.1"
 # 导出：系统的另存为对话框；前端把文件内容用 base64 传过来
 tauri-plugin-dialog = "2"
 base64 = "0.22"
+tauri-plugin-updater = "2"
 
 # 应用崩溃或被强制结束时，让 llama-server 跟着退出，不留下占着显存的孤儿进程
 [target.'cfg(target_os = "linux")'.dependencies]

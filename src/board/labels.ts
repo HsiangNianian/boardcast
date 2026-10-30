@@ -1,44 +1,69 @@
-// 连线标签的位置：手写和铅笔两种画法都要避免标签飘离连线、压在节点上。
+// 连线标签的位置：别飘离自己的线，也别压在节点、文字或者别的线上。
 
 import { textWidth } from './layout.ts'
 
-type Pt = [number, number]
-interface Rect {
+export type Pt = [number, number]
+export interface Rect {
   x: number
   y: number
   w: number
   h: number
 }
 
+export interface Spot {
+  /** 标签左上角 */
+  x: number
+  y: number
+  w: number
+  h: number
+  /** 找到了一个不压框、不压字、不压线的位置；为 false 时调用方应该给标签垫一块底色 */
+  clear: boolean
+}
+
+const PAD = 3
+
+/** 线段有没有穿过（或贴着）这个矩形：沿线每隔几个单位取一个点看 */
+function hitsSegment(r: Rect, a: Pt, b: Pt): boolean {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+  const n = Math.max(1, Math.ceil(len / 4))
+  for (let i = 0; i <= n; i++) {
+    const x = a[0] + ((b[0] - a[0]) * i) / n
+    const y = a[1] + ((b[1] - a[1]) * i) / n
+    if (x > r.x - PAD && x < r.x + r.w + PAD && y > r.y - PAD && y < r.y + r.h + PAD) return true
+  }
+  return false
+}
+
+const hitsLine = (r: Rect, line: Pt[]) => line.some((p, i) => i > 0 && hitsSegment(r, line[i - 1], p))
+const hitsRect = (r: Rect, o: Rect) => r.x < o.x + o.w && o.x < r.x + r.w && r.y < o.y + o.h && o.y < r.y + r.h
+
 /**
- * 流程图连线的标签放哪：贴着折线最长的那一段写（横的写在线上方，竖的写在线右边），
- * 压到节点就换到线的另一边。返回标签左上角。
- * 以前放在两端点的中点，折线绕路时标签会飘到离线很远、甚至压在框上。
+ * 标签放哪：沿着自己的折线，从最长的一段开始，每段试中点和两侧的位置，横段写在线的上方或下方，竖段写在线的左右；
+ * 挑第一个不压节点 / 文字（`blocks`）、不压任何一条线（`lines`，包括自己这条）的位置。
+ * `prefer` 是调用方想优先试的位置（比如弧线的外侧）。都不行就退回第一个候选，并标记 clear = false。
  */
-export function labelSpot(points: Pt[], label: string, size: number, nodes: Rect[]): Pt {
+export function labelSpot(points: Pt[], label: string, size: number, blocks: Rect[], lines: Pt[][] = [], prefer: Pt[] = []): Spot {
   const w = textWidth(label, size)
-  let best = 1
-  let len = -1
-  for (let i = 1; i < points.length; i++) {
-    const l = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1])
-    if (l > len) {
-      len = l
-      best = i
+  const h = size
+  const cands: Pt[] = [...prefer]
+  const segs = points
+    .map((p, i) => (i ? ([points[i - 1], p] as [Pt, Pt]) : null))
+    .filter((s): s is [Pt, Pt] => !!s)
+    .sort((s, t) => Math.hypot(t[1][0] - t[0][0], t[1][1] - t[0][1]) - Math.hypot(s[1][0] - s[0][0], s[1][1] - s[0][1]))
+  for (const [a, b] of segs) {
+    const flat = Math.abs(b[1] - a[1]) <= Math.abs(b[0] - a[0])
+    for (const t of [0.5, 0.3, 0.7]) {
+      const mx = a[0] + (b[0] - a[0]) * t
+      const my = a[1] + (b[1] - a[1]) * t
+      if (flat) cands.push([mx - w / 2, my - h - 8], [mx - w / 2, my + 8])
+      else cands.push([mx + 8, my - h / 2], [mx - w - 8, my - h / 2])
     }
   }
-  const [a, b] = [points[best - 1], points[best]]
-  const mx = (a[0] + b[0]) / 2
-  const my = (a[1] + b[1]) / 2
-  const flat = Math.abs(b[1] - a[1]) <= Math.abs(b[0] - a[0])
-  const spots: Pt[] = flat
-    ? [
-        [mx - w / 2, my - size - 8],
-        [mx - w / 2, my + 8],
-      ]
-    : [
-        [mx + 8, my - size / 2],
-        [mx - w - 8, my - size / 2],
-      ]
-  const free = ([x, y]: Pt) => !nodes.some((n) => x < n.x + n.w && n.x < x + w && y < n.y + n.h && n.y < y + size)
-  return spots.find(free) ?? spots[0]
+  const free = ([x, y]: Pt) => {
+    const r = { x, y, w, h }
+    return !blocks.some((b) => hitsRect(r, b)) && !lines.some((l) => hitsLine(r, l))
+  }
+  const hit = cands.find(free)
+  const at = hit ?? cands[0] ?? [points[0][0], points[0][1]]
+  return { x: at[0], y: at[1], w, h, clear: !!hit }
 }

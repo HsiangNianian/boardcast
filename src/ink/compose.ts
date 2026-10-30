@@ -1,7 +1,7 @@
 // 排版结果 → 一笔一笔的墨迹。和 board/scene.ts 吃同一份 Layout，只是换了一支「真的笔」。
 
 import type { Layout, Row } from '../board/layout.ts'
-import { labelSpot } from '../board/labels.ts'
+import { type Rect, labelSpot } from '../board/labels.ts'
 import { FONT, TITLE } from '../board/layout.ts'
 import type { Graph, Node } from '../engine/graph.ts'
 import { type Pt, type Stroke, glyph } from './glyphs.ts'
@@ -160,6 +160,10 @@ export async function compose(
     if (n.icon) add(`${n.id}|icon|${n.icon}`, c, alpha(n), inkIcon(n.icon, x + pre + row.w + 10, y - 2, row.size + 6, rng(`${n.id}i`)), penFor(row.size) * 0.85)
   }
 
+  // 所有连线的走线和标签：标签留到最后统一放
+  const lines: Pt[][] = []
+  const labels: { key: string; text: string; route: Pt[]; color: string; prefer?: Pt[] }[] = []
+
   // —— 流程图区域 ——
   const d = l.diagram
   if (d) {
@@ -185,10 +189,8 @@ export async function compose(
       const r = rng(`${e.from}>${e.to}`)
       const c = e.ink === 'draft' ? look.pencil : look.ink
       add(`${e.from}>${e.to}`, c, e.ink === 'draft' ? 0.55 : 1, arrow(rt.points as Pt[], r), penFor(FONT) * 0.9)
-      if (e.label) {
-        const [lx, ly] = labelSpot(rt.points as Pt[], e.label, FONT - 4, d.nodes)
-        await text(undefined, `${e.from}>${e.to}l`, e.label, lx, ly, FONT - 4, c, 0)
-      }
+      lines.push(rt.points as Pt[])
+      if (e.label) labels.push({ key: `${e.from}>${e.to}l`, text: e.label, route: rt.points as Pt[], color: c })
     }
   }
 
@@ -217,12 +219,30 @@ export async function compose(
     const c = e.ink === 'draft' ? look.pencil : look.ink
     const r = rng(`${e.from}~${e.to}`)
     add(`${e.from}~${e.to}`, c, e.ink === 'draft' ? 0.55 : 1, arrow(curve, r), penFor(FONT) * 0.9)
-    // 标签放在曲线中点（t = 0.5），不是控制点
+    lines.push(curve)
+    // 标签优先放在曲线中点（t = 0.5，不是控制点）沿法线往弯的外侧挪一点
     const on: Pt = [(p0[0] + 2 * mid[0] + p1[0]) / 4, (p0[1] + 2 * mid[1] + p1[1]) / 4]
-    // 再沿法线往弯的外侧挪一点，别压在线上
     const nx = -(p1[1] - p0[1]) / len
     const ny = (p1[0] - p0[0]) / len
-    if (e.label) await text(undefined, `${e.from}~${e.to}l`, e.label, on[0] + nx * 22 - 12, on[1] + ny * 22 - 10, FONT - 4, c, 0)
+    if (e.label) labels.push({ key: `${e.from}~${e.to}l`, text: e.label, route: curve, color: c, prefer: [[on[0] + nx * 22 - 12, on[1] + ny * 22 - 10]] })
+  }
+
+  // —— 连线标签：所有线都画完了再放，这样能避开每一条线；后画的也会盖在线上面 ——
+  // 能挡住标签的东西：流程图节点、话题里一行行的字（不算整块话题区域，否则标签哪儿都放不了）
+  const regionIds = new Set(l.regions.map((x) => x.id))
+  const blocks = [...l.anchors.entries()].filter(([id]) => !regionIds.has(id)).map(([, b]) => b)
+  const placed: Rect[] = []
+  for (const lb of labels) {
+    const size = FONT - 4
+    const spot = labelSpot(lb.route, lb.text, size, [...blocks, ...placed], lines, lb.prefer)
+    placed.push(spot)
+    // 实在找不到干净的地方：先垫一块纸色的底，线从下面过，字照样看得清
+    if (!spot.clear) {
+      const r = rng(`${lb.key}bg`)
+      const cy = spot.y + spot.h / 2 + 1
+      add(`${lb.key}|bg`, look.paper, 0.92, [line([spot.x - 4, cy], [spot.x + spot.w + 4, cy], r, 0)], spot.h + 8)
+    }
+    await text(undefined, lb.key, lb.text, spot.x, spot.y, size, lb.color, 0)
   }
   return pieces
 }

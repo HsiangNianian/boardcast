@@ -210,8 +210,24 @@ pub struct Voice {
     status: Mutex<VoiceStatus>,
 }
 
+/// 语音模型所在的目录：优先用安装包自带的（资源目录下的 voice/），没有再用下载的
+pub fn base(app: &AppHandle) -> Option<std::path::PathBuf> {
+    if let Some(d) = bundled(app) {
+        return Some(d);
+    }
+    llm::models_dir(app).filter(|d| crate::models::installed("voice", d))
+}
+
+/// 安装包里带着语音模型时，返回资源目录
+pub fn bundled(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path()
+        .resource_dir()
+        .ok()
+        .filter(|d| crate::models::installed("voice", d))
+}
+
 fn installed(app: &AppHandle) -> bool {
-    llm::models_dir(app).is_some_and(|d| crate::models::installed("voice", &d))
+    base(app).is_some()
 }
 
 fn set_status(app: &AppHandle, s: VoiceStatus) {
@@ -276,7 +292,7 @@ pub fn voice_start(app: AppHandle, device: Option<String>) -> Result<(), String>
     if running.is_some() {
         return Ok(());
     }
-    let models = llm::models_dir(&app).ok_or("找不到模型目录")?;
+    let models = base(&app).ok_or("找不到语音模型")?;
     let stop = Arc::new(AtomicBool::new(false));
     let flag = stop.clone();
     let handle = app.clone();

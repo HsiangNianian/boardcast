@@ -9,3 +9,4 @@ eval/reports/
 .playwright-mcp/
 public/hanzi/
 src-tauri/llama/
+src-tauri/voice/

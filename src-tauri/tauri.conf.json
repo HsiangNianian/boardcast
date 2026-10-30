@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "node scripts/fetch-llama.mjs && pnpm build",
+    "beforeBuildCommand": "node scripts/fetch-llama.mjs && node scripts/fetch-voice.mjs && pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -26,7 +26,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "resources": { "llama/": "llama/" },
+    "resources": { "llama/": "llama/", "voice/": "voice/" },
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
   }
 }

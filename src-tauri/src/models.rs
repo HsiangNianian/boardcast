@@ -276,8 +276,11 @@ pub fn models_list(app: AppHandle, downloads: tauri::State<'_, Downloads>) -> Ca
     let dir = llm::models_dir(&app);
     let sel = dir.as_deref().and_then(selected);
     let rec = recommended(&app);
+    // 安装包自带语音模型时，模型面板里就不再列出「语音识别」，免得让用户去下载
+    let voice_bundled = crate::voice::bundled(&app).is_some();
     let models = CATALOG
         .iter()
+        .filter(|e| !(voice_bundled && e.kind == Kind::Voice))
         .map(|e| {
             let installed = dir.as_deref().is_some_and(|d| installed(e.id, d));
             ModelInfo {

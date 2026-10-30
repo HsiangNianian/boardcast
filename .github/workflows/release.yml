@@ -109,10 +109,29 @@ jobs:
           cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys
           cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys --release
       - run: pnpm install --frozen-lockfile
-      # 打包并把安装包传到上一步建好的 Release 上（deb / rpm / AppImage，msi / exe）
+      # 语音模型（约 240 MB）打进安装包；和 CI 共用同一个缓存，命中时不用再下载
+      - name: Cache voice models
+        id: voice-cache
+        uses: actions/cache@v4
+        with:
+          path: voice-models
+          key: voice-sensevoice-2024-07-17-silero-v4
+      - name: Download voice models
+        if: steps.voice-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          hf=https://huggingface.co
+          sv=$hf/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main
+          mkdir -p voice-models/voice/sense-voice
+          curl -fL --retry 3 -o voice-models/voice/sense-voice/model.int8.onnx $sv/model.int8.onnx
+          curl -fL --retry 3 -o voice-models/voice/sense-voice/tokens.txt $sv/tokens.txt
+          curl -fL --retry 3 -o voice-models/voice/silero_vad.onnx $hf/csukuangfj/vad/resolve/main/silero_vad.onnx
+          curl -fL --retry 3 -o voice-models/zh.wav $sv/test_wavs/zh.wav
+      # 打包并把安装包传到上一步建好的 Release 上（deb / rpm / AppImage，msi / exe，dmg）
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/voice-models
         with:
           releaseId: ${{ needs.notes.outputs.release-id }}
 

@@ -70,17 +70,7 @@ jobs:
           cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys
           cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys --release
       - run: pnpm install --frozen-lockfile
-      - run: pnpm tauri build
-      # 冒烟测试：打进安装包的 llama-server 在这个平台上能跑起来、能列出设备
-      - name: Smoke-test bundled llama-server
-        shell: bash
-        run: |
-          exe=src-tauri/llama/llama-server
-          [ -f "$exe.exe" ] && exe="$exe.exe"
-          "$exe" --version
-          "$exe" --list-devices
-          du -sh src-tauri/llama
-      # 语音识别的测试要用真模型和一段测试音频（约 240 MB，缓存起来）
+      # 语音模型（约 240 MB）：打包时要放进安装包，Rust 测试也要用真模型和一段测试音频，缓存起来
       - name: Cache voice models
         id: voice-cache
         uses: actions/cache@v4
@@ -98,6 +88,20 @@ jobs:
           curl -fL --retry 3 -o voice-models/voice/sense-voice/tokens.txt $sv/tokens.txt
           curl -fL --retry 3 -o voice-models/voice/silero_vad.onnx $hf/csukuangfj/vad/resolve/main/silero_vad.onnx
           curl -fL --retry 3 -o voice-models/zh.wav $sv/test_wavs/zh.wav
+      # fetch-voice 发现 BOARDCAST_VOICE_DIR 里的文件校验通过，就直接复制进安装包，不再下载
+      - run: pnpm tauri build
+        shell: bash
+        env:
+          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/voice-models
+      # 冒烟测试：打进安装包的 llama-server 在这个平台上能跑起来、能列出设备
+      - name: Smoke-test bundled llama-server
+        shell: bash
+        run: |
+          exe=src-tauri/llama/llama-server
+          [ -f "$exe.exe" ] && exe="$exe.exe"
+          "$exe" --version
+          "$exe" --list-devices
+          du -sh src-tauri/llama
       # Rust 测试：模型下载器（假的 HTTP 服务：换源、断线续传、校验失败、取消、磁盘空间），
       # 语音识别（真模型认一段中文、两句话按停顿切开、静音不出字）
       - name: Rust tests

@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/engine/*.test.ts\"",
     "eval": "node eval/run.ts",
-    "tauri": "node scripts/fetch-llama.mjs && tauri",
+    "tauri": "node scripts/fetch-llama.mjs && node scripts/fetch-voice.mjs && tauri",
     "release": "node scripts/release.mjs"
   },
   "dependencies": {

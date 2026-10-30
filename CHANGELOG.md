@@ -2,6 +2,36 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.7.0 - 2026-10-30
+
+### Features
+
+- **desktop:** Update the app in place from GitHub releases (closes #17) ([`28dae69`](https://github.com/HsiangNianian/boardcast/commit/28dae69849ca38679a61572a557d69f8d13f28ff))
+  - the Tauri updater plugin checks latest.json on the latest GitHub release a few seconds after launch; a "新版本 x.y.z" button appears in the top bar when there is one
+  - the update panel renders the release notes and has "下载并重启": it shows download progress, verifies the signature, then stops listening and the built-in model, installs and restarts; a failed download leaves the meeting untouched, and a failed install brings the model back
+  - settings get an 更新 section: current version, a toggle for checking on launch, and a manual check
+  - both commands live in Rust (update_check, update_install), so the webview needs no updater permissions
+  - release builds sign update bundles with the TAURI_SIGNING_PRIVATE_KEY secret through tauri.updater.conf.json, and tauri-action uploads latest.json; regular CI builds need no key
+  - the public key is in tauri.conf.json, and a Rust test checks the updater config parses, since a bad one would crash the app on launch
+  - prereleases never become GitHub's latest release, so they are not offered
+- **voice:** Capture system audio for online meetings (refs #10) ([`8c5b1dd`](https://github.com/HsiangNianian/boardcast/commit/8c5b1ddd52b6284b7dcca0321df1331facc99e03))
+  - settings choose what to listen to: the microphone, the microphone plus system audio, or system audio only
+  - Linux reads the default output's PulseAudio / PipeWire monitor source; Windows opens the default speakers as a WASAPI loopback input; other systems say it is not supported yet
+  - each source is resampled to 16 kHz on its own and a Mixer sums them before sentence splitting and recognition
+  - the mixer does not wait for a source that has gone quiet (Windows loopback sends nothing while nothing plays): after 0.3 s it treats the gap as silence
+  - opening a stream is shared between microphone and system audio, with errors that say which one failed
+  - tests: the mixer is unit-tested, and an ignored hardware test reads one second of system audio (48 kHz monitor source on a Linux laptop)
+- **import:** Import .excalidraw drawings as boards (refs #12) ([`742b970`](https://github.com/HsiangNianian/boardcast/commit/742b970e4e377b5a58cc6282dc094086610b7230))
+  - an import button in the top bar, and files can be dropped onto the board
+  - boxes, ellipses and diamonds with text become flowchart nodes; arrows bound at both ends become edges, with the arrow's text as the label; frames become groups; loose text goes under a "白板上的文字" topic
+  - two boxes with the same text stay two nodes, and connected boxes without text get a name
+  - everything goes through ops and applyOps, so ids, dedupe and validation match what the model draws
+  - a drawing lands on a new board when the current one has content, is logged in the transcript, can be undone, and the model can keep adding to it
+  - drops are caught in the capture phase so Excalidraw's own drop handler on the pencil board does not replace the canvas; the desktop window passes file drops to the page (dragDropEnabled: false)
+  - invalid files are rejected with a reason
+
+**Full diff:** [v0.6.0...v0.7.0](https://github.com/HsiangNianian/boardcast/compare/v0.6.0...v0.7.0)
+
 ## 0.6.0 - 2026-10-30
 
 ### Features

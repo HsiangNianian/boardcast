@@ -46,6 +46,8 @@ export interface VoiceStatus {
   message?: string
 }
 
+export type VoiceSource = 'mic' | 'both' | 'system'
+
 export interface Heard {
   text: string
   start: number
@@ -102,7 +104,8 @@ export const models = {
 export const voice = {
   status: () => call<VoiceStatus>('voice_status'),
   devices: () => call<string[]>('voice_devices'),
-  start: (device?: string) => call<void>('voice_start', { device: device ?? null }),
+  /** `source`：只收麦克风、麦克风加系统声音（线上会议），或者只收系统声音 */
+  start: (device?: string, source: VoiceSource = 'mic') => call<void>('voice_start', { device: device ?? null, source }),
   stop: () => call<void>('voice_stop'),
 }
 

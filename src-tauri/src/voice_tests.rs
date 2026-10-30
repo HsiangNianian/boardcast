@@ -116,6 +116,61 @@ fn voiceprints_tell_speakers_apart() {
     assert!(engine.voiceprint(&[0.0; 4000]).is_none());
 }
 
+#[test]
+fn mixer_adds_sources_and_does_not_wait_for_a_silent_one() {
+    // 一路：原样出
+    let mut one = Mixer::new(1);
+    one.push(0, &[0.1, 0.2]);
+    assert_eq!(one.pop(), vec![0.1, 0.2]);
+
+    // 两路：到齐的部分加起来，多出来的先留着
+    let mut m = Mixer::new(2);
+    m.push(0, &[0.1, 0.2, 0.3]);
+    m.push(1, &[0.5, 0.5]);
+    let out = m.pop();
+    assert_eq!(out.len(), 2);
+    assert!((out[0] - 0.6).abs() < 1e-6 && (out[1] - 0.7).abs() < 1e-6);
+    // 加爆了就削顶
+    m.push(1, &[0.9]);
+    m.push(0, &[0.9]);
+    assert_eq!(m.pop(), vec![1.0]);
+
+    // 系统声音那一路一直不来（Windows 上没声音播放时就是这样）：积压到 0.3 秒就不等了，按静音补
+    let mut quiet = Mixer::new(2);
+    quiet.push(0, &vec![0.2; 1000]);
+    assert!(quiet.pop().is_empty());
+    quiet.push(0, &vec![0.2; MAX_LAG]);
+    let out = quiet.pop();
+    assert_eq!(out.len(), 1000 + MAX_LAG);
+    assert!(out.iter().all(|&s| (s - 0.2).abs() < 1e-6));
+}
+
+/// 找到系统声音（扬声器的回采）并真的收 1 秒。需要声卡，默认跳过：
+///   cargo test --manifest-path src-tauri/Cargo.toml --lib system_audio -- --ignored --nocapture
+#[test]
+#[ignore]
+fn system_audio_delivers_samples() {
+    use cpal::traits::{DeviceTrait, StreamTrait};
+    let host = audio_host();
+    let (dev, loopback) = system_source(&host).expect("找不到系统声音");
+    eprintln!(
+        "系统声音：{}（{}）",
+        dev.description()
+            .map(|d| d.name().to_string())
+            .unwrap_or_default(),
+        if loopback { "loopback" } else { "monitor" }
+    );
+    let (tx, rx) = mpsc::channel();
+    let (stream, rate) = open_stream(&dev, loopback, 1, tx, |_| {}).expect("打不开");
+    stream.play().unwrap();
+    thread::sleep(Duration::from_secs(1));
+    drop(stream);
+    let n: usize = rx.try_iter().map(|(_, v): (usize, Vec<f32>)| v.len()).sum();
+    eprintln!("{rate} Hz，1 秒收到 {n} 个样本");
+    // monitor 源没声音时也给静音帧；loopback 没声音时可能一帧都没有
+    assert!(loopback || n > 1000);
+}
+
 /// 真的打开默认麦克风收 1 秒，看有没有数据进来。需要声卡，默认跳过：
 ///   cargo test --manifest-path src-tauri/Cargo.toml --lib mic -- --ignored --nocapture
 #[test]

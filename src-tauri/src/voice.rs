@@ -5,6 +5,8 @@
 //! - VAD 判断一句话说完（停顿 `MIN_SILENCE` 秒），就用这一整段识别出定稿（`voice-final`），前端拿去出板书。
 //! - 音量每 100 ms 推一次（`voice-level`），界面上画一个电平条，让人知道麦克风在收音。
 //! - 采集在 Rust 里用 cpal 做，不走浏览器的 getUserMedia：各平台 WebView 的麦克风权限处理不一致。
+//! - 线上会议可以同时收系统声音（别人的声音从扬声器出来）：Linux 用默认输出的 monitor 源，
+//!   Windows 用 WASAPI loopback；两路各自转成 16 kHz 后混成一路（`Mixer`）再断句识别。
 //!
 //! - 每句定稿时顺带算一个声纹向量（CAM++，`voiceprint`），前端拿它和这场会已经出现过的声音比，判断是谁在说。
 //!   比对和起名放在前端：声纹跟着会议存，中途关麦再开、过几天接着开都认得人。
@@ -255,6 +257,54 @@ impl Engine {
     }
 }
 
+// —— 混音：麦克风和系统声音混成一路 ——
+
+/// 某一路落后这么多（样本数）还没来数据，就当它这段是静音，不再等它
+const MAX_LAG: usize = SAMPLE_RATE as usize * 3 / 10;
+
+/// 把几路 16 kHz 单声道的声音对齐了加起来。
+/// Windows 的回采（loopback）在没有声音播放时根本不给数据，所以不能死等每一路都到齐：
+/// 有一路积压超过 `MAX_LAG`，就把落后的那几路补零，照常往下走。
+pub struct Mixer {
+    queues: Vec<std::collections::VecDeque<f32>>,
+}
+
+impl Mixer {
+    pub fn new(sources: usize) -> Self {
+        Self {
+            queues: (0..sources.max(1)).map(|_| Default::default()).collect(),
+        }
+    }
+
+    pub fn push(&mut self, src: usize, samples: &[f32]) {
+        if let Some(q) = self.queues.get_mut(src) {
+            q.extend(samples);
+        }
+    }
+
+    /// 取出已经能混的部分
+    pub fn pop(&mut self) -> Vec<f32> {
+        let longest = self.queues.iter().map(|q| q.len()).max().unwrap_or(0);
+        let shortest = self.queues.iter().map(|q| q.len()).min().unwrap_or(0);
+        let n = if longest >= MAX_LAG {
+            longest
+        } else {
+            shortest
+        };
+        let mut out = vec![0.0f32; n];
+        for q in &mut self.queues {
+            let take = n.min(q.len());
+            for (o, s) in out.iter_mut().zip(q.drain(..take)) {
+                *o += s;
+            }
+        }
+        for o in &mut out {
+            *o = o.clamp(-1.0, 1.0);
+        }
+        out
+    }
+}
+
 // —— 采集和生命周期 ——
 
 struct Running {
@@ -341,7 +391,12 @@ pub fn voice_devices() -> Vec<String> {
 }
 
 #[tauri::command]
-pub fn voice_start(app: AppHandle, device: Option<String>) -> Result<(), String> {
+pub fn voice_start(
+    app: AppHandle,
+    device: Option<String>,
+    source: Option<String>,
+) -> Result<(), String> {
+    let source = Source::parse(source.as_deref());
     if !installed(&app) {
         return Err("语音模型还没下载".into());
     }
@@ -356,7 +411,7 @@ pub fn voice_start(app: AppHandle, device: Option<String>) -> Result<(), String>
     let handle = app.clone();
     // 模型加载和 cpal 的流都放在这个线程里：有些平台上 cpal 的 Stream 不能跨线程
     let (ready_tx, ready_rx) = mpsc::channel::<Result<String, String>>();
-    let thread = thread::spawn(move || run(handle, models, device, flag, ready_tx));
+    let thread = thread::spawn(move || run(handle, models, device, source, flag, ready_tx));
     match ready_rx.recv_timeout(Duration::from_secs(30)) {
         Ok(Ok(name)) => {
             *running = Some(Running { stop, thread });
@@ -385,7 +440,7 @@ pub fn voice_start(app: AppHandle, device: Option<String>) -> Result<(), String>
         }
         Err(_) => {
             stop.store(true, Ordering::SeqCst);
-            Err("打开麦克风超时".into())
+            Err("打开收音超时".into())
         }
     }
 }
@@ -415,10 +470,138 @@ pub fn unload(app: &AppHandle) {
     voice_stop(app.clone());
 }
 
+/// 收哪些声音
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Source {
+    Mic,
+    /// 麦克风 + 系统声音（线上会议：自己的声音从麦克风来，别人的从扬声器来）
+    Both,
+    /// 只收系统声音
+    System,
+}
+
+impl Source {
+    pub fn parse(s: Option<&str>) -> Self {
+        match s {
+            Some("both") => Self::Both,
+            Some("system") => Self::System,
+            _ => Self::Mic,
+        }
+    }
+}
+
+/// 系统声音从哪来：Linux 上是默认输出设备的回采（PulseAudio / PipeWire 的 monitor 源，本身就是输入设备）；
+/// Windows 上直接把默认输出设备当输入打开（WASAPI loopback）。返回的 bool 表示是不是 loopback
+#[cfg(target_os = "linux")]
+fn system_source(host: &cpal::Host) -> Result<(cpal::Device, bool), String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    let out = host
+        .default_output_device()
+        .and_then(|d| d.description().ok().map(|x| x.name().to_string()));
+    let monitors: Vec<cpal::Device> = host
+        .input_devices()
+        .map(|ds| {
+            ds.filter(|d| {
+                let id = d.id().map(|i| i.to_string()).unwrap_or_default();
+                let name = d
+                    .description()
+                    .map(|x| x.name().to_string())
+                    .unwrap_or_default();
+                id.ends_with(".monitor") || name.starts_with("Monitor of")
+            })
+            .collect()
+        })
+        .unwrap_or_default();
+    // 优先用正在出声的那个输出设备的回采
+    let wanted = out.map(|o| format!("Monitor of {o}"));
+    let pick = monitors
+        .iter()
+        .position(|d| {
+            wanted
+                .as_deref()
+                .is_some_and(|w| d.description().is_ok_and(|x| x.name() == w))
+        })
+        .unwrap_or(0);
+    monitors
+        .into_iter()
+        .nth(pick)
+        .map(|d| (d, false))
+        .ok_or_else(|| "找不到系统声音（PulseAudio / PipeWire 的回采源）".into())
+}
+
+#[cfg(windows)]
+fn system_source(host: &cpal::Host) -> Result<(cpal::Device, bool), String> {
+    use cpal::traits::HostTrait;
+    host.default_output_device()
+        .map(|d| (d, true))
+        .ok_or_else(|| "找不到扬声器，收不了系统声音".into())
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn system_source(_host: &cpal::Host) -> Result<(cpal::Device, bool), String> {
+    Err("这个系统上暂时收不了系统声音（macOS 需要录屏权限，还没做）".into())
+}
+
+/// 打开一路声音：声卡回调里只把这一段转成单声道 f32，连同来源编号丢进通道，重活在外面的循环里做。
+/// `loopback`：设备是输出设备（Windows 回采），按它的输出格式打开
+fn open_stream(
+    dev: &cpal::Device,
+    loopback: bool,
+    src: usize,
+    tx: mpsc::Sender<(usize, Vec<f32>)>,
+    on_err: impl FnMut(String) + Send + Clone + 'static,
+) -> Result<(cpal::Stream, i32), String> {
+    use cpal::traits::DeviceTrait;
+    let what = if src == 0 {
+        "麦克风"
+    } else {
+        "系统声音"
+    };
+    let supported = if loopback {
+        dev.default_output_config()
+    } else {
+        dev.default_input_config()
+    }
+    .map_err(|e| format!("{what}打不开：{e}"))?;
+    let channels = supported.channels() as usize;
+    let rate = supported.sample_rate() as i32;
+    let config = supported.config();
+    macro_rules! stream_of {
+        ($t:ty, $to_f32:expr) => {{
+            let tx = tx.clone();
+            let mut on_err = on_err.clone();
+            dev.build_input_stream::<$t, _, _>(
+                config.clone(),
+                move |data: &[$t], _| {
+                    let mono: Vec<f32> = data
+                        .chunks(channels)
+                        .map(|frame| {
+                            frame.iter().map(|&s| $to_f32(s)).sum::<f32>() / channels as f32
+                        })
+                        .collect();
+                    let _ = tx.send((src, mono));
+                },
+                move |err: cpal::Error| on_err(format!("{what}出错：{err}")),
+                None,
+            )
+        }};
+    }
+    let stream = match supported.sample_format() {
+        cpal::SampleFormat::F32 => stream_of!(f32, |s: f32| s),
+        cpal::SampleFormat::I16 => stream_of!(i16, |s: i16| s as f32 / 32768.0),
+        cpal::SampleFormat::U16 => stream_of!(u16, |s: u16| (s as f32 - 32768.0) / 32768.0),
+        cpal::SampleFormat::I32 => stream_of!(i32, |s: i32| s as f32 / 2147483648.0),
+        other => return Err(format!("{what}的采样格式 {other:?} 不支持")),
+    }
+    .map_err(|e| format!("{what}打不开：{e}"))?;
+    Ok((stream, rate))
+}
+
 fn run(
     app: AppHandle,
     models: std::path::PathBuf,
     device: Option<String>,
+    source: Source,
     stop: Arc<AtomicBool>,
     ready: mpsc::Sender<Result<String, String>>,
 ) {
@@ -433,105 +616,99 @@ fn run(
     };
 
     let host = audio_host();
-    // 设置里选的麦克风拔掉了就退回系统默认的，不让收音直接失败
-    let chosen = device
-        .as_deref()
-        .filter(|n| !n.is_empty())
-        .and_then(|name| {
-            host.input_devices()
-                .ok()
-                .and_then(|mut ds| ds.find(|d| d.description().is_ok_and(|x| x.name() == name)))
-        });
-    let dev = chosen.or_else(|| host.default_input_device());
-    let Some(dev) = dev else {
-        let _ = ready.send(Err("没有找到麦克风".into()));
-        return;
-    };
-    let name = dev
-        .description()
-        .map(|d| d.name().to_string())
-        .unwrap_or_else(|_| "麦克风".into());
-    let supported = match dev.default_input_config() {
-        Ok(c) => c,
-        Err(err) => {
-            let _ = ready.send(Err(format!("麦克风打不开：{err}")));
-            return;
-        }
-    };
-    let channels = supported.channels() as usize;
-    let rate = supported.sample_rate() as i32;
-    let config = supported.config();
-
-    // 声卡回调里只做一件事：转成单声道 f32 丢进通道，重活都在下面的循环里做
-    let (tx, rx) = mpsc::channel::<Vec<f32>>();
+    let (tx, rx) = mpsc::channel::<(usize, Vec<f32>)>();
     let err_app = app.clone();
-    let on_err = move |err: cpal::Error| {
-        let _ = err_app.emit("voice-error", format!("麦克风出错：{err}"));
+    let on_err = move |msg: String| {
+        let _ = err_app.emit("voice-error", msg);
     };
-    macro_rules! stream_of {
-        ($t:ty, $to_f32:expr) => {{
-            let tx = tx.clone();
-            dev.build_input_stream::<$t, _, _>(
-                config.clone(),
-                move |data: &[$t], _| {
-                    let mono: Vec<f32> = data
-                        .chunks(channels)
-                        .map(|frame| {
-                            frame.iter().map(|&s| $to_f32(s)).sum::<f32>() / channels as f32
-                        })
-                        .collect();
-                    let _ = tx.send(mono);
-                },
-                on_err.clone(),
-                None,
-            )
-        }};
-    }
-    let stream = match supported.sample_format() {
-        cpal::SampleFormat::F32 => stream_of!(f32, |s: f32| s),
-        cpal::SampleFormat::I16 => stream_of!(i16, |s: i16| s as f32 / 32768.0),
-        cpal::SampleFormat::U16 => stream_of!(u16, |s: u16| (s as f32 - 32768.0) / 32768.0),
-        cpal::SampleFormat::I32 => stream_of!(i32, |s: i32| s as f32 / 2147483648.0),
-        other => {
-            let _ = ready.send(Err(format!("不支持的采样格式 {other:?}")));
-            return;
-        }
-    };
-    let stream = match stream {
-        Ok(s) => s,
-        Err(err) => {
-            let _ = ready.send(Err(format!("麦克风打不开：{err}")));
-            return;
-        }
-    };
-    if let Err(err) = stream.play() {
-        let _ = ready.send(Err(format!("麦克风打不开：{err}")));
-        return;
-    }
-    let resampler = if rate != SAMPLE_RATE {
-        LinearResampler::create(rate, SAMPLE_RATE)
-    } else {
-        None
-    };
-    let _ = ready.send(Ok(name));
+    // 每一路：流（得一直拿着，丢了就停了）、要不要重采样到 16 kHz
+    let mut streams = vec![];
+    let mut resamplers: Vec<Option<LinearResampler>> = vec![None, None];
+    let mut names = vec![];
 
+    if source != Source::System {
+        // 设置里选的麦克风拔掉了就退回系统默认的，不让收音直接失败
+        let chosen = device
+            .as_deref()
+            .filter(|n| !n.is_empty())
+            .and_then(|name| {
+                host.input_devices()
+                    .ok()
+                    .and_then(|mut ds| ds.find(|d| d.description().is_ok_and(|x| x.name() == name)))
+            });
+        let Some(dev) = chosen.or_else(|| host.default_input_device()) else {
+            let _ = ready.send(Err("没有找到麦克风".into()));
+            return;
+        };
+        match open_stream(&dev, false, 0, tx.clone(), on_err.clone()) {
+            Ok((stream, rate)) => {
+                streams.push(stream);
+                resamplers[0] = (rate != SAMPLE_RATE)
+                    .then(|| LinearResampler::create(rate, SAMPLE_RATE))
+                    .flatten();
+                names.push(
+                    dev.description()
+                        .map(|d| d.name().to_string())
+                        .unwrap_or_else(|_| "麦克风".into()),
+                );
+            }
+            Err(msg) => {
+                let _ = ready.send(Err(msg));
+                return;
+            }
+        }
+    }
+    if source != Source::Mic {
+        let opened = system_source(&host)
+            .and_then(|(dev, loopback)| open_stream(&dev, loopback, 1, tx.clone(), on_err.clone()));
+        match opened {
+            Ok((stream, rate)) => {
+                streams.push(stream);
+                resamplers[1] = (rate != SAMPLE_RATE)
+                    .then(|| LinearResampler::create(rate, SAMPLE_RATE))
+                    .flatten();
+                names.push("系统声音".into());
+            }
+            Err(msg) => {
+                let _ = ready.send(Err(msg));
+                return;
+            }
+        }
+    }
+    drop(tx);
+    for s in &streams {
+        if let Err(err) = s.play() {
+            let _ = ready.send(Err(format!("收音打不开：{err}")));
+            return;
+        }
+    }
+    let _ = ready.send(Ok(names.join(" + ")));
+
+    // 只开了系统声音时，它是第 1 路；混音器按实际开了几路来
+    let mut mixer = Mixer::new(streams.len());
+    let slot = |src: usize| if source == Source::System { 0 } else { src };
     let mut events = vec![];
     let mut level_sum = 0.0f32;
     let mut level_n = 0usize;
     let mut last_level = Instant::now();
     while !stop.load(Ordering::SeqCst) {
-        let Ok(chunk) = rx.recv_timeout(Duration::from_millis(100)) else {
+        let Ok((src, chunk)) = rx.recv_timeout(Duration::from_millis(100)) else {
             continue;
         };
-        for s in &chunk {
-            level_sum += s * s;
-        }
-        level_n += chunk.len();
-        let samples = match &resampler {
+        let samples = match &resamplers[src] {
             Some(r) => r.resample(&chunk, false),
             None => chunk,
         };
-        engine.feed(&samples, &mut events);
+        mixer.push(slot(src), &samples);
+        let mixed = mixer.pop();
+        if mixed.is_empty() {
+            continue;
+        }
+        for s in &mixed {
+            level_sum += s * s;
+        }
+        level_n += mixed.len();
+        engine.feed(&mixed, &mut events);
         if last_level.elapsed() >= Duration::from_millis(100) && level_n > 0 {
             let rms = (level_sum / level_n as f32).sqrt();
             let _ = app.emit("voice-level", rms);
@@ -541,7 +718,7 @@ fn run(
         }
         emit_events(&app, &mut events);
     }
-    drop(stream);
+    drop(streams);
     engine.finish(&mut events);
     emit_events(&app, &mut events);
 }

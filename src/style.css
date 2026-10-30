@@ -331,6 +331,13 @@ button.where:hover {
   border-radius: 999px;
   background: var(--surface-2);
 }
+/* 设置里的收音来源 */
+.seg.sources {
+  width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
 .seg button {
   display: inline-flex;
   align-items: center;

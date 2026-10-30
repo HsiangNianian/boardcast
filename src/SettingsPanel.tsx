@@ -1,7 +1,7 @@
 // 设置：不常用的东西都放这里，主页面只留说话、收音和板书本身。
 
 import { useEffect, useState } from 'react'
-import { type LlmStatus, type UpdateInfo, isDesktop, updates, voice } from './desktop.ts'
+import { type LlmStatus, type UpdateInfo, type VoiceSource, isDesktop, updates, voice } from './desktop.ts'
 import { KEPT, SENT, hostOf, needsConsent, rememberConsent } from './privacy.ts'
 import { type RemoteTest, type RemoteView, remote } from './remote.ts'
 
@@ -26,6 +26,8 @@ interface Props {
   // 语音
   mic: string
   setMic: (m: string) => void
+  source: VoiceSource
+  setSource: (s: VoiceSource) => void
   diarize: boolean
   setDiarize: (on: boolean) => void
   // 更新
@@ -290,7 +292,23 @@ export default function SettingsPanel(p: Props) {
 
         {isDesktop && (
           <section>
-            <h3>麦克风</h3>
+            <h3>收音</h3>
+            <div className="seg sources" role="radiogroup" aria-label="收哪些声音">
+              {(
+                [
+                  ['mic', '麦克风'],
+                  ['both', '麦克风 + 系统声音'],
+                  ['system', '只收系统声音'],
+                ] as const
+              ).map(([v, label]) => (
+                <button key={v} type="button" role="radio" aria-checked={p.source === v} className={p.source === v ? 'on' : ''} onClick={() => p.setSource(v)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="hint">
+              线上会议选「麦克风 + 系统声音」：自己说的从麦克风收，别人说的从扬声器里收（Linux 收默认输出设备，Windows 收默认扬声器；macOS 暂时不支持）。外放时麦克风会把别人的声音再收一遍，戴耳机效果最好。
+            </p>
             <select value={p.mic} onChange={(e) => p.setMic(e.target.value)} aria-label="麦克风">
               <option value="">系统默认</option>
               {devices.map((d) => (
@@ -300,7 +318,7 @@ export default function SettingsPanel(p: Props) {
               ))}
               {p.mic && !devices.includes(p.mic) && <option value={p.mic}>{p.mic}（没找到，会改用系统默认）</option>}
             </select>
-            <p className="hint">换了麦克风以后，下次点「开始收音」生效。</p>
+            <p className="hint">换了麦克风或者收音来源，下次点「开始收音」生效。</p>
             <label className="check">
               <input type="checkbox" checked={p.diarize} onChange={(e) => p.setDiarize(e.target.checked)} />
               <span>按声音自动区分说话人</span>

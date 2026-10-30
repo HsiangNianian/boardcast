@@ -10,6 +10,7 @@ import {
   isDesktop,
   llmEnsure,
   type UpdateInfo,
+  type VoiceSource,
   updates,
   llmStatus,
   llmStop,
@@ -293,6 +294,11 @@ export default function App() {
   const messyLater = useDeferredValue(messy)
   const weightLater = useDeferredValue(weight)
   const [micChoice, setMicChoice] = useState(() => load('boardcast.mic', ''))
+  // 收哪些声音：线上会议要加上系统声音（别人的声音从扬声器出来）
+  const [voiceSource, setVoiceSource] = useState<VoiceSource>(() => {
+    const v = load('boardcast.source', 'mic')
+    return v === 'both' || v === 'system' ? v : 'mic'
+  })
   // 自动更新：打开应用一会儿以后查一次，有新版本就在顶栏冒一个按钮
   const [autoUpdate, setAutoUpdate] = useState(() => load('boardcast.autoupdate', 'on') === 'on')
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
@@ -568,10 +574,11 @@ export default function App() {
     save('boardcast.messy', String(messy))
     save('boardcast.weight', String(weight))
     save('boardcast.mic', micChoice)
+    save('boardcast.source', voiceSource)
     save('boardcast.diarize', diarize ? 'on' : 'off')
     save('boardcast.autoupdate', autoUpdate ? 'on' : 'off')
     save('boardcast.log', showLog ? 'open' : 'closed')
-  }, [mode, messy, weight, micChoice, diarize, autoUpdate, showLog])
+  }, [mode, messy, weight, micChoice, voiceSource, diarize, autoUpdate, showLog])
 
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
   useEffect(() => {
@@ -639,7 +646,7 @@ export default function App() {
       setShowModels(true)
       return
     }
-    await voice.start(micChoice || undefined).catch((e) => setVoiceErr(errText(e)))
+    await voice.start(micChoice || undefined, voiceSource).catch((e) => setVoiceErr(errText(e)))
   }
 
   /** 生成摘要：会议记录（不含手动改动）加板书结构，交给当前在用的模型 */
@@ -1417,6 +1424,8 @@ export default function App() {
           setLocalOnly={setLocalOnly}
           mic={micChoice}
           setMic={setMicChoice}
+          source={voiceSource}
+          setSource={setVoiceSource}
           diarize={diarize}
           setDiarize={setDiarize}
           autoUpdate={autoUpdate}

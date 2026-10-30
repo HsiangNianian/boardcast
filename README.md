@@ -195,7 +195,7 @@ pnpm release 0.2.0 --push      # 同上，再推送提交和 tag，触发 Releas
 - 更新日志按类型分组（Features、Fixes、Documentation、Build and CI……），提交正文里的 `- ` 要点会保留成子条目，每条附提交链接，最后附上和上一版的对比链接。
 - 不加 `--push` 时可以先手动改 CHANGELOG.md 里的措辞再推；Release 正文用的就是推上去的那一节。
 - 直接手推的 tag（CHANGELOG.md 里没有这一版）也能发：正文按上一个 tag 以来的提交现生成。
-- 0.x 和带后缀的版本（如 `-rc.1`）标为预发布。某个平台打包失败时 Release 留在草稿，修好后在 Actions 里对这个 tag 手动重跑。
+- 带后缀的版本（如 `-rc.1`）标为预发布，其余（包括 0.x）是正式版。某个平台打包失败时 Release 留在草稿，修好后在 Actions 里对这个 tag 手动重跑。
 
 ## 路线
 

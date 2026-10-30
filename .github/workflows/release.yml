@@ -53,9 +53,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 0.x 和带后缀的版本（-rc.1 之类）标成预发布
+          # 只有带后缀的版本（-rc.1 之类）标成预发布；0.x 正式版照常是 Latest
           pre=false
-          case "$TAG" in v0.*|*-*) pre=true ;; esac
+          case "$TAG" in *-*) pre=true ;; esac
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --title "boardcast $TAG" --notes-file notes.md --prerelease="$pre"
           else

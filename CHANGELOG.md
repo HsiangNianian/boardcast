@@ -2,6 +2,39 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.4.0 - 2026-10-30
+
+### Features
+
+- **summary:** Render the summary as Markdown and copy it as source or plain text ([`7acf097`](https://github.com/HsiangNianian/boardcast/commit/7acf0970bbea6b88b21571d1e7ea8a516ead5e84))
+  - the summary is rendered with react-markdown and remark-gfm (todos show as checkboxes); raw HTML from the model is not rendered
+  - the pen button (or a double click) switches to editing the source, the check button goes back
+  - "复制原文" copies the Markdown, "仅文本" copies it without markup (bullets and boxes for todos)
+  - the renderer is lazy-loaded with the summary panel, so startup size is unchanged
+- **voice:** Tell speakers apart by their voice (refs #10) ([`a567e44`](https://github.com/HsiangNianian/boardcast/commit/a567e441db925165f13833308a84d886700aa1b9))
+  - each final sentence carries a unit-length CAM++ voiceprint (3D-Speaker, zh/en, 26 MB); sentences shorter than 0.8 s get none
+  - the app clusters voiceprints online per meeting: close enough to a known voice (cosine >= 0.45) means the same person, otherwise a new one named A, B, C...
+  - short sentences without a voiceprint go to the previous speaker
+  - click a speaker's avatar in the transcript to rename them; renaming to an existing name merges the two voices
+  - voiceprints are saved with the meeting, so speakers are still recognized after the mic is restarted or the meeting is reopened
+  - a setting turns it off and falls back to the speaker tag in the composer
+  - the speaker model is bundled by fetch-voice (hf-mirror, Hugging Face, then GitHub) and is optional: without it, voice input works as before
+  - CI and Release cache the model, and a Rust test checks it scores the same speaker well above a different one (0.60 vs 0.06 on the 3D-Speaker test clips)
+
+### Fixes
+
+- **summary:** Don't show an empty summary when a thinking model runs out of tokens ([`33aec54`](https://github.com/HsiangNianian/boardcast/commit/33aec549ca8e71f12e2b9aad6269a660e3335301))
+  - reasoning models such as deepseek spend max_tokens on thinking and return empty content; the summary then showed four "无" sections
+  - remote models now get 4096 tokens for the summary (2048 per chunk), and an empty answer is retried once with twice as much
+  - if it is still empty, say so instead of saving an empty summary (mentions thinking when finish_reason is length)
+  - headings written as ## 结论, **结论**, 【待办事项】 or 结论： are recognized; output with no recognizable section is kept as is
+  - remote requests time out after 180 s instead of 60 s, since long answers from thinking models can take longer
+  - content: null in a reply is handled
+- **summary:** Drop the model name from the summary header ([`7a4afab`](https://github.com/HsiangNianian/boardcast/commit/7a4afab27287d029811a0cca4f6ed0cbc4ae04ef))
+  - the header only shows progress while generating; which endpoint is used is already in the top bar and the button tooltip
+
+**Full diff:** [v0.3.0...v0.4.0](https://github.com/HsiangNianian/boardcast/compare/v0.3.0...v0.4.0)
+
 ## 0.3.0 - 2026-10-30
 
 ### Features

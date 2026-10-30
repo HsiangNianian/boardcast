@@ -2,6 +2,127 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.3.0 - 2026-10-30
+
+### Features
+
+- **ink:** Draw the small icons in handwriting mode ([`c8c4259`](https://github.com/HsiangNianian/boardcast/commit/c8c42591c1ab2921371491dcdd528f64c9b59cb0))
+  - icons (database, table, phone, person, server, document, cloud, chart, message) were only drawn on the pencil board
+  - the same shapes are now traced as pen strokes and written in order with the rest of the board: before topic titles, after items, and inside flowchart nodes with the label shifted right
+  - README roadmap updated
+- **board:** Export the board as SVG ([`0367c11`](https://github.com/HsiangNianian/boardcast/commit/0367c111017e21aa9d0b6f46ee5d8ac0c2afbee4))
+  - new "SVG 矢量图" entry in the export menu
+  - handwriting mode saves the cropped board SVG (chalk / marker texture included, unfinished strokes completed); pencil mode uses Excalidraw's SVG export on light paper
+  - PNG export now rasterizes the same SVG, so both stay identical
+  - the desktop save dialog filters .svg; README updated
+- **desktop:** Build for macOS (Apple Silicon) ([`13c03c9`](https://github.com/HsiangNianian/boardcast/commit/13c03c9bca662b6507e330e8bc1297a90f6f4b5e))
+  - fetch-llama downloads llama.cpp's Metal build for macos-arm64 / macos-x64 and keeps only the libX.0.dylib names the binaries load
+  - keep libggml-rpc on macOS: unlike Linux and Windows, llama-server and every library there link it directly
+  - add Info.plist with NSMicrophoneUsageDescription, without which macOS refuses microphone access
+  - CI and the Release workflow build, smoke-test and test on a macos-15 runner and upload the .dmg
+  - the app is not code-signed yet; README says how to allow it on first launch
+- **desktop:** Bundle the voice models in the installer ([`3c39d3b`](https://github.com/HsiangNianian/boardcast/commit/3c39d3bec3d0b00f7b9033770bc58c09a105880a))
+  - users no longer have to download speech recognition separately after installing; voice input works right away
+  - scripts/fetch-voice.mjs fetches SenseVoice int8, its tokens and Silero VAD (about 241 MB) into src-tauri/voice/ with sha256 checks, trying ModelScope, hf-mirror and Hugging Face like the in-app downloader, or copying from BOARDCAST_VOICE_DIR when it already has verified files
+  - it runs before the Tauri CLI and in beforeBuildCommand; voice/ is shipped as a resource next to llama/
+  - the app looks for the bundled models first and falls back to the downloaded ones; the model panel hides the voice entry when they are bundled
+  - CI and the Release workflow restore the cached voice models before packaging, so builds copy them instead of downloading
+- Save meetings automatically and reopen the last one (refs #13) ([`e62adfa`](https://github.com/HsiangNianian/boardcast/commit/e62adfa9ccb94a582d8ae66ec219d265e7425a4e))
+  - each meeting (board graph, model context, transcript, remembered layout positions) is saved half a second after it changes, as versioned JSON: one file per meeting under the app data meetings/ folder on desktop (written to a temp file then renamed), IndexedDB in the web build
+  - on launch the last meeting is reopened with the same layout, so you can keep talking where you left off; sentences cut off by a crash are marked as not drawn
+  - the eraser button becomes "new meeting": the current one stays saved and a fresh board starts
+  - meetings get a title from their first topic (or node, or sentence) until renamed
+  - StableLayout can snapshot and restore its memory; meeting ids are checked so they cannot escape the meetings folder
+  - fix: the Session is now created once and only its model config is updated; it used to be rebuilt on every config change, so starting the built-in model mid-meeting (remote fallback) swapped the meeting for an empty board
+- **ui:** Meeting list to open, rename and delete past meetings (closes #13) ([`15c9836`](https://github.com/HsiangNianian/boardcast/commit/15c9836b5da854a6bbc61702b5e7b4feb03b4218))
+  - the current meeting's name sits next to the wordmark; clicking it opens the meeting list, most recent first, with time and sentence count
+  - open another meeting (the current one is saved first), rename one (a renamed meeting keeps its name instead of being auto-titled), delete with a confirmation step, or start a new meeting from the top of the list
+  - deleting the meeting you are in starts a fresh one without saving it back
+- **ink:** Select, rename, mark and delete on the handwritten board, with undo (refs #14) ([`0b792db`](https://github.com/HsiangNianian/boardcast/commit/0b792dbc90fe02e7b53202087fb5b79b914480d5))
+  - click a flowchart node, item, topic title or edge to select it (a dashed outline); dragging still pans and clicking empty space clears the selection
+  - a small toolbar above the selection: rename (node names keep the old one as an alias; edge labels can be cleared), toggle strike / circle / star, delete (a topic takes its items with it)
+  - Delete removes the selection, Esc clears it, Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) undo and redo, plus undo / redo buttons in the top bar; each model round and each manual edit is one step
+  - manual edits, undo and redo are written to the transcript as edits, and the model's next sentence sees the edited board; edits do not count as sentences
+  - edit.ts and hit.ts are pure modules with tests; ink pieces carry a data-key for browser tests
+- **ink:** Drag flowchart nodes and topics to move them (closes #14) ([`0719033`](https://github.com/HsiangNianian/boardcast/commit/07190337e0bef46510659ca99a219461a95ec4b4))
+  - press on the selected box or topic and drag; a topic carries its items along
+  - the layout remembers the new spot and reroutes lines around it
+  - undo/redo now restore layout positions too, so undoing a delete puts things back where they were
+  - keep the floating toolbar inside the board near the edges
+- **summary:** One-click meeting summary in the log panel (closes #15) ([`8a25d20`](https://github.com/HsiangNianian/boardcast/commit/8a25d2042e42d7760fe35800f9dc7ddedab187ed))
+  - conclusions, decisions, todos with owners and open questions from the transcript plus the board
+  - uses the active model: remote when enabled, falling back to the built-in one
+  - long meetings are summarized in chunks, then merged
+  - the summary is editable, saved with the meeting and put first in the Markdown export
+  - Markdown export is titled with the meeting name
+  - the button tooltip says when the transcript goes to a remote endpoint
+
+### Fixes
+
+- **ink:** Put flowchart edge labels on the line they belong to ([`56c2a65`](https://github.com/HsiangNianian/boardcast/commit/56c2a657a752d36f339230cb47eaa6f6cbc6b736))
+  - labels were placed at the midpoint between the two endpoints, so on elbow or detour routes they floated away from the line and could cover a box
+  - write the label along the longest segment of the route: above a horizontal segment, right of a vertical one, and on the other side when that spot covers a node
+  - the placement lives in board/labels.ts with unit tests
+- **engine:** Drop references to node ids that don't exist ([`d3ace36`](https://github.com/HsiangNianian/boardcast/commit/d3ace366b67adfbe10eb230f01b7cb24e22ddd33))
+  - an unquoted reference that looks like an id (n12, g3) but isn't on the board used to be retried as a name, creating a node literally called "n12"
+  - local models are grammar-constrained to real ids, but remote models are not and sometimes invent them
+  - such references now resolve to nothing, so the op is skipped; bare words like 小程序 are still looked up by name
+- **ui:** Plain startup animation that finishes writing before it fades ([`bf9f727`](https://github.com/HsiangNianian/boardcast/commit/bf9f727bcd3ec22227034e6b815c35200b2eecf2))
+  - the splash timer started on mount, but the wordmark only begins writing once its glyphs load, so on a slow start it faded out after just "bo"
+  - start the timer when the wordmark is ready (Wordmark gets an onReady callback), with a 3 s cap
+  - drop the grainy colour clouds, which looked muddy in dark mode and were the last piece borrowed from typesafe.ai: plain theme background, the wordmark in the theme's ink, a hairline that grows while it writes
+  - exit with a short fade only, no blur or scale over the half-visible app
+- **desktop:** Download llama-server before tauri dev starts compiling ([`74291d2`](https://github.com/HsiangNianian/boardcast/commit/74291d2e6fe0584a51be69341b441a27de37e5d3))
+  - tauri dev runs beforeDevCommand in the background and compiles Rust at the same time, so on a fresh checkout the build script failed with "resource path llama doesn't exist" while fetch-llama was still downloading
+  - run fetch-llama in the "tauri" package script, before the Tauri CLI starts; beforeDevCommand is just the dev server now
+  - build.rs creates an empty llama/ when it is missing, so plain cargo build / cargo test work without fetching first
+- **ink:** Keep edge labels off other edges' lines ([`c719700`](https://github.com/HsiangNianian/boardcast/commit/c71970042ab3001767145286e5e697132a079e59))
+  - labels only avoided nodes, so a label placed next to its own line could still be crossed by another edge (e.g. a line straight through 锁库存)
+  - labels are now placed after every line is drawn, and each candidate spot (every segment, at the middle and either side, longest first) is checked against nodes, text rows, already placed labels and all edge lines
+  - cross-region arc labels go through the same search, with their old outside-of-the-curve spot tried first
+  - if no clean spot exists, the label gets a paper-coloured backing so it stays readable over the lines
+  - tests cover avoiding another edge's line and the backing fallback
+- **ui:** Hide Excalidraw's own menu, library and help on the pencil board ([`fd5afc6`](https://github.com/HsiangNianian/boardcast/commit/fd5afc6624463deb5b58b4c0ac6537b655730eaa))
+  - the hamburger menu, Library button, shortcut help and canvas hint made the pencil board look like an embedded Excalidraw, and the menu duplicated (and could fight with) our own export, clear and theme controls
+  - hide them; keep the drawing toolbar, zoom and undo, which editing needs
+  - set Excalidraw's language to zh-CN so the remaining tooltips match the app
+- **ci:** Use Windows' own tar when unpacking llama-server ([`f456726`](https://github.com/HsiangNianian/boardcast/commit/f4567263b0c10c24bb9b712f05b9e6af8db5a9e7))
+  - the desktop build step ran under shell: bash, which on Windows puts Git Bash's GNU tar first on PATH; it treated D:\ as a remote host and could not unpack the llama.cpp zip
+  - drop shell: bash from that step (the env var is set through env: anyway)
+  - fetch-llama now calls %SystemRoot%\System32\tar.exe (bsdtar) on Windows, so it works from any shell
+
+### Performance
+
+- Load Excalidraw, ELK and the exporters only when they are needed ([`ceaa556`](https://github.com/HsiangNianian/boardcast/commit/ceaa556d7f6129c7b645ca0896eeeef3284033fe))
+  - the startup bundle shrinks from 2.9 MB to 340 kB (111 kB gzipped)
+  - the pencil board (Excalidraw, with its fonts and mermaid/katex) is a lazy component loaded when you switch to pencil mode
+  - ELK is imported the first time a flowchart has to be laid out
+  - scene building and the PNG / Markdown / .excalidraw exporters are imported on use
+
+### Refactoring
+
+- **desktop:** Pick the recommended model with rfind and keep clippy clean in CI ([`8538255`](https://github.com/HsiangNianian/boardcast/commit/8538255c144747284cf398bb43d4a670deb4ad19))
+  - replace filter().last() with rfind() when choosing the largest model that fits in VRAM (clippy::double_ended_iterator_last)
+  - run cargo clippy with -D warnings on the Linux desktop job so new warnings fail CI
+
+### Dependencies
+
+- **deps:** Drop cheerio and lodash.pick from the dev tree ([`d5b6c11`](https://github.com/HsiangNianian/boardcast/commit/d5b6c11c01718e8abd061c8c1b06afe49b23f1b1))
+  - hersheytext is only used by scripts/glyphs.mjs to read its bundled font JSON, never its SVG parser
+  - override hersheytext>cheerio away, which also removes lodash.pick (Dependabot alert #16, no patched version upstream)
+  - the generated src/ink/hershey.json is unchanged
+
+### Build and CI
+
+- **release:** Don't let setup-node look for pnpm in the release-notes job ([`f3cec0a`](https://github.com/HsiangNianian/boardcast/commit/f3cec0ab811fcdd0da40a9fa788c1b4d7c2a169f))
+  - setup-node v5 enables a package-manager cache from package.json's packageManager field, which failed because that job never installs pnpm
+  - the job only runs node scripts/changelog.mjs, so turn the cache off there
+- **release:** Only mark suffixed versions as prereleases ([`4b7ba97`](https://github.com/HsiangNianian/boardcast/commit/4b7ba97d287c066605f15e1bd40f468c4210197d))
+  - 0.x releases are regular releases and become Latest
+  - -rc.1 style tags stay prereleases
+
+**Full diff:** [v0.2.0...v0.3.0](https://github.com/HsiangNianian/boardcast/compare/v0.2.0...v0.3.0)
+
 ## 0.2.0 - 2026-10-29
 
 ### Features

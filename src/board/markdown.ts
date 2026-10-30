@@ -1,4 +1,5 @@
-// 把一块板导出成 Markdown：话题和条目写成标题加编号列表，流程图写成 Mermaid，最后附上会议记录。
+// 把板书导出成 Markdown：话题和条目写成标题加编号列表，流程图写成 Mermaid，最后附上会议记录。
+// 一场会有几张板时，每张板一节（「## 第 2 张板」，里面的标题降一级），会议记录也按板分开。
 // 铅笔稿（还没被模型确认的草稿）不导出。
 
 import { type Graph, type Node, children } from '../engine/graph.ts'
@@ -7,6 +8,8 @@ import { isDiagram, isHead } from './layout.ts'
 export interface SaidLine {
   speaker?: string
   text: string
+  /** 说这句时在第几张板（从 0 数） */
+  page?: number
 }
 
 const isAttach = (n: Node) => n.kind === 'question' || n.kind === 'formula' || n.kind === 'note'
@@ -31,12 +34,48 @@ function attachLine(n: Node): string {
 /** Mermaid 里的文字要转义引号 */
 const mm = (s: string) => s.replace(/"/g, '#quot;')
 
-export function toMarkdown(g: Graph, lines: SaidLine[] = [], title = '会议板书', when = new Date(), summary?: string): string {
-  const live = (n: Node) => n.ink !== 'draft'
+/**
+ * `pages`：一场会的所有板（从第一张起）；不给或者只有一张时，就是 `g` 这一块板。
+ */
+export function toMarkdown(
+  g: Graph,
+  lines: SaidLine[] = [],
+  title = '会议板书',
+  when = new Date(),
+  summary?: string,
+  pages?: Graph[],
+): string {
   const out: string[] = []
   const stamp = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')} ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`
   out.push(`# ${title}`, '', `> ${stamp} · boardcast`, '')
   if (summary?.trim()) out.push('## 摘要', '', summary.trim(), '')
+
+  const many = pages && pages.length > 1
+  if (many)
+    pages.forEach((p, i) => {
+      out.push(`## 第 ${i + 1} 张板`, '')
+      board(p, out, '###')
+    })
+  else board(g, out, '##')
+
+  if (lines.length) {
+    out.push('## 会议记录', '')
+    let page: number | undefined
+    for (const l of lines) {
+      if (many && (l.page ?? 0) !== page) {
+        page = l.page ?? 0
+        out.push('', `### 第 ${page + 1} 张板`, '')
+      }
+      out.push(l.speaker ? `- **${l.speaker}**：${l.text}` : `- ${l.text}`)
+    }
+    out.push('')
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n')
+}
+
+/** 一块板的内容；`h` 是这一层小节标题用几个 # */
+function board(g: Graph, out: string[], h: string) {
+  const live = (n: Node) => n.ink !== 'draft'
 
   // 话题：标题 + 编号条目，挂件跟在被挂的东西下面
   const walk = (parent: Node, depth: number) => {
@@ -57,7 +96,7 @@ export function toMarkdown(g: Graph, lines: SaidLine[] = [], title = '会议板�
   }
   for (const n of g.nodes.filter(live)) {
     if (!isHead(g, n)) continue
-    out.push(`## ${marked(n)}`, '')
+    out.push(`${h} ${marked(n)}`, '')
     const before = out.length
     walk(n, 1)
     if (out.length > before) out.push('')
@@ -67,7 +106,7 @@ export function toMarkdown(g: Graph, lines: SaidLine[] = [], title = '会议板�
   const dia = g.nodes.filter((n) => live(n) && isDiagram(g, n))
   if (dia.length) {
     const ids = new Set(dia.map((n) => n.id))
-    out.push('## 流程', '', '```mermaid', 'flowchart LR')
+    out.push(`${h} 流程`, '', '```mermaid', 'flowchart LR')
     const grouped = new Set<string>()
     for (const grp of g.groups) {
       const members = dia.filter((n) => n.group === grp.id)
@@ -94,7 +133,7 @@ export function toMarkdown(g: Graph, lines: SaidLine[] = [], title = '会议板�
   // 没有挂靠的问题和公式
   const loose = g.nodes.filter((n) => live(n) && isAttach(n) && (!n.parent || !g.nodes.some((p) => p.id === n.parent)))
   if (loose.length) {
-    out.push('## 待定', '')
+    out.push(`${h} 待定`, '')
     for (const n of loose) out.push(`- ${attachLine(n)}`)
     out.push('')
   }
@@ -102,16 +141,9 @@ export function toMarkdown(g: Graph, lines: SaidLine[] = [], title = '会议板�
   // 话题、条目之间的连线（跨区域的箭头），写成一句话
   const cross = g.edges.filter((e) => e.ink !== 'draft' && !(dia.some((n) => n.id === e.from) && dia.some((n) => n.id === e.to)))
   if (cross.length) {
-    out.push('## 关联', '')
+    out.push(`${h} 关联`, '')
     const name = (id: string) => g.nodes.find((n) => n.id === id)?.label ?? id
     for (const e of cross) out.push(`- ${name(e.from)} → ${name(e.to)}${e.label ? `：${e.label}` : ''}`)
     out.push('')
   }
-
-  if (lines.length) {
-    out.push('## 会议记录', '')
-    for (const l of lines) out.push(l.speaker ? `- **${l.speaker}**：${l.text}` : `- ${l.text}`)
-    out.push('')
-  }
-  return out.join('\n')
 }

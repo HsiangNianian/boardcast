@@ -488,6 +488,98 @@ button.where:hover {
   margin-left: 6px;
 }
 
+/* 几张板：左上角一排缩略图 */
+.pages {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  flex-wrap: wrap;
+}
+.pages .page {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 46px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--faint);
+  box-shadow: var(--shadow);
+}
+.pages .page:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+.pages .page.on {
+  border-color: var(--ink);
+  color: var(--muted);
+}
+.pages .page svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+}
+.pages .page svg line.head {
+  stroke: var(--accent);
+}
+.pages .page span {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.pages .page.new {
+  width: 32px;
+  color: var(--muted);
+  border-style: dashed;
+  box-shadow: none;
+}
+.pages .suggest {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 46px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  color: var(--muted);
+  animation: bc-pop 0.24s ease-out;
+}
+.pages .suggest button.small {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+/* 会议记录里换板的地方 */
+.log .page-mark {
+  display: block;
+  width: calc(100% - 36px);
+  margin: 10px 18px 2px;
+  padding: 0 0 4px;
+  border: 0;
+  border-bottom: 1px dashed var(--line-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-align: left;
+}
+.log .page-mark:hover:not(:disabled) {
+  color: var(--ink);
+}
+
 /* 回放：控制条占输入栏的位置，输入栏藏起来但还占着地方（白板按它让出底部） */
 .board.replaying > .dock:not(.replay-dock) {
   visibility: hidden;

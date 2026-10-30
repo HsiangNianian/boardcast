@@ -1,5 +1,5 @@
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import cases from '../eval/cases.json'
 import { type LayoutMemory, board } from './board/layout.ts'
 import type { Look } from './board/scene.ts'
@@ -25,7 +25,7 @@ import { Session } from './engine/session.ts'
 import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
 import { summarize } from './engine/summary.ts'
 import { type Voice, identify, renameVoice } from './engine/voices.ts'
-import { type Meeting, type MeetingLine, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
+import { type Meeting, type MeetingLine, type Page, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
 import InkBoard from './ink/InkBoard.tsx'
 import ModelPanel from './ModelPanel.tsx'
 import { hostOf, isLoopback } from './privacy.ts'
@@ -36,6 +36,8 @@ import type { ExportKind } from './exporter.ts'
 import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Replay as ReplayIcon, Sun, Tidy, Transcript as TranscriptIcon, Undo } from './ui/icons.tsx'
 import MeetingsPanel from './ui/MeetingsPanel.tsx'
 import ReplayBar, { SPEEDS } from './ui/ReplayBar.tsx'
+import PageStrip from './ui/PageStrip.tsx'
+import { type Thumb, thumbOf } from './board/thumb.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -319,6 +321,19 @@ export default function App() {
   const replayRef = useRef<Replay | null>(null)
   replayRef.current = replay
 
+  // —— 几张板：当前这张的内容在 session / board / stepsRef 里，别的张存在 pagesRef 里 ——
+  const pagesRef = useRef<Page[]>([{ graph: emptyGraph() }])
+  const [page, setPage] = useState(0)
+  const pageRef = useRef(0)
+  pageRef.current = page
+  const [thumbs, setThumbs] = useState<(Thumb | undefined)[]>([undefined])
+  const thumbRef = useRef<Thumb | undefined>(undefined)
+  /** 已经建议过新开一张的板（每张只提一次） */
+  const suggested = useRef(new Set<number>())
+  const [suggest, setSuggest] = useState(false)
+  /** 当前这张板的完整内容 */
+  const capture = (): Page => ({ graph: session.graph, layout: board.snapshot(), steps: stepsRef.current, thumb: thumbRef.current })
+
   // Session 只建一次。以前跟着模型配置重建：远程出错临时拉起本地模型、地址一变，会开到一半板书就被换成空的
   const sessionRef = useRef<Session | null>(null)
   sessionRef.current ??= new Session(llm, {
@@ -387,6 +402,14 @@ export default function App() {
       const seed = m.steps?.length ? null : diffGraph(emptyGraph(), inkOnly(m.graph))
       stepsRef.current = m.steps?.length ? m.steps : seed ? [{ t: m.updatedAt, line: m.lines.length, d: seed }] : []
       recorded.current = replayTo(stepsRef.current, stepsRef.current.length)
+      pagesRef.current = m.pages?.length ? m.pages : [{ graph: m.graph }]
+      const cur = Math.min(m.page ?? 0, pagesRef.current.length - 1)
+      pageRef.current = cur
+      setPage(cur)
+      thumbRef.current = pagesRef.current[cur].thumb
+      setThumbs(pagesRef.current.map((p) => p.thumb))
+      suggested.current = new Set()
+      setSuggest(false)
       summingFor.current?.abort()
       setSummary(m.summary ?? '')
       voicesRef.current = m.voices ?? []
@@ -413,7 +436,8 @@ export default function App() {
     (meta: MeetingMeta): Meeting => ({
       version: MEETING_VERSION,
       ...meta,
-      title: meta.titled ? meta.title : autoTitle(session.graph, linesRef.current),
+      // 按第一张板起名：翻到后面的板时会议名不跟着变
+      title: meta.titled ? meta.title : autoTitle(pageRef.current === 0 ? session.graph : pagesRef.current[0].graph, linesRef.current),
       updatedAt: Date.now(),
       graph: session.graph,
       history: session.history,
@@ -423,6 +447,8 @@ export default function App() {
       voices: voicesRef.current.length ? voicesRef.current : undefined,
       steps: stepsRef.current.length ? stepsRef.current : undefined,
       localOnly: localOnlyRef.current || undefined,
+      pages: pagesRef.current.length > 1 ? pagesRef.current.map((p, i) => (i === pageRef.current ? capture() : p)) : undefined,
+      page: pagesRef.current.length > 1 ? pageRef.current : undefined,
     }),
     [session],
   )
@@ -443,7 +469,7 @@ export default function App() {
         .catch((e) => console.error('保存会议失败', e))
     }, 500)
     return () => clearTimeout(t)
-  }, [graph, lines, summary, localOnly, meeting, restored, snapshot])
+  }, [graph, lines, summary, localOnly, page, meeting, restored, snapshot])
 
   // 墨线板书变了就记一步（铅笔稿不记）；会议记录说到第几句也记下，回放时字幕跟着走
   useEffect(() => {
@@ -480,7 +506,13 @@ export default function App() {
   useEffect(() => {
     let stale = false
     void board.layout(graph).then(async (l) => {
-      if (stale || !api) return
+      if (stale) return
+      if (!replayRef.current) {
+        const t = thumbOf(l)
+        thumbRef.current = t
+        setThumbs((ts) => ts.map((x, i) => (i === pageRef.current ? t : x)))
+      }
+      if (!api) return
       // 只有铅笔模式用得到；跟着 Excalidraw 一起按需加载
       const { scene } = await import('./board/scene.ts')
       if (stale) return
@@ -533,7 +565,7 @@ export default function App() {
   }, [lines, replay?.at])
 
   function say(u: Utterance) {
-    setLines((ls) => [...ls, u])
+    setLines((ls) => [...ls, { ...u, page: pageRef.current }])
     session.say(u)
   }
 
@@ -628,7 +660,13 @@ export default function App() {
       const ink = document.querySelector('.ink')
       const paper = mode === 'ink' && ink ? getComputedStyle(ink).backgroundColor : PAPER_LIGHT
       const { build, saveFile } = await import('./exporter.ts')
-      const { name, blob } = await build(kind, { graph, lines, title: meeting.title, summary, mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
+      const { name, blob } = await build(kind, {
+        graph,
+        lines,
+        title: meeting.title,
+        summary,
+        pages: pagesRef.current.length > 1 ? pagesRef.current.map((p, i) => (i === page ? session.graph : p.graph)) : undefined,
+        mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
       const where = await saveFile(name, blob)
       if (where) setToast({ ok: true, text: isDesktop ? `已保存：${where}` : `已下载：${where}` })
     } catch (e) {
@@ -655,6 +693,13 @@ export default function App() {
     recorded.current = emptyGraph()
     setReplay(null)
     setLocalOnly(false)
+    pagesRef.current = [{ graph: emptyGraph() }]
+    pageRef.current = 0
+    setPage(0)
+    thumbRef.current = undefined
+    setThumbs([undefined])
+    suggested.current = new Set()
+    setSuggest(false)
     const id = newMeetingId()
     setMeeting({ id, title: '未命名会议', createdAt: Date.now() })
     save('boardcast.meeting', id)
@@ -668,7 +713,7 @@ export default function App() {
     lastInk.current = next
     setGraph(next)
     setUndoTick((t) => t + 1)
-    setLines((ls) => [...ls, { text: note, manual: true, ms: 0 }])
+    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current }])
     setSelection((sel) => (sel && exists(next, sel) ? sel : null))
   }
 
@@ -683,7 +728,7 @@ export default function App() {
     setUndoTick((t) => t + 1)
     setSelection(null)
     // 也记进会议记录：不然记录里还写着「删掉了……」，看着像没恢复
-    setLines((ls) => [...ls, { text: note, manual: true, ms: 0 }])
+    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current }])
   }
   const now = (): Snap => ({ graph: session.graph, layout: board.snapshot() })
   const undo = () => stepTo(editHistory.current.undo(now()), '撤销了上一步')
@@ -697,7 +742,7 @@ export default function App() {
     editHistory.current.record(before)
     setUndoTick((t) => t + 1)
     setLayoutRev((n) => n + 1)
-    setLines((ls) => [...ls, { text: `挪了${describe(session.graph, sel)}的位置`, manual: true, ms: 0 }])
+    setLines((ls) => [...ls, { text: `挪了${describe(session.graph, sel)}的位置`, manual: true, ms: 0, page: pageRef.current }])
   }
 
   function deleteSelection() {
@@ -835,6 +880,59 @@ export default function App() {
     // seekReplay 每次渲染都是新的，读的是 ref，不用放进依赖
   }, [replay])
 
+  /** 把一张板放到画面上：板书、排版、回放记录都换成它的 */
+  function showPage(p: Page) {
+    session.graph = p.graph
+    board.restore(p.layout)
+    editHistory.current.clear()
+    lastInk.current = p.graph
+    stepsRef.current = p.steps ?? []
+    recorded.current = replayTo(stepsRef.current, stepsRef.current.length)
+    thumbRef.current = p.thumb
+    setSelection(null)
+    setRenaming(null)
+    setGraph(p.graph)
+    setLayoutRev((n) => n + 1)
+    // 换了一块板，视角重新适配
+    setTidy((t) => t + 1)
+  }
+
+  /** 切到第 `i` 张板（当前这张先存起来） */
+  function goPage(i: number) {
+    if (i === pageRef.current || i < 0 || i >= pagesRef.current.length) return
+    exitReplay()
+    const all = [...pagesRef.current]
+    all[pageRef.current] = capture()
+    pagesRef.current = all
+    pageRef.current = i
+    showPage(all[i])
+    setPage(i)
+    setThumbs(all.map((p) => p.thumb))
+    setSuggest(false)
+  }
+
+  /** 新开一张板，接在最后；这张留着可以切回来 */
+  function newPage() {
+    exitReplay()
+    const all = [...pagesRef.current]
+    all[pageRef.current] = capture()
+    all.push({ graph: emptyGraph() })
+    pagesRef.current = all
+    pageRef.current = all.length - 1
+    showPage(all[all.length - 1])
+    setPage(all.length - 1)
+    setThumbs(all.map((p) => p.thumb))
+    setSuggest(false)
+  }
+
+  // 一张板上的东西太多（自动适配会把字缩得很小），建议新开一张；每张只提一次
+  useEffect(() => {
+    if (replayRef.current || suggested.current.has(page)) return
+    if (session.graph.nodes.filter((n) => n.ink === 'ink').length < 30) return
+    suggested.current.add(page)
+    setSuggest(true)
+  }, [graph, page, session])
+
   async function openOther(id: string) {
     exitReplay()
     if (lines.length || graph.nodes.length) await meetings.save(snapshot(meeting)).catch(() => undefined)
@@ -872,7 +970,7 @@ export default function App() {
   } else if (builtin) {
     status = builtin.message ?? '内置模型不可用'
   } else {
-    status = online ? `本地 · ${baseUrl.replace(/^https?:\/\//, '')}` : '没有连上模型'
+    status = online ? `${baseUrl.replace(/^https?:\/\//, '')}` : '没有连上模型'
   }
   const remoteBroken = remoteView?.enabled && remoteState.state === 'fail'
 
@@ -1140,6 +1238,17 @@ export default function App() {
           where={cloud && remoteView ? { cloud: true, host: hostOf(remoteView.baseUrl) } : { cloud: false }}
           onWhere={() => setShowSettings(true)}
         />
+        {(pagesRef.current.length > 1 || graph.nodes.length > 0) && (
+          <PageStrip
+            thumbs={thumbs}
+            current={page}
+            onGo={goPage}
+            onNew={newPage}
+            blocked={replay ? '回放时不能翻页，先退出回放' : waiting ? '模型还在画，画完再翻页' : undefined}
+            suggest={suggest}
+            onDismiss={() => setSuggest(false)}
+          />
+        )}
         {replay && (
           <ReplayBar
             at={replay.at}
@@ -1214,8 +1323,13 @@ export default function App() {
         <div className="lines">
           {lines.length === 0 && !partial && <p className="empty">还没有人说话。说的每一句和它画出来的东西都会记在这里。</p>}
           {shown.map((l, i) => (
+            <Fragment key={i}>
+            {pagesRef.current.length > 1 && (i === 0 || (shown[i - 1].page ?? 0) !== (l.page ?? 0)) && (
+              <button type="button" className="page-mark" onClick={() => goPage(l.page ?? 0)} disabled={!!replay || waiting} title="切到这张板">
+                第 {(l.page ?? 0) + 1} 张板
+              </button>
+            )}
             <article
-              key={i}
               className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}`}
             >
               {l.manual && <span className="who edit">改</span>}
@@ -1245,6 +1359,7 @@ export default function App() {
                 )}
               </div>
             </article>
+            </Fragment>
           ))}
           {partial && !replay && (
             <article className="line partial" aria-live="polite">

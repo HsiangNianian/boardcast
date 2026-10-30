@@ -683,6 +683,46 @@ kbd {
   font-family: var(--mono);
   font-size: 12px;
 }
+.log header button.small {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.log .summary {
+  flex: none;
+  max-height: 45%;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.summary-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.summary-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.summary-head span {
+  flex: 1;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.log .summary textarea {
+  min-height: 0;
+  flex: 1;
+  resize: vertical;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-y: auto;
+}
 .log .lines {
   flex: 1;
   overflow-y: auto;

@@ -31,11 +31,12 @@ function attachLine(n: Node): string {
 /** Mermaid 里的文字要转义引号 */
 const mm = (s: string) => s.replace(/"/g, '#quot;')
 
-export function toMarkdown(g: Graph, lines: SaidLine[] = [], title = '会议板书', when = new Date()): string {
+export function toMarkdown(g: Graph, lines: SaidLine[] = [], title = '会议板书', when = new Date(), summary?: string): string {
   const live = (n: Node) => n.ink !== 'draft'
   const out: string[] = []
   const stamp = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')} ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`
   out.push(`# ${title}`, '', `> ${stamp} · boardcast`, '')
+  if (summary?.trim()) out.push('## 摘要', '', summary.trim(), '')
 
   // 话题：标题 + 编号条目，挂件跟在被挂的东西下面
   const walk = (parent: Node, depth: number) => {

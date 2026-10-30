@@ -21,6 +21,8 @@ interface Board {
   api: ExcalidrawImperativeAPI | null
   look: Look
   paper: string
+  title?: string
+  summary?: string
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -103,7 +105,7 @@ async function excalidrawFile(b: Board): Promise<string> {
 }
 
 export async function build(kind: ExportKind, b: Board): Promise<{ name: string; blob: Blob }> {
-  if (kind === 'md') return { name: fileName('md'), blob: new Blob([toMarkdown(b.graph, b.lines)], { type: 'text/markdown' }) }
+  if (kind === 'md') return { name: fileName('md'), blob: new Blob([toMarkdown(b.graph, b.lines, b.title, new Date(), b.summary)], { type: 'text/markdown' }) }
   if (kind === 'excalidraw')
     return { name: fileName('excalidraw'), blob: new Blob([await excalidrawFile(b)], { type: 'application/json' }) }
   if (kind === 'svg') {

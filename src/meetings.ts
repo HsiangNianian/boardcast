@@ -34,6 +34,8 @@ export interface Meeting {
   history: Utterance[]
   lines: MeetingLine[]
   layout?: LayoutMemory
+  /** 会议摘要（Markdown），生成后可以手改 */
+  summary?: string
 }
 
 /** 历史列表里显示的样子 */

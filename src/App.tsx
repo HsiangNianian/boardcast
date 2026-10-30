@@ -22,6 +22,7 @@ import type { Utterance } from './engine/prompt.ts'
 import { History as EditHistory, type Selection, describe, exists, remove as removeSel, rename as renameSel, toggleMark } from './engine/edit.ts'
 import type { Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
+import { summarize } from './engine/summary.ts'
 import { type Meeting, type MeetingLine, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
 import InkBoard from './ink/InkBoard.tsx'
 import ModelPanel from './ModelPanel.tsx'
@@ -209,6 +210,13 @@ export default function App() {
   }, [baseUrl, useRemote, remoteView])
 
   const [lines, setLines] = useState<Line[]>([])
+  // 会议摘要：一键生成，可以手改，跟着会议一起存、一起导出
+  const [summary, setSummary] = useState('')
+  const summaryRef = useRef('')
+  summaryRef.current = summary
+  /** 正在生成摘要：给界面看的进度；null 表示没在生成 */
+  const [summing, setSumming] = useState<string | null>(null)
+  const summingFor = useRef<AbortController | null>(null)
   const [graph, setGraph] = useState<Graph>(emptyGraph)
   const [hot, setHot] = useState<Set<string>>(new Set())
   const [speaker, setSpeaker] = useState('A')
@@ -337,6 +345,8 @@ export default function App() {
       session.history = m.history
       setGraph(m.graph)
       setLines(m.lines)
+      summingFor.current?.abort()
+      setSummary(m.summary ?? '')
       setMeeting({ id: m.id, title: m.title, titled: m.titled, createdAt: m.createdAt })
       save('boardcast.meeting', m.id)
     },
@@ -364,6 +374,7 @@ export default function App() {
       history: session.history,
       lines: linesRef.current,
       layout: board.snapshot(),
+      summary: summaryRef.current || undefined,
     }),
     [session],
   )
@@ -383,7 +394,7 @@ export default function App() {
         .catch((e) => console.error('保存会议失败', e))
     }, 500)
     return () => clearTimeout(t)
-  }, [graph, lines, meeting, restored, snapshot])
+  }, [graph, lines, summary, meeting, restored, snapshot])
 
   useEffect(() => {
     // 桌面版的地址是内置服务每次启动时随机分配的端口，记下来下次也用不上
@@ -515,13 +526,39 @@ export default function App() {
     await voice.start(micChoice || undefined).catch((e) => setVoiceErr(errText(e)))
   }
 
+  /** 生成摘要：会议记录（不含手动改动）加板书结构，交给当前在用的模型 */
+  async function makeSummary() {
+    if (summing) {
+      summingFor.current?.abort()
+      return
+    }
+    const ctl = new AbortController()
+    summingFor.current = ctl
+    setSumming('整理中…')
+    try {
+      const r = await summarize(session.llm, session.graph, lines.filter((l) => !l.manual), ctl.signal, (done, total) =>
+        setSumming(done < total - 1 ? `分段整理 ${done + 1}/${total - 1}…` : '合成摘要…'),
+      )
+      if (ctl.signal.aborted) return
+      setSummary(r.text)
+      if (r.fellBack) setToast({ ok: false, text: '远程接口失败，摘要改用了本地模型' })
+    } catch (e) {
+      if (!ctl.signal.aborted) setToast({ ok: false, text: `生成摘要失败：${errText(e)}` })
+    } finally {
+      if (summingFor.current === ctl) {
+        summingFor.current = null
+        setSumming(null)
+      }
+    }
+  }
+
   async function exportAs(kind: ExportKind) {
     setExportMenu(false)
     try {
       const ink = document.querySelector('.ink')
       const paper = mode === 'ink' && ink ? getComputedStyle(ink).backgroundColor : PAPER_LIGHT
       const { build, saveFile } = await import('./exporter.ts')
-      const { name, blob } = await build(kind, { graph, lines, mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
+      const { name, blob } = await build(kind, { graph, lines, title: meeting.title, summary, mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
       const where = await saveFile(name, blob)
       if (where) setToast({ ok: true, text: isDesktop ? `已保存：${where}` : `已下载：${where}` })
     } catch (e) {
@@ -540,6 +577,8 @@ export default function App() {
     setSelection(null)
     setGraph(session.graph)
     setLines([])
+    summingFor.current?.abort()
+    setSummary('')
     const id = newMeetingId()
     setMeeting({ id, title: '未命名会议', createdAt: Date.now() })
     save('boardcast.meeting', id)
@@ -922,10 +961,46 @@ export default function App() {
         <header>
           <h2>会议记录</h2>
           <span className="count">{said.length ? `${said.length} 句` : ''}</span>
+          <button
+            type="button"
+            className="ghost small"
+            onClick={() => void makeSummary()}
+            disabled={!summing && (!said.length || !ready)}
+            title={
+              summing
+                ? '停止生成'
+                : useRemote && remoteView
+                  ? `用远程 ${remoteView.model} 生成摘要：会议记录会发到这个接口`
+                  : '用本地模型生成摘要：结论、决定、待办、待讨论'
+            }
+          >
+            {summing ? '停止' : summary ? '重新摘要' : '摘要'}
+          </button>
           <button type="button" className="icon" onClick={() => setShowLog(false)} aria-label="收起会议记录">
             <Close size={16} />
           </button>
         </header>
+        {(summing || summary) && (
+          <section className="summary" aria-label="会议摘要">
+            <div className="summary-head">
+              <h3>摘要</h3>
+              <span>{summing ?? (useRemote && remoteView ? `远程 ${remoteView.model}` : '可以直接改')}</span>
+              {!summing && (
+                <button type="button" className="icon" onClick={() => setSummary('')} aria-label="删掉摘要" title="删掉摘要">
+                  <Close size={14} />
+                </button>
+              )}
+            </div>
+            {!summing && (
+              <textarea
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                rows={Math.min(14, summary.split('\n').length + 1)}
+                spellCheck={false}
+              />
+            )}
+          </section>
+        )}
         <div className="lines">
           {lines.length === 0 && !partial && <p className="empty">还没有人说话。说的每一句和它画出来的东西都会记在这里。</p>}
           {lines.map((l, i) => (

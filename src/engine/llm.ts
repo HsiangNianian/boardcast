@@ -135,3 +135,48 @@ export async function proposeOps(
     via: cfg.label,
   }
 }
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+/**
+ * 普通的一问一答（摘要之类）：不带语法约束，本地和远程都按各自的规矩关掉思考模式；
+ * 首选接口失败就退回 fallback。
+ */
+export async function chat(cfg: LlmConfig, msgs: ChatMessage[], maxTokens: number, signal?: AbortSignal): Promise<LlmResult> {
+  const t0 = performance.now()
+  const make = (extras: boolean): Record<string, unknown> => {
+    const b: Record<string, unknown> = { model: cfg.model ?? 'local', messages: msgs, temperature: 0.2, max_tokens: maxTokens }
+    if (cfg.flavor !== 'openai') {
+      b.cache_prompt = true
+      if (cfg.noThink) b.chat_template_kwargs = { enable_thinking: false }
+    } else if (extras && cfg.noThink !== false && !strictServers.has(cfg.baseUrl)) {
+      b.chat_template_kwargs = { enable_thinking: false }
+      b.enable_thinking = false
+    }
+    return b
+  }
+  let data: ChatResponse
+  try {
+    try {
+      data = await post(cfg, make(true), signal)
+    } catch (e) {
+      if (cfg.flavor !== 'openai' || strictServers.has(cfg.baseUrl) || !rejectsExtras(e)) throw e
+      strictServers.add(cfg.baseUrl)
+      data = await post(cfg, make(false), signal)
+    }
+  } catch (e) {
+    if (!cfg.fallback || signal?.aborted) throw e
+    const r = await chat(cfg.fallback, msgs, maxTokens, signal)
+    return { ...r, fellBack: String(e) }
+  }
+  return {
+    text: stripThinking(data.choices?.[0]?.message?.content ?? ''),
+    ms: performance.now() - t0,
+    promptTokens: data.usage?.prompt_tokens,
+    outputTokens: data.timings?.predicted_n ?? data.usage?.completion_tokens,
+    via: cfg.label,
+  }
+}

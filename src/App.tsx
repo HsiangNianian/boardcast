@@ -988,7 +988,7 @@ export default function App() {
               text={summary}
               onChange={setSummary}
               busy={!!summing}
-              status={summing ?? (useRemote && remoteView ? `远程 ${remoteView.model}` : '')}
+              status={summing ?? ''}
               onClear={() => setSummary('')}
               onToast={setToast}
             />

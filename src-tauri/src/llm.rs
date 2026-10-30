@@ -43,6 +43,8 @@ pub struct LlmStatus {
     pub models_dir: Option<String>,
     /// 这台机器上 llama.cpp 能看到的 GPU，前端用来推荐模型
     pub gpus: Vec<Gpu>,
+    /// 带着看图组件（导入图片时能读字）
+    pub vision: bool,
 }
 
 #[derive(Default)]
@@ -232,6 +234,7 @@ fn spawn(
     model: &Path,
     port: u16,
     device: Option<&str>,
+    mmproj: Option<&Path>,
     log: &Path,
 ) -> std::io::Result<Child> {
     let out = File::create(log)?;
@@ -241,6 +244,10 @@ fn spawn(
         .arg(model)
         .args(["--host", "127.0.0.1", "--port", &port.to_string()])
         .args(["-c", "4096", "-np", "1", "--jinja"]);
+    // 看图组件：导入图片时读图里的字。没 GPU 时也照样加载，只是读得慢
+    if let Some(p) = mmproj {
+        cmd.arg("--mmproj").arg(p);
+    }
     match device {
         // 不写死 -ngl 99：显存不够放下整个模型时（6 GB 卡跑 9B，或者显存被别的程序占了），
         // 让 llama.cpp 按剩余显存放尽量多的层，其余留在 CPU，而不是整个启动失败退回纯 CPU
@@ -388,6 +395,14 @@ fn launch(app: AppHandle, run: bool) {
             return;
         };
         let model_name = model.file_name().map(|n| n.to_string_lossy().to_string());
+        let mmproj = models_dir
+            .as_deref()
+            .zip(model_name.as_deref())
+            .and_then(|(d, f)| crate::models::vision_for(d, f));
+        let base = LlmStatus {
+            vision: mmproj.is_some(),
+            ..base
+        };
         if !run {
             llm.set(
                 generation,
@@ -458,6 +473,7 @@ fn launch(app: AppHandle, run: bool) {
                 &model,
                 port,
                 dev.as_ref().map(|d| d.id.as_str()),
+                mmproj.as_deref(),
                 &log,
             ) else {
                 continue;

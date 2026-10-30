@@ -43,6 +43,8 @@ pub enum Kind {
     Llm,
     /// 语音识别用的一组小模型
     Voice,
+    /// 大模型的「看图」组件（视觉投影文件）：导入图片时读图里的字。和同名大模型配对，id 是大模型的 id 加 `-vision`
+    Vision,
 }
 
 struct Entry {
@@ -89,6 +91,16 @@ macro_rules! sources {
     };
 }
 
+/// 大模型配的看图组件装好了的话，返回它的路径（llama-server 用 --mmproj 加载）
+pub fn vision_for(dir: &Path, model_file: &str) -> Option<PathBuf> {
+    let llm = CATALOG
+        .iter()
+        .find(|e| e.kind == Kind::Llm && e.main_file() == model_file)?;
+    let id = format!("{}-vision", llm.id);
+    let v = CATALOG.iter().find(|e| e.id == id)?;
+    installed(v.id, dir).then(|| dir.join(v.main_file()))
+}
+
 const CATALOG: &[Entry] = &[
     Entry {
         id: "qwen3.5-4b",
@@ -119,6 +131,38 @@ const CATALOG: &[Entry] = &[
             sources: sources!(
                 "unsloth/Qwen3.5-9B-GGUF/resolve/master/Qwen3.5-9B-Q4_K_M.gguf",
                 "unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf"
+            ),
+        }],
+    },
+    Entry {
+        id: "qwen3.5-4b-vision",
+        label: "看图组件 · Qwen3.5-4B",
+        note: "导入图片时让内置模型读出图里的字，开会时就能在图上圈画；图片只在这台电脑上处理",
+        kind: Kind::Vision,
+        vram_mib: 0,
+        files: &[FileSpec {
+            name: "Qwen3.5-4B-mmproj-F16.gguf",
+            size: 672_423_616,
+            sha256: "cd88edcf8d031894960bb0c9c5b9b7e1fea6ebee02b9f7ce925a00d12891f864",
+            sources: sources!(
+                "unsloth/Qwen3.5-4B-GGUF/resolve/master/mmproj-F16.gguf",
+                "unsloth/Qwen3.5-4B-GGUF/resolve/main/mmproj-F16.gguf"
+            ),
+        }],
+    },
+    Entry {
+        id: "qwen3.5-9b-vision",
+        label: "看图组件 · Qwen3.5-9B",
+        note: "导入图片时让内置模型读出图里的字，开会时就能在图上圈画；图片只在这台电脑上处理",
+        kind: Kind::Vision,
+        vram_mib: 0,
+        files: &[FileSpec {
+            name: "Qwen3.5-9B-mmproj-F16.gguf",
+            size: 918_166_080,
+            sha256: "f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f",
+            sources: sources!(
+                "unsloth/Qwen3.5-9B-GGUF/resolve/master/mmproj-F16.gguf",
+                "unsloth/Qwen3.5-9B-GGUF/resolve/main/mmproj-F16.gguf"
             ),
         }],
     },
@@ -283,6 +327,13 @@ pub fn models_list(app: AppHandle, downloads: tauri::State<'_, Downloads>) -> Ca
     let models = CATALOG
         .iter()
         .filter(|e| !(voice_bundled && e.kind == Kind::Voice))
+        // 看图组件只列出已经装好的大模型配的那个
+        .filter(|e| {
+            e.kind != Kind::Vision
+                || dir
+                    .as_deref()
+                    .is_some_and(|d| installed(e.id.trim_end_matches("-vision"), d))
+        })
         .map(|e| {
             let installed = dir.as_deref().is_some_and(|d| installed(e.id, d));
             ModelInfo {
@@ -361,6 +412,8 @@ pub fn model_download(
                         llm::restart(&app);
                     }
                     Kind::Voice => crate::voice::reload(&app),
+                    // 重启内置模型，带上看图组件
+                    Kind::Vision => llm::restart(&app),
                 }
             }
             Err(DlError::Canceled) => emit(&app, e, "canceled", on_disk(e, &dir), 0, None, None),
@@ -413,7 +466,7 @@ pub fn model_delete(
     let dir = llm::models_dir(&app).ok_or("找不到应用数据目录")?;
     // 先停掉正在用这些文件的东西：Windows 上被占用的文件删不掉。删完再按剩下的重新拉起
     match e.kind {
-        Kind::Llm => app.state::<llm::Llm>().shutdown(),
+        Kind::Llm | Kind::Vision => app.state::<llm::Llm>().shutdown(),
         Kind::Voice => crate::voice::unload(&app),
     }
     for f in e.files {
@@ -430,6 +483,7 @@ pub fn model_delete(
             }
             llm::restart(&app);
         }
+        Kind::Vision => llm::restart(&app),
         Kind::Voice => crate::voice::reload(&app),
     }
     Ok(())

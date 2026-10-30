@@ -1000,7 +1000,19 @@ export default function App() {
         setToast({ ok: true, text: `${f.name} 导入好了：每页一张板，开会时可以说「把这一段圈出来」` })
         return
       }
-      if (!/\.(excalidraw|json)$/i.test(f.name)) throw new Error('现在能导入 PDF 和 .excalidraw，图片还在做')
+      if (/^image\//.test(f.type) || /\.(png|jpe?g|webp|gif)$/i.test(f.name)) {
+        // 图片只交给本机的模型读：桌面版用内置模型（要装看图组件），网页版用填的本地地址
+        if (isDesktop && !builtin?.vision) throw new Error('内置模型还不能看图：在「设置 → 管理模型」里下载「看图组件」')
+        const url = isDesktop ? await localReady() : baseUrl
+        if (!url) throw new Error('没有连上本地模型')
+        const { importImage, llamaReader } = await import('./board/importImage.ts')
+        setToast({ ok: true, text: `正在看 ${f.name}…` })
+        const r = await importImage(f, llamaReader(url), (done, total) => setToast({ ok: true, text: `正在读 ${f.name}：${done}/${total} 块` }))
+        addPages([r.page], `导入了 ${f.name}（读出 ${r.read} 块文字${r.capped ? '，块太多只读了一部分' : ''}）`)
+        setToast({ ok: true, text: r.read ? `${f.name} 导入好了，开会时可以说「把这里圈出来」` : `${f.name} 里没读出文字，只能当底图看` })
+        return
+      }
+      if (!/\.(excalidraw|json)$/i.test(f.name)) throw new Error('能导入的是图片、PDF 和 .excalidraw')
       const { importExcalidraw } = await import('./board/importExcalidraw.ts')
       const r = importExcalidraw(await f.text())
       // 当前这张板上有东西就新开一张，不和现有的板书搅在一起
@@ -1146,14 +1158,14 @@ export default function App() {
             onClick={() => fileInput.current?.click()}
             disabled={!!replay}
             aria-label="导入"
-            title="导入 PDF 或 .excalidraw（也可以直接拖到白板上）：PDF 每页垫在一张板下面，开会时在上面圈画批注；.excalidraw 转成板书接着画"
+            title="导入图片、PDF 或 .excalidraw（也可以直接拖到白板上）：图片和 PDF 垫在板下面，开会时在上面圈画批注；.excalidraw 转成板书接着画"
           >
             <Upload />
           </button>
           <input
             ref={fileInput}
             type="file"
-            accept=".pdf,application/pdf,.excalidraw,application/json,.json"
+            accept="image/png,image/jpeg,image/webp,image/gif,.pdf,application/pdf,.excalidraw,application/json,.json"
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0]

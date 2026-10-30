@@ -153,6 +153,29 @@ fn quiet() -> impl FnMut(&'static str, u64, u64, Option<&str>, Option<String>) +
     |_, _, _, _, _| {}
 }
 
+#[test]
+fn each_model_gets_its_own_vision_component() {
+    let d = tmp("vision");
+    // 没装看图组件
+    assert_eq!(vision_for(&d, "Qwen3.5-4B-Q4_K_M.gguf"), None);
+    std::fs::write(d.join("Qwen3.5-4B-mmproj-F16.gguf"), b"x").unwrap();
+    assert_eq!(
+        vision_for(&d, "Qwen3.5-4B-Q4_K_M.gguf"),
+        Some(d.join("Qwen3.5-4B-mmproj-F16.gguf"))
+    );
+    // 4B 的组件不能给 9B 用
+    assert_eq!(vision_for(&d, "Qwen3.5-9B-Q4_K_M.gguf"), None);
+    // 每个大模型都有配对的组件
+    for e in CATALOG.iter().filter(|e| e.kind == Kind::Llm) {
+        let id = format!("{}-vision", e.id);
+        assert!(
+            CATALOG.iter().any(|v| v.id == id && v.kind == Kind::Vision),
+            "{id}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// 真的从清单里的源下载轻量档模型（2.7 GB），默认跳过：
 ///   cargo test --manifest-path src-tauri/Cargo.toml --lib -- --ignored --nocapture
 #[tokio::test]

@@ -76,7 +76,7 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
                 <b>{m.label}</b>
                 {m.recommended && <span className="tag rec">推荐</span>}
                 {m.selected && status?.state === 'ready' && <span className="tag on">正在使用</span>}
-                {m.kind === 'voice' && m.installed && <span className="tag on">已就绪</span>}
+                {(m.kind === 'voice' || m.kind === 'vision') && m.installed && <span className="tag on">已就绪</span>}
                 <span className="size">{gb(m.size)}</span>
               </div>
               <div className="note">{m.note}</div>

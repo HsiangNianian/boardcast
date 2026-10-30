@@ -18,13 +18,15 @@ export interface LlmStatus {
   message?: string
   modelsDir?: string
   gpus: Gpu[]
+  /** 带着看图组件（导入图片时能读字） */
+  vision?: boolean
 }
 
 export interface ModelInfo {
   id: string
   label: string
   note: string
-  kind: 'llm' | 'voice'
+  kind: 'llm' | 'voice' | 'vision'
   size: number
   installed: boolean
   partial: number

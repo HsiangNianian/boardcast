@@ -168,3 +168,17 @@ export const Check = (p: P) => (
     <path d="M5 12.5l4.5 4.5L19 7.5" />
   </Icon>
 )
+
+export const Pause = (p: P) => (
+  <Icon {...p}>
+    <path d="M8.5 5.5v13M15.5 5.5v13" strokeWidth={2.2} />
+  </Icon>
+)
+
+/** 回放：倒转的箭头圈住一个播放三角 */
+export const Replay = (p: P) => (
+  <Icon {...p}>
+    <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v3.2h3.2" />
+    <path d="M10.5 9.3v5.4l4.3-2.7-4.3-2.7Z" />
+  </Icon>
+)

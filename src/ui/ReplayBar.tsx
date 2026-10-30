@@ -1,0 +1,57 @@
+// 回放时底部的控制条：播放 / 暂停、进度（可拖）、时间、倍速、退出。占输入栏的位置。
+
+import type { CSSProperties } from 'react'
+import { Close, Pause, Play } from './icons.tsx'
+
+export const SPEEDS = [1, 2, 4] as const
+
+const clock = (ms: number) => {
+  const s = Math.max(0, Math.round(ms / 1000))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`
+}
+
+export default function ReplayBar(p: {
+  /** 已经放到第几步（0 = 空板） */
+  at: number
+  total: number
+  playing: boolean
+  speed: number
+  /** 这一步离会议开始多久、整场多长（毫秒） */
+  elapsed: number
+  duration: number
+  onToggle: () => void
+  onSeek: (at: number) => void
+  onSpeed: () => void
+  onExit: () => void
+}) {
+  return (
+    <div className="dock replay-dock" role="group" aria-label="回放">
+      <div className="bar">
+        <button type="button" className="icon" onClick={p.onToggle} aria-label={p.playing ? '暂停' : '播放'} title={p.playing ? '暂停（空格）' : '播放（空格）'}>
+          {p.playing ? <Pause size={16} /> : <Play size={16} />}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={p.total}
+          value={p.at}
+          onChange={(e) => p.onSeek(Number(e.target.value))}
+          aria-label="回放进度"
+          style={{ '--fill': `${p.total ? (100 * p.at) / p.total : 0}%` } as CSSProperties}
+        />
+        <span className="time">
+          {clock(p.elapsed)} / {clock(p.duration)}
+        </span>
+        <button type="button" className="speed" onClick={p.onSpeed} title="倍速">
+          {p.speed}×
+        </button>
+        <button type="button" className="icon" onClick={p.onExit} aria-label="退出回放" title="退出回放（Esc）">
+          <Close size={16} />
+        </button>
+      </div>
+    </div>
+  )
+}

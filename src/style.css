@@ -437,6 +437,67 @@ button.link {
   margin-left: 6px;
 }
 
+/* 回放：控制条占输入栏的位置，输入栏藏起来但还占着地方（白板按它让出底部） */
+.board.replaying > .dock:not(.replay-dock) {
+  visibility: hidden;
+}
+.replay-dock .bar {
+  gap: 10px;
+  padding: 6px 8px;
+}
+.replay-dock .bar > * + * {
+  margin-left: 0;
+}
+.replay-dock input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  margin: 0 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  appearance: none;
+  background: linear-gradient(to right, var(--ink) var(--fill), var(--line) var(--fill));
+  cursor: pointer;
+}
+.replay-dock input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+.replay-dock input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--surface);
+}
+.replay-dock .time {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.replay-dock .speed {
+  flex: none;
+  height: 28px;
+  min-width: 40px;
+  padding: 0 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+.line.now {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
 /* 收音：一个圆钮，收音时右边展开一段实时波形 */
 .dock .listen {
   display: flex;

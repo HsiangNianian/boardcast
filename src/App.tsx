@@ -22,6 +22,7 @@ import type { Utterance } from './engine/prompt.ts'
 import { History as EditHistory, type Selection, describe, exists, remove as removeSel, rename as renameSel, toggleMark } from './engine/edit.ts'
 import type { Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
+import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
 import { summarize } from './engine/summary.ts'
 import { type Voice, identify, renameVoice } from './engine/voices.ts'
 import { type Meeting, type MeetingLine, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
@@ -31,8 +32,9 @@ import { type RemoteView, remote } from './remote.ts'
 import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
 import Composer from './ui/Composer.tsx'
 import type { ExportKind } from './exporter.ts'
-import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Sun, Tidy, Transcript as TranscriptIcon, Undo } from './ui/icons.tsx'
+import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Replay as ReplayIcon, Sun, Tidy, Transcript as TranscriptIcon, Undo } from './ui/icons.tsx'
 import MeetingsPanel from './ui/MeetingsPanel.tsx'
+import ReplayBar, { SPEEDS } from './ui/ReplayBar.tsx'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -292,6 +294,16 @@ export default function App() {
   const [selection, setSelection] = useState<Selection | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
 
+  // —— 回放：墨线板书每变一次记一步（和上一版的差异），回放时从空板依次打上 ——
+  const stepsRef = useRef<Step[]>([])
+  /** 最近记下的那一版墨线板书 */
+  const recorded = useRef<Graph>(emptyGraph())
+  /** 正在回放：放到第几步、是不是在播、倍速，和回放前的板书（退出时放回去） */
+  type Replay = { at: number; playing: boolean; speed: number; total: number; saved: Snap }
+  const [replay, setReplay] = useState<Replay | null>(null)
+  const replayRef = useRef<Replay | null>(null)
+  replayRef.current = replay
+
   // Session 只建一次。以前跟着模型配置重建：远程出错临时拉起本地模型、地址一变，会开到一半板书就被换成空的
   const sessionRef = useRef<Session | null>(null)
   sessionRef.current ??= new Session(llm, {
@@ -301,7 +313,7 @@ export default function App() {
             lastInk.current = g
             setUndoTick((t) => t + 1)
           }
-          setGraph(g)
+          if (!replayRef.current) setGraph(g)
         },
         mention: (ids) => {
           setHot(new Set(ids))
@@ -355,6 +367,11 @@ export default function App() {
       session.history = m.history
       setGraph(m.graph)
       setLines(m.lines)
+      setReplay(null)
+      // 旧版本存的会议没有逐步记录：整块板算一步
+      const seed = m.steps?.length ? null : diffGraph(emptyGraph(), inkOnly(m.graph))
+      stepsRef.current = m.steps?.length ? m.steps : seed ? [{ t: m.updatedAt, line: m.lines.length, d: seed }] : []
+      recorded.current = replayTo(stepsRef.current, stepsRef.current.length)
       summingFor.current?.abort()
       setSummary(m.summary ?? '')
       voicesRef.current = m.voices ?? []
@@ -388,13 +405,15 @@ export default function App() {
       layout: board.snapshot(),
       summary: summaryRef.current || undefined,
       voices: voicesRef.current.length ? voicesRef.current : undefined,
+      steps: stepsRef.current.length ? stepsRef.current : undefined,
     }),
     [session],
   )
 
   // 板书或会议记录一变，停半秒存一次；空会议不存
   useEffect(() => {
-    if (!restored) return
+    // 回放时画面上是过去某一刻的板，不存
+    if (!restored || replayRef.current) return
     if (!lines.length && !graph.nodes.length) return
     const t = setTimeout(() => {
       const m = snapshot(meeting)
@@ -408,6 +427,16 @@ export default function App() {
     }, 500)
     return () => clearTimeout(t)
   }, [graph, lines, summary, meeting, restored, snapshot])
+
+  // 墨线板书变了就记一步（铅笔稿不记）；会议记录说到第几句也记下，回放时字幕跟着走
+  useEffect(() => {
+    if (!restored || replayRef.current) return
+    const ink = inkOnly(session.graph)
+    const d = diffGraph(recorded.current, ink)
+    if (!d) return
+    stepsRef.current = [...stepsRef.current, { t: Date.now(), line: linesRef.current.length, d }]
+    recorded.current = ink
+  }, [graph, restored, session])
 
   useEffect(() => {
     // 桌面版的地址是内置服务每次启动时随机分配的端口，记下来下次也用不上
@@ -484,7 +513,7 @@ export default function App() {
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
   useEffect(() => {
     listEnd.current?.scrollIntoView({ block: 'end' })
-  }, [lines])
+  }, [lines, replay?.at])
 
   function say(u: Utterance) {
     setLines((ls) => [...ls, u])
@@ -605,6 +634,9 @@ export default function App() {
     setSummary('')
     voicesRef.current = []
     setRenamingWho(null)
+    stepsRef.current = []
+    recorded.current = emptyGraph()
+    setReplay(null)
     const id = newMeetingId()
     setMeeting({ id, title: '未命名会议', createdAt: Date.now() })
     save('boardcast.meeting', id)
@@ -684,11 +716,24 @@ export default function App() {
   }
 
   // 键盘：撤销 / 重做 / 删除 / 取消选中。焦点在输入框里时不管；铅笔模式交给 Excalidraw 自己处理
-  const keys = useRef({ undo, redo, deleteSelection })
-  keys.current = { undo, redo, deleteSelection }
+  const keys = useRef({ undo, redo, deleteSelection, toggleReplay, seekReplay, exitReplay })
+  keys.current = { undo, redo, deleteSelection, toggleReplay, seekReplay, exitReplay }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (mode !== 'ink' || (e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return
+      // 焦点在文字输入框里时不管（回放的进度条不算）
+      if ((e.target as HTMLElement).closest('input:not([type=range]), textarea, select, [contenteditable]')) return
+      // 回放：空格播放 / 暂停，左右键一步一步走，Esc 退出；别的快捷键都不管
+      const r = replayRef.current
+      if (r) {
+        if (e.key === ' ') keys.current.toggleReplay()
+        else if (e.key === 'ArrowLeft') keys.current.seekReplay(r.at - 1)
+        else if (e.key === 'ArrowRight') keys.current.seekReplay(r.at + 1)
+        else if (e.key === 'Escape') keys.current.exitReplay()
+        else return
+        e.preventDefault()
+        return
+      }
+      if (mode !== 'ink') return
       const mod = e.ctrlKey || e.metaKey
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault()
@@ -712,7 +757,68 @@ export default function App() {
     if (selection && !exists(graph, selection)) setSelection(null)
   }, [graph, selection])
 
+  /** 开始回放：记下现在的板书和排版，从空板开始 */
+  function startReplay() {
+    const total = stepsRef.current.length
+    if (!total || replayRef.current) return
+    const saved: Snap = { graph: session.graph, layout: board.snapshot() }
+    setSelection(null)
+    setRenaming(null)
+    setExportMenu(false)
+    board.reset()
+    setGraph(emptyGraph())
+    setReplay({ at: 0, playing: true, speed: 1, total, saved })
+  }
+
+  /** 跳到第 `at` 步。往回跳时排版从头来，往前走时新内容照常找空地 */
+  function seekReplay(at: number) {
+    const r = replayRef.current
+    if (!r) return
+    at = Math.max(0, Math.min(r.total, Math.round(at)))
+    if (at === r.at) return
+    if (at < r.at) board.reset()
+    setGraph(replayTo(stepsRef.current, at))
+    const next = { ...r, at, playing: r.playing && at < r.total }
+    replayRef.current = next
+    setReplay(next)
+  }
+
+  function toggleReplay() {
+    const r = replayRef.current
+    if (!r) return
+    if (r.playing) setReplay({ ...r, playing: false })
+    else if (r.at >= r.total) {
+      // 放完了再点播放：从头开始
+      board.reset()
+      setGraph(emptyGraph())
+      setReplay({ ...r, at: 0, playing: true })
+    } else setReplay({ ...r, playing: true })
+  }
+
+  /** 退出回放：放回原来的板书和排版 */
+  function exitReplay() {
+    const r = replayRef.current
+    if (!r) return
+    board.restore(r.saved.layout)
+    replayRef.current = null
+    setReplay(null)
+    setGraph(session.graph)
+    setLayoutRev((n) => n + 1)
+  }
+
+  // 播放：按当时的节奏走（停顿太长的压到 3 秒，太密的至少留 0.9 秒让字写出来），再除以倍速
+  useEffect(() => {
+    if (!replay?.playing) return
+    const s = stepsRef.current
+    const gap = replay.at > 0 && replay.at < s.length ? s[replay.at].t - s[replay.at - 1].t : 0
+    const wait = replay.at === 0 ? 300 : Math.min(Math.max(gap, 900), 3000) / replay.speed
+    const t = setTimeout(() => seekReplay(replay.at + 1), wait)
+    return () => clearTimeout(t)
+    // seekReplay 每次渲染都是新的，读的是 ref，不用放进依赖
+  }, [replay])
+
   async function openOther(id: string) {
+    exitReplay()
     if (lines.length || graph.nodes.length) await meetings.save(snapshot(meeting)).catch(() => undefined)
     const m = await meetings.load(id).catch(() => null)
     if (m) openMeeting(m)
@@ -762,6 +868,10 @@ export default function App() {
   const empty = lines.length === 0 && graph.nodes.length === 0 && !partial
   /** 会上说的话（不算手动修改） */
   const said = lines.filter((l) => !l.manual)
+  /** 模型还有没画完的句子 */
+  const waiting = lines.some((l) => l.ms === undefined)
+  /** 会议记录栏里显示的：回放时只显示到当时说到的那一句 */
+  const shown = replay ? lines.slice(0, replay.at ? stepsRef.current[replay.at - 1].line : 0) : lines
 
   return (
     <div className={`app${showLog ? '' : ' no-log'}`}>
@@ -807,10 +917,21 @@ export default function App() {
           >
             <TranscriptIcon />
           </button>
-          <button type="button" className="icon" onClick={undo} disabled={!editHistory.current.canUndo} aria-label="撤销" title="撤销（Ctrl+Z）">
+          <button
+            type="button"
+            className={`icon${replay ? ' on' : ''}`}
+            onClick={() => (replay ? exitReplay() : startReplay())}
+            disabled={!replay && (!stepsRef.current.length || listening || waiting)}
+            aria-pressed={!!replay}
+            aria-label="回放"
+            title={replay ? '退出回放' : waiting || listening ? '收音或者模型还在画的时候不能回放' : '回放：看板书是怎么一步步长出来的'}
+          >
+            <ReplayIcon />
+          </button>
+          <button type="button" className="icon" onClick={undo} disabled={!!replay || !editHistory.current.canUndo} aria-label="撤销" title="撤销（Ctrl+Z）">
             <Undo />
           </button>
-          <button type="button" className="icon" onClick={redo} disabled={!editHistory.current.canRedo} aria-label="重做" title="重做（Ctrl+Shift+Z）">
+          <button type="button" className="icon" onClick={redo} disabled={!!replay || !editHistory.current.canRedo} aria-label="重做" title="重做（Ctrl+Shift+Z）">
             <Redo />
           </button>
           <button type="button" className="icon" onClick={tidyUp} disabled={!graph.nodes.length} aria-label="整理排版" title="整理排版：整块重新排一次">
@@ -868,7 +989,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="board">
+      <main className={`board${replay ? ' replaying' : ''}`}>
         {mode === 'ink' ? (
           <InkBoard
             graph={graph}
@@ -878,13 +999,17 @@ export default function App() {
             bottomInset={inset}
             tidy={tidy}
             weight={weightLater / 100}
-            selection={selection}
+            selection={replay ? null : selection}
             layoutRev={layoutRev}
-            onMoveSel={moveSelection}
-            onSelect={(sel) => {
-              setSelection(sel)
-              setRenaming(null)
-            }}
+            onMoveSel={replay ? undefined : moveSelection}
+            onSelect={
+              replay
+                ? undefined
+                : (sel) => {
+                    setSelection(sel)
+                    setRenaming(null)
+                  }
+            }
             toolbar={
               selection &&
               (renaming !== null ? (
@@ -993,6 +1118,20 @@ export default function App() {
           voiceErr={voiceErr}
           toggleMic={() => void toggleMic()}
         />
+        {replay && (
+          <ReplayBar
+            at={replay.at}
+            total={replay.total}
+            playing={replay.playing}
+            speed={replay.speed}
+            elapsed={replay.at ? stepsRef.current[replay.at - 1].t - stepsRef.current[0].t : 0}
+            duration={stepsRef.current[replay.total - 1].t - stepsRef.current[0].t}
+            onToggle={toggleReplay}
+            onSeek={seekReplay}
+            onSpeed={() => setReplay({ ...replay, speed: SPEEDS[(SPEEDS.indexOf(replay.speed as 1) + 1) % SPEEDS.length] })}
+            onExit={exitReplay}
+          />
+        )}
       </main>
 
       <aside className="log" aria-label="会议记录" hidden={!showLog}>
@@ -1018,7 +1157,7 @@ export default function App() {
             <Close size={16} />
           </button>
         </header>
-        {(summing || summary) && (
+        {(summing || summary) && !replay && (
           <Suspense fallback={null}>
             <Summary
               text={summary}
@@ -1052,8 +1191,11 @@ export default function App() {
         )}
         <div className="lines">
           {lines.length === 0 && !partial && <p className="empty">还没有人说话。说的每一句和它画出来的东西都会记在这里。</p>}
-          {lines.map((l, i) => (
-            <article key={i} className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}`}>
+          {shown.map((l, i) => (
+            <article
+              key={i}
+              className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}`}
+            >
               {l.manual && <span className="who edit">改</span>}
               {l.speaker && (
                 <span
@@ -1082,7 +1224,7 @@ export default function App() {
               </div>
             </article>
           ))}
-          {partial && (
+          {partial && !replay && (
             <article className="line partial" aria-live="polite">
               {speaker.trim() && <span className={`who c${speakers.indexOf(speaker.trim()) % 6}`}>{speaker.trim()}</span>}
               <div className="body">

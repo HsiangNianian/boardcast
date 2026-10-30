@@ -3,6 +3,7 @@
 // - 桌面版由外壳存在应用数据目录的 meetings/ 下；网页版存在浏览器的 IndexedDB；
 // - 带版本号，以后改数据结构时可以迁移。
 
+import type { Step } from './engine/steps.ts'
 import type { Voice } from './engine/voices.ts'
 import type { LayoutMemory } from './board/layout.ts'
 import { isDesktop } from './desktop.ts'
@@ -39,6 +40,8 @@ export interface Meeting {
   summary?: string
   /** 这场会里认出来的声音（区分说话人用） */
   voices?: Voice[]
+  /** 墨线板书的每一次变化（回放用） */
+  steps?: Step[]
 }
 
 /** 历史列表里显示的样子 */

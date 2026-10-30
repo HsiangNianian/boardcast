@@ -2,6 +2,20 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.5.0 - 2026-10-30
+
+### Features
+
+- **replay:** Replay how the board grew during a meeting (closes #16) ([`6d079f1`](https://github.com/HsiangNianian/boardcast/commit/6d079f12c2805195c6c29cb283fa1af3b108b217))
+  - every change to the inked board is recorded as a diff against the previous version (nodes, edges and groups added, changed or removed, plus the id counters), with a timestamp and how many transcript lines there were
+  - recording diffs instead of ops keeps replay exact: pencil drafts take node ids before the model's ops, and manual edits and undo are not ops at all
+  - steps are saved with the meeting; meetings saved by older versions replay as a single step
+  - a replay button in the top bar starts from an empty board and writes each step in at the meeting's pace (gaps clamped to 0.9-3 s), with the transcript following along
+  - the replay bar replaces the composer: play / pause (space), a draggable progress bar or arrow keys to step, 1x / 2x / 4x, and Esc to leave; export works on the moment shown
+  - the current board and layout are restored on exit; nothing is autosaved or editable while replaying, and replay is unavailable while listening or while the model is still drawing
+
+**Full diff:** [v0.4.0...v0.5.0](https://github.com/HsiangNianian/boardcast/compare/v0.4.0...v0.5.0)
+
 ## 0.4.0 - 2026-10-30
 
 ### Features

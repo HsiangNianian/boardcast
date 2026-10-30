@@ -1388,5 +1388,198 @@
         "缓存"
       ]
     }
+  },
+  {
+    "id": "noise-long",
+    "name": "闲聊占了大半，有用的两句夹在中间",
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "喂喂，能看到我屏幕吗？"
+      },
+      {
+        "speaker": "B",
+        "text": "能，就是有点糊。"
+      },
+      {
+        "speaker": "C",
+        "text": "我刚从上一个会过来，稍等我喝口水。"
+      },
+      {
+        "speaker": "A",
+        "text": "好的。嗯，告警这块是 Prometheus 采指标，触发以后推给 Alertmanager。"
+      },
+      {
+        "speaker": "B",
+        "text": "这周末大家有啥安排没？"
+      },
+      {
+        "speaker": "C",
+        "text": "我要搬家，累死了。"
+      },
+      {
+        "speaker": "A",
+        "text": "哈哈辛苦。那个，Alertmanager 收到以后再发到企业微信。"
+      },
+      {
+        "speaker": "B",
+        "text": "行，那今天就先这样？"
+      }
+    ],
+    "gold": {
+      "nodes": [
+        [
+          "Prometheus"
+        ],
+        [
+          "Alertmanager"
+        ],
+        [
+          "企业微信",
+          "企微"
+        ]
+      ],
+      "edges": [
+        [
+          "Prometheus",
+          "Alertmanager"
+        ],
+        [
+          "Alertmanager",
+          "企业微信"
+        ]
+      ],
+      "optional_nodes": [
+        [
+          "告警",
+          "告警系统"
+        ],
+        [
+          "指标"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "mark-target",
+    "name": "强调的是条目，不是话题",
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "下个版本要做的事列一下：消息推送、深色模式、支付改版。"
+      },
+      {
+        "speaker": "B",
+        "text": "这三个里面支付改版最重要，必须这个版本上。"
+      },
+      {
+        "speaker": "A",
+        "text": "深色模式可以往后放。"
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "下个版本",
+            "下个版本要做的事",
+            "待办",
+            "版本计划"
+          ],
+          "items": [
+            [
+              "消息推送",
+              "推送"
+            ],
+            [
+              "深色模式"
+            ],
+            [
+              "支付改版",
+              "支付"
+            ]
+          ]
+        }
+      ],
+      "emphasized": [
+        [
+          "支付改版",
+          "支付"
+        ]
+      ],
+      "not_emphasized": [
+        [
+          "下个版本",
+          "下个版本要做的事",
+          "待办",
+          "版本计划"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "group-phrasing",
+    "name": "分组用「都属于」说出来",
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "采集服务把数据写进 Kafka，清洗服务从 Kafka 读。"
+      },
+      {
+        "speaker": "A",
+        "text": "清洗完存到 ClickHouse。"
+      },
+      {
+        "speaker": "B",
+        "text": "Kafka 和 ClickHouse 都属于存储层吧？"
+      },
+      {
+        "speaker": "A",
+        "text": "对，这两个算存储层，采集和清洗算计算层。"
+      }
+    ],
+    "gold": {
+      "nodes": [
+        [
+          "采集服务",
+          "采集"
+        ],
+        [
+          "Kafka"
+        ],
+        [
+          "清洗服务",
+          "清洗"
+        ],
+        [
+          "ClickHouse",
+          "CH"
+        ]
+      ],
+      "edges": [
+        [
+          "采集服务",
+          "Kafka"
+        ],
+        [
+          "Kafka",
+          "清洗服务"
+        ],
+        [
+          "清洗服务",
+          "ClickHouse"
+        ]
+      ],
+      "groups": [
+        [
+          "Kafka",
+          "ClickHouse"
+        ],
+        [
+          "采集服务",
+          "清洗服务"
+        ]
+      ]
+    }
   }
 ]

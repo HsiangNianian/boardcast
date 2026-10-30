@@ -28,6 +28,8 @@ export interface Gold {
   struck?: Names[]
   /** 应该被强调的（星标、圈出、下划线都算） */
   emphasized?: Names[]
+  /** 不该被强调的（比如强调落到了话题上，而不是被强调的那一条）：强调了算一次标记没命中 */
+  not_emphasized?: Names[]
   /** 应该记成问题 / 公式的，写几个关键词，命中任意一个就算 */
   questions?: Names[]
   formulas?: Names[]
@@ -145,6 +147,12 @@ export function score(g: Graph, gold: Gold): Score {
   for (const s of gold.struck ?? []) has(s, (n) => n.marks.includes('划掉'), '没划掉')
   for (const s of gold.emphasized ?? [])
     has(s, (n) => n.marks.some((m) => m === '星标' || m === '圈出' || m === '下划线'), '没强调')
+  for (const s of gold.not_emphasized ?? []) {
+    markAll++
+    const wrong = g.nodes.some((n) => n.marks.some((m) => m === '星标' || m === '圈出' || m === '下划线') && best(names(n), s) >= 1)
+    if (wrong) markMiss.push(`强调错了地方：${s[0]}`)
+    else markHit++
+  }
   for (const q of gold.questions ?? []) has(q, (n) => n.kind === 'question', '没记成问题')
   for (const f of gold.formulas ?? []) has(f, (n) => n.kind === 'formula', '没记成公式')
 

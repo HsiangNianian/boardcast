@@ -1,0 +1,324 @@
+[
+  {
+    "id": "h-refund",
+    "name": "退款流程，中途改一步",
+    "turns": [
+      { "speaker": "A", "text": "退款是用户在 App 里点申请退款，请求到售后服务。" },
+      { "speaker": "A", "text": "售后服务直接调支付网关退钱。" },
+      { "speaker": "B", "text": "不是直接退，售后服务要先让客服审核，审核通过了才调支付网关。" },
+      { "speaker": "A", "text": "对，忘了审核这步。" }
+    ],
+    "gold": {
+      "nodes": [["用户"], ["App"], ["售后服务", "售后"], ["客服审核", "客服", "审核"], ["支付网关"]],
+      "edges": [["用户", "App"], ["App", "售后服务"], ["售后服务", "客服审核"], ["客服审核", "支付网关"]],
+      "optional_nodes": [["申请退款", "退款"]],
+      "forbidden_edges": [["售后服务", "支付网关"]]
+    }
+  },
+  {
+    "id": "h-cdn",
+    "name": "静态资源链路，指代",
+    "turns": [
+      { "speaker": "A", "text": "前端打包完把静态文件传到对象存储。" },
+      { "speaker": "A", "text": "它前面挂一层 CDN，用户访问都先到 CDN。" },
+      { "speaker": "B", "text": "CDN 没命中就回源到它。" }
+    ],
+    "gold": {
+      "nodes": [["前端", "前端打包", "打包"], ["对象存储", "OSS"], ["CDN"], ["用户"]],
+      "edges": [["前端", "对象存储"], ["用户", "CDN"], ["CDN", "对象存储"]],
+      "either_direction": [["CDN", "对象存储"]],
+      "optional_nodes": [["静态文件", "静态资源"]]
+    }
+  },
+  {
+    "id": "h-chat-noise",
+    "name": "开场寒暄很长",
+    "turns": [
+      { "speaker": "A", "text": "早上好早上好。" },
+      { "speaker": "B", "text": "早，昨天的球看了没？" },
+      { "speaker": "A", "text": "看了，最后那个点球太离谱了。" },
+      { "speaker": "C", "text": "人到齐了吧，那我们开始。" },
+      { "speaker": "C", "text": "今天说日志：应用把日志打到 Filebeat，Filebeat 送进 Elasticsearch。" },
+      { "speaker": "B", "text": "然后在 Kibana 里查。" },
+      { "speaker": "A", "text": "好的没问题。" }
+    ],
+    "gold": {
+      "nodes": [["应用"], ["Filebeat"], ["Elasticsearch", "ES"], ["Kibana"]],
+      "edges": [["应用", "Filebeat"], ["Filebeat", "Elasticsearch"], ["Elasticsearch", "Kibana"]],
+      "either_direction": [["Elasticsearch", "Kibana"]],
+      "optional_nodes": [["日志"]]
+    }
+  },
+  {
+    "id": "h-sprint",
+    "name": "迭代计划，三块话题",
+    "turns": [
+      { "speaker": "PM", "text": "这个迭代分三块：新功能、修 bug、技术债。" },
+      { "speaker": "PM", "text": "新功能是收藏夹和分享卡片。" },
+      { "speaker": "研发", "text": "bug 主要是闪退和图片加载慢。" },
+      { "speaker": "研发", "text": "技术债就是把旧的网络库换掉。" }
+    ],
+    "gold": {
+      "topics": [
+        { "title": ["新功能"], "items": [["收藏夹"], ["分享卡片", "分享"]] },
+        { "title": ["修bug", "bug", "修 bug"], "items": [["闪退"], ["图片加载慢", "图片加载"]] },
+        { "title": ["技术债"], "items": [["换网络库", "旧的网络库", "网络库"]] }
+      ]
+    }
+  },
+  {
+    "id": "h-owner-swap",
+    "name": "负责人对调",
+    "turns": [
+      { "speaker": "组长", "text": "小张做搜索，小刘做推荐。" },
+      { "speaker": "小张", "text": "我对推荐更熟，要不我们俩换一下？" },
+      { "speaker": "组长", "text": "行，那推荐给小张，搜索给小刘。" }
+    ],
+    "gold": {
+      "topics": [
+        { "title": ["小张"], "items": [["推荐"]] },
+        { "title": ["小刘"], "items": [["搜索"]] }
+      ]
+    }
+  },
+  {
+    "id": "h-strike-option",
+    "name": "三个选项否掉两个",
+    "turns": [
+      { "speaker": "A", "text": "缓存方案有三个：本地缓存、Redis、Memcached。" },
+      { "speaker": "B", "text": "本地缓存多实例会不一致，不行。" },
+      { "speaker": "A", "text": "Memcached 我们没人熟，也划掉吧。" },
+      { "speaker": "B", "text": "那就 Redis。" }
+    ],
+    "gold": {
+      "topics": [{ "title": ["缓存方案", "缓存"], "items": [["本地缓存"], ["Redis"], ["Memcached"]] }],
+      "struck": [["本地缓存"], ["Memcached"]],
+      "optional_nodes": [["多实例不一致", "不一致"]]
+    }
+  },
+  {
+    "id": "h-formula",
+    "name": "转化率公式",
+    "turns": [
+      { "speaker": "数据", "text": "转化率我们按下单人数除以访问人数算。" },
+      { "speaker": "产品", "text": "访问人数要去重吗？" },
+      { "speaker": "数据", "text": "要，按用户 ID 去重。" }
+    ],
+    "gold": {
+      "formulas": [["下单人数", "访问人数", "转化率"]],
+      "optional_nodes": [["转化率"], ["去重"], ["用户ID"]]
+    }
+  },
+  {
+    "id": "h-questions",
+    "name": "一串没定的问题",
+    "turns": [
+      { "speaker": "A", "text": "海外版的事还有几个没定。" },
+      { "speaker": "A", "text": "服务器放新加坡还是法兰克福？" },
+      { "speaker": "B", "text": "支付要不要接 Stripe 也没定。" },
+      { "speaker": "C", "text": "还有谁来做本地化翻译？" }
+    ],
+    "gold": {
+      "questions": [["新加坡", "法兰克福", "服务器"], ["Stripe", "支付"], ["翻译", "本地化"]],
+      "optional_nodes": [["海外版"]]
+    }
+  },
+  {
+    "id": "h-rename",
+    "name": "节点改名",
+    "turns": [
+      { "speaker": "A", "text": "网页端调用户服务，用户服务读用户表。" },
+      { "speaker": "B", "text": "用户服务现在改名叫账号中心了。" },
+      { "speaker": "A", "text": "好，账号中心还要调短信服务发验证码。" }
+    ],
+    "gold": {
+      "nodes": [["网页端", "网页", "Web"], ["账号中心", "用户服务"], ["用户表"], ["短信服务", "短信"]],
+      "edges": [["网页端", "账号中心"], ["账号中心", "用户表"], ["账号中心", "短信服务"]],
+      "forbidden_nodes": []
+    }
+  },
+  {
+    "id": "h-delete",
+    "name": "说错了删掉",
+    "turns": [
+      { "speaker": "A", "text": "订单服务会调用风控服务和积分服务。" },
+      { "speaker": "B", "text": "积分服务不对，那是会员那边调的，订单不调它。" },
+      { "speaker": "A", "text": "那把积分去掉。订单服务再调物流服务。" }
+    ],
+    "gold": {
+      "nodes": [["订单服务", "订单"], ["风控服务", "风控"], ["物流服务", "物流"]],
+      "edges": [["订单服务", "风控服务"], ["订单服务", "物流服务"]],
+      "optional_nodes": [["会员"]],
+      "forbidden_edges": [["订单服务", "积分服务"]]
+    }
+  },
+  {
+    "id": "h-english",
+    "name": "中英混说",
+    "turns": [
+      { "speaker": "A", "text": "client 先发 request 到 load balancer。" },
+      { "speaker": "A", "text": "LB 再分到三个 API server。" },
+      { "speaker": "B", "text": "API server 都连同一个 Postgres。" }
+    ],
+    "gold": {
+      "nodes": [["client", "客户端"], ["load balancer", "LB", "负载均衡"], ["API server", "API服务"], ["Postgres", "PostgreSQL"]],
+      "edges": [["client", "load balancer"], ["load balancer", "API server"], ["API server", "Postgres"]]
+    }
+  },
+  {
+    "id": "h-groups",
+    "name": "前后端分组",
+    "turns": [
+      { "speaker": "A", "text": "管理后台和小程序都调网关。" },
+      { "speaker": "A", "text": "网关后面是商品服务和库存服务。" },
+      { "speaker": "B", "text": "管理后台和小程序算前端，商品和库存算后端服务。" }
+    ],
+    "gold": {
+      "nodes": [["管理后台", "后台"], ["小程序"], ["网关"], ["商品服务", "商品"], ["库存服务", "库存"]],
+      "edges": [["管理后台", "网关"], ["小程序", "网关"], ["网关", "商品服务"], ["网关", "库存服务"]],
+      "groups": [["管理后台", "小程序"], ["商品服务", "库存服务"]]
+    }
+  },
+  {
+    "id": "h-cause",
+    "name": "故障原因链",
+    "turns": [
+      { "speaker": "SRE", "text": "昨天的故障是配置中心推了一个错的超时配置。" },
+      { "speaker": "SRE", "text": "导致订单服务大量超时，然后线程池打满。" },
+      { "speaker": "研发", "text": "线程池满了以后整个下单都不可用了。" }
+    ],
+    "gold": {
+      "nodes": [["配置中心", "错的超时配置", "超时配置"], ["订单服务超时", "大量超时", "订单服务"], ["线程池打满", "线程池"], ["下单不可用", "下单"]],
+      "edges": [["配置中心", "订单服务超时"], ["订单服务超时", "线程池打满"], ["线程池打满", "下单不可用"]],
+      "optional_nodes": [["故障"]]
+    }
+  },
+  {
+    "id": "h-retro",
+    "name": "复盘：好的和要改进的",
+    "turns": [
+      { "speaker": "主持", "text": "复盘一下，先说做得好的。" },
+      { "speaker": "A", "text": "上线前做了灰度，问题发现得早。" },
+      { "speaker": "主持", "text": "要改进的呢？" },
+      { "speaker": "B", "text": "监控告警太晚，用户先发现的问题。" },
+      { "speaker": "C", "text": "回滚脚本没人维护，这个一定要改。" }
+    ],
+    "gold": {
+      "topics": [
+        { "title": ["做得好的", "好的"], "items": [["灰度", "做了灰度"]] },
+        { "title": ["要改进的", "改进"], "items": [["监控告警太晚", "告警太晚", "监控告警"], ["回滚脚本没人维护", "回滚脚本"]] }
+      ],
+      "emphasized": [["回滚脚本没人维护", "回滚脚本"]]
+    }
+  },
+  {
+    "id": "h-mixed",
+    "name": "流程图加待办",
+    "turns": [
+      { "speaker": "A", "text": "上传图片走前端直传对象存储，传完回调业务服务。" },
+      { "speaker": "B", "text": "待办记一下：回调要加签名校验。" },
+      { "speaker": "A", "text": "还有图片要压缩，也记上。" }
+    ],
+    "gold": {
+      "nodes": [["前端"], ["对象存储", "OSS"], ["业务服务"]],
+      "edges": [["前端", "对象存储"], ["对象存储", "业务服务"]],
+      "topics": [{ "title": ["待办"], "items": [["签名校验", "回调加签名校验"], ["图片压缩", "压缩"]] }]
+    }
+  },
+  {
+    "id": "h-nested",
+    "name": "条目下面的子条目",
+    "turns": [
+      { "speaker": "A", "text": "发布清单：第一是数据库迁移，第二是配置更新。" },
+      { "speaker": "B", "text": "数据库迁移里面要先备份，再跑脚本。" }
+    ],
+    "gold": {
+      "topics": [{ "title": ["发布清单", "发布"], "items": [["数据库迁移"], ["配置更新"], ["备份", "先备份"], ["跑脚本", "脚本"]] }]
+    }
+  },
+  {
+    "id": "h-move-item",
+    "name": "条目挪到别的话题",
+    "turns": [
+      { "speaker": "A", "text": "前端要做的：首页改版、埋点上报。" },
+      { "speaker": "A", "text": "后端要做的：订单导出。" },
+      { "speaker": "B", "text": "埋点上报应该算后端的，接口在后端。" }
+    ],
+    "gold": {
+      "topics": [
+        { "title": ["前端"], "items": [["首页改版"]] },
+        { "title": ["后端"], "items": [["订单导出"], ["埋点上报", "埋点"]] }
+      ]
+    }
+  },
+  {
+    "id": "h-emphasis",
+    "name": "重点和问题混在一起",
+    "turns": [
+      { "speaker": "A", "text": "上线检查有三项：压测、安全扫描、文档。" },
+      { "speaker": "B", "text": "压测是重中之重，上次就是没压测出的事。" },
+      { "speaker": "C", "text": "文档要不要这次一起写完？" }
+    ],
+    "gold": {
+      "topics": [{ "title": ["上线检查"], "items": [["压测"], ["安全扫描"], ["文档"]] }],
+      "emphasized": [["压测"]],
+      "not_emphasized": [["上线检查"]],
+      "questions": [["文档"]]
+    }
+  },
+  {
+    "id": "h-loop",
+    "name": "带回环的流程",
+    "turns": [
+      { "speaker": "A", "text": "用户提交表单，表单服务校验。" },
+      { "speaker": "A", "text": "校验不过就退回给用户改，过了就存进数据库。" }
+    ],
+    "gold": {
+      "nodes": [["用户"], ["表单服务", "表单"], ["数据库"]],
+      "edges": [["用户", "表单服务"], ["表单服务", "用户"], ["表单服务", "数据库"]],
+      "optional_nodes": [["校验"]]
+    }
+  },
+  {
+    "id": "h-pricing",
+    "name": "定价讨论，带公式和否掉的方案",
+    "turns": [
+      { "speaker": "A", "text": "会员定价两个思路：按月订阅，或者一次性买断。" },
+      { "speaker": "B", "text": "买断不行，后续没收入。" },
+      { "speaker": "A", "text": "月费按成本乘以一点五倍来定。" }
+    ],
+    "gold": {
+      "topics": [{ "title": ["会员定价", "定价"], "items": [["按月订阅", "订阅", "月订阅"], ["一次性买断", "买断"]] }],
+      "struck": [["一次性买断", "买断"]],
+      "formulas": [["成本", "1.5", "一点五"]]
+    }
+  },
+  {
+    "id": "h-coref-long",
+    "name": "隔几句才回指",
+    "turns": [
+      { "speaker": "A", "text": "推荐系统先从行为日志里算出用户画像。" },
+      { "speaker": "B", "text": "画像每天凌晨跑一次。" },
+      { "speaker": "A", "text": "排序模型读画像，给每个用户出一个列表。" },
+      { "speaker": "B", "text": "这个列表最后放进 Redis，App 打开时直接读。" }
+    ],
+    "gold": {
+      "nodes": [["行为日志"], ["用户画像", "画像"], ["排序模型"], ["推荐列表", "列表"], ["Redis"], ["App"]],
+      "edges": [["行为日志", "用户画像"], ["用户画像", "排序模型"], ["排序模型", "推荐列表"], ["推荐列表", "Redis"], ["Redis", "App"]],
+      "alt_edges": [[["推荐列表", "Redis"], ["排序模型", "Redis"]]],
+      "optional_nodes": [["推荐系统"]]
+    }
+  },
+  {
+    "id": "h-just-chat",
+    "name": "整段都是闲聊，什么都不该画",
+    "turns": [
+      { "speaker": "A", "text": "今天好热啊。" },
+      { "speaker": "B", "text": "是啊，空调好像坏了。" },
+      { "speaker": "A", "text": "那等会儿再开吧，先吃饭。" }
+    ],
+    "gold": {
+      "forbidden_nodes": ["空调", "吃饭", "天气"]
+    }
+  }
+]

@@ -56,6 +56,8 @@ export default function InkBoard({
   selection = null,
   onSelect,
   toolbar,
+  onMoveSel,
+  layoutRev = 0,
 }: {
   graph: Graph
   hot: Set<string>
@@ -71,6 +73,10 @@ export default function InkBoard({
   selection?: Selection | null
   onSelect?: (sel: Selection | null) => void
   toolbar?: ReactNode
+  /** 把选中的框或话题拖到了新位置（画板坐标的位移） */
+  onMoveSel?: (sel: Selection, dx: number, dy: number) => void
+  /** 排版记忆变了（拖动、撤销）就加一：重新排版、重画 */
+  layoutRev?: number
 }) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
@@ -85,6 +91,9 @@ export default function InkBoard({
   const drag = useRef<{ x: number; y: number } | null>(null)
   /** 这次按下以后有没有拖动：没拖动就算点了一下，用来点选 */
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  /** 正在拖动选中的东西：按下时的画板坐标，和目前的位移 */
+  const moveFrom = useRef<{ x: number; y: number } | null>(null)
+  const [moving, setMoving] = useState<{ dx: number; dy: number } | null>(null)
   /** 最近一次的排版：点选判定、画高亮框要用 */
   const [lay, setLay] = useState<Layout | null>(null)
   /** 现在画面上的视角和画布尺寸，排完新内容时判断要不要重新适配 */
@@ -149,7 +158,7 @@ export default function InkBoard({
     return () => {
       stale = true
     }
-  }, [graph, hot, look, messy, weight, tidy, bottomInset])
+  }, [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev])
 
   // 画布尺寸放进 state：第一次渲染时 ref 还没挂上，窗口缩放时也要重新适配
   const [[W, H], setSize] = useState<[number, number]>([1000, 700])
@@ -186,11 +195,29 @@ export default function InkBoard({
     // 浮动按钮上的点击不算点白板
     if ((e.target as Element).closest('.ink-toolbar')) return
     const [x, y] = at(e)
+    ;(e.target as Element).setPointerCapture(e.pointerId)
+    // 在已经选中的框或话题上按下去：拖它，而不是平移画面
+    const wx = v.x + x / v.k
+    const wy = v.y + y / v.k
+    if (selection?.kind === 'node' && onMoveSel && lay && board.movable(selection.id)) {
+      const hit = hitTest(lay, graph, wx, wy, 8 / v.k)
+      if (hit?.kind === 'node' && hit.id === selection.id) {
+        moveFrom.current = { x: wx, y: wy }
+        setMoving({ dx: 0, dy: 0 })
+        return
+      }
+    }
     drag.current = { x, y }
     press.current = { x, y, moved: false }
-    ;(e.target as Element).setPointerCapture(e.pointerId)
   }
   const onUp = (e: PointerEvent) => {
+    if (moveFrom.current) {
+      const m = moving
+      moveFrom.current = null
+      setMoving(null)
+      if (m && selection && Math.hypot(m.dx, m.dy) * v.k > 3) onMoveSel?.(selection, m.dx, m.dy)
+      return
+    }
     drag.current = null
     const p = press.current
     press.current = null
@@ -200,6 +227,11 @@ export default function InkBoard({
     onSelect(hitTest(lay, graph, v.x + x / v.k, v.y + y / v.k, 8 / v.k))
   }
   const onMove = (e: PointerEvent) => {
+    if (moveFrom.current) {
+      const [x, y] = at(e)
+      setMoving({ dx: v.x + x / v.k - moveFrom.current.x, dy: v.y + y / v.k - moveFrom.current.y })
+      return
+    }
     if (!drag.current) return
     const [x, y] = at(e)
     if (press.current && Math.hypot(x - press.current.x, y - press.current.y) > 4) press.current.moved = true
@@ -209,12 +241,30 @@ export default function InkBoard({
     setView({ ...v, x: v.x - dx, y: v.y - dy })
   }
 
-  const selBox = selection && lay ? selectionBox(lay, selection) : undefined
+  const moved = useMemo(() => {
+    if (!moving || selection?.kind !== 'node') return null
+    const ids = new Set([selection.id])
+    // 话题：下面挂的条目、问题、备注都跟着走
+    for (let grew = true; grew; ) {
+      grew = false
+      for (const n of graph.nodes)
+        if (n.parent && ids.has(n.parent) && !ids.has(n.id)) {
+          ids.add(n.id)
+          grew = true
+        }
+    }
+    return ids
+  }, [moving, selection, graph])
+  const follows = (key: string) => !!moved && [...moved].some((id) => key === id || key.startsWith(`${id}|`) || key.startsWith(`${id}pre`))
+  const offset = moving ? `translate(${moving.dx} ${moving.dy})` : undefined
+
+  const selBox0 = selection && lay ? selectionBox(lay, selection) : undefined
+  const selBox = selBox0 && moving ? { ...selBox0, x: selBox0.x + moving.dx, y: selBox0.y + moving.dy } : selBox0
   const selLine = selection && lay ? selectionLine(lay, selection) : undefined
 
   const now = performance.now()
   const render = (p: Piece, i: number) => (
-    <g key={p.key} data-key={p.key} opacity={p.opacity} fill={p.color} style={p.under ? { mixBlendMode: dark ? 'screen' : 'multiply' } : undefined}>
+    <g key={p.key} data-key={p.key} transform={follows(p.key) ? offset : undefined} opacity={p.opacity} fill={p.color} style={p.under ? { mixBlendMode: dark ? 'screen' : 'multiply' } : undefined}>
       {p.strokes.map((s, j) => {
         const t = timing.current.get(p.key)
         const live = t && t.end > now && t.durs[j] > 0
@@ -283,11 +333,12 @@ export default function InkBoard({
           </g>
         )}
       </svg>
-      {selBox && toolbar && (
+      {selBox && toolbar && !moving && (
         <div
           className="ink-toolbar"
           style={{
-            left: Math.max(8, Math.min(W - 8, (selBox.x + selBox.w / 2 - v.x) * v.k)),
+            // 按钮条以选中物为中心；靠近边缘时整条往里收，别被裁掉（按钮条大约 300 宽）
+            left: Math.max(160, Math.min(W - 160, (selBox.x + selBox.w / 2 - v.x) * v.k)),
             top: Math.max(8, (selBox.y - v.y) * v.k - 12),
           }}
           onPointerDown={(e) => e.stopPropagation()}

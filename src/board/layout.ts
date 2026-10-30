@@ -351,6 +351,27 @@ export class StableLayout {
     this.boxAt = new Map(m.boxAt)
   }
 
+  /**
+   * 手动挪位置：流程图节点按流程图内部坐标挪，话题按整块区域挪（`id` 是话题节点）。
+   * 挪完下一次排版就用新位置；连到它的线因为两端变了会重新走线。挪不了（比如条目）返回 false。
+   */
+  move(id: string, dx: number, dy: number): boolean {
+    const n = this.nodeAt.get(id)
+    if (n) this.nodeAt.set(id, { ...n, x: n.x + dx, y: n.y + dy })
+    else {
+      const r = this.regionAt.get(id)
+      if (!r) return false
+      this.regionAt.set(id, { x: r.x + dx, y: r.y + dy })
+    }
+    this.cache = new WeakMap()
+    return true
+  }
+
+  /** 这个东西能不能拖：流程图节点、话题 */
+  movable(id: string): boolean {
+    return this.nodeAt.has(id) || this.regionAt.has(id)
+  }
+
   /** 同一个图对象只排一次；排版按调用顺序一个个来，后一次能看到前一次记下的位置 */
   layout(g: Graph): Promise<Layout> {
     let p = this.cache.get(g)

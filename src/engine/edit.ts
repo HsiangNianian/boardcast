@@ -46,28 +46,28 @@ export function exists(g: Graph, sel: Selection): boolean {
   return g.edges.some((e) => e.from === sel.from && e.to === sel.to)
 }
 
-/** 撤销 / 重做：按「一步」记整张图。模型每画完一轮、每次手动修改各算一步 */
-export class History {
-  private past: Graph[] = []
-  private future: Graph[] = []
+/** 撤销 / 重做：按「一步」记整个状态（板书，或者板书加排版位置）。模型每画完一轮、每次手动修改各算一步 */
+export class History<T = Graph> {
+  private past: T[] = []
+  private future: T[] = []
   private limit: number
   constructor(limit = 100) {
     this.limit = limit
   }
 
   /** 记下改之前的样子；新的修改会清掉能重做的步骤 */
-  record(before: Graph) {
+  record(before: T) {
     this.past.push(before)
     if (this.past.length > this.limit) this.past.shift()
     this.future = []
   }
-  undo(current: Graph): Graph | null {
+  undo(current: T): T | null {
     const g = this.past.pop()
     if (!g) return null
     this.future.push(current)
     return g
   }
-  redo(current: Graph): Graph | null {
+  redo(current: T): T | null {
     const g = this.future.pop()
     if (!g) return null
     this.past.push(current)

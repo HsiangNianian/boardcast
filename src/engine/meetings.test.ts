@@ -28,6 +28,28 @@ test('a restored layout puts everything back where it was', async () => {
     if (id.startsWith('n')) assert.deepEqual([more.anchors.get(id)?.x, more.anchors.get(id)?.y], [box.x, box.y], `${id} 挪了`)
 })
 
+test('dragging moves a flowchart node or a whole topic and leaves the rest alone', async () => {
+  const b = new StableLayout()
+  const g = applyOps(emptyGraph(), parseOps('E 「用户」 「网关」\nT 「爬虫」\nL n3 「监控任务」'))
+  const l0 = await b.layout(g)
+  assert.ok(b.movable('n2') && b.movable('n3'))
+  assert.ok(!b.movable('n4'), '条目跟着话题走，不能单独拖')
+  assert.ok(b.move('n2', 120, 40))
+  assert.ok(b.move('n3', -30, 200))
+  assert.ok(!b.move('n4', 10, 10))
+  const l1 = await b.layout(g)
+  const at = (l: typeof l0, id: string) => [l.anchors.get(id)!.x, l.anchors.get(id)!.y]
+  assert.deepEqual(at(l1, 'n2'), [at(l0, 'n2')[0] + 120, at(l0, 'n2')[1] + 40])
+  assert.deepEqual(at(l1, 'n1'), at(l0, 'n1'))
+  // 话题整块挪，条目跟着走
+  assert.deepEqual(at(l1, 'n4'), [at(l0, 'n4')[0] - 30, at(l0, 'n4')[1] + 200])
+  // 连到挪过的节点的线重新走线，终点跟着到了新位置
+  const route = l1.diagram!.edges.find((e) => e.to === 'n2')!.points
+  const end = route[route.length - 1]
+  const box = l1.anchors.get('n2')!
+  assert.ok(end[0] >= box.x - 1 && end[0] <= box.x + box.w + 1 && end[1] >= box.y - 1 && end[1] <= box.y + box.h + 1)
+})
+
 test('meetings get a title from their content until the user names them', () => {
   const g = applyOps(emptyGraph(), parseOps('E 「用户」 「小程序」\nT 「登录流程」'))
   assert.equal(autoTitle(g, []), '登录流程')

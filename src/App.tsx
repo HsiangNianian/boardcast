@@ -1,7 +1,7 @@
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import cases from '../eval/cases.json'
-import { board } from './board/layout.ts'
+import { type LayoutMemory, board } from './board/layout.ts'
 import type { Look } from './board/scene.ts'
 import {
   type Heard,
@@ -263,7 +263,11 @@ export default function App() {
   const listEnd = useRef<HTMLDivElement>(null)
 
   // —— 手动修改：撤销历史、选中 ——
-  const editHistory = useRef(new EditHistory())
+  /** 撤销的一步：板书 + 排版记住的位置（拖动只改位置；撤销删除时东西也回到原处） */
+  type Snap = { graph: Graph; layout: LayoutMemory }
+  const editHistory = useRef(new EditHistory<Snap>())
+  /** 排版记忆变了（拖动、撤销）就加一，让白板重新排版 */
+  const [layoutRev, setLayoutRev] = useState(0)
   /** 最近一张墨线板（不含铅笔稿）：撤销时退回到这里 */
   const lastInk = useRef<Graph>(emptyGraph())
   const [, setUndoTick] = useState(0)
@@ -275,7 +279,7 @@ export default function App() {
   sessionRef.current ??= new Session(llm, {
         graph: (g, why) => {
           if (why === 'ink') {
-            editHistory.current.record(lastInk.current)
+            editHistory.current.record({ graph: lastInk.current, layout: board.snapshot() })
             lastInk.current = g
             setUndoTick((t) => t + 1)
           }
@@ -442,7 +446,7 @@ export default function App() {
     return () => {
       stale = true
     }
-  }, [graph, hot, api, inset, tidy])
+  }, [graph, hot, api, inset, tidy, layoutRev])
 
   useEffect(() => {
     save('boardcast.mode', mode)
@@ -544,7 +548,7 @@ export default function App() {
   /** 手动改了板书：记一步撤销，记进会议记录（模型下一句看到的就是改过的板） */
   function applyEdit(next: Graph, note: string) {
     if (next === session.graph) return
-    editHistory.current.record(session.graph)
+    editHistory.current.record({ graph: session.graph, layout: board.snapshot() })
     session.graph = next
     lastInk.current = next
     setGraph(next)
@@ -553,18 +557,33 @@ export default function App() {
     setSelection((sel) => (sel && exists(next, sel) ? sel : null))
   }
 
-  function stepTo(g: Graph | null, note: string) {
-    if (!g) return
+  function stepTo(snap: Snap | null, note: string) {
+    if (!snap) return
+    board.restore(snap.layout)
+    const g = snap.graph
     session.graph = g
     lastInk.current = g
     setGraph(g)
+    setLayoutRev((n) => n + 1)
     setUndoTick((t) => t + 1)
     setSelection(null)
     // 也记进会议记录：不然记录里还写着「删掉了……」，看着像没恢复
     setLines((ls) => [...ls, { text: note, manual: true, ms: 0 }])
   }
-  const undo = () => stepTo(editHistory.current.undo(session.graph), '撤销了上一步')
-  const redo = () => stepTo(editHistory.current.redo(session.graph), '重做了一步')
+  const now = (): Snap => ({ graph: session.graph, layout: board.snapshot() })
+  const undo = () => stepTo(editHistory.current.undo(now()), '撤销了上一步')
+  const redo = () => stepTo(editHistory.current.redo(now()), '重做了一步')
+
+  /** 拖动：把新位置写进排版记忆，记一步撤销 */
+  function moveSelection(sel: Selection, dx: number, dy: number) {
+    if (sel.kind !== 'node') return
+    const before = now()
+    if (!board.move(sel.id, dx, dy)) return
+    editHistory.current.record(before)
+    setUndoTick((t) => t + 1)
+    setLayoutRev((n) => n + 1)
+    setLines((ls) => [...ls, { text: `挪了${describe(session.graph, sel)}的位置`, manual: true, ms: 0 }])
+  }
 
   function deleteSelection() {
     if (!selection) return
@@ -783,6 +802,8 @@ export default function App() {
             tidy={tidy}
             weight={weightLater / 100}
             selection={selection}
+            layoutRev={layoutRev}
+            onMoveSel={moveSelection}
             onSelect={(sel) => {
               setSelection(sel)
               setRenaming(null)

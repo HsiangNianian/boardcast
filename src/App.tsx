@@ -28,6 +28,7 @@ import { type Voice, identify, renameVoice } from './engine/voices.ts'
 import { type Meeting, type MeetingLine, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
 import InkBoard from './ink/InkBoard.tsx'
 import ModelPanel from './ModelPanel.tsx'
+import { hostOf, isLoopback } from './privacy.ts'
 import { type RemoteView, remote } from './remote.ts'
 import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
 import Composer from './ui/Composer.tsx'
@@ -142,6 +143,10 @@ export default function App() {
 
   // —— 远程模型：启用了就先确认能连上，能连上才优先用 ——
   const [remoteView, setRemoteView] = useState<RemoteView | null>(null)
+  // 这场会只用本地模型（按会议记住）：开着远程也不发出去
+  const [localOnly, setLocalOnly] = useState(false)
+  const localOnlyRef = useRef(false)
+  localOnlyRef.current = localOnly
   const [remoteState, setRemoteState] = useState<RemoteState>({ state: 'off' })
   const checkRemote = useCallback(async () => {
     const v = await remote.get().catch(() => null)
@@ -156,10 +161,10 @@ export default function App() {
     setRemoteState({ state: 'checking' })
     try {
       const t = await remote.test()
-      remoteFirst.current = true
+      remoteFirst.current = !localOnlyRef.current
       setRemoteState({ state: 'ok', ms: t.ms })
-      // 远程能用：内置模型停下来，把显存让出来；某一句远程出错时再临时拉起
-      if (isDesktop) {
+      // 远程能用：内置模型停下来，把显存让出来；某一句远程出错时再临时拉起（这场会只用本地时不停）
+      if (isDesktop && !localOnlyRef.current) {
         const b = await llmStatus().catch(() => null)
         if (b && (b.state === 'ready' || b.state === 'starting')) await llmStop().catch(() => undefined)
       }
@@ -173,6 +178,16 @@ export default function App() {
     void checkRemote()
   }, [checkRemote])
   const useRemote = remoteState.state === 'ok' && !!remoteView
+  /** 这场会用不用远程接口：远程能用，而且这场会没有限定只用本地 */
+  const remoteOn = useRemote && !localOnly
+  /** 说的话会不会离开这台电脑：远程接口填的是本机地址（LM Studio 之类）不算 */
+  const cloud = remoteOn && !!remoteView && !isLoopback(remoteView.baseUrl)
+  // 这场会只用本地：内置模型这时可能在待命，拉起来
+  useEffect(() => {
+    if (!localOnly || !useRemote) return
+    remoteFirst.current = false
+    if (isDesktop) void llmEnsure().catch(() => undefined)
+  }, [localOnly, useRemote])
 
   useEffect(() => {
     if (builtin?.state === 'no-model' && !askedForModel.current && remoteState.state !== 'checking' && !useRemote) {
@@ -184,7 +199,7 @@ export default function App() {
   // 实际用来出板书的接口：远程优先，本地兜底
   const llm = useMemo<LlmConfig>(() => {
     const local: LlmConfig = { baseUrl, noThink: true, label: isDesktop ? '内置' : '本地' }
-    if (!useRemote || !remoteView) return local
+    if (!remoteOn || !remoteView) return local
     // 桌面版的内置模型这时多半在待命：某一句远程失败了，先把它拉起来、等就绪，再用它画这一句
     const fallback: LlmConfig | undefined = isDesktop
       ? {
@@ -212,7 +227,7 @@ export default function App() {
       label: `远程 ${remoteView.model}`,
       fallback,
     }
-  }, [baseUrl, useRemote, remoteView])
+  }, [baseUrl, remoteOn, remoteView])
 
   const [lines, setLines] = useState<Line[]>([])
   // 会议摘要：一键生成，可以手改，跟着会议一起存、一起导出
@@ -376,6 +391,7 @@ export default function App() {
       setSummary(m.summary ?? '')
       voicesRef.current = m.voices ?? []
       setRenamingWho(null)
+      setLocalOnly(!!m.localOnly)
       setMeeting({ id: m.id, title: m.title, titled: m.titled, createdAt: m.createdAt })
       save('boardcast.meeting', m.id)
     },
@@ -406,6 +422,7 @@ export default function App() {
       summary: summaryRef.current || undefined,
       voices: voicesRef.current.length ? voicesRef.current : undefined,
       steps: stepsRef.current.length ? stepsRef.current : undefined,
+      localOnly: localOnlyRef.current || undefined,
     }),
     [session],
   )
@@ -426,7 +443,7 @@ export default function App() {
         .catch((e) => console.error('保存会议失败', e))
     }, 500)
     return () => clearTimeout(t)
-  }, [graph, lines, summary, meeting, restored, snapshot])
+  }, [graph, lines, summary, localOnly, meeting, restored, snapshot])
 
   // 墨线板书变了就记一步（铅笔稿不记）；会议记录说到第几句也记下，回放时字幕跟着走
   useEffect(() => {
@@ -637,6 +654,7 @@ export default function App() {
     stepsRef.current = []
     recorded.current = emptyGraph()
     setReplay(null)
+    setLocalOnly(false)
     const id = newMeetingId()
     setMeeting({ id, title: '未命名会议', createdAt: Date.now() })
     save('boardcast.meeting', id)
@@ -838,11 +856,11 @@ export default function App() {
   }
 
   // 现在是哪个模型在画
-  const ready = useRemote || !!online
+  const ready = remoteOn || !!online
   let status: string
   const localName = builtin?.model?.replace(/\.gguf$/, '')
-  if (useRemote) {
-    status = `远程 · ${remoteView?.model}`
+  if (remoteOn) {
+    status = remoteView?.model ?? ''
   } else if (remoteState.state === 'checking') {
     status = '正在检查远程模型…'
   } else if (builtin?.state === 'ready') {
@@ -892,8 +910,10 @@ export default function App() {
           title="出板书的模型，点开设置"
         >
           <i className="dot" />
+          <b className={`where${cloud ? ' cloud' : ''}`}>{cloud ? '云端' : '本地'}</b>
           <span>{status}</span>
-          {remoteBroken && <em>远程连不上，暂用本地</em>}
+          {remoteBroken && !localOnly && <em>远程连不上，暂用本地</em>}
+          {useRemote && localOnly && <em>这场会只用本地</em>}
         </button>
         <span className="spacer" />
         <div className="seg" role="radiogroup" aria-label="板书风格">
@@ -1117,6 +1137,8 @@ export default function App() {
           micName={mic}
           voiceErr={voiceErr}
           toggleMic={() => void toggleMic()}
+          where={cloud && remoteView ? { cloud: true, host: hostOf(remoteView.baseUrl) } : { cloud: false }}
+          onWhere={() => setShowSettings(true)}
         />
         {replay && (
           <ReplayBar
@@ -1146,8 +1168,8 @@ export default function App() {
             title={
               summing
                 ? '停止生成'
-                : useRemote && remoteView
-                  ? `用远程 ${remoteView.model} 生成摘要：会议记录会发到这个接口`
+                : cloud && remoteView
+                  ? `用云端的 ${remoteView.model} 生成摘要：整场会议记录会发到 ${hostOf(remoteView.baseUrl)}`
                   : '用本地模型生成摘要：结论、决定、待办、待讨论'
             }
           >
@@ -1251,6 +1273,8 @@ export default function App() {
           remoteView={remoteView}
           remoteState={remoteState}
           onRemoteChanged={() => void checkRemote()}
+          localOnly={localOnly}
+          setLocalOnly={setLocalOnly}
           mic={micChoice}
           setMic={setMicChoice}
           diarize={diarize}

@@ -42,6 +42,8 @@ export interface Meeting {
   voices?: Voice[]
   /** 墨线板书的每一次变化（回放用） */
   steps?: Step[]
+  /** 这场会只用本地模型，不发到远程接口 */
+  localOnly?: boolean
 }
 
 /** 历史列表里显示的样子 */

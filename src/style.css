@@ -271,6 +271,57 @@ button.link {
   color: var(--warn);
 }
 
+/* 隐私：现在说的话发到云端还是只在本地。云端用强调色描边，一眼看得出来 */
+.where {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+.where.cloud {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+button.where {
+  height: 22px;
+  margin-right: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+button.where:hover {
+  background: var(--surface-2);
+}
+
+.consent {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.consent p {
+  margin: 0 0 4px;
+}
+.consent ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: var(--muted);
+}
+.consent .actions {
+  margin-top: 8px;
+}
+
 .seg {
   display: flex;
   flex: none;

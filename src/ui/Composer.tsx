@@ -20,6 +20,9 @@ interface Props {
   micName?: string
   voiceErr: string | null
   toggleMic: () => void
+  /** 说的话会发到哪：云端（远程模型）还是只在本地 */
+  where: { cloud: boolean; host?: string }
+  onWhere: () => void
 }
 
 function load(key: string, fallback: string) {
@@ -188,6 +191,14 @@ export default function Composer(p: Props) {
           </button>
         )}
 
+        <button
+          type="button"
+          className={`where${p.where.cloud ? ' cloud' : ''}`}
+          onClick={p.onWhere}
+          title={p.where.cloud ? `说的话会发到 ${p.where.host} 出板书，点开设置` : '说的话只在这台电脑上处理，点开设置'}
+        >
+          {p.where.cloud ? '云端' : '本地'}
+        </button>
         <button type="button" className="fold" onClick={() => setOpen(!open)} aria-label={open ? '收起' : '展开'} title={open ? '收起' : '展开'}>
           {open ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { type LlmStatus, isDesktop, voice } from './desktop.ts'
+import { KEPT, SENT, hostOf, needsConsent, rememberConsent } from './privacy.ts'
 import { type RemoteTest, type RemoteView, remote } from './remote.ts'
 
 export type RemoteState = { state: 'off' | 'checking' | 'ok' | 'fail'; ms?: number; message?: string }
@@ -19,6 +20,9 @@ interface Props {
   remoteView: RemoteView | null
   remoteState: RemoteState
   onRemoteChanged: () => void
+  /** 这场会只用本地模型（按会议记住） */
+  localOnly: boolean
+  setLocalOnly: (on: boolean) => void
   // 语音
   mic: string
   setMic: (m: string) => void
@@ -72,8 +76,16 @@ export default function SettingsPanel(p: Props) {
     }
   }
 
+  // 第一次把会议内容发到某个云端地址之前，先说清楚会发什么、发到哪，用户点了确认才启用
+  const [consent, setConsent] = useState(false)
+  function requestEnable() {
+    if (needsConsent(baseUrl)) setConsent(true)
+    else void saveAndEnable()
+  }
+
   // 先确认能连上再启用；连不上也把填的内容存下来，免得白填
   async function saveAndEnable() {
+    setConsent(false)
     setBusy('save')
     setResult(null)
     try {
@@ -192,6 +204,38 @@ export default function SettingsPanel(p: Props) {
               autoComplete="off"
             />
           </label>
+          {consent && (
+            <div className="consent" role="alertdialog" aria-label="启用远程模型前确认">
+              <p>
+                启用以后，开会时这些内容会发到 <b>{hostOf(baseUrl)}</b>：
+              </p>
+              <ul>
+                {SENT.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ul>
+              <p>不会发出去的：</p>
+              <ul>
+                {KEPT.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ul>
+              <p className="hint">涉及敏感内容的会，可以在下面勾「这场会只用本地模型」。</p>
+              <div className="actions">
+                <button className="ghost" onClick={() => setConsent(false)}>
+                  先不用
+                </button>
+                <button
+                  onClick={() => {
+                    rememberConsent(baseUrl)
+                    void saveAndEnable()
+                  }}
+                >
+                  知道了，启用
+                </button>
+              </div>
+            </div>
+          )}
           {result && <p className={`meta ${result.ok ? 'okmsg' : 'err'}`}>{result.text}</p>}
           {!result && enabled && rs.state === 'fail' && <p className="meta err">{rs.message}</p>}
           <div className="actions">
@@ -203,10 +247,19 @@ export default function SettingsPanel(p: Props) {
                 停用
               </button>
             )}
-            <button onClick={() => void saveAndEnable()} disabled={!!busy || !baseUrl.trim() || !model.trim()}>
+            <button onClick={requestEnable} disabled={!!busy || consent || !baseUrl.trim() || !model.trim()}>
               {busy === 'save' ? '确认中…' : enabled ? '保存' : '保存并启用'}
             </button>
           </div>
+          {enabled && (
+            <>
+              <label className="check">
+                <input type="checkbox" checked={p.localOnly} onChange={(e) => p.setLocalOnly(e.target.checked)} />
+                <span>这场会只用本地模型</span>
+              </label>
+              <p className="hint">按会议记住：勾上以后这场会的板书和摘要都不会发到远程接口，别的会照常用远程。</p>
+            </>
+          )}
         </section>
 
         {isDesktop && (

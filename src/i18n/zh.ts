@@ -81,6 +81,19 @@ export const zh: Messages = {
     feedbackHint: '把版本、模型状态、日志和最近的报错打成一个 zip，不带会议内容。',
     diagnostics: '导出诊断信息',
 
+    // —— Correction samples ——
+    samples: '纠错样本',
+    samplesHint:
+      '模型刚画完一句，你紧接着在手写板上改了它画的东西（删线、改名、划掉、撤销），这一轮就会自动记下：它看到的板书和那句话、它的输出、你改完的样子。只存在本机的会议里，导出才会离开这台电脑。',
+    samplesCounting: '正在数…',
+    samplesCount: (n: number) => (n ? `一共攒了 ${n} 条。` : '还没有：开会时改一下模型刚画错的地方就有了。'),
+    exportCases: '导出评测用例',
+    exportPairs: '导出训练数据',
+    samplesCases: '评测用例和 eval/cases.json 同一个格式，从当时的板书接着跑：',
+    samplesFile: '<文件>',
+    samplesPairs: '训练数据是 JSONL，一行一条 prompt / chosen / rejected：DPO 直接用，SFT 取 prompt 和 chosen。',
+    samplesSaved: (where: string) => `已导出：${where}`,
+
     // —— Glossary ——
     glossary: '术语表',
     glossaryHint:
@@ -426,6 +439,8 @@ export const zh: Messages = {
     gotoPage: '切到这张板',
     pageN: (n: number) => `第 ${n} 张板`,
     editBadge: '改',
+    fixBadge: '记为纠错样本',
+    fixTitle: '改的是模型刚画的：这一轮记成了纠错样本，可以在设置里导出成评测用例或训练数据',
     drawing: '画着…',
     lineFellBack: ' · 远程失败，这句用了本地模型',
     noChange: '（没有改动）',

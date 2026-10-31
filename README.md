@@ -232,8 +232,11 @@ pnpm dev            # http://localhost:1420
 ```sh
 pnpm eval -- --label my-model          # 报告写到 eval/reports/
 node eval/run.ts --only login-flow -v  # 看某一段的逐句操作
+node eval/run.ts --file boardcast-corrections-*.cases.json  # 跑应用里导出的纠错样本
 pnpm test                              # 引擎单元测试，不需要模型
 ```
+
+纠错样本：开会时模型刚画完一句，你紧接着在手写板上改了它画的东西（删线、改名、划掉、撤销），这一轮会自动记下来（模型看到的板书、前文和这句话，它的输出，你改完的样子），跟着会议存在本机。在 设置 → 纠错样本 里可以导出成评测用例（同 `eval/cases.json` 的格式，从当时的板书接着跑），或者 DPO / SFT 用的 JSONL（`prompt` / `chosen` / `rejected`）。
 
 ## CI
 

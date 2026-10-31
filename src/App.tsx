@@ -31,6 +31,7 @@ import { Session } from './engine/session.ts'
 import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
 import { summarize } from './engine/summary.ts'
 import { correct, parseGlossary } from './engine/glossary.ts'
+import { Corrections, casesFile, gather, pairsFile } from './engine/corrections.ts'
 import { type Voice, identify, renameVoice } from './engine/voices.ts'
 import { type Meeting, type MeetingLine, type Page, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
 import InkBoard from './ink/InkBoard.tsx'
@@ -366,6 +367,8 @@ export default function App() {
   /** 撤销的一步：板书 + 排版记住的位置（拖动只改位置；撤销删除时东西也回到原处） */
   type Snap = { graph: Graph; layout: LayoutMemory }
   const editHistory = useRef(new EditHistory<Snap>())
+  /** 模型刚画完就被手动改了的那几轮，记成纠错样本（跟着会议存） */
+  const fixes = useRef(new Corrections())
   /** 排版记忆变了（拖动、撤销）就加一，让白板重新排版 */
   const [layoutRev, setLayoutRev] = useState(0)
   /** 最近一张墨线板（不含铅笔稿）：撤销时退回到这里 */
@@ -418,7 +421,17 @@ export default function App() {
           setHot(new Set(ids))
           if (ids.length) setTimeout(() => setHot(new Set()), 3000)
         },
-        llm: (r) =>
+        llm: (r) => {
+          fixes.current.round({
+            at: Date.now(),
+            page: pageRef.current,
+            seen: r.seen,
+            context: r.context,
+            said: r.said,
+            terms: sessionRef.current?.terms,
+            ops: r.ops,
+            drawn: sessionRef.current?.graph ?? r.seen,
+          })
           setLines((ls) => {
             // 一批里的每句都标上这一轮的耗时
             const out = [...ls]
@@ -437,7 +450,8 @@ export default function App() {
               }
             }
             return out
-          }),
+          })
+        },
         error: (e) => {
           console.error(e)
           setOnline(false)
@@ -464,6 +478,7 @@ export default function App() {
     (m: Meeting) => {
       board.restore(m.layout)
       editHistory.current.clear()
+      fixes.current.load(m.corrections)
       lastInk.current = m.graph
       setSelection(null)
       session.graph = m.graph
@@ -522,6 +537,7 @@ export default function App() {
       steps: stepsRef.current.length ? stepsRef.current : undefined,
       localOnly: localOnlyRef.current || undefined,
       glossary: meetingGlossaryRef.current.trim() || undefined,
+      corrections: fixes.current.list.length ? fixes.current.list : undefined,
       // 只有一张板、但它垫着导入页时也要存 pages：底图存在这里
       ...(pagesRef.current.length > 1 || pagesRef.current.some((p) => p.underlay)
         ? { pages: pagesRef.current.map((p, i) => (i === pageRef.current ? capture() : p)), page: pageRef.current }
@@ -796,6 +812,23 @@ export default function App() {
     }
   }
 
+  /** 所有会议里的纠错样本：存着的，加上这场会里还没来得及存的 */
+  async function allFixes() {
+    const saved = await meetings.corrections().catch(() => [])
+    return [{ id: meeting.id, corrections: fixes.current.list }, ...saved.filter((m) => m.id !== meeting.id)]
+  }
+
+  /** 导出纠错样本：评测用例（eval/cases.json 的格式）或者偏好数据（JSONL） */
+  async function exportFixes(kind: 'cases' | 'pairs'): Promise<string | null> {
+    const all = await allFixes()
+    const d = new Date()
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const { saveFile } = await import('./exporter.ts')
+    return kind === 'cases'
+      ? saveFile(`boardcast-corrections-${day}.cases.json`, new Blob([casesFile(all)], { type: 'application/json' }))
+      : saveFile(`boardcast-corrections-${day}.dpo.jsonl`, new Blob([pairsFile(all)], { type: 'application/x-ndjson' }))
+  }
+
   /** 新会议：当前这场已经自动存下了，换一个新编号从空板开始；`keepCurrent` 为 false 时当前这场刚被删掉，不再存 */
   function reset(keepCurrent = true) {
     if (keepCurrent && (lines.length || graph.nodes.length) && meeting.id !== demoMeetingId.current)
@@ -804,6 +837,7 @@ export default function App() {
     session.graph = emptyGraph()
     session.history = []
     editHistory.current.clear()
+    fixes.current.load([])
     lastInk.current = session.graph
     setSelection(null)
     setGraph(session.graph)
@@ -837,7 +871,9 @@ export default function App() {
     lastInk.current = next
     setGraph(next)
     setUndoTick((t) => t + 1)
-    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current }])
+    // 改的是模型刚画的：这一轮记成纠错样本
+    const fix = fixes.current.edit(next, note) || undefined
+    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current, fix }])
     setSelection((sel) => (sel && exists(next, sel) ? sel : null))
   }
 
@@ -851,8 +887,10 @@ export default function App() {
     setLayoutRev((n) => n + 1)
     setUndoTick((t) => t + 1)
     setSelection(null)
+    // 撤销模型刚画的一轮，也是在说它画错了
+    const fix = fixes.current.edit(g, note) || undefined
     // 也记进会议记录：不然记录里还写着「删掉了……」，看着像没恢复
-    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current }])
+    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current, fix }])
   }
   const now = (): Snap => ({ graph: session.graph, layout: board.snapshot() })
   const undo = () => stepTo(editHistory.current.undo(now()), t.app.undoNote)
@@ -1097,6 +1135,7 @@ export default function App() {
     session.graph = p.graph
     board.restore(p.layout)
     editHistory.current.clear()
+    fixes.current.reset()
     lastInk.current = p.graph
     stepsRef.current = p.steps ?? []
     recorded.current = replayTo(stepsRef.current, stepsRef.current.length)
@@ -1848,7 +1887,14 @@ export default function App() {
                 </span>
               )}
               <div className="body">
-                <p>{l.text}</p>
+                <p>
+                  {l.text}
+                  {l.fix && (
+                    <span className="fix-tag" title={t.app.fixTitle}>
+                      {t.app.fixBadge}
+                    </span>
+                  )}
+                </p>
                 {!l.manual && (
                 <details>
                   <summary>
@@ -1932,6 +1978,8 @@ export default function App() {
           setMessy={setMessy}
           weight={weight}
           setWeight={setWeight}
+          countSamples={async () => gather(await allFixes()).length}
+          exportSamples={exportFixes}
         />
       )}
       {showModels && <ModelPanel status={builtin} onClose={() => setShowModels(false)} />}

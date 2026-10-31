@@ -15,8 +15,11 @@ export interface SessionEvents {
   graph?: (g: Graph, why: 'draft' | 'ink') => void
   /** 这句话提到了哪些已有节点，用来做高亮 */
   mention?: (ids: string[]) => void
-  /** 模型的一轮结果，用来显示延迟和调试。`queuedMs`: how long each line of the batch waited for the model */
-  llm?: (r: LlmResult & { ops: Op[]; batch: Utterance[]; queuedMs: number[] }) => void
+  /**
+   * 模型的一轮结果，用来显示延迟和调试。`queuedMs`: how long each line of the batch waited for the model.
+   * `seen`、`context`、`said`：发给模型的板书、前文和这一句（一批合成的那句），记纠错样本用
+   */
+  llm?: (r: LlmResult & { ops: Op[]; batch: Utterance[]; queuedMs: number[]; seen: Graph; context: Utterance[]; said: Utterance }) => void
   error?: (e: unknown) => void
 }
 
@@ -69,8 +72,10 @@ export class Session {
         ? batch[0]
         : { text: batch.map((u) => (u.speaker ? `${u.speaker}：${u.text}` : u.text)).join(' ') }
     try {
-      const drafts = markDrafts(this.graph)
-      const r = await proposeOps(this.llm, this.graph, this.history.slice(-this.context), next, undefined, this.terms)
+      const seen = this.graph
+      const context = this.history.slice(-this.context)
+      const drafts = markDrafts(seen)
+      const r = await proposeOps(this.llm, seen, context, next, undefined, this.terms)
       const ops = parseOps(r.text)
       this.graph = eraseDrafts(applyOps(this.graph, ops, 'ink'), drafts)
       this.on.graph?.(this.graph, 'ink')
@@ -82,7 +87,7 @@ export class Session {
         return n ? [n.id] : []
       })
       if (shown.length) this.on.mention?.(shown)
-      this.on.llm?.({ ...r, ops, batch, queuedMs })
+      this.on.llm?.({ ...r, ops, batch, queuedMs, seen, context, said: next })
     } catch (e) {
       this.on.error?.(e)
     } finally {

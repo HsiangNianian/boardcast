@@ -1,17 +1,21 @@
 // 离线评测：把合成会议逐句喂给引擎，比较最终板书和标注，统计每句的延迟。
 //
 //   node eval/run.ts [--base-url http://127.0.0.1:8080] [--label qwen3.5-4b] [--set dev|holdout|all] [--repeat 3] [--only login-flow]
+//   node eval/run.ts --file ~/Downloads/boardcast-corrections.cases.json
 //
 // 两套用例：
 // - dev（eval/cases.json）：调提示词时用，分数偏乐观；
 // - holdout（eval/holdout.json）：不参与调参，只在发版前、换模型时看。看了分数不要回头改提示词去迁就它。
 // --repeat N：每段跑 N 遍，报告平均值和波动（标准差），结果差得多的用例标「不稳定」。
+// --file：跑别的用例文件，比如应用里导出的纠错样本（设置 → 纠错样本）。那种用例带着当时的板书和前文，从那里接着说。
 //
 // 需要先起一个 llama-server（见 README）。结果写到 eval/reports/ 和 GitHub Actions 的 job summary。
 
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { basename } from 'node:path'
 import { parseArgs } from 'node:util'
-import { describe } from '../src/engine/graph.ts'
+import type { Term } from '../src/engine/glossary.ts'
+import { type Graph, describe } from '../src/engine/graph.ts'
 import { formatOps } from '../src/engine/ops.ts'
 import type { Utterance } from '../src/engine/prompt.ts'
 import { Session } from '../src/engine/session.ts'
@@ -24,6 +28,7 @@ const { values: args } = parseArgs({
     set: { type: 'string', default: 'dev' },
     repeat: { type: 'string', default: '1' },
     only: { type: 'string' },
+    file: { type: 'string' },
     verbose: { type: 'boolean', short: 'v', default: false },
   },
 })
@@ -31,14 +36,21 @@ const { values: args } = parseArgs({
 interface Case {
   id: string
   name: string
+  /** 从这张板开始（纠错样本），不给就是空板；模型已经看过的前文；术语 */
+  board?: Graph
+  history?: Utterance[]
+  terms?: Term[]
   turns: Utterance[]
   gold: Gold
 }
 
-const load = (file: string) => JSON.parse(readFileSync(new URL(file, import.meta.url), 'utf8')) as Case[]
+const load = (file: string | URL) => JSON.parse(readFileSync(file, 'utf8')) as Case[]
 const sets: Record<string, string[]> = { dev: ['./cases.json'], holdout: ['./holdout.json'], all: ['./cases.json', './holdout.json'] }
 if (!sets[args.set!]) throw new Error(`--set 只能是 ${Object.keys(sets).join(' / ')}`)
-const cases = sets[args.set!].flatMap(load).filter((c) => !args.only || args.only.split(',').includes(c.id))
+const files = args.file ? [args.file] : sets[args.set!].map((f) => new URL(f, import.meta.url))
+/** 报告里写的用例集名字 */
+const setName = args.file ? basename(args.file).replace(/\.json$/, '') : args.set!
+const cases = files.flatMap(load).filter((c) => !args.only || args.only.split(',').includes(c.id))
 const repeat = Math.max(1, Number(args.repeat) || 1)
 
 // A model that can't be reached makes every case score 0, which reads like a real result: stop early instead
@@ -106,6 +118,9 @@ for (let r = 0; r < repeat; r++) {
         error: (e) => log.push(`! ${String(e)}`),
       },
     )
+    if (c.board) s.graph = c.board
+    if (c.history) s.history = [...c.history]
+    if (c.terms) s.terms = c.terms
     for (const t of c.turns) {
       s.say(t)
       // 评测时逐句等待，测的是单句延迟，不让排队合并掩盖它
@@ -164,7 +179,7 @@ const rows = cases.map((c) => {
 const shaky = cases.filter((c) => unstable(c.id)).map((c) => c.id)
 
 const summary = [
-  `## 板书评测 · ${args.label} · ${args.set}${repeat > 1 ? ` · 每段 ${repeat} 遍` : ''}`,
+  `## 板书评测 · ${args.label} · ${setName}${repeat > 1 ? ` · 每段 ${repeat} 遍` : ''}`,
   '',
   `| 指标 | 值${repeat > 1 ? '（平均 ± 各遍之间的标准差）' : ''} |`,
   `|---|---|`,
@@ -189,6 +204,6 @@ const summary = [
 
 mkdirSync(new URL('./reports/', import.meta.url), { recursive: true })
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-writeFileSync(new URL(`./reports/${args.label}-${args.set}-${stamp}.md`, import.meta.url), summary)
+writeFileSync(new URL(`./reports/${args.label}-${setName}-${stamp}.md`, import.meta.url), summary)
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\n')
 console.log(summary.split('\n').slice(0, 20 + cases.length).join('\n'))

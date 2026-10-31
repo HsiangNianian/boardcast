@@ -361,7 +361,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast"
-version = "0.19.0-1"
+version = "0.19.0-2"
 dependencies = [
  "base64 0.22.1",
  "cpal",

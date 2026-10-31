@@ -2,7 +2,7 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
-## 0.19.0-1 - 2026-10-31
+## 0.19.0-2 - 2026-10-31
 
 ### Features
 
@@ -50,11 +50,18 @@ All notable changes to boardcast. Generated from Conventional Commits by `pnpm r
   - 5 English cases each in the dev and holdout sets
   - the scorer matches English labels word by word: hyphens count as spaces, no partial matches inside words, and ClickHouse equals Click House
 
+### Build and CI
+
+- **release:** Pre-releases build without RPM and need a numeric suffix ([`b2f59d7`](https://github.com/HsiangNianian/boardcast/commit/b2f59d706884c144f6e5fb6719af584eaf5a89b8))
+  - RPM versions can't contain '-', so pre-release tags build deb and AppImage only on Linux; stable releases still ship the RPM
+  - the Windows MSI only accepts a numeric pre-release part, so pnpm release now rejects 0.x.y-rc.1 and suggests 0.x.y-1
+  - READMEs use 0.19.0-1 as the pre-release example
+
 ### Maintenance
 
 - Apply pre-commit fixes ([`e1f31e4`](https://github.com/HsiangNianian/boardcast/commit/e1f31e43f8fc558915558568f4622c9dd63c7830))
 
-**Full diff:** [v0.18.0...v0.19.0-1](https://github.com/HsiangNianian/boardcast/compare/v0.18.0...v0.19.0-1)
+**Full diff:** [v0.18.0...v0.19.0-2](https://github.com/HsiangNianian/boardcast/compare/v0.18.0...v0.19.0-2)
 
 ## 0.18.0 - 2026-10-31
 

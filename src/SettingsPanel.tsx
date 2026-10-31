@@ -8,6 +8,7 @@ import { type RemoteTest, type RemoteView, remote } from './remote.ts'
 export type RemoteState = { state: 'off' | 'checking' | 'ok' | 'fail'; ms?: number; message?: string }
 
 interface Props {
+  onDiagnostics: () => void
   onClose: () => void
   // 本地模型
   builtin: LlmStatus | null
@@ -295,6 +296,13 @@ export default function SettingsPanel(p: Props) {
           )}
         </section>
 
+        <section>
+          <h3>反馈问题</h3>
+          <p className="hint">把版本、模型状态、日志和最近的报错打成一个 zip，不带会议内容。</p>
+          <button type="button" onClick={p.onDiagnostics}>
+            导出诊断信息
+          </button>
+        </section>
         <section>
           <h3>术语表</h3>
           <p className="hint">

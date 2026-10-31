@@ -1991,3 +1991,38 @@ button.danger {
 .meeting-hits mark {
   color: inherit;
 }
+
+.panel.diagnostics details {
+  margin: 6px 0;
+}
+.panel.diagnostics summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.panel.diagnostics small {
+  color: var(--faint);
+}
+.panel.diagnostics pre {
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.panel.diagnostics header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel.diagnostics .row.end {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.toast button {
+  margin-left: 10px;
+}

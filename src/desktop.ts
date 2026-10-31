@@ -143,6 +143,9 @@ export async function arxivPdf(id: string): Promise<Uint8Array> {
   return out
 }
 
+/** 诊断信息：系统和 llama-server 日志的末尾 */
+export const diagnosticsInfo = () => call<{ os: string; arch: string; log: string | null }>('diagnostics_info')
+
 /** 自动更新：检查、下载安装并重启（成功的话 install 不会返回） */
 export const updates = {
   version: async () => (await import('@tauri-apps/api/app')).getVersion(),

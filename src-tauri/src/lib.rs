@@ -8,6 +8,7 @@
 // - 自动更新（updater.rs）
 // - 按 arXiv 编号下载论文（arxiv.rs）
 
+mod diagnostics;
 mod arxiv;
 mod export;
 mod llm;
@@ -38,6 +39,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            diagnostics::diagnostics_info,
             llm::llm_status,
             llm::llm_restart,
             llm::llm_ensure,

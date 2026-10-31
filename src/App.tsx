@@ -47,6 +47,8 @@ import { type Thumb, pageThumb, thumbOf } from './board/thumb.ts'
 import { navTarget, parseNav } from './engine/nav.ts'
 import type { Hit } from './engine/search.ts'
 import { hasSpan, spanAt, toggleSpan } from './engine/spans.ts'
+import DiagnosticsPanel from './ui/DiagnosticsPanel.tsx'
+import { recentErrors } from './engine/diagnostics.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -275,7 +277,8 @@ export default function App() {
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null)
   useEffect(() => {
     if (!toast) return
-    const t = setTimeout(() => setToast(null), 4000)
+    // 报错多留一会儿，来得及复制
+    const t = setTimeout(() => setToast(null), toast.ok ? 4000 : 10000)
     return () => clearTimeout(t)
   }, [toast])
   // 悬浮输入框挡住了白板底部多高：自动适配画面时让开（输入框展开、收起、换屏幕尺寸时都会变）
@@ -1075,6 +1078,7 @@ export default function App() {
   const [dropping, setDropping] = useState(false)
   const [importMenu, setImportMenu] = useState(false)
   const [arxivInput, setArxivInput] = useState('')
+  const [showDiag, setShowDiag] = useState(false)
   const [pendingPdf, setPendingPdf] = useState<{ name: string; r: PdfImport } | null>(null)
 
   /** 导入一份 PDF（文件或者从 arXiv 下的）。这场会已经有内容时先问一声：一篇文档和正在开的会搅在一起很难翻 */
@@ -1754,6 +1758,10 @@ export default function App() {
       {showSettings && (
         <SettingsPanel
           onClose={() => setShowSettings(false)}
+          onDiagnostics={() => {
+            setShowSettings(false)
+            setShowDiag(true)
+          }}
           builtin={builtin}
           warming={warming}
           localUrl={baseUrl}
@@ -1832,9 +1840,29 @@ export default function App() {
           </button>
         </div>
       )}
+      {showDiag && (
+        <DiagnosticsPanel
+          voice={{ listening, device: mic ?? null, choice: micChoice ?? null, source: voiceSource, diarize, error: voiceErr }}
+          onClose={() => setShowDiag(false)}
+          onSaved={(ok, text) => setToast({ ok, text })}
+        />
+      )}
       {toast && (
         <div className={`toast${toast.ok ? '' : ' err'}`} role="status">
           {toast.text}
+          {!toast.ok && (
+            <button
+              type="button"
+              className="ghost small"
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText(`${toast.text}\n\n${recentErrors().slice(-5).join('\n')}\n${navigator.userAgent}`)
+                  .then(() => setToast({ ok: true, text: '错误详情复制好了' }))
+              }}
+            >
+              复制错误详情
+            </button>
+          )}
         </div>
       )}
     </div>

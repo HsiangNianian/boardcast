@@ -3,6 +3,7 @@
 // 模型同一时间只跑一个请求。它忙的时候新来的句子先攒着，下一轮合并成一句处理：
 // 宁可跳过中间状态，也不能让板书越拖越晚。
 
+import { attribute } from './attribute.ts'
 import { type Graph, emptyGraph, findNode } from './graph.ts'
 import { type LlmConfig, type LlmResult, proposeOps } from './llm.ts'
 import { type Op, applyOps, eraseDrafts, markDrafts, parseOps } from './ops.ts'
@@ -73,7 +74,8 @@ export class Session {
       const drafts = markDrafts(this.graph)
       const r = await proposeOps(this.llm, this.graph, this.history.slice(-this.context), next, undefined, this.terms)
       const ops = parseOps(r.text)
-      this.graph = eraseDrafts(applyOps(this.graph, ops, 'ink'), drafts)
+      // 这一轮新写成墨线的，记下是这批话里谁说的
+      this.graph = attribute(this.graph, eraseDrafts(applyOps(this.graph, ops, 'ink'), drafts), batch)
       this.on.graph?.(this.graph, 'ink')
       // 指给大家看的：板书不变，高亮一下
       const shown = ops.flatMap((o) => {

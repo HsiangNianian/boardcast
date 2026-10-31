@@ -768,25 +768,46 @@ kbd {
   font-size: 11px;
 }
 
-/* 说话人：输入框前面一个小标签，点一下轮换 */
+/* 说话人：输入框前面一枚「以谁的身份说」的小胶囊（头像 + 名字），点一下轮换 */
 .dock .who {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  align-self: center;
+  gap: 6px;
+  height: 30px;
+  max-width: 9.5em;
+  margin-right: 10px;
+  padding: 0 11px 0 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+.dock .who:hover {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+.dock .who .av {
   display: grid;
   place-items: center;
   flex: none;
-  align-self: center;
-  min-width: 24px;
-  height: 24px;
-  margin-right: 10px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 6px;
-  color: #1f2937;
-  font-family: var(--mono);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 650;
 }
-.dock .who:hover {
-  box-shadow: 0 0 0 1.5px var(--pen);
+/* 名字就是头像上那个字（A、B、C）时只留头像 */
+.dock .who.solo {
+  padding: 0 3px;
+}
+.dock .who .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dock .send {
@@ -1083,10 +1104,11 @@ label.check input {
   line-height: 1.7;
 }
 .line {
+  position: relative;
   display: grid;
-  grid-template-columns: 26px 1fr;
-  gap: 10px;
-  padding: 10px 18px;
+  grid-template-columns: 28px 1fr;
+  gap: 0 10px;
+  padding: 9px 18px;
   animation: bc-pop 0.25s ease-out;
 }
 .line:hover {
@@ -1095,32 +1117,59 @@ label.check input {
 .line .who {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 650;
   overflow: hidden;
   white-space: nowrap;
-  color: #1f2937;
 }
-.who.c0 {
+/* 说话人的颜色：浅底配同色相的深字 */
+.who.c0,
+.av.c0 {
   background: #fcd7ea;
+  color: #a61e4d;
 }
-.who.c1 {
+.who.c1,
+.av.c1 {
   background: #d6e6ff;
+  color: #1c4f9c;
 }
-.who.c2 {
+.who.c2,
+.av.c2 {
   background: #d4f5e7;
+  color: #1f7a45;
 }
-.who.c3 {
+.who.c3,
+.av.c3 {
   background: #fde8c8;
+  color: #a8550f;
 }
-.who.c4 {
+.who.c4,
+.av.c4 {
   background: #e5dcff;
+  color: #5b3cc4;
 }
-.who.c5 {
+.who.c5,
+.av.c5 {
   background: #e2e8f0;
+  color: #475569;
+}
+/* 名字一行，耗时浮在同一行的右边 */
+.line .head {
+  display: flex;
+  align-items: center;
+  min-height: 18px;
+}
+.line .head .name {
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 18px;
 }
 .line .body {
   grid-column: 2;
@@ -1130,17 +1179,25 @@ label.check input {
   grid-column: auto;
 }
 .line p {
-  margin: 2px 0 2px;
+  margin: 1px 0 0;
   font-size: 14px;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
 .line details summary {
+  position: absolute;
+  top: 9px;
+  right: 18px;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
   list-style: none;
   color: var(--faint);
   font-family: var(--mono);
   font-size: 11px;
+  line-height: 18px;
 }
 .line details summary::-webkit-details-marker {
   display: none;
@@ -1148,7 +1205,8 @@ label.check input {
 .line details summary:hover {
   color: var(--muted);
 }
-.line details summary em {
+.line details summary em,
+.line details p.warn {
   font-style: normal;
   color: var(--warn);
 }
@@ -1914,6 +1972,28 @@ button.danger {
 .ink-toolbar button.del {
   color: var(--bad);
 }
+/* 谁提的：说话人颜色的小胶囊，点一下跳到会议记录里那句话 */
+.ink-toolbar button.by {
+  padding: 2px 4px;
+}
+.ink-toolbar button.by .who {
+  display: inline-block;
+  max-width: 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ink-toolbar button.by:hover .who {
+  box-shadow: 0 0 0 1.5px var(--line-strong);
+}
+/* 溯源时淡下去、亮回来都缓一下 */
+.ink g[data-key] {
+  transition: opacity 0.18s;
+}
 .ink-toolbar .rename {
   display: flex;
   gap: 4px;
@@ -1928,7 +2008,11 @@ button.danger {
   background: var(--ink);
   color: var(--bg);
 }
+.line.manual {
+  align-items: center;
+}
 .line.manual p {
+  margin: 0;
   color: var(--muted);
   font-size: 13px;
 }

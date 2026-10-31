@@ -104,24 +104,91 @@ export function info(m: Meeting): MeetingInfo {
   return { id: m.id, title: m.title, createdAt: m.createdAt, updatedAt: m.updatedAt, lines: m.lines.filter((l) => !l.manual).length }
 }
 
+// —— 导入页的图片单独存：会议 JSON 里只记 `asset:<内容哈希>.<扩展名>` ——
+// 不然几十页的 PDF 能让一场会到好几 MB，每次自动保存都要整份重写。
+
+export interface AssetStore {
+  put(meeting: string, key: string, dataUrl: string): Promise<void>
+  get(meeting: string, key: string): Promise<string | null>
+}
+
+const REF = 'asset:'
+const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+const MIME: Record<string, string> = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }
+
+/** 同一张图（同一个字符串）只算一次哈希 */
+const hashed = new Map<string, string>()
+async function keyOf(dataUrl: string): Promise<string | null> {
+  const ext = EXT[/^data:([^;,]+)/.exec(dataUrl)?.[1] ?? '']
+  if (!ext) return null
+  const known = hashed.get(dataUrl)
+  if (known) return known
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(dataUrl))
+  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32)
+  const key = `${hex}.${ext}`
+  hashed.set(dataUrl, key)
+  return key
+}
+
+/** 存之前：把每张板上的图换成引用，没存过的图先存起来。`stored` 记着这场会已经存过哪些，下次不再写 */
+export async function stashAssets(m: Meeting, store: AssetStore, stored: Set<string>): Promise<Meeting> {
+  if (!m.pages?.some((p) => p.underlay?.startsWith('data:'))) return m
+  const pages = await Promise.all(
+    m.pages.map(async (p) => {
+      if (!p.underlay?.startsWith('data:')) return p
+      const key = await keyOf(p.underlay)
+      if (!key) return p
+      if (!stored.has(`${m.id}/${key}`)) {
+        await store.put(m.id, key, p.underlay)
+        stored.add(`${m.id}/${key}`)
+      }
+      return { ...p, underlay: REF + key }
+    }),
+  )
+  return { ...m, pages }
+}
+
+/** 读出来以后：引用换回图。图找不到了就去掉底图，板书照常能看 */
+export async function loadAssets(m: Meeting, store: AssetStore, stored?: Set<string>): Promise<Meeting> {
+  if (!m.pages?.some((p) => p.underlay?.startsWith(REF))) return m
+  const pages = await Promise.all(
+    m.pages.map(async (p) => {
+      if (!p.underlay?.startsWith(REF)) return p
+      const key = p.underlay.slice(REF.length)
+      const data = await store.get(m.id, key).catch(() => null)
+      if (!data) return { ...p, underlay: undefined }
+      stored?.add(`${m.id}/${key}`)
+      hashed.set(data, key)
+      return { ...p, underlay: data }
+    }),
+  )
+  return { ...m, pages }
+}
+
 // —— 网页版：IndexedDB ——
 
 const DB = 'boardcast'
 const STORE = 'meetings'
+const ASSETS = 'assets'
 
 function db(): Promise<IDBDatabase> {
   return new Promise((ok, fail) => {
-    const req = indexedDB.open(DB, 1)
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id' })
+    const req = indexedDB.open(DB, 2)
+    req.onupgradeneeded = () => {
+      const d = req.result
+      if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE, { keyPath: 'id' })
+      // 第 2 版：导入页的图片，键是「会议编号/图片名」，值是 data URL
+      if (!d.objectStoreNames.contains(ASSETS)) d.createObjectStore(ASSETS)
+    }
     req.onsuccess = () => ok(req.result)
     req.onerror = () => fail(req.error)
   })
 }
 
-async function tx<T>(mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+async function tx<T>(mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<T>, store = STORE): Promise<T> {
   const d = await db()
   return new Promise((ok, fail) => {
-    const req = run(d.transaction(STORE, mode).objectStore(STORE))
+    const req = run(d.transaction(store, mode).objectStore(store))
     req.onsuccess = () => ok(req.result)
     req.onerror = () => fail(req.error)
   })
@@ -134,6 +201,20 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   return invoke<T>(cmd, args)
 }
 
+const assets: AssetStore = {
+  async put(meeting, key, dataUrl) {
+    if (isDesktop) await call('meeting_asset_save', { id: meeting, key, data: dataUrl.slice(dataUrl.indexOf(',') + 1) })
+    else await tx('readwrite', (s) => s.put(dataUrl, `${meeting}/${key}`), ASSETS)
+  },
+  async get(meeting, key) {
+    if (!isDesktop) return ((await tx('readonly', (s) => s.get(`${meeting}/${key}`), ASSETS)) as string | undefined) ?? null
+    const b64 = await call<string | null>('meeting_asset_load', { id: meeting, key })
+    return b64 ? `data:${MIME[key.split('.').pop()!] ?? 'image/jpeg'};base64,${b64}` : null
+  },
+}
+/** 已经存过的图（「会议编号/图片名」），自动保存时跳过 */
+const stored = new Set<string>()
+
 export const meetings = {
   /** 最近改过的在前 */
   async list(): Promise<MeetingInfo[]> {
@@ -144,14 +225,19 @@ export const meetings = {
     const raw = isDesktop
       ? await call<string | null>('meeting_load', { id }).then((t) => (t ? (JSON.parse(t) as Meeting) : null))
       : ((await tx('readonly', (s) => s.get(id))) as Meeting | undefined) ?? null
-    return raw ? normalize(raw) : null
+    return raw ? normalize(await loadAssets(raw, assets, stored)) : null
   },
-  async save(m: Meeting): Promise<void> {
+  async save(meeting: Meeting): Promise<void> {
+    const m = await stashAssets(meeting, assets, stored)
     if (isDesktop) await call('meeting_save', { id: m.id, json: JSON.stringify(m) })
     else await tx('readwrite', (s) => s.put(m))
   },
   async remove(id: string): Promise<void> {
     if (isDesktop) await call('meeting_delete', { id })
-    else await tx('readwrite', (s) => s.delete(id))
+    else {
+      await tx('readwrite', (s) => s.delete(id))
+      await tx('readwrite', (s) => s.delete(IDBKeyRange.bound(`${id}/`, `${id}/\uffff`)), ASSETS)
+    }
+    for (const k of [...stored]) if (k.startsWith(`${id}/`)) stored.delete(k)
   },
 }

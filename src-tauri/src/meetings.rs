@@ -1,5 +1,7 @@
 //! 会议的保存和读取：应用数据目录下的 meetings/，一场会议一个 JSON 文件（内容由前端组织）。
 //! 写文件时先写临时文件再改名，写到一半崩溃也不会留下坏掉的会议。
+//! 导入的 PDF 页、图片单独存在 meetings/<会议编号>/ 下（文件名是内容的哈希），JSON 里只记引用，
+//! 这样自动保存时不用每次把几 MB 的图片重写一遍。
 
 use serde::Serialize;
 use serde_json::Value;
@@ -33,6 +35,20 @@ fn valid(id: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("会议编号不合法：{id}"))
+    }
+}
+
+/// 图片文件名：内容哈希（十六进制）加扩展名，杜绝 ../ 之类
+fn valid_asset(key: &str) -> Result<(), String> {
+    let ok = key.split_once('.').is_some_and(|(h, ext)| {
+        (16..=64).contains(&h.len())
+            && h.chars().all(|c| c.is_ascii_hexdigit())
+            && ["jpg", "png", "webp"].contains(&ext)
+    });
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("图片名不合法：{key}"))
     }
 }
 
@@ -106,16 +122,83 @@ pub fn meeting_save(app: AppHandle, id: String, json: String) -> Result<(), Stri
 #[tauri::command]
 pub fn meeting_delete(app: AppHandle, id: String) -> Result<(), String> {
     valid(&id)?;
-    let p = dir(&app)?.join(format!("{id}.json"));
+    let d = dir(&app)?;
+    let p = d.join(format!("{id}.json"));
     if p.is_file() {
         std::fs::remove_file(p).map_err(|e| e.to_string())?;
     }
+    // 连同它的图片
+    let assets = d.join(&id);
+    if assets.is_dir() {
+        std::fs::remove_dir_all(assets).map_err(|e| e.to_string())?;
+    }
     Ok(())
+}
+
+/// 存一张图（base64）。同名的已经有了就不再写：名字就是内容的哈希
+#[tauri::command]
+pub fn meeting_asset_save(
+    app: AppHandle,
+    id: String,
+    key: String,
+    data: String,
+) -> Result<(), String> {
+    use base64::Engine;
+    valid(&id)?;
+    valid_asset(&key)?;
+    let d = dir(&app)?.join(&id);
+    let p = d.join(&key);
+    if p.is_file() {
+        return Ok(());
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data.as_bytes())
+        .map_err(|e| format!("图片数据不对：{e}"))?;
+    std::fs::create_dir_all(&d).map_err(|e| format!("建不了图片目录：{e}"))?;
+    let tmp = d.join(format!("{key}.tmp"));
+    std::fs::write(&tmp, bytes).map_err(|e| format!("保存图片失败：{e}"))?;
+    std::fs::rename(&tmp, &p).map_err(|e| format!("保存图片失败：{e}"))
+}
+
+/// 读一张图，返回 base64；没有就是 None
+#[tauri::command]
+pub fn meeting_asset_load(
+    app: AppHandle,
+    id: String,
+    key: String,
+) -> Result<Option<String>, String> {
+    use base64::Engine;
+    valid(&id)?;
+    valid_asset(&key)?;
+    let p = dir(&app)?.join(&id).join(&key);
+    if !p.is_file() {
+        return Ok(None);
+    }
+    let bytes = std::fs::read(&p).map_err(|e| e.to_string())?;
+    Ok(Some(
+        base64::engine::general_purpose::STANDARD.encode(bytes),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn asset_names_are_content_hashes() {
+        assert!(valid_asset("0123456789abcdef0123456789abcdef.jpg").is_ok());
+        assert!(valid_asset("0123456789ABCDEF.png").is_ok());
+        for bad in [
+            "../x.jpg",
+            "0123456789abcdef.exe",
+            "abc.jpg",
+            "0123456789abcdef/../../a.jpg",
+            "0123456789abcdef",
+            "0123456789abcdeg.jpg",
+        ] {
+            assert!(valid_asset(bad).is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn ids_cannot_escape_the_meetings_folder() {

@@ -58,6 +58,8 @@ pub fn run() {
             meetings::meeting_load,
             meetings::meeting_save,
             meetings::meeting_delete,
+            meetings::meeting_asset_save,
+            meetings::meeting_asset_load,
             updater::update_check,
             updater::update_install,
         ])

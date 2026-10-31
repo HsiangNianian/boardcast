@@ -472,8 +472,10 @@ export default function App() {
       voices: voicesRef.current.length ? voicesRef.current : undefined,
       steps: stepsRef.current.length ? stepsRef.current : undefined,
       localOnly: localOnlyRef.current || undefined,
-      pages: pagesRef.current.length > 1 ? pagesRef.current.map((p, i) => (i === pageRef.current ? capture() : p)) : undefined,
-      page: pagesRef.current.length > 1 ? pageRef.current : undefined,
+      // 只有一张板、但它垫着导入页时也要存 pages：底图存在这里
+      ...(pagesRef.current.length > 1 || pagesRef.current.some((p) => p.underlay)
+        ? { pages: pagesRef.current.map((p, i) => (i === pageRef.current ? capture() : p)), page: pageRef.current }
+        : {}),
     }),
     [session],
   )

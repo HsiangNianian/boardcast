@@ -684,7 +684,9 @@ export default function App() {
     summingFor.current = ctl
     setSumming('整理中…')
     try {
-      const r = await summarize(session.llm, session.graph, lines.filter((l) => !l.manual), ctl.signal, (done, total) =>
+      // 所有板都带上：当前这张以 Session 里的为准
+      const boards = pagesRef.current.map((p, i) => (i === pageRef.current ? session.graph : p.graph))
+      const r = await summarize(session.llm, boards, lines.filter((l) => !l.manual), ctl.signal, (done, total) =>
         setSumming(done < total - 1 ? `分段整理 ${done + 1}/${total - 1}…` : '合成摘要…'),
       )
       if (ctl.signal.aborted) return

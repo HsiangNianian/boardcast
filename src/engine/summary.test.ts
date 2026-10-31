@@ -4,7 +4,8 @@ import { toMarkdown } from '../board/markdown.ts'
 import { emptyGraph } from './graph.ts'
 import type { ChatResponse, LlmConfig } from './llm.ts'
 import { applyOps, parseOps } from './ops.ts'
-import { chunks, plainText, summarize, tidySummary } from './summary.ts'
+import { pageGraph } from './regions.ts'
+import { boardsText, chunks, plainText, summarize, summaryMessages, tidySummary, transcript } from './summary.ts'
 
 test('long transcripts are cut between sentences', () => {
   const lines = Array.from({ length: 10 }, (_, i) => ({ text: `${i}`.repeat(40) }))
@@ -75,6 +76,31 @@ test('an empty answer from a thinking model is retried with more room, then repo
 test('copying as plain text drops the markdown', () => {
   assert.equal(plainText('### 结论\n- **用 Go**\n\n\n### 待办\n- [ ] 写爬虫\n- [x] 定方案'), '结论\n• 用 Go\n\n待办\n☐ 写爬虫\n☑ 定方案')
   assert.equal(plainText('### 结论\n- 好\n### 决定\n- 无'), '结论\n• 好\n\n决定\n• 无')
+})
+
+test('a summary sees every board, marks where the boards change, and skips untouched source text', () => {
+  const a = applyOps(emptyGraph(), parseOps('T 「爬虫」\nL 「爬虫」 「监控任务」'))
+  const pdf = applyOps(
+    pageGraph({ w: 800, h: 1000 }, [
+      { text: '库存先锁后扣', x: 0, y: 0, w: 100, h: 20 },
+      { text: '没人讨论的一段', x: 0, y: 40, w: 100, h: 20 },
+    ]),
+    parseOps('K n1 「超时要可配置」'),
+  )
+  const text = boardsText([a, pdf])
+  assert.match(text, /^第 1 张板：\n.*爬虫[\s\S]*第 2 张板：\n[\s\S]*库存先锁后扣/)
+  assert.match(text, /超时要可配置/)
+  assert.doesNotMatch(text, /没人讨论的一段/)
+  // 只有一张板时不分节
+  assert.doesNotMatch(boardsText([a]), /张板/)
+  const said = transcript([
+    { speaker: 'A', text: '先说爬虫', page: 0 },
+    { speaker: 'B', text: '再看文档', page: 1 },
+  ])
+  assert.equal(said, '【第 1 张板】\nA：先说爬虫\n【第 2 张板】\nB：再看文档')
+  assert.equal(transcript([{ text: '一句' }]), '一句')
+  const user = summaryMessages([a, pdf], '会议记录：…')[1].content
+  assert.match(user, /第 2 张板/)
 })
 
 test('markdown export puts the summary right under the title', () => {

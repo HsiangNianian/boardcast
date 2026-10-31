@@ -3,6 +3,10 @@ import { test } from 'node:test'
 import { toMarkdown } from '../board/markdown.ts'
 import { emptyGraph } from './graph.ts'
 import { applyOps, parseOps } from './ops.ts'
+import { setLangChoice } from '../i18n/index.ts'
+
+// These tests check the Chinese wording
+setLangChoice('zh')
 
 test('markdown export: topics as numbered lists, flowchart as mermaid, transcript at the end', () => {
   let g = applyOps(

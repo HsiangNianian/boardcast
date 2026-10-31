@@ -41,11 +41,16 @@ export function toggleMark(g: Graph, id: string, mark: Mark): Graph {
 }
 
 /** 选中的东西的名字，用来写进会议记录 */
-export function describe(g: Graph, sel: Selection): string {
+export function describe(
+  g: Graph,
+  sel: Selection,
+  /** How the current language quotes a name and adds an aside */
+  fmt: { quote: (s: string) => string; aside: (s: string) => string } = { quote: (s) => `「${s}」`, aside: (s) => `（${s}）` },
+): string {
   const name = (id: string) => g.nodes.find((n) => n.id === id)?.label ?? id
-  if (sel.kind === 'node') return `「${name(sel.id)}」`
+  if (sel.kind === 'node') return fmt.quote(name(sel.id))
   const e = g.edges.find((x) => x.from === sel.from && x.to === sel.to)
-  return `「${name(sel.from)} → ${name(sel.to)}」${e?.label ? `（${e.label}）` : ''}`
+  return `${fmt.quote(`${name(sel.from)} → ${name(sel.to)}`)}${e?.label ? fmt.aside(e.label) : ''}`
 }
 
 /** 选中的东西还在不在（撤销、模型改板书以后可能已经没了） */

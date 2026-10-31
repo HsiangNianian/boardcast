@@ -1,5 +1,7 @@
 // 桌面版（Tauri）才有的能力。网页版里这些函数都返回 null 或什么都不做，界面照旧用手填的模型地址。
 
+import { msg } from './i18n/index.ts'
+
 export const isDesktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
 export interface Gpu {
@@ -88,11 +90,11 @@ export async function localReady(timeoutMs = 240_000): Promise<string> {
   const t0 = Date.now()
   while (Date.now() - t0 < timeoutMs) {
     if (s.state === 'ready' && s.url) return s.url
-    if (s.state === 'no-model' || s.state === 'error') throw new Error(s.message ?? '内置模型不可用')
+    if (s.state === 'no-model' || s.state === 'error') throw new Error(s.message ?? msg().app.builtinUnavailable)
     await new Promise((r) => setTimeout(r, 700))
     s = await call<LlmStatus>('llm_status')
   }
-  throw new Error('内置模型启动超时')
+  throw new Error(msg().errors.builtinTimeout)
 }
 
 export const models = {

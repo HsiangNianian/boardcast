@@ -3,6 +3,7 @@
 
 import { type Term, glossaryLine } from './glossary.ts'
 import { type Graph, ICONS, MARKS, describe } from './graph.ts'
+import { type SpokenLang, spokenLang } from './lang.ts'
 
 export const SYSTEM = `你是会议板书员。大家在讨论，你根据「新的一句」更新白板。
 
@@ -99,6 +100,67 @@ const EXAMPLES: [string, string][] = [
   ],
 ]
 
+/**
+ * The same examples for English meetings. The system prompt stays Chinese (it is long and tuned),
+ * but with only Chinese examples the model labels lines in Chinese even when everything else is
+ * English. Op keywords, marks and icons are part of the grammar and stay as they are.
+ */
+const EXAMPLES_EN: [string, string][] = [
+  [
+    '白板：\n（空）\n新的一句：First the user opens the app, then the app calls the login API.',
+    'E 「User」 -> 「App」 : 「opens」\nE 「App」 -> 「Login API」 : 「calls」',
+  ],
+  [
+    '白板：\nn1 App\nn2 Login API\nn1(App) -> n2(Login API) calls\n新的一句：No, the app has to go through the gateway first, and the gateway forwards to login.',
+    'X n1 -> n2\nE n1 -> 「Gateway」\nE 「Gateway」 -> n2 : 「forwards」',
+  ],
+  [
+    '白板：\nn1 Order service\nn2 Inventory service\nn1(Order service) -> n2(Inventory service)\n新的一句：Put both of them in the trading domain. Inventory is also called stock.',
+    'G 「Trading domain」 n1 n2\nA n2 「stock」',
+  ],
+  ['白板：\nn1 Order service\n新的一句：Haha yeah, that meeting yesterday went on forever.', '-'],
+  [
+    '白板：\n（空）\n新的一句：The crawler needs three things: task monitoring, video search and comment collection. Monitoring is the priority.',
+    'T 「Crawler」\nL 「Crawler」 「Task monitoring」\nL 「Crawler」 「Video search」\nL 「Crawler」 「Comment collection」\nM 「Task monitoring」 星标',
+  ],
+  [
+    '白板：\nn1 [话题] Push options\n  n2 Firebase\n  n3 APNs direct\n新的一句：Drop Firebase, the contract was not renewed. And we have not decided whether to add a message queue.',
+    'M n2 划掉\nK n2 「Contract not renewed」\nQ n1 「Add a message queue?」',
+  ],
+  [
+    '白板：\nn1 [话题] Hotness\nn2 graphRAG\n新的一句：Hotness is just current time minus publish time, and the result feeds into graphRAG.',
+    'F n1 「T_now − T_publish」\nE n1 -> n2 : 「feeds」',
+  ],
+  [
+    '白板：\n（空）\n新的一句：For expenses you submit a request, and only after the manager approves does finance pay out.',
+    'E 「Submit request」 -> 「Manager approval」\nE 「Manager approval」 -> 「Finance payout」 : 「approved」',
+  ],
+  [
+    '白板：\nn1 [话题] Went well\n  n2 Shipped on time\n新的一句：To improve: integration started too late, and requirements kept changing. Should the weekly sync be twice a week?',
+    'T 「To improve」\nL 「To improve」 「Late integration」\nL 「To improve」 「Changing requirements」\nQ 「Weekly sync twice a week?」',
+  ],
+  [
+    '白板：\nn1 [话题] Sam\n  n2 Login page\nn3 [话题] Lee\n  n4 API\n  n5 Report export\n新的一句：Actually, give report export to Sam.',
+    'L n1 「Report export」',
+  ],
+  [
+    '白板：\nn1 [话题] Chen\n  n2 Payments\n前文（已经画过了）：\nA：Chen takes payments.\n新的一句：Zhou too, the two of them together.',
+    'R n1 「Chen, Zhou」',
+  ],
+  [
+    '白板：\nn1 [原文] Deep networks are hard to train. We present a residual framework that eases training.\n新的一句：Circle the word residual.',
+    'M n1 圈出 「residual」',
+  ],
+  [
+    '白板：\nn1 [原文] Deep networks are hard to train. We present a residual framework that eases training.\n新的一句：Underline the sentence deep networks are hard to train.',
+    'M n1 下划线 句 「Deep networks are hard」',
+  ],
+  [
+    '白板：\nn1 [原文] Abstract\nn2 [原文] This work presents a decoupled framework for automation.\nn3 [原文] §1 Introduction\n新的一句：Okay, let us look at the introduction first.',
+    'H n3',
+  ],
+]
+
 export interface Utterance {
   speaker?: string
   text: string
@@ -108,8 +170,21 @@ function line(u: Utterance): string {
   return u.speaker ? `${u.speaker}：${u.text}` : u.text
 }
 
+/** Language the board should be written in, judged from the recent lines and the new one */
+export function boardLang(recent: Utterance[], next: Utterance): SpokenLang {
+  return spokenLang([...recent, next].map((u) => u.text))
+}
+
+/**
+ * English meetings: the system prompt and examples are Chinese (kept fixed so the server can reuse
+ * their KV cache), so say explicitly that the board stays in English. Chinese meetings get nothing
+ * extra, so their prompt is exactly what the eval measured.
+ */
+const ENGLISH_BOARD = '这场会说的是英文：板上的名字、条目、问题、备注都用英文写，照原话的叫法，不要翻译成中文。名字 1 到 4 个词，条目最多 8 个词。'
+
 export function userMessage(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = []): string {
   const parts = [`白板：\n${describe(g)}`]
+  if (boardLang(recent, next) === 'en') parts.unshift(ENGLISH_BOARD)
   // 术语表放在最前面：一场会里不变，llama-server 的前缀缓存能复用
   if (terms.length) parts.unshift(`术语（起名照这个写法）：${glossaryLine(terms)}`)
   if (recent.length) parts.push(`前文（已经画过了）：\n${recent.map(line).join('\n')}`)
@@ -118,9 +193,10 @@ export function userMessage(g: Graph, recent: Utterance[], next: Utterance, term
 }
 
 export function messages(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = []): { role: string; content: string }[] {
+  const examples = boardLang(recent, next) === 'en' ? EXAMPLES_EN : EXAMPLES
   return [
     { role: 'system', content: SYSTEM },
-    ...EXAMPLES.flatMap(([u, a]) => [
+    ...examples.flatMap(([u, a]) => [
       { role: 'user', content: u },
       { role: 'assistant', content: a },
     ]),
@@ -133,7 +209,9 @@ const alt = (xs: readonly string[]) => xs.map((x) => `"${x}"`).join(' | ')
 /**
  * 每次调用按当前白板生成 GBNF：编号只能从现有节点里选，模型就写不出不存在的 n99。
  */
-export function grammar(g: Graph, maxOps = 8): string {
+export function grammar(g: Graph, maxOps = 8, lang: SpokenLang = 'zh'): string {
+  // English names need more characters than Chinese ones for the same content
+  const nameMax = lang === 'en' ? 48 : 20
   const ids = g.nodes.map((n) => `"${n.id}"`)
   // 长的放前面，避免 n1 抢先匹配 n12 的前缀
   ids.sort((a, b) => b.length - a.length)
@@ -157,6 +235,6 @@ export function grammar(g: Graph, maxOps = 8): string {
     'a ::= "A " ref " " name',
     'd ::= "D " ref',
     ref,
-    'name ::= "「" [^「」\\n]{1,20} "」"',
+    `name ::= "「" [^「」\\n]{1,${nameMax}} "」"`,
   ].join('\n')
 }

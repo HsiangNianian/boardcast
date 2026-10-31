@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { Hit } from '../engine/search.ts'
+import { msg, useT } from '../i18n/index.ts'
 import { type MeetingInfo, meetings } from '../meetings.ts'
 import { Close, Plus } from './icons.tsx'
 
@@ -20,12 +21,11 @@ const pad = (n: number) => String(n).padStart(2, '0')
 function when(t: number): string {
   const d = new Date(t)
   const today = new Date()
+  const s = msg().meetings
   const day =
     d.toDateString() === today.toDateString()
-      ? '今天'
-      : d.getFullYear() === today.getFullYear()
-        ? `${d.getMonth() + 1} 月 ${d.getDate()} 日`
-        : `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`
+      ? s.today
+      : s.date(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getFullYear() === today.getFullYear())
   return `${day} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
@@ -41,9 +41,8 @@ function Marked({ hit }: { hit: Hit }) {
   return <>{out}</>
 }
 
-const PLACE = { title: '会议名', summary: '摘要', line: '会议记录', board: '板上' }
-
 export default function MeetingsPanel(p: Props) {
+  const s = useT().meetings
   const [query, setQuery] = useState('')
   const [found, setFound] = useState<Map<string, Hit[]> | null>(null)
   // 边打字边搜，停一下才真的搜
@@ -98,10 +97,10 @@ export default function MeetingsPanel(p: Props) {
   }
 
   return (
-    <div className="modal" role="dialog" aria-label="会议" onClick={(e) => e.target === e.currentTarget && p.onClose()}>
+    <div className="modal" role="dialog" aria-label={s.title} onClick={(e) => e.target === e.currentTarget && p.onClose()}>
       <div className="panel meetings">
         <header>
-          <h2>会议</h2>
+          <h2>{s.title}</h2>
           <div className="row">
             <button
               type="button"
@@ -110,16 +109,16 @@ export default function MeetingsPanel(p: Props) {
                 p.onClose()
               }}
             >
-              <Plus size={14} /> 新会议
+              <Plus size={14} /> {s.newMeeting}
             </button>
-            <button type="button" className="icon" onClick={p.onClose} aria-label="关闭">
+            <button type="button" className="icon" onClick={p.onClose} aria-label={s.close}>
               <Close size={16} />
             </button>
           </div>
         </header>
-        <p className="hint">每场会议都会自动保存在这台电脑上，关掉应用再打开也能接着开。</p>
-        {error && <p className="meta err">读取会议列表失败：{error}</p>}
-        {list && !list.length && <p className="hint">还没有保存过的会议。说第一句话后就会自动保存。</p>}
+        <p className="hint">{s.hint}</p>
+        {error && <p className="meta err">{s.loadFailed(error)}</p>}
+        {list && !list.length && <p className="hint">{s.empty}</p>}
         {!!list?.length && (
           <input
             className="meeting-search"
@@ -127,11 +126,11 @@ export default function MeetingsPanel(p: Props) {
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜会议名、说过的话、板上的字、摘要"
-            aria-label="搜索会议"
+            placeholder={s.searchPlaceholder}
+            aria-label={s.searchAria}
           />
         )}
-        {found && !found.size && <p className="hint">没有搜到。</p>}
+        {found && !found.size && <p className="hint">{s.noResults}</p>}
         <ul className="meeting-list">
           {list?.filter((m) => !found || found.has(m.id)).map((m) => (
             <li key={m.id} className={m.id === p.currentId ? 'current' : ''}>
@@ -146,7 +145,7 @@ export default function MeetingsPanel(p: Props) {
                     if (e.key === 'Enter' && !e.nativeEvent.isComposing) (e.target as HTMLInputElement).blur()
                     if (e.key === 'Escape') setEditing(null)
                   }}
-                  aria-label="会议名称"
+                  aria-label={s.titleAria}
                 />
               ) : (
                 <button
@@ -159,7 +158,7 @@ export default function MeetingsPanel(p: Props) {
                 >
                   <span className="title">{m.title}</span>
                   <span className="sub">
-                    {when(m.updatedAt)} · {m.lines} 句{m.id === p.currentId && <em>正在开</em>}
+                    {when(m.updatedAt)} · {s.lines(m.lines)}{m.id === p.currentId && <em>{s.open}</em>}
                   </span>
                 </button>
               )}
@@ -174,7 +173,7 @@ export default function MeetingsPanel(p: Props) {
                         p.onClose()
                       }}
                     >
-                      <small>{h.where === 'board' ? `第 ${(h.page ?? 0) + 1} 张板` : PLACE[h.where]}</small>
+                      <small>{h.where === 'board' ? s.pageN((h.page ?? 0) + 1) : s.places[h.where]}</small>
                       <span>
                         <Marked hit={h} />
                       </span>
@@ -185,12 +184,12 @@ export default function MeetingsPanel(p: Props) {
               <div className="ops">
                 {confirming === m.id ? (
                   <>
-                    <span className="sure">删掉这场会议？</span>
+                    <span className="sure">{s.confirmDelete}</span>
                     <button type="button" className="danger" onClick={() => void remove(m.id)}>
-                      删除
+                      {s.delete}
                     </button>
                     <button type="button" className="ghost" onClick={() => setConfirming(null)}>
-                      取消
+                      {s.cancel}
                     </button>
                   </>
                 ) : (
@@ -203,10 +202,10 @@ export default function MeetingsPanel(p: Props) {
                         setEditing(m.id)
                       }}
                     >
-                      重命名
+                      {s.rename}
                     </button>
                     <button type="button" className="ghost" onClick={() => setConfirming(m.id)}>
-                      删除
+                      {s.delete}
                     </button>
                   </>
                 )}

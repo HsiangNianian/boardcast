@@ -14,20 +14,20 @@ pub async fn export_save(
 ) -> Result<Option<String>, String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data_base64.as_bytes())
-        .map_err(|e| format!("文件内容坏了：{e}"))?;
+        .map_err(|e| format!("Invalid file data: {e}"))?;
     let ext = std::path::Path::new(&name)
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_string();
     let label = match ext.as_str() {
-        "png" => "PNG 图片",
-        "svg" => "SVG 矢量图",
+        "png" => "PNG image",
+        "svg" => "SVG vector",
         "md" => "Markdown",
         "excalidraw" => "Excalidraw",
-        "html" => "回放网页",
+        "html" => "Replay page",
         "pdf" => "PDF",
-        _ => "文件",
+        _ => "File",
     };
     // 对话框会阻塞，放到专门的线程里等
     let picked = tauri::async_runtime::spawn_blocking(move || {
@@ -41,6 +41,6 @@ pub async fn export_save(
     .map_err(|e| e.to_string())?;
     let Some(path) = picked else { return Ok(None) };
     let path = path.into_path().map_err(|e| e.to_string())?;
-    std::fs::write(&path, bytes).map_err(|e| format!("保存失败：{e}"))?;
+    std::fs::write(&path, bytes).map_err(|e| format!("Save failed: {e}"))?;
     Ok(Some(path.display().to_string()))
 }

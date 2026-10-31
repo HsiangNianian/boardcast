@@ -6,6 +6,10 @@ import { describe } from './graph.ts'
 import { applyOps, parseOps } from './ops.ts'
 import { pageGraph } from './regions.ts'
 import { diffGraph, replayTo } from './steps.ts'
+import { setLangChoice } from '../i18n/index.ts'
+
+// These tests check the Chinese wording
+setLangChoice('zh')
 
 const page = () =>
   pageGraph({ w: 800, h: 1000 }, [

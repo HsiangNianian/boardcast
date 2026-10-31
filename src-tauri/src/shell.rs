@@ -32,7 +32,7 @@ pub fn shortcut_set(app: AppHandle, accel: Option<String>) -> Result<(), String>
     match accel.as_deref().map(str::trim) {
         Some(a) if !a.is_empty() => gs
             .register(a)
-            .map_err(|e| format!("注册不了 {a}：{e}")),
+            .map_err(|e| format!("Couldn't register shortcut {a}: {e}")),
         _ => Ok(()),
     }
 }
@@ -110,9 +110,9 @@ pub fn init_tray(app: &AppHandle) -> tauri::Result<()> {
     }
     let idle = Image::from_bytes(include_bytes!("../icons/32x32.png"))?.to_owned();
     let live = with_dot(&idle);
-    let item = MenuItem::with_id(app, "mic", "开始收音", true, None::<&str>)?;
-    let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let item = MenuItem::with_id(app, "mic", "Start listening", true, None::<&str>)?;
+    let show = MenuItem::with_id(app, "show", "Show window", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&item, &show, &quit])?;
     let icon = TrayIconBuilder::new()
         .icon(idle.clone())
@@ -135,5 +135,5 @@ pub fn set_listening(app: &AppHandle, on: bool) {
         return;
     };
     let _ = t.icon.set_icon(Some(if on { t.live.clone() } else { t.idle.clone() }));
-    let _ = t.item.set_text(if on { "停止收音" } else { "开始收音" });
+    let _ = t.item.set_text(if on { "Stop listening" } else { "Start listening" });
 }

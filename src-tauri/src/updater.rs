@@ -38,7 +38,7 @@ pub async fn update_check(app: AppHandle) -> Result<Option<UpdateInfo>, String> 
         .map_err(|e| e.to_string())?
         .check()
         .await
-        .map_err(|e| format!("检查更新失败：{e}"))?;
+        .map_err(|e| format!("Update check failed: {e}"))?;
     let info = found.as_ref().map(|u| UpdateInfo {
         version: u.version.clone(),
         current: u.current_version.clone(),
@@ -80,7 +80,7 @@ pub async fn update_install(app: AppHandle) -> Result<(), String> {
         .lock()
         .unwrap()
         .take()
-        .ok_or("没有待安装的更新，请先检查一遍")?;
+        .ok_or("No update ready to install; check for updates first")?;
     let emitter = app.clone();
     let mut done = 0u64;
     let bytes = update
@@ -92,13 +92,13 @@ pub async fn update_install(app: AppHandle) -> Result<(), String> {
             || {},
         )
         .await
-        .map_err(|e| format!("下载更新失败：{e}"))?;
+        .map_err(|e| format!("Update download failed: {e}"))?;
     // 下好了、签名也对，再把收音和内置模型停掉（Windows 上 llama-server 占着安装目录里的文件，安装器覆盖不了）；
     // 下载失败的话这场会照常开
     crate::voice::voice_stop(app.clone());
     app.state::<crate::llm::Llm>().shutdown();
     update
         .install(bytes)
-        .map_err(|e| format!("安装更新失败：{e}"))?;
+        .map_err(|e| format!("Update installation failed: {e}"))?;
     app.restart()
 }

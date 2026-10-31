@@ -7,6 +7,9 @@ import { applyOps, parseOps } from '../engine/ops.ts'
 import { pageGraph } from '../engine/regions.ts'
 import { type PaperState, type TextPiece, analyzePage } from './paper.ts'
 import { inkBox } from './segment.ts'
+import { msg as strings } from '../i18n/index.ts'
+
+const t = () => strings().errors
 
 /** 页面在板上的宽度（板书坐标）；底图按两倍渲染，放大看也清楚 */
 const WIDTH = 900
@@ -45,7 +48,7 @@ export async function importPdf(data: ArrayBuffer | Uint8Array, onPage?: (done: 
     doc = await task.promise
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    throw new Error(/password/i.test(msg) ? '这个 PDF 有密码，先去掉密码再导入' : `PDF 打不开：${msg}`)
+    throw new Error(/password/i.test(msg) ? t().pdfPassword : t().pdfBroken(msg))
   }
   const total = doc.numPages
   const meta = (await doc.getMetadata().catch(() => null))?.info as { Title?: string } | undefined
@@ -108,7 +111,7 @@ export async function importPdf(data: ArrayBuffer | Uint8Array, onPage?: (done: 
     if (!areas.length) {
       scanned++
       const box = inkBox(ctx.getImageData(0, 0, canvas.width, canvas.height))
-      if (box) areas.push({ text: '', name: `第 ${i} 页的图`, kind: 'figure', x: box.x / 2, y: box.y / 2, w: box.w / 2, h: box.h / 2 })
+      if (box) areas.push({ text: '', name: t().figureOfPage(i), kind: 'figure', x: box.x / 2, y: box.y / 2, w: box.w / 2, h: box.h / 2 })
     }
     pages.push({ graph: pageGraph({ w: vp.width, h: vp.height, no: i }, areas), underlay: image })
   }
@@ -123,7 +126,8 @@ export async function importPdf(data: ArrayBuffer | Uint8Array, onPage?: (done: 
       const m = /^§(\S+)\s+(.*)$/.exec(s.replace(/[「」\n]/g, ''))
       return m ? `${m[2].slice(0, 28)}（§${m[1]}）` : s.replace(/[「」\n]/g, '').slice(0, 30)
     }
-    const ops = ['T 「论文结构」', ...headings.slice(0, 30).map((h) => `L 「论文结构」 「${clean(h)}」`)].join('\n')
+    const outline = t().paperOutline
+    const ops = [`T 「${outline}」`, ...headings.slice(0, 30).map((h) => `L 「${outline}」 「${clean(h)}」`)].join('\n')
     pages[0] = { ...pages[0], graph: applyOps(pages[0].graph, parseOps(ops), 'ink') }
   }
   return { pages, total, unread: total - read, scanned, paper, refsSkipped, title: title?.slice(0, 80) }

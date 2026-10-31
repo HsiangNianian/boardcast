@@ -25,7 +25,7 @@ import { type LlmConfig, proposeOps } from './engine/llm.ts'
 import { formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { History as EditHistory, type Selection, describe, exists, pinned, remove as removeSel, rename as renameSel, toggleMark } from './engine/edit.ts'
-import type { Mark } from './engine/graph.ts'
+import { MARKS, type Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
 import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
 import { summarize } from './engine/summary.ts'
@@ -50,7 +50,10 @@ import type { Hit } from './engine/search.ts'
 import { hasSpan, spanAt, toggleSpan } from './engine/spans.ts'
 import DiagnosticsPanel from './ui/DiagnosticsPanel.tsx'
 import { recentErrors } from './engine/diagnostics.ts'
-import { type Action, SHORTCUTS, actionFor } from './engine/shortcuts.ts'
+import { type Action, actionFor } from './engine/shortcuts.ts'
+import { currentLang, msg, useT } from './i18n/index.ts'
+import { type SpokenLang, spokenLang } from './engine/lang.ts'
+import { type DemoInfo, demoIndex, demoMeeting, loadDemo } from './demo.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -62,7 +65,6 @@ type Line = MeetingLine
 const LIGHT: Look = { ink: '#1e1e1e', pencil: '#868e96', highlight: '#ffec99', group: '#1971c2', question: '#e03131', note: '#1971c2' }
 
 const THEMES: Theme[] = ['system', 'light', 'dark']
-const THEME_LABEL: Record<Theme, string> = { system: '跟随系统', light: '浅色', dark: '深色' }
 // Excalidraw 很大（连同 mermaid、katex 好几 MB），只在切到铅笔模式时才加载
 // 摘要要用 Markdown 渲染库，第一次显示摘要时再加载
 const Summary = lazy(() => import('./ui/Summary.tsx'))
@@ -88,6 +90,15 @@ function save(key: string, value: string) {
   }
 }
 
+/** Sample meetings in the given language; all of them if there are none in it */
+function inLang<T extends { lang: SpokenLang }>(xs: T[], lang: SpokenLang): T[] {
+  const mine = xs.filter((x) => x.lang === lang)
+  return mine.length ? mine : xs
+}
+
+const LIVE_DEMOS = cases.map((c) => ({ id: c.id, name: c.name, lang: spokenLang(c.turns.map((u) => u.text)) }))
+const RELEASES = 'https://github.com/HsiangNianian/boardcast/releases/latest'
+
 function useSystemDark(): boolean {
   const q = '(prefers-color-scheme: dark)'
   const [dark, setDark] = useState(() => matchMedia(q).matches)
@@ -101,6 +112,7 @@ function useSystemDark(): boolean {
 }
 
 export default function App() {
+  const t = useT()
   // —— 主题：跟随系统 / 浅色 / 深色，写在 <html data-theme> 上，CSS 变量跟着变 ——
   const [theme, setTheme] = useState<Theme>(() => {
     const t = load('boardcast.theme', 'system')
@@ -222,7 +234,7 @@ export default function App() {
 
   // 实际用来出板书的接口：远程优先，本地兜底
   const llm = useMemo<LlmConfig>(() => {
-    const local: LlmConfig = { baseUrl, noThink: true, label: isDesktop ? '内置' : '本地' }
+    const local: LlmConfig = { baseUrl, noThink: true, label: isDesktop ? t.app.builtinLabel : t.app.localLabel }
     if (!remoteOn || !remoteView) return local
     // 桌面版的内置模型这时多半在待命：某一句远程失败了，先把它拉起来、等就绪，再用它画这一句
     const fallback: LlmConfig | undefined = isDesktop
@@ -236,7 +248,7 @@ export default function App() {
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify(body),
             })
-            if (!res.ok) throw new Error(`内置模型 ${res.status}: ${await res.text()}`)
+            if (!res.ok) throw new Error(t.app.builtinHttp(res.status, await res.text()))
             return res.json()
           },
         }
@@ -248,10 +260,10 @@ export default function App() {
       model: remoteView.model,
       flavor: 'openai',
       send: remote.send,
-      label: `远程 ${remoteView.model}`,
+      label: t.app.remoteLabel(remoteView.model),
       fallback,
     }
-  }, [baseUrl, remoteOn, remoteView])
+  }, [baseUrl, remoteOn, remoteView, t])
 
   const [lines, setLines] = useState<Line[]>([])
   // 会议摘要：一键生成，可以手改，跟着会议一起存、一起导出
@@ -298,7 +310,16 @@ export default function App() {
     ro.observe(board)
     return () => ro.disconnect()
   }, [])
-  const [demo, setDemo] = useState(cases[0].id)
+  // Sample meetings: with a model they are played live; without one (the web demo) the ones
+  // recorded by eval/record.ts are replayed. The list itself is worked out once `ready` is known.
+  const lang = currentLang()
+  const [recordedDemos, setRecordedDemos] = useState<DemoInfo[]>([])
+  useEffect(() => {
+    if (!isDesktop) void demoIndex().then(setRecordedDemos)
+  }, [])
+  const [demoPick, setDemo] = useState('')
+  /** Id of the meeting opened from a recorded demo: it is not saved */
+  const demoMeetingId = useRef<string | null>(null)
   const [playing, setPlaying] = useState(false)
   // 用 state 而不是 ref：切回铅笔模式时 Excalidraw 重新挂载，要让重画的 effect 再跑一次
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
@@ -430,7 +451,7 @@ export default function App() {
 
   // —— 会议：自动保存，下次打开接着开 ——
   type MeetingMeta = Pick<Meeting, 'id' | 'title' | 'titled' | 'createdAt'>
-  const [meeting, setMeeting] = useState<MeetingMeta>(() => ({ id: newMeetingId(), title: '未命名会议', createdAt: Date.now() }))
+  const [meeting, setMeeting] = useState<MeetingMeta>(() => ({ id: newMeetingId(), title: msg().app.untitled, createdAt: Date.now() }))
   const [restored, setRestored] = useState(false)
   const [showMeetings, setShowMeetings] = useState(false)
   const linesRef = useRef<Line[]>([])
@@ -509,8 +530,8 @@ export default function App() {
 
   // 板书或会议记录一变，停半秒存一次；空会议不存
   useEffect(() => {
-    // 回放时画面上是过去某一刻的板，不存
-    if (!restored || replayRef.current) return
+    // 回放时画面上是过去某一刻的板，不存；放的录好的示例会议也不存
+    if (!restored || replayRef.current || meeting.id === demoMeetingId.current) return
     if (!lines.length && !graph.nodes.length) return
     const t = setTimeout(() => {
       const m = snapshot(meeting)
@@ -520,7 +541,7 @@ export default function App() {
           save('boardcast.meeting', m.id)
           if (m.title !== meeting.title) setMeeting((x) => (x.id === m.id ? { ...x, title: m.title } : x))
         })
-        .catch((e) => console.error('保存会议失败', e))
+        .catch((e) => console.error('saving the meeting failed', e))
     }, 500)
     return () => clearTimeout(t)
   }, [graph, lines, summary, localOnly, meetingGlossary, page, meeting, restored, snapshot])
@@ -634,6 +655,8 @@ export default function App() {
   }, [jumpLine])
 
   function say(said: Utterance) {
+    // Saying something in a recorded demo makes it your own meeting, saved from now on
+    demoMeetingId.current = null
     // 先按术语表纠正（说的和打的都纠）：内部叫法常被听成、打成别的字
     const u = { ...said, text: correct(said.text, termsRef.current) }
     // 整句就是翻页：不用问模型，也不写板书
@@ -642,8 +665,8 @@ export default function App() {
       const boards = pagesRef.current.map((p, i) => (i === pageRef.current ? session.graph : p.graph).underlay ?? {})
       const to = navTarget(nav, boards, pageRef.current)
       setLines((ls) => [...ls, { ...u, page: pageRef.current, ms: 0 }])
-      if (to < 0) setToast({ ok: false, text: '没有这一页的板' })
-      else if (waiting) setToast({ ok: false, text: '模型还在画，画完再翻页' })
+      if (to < 0) setToast({ ok: false, text: t.app.noSuchPage })
+      else if (waiting) setToast({ ok: false, text: t.app.busyPage })
       else goPage(to)
       return
     }
@@ -703,7 +726,7 @@ export default function App() {
     }
     const s = await voice.status()
     if (!s.installed) {
-      setVoiceErr('先下载语音识别模型')
+      setVoiceErr(t.app.needVoiceModel)
       setShowModels(true)
       return
     }
@@ -718,18 +741,18 @@ export default function App() {
     }
     const ctl = new AbortController()
     summingFor.current = ctl
-    setSumming('整理中…')
+    setSumming(t.app.summing)
     try {
       // 所有板都带上：当前这张以 Session 里的为准
       const boards = pagesRef.current.map((p, i) => (i === pageRef.current ? session.graph : p.graph))
       const r = await summarize(session.llm, boards, lines.filter((l) => !l.manual), ctl.signal, (done, total) =>
-        setSumming(done < total - 1 ? `分段整理 ${done + 1}/${total - 1}…` : '合成摘要…'),
+        setSumming(done < total - 1 ? t.app.summingPart(done + 1, total - 1) : t.app.summingMerge),
       )
       if (ctl.signal.aborted) return
       setSummary(r.text)
-      if (r.fellBack) setToast({ ok: false, text: '远程接口失败，摘要改用了本地模型' })
+      if (r.fellBack) setToast({ ok: false, text: t.app.summaryFellBack })
     } catch (e) {
-      if (!ctl.signal.aborted) setToast({ ok: false, text: `生成摘要失败：${errText(e)}` })
+      if (!ctl.signal.aborted) setToast({ ok: false, text: t.app.summaryFailed(errText(e)) })
     } finally {
       if (summingFor.current === ctl) {
         summingFor.current = null
@@ -765,15 +788,16 @@ export default function App() {
             : undefined,
         mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
       const where = await saveFile(name, blob)
-      if (where) setToast({ ok: true, text: isDesktop ? `已保存：${where}` : `已下载：${where}` })
+      if (where) setToast({ ok: true, text: isDesktop ? t.app.saved(where) : t.app.downloaded(where) })
     } catch (e) {
-      setToast({ ok: false, text: `导出失败：${errText(e)}` })
+      setToast({ ok: false, text: t.app.exportFailed(errText(e)) })
     }
   }
 
   /** 新会议：当前这场已经自动存下了，换一个新编号从空板开始；`keepCurrent` 为 false 时当前这场刚被删掉，不再存 */
   function reset(keepCurrent = true) {
-    if (keepCurrent && (lines.length || graph.nodes.length)) void meetings.save(snapshot(meeting)).catch(() => undefined)
+    if (keepCurrent && (lines.length || graph.nodes.length) && meeting.id !== demoMeetingId.current)
+      void meetings.save(snapshot(meeting)).catch(() => undefined)
     board.reset()
     session.graph = emptyGraph()
     session.history = []
@@ -799,7 +823,7 @@ export default function App() {
     suggested.current = new Set()
     setSuggest(false)
     const id = newMeetingId()
-    setMeeting({ id, title: '未命名会议', createdAt: Date.now() })
+    setMeeting({ id, title: t.app.untitled, createdAt: Date.now() })
     save('boardcast.meeting', id)
   }
 
@@ -829,8 +853,8 @@ export default function App() {
     setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current }])
   }
   const now = (): Snap => ({ graph: session.graph, layout: board.snapshot() })
-  const undo = () => stepTo(editHistory.current.undo(now()), '撤销了上一步')
-  const redo = () => stepTo(editHistory.current.redo(now()), '重做了一步')
+  const undo = () => stepTo(editHistory.current.undo(now()), t.app.undoNote)
+  const redo = () => stepTo(editHistory.current.redo(now()), t.app.redoNote)
 
   /** 拖动：把新位置写进排版记忆，记一步撤销 */
   function moveSelection(sel: Selection, dx: number, dy: number) {
@@ -840,12 +864,12 @@ export default function App() {
     editHistory.current.record(before)
     setUndoTick((t) => t + 1)
     setLayoutRev((n) => n + 1)
-    setLines((ls) => [...ls, { text: `挪了${describe(session.graph, sel)}的位置`, manual: true, ms: 0, page: pageRef.current }])
+    setLines((ls) => [...ls, { text: t.app.movedNote(describe(session.graph, sel, t.doc)), manual: true, ms: 0, page: pageRef.current }])
   }
 
   function deleteSelection() {
     if (!selection) return
-    applyEdit(removeSel(session.graph, selection), `删掉了${describe(session.graph, selection)}`)
+    applyEdit(removeSel(session.graph, selection), t.app.deletedNote(describe(session.graph, selection, t.doc)))
     setSelection(null)
   }
 
@@ -863,11 +887,11 @@ export default function App() {
     const n = session.graph.nodes.find((x) => x.id === selection.id)
     const span = unitSpan(mark)
     if (span) {
-      applyEdit(toggleSpan(session.graph, selection.id, span), `${hasSpan(n, span) ? '去掉了' : '加上了'}「${span.text.slice(0, 30)}」的${mark}`)
+      applyEdit(toggleSpan(session.graph, selection.id, span), t.app.markSpanNote(hasSpan(n, span), span.text.slice(0, 30), t.app.marks[mark]))
       return
     }
     const on = n?.marks.includes(mark)
-    applyEdit(toggleMark(session.graph, selection.id, mark), `${on ? '去掉了' : '加上了'}${describe(session.graph, selection)}的${mark}`)
+    applyEdit(toggleMark(session.graph, selection.id, mark), t.app.markNote(!!on, describe(session.graph, selection, t.doc), t.app.marks[mark]))
   }
 
   /** 说话人改名：会议记录、模型看的前文、声纹表一起改；改成已有的名字就是把两个人合成一个 */
@@ -884,10 +908,10 @@ export default function App() {
 
   function commitRename() {
     if (!selection || renaming === null) return
-    const before = describe(session.graph, selection)
+    const before = describe(session.graph, selection, t.doc)
     const next = renameSel(session.graph, selection, renaming)
     setRenaming(null)
-    if (next !== session.graph) applyEdit(next, `把${before}改成了「${renaming.trim() || '（无标签）'}」`)
+    if (next !== session.graph) applyEdit(next, t.app.renamedNote(before, renaming.trim()))
   }
 
   // 键盘：撤销 / 重做 / 删除 / 取消选中。焦点在输入框里时不管；铅笔模式交给 Excalidraw 自己处理
@@ -898,7 +922,7 @@ export default function App() {
     else if (replaying) return
     else if (a === 'import') fileInput.current?.click()
     else if (a === 'summary') void makeSummary()
-    else if (waiting) setToast({ ok: false, text: '模型还在画，画完再翻页' })
+    else if (waiting) setToast({ ok: false, text: t.app.busyPage })
     else if (a === 'newPage') newPage()
     else goPage(pageRef.current + (a === 'nextPage' ? 1 : -1))
   }
@@ -1059,11 +1083,11 @@ export default function App() {
     const label = session.graph.nodes.find((n) => n.id === selection.id)?.label
     if (!label) return
     if (terms.some((t) => t.term === label)) {
-      setToast({ ok: true, text: `「${label}」已经在术语表里了` })
+      setToast({ ok: true, text: t.app.termExists(label) })
       return
     }
     setMeetingGlossary((g) => (g.trim() ? `${g.trimEnd()}\n${label}` : label))
-    setToast({ ok: true, text: `已把「${label}」加进这场会的术语表，可以在设置里补上常听错的写法` })
+    setToast({ ok: true, text: t.app.termAdded(label) })
   }
 
   /** 把一张板放到画面上：板书、排版、回放记录都换成它的 */
@@ -1150,8 +1174,8 @@ export default function App() {
   /** 导入一份 PDF（文件或者从 arXiv 下的）。这场会已经有内容时先问一声：一篇文档和正在开的会搅在一起很难翻 */
   async function importPdfData(name: string, data: ArrayBuffer | Uint8Array) {
     const { importPdf } = await import('./board/importPdf.ts')
-    setToast({ ok: true, text: `正在读 ${name}…` })
-    const r = await importPdf(data, (done, total) => setToast({ ok: true, text: `正在读 ${name}：${done}/${total} 页` }))
+    setToast({ ok: true, text: t.app.reading(name) })
+    const r = await importPdf(data, (done, total) => setToast({ ok: true, text: t.app.readingPages(name, done, total) }))
     const blank = !lines.length && !pagesRef.current.some((p) => p.underlay || p.graph.nodes.some((n) => n.ink === 'ink'))
     if (blank) {
       placePdf(name, r, true)
@@ -1164,18 +1188,16 @@ export default function App() {
   /** 把读好的 PDF 放上板；`fresh`：这场会是空的，可以用文档标题当会议名 */
   function placePdf(name: string, r: PdfImport, fresh: boolean) {
     const extra = [
-      r.refsSkipped && `参考文献 ${r.refsSkipped} 页没建板`,
-      r.unread && `板到上限了，最后 ${r.unread} 页没导`,
-      r.scanned && `${r.scanned} 页没有文字层，整页算一张图`,
-    ].filter(Boolean)
+      r.refsSkipped && t.app.refsSkipped(r.refsSkipped),
+      r.unread && t.app.unread(r.unread),
+      r.scanned && t.app.scanned(r.scanned),
+    ].filter((x): x is string => !!x)
     // 这场会还是空的、也没改过名：用文档的标题当会议名
     if (fresh && r.title) setMeeting((m) => (m.titled ? m : { ...m, title: r.title!, titled: true }))
-    addPages(r.pages, `导入了 ${name}（共 ${r.total} 页，建了 ${r.pages.length} 张板${extra.length ? `，${extra.join('，')}` : ''}）`)
+    addPages(r.pages, t.app.pdfNote(name, r.total, r.pages.length, extra))
     setToast({
       ok: true,
-      text: r.paper
-        ? `${name} 导入好了：按论文的章节、图表、公式切好了，可以说「图 3 这里」「公式 5 有问题」`
-        : `${name} 导入好了：每页一张板，开会时可以说「把这一段圈出来」`,
+      text: r.paper ? t.app.pdfReadyPaper(name) : t.app.pdfReady(name),
     })
   }
 
@@ -1184,32 +1206,32 @@ export default function App() {
     const { parseArxiv } = await import('./board/arxiv.ts')
     const id = parseArxiv(input)
     if (!id) {
-      setToast({ ok: false, text: '没认出 arXiv 编号：贴 arxiv.org/abs/… 的链接，或者 2401.12345 这样的编号' })
+      setToast({ ok: false, text: t.app.arxivBad })
       return
     }
     if (!isDesktop) {
-      setToast({ ok: false, text: '网页版下载不了 arXiv（浏览器不允许跨站取文件）：先下载 PDF 再拖进来' })
+      setToast({ ok: false, text: t.app.arxivWeb })
       return
     }
     exitReplay()
     if (waiting) {
-      setToast({ ok: false, text: '模型还在画，画完再导入' })
+      setToast({ ok: false, text: t.app.busyImport })
       return
     }
     setImportMenu(false)
     setArxivInput('')
     try {
-      setToast({ ok: true, text: `正在从 arXiv 下载 ${id}…` })
+      setToast({ ok: true, text: t.app.arxivDownloading(id) })
       await importPdfData(`arXiv ${id}`, await arxivPdf(id))
     } catch (e) {
-      setToast({ ok: false, text: `导入失败：${errText(e)}` })
+      setToast({ ok: false, text: t.app.importFailed(errText(e)) })
     }
   }
 
   async function importFile(f: File) {
     exitReplay()
     if (waiting) {
-      setToast({ ok: false, text: '模型还在画，画完再导入' })
+      setToast({ ok: false, text: t.app.busyImport })
       return
     }
     try {
@@ -1219,26 +1241,25 @@ export default function App() {
       }
       if (/^image\//.test(f.type) || /\.(png|jpe?g|webp|gif)$/i.test(f.name)) {
         // 图片只交给本机的模型读：桌面版用内置模型（要装看图组件），网页版用填的本地地址
-        if (isDesktop && !builtin?.vision) throw new Error('内置模型还不能看图：在「设置 → 管理模型」里下载「看图组件」')
+        if (isDesktop && !builtin?.vision) throw new Error(t.app.needVision)
         const url = isDesktop ? await localReady() : baseUrl
-        if (!url) throw new Error('没有连上本地模型')
+        if (!url) throw new Error(t.app.noLocal)
         const { importImage, llamaReader } = await import('./board/importImage.ts')
-        setToast({ ok: true, text: `正在看 ${f.name}…` })
-        const r = await importImage(f, llamaReader(url), (done, total) => setToast({ ok: true, text: `正在读 ${f.name}：${done}/${total} 块` }))
-        addPages([r.page], `导入了 ${f.name}（读出 ${r.read} 块文字${r.capped ? '，块太多只读了一部分' : ''}）`)
-        setToast({ ok: true, text: r.read ? `${f.name} 导入好了，开会时可以说「把这里圈出来」` : `${f.name} 里没读出文字，只能当底图看` })
+        setToast({ ok: true, text: t.app.looking(f.name) })
+        const r = await importImage(f, llamaReader(url), (done, total) => setToast({ ok: true, text: t.app.readingBlocks(f.name, done, total) }))
+        addPages([r.page], t.app.imageNote(f.name, r.read, !!r.capped))
+        setToast({ ok: true, text: r.read ? t.app.imageReady(f.name) : t.app.imageNoText(f.name) })
         return
       }
-      if (!/\.(excalidraw|json)$/i.test(f.name)) throw new Error('能导入的是图片、PDF 和 .excalidraw')
+      if (!/\.(excalidraw|json)$/i.test(f.name)) throw new Error(t.app.unsupported)
       const { importExcalidraw } = await import('./board/importExcalidraw.ts')
       const r = importExcalidraw(await f.text())
       // 当前这张板上有东西就新开一张，不和现有的板书搅在一起
       if (session.graph.nodes.some((n) => n.ink === 'ink')) newPage()
-      const parts = [`${r.nodes} 个框`, `${r.edges} 条连线`, r.groups && `${r.groups} 个分组`, r.notes && `${r.notes} 段文字`].filter(Boolean)
-      applyEdit(r.graph, `导入了 ${f.name}（${parts.join('、')}）`)
+      applyEdit(r.graph, t.app.excalidrawNote(f.name, r))
       setTidy((t) => t + 1)
     } catch (e) {
-      setToast({ ok: false, text: `导入失败：${errText(e)}` })
+      setToast({ ok: false, text: t.app.importFailed(errText(e)) })
     }
   }
 
@@ -1246,10 +1267,10 @@ export default function App() {
   async function openOther(id: string, hit?: Hit) {
     exitReplay()
     if (id !== meeting.id) {
-      if (lines.length || graph.nodes.length) await meetings.save(snapshot(meeting)).catch(() => undefined)
+      if ((lines.length || graph.nodes.length) && meeting.id !== demoMeetingId.current) await meetings.save(snapshot(meeting)).catch(() => undefined)
       const m = await meetings.load(id).catch(() => null)
       if (!m) {
-        setToast({ ok: false, text: '打开会议失败：找不到这场会议' })
+        setToast({ ok: false, text: t.app.openFailed })
         return
       }
       openMeeting(m)
@@ -1262,6 +1283,7 @@ export default function App() {
   }
 
   async function play() {
+    if (recordedOnly) return playRecorded()
     const c = cases.find((x) => x.id === demo)
     if (!c) return
     reset()
@@ -1273,24 +1295,45 @@ export default function App() {
     setPlaying(false)
   }
 
+  /** Replay a recorded sample meeting: no model needed */
+  async function playRecorded() {
+    if (!demo) return
+    try {
+      const d = await loadDemo(demo)
+      reset()
+      const id = newMeetingId()
+      demoMeetingId.current = id
+      openMeeting(demoMeeting(d, id))
+      // reset() only queues leaving an earlier replay; startReplay() checks the ref
+      replayRef.current = null
+      startReplay()
+    } catch (e) {
+      setToast({ ok: false, text: t.app.demoFailed(errText(e)) })
+    }
+  }
+
   // 现在是哪个模型在画
   const ready = remoteOn || !!online
+  /** No model, but recorded sample meetings to replay (the web demo) */
+  const recordedOnly = !ready && recordedDemos.length > 0
+  const demos = recordedOnly ? inLang(recordedDemos, lang) : inLang(LIVE_DEMOS, lang)
+  const demo = demos.some((c) => c.id === demoPick) ? demoPick : demos[0]?.id
   let status: string
   const localName = builtin?.model?.replace(/\.gguf$/, '')
   if (remoteOn) {
     status = remoteView?.model ?? ''
   } else if (remoteState.state === 'checking') {
-    status = '正在检查远程模型…'
+    status = t.app.checkingRemote
   } else if (builtin?.state === 'ready') {
-    status = `内置 · ${localName}${warming ? ' · 预热中' : ''}`
+    status = t.app.builtinReady(localName ?? '', warming)
   } else if (builtin?.state === 'idle') {
-    status = `内置 · ${localName ?? ''} · 待命`
+    status = t.app.builtinIdle(localName ?? '')
   } else if (builtin?.state === 'starting') {
-    status = `正在启动 ${localName ?? '内置模型'}…`
+    status = t.app.builtinStarting(localName)
   } else if (builtin) {
-    status = builtin.message ?? '内置模型不可用'
+    status = builtin.message ?? t.app.builtinUnavailable
   } else {
-    status = online ? `${baseUrl.replace(/^https?:\/\//, '')}` : '没有连上模型'
+    status = online ? `${baseUrl.replace(/^https?:\/\//, '')}` : t.app.noModel
   }
   const remoteBroken = remoteView?.enabled && remoteState.state === 'fail'
 
@@ -1317,7 +1360,7 @@ export default function App() {
         <div className="brand">
           <Wordmark size={24} className="logo" />
         </div>
-        <button type="button" className="meeting-title" onClick={() => setShowMeetings(true)} title="会议列表：打开、重命名、删除">
+        <button type="button" className="meeting-title" onClick={() => setShowMeetings(true)} title={t.app.meetingsTitle}>
           <History size={15} />
           <span>{meeting.title}</span>
         </button>
@@ -1325,28 +1368,33 @@ export default function App() {
           type="button"
           className={`chip status${ready ? ' ok' : ''}${remoteBroken ? ' warn' : ''}`}
           onClick={() => setShowSettings(true)}
-          title="出板书的模型，点开设置"
+          title={t.app.statusTitle}
         >
           <i className="dot" />
-          <b className={`where${cloud ? ' cloud' : ''}`}>{cloud ? '云端' : '本地'}</b>
+          <b className={`where${cloud ? ' cloud' : ''}`}>{cloud ? t.app.cloud : t.app.local}</b>
           <span>{status}</span>
-          {remoteBroken && !localOnly && <em>远程连不上，暂用本地</em>}
-          {useRemote && localOnly && <em>这场会只用本地</em>}
+          {remoteBroken && !localOnly && <em>{t.app.remoteDown}</em>}
+          {useRemote && localOnly && <em>{t.app.localOnlyMeeting}</em>}
         </button>
         {update && (
-          <button type="button" className="chip new-version" onClick={() => setShowUpdate(true)} title="有新版本，点开看更新说明">
-            新版本 {update.version}
+          <button type="button" className="chip new-version" onClick={() => setShowUpdate(true)} title={t.app.newVersionTitle}>
+            {t.app.newVersion(update.version)}
           </button>
         )}
+        {!isDesktop && (
+          <a className="chip web-demo" href={RELEASES} target="_blank" rel="noreferrer" title={t.app.webDemoTitle}>
+            {t.app.webDemo}
+          </a>
+        )}
         <span className="spacer" />
-        <div className="seg" role="radiogroup" aria-label="板书风格">
+        <div className="seg" role="radiogroup" aria-label={t.app.styleAria}>
           <button role="radio" aria-checked={mode === 'ink'} className={mode === 'ink' ? 'on' : ''} onClick={() => setMode('ink')}>
             <Pen size={15} />
-            手写
+            {t.app.ink}
           </button>
           <button role="radio" aria-checked={mode === 'pencil'} className={mode === 'pencil' ? 'on' : ''} onClick={() => setMode('pencil')}>
             <Pencil size={15} />
-            铅笔 · 可编辑
+            {t.app.pencil}
           </button>
         </div>
         <div className="icons">
@@ -1355,8 +1403,8 @@ export default function App() {
             className={`icon${showLog ? ' on' : ''}`}
             onClick={() => setShowLog(!showLog)}
             aria-pressed={showLog}
-            aria-label="会议记录"
-            title="会议记录"
+            aria-label={t.app.log}
+            title={t.app.log}
           >
             <TranscriptIcon />
           </button>
@@ -1366,18 +1414,18 @@ export default function App() {
             onClick={() => (replay ? exitReplay() : startReplay())}
             disabled={!replay && (!stepsRef.current.length || listening || waiting)}
             aria-pressed={!!replay}
-            aria-label="回放"
-            title={replay ? '退出回放' : waiting || listening ? '收音或者模型还在画的时候不能回放' : '回放：看板书是怎么一步步长出来的'}
+            aria-label={t.app.replay}
+            title={replay ? t.app.exitReplay : waiting || listening ? t.app.replayBlocked : t.app.replayHint}
           >
             <ReplayIcon />
           </button>
-          <button type="button" className="icon" onClick={undo} disabled={!!replay || !editHistory.current.canUndo} aria-label="撤销" title="撤销（Ctrl+Z）">
+          <button type="button" className="icon" onClick={undo} disabled={!!replay || !editHistory.current.canUndo} aria-label={t.app.undo} title={t.app.undoTitle}>
             <Undo />
           </button>
-          <button type="button" className="icon" onClick={redo} disabled={!!replay || !editHistory.current.canRedo} aria-label="重做" title="重做（Ctrl+Shift+Z）">
+          <button type="button" className="icon" onClick={redo} disabled={!!replay || !editHistory.current.canRedo} aria-label={t.app.redo} title={t.app.redoTitle}>
             <Redo />
           </button>
-          <button type="button" className="icon" onClick={tidyUp} disabled={!graph.nodes.length} aria-label="整理排版" title="整理排版：整块重新排一次">
+          <button type="button" className="icon" onClick={tidyUp} disabled={!graph.nodes.length} aria-label={t.app.tidy} title={t.app.tidyTitle}>
             <Tidy />
           </button>
           <div className="menu-anchor">
@@ -1388,8 +1436,8 @@ export default function App() {
               disabled={!!replay}
               aria-haspopup="menu"
               aria-expanded={importMenu}
-              aria-label="导入"
-              title="导入图片、PDF、.excalidraw 或 arXiv 论文（文件也可以直接拖到白板上）"
+              aria-label={t.app.import}
+              title={t.app.importTitle}
             >
               <Upload />
             </button>
@@ -1403,8 +1451,8 @@ export default function App() {
                     fileInput.current?.click()
                   }}
                 >
-                  <span>选择文件…</span>
-                  <small>图片、PDF 垫在板下面圈画批注；.excalidraw 转成板书</small>
+                  <span>{t.app.chooseFile}</span>
+                  <small>{t.app.chooseFileHint}</small>
                 </button>
                 <form
                   className="arxiv"
@@ -1413,21 +1461,21 @@ export default function App() {
                     void importArxiv(arxivInput)
                   }}
                 >
-                  <span>arXiv 论文</span>
+                  <span>{t.app.arxiv}</span>
                   <div>
                     <input
                       value={arxivInput}
                       onChange={(e) => setArxivInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Escape' && setImportMenu(false)}
-                      placeholder="arxiv.org/abs/… 或 2401.12345"
+                      placeholder={t.app.arxivPlaceholder}
                       spellCheck={false}
                       autoFocus
                     />
                     <button type="submit" className="small" disabled={!arxivInput.trim()}>
-                      导入
+                      {t.app.import}
                     </button>
                   </div>
-                  {!isDesktop && <small>网页版下载不了，请用桌面版，或者先下载 PDF 再拖进来</small>}
+                  {!isDesktop && <small>{t.app.arxivWebHint}</small>}
                 </form>
               </div>
             )}
@@ -1451,8 +1499,8 @@ export default function App() {
               disabled={!graph.nodes.length}
               aria-haspopup="menu"
               aria-expanded={exportMenu}
-              aria-label="导出"
-              title="导出"
+              aria-label={t.app.export}
+              title={t.app.export}
             >
               <Download />
             </button>
@@ -1460,44 +1508,44 @@ export default function App() {
               <div className="menu" role="menu" onMouseLeave={() => setExportMenu(false)}>
                 <button type="button" role="menuitem" onClick={() => void exportAs('md')}>
                   <span>Markdown</span>
-                  <small>要点、Mermaid 流程图和会议记录</small>
+                  <small>{t.app.exportMd}</small>
                 </button>
                 <button type="button" role="menuitem" onClick={() => void exportAs('png')}>
-                  <span>PNG 图片</span>
-                  <small>{mode === 'ink' ? '手写板书，和画面上一样' : '铅笔板书，含手动改动'}</small>
+                  <span>{t.app.exportPng}</span>
+                  <small>{mode === 'ink' ? t.app.exportPngInk : t.app.exportPngPencil}</small>
                 </button>
                 <button type="button" role="menuitem" onClick={() => void exportAs('svg')}>
-                  <span>SVG 矢量图</span>
-                  <small>放大不糊，可以插进文档或者接着改</small>
+                  <span>{t.app.exportSvg}</span>
+                  <small>{t.app.exportSvgHint}</small>
                 </button>
                 <button type="button" role="menuitem" onClick={() => void exportAs('pdf')}>
-                  <span>整场会 PDF</span>
-                  <small>每张板一页，后面是摘要和会议记录；页面是图片，字不能复制</small>
+                  <span>{t.app.exportPdf}</span>
+                  <small>{t.app.exportPdfHint}</small>
                 </button>
                 <button type="button" role="menuitem" onClick={() => void exportAs('html')}>
-                  <span>回放网页</span>
-                  <small>一个 .html，发给没参会的人，双击就能看板书怎么长出来的</small>
+                  <span>{t.app.exportHtml}</span>
+                  <small>{t.app.exportHtmlHint}</small>
                 </button>
                 <button type="button" role="menuitem" onClick={() => void exportAs('excalidraw')}>
                   <span>Excalidraw</span>
-                  <small>.excalidraw，可以在 excalidraw.com 接着改</small>
+                  <small>{t.app.exportExcalidrawHint}</small>
                 </button>
               </div>
             )}
           </div>
-          <button type="button" className="icon" onClick={() => reset()} aria-label="新会议" title="新会议：这场会已经自动保存了，从一块空板重新开始">
+          <button type="button" className="icon" onClick={() => reset()} aria-label={t.app.newMeeting} title={t.app.newMeetingTitle}>
             <Plus />
           </button>
           <button
             type="button"
             className="icon"
             onClick={() => setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length])}
-            aria-label={`主题：${THEME_LABEL[theme]}，点一下切换`}
-            title={`主题：${THEME_LABEL[theme]}`}
+            aria-label={t.theme.aria(t.theme[theme])}
+            title={t.theme.title(t.theme[theme])}
           >
             {theme === 'light' ? <Sun /> : theme === 'dark' ? <Moon /> : <Auto />}
           </button>
-          <button type="button" className="icon" onClick={() => setShowSettings(true)} aria-label="设置" title="设置">
+          <button type="button" className="icon" onClick={() => setShowSettings(true)} aria-label={t.app.settings} title={t.app.settings}>
             <Gear />
           </button>
         </div>
@@ -1563,10 +1611,10 @@ export default function App() {
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') setRenaming(null)
                     }}
-                    placeholder={selection.kind === 'edge' ? '连线上的字，留空就去掉' : '新的名字'}
-                    aria-label="改字"
+                    placeholder={selection.kind === 'edge' ? t.app.renameEdgePlaceholder : t.app.renamePlaceholder}
+                    aria-label={t.app.rename}
                   />
-                  <button type="submit">好</button>
+                  <button type="submit">{t.app.ok}</button>
                 </form>
               ) : (
                 <>
@@ -1581,43 +1629,37 @@ export default function App() {
                       setRenaming(cur ?? '')
                     }}
                   >
-                    改字
+                    {t.app.rename}
                   </button>
                   )}
                   {selection.kind === 'node' && session.graph.nodes.find((n) => n.id === selection.id)?.rows && (
-                    <span className="mark-unit" role="group" aria-label="圈画范围">
-                      {(
-                        [
-                          ['word', '词'],
-                          ['sentence', '句'],
-                          ['block', '段'],
-                        ] as const
-                      ).map(([u, label]) => (
+                    <span className="mark-unit" role="group" aria-label={t.app.markUnitAria}>
+                      {(['word', 'sentence', 'block'] as const).map((u) => (
                         <button key={u} type="button" className={markUnit === u ? 'on' : ''} aria-pressed={markUnit === u} onClick={() => setMarkUnit(u)}>
-                          {label}
+                          {t.app.units[u]}
                         </button>
                       ))}
                     </span>
                   )}
                   {selection.kind === 'node' &&
-                    (['划掉', '圈出', '下划线', '星标'] as const).map((m) => (
+                    MARKS.map((m) => (
                       <button
                         key={m}
                         type="button"
                         className={(unitSpan(m) ? hasSpan(session.graph.nodes.find((n) => n.id === selection.id), unitSpan(m)) : session.graph.nodes.find((n) => n.id === selection.id)?.marks.includes(m)) ? 'on' : ''}
                         onClick={() => markSelection(m)}
                       >
-                        {m}
+                        {t.app.marks[m]}
                       </button>
                     ))}
                   {selection.kind === 'node' && !pinned(session.graph, selection) && (
-                    <button type="button" onClick={addTerm} title="把这个名字加进这场会的术语表：之后语音听错、模型写偏都按它纠正">
-                      加进术语
+                    <button type="button" onClick={addTerm} title={t.app.addTermTitle}>
+                      {t.app.addTerm}
                     </button>
                   )}
                   {!pinned(session.graph, selection) && (
                     <button type="button" className="del" onClick={deleteSelection}>
-                      删除
+                      {t.app.delete}
                     </button>
                   )}
                 </>
@@ -1625,43 +1667,58 @@ export default function App() {
             }
           />
         ) : (
-          <Suspense fallback={<div className="board-loading">正在打开铅笔白板…</div>}>
+          <Suspense fallback={<div className="board-loading">{t.app.pencilLoading}</div>}>
             <PencilBoard onApi={setApi} dark={dark} paper={PAPER_LIGHT} />
           </Suspense>
         )}
 
         {empty && !splash && (
           <div className={`hero${mode === 'ink' && dark ? ' on-board' : ''}`}>
-            <span className="kicker">本地优先 · 实时会议板书</span>
+            <span className="kicker">{t.app.kicker}</span>
             <h1>
-              开会时只管说，
+              {t.app.headline1}
               <br />
-              板书自己长出来。
+              {t.app.headline2}
             </h1>
             <p>
-              说出来的话会被整理成话题、要点、流程和问题，一笔一笔写在白板上。
-              {isDesktop ? '点下面的麦克风开始，或者先放一段示例会议看看。' : '在下面输入一句话，或者先放一段示例会议看看。'}
+              {t.app.lead(isDesktop)}
             </p>
             <div className="cta">
               {isDesktop && (
                 <button type="button" className="primary" onClick={() => void toggleMic()}>
-                  开始收音
+                  {t.app.startMic}
                 </button>
               )}
-              <button type="button" className={isDesktop ? 'secondary' : 'primary'} onClick={() => void play()} disabled={!ready || playing}>
-                {ready ? '播放示例会议' : '等模型就绪…'}
+              <button type="button" className={isDesktop ? 'secondary' : 'primary'} onClick={() => void play()} disabled={(!ready && !recordedOnly) || playing}>
+                {ready || recordedOnly ? t.app.playDemo : t.app.waitModel}
               </button>
             </div>
             <label className="demo-pick">
-              <span>示例</span>
-              <select value={demo} onChange={(e) => setDemo(e.target.value)} aria-label="示例会议">
-                {cases.map((c) => (
+              <span>{t.app.demo}</span>
+              <select value={demo} onChange={(e) => setDemo(e.target.value)} aria-label={t.app.demoAria}>
+                {demos.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
                 ))}
               </select>
             </label>
+            {recordedOnly && (
+              <p className="demo-note">
+                {t.app.recordedHint}{' '}
+                <button type="button" className="link" onClick={() => setShowSettings(true)}>
+                  {t.app.connectModel}
+                </button>
+              </p>
+            )}
+            {!isDesktop && (
+              <p className="demo-note">
+                {t.app.webNotice}{' '}
+                <a href={RELEASES} target="_blank" rel="noreferrer">
+                  {t.app.getDesktop}
+                </a>
+              </p>
+            )}
           </div>
         )}
 
@@ -1686,7 +1743,7 @@ export default function App() {
             current={page}
             onGo={goPage}
             onNew={newPage}
-            blocked={replay ? '回放时不能翻页，先退出回放' : waiting ? '模型还在画，画完再翻页' : undefined}
+            blocked={replay ? t.app.replayNoPage : waiting ? t.app.busyPage : undefined}
             suggest={suggest}
             onDismiss={() => setSuggest(false)}
           />
@@ -1707,10 +1764,10 @@ export default function App() {
         )}
       </main>
 
-      <aside className="log" aria-label="会议记录" hidden={!showLog}>
+      <aside className="log" aria-label={t.app.log} hidden={!showLog}>
         <header>
-          <h2>会议记录</h2>
-          <span className="count">{said.length ? `${said.length} 句` : ''}</span>
+          <h2>{t.app.log}</h2>
+          <span className="count">{said.length ? t.app.count(said.length) : ''}</span>
           <button
             type="button"
             className="ghost small"
@@ -1718,19 +1775,20 @@ export default function App() {
             disabled={!summing && (!said.length || !ready)}
             title={
               summing
-                ? '停止生成'
+                ? t.app.stopSumming
                 : cloud && remoteView
-                  ? `用云端的 ${remoteView.model} 生成摘要：整场会议记录会发到 ${hostOf(remoteView.baseUrl)}`
-                  : '用本地模型生成摘要：结论、决定、待办、待讨论'
+                  ? t.app.summaryCloud(remoteView.model, hostOf(remoteView.baseUrl))
+                  : t.app.summaryLocal
             }
           >
-            {summing ? '停止' : summary ? '重新摘要' : '摘要'}
+            {summing ? t.app.stop : summary ? t.app.resummarize : t.app.summarize}
           </button>
-          <button type="button" className="icon" onClick={() => setShowLog(false)} aria-label="收起会议记录">
+          <button type="button" className="icon" onClick={() => setShowLog(false)} aria-label={t.app.collapseLog}>
             <Close size={16} />
           </button>
         </header>
-        {(summing || summary) && !replay && (
+        {/* Hidden while replaying, back once the replay reaches the end (e.g. a finished sample meeting) */}
+        {(summing || summary) && (!replay || replay.at >= replay.total) && (
           <Suspense fallback={null}>
             <Summary
               text={summary}
@@ -1751,36 +1809,36 @@ export default function App() {
             }}
           >
             <span>
-              把 <b>{renamingWho}</b> 改成
+              {t.app.renameFrom} <b>{renamingWho}</b> {t.app.renameTo}
             </span>
             <input name="name" defaultValue={renamingWho} autoFocus onFocus={(e) => e.currentTarget.select()} onKeyDown={(e) => e.key === 'Escape' && setRenamingWho(null)} />
             <button type="submit" className="small">
-              改名
+              {t.app.renameSpeaker}
             </button>
             <button type="button" className="ghost small" onClick={() => setRenamingWho(null)}>
-              取消
+              {t.app.cancel}
             </button>
           </form>
         )}
         <div className="lines">
-          {lines.length === 0 && !partial && <p className="empty">还没有人说话。说的每一句和它画出来的东西都会记在这里。</p>}
+          {lines.length === 0 && !partial && <p className="empty">{t.app.logEmpty}</p>}
           {shown.map((l, i) => (
             <Fragment key={i}>
             {pagesRef.current.length > 1 && (i === 0 || (shown[i - 1].page ?? 0) !== (l.page ?? 0)) && (
-              <button type="button" className="page-mark" onClick={() => goPage(l.page ?? 0)} disabled={!!replay || waiting} title="切到这张板">
-                第 {(l.page ?? 0) + 1} 张板
+              <button type="button" className="page-mark" onClick={() => goPage(l.page ?? 0)} disabled={!!replay || waiting} title={t.app.gotoPage}>
+                {t.app.pageN((l.page ?? 0) + 1)}
               </button>
             )}
             <article
               className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}${jumpLine === i ? ' jump' : ''}`}
             >
-              {l.manual && <span className="who edit">改</span>}
+              {l.manual && <span className="who edit">{t.app.editBadge}</span>}
               {l.speaker && (
                 <span
                   className={`who c${speakers.indexOf(l.speaker) % 6}`}
                   role="button"
                   tabIndex={0}
-                  title={`给「${l.speaker}」改名`}
+                  title={t.app.renameSpeakerTitle(l.speaker)}
                   onClick={() => setRenamingWho(l.speaker!)}
                   onKeyDown={(e) => e.key === 'Enter' && setRenamingWho(l.speaker!)}
                 >
@@ -1792,11 +1850,11 @@ export default function App() {
                 {!l.manual && (
                 <details>
                   <summary>
-                    {l.ms === undefined ? '画着…' : `${Math.round(l.ms)} ms`}
+                    {l.ms === undefined ? t.app.drawing : `${Math.round(l.ms)} ms`}
                     {l.ms !== undefined && useRemote && l.via && ` · ${l.via}`}
-                    {l.fellBack && <em> · 远程失败，这句用了本地模型</em>}
+                    {l.fellBack && <em>{t.app.lineFellBack}</em>}
                   </summary>
-                  {l.ops ? <pre>{l.ops}</pre> : <pre>（没有改动）</pre>}
+                  {l.ops ? <pre>{l.ops}</pre> : <pre>{t.app.noChange}</pre>}
                 </details>
                 )}
               </div>
@@ -1884,10 +1942,8 @@ export default function App() {
         />
       )}
       {pendingPdf && (
-        <div className="import-choice" role="dialog" aria-label="导入到哪里">
-          <span>
-            {pendingPdf.name}（{pendingPdf.r.pages.length} 张板）放到哪里？
-          </span>
+        <div className="import-choice" role="dialog" aria-label={t.app.importWhereAria}>
+          <span>{t.app.importWhere(pendingPdf.name, pendingPdf.r.pages.length)}</span>
           <button
             type="button"
             className="small"
@@ -1898,7 +1954,7 @@ export default function App() {
               placePdf(p.name, p.r, true)
             }}
           >
-            新开一场会
+            {t.app.importNewMeeting}
           </button>
           <button
             type="button"
@@ -1909,22 +1965,22 @@ export default function App() {
               placePdf(p.name, p.r, false)
             }}
           >
-            加到这场会
+            {t.app.importHere}
           </button>
         </div>
       )}
       {showKeys && (
-        <div className="modal" role="dialog" aria-label="快捷键" onClick={(e) => e.target === e.currentTarget && setShowKeys(false)}>
+        <div className="modal" role="dialog" aria-label={t.app.keys} onClick={(e) => e.target === e.currentTarget && setShowKeys(false)}>
           <div className="panel keys">
             <header>
-              <h2>快捷键</h2>
-              <button type="button" className="icon" onClick={() => setShowKeys(false)} aria-label="关闭">
+              <h2>{t.app.keys}</h2>
+              <button type="button" className="icon" onClick={() => setShowKeys(false)} aria-label={t.app.close}>
                 <Close size={16} />
               </button>
             </header>
             <table>
               <tbody>
-                {SHORTCUTS.map(([k, what]) => (
+                {t.shortcuts.map(([k, what]) => (
                   <tr key={k}>
                     <td>
                       <kbd>{k}</kbd>
@@ -1934,7 +1990,7 @@ export default function App() {
                 ))}
               </tbody>
             </table>
-            <p className="hint">只在手写模式生效；焦点在输入框里时不抢键。回放时空格播放或暂停，左右键一步步走，Esc 退出。</p>
+            <p className="hint">{t.app.keysHint}</p>
           </div>
         </div>
       )}
@@ -1955,10 +2011,10 @@ export default function App() {
               onClick={() => {
                 void navigator.clipboard
                   ?.writeText(`${toast.text}\n\n${recentErrors().slice(-5).join('\n')}\n${navigator.userAgent}`)
-                  .then(() => setToast({ ok: true, text: '错误详情复制好了' }))
+                  .then(() => setToast({ ok: true, text: t.app.copied }))
               }}
             >
-              复制错误详情
+              {t.app.copyError}
             </button>
           )}
         </div>

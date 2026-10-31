@@ -5,6 +5,7 @@ import { useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { plainText } from '../engine/summary.ts'
+import { useT } from '../i18n/index.ts'
 import { Check, Close, Pen } from './icons.tsx'
 
 async function copy(text: string) {
@@ -20,7 +21,7 @@ async function copy(text: string) {
     t.select()
     const ok = document.execCommand('copy')
     t.remove()
-    if (!ok) throw new Error('复制失败')
+    if (!ok) throw new Error('copy failed')
   }
 }
 
@@ -40,36 +41,37 @@ export default function Summary({
   onClear: () => void
   onToast: (t: { ok: boolean; text: string }) => void
 }) {
+  const s = useT().summary
   const [editing, setEditing] = useState(false)
-  const put = (what: string, s: string) =>
-    copy(s).then(
-      () => onToast({ ok: true, text: `已复制${what}` }),
-      () => onToast({ ok: false, text: '复制失败' }),
+  const put = (what: 'md' | 'text', body: string) =>
+    copy(body).then(
+      () => onToast({ ok: true, text: s.copied(what) }),
+      () => onToast({ ok: false, text: s.copyFailed }),
     )
 
   return (
-    <section className="summary" aria-label="会议摘要">
+    <section className="summary" aria-label={s.aria}>
       <div className="summary-head">
-        <h3>摘要</h3>
+        <h3>{s.title}</h3>
         <span>{status}</span>
         {!busy && (
           <>
-            <button type="button" className="ghost small" onClick={() => void put(' Markdown 原文', text)} title="复制 Markdown 原文">
-              复制原文
+            <button type="button" className="ghost small" onClick={() => void put('md', text)} title={s.copyMdTitle}>
+              {s.copyMd}
             </button>
-            <button type="button" className="ghost small" onClick={() => void put('纯文本', plainText(text))} title="去掉 Markdown 记号再复制">
-              仅文本
+            <button type="button" className="ghost small" onClick={() => void put('text', plainText(text))} title={s.copyTextTitle}>
+              {s.copyText}
             </button>
             <button
               type="button"
               className="icon"
               onClick={() => setEditing((e) => !e)}
-              aria-label={editing ? '改完了' : '修改摘要'}
-              title={editing ? '改完了' : '修改摘要'}
+              aria-label={editing ? s.done : s.edit}
+              title={editing ? s.done : s.edit}
             >
               {editing ? <Check size={14} /> : <Pen size={14} />}
             </button>
-            <button type="button" className="icon" onClick={onClear} aria-label="删掉摘要" title="删掉摘要">
+            <button type="button" className="icon" onClick={onClear} aria-label={s.clear} title={s.clear}>
               <Close size={14} />
             </button>
           </>

@@ -105,7 +105,7 @@ const CATALOG: &[Entry] = &[
     Entry {
         id: "qwen3.5-4b",
         label: "Qwen3.5-4B",
-        note: "轻量档：轻薄本、核显、纯 CPU 也能用",
+        note: "Lightweight: runs on laptops, integrated graphics or CPU only",
         kind: Kind::Llm,
         vram_mib: 0,
         files: &[FileSpec {
@@ -121,7 +121,7 @@ const CATALOG: &[Entry] = &[
     Entry {
         id: "qwen3.5-9b",
         label: "Qwen3.5-9B",
-        note: "高配档：更准，建议有 6 GB 以上显存的独显",
+        note: "More accurate: a dedicated graphics card with at least 6 GB of VRAM is recommended",
         kind: Kind::Llm,
         vram_mib: 6000,
         files: &[FileSpec {
@@ -136,8 +136,8 @@ const CATALOG: &[Entry] = &[
     },
     Entry {
         id: "qwen3.5-4b-vision",
-        label: "看图组件 · Qwen3.5-4B",
-        note: "导入图片时让内置模型读出图里的字，开会时就能在图上圈画；图片只在这台电脑上处理",
+        label: "Vision add-on · Qwen3.5-4B",
+        note: "Lets the built-in model read text in imported images for annotation during meetings. Images are processed only on this computer.",
         kind: Kind::Vision,
         vram_mib: 0,
         files: &[FileSpec {
@@ -152,8 +152,8 @@ const CATALOG: &[Entry] = &[
     },
     Entry {
         id: "qwen3.5-9b-vision",
-        label: "看图组件 · Qwen3.5-9B",
-        note: "导入图片时让内置模型读出图里的字，开会时就能在图上圈画；图片只在这台电脑上处理",
+        label: "Vision add-on · Qwen3.5-9B",
+        note: "Lets the built-in model read text in imported images for annotation during meetings. Images are processed only on this computer.",
         kind: Kind::Vision,
         vram_mib: 0,
         files: &[FileSpec {
@@ -168,8 +168,8 @@ const CATALOG: &[Entry] = &[
     },
     Entry {
         id: "voice",
-        label: "语音识别",
-        note: "SenseVoice（中英日韩粤，带标点）+ Silero 断句，说话时用",
+        label: "Speech recognition model",
+        note: "Live transcription: SenseVoice (Chinese, English, Japanese, Korean and Cantonese, with punctuation) + Silero speech detection",
         kind: Kind::Voice,
         vram_mib: 0,
         files: &[
@@ -261,7 +261,7 @@ fn entry(id: &str) -> Result<&'static Entry, String> {
     CATALOG
         .iter()
         .find(|e| e.id == id)
-        .ok_or_else(|| format!("没有这个模型：{id}"))
+        .ok_or_else(|| format!("Model not found: {id}"))
 }
 
 fn selected(dir: &Path) -> Option<String> {
@@ -371,7 +371,7 @@ fn check_space(e: &Entry, dir: &Path, free: u64) -> Result<(), String> {
     if need + SPACE_MARGIN > free {
         let gb = |n: u64| n as f64 / 1e9;
         return Err(format!(
-            "磁盘空间不够：{} 还需要 {:.1} GB（另外留 {:.1} GB 余量），模型目录所在的盘只剩 {:.1} GB",
+            "Not enough disk space: {} needs {:.1} GB more (plus {:.1} GB spare); only {:.1} GB is free on the model folder's disk",
             e.label,
             gb(need),
             gb(SPACE_MARGIN),
@@ -388,13 +388,13 @@ pub fn model_download(
     id: String,
 ) -> Result<(), String> {
     let e = entry(&id)?;
-    let dir = llm::models_dir(&app).ok_or("找不到应用数据目录")?;
-    let free = fs4::available_space(&dir).map_err(|err| format!("读不到磁盘剩余空间：{err}"))?;
+    let dir = llm::models_dir(&app).ok_or("App data folder not found")?;
+    let free = fs4::available_space(&dir).map_err(|err| format!("Couldn't check free disk space: {err}"))?;
     check_space(e, &dir, free)?;
     let cancel = {
         let mut cur = downloads.current.lock().unwrap();
         if let Some((other, _)) = cur.as_ref() {
-            return Err(format!("{other} 正在下载，等它下完或者先取消"));
+            return Err(format!("{other} is downloading; wait for it to finish or cancel it first"));
         }
         let flag = Arc::new(AtomicBool::new(false));
         *cur = Some((id.clone(), flag.clone()));
@@ -435,12 +435,12 @@ pub fn model_cancel(downloads: tauri::State<'_, Downloads>) {
 #[tauri::command]
 pub fn model_select(app: AppHandle, id: String) -> Result<(), String> {
     let e = entry(&id)?;
-    let dir = llm::models_dir(&app).ok_or("找不到应用数据目录")?;
+    let dir = llm::models_dir(&app).ok_or("App data folder not found")?;
     if e.kind != Kind::Llm {
-        return Err(format!("{} 不是可以切换的大模型", e.label));
+        return Err(format!("{} can't be selected as the built-in model", e.label));
     }
     if !installed(e.id, &dir) {
-        return Err(format!("{} 还没下载", e.label));
+        return Err(format!("{} has not been downloaded yet", e.label));
     }
     std::fs::write(dir.join(llm::SELECTED), e.main_file()).map_err(|err| err.to_string())?;
     llm::restart(&app);
@@ -461,9 +461,9 @@ pub fn model_delete(
         .as_ref()
         .is_some_and(|c| c.0 == id)
     {
-        return Err("正在下载，先取消".into());
+        return Err("Download in progress; cancel it first".into());
     }
-    let dir = llm::models_dir(&app).ok_or("找不到应用数据目录")?;
+    let dir = llm::models_dir(&app).ok_or("App data folder not found")?;
     // 先停掉正在用这些文件的东西：Windows 上被占用的文件删不掉。删完再按剩下的重新拉起
     match e.kind {
         Kind::Llm | Kind::Vision => app.state::<llm::Llm>().shutdown(),
@@ -570,7 +570,7 @@ async fn fetch(
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
-            .map_err(|err| DlError::Failed(format!("建不了目录：{err}")))?;
+            .map_err(|err| DlError::Failed(format!("Couldn't create the folder: {err}")))?;
     }
     let part = part_of(&path);
 
@@ -578,7 +578,7 @@ async fn fetch(
     let mut hasher = Sha256::new();
     let mut have: u64 = 0;
     if let Ok(mut file) = tokio::fs::File::open(&part).await {
-        report("verifying", 0, 0, None, Some("核对已下载的部分".into()));
+        report("verifying", 0, 0, None, Some("Verifying the downloaded portion…".into()));
         let mut buf = vec![0u8; 8 << 20];
         loop {
             let n = file
@@ -602,7 +602,7 @@ async fn fetch(
         have = 0;
     }
 
-    let mut last_error = String::from("所有下载源都失败了");
+    let mut last_error = String::from("All download sources failed");
     for src in f.sources {
         if have >= f.size {
             break;
@@ -617,7 +617,7 @@ async fn fetch(
         let resp = match req.send().await {
             Ok(r) => r,
             Err(err) => {
-                last_error = format!("{}：{err}", src.name);
+                last_error = format!("{}: {err}", src.name);
                 continue;
             }
         };
@@ -628,7 +628,7 @@ async fn fetch(
             have = 0;
             let _ = tokio::fs::remove_file(&part).await;
         } else if !status.is_success() {
-            last_error = format!("{}：HTTP {status}", src.name);
+            last_error = format!("{}: HTTP {status}", src.name);
             continue;
         }
         let mut file = match tokio::fs::OpenOptions::new()
@@ -638,7 +638,7 @@ async fn fetch(
             .await
         {
             Ok(fh) => fh,
-            Err(err) => return Err(DlError::Failed(format!("写不进模型目录：{err}"))),
+            Err(err) => return Err(DlError::Failed(format!("Couldn't write to the model folder: {err}"))),
         };
         let mut stream = resp.bytes_stream();
         let mut last_emit = Instant::now();
@@ -654,14 +654,14 @@ async fn fetch(
             let chunk = match chunk {
                 Ok(c) => c,
                 Err(err) => {
-                    last_error = format!("{}：{err}", src.name);
+                    last_error = format!("{}: {err}", src.name);
                     broken = true;
                     break;
                 }
             };
             if let Err(err) = file.write_all(&chunk).await {
                 // 下载前已经查过空间，到这里多半是别的程序把盘写满了
-                return Err(DlError::Failed(format!("写入失败：{err}")));
+                return Err(DlError::Failed(format!("Write failed: {err}")));
             }
             hasher.update(&chunk);
             have += chunk.len() as u64;
@@ -686,12 +686,12 @@ async fn fetch(
         return Err(DlError::Failed(last_error));
     }
 
-    report("verifying", have, 0, None, Some("校验文件".into()));
+    report("verifying", have, 0, None, Some("Verifying file…".into()));
     let got = format!("{:x}", hasher.finalize());
     if got != f.sha256 {
         let _ = tokio::fs::remove_file(&part).await;
         return Err(DlError::Failed(format!(
-            "校验失败（sha256 {got}），已删除，请重新下载"
+            "Verification failed (sha256 {got}); file deleted. Please download it again"
         )));
     }
     tokio::fs::rename(&part, &path)

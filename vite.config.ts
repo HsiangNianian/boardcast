@@ -33,6 +33,8 @@ function pdfjsAssets(): Plugin {
 
 // Tauri 开发时固定端口；TAURI_ENV_* 由 tauri cli 注入
 export default defineConfig({
+  // The web demo on GitHub Pages lives under /boardcast/ (BOARDCAST_BASE=/boardcast/); the desktop app uses /
+  base: process.env.BOARDCAST_BASE || '/',
   plugins: [react(), pdfjsAssets()],
   clearScreen: false,
   server: { port: 1420, strictPort: true },

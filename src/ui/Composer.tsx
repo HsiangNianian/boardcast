@@ -3,6 +3,7 @@
 // 收起时只剩收音按钮和一行提示；说话时的临时字幕浮在栏上方。
 
 import { useEffect, useRef, useState } from 'react'
+import { useT } from '../i18n/index.ts'
 import { ArrowUp, ChevronDown, ChevronUp, Mic, Stop } from './icons.tsx'
 
 interface Props {
@@ -63,6 +64,7 @@ export function splitSpeaker(line: string): { speaker?: string; text: string } {
 }
 
 export default function Composer(p: Props) {
+  const c = useT().composer
   const [open, setOpen] = useState(() => load('boardcast.composer', 'open') === 'open')
   const [text, setText] = useState('')
   const area = useRef<HTMLTextAreaElement>(null)
@@ -138,8 +140,8 @@ export default function Composer(p: Props) {
               className="mic"
               onClick={p.toggleMic}
               aria-pressed={p.listening}
-              aria-label={p.listening ? '停止收音' : '开始收音'}
-              title={p.listening ? `正在收音：${p.micName ?? ''}` : '开始收音'}
+              aria-label={p.listening ? c.stopListening : c.startListening}
+              title={p.listening ? c.listeningOn(p.micName ?? '') : c.startListening}
             >
               {p.listening ? <Stop size={14} /> : <Mic size={17} />}
             </button>
@@ -159,8 +161,8 @@ export default function Composer(p: Props) {
               type="button"
               className={`who ${color(p.speaker)}`}
               onClick={nextSpeaker}
-              title="当前说话人：点一下换下一个，也可以在句首写 @名字"
-              aria-label={`说话人 ${p.speaker}，点一下换下一个`}
+              title={c.speakerTitle}
+              aria-label={c.speakerAria(p.speaker)}
             >
               {p.speaker.slice(0, 2)}
             </button>
@@ -176,20 +178,20 @@ export default function Composer(p: Props) {
                   send()
                 }
               }}
-              placeholder={p.listening ? '正在听，也可以接着打字' : '说一句会上的话，回车写上白板；@名字 换人'}
-              aria-label="说的话"
+              placeholder={p.listening ? c.placeholderListening : c.placeholder}
+              aria-label={c.textAria}
               autoFocus
             />
           </form>
         ) : (
           <button type="button" className="write idle" onClick={() => setOpen(true)}>
-            <span>{p.listening ? `正在听 · ${p.micName ?? ''}` : '说一句会上的话…'}</span>
+            <span>{p.listening ? c.idleListening(p.micName ?? '') : c.idle}</span>
             <kbd>/</kbd>
           </button>
         )}
 
         {open && (
-          <button type="button" className="send" onClick={send} disabled={!text.trim()} aria-label="写上白板" title="写上白板（回车）">
+          <button type="button" className="send" onClick={send} disabled={!text.trim()} aria-label={c.send} title={c.sendTitle}>
             <ArrowUp size={16} />
           </button>
         )}
@@ -198,11 +200,11 @@ export default function Composer(p: Props) {
           type="button"
           className={`where${p.where.cloud ? ' cloud' : ''}`}
           onClick={p.onWhere}
-          title={p.where.cloud ? `说的话会发到 ${p.where.host} 出板书，点开设置` : '说的话只在这台电脑上处理，点开设置'}
+          title={p.where.cloud ? c.cloudTitle(p.where.host ?? '') : c.localTitle}
         >
-          {p.where.cloud ? '云端' : '本地'}
+          {p.where.cloud ? c.cloud : c.local}
         </button>
-        <button type="button" className="fold" onClick={() => setOpen(!open)} aria-label={open ? '收起' : '展开'} title={open ? '收起' : '展开'}>
+        <button type="button" className="fold" onClick={() => setOpen(!open)} aria-label={open ? c.collapse : c.expand} title={open ? c.collapse : c.expand}>
           {open ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
       </div>

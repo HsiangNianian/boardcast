@@ -11,6 +11,7 @@ import { isDesktop } from './desktop.ts'
 import type { Graph } from './engine/graph.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { type Hit, type Searchable, searchMeeting } from './engine/search.ts'
+import { msg } from './i18n/index.ts'
 
 export const MEETING_VERSION = 1
 
@@ -90,7 +91,7 @@ export function autoTitle(graph: Graph, lines: MeetingLine[]): string {
   if (node) return node.label
   const first = lines[0]?.text.trim()
   if (first) return first.length > 20 ? `${first.slice(0, 20)}…` : first
-  return '未命名会议'
+  return msg().app.untitled
 }
 
 /** 读进来的会议：补齐缺的字段；上次关闭时还没画完的句子，标成没来得及画 */
@@ -99,7 +100,7 @@ export function normalize(m: Meeting): Meeting {
     ...m,
     version: m.version ?? MEETING_VERSION,
     history: m.history ?? [],
-    lines: (m.lines ?? []).map((l) => (l.ms === undefined ? { ...l, ms: 0, ops: '（应用关闭时这句还没画完）' } : l)),
+    lines: (m.lines ?? []).map((l) => (l.ms === undefined ? { ...l, ms: 0, ops: msg().doc.unfinished } : l)),
   }
 }
 

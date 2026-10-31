@@ -5,6 +5,7 @@
 import type { Page } from '../meetings.ts'
 import { type Area, pageGraph } from '../engine/regions.ts'
 import { segment } from './segment.ts'
+import { msg } from '../i18n/index.ts'
 
 /** 图片在板上的宽度（板书坐标），和 PDF 页一样 */
 const WIDTH = 900
@@ -42,8 +43,8 @@ export function llamaReader(baseUrl: string): Reader {
     })
     if (!res.ok) {
       const body = await res.text()
-      if (/image|mmproj|multimodal|vision/i.test(body)) throw new Error('本地模型还不能看图：在「本地模型」里装上「看图」组件')
-      throw new Error(`本地模型 ${res.status}：${body.slice(0, 200)}`)
+      if (/image|mmproj|multimodal|vision/i.test(body)) throw new Error(msg().errors.needVision)
+      throw new Error(msg().errors.localHttp(res.status, body.slice(0, 200)))
     }
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] }
     return cleanRead(j.choices?.[0]?.message?.content ?? '')
@@ -81,7 +82,7 @@ export async function importImage(file: Blob, read: Reader, onStep?: (done: numb
   try {
     bmp = await createImageBitmap(file)
   } catch {
-    throw new Error('图片打不开（支持 PNG、JPEG、WebP、GIF）')
+    throw new Error(msg().errors.imageBroken)
   }
   const k = Math.min(1, WORK / bmp.width)
   const work = document.createElement('canvas')

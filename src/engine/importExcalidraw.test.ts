@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { importExcalidraw } from '../board/importExcalidraw.ts'
+import { setLangChoice } from '../i18n/index.ts'
+
+// These tests check the Chinese wording
+setLangChoice('zh')
 
 const file = (elements: object[]) => JSON.stringify({ type: 'excalidraw', version: 2, elements })
 

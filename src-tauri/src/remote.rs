@@ -51,9 +51,9 @@ fn load(app: &AppHandle) -> RemoteConfig {
 }
 
 fn store(app: &AppHandle, c: &RemoteConfig) -> Result<(), String> {
-    let p = path(app).ok_or("找不到应用配置目录")?;
+    let p = path(app).ok_or("App configuration folder not found")?;
     let text = serde_json::to_string_pretty(c).map_err(|e| e.to_string())?;
-    std::fs::write(&p, text).map_err(|e| format!("保存失败：{e}"))?;
+    std::fs::write(&p, text).map_err(|e| format!("Save failed: {e}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -103,7 +103,7 @@ fn is_loopback(url: &str) -> bool {
 
 async fn post(base: &str, key: &str, body: &Value) -> Result<Value, String> {
     if base.trim().is_empty() {
-        return Err("还没填 base URL".into());
+        return Err("Fill in the base URL first".into());
     }
     let url = chat_url(base);
     let mut builder = reqwest::Client::builder()
@@ -119,7 +119,7 @@ async fn post(base: &str, key: &str, body: &Value) -> Result<Value, String> {
     if !key.is_empty() {
         req = req.bearer_auth(key);
     }
-    let resp = req.send().await.map_err(|e| format!("连不上：{e}"))?;
+    let resp = req.send().await.map_err(|e| format!("Can't connect: {e}"))?;
     let status = resp.status();
     let text = resp.text().await.map_err(|e| e.to_string())?;
     if !status.is_success() {
@@ -132,11 +132,11 @@ async fn post(base: &str, key: &str, body: &Value) -> Result<Value, String> {
                     .map(str::to_string)
             })
             .unwrap_or_else(|| text.chars().take(300).collect());
-        return Err(format!("HTTP {status}：{msg}"));
+        return Err(format!("HTTP {status}: {msg}"));
     }
     serde_json::from_str(&text).map_err(|_| {
         format!(
-            "返回的不是 JSON：{}",
+            "The reply is not JSON: {}",
             text.chars().take(200).collect::<String>()
         )
     })
@@ -186,7 +186,7 @@ pub async fn remote_test(
     let key = api_key.unwrap_or(saved.api_key);
     let model = model.unwrap_or(saved.model);
     if model.trim().is_empty() {
-        return Err("还没填模型名".into());
+        return Err("Fill in the model name first".into());
     }
     let body = serde_json::json!({
         "model": model.trim(),
@@ -199,7 +199,7 @@ pub async fn remote_test(
     let reply = v
         .pointer("/choices/0/message/content")
         .and_then(Value::as_str)
-        .ok_or("返回里没有 choices[0].message.content，不像是 OpenAI 兼容接口")?
+        .ok_or("The reply has no choices[0].message.content — this doesn't look like an OpenAI-compatible API")?
         .trim()
         .chars()
         .take(40)
@@ -215,7 +215,7 @@ pub async fn remote_test(
 pub async fn remote_chat(app: AppHandle, mut body: Value) -> Result<Value, String> {
     let c = load(&app);
     if !c.enabled {
-        return Err("远程模型没有启用".into());
+        return Err("Remote model is not enabled".into());
     }
     body["model"] = Value::String(c.model.clone());
     post(&c.base_url, &c.api_key, &body).await
@@ -259,7 +259,7 @@ mod tests {
         assert!(err.starts_with("HTTP 404"), "{err}");
         // 连不上的地址
         let err = post("http://127.0.0.1:9/v1", "", &body).await.unwrap_err();
-        assert!(err.starts_with("连不上"), "{err}");
+        assert!(err.starts_with("Can't connect"), "{err}");
     }
 
     #[test]

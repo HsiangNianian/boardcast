@@ -4,6 +4,7 @@
 
 import { isDesktop } from './desktop.ts'
 import { type ChatResponse, chatUrl } from './engine/llm.ts'
+import { msg } from './i18n/index.ts'
 
 export interface RemoteView {
   baseUrl: string
@@ -52,14 +53,14 @@ function hint(key: string): string | undefined {
 }
 
 async function webPost(s: { baseUrl: string; apiKey: string }, body: Record<string, unknown>): Promise<ChatResponse> {
-  if (!s.baseUrl.trim()) throw new Error('还没填 base URL')
+  if (!s.baseUrl.trim()) throw new Error(msg().errors.noBaseUrl)
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (s.apiKey) headers.authorization = `Bearer ${s.apiKey}`
   let res: Response
   try {
     res = await fetch(chatUrl(s.baseUrl), { method: 'POST', headers, body: JSON.stringify(body) })
   } catch (e) {
-    throw new Error(`连不上（网页版可能被服务商的跨域限制挡住了，桌面版没有这个问题）：${e}`)
+    throw new Error(msg().errors.unreachableWeb(String(e)))
   }
   const text = await res.text()
   if (!res.ok) {
@@ -99,7 +100,7 @@ export const remote = {
     try {
       localStorage.setItem(KEY, JSON.stringify(next))
     } catch {
-      throw new Error('浏览器不让存设置')
+      throw new Error(msg().errors.storageBlocked)
     }
     return { baseUrl: next.baseUrl, model: next.model, enabled: next.enabled, keyHint: hint(next.apiKey) }
   },
@@ -114,14 +115,14 @@ export const remote = {
       })
     const s = read()
     const model = (d?.model ?? s.model).trim()
-    if (!model) throw new Error('还没填模型名')
+    if (!model) throw new Error(msg().errors.noModelName)
     const t0 = performance.now()
     const r = await webPost(
       { baseUrl: d?.baseUrl ?? s.baseUrl, apiKey: d?.apiKey ?? s.apiKey },
-      { model, messages: [{ role: 'user', content: '只回复 OK 两个字母。' }], max_tokens: 8, temperature: 0 },
+      { model, messages: [{ role: 'user', content: 'Reply with just the two letters OK.' }], max_tokens: 8, temperature: 0 },
     )
     const reply = r.choices?.[0]?.message?.content
-    if (reply === undefined) throw new Error('返回里没有 choices[0].message.content，不像是 OpenAI 兼容接口')
+    if (reply === undefined) throw new Error(msg().errors.notOpenAI)
     return { ms: Math.round(performance.now() - t0), reply: (reply ?? '').trim().slice(0, 40) }
   },
 

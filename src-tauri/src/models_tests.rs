@@ -111,7 +111,7 @@ fn refuses_to_start_without_enough_space() {
     // 2.7 GB 的模型，盘上只剩 1 GB：拒绝，并且说清楚差多少
     let err = check_space(e, &dir, 1_000_000_000).unwrap_err();
     assert!(
-        err.contains("磁盘空间不够") && err.contains("2.7 GB"),
+        err.contains("Not enough disk space") && err.contains("2.7 GB"),
         "{err}"
     );
     // 已经下了 2 GB：只需要再下 0.7 GB，加余量 1 GB 够了
@@ -231,7 +231,7 @@ async fn bad_checksum_deletes_the_file() {
     let e = entry(vec![serve(Mode::Good, ranges).await], leak("0".repeat(64)));
     let dir = tmp("badsha");
     let r = fetch(e, &dir, &AtomicBool::new(false), &mut quiet()).await;
-    assert!(matches!(r, Err(DlError::Failed(ref m)) if m.contains("校验失败")));
+    assert!(matches!(r, Err(DlError::Failed(ref m)) if m.contains("Verification failed")));
     assert!(!dir.join("model.gguf").exists());
     assert!(!part_of(&dir.join("model.gguf")).exists());
 }

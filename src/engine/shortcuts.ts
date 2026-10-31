@@ -32,22 +32,6 @@ export function actionFor(e: Key): Action | null {
   return null
 }
 
-/** 帮助面板和设置里列出来的 */
-export const SHORTCUTS: [string, string][] = [
-  ['按住空格', '按住说话，松开停止（桌面版）'],
-  ['/', '把光标放到输入框'],
-  ['PageUp / PageDown', '上一张、下一张板'],
-  ['Ctrl+[ / Ctrl+]', '上一张、下一张板'],
-  ['Ctrl+Shift+N', '新开一张板'],
-  ['Ctrl+O', '导入文件'],
-  ['Ctrl+Shift+R', '开始或退出回放'],
-  ['Ctrl+Shift+S', '生成摘要'],
-  ['Ctrl+Z / Ctrl+Y', '撤销、重做'],
-  ['Delete', '删除选中的'],
-  ['Esc', '取消选中'],
-  ['?', '显示这张表'],
-]
-
 /** 把一次按键写成全局快捷键的写法（Ctrl+Shift+Space）；只按了修饰键，或者没带修饰键，返回 null */
 export function accelFrom(e: Key & { code: string }): string | null {
   const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super'].filter(Boolean) as string[]

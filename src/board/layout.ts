@@ -14,6 +14,7 @@
 
 import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk.bundled.js'
 import { type Graph, type Node, children } from '../engine/graph.ts'
+import { spokenLang } from '../engine/lang.ts'
 
 // ELK 打包后有一百多万字节，只有出现流程图时才用得到：第一次要排流程图时再加载
 let elkReady: Promise<{ layout: (g: ElkNode) => Promise<ElkNode> }> | undefined
@@ -143,16 +144,19 @@ function topicRegion(g: Graph, head: Node): Region {
 
 /** 没有挂靠、或者挂在流程图节点上的问题和公式，统一收进「待定」。 */
 function looseRegion(g: Graph, loose: Node[]): Region {
+  // Board text, so it follows the language written on the board rather than the interface
+  const en = spokenLang(g.nodes.map((n) => n.label)) === 'en'
+  const heading = en ? 'Open' : '待定'
   const rows: Row[] = []
   let y = TITLE + 26
   for (const n of loose) {
     const host = n.parent ? g.nodes.find((p) => p.id === n.parent) : undefined
-    const text = host ? `${host.label}：${n.label}` : n.label
+    const text = host ? `${host.label}${en ? ': ' : '：'}${n.label}` : n.label
     rows.push({ id: n.id, node: n, prefix: prefixFor(n, 1, 0), text, x: 8, y, w: textWidth(text, FONT), size: FONT })
     y += n.kind === 'formula' ? FONT + 30 : FONT + 16
   }
-  const w = Math.max(textWidth('待定', TITLE), ...rows.map((r) => r.x + 30 + r.w + 24)) + 16
-  return { id: '__loose', x: 0, y: 0, w, h: y + 8, title: { text: '待定', x: 0, y: 0, w: textWidth('待定', TITLE) }, rows }
+  const w = Math.max(textWidth(heading, TITLE), ...rows.map((r) => r.x + 30 + r.w + 24)) + 16
+  return { id: '__loose', x: 0, y: 0, w, h: y + 8, title: { text: heading, x: 0, y: 0, w: textWidth(heading, TITLE) }, rows }
 }
 
 const nodeW = (n: Node) => Math.max(110, textWidth(n.label, FONT) + 44 + (n.icon ? 40 : 0))

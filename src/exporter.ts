@@ -11,6 +11,7 @@ import { type Look, scene } from './board/scene.ts'
 import { isDesktop } from './desktop.ts'
 import type { Graph } from './engine/graph.ts'
 import { type ReplayData, replayHtml, usedHan } from './player/data.ts'
+import { msg } from './i18n/index.ts'
 
 export type ExportKind = 'md' | 'png' | 'svg' | 'excalidraw' | 'html' | 'pdf'
 
@@ -38,7 +39,7 @@ function fileName(ext: string, when = new Date()) {
 /** 手写板：把画面上的 SVG 裁到内容范围，去掉还没写完的遮罩，垫上纸色 */
 async function inkSvg(b: Board, scale = 1): Promise<{ svg: string; width: number; height: number }> {
   const el = document.querySelector<SVGSVGElement>('.ink svg')
-  if (!el) throw new Error('找不到白板')
+  if (!el) throw new Error(msg().errors.noBoard)
   const { bounds } = await board.layout(b.graph)
   const P = 48
   const x = bounds.x0 - P
@@ -75,7 +76,7 @@ async function inkPng(b: Board): Promise<Blob> {
     canvas.width = width
     canvas.height = height
     canvas.getContext('2d')!.drawImage(img, 0, 0, width, height)
-    return await new Promise<Blob>((ok, fail) => canvas.toBlob((x) => (x ? ok(x) : fail(new Error('生成图片失败'))), 'image/png'))
+    return await new Promise<Blob>((ok, fail) => canvas.toBlob((x) => (x ? ok(x) : fail(new Error(msg().errors.imageFailed))), 'image/png'))
   } finally {
     URL.revokeObjectURL(url)
   }
@@ -113,7 +114,7 @@ async function excalidrawFile(b: Board): Promise<string> {
 async function replayFile(data: ReplayData): Promise<Blob> {
   const at = (p: string) => new URL(p, document.baseURI)
   const res = await fetch(at('player/player.js'))
-  if (!res.ok) throw new Error('找不到回放播放器（player/player.js），开发时先跑一次 pnpm build:player')
+  if (!res.ok) throw new Error(msg().errors.noPlayer)
   const player = await res.text()
   const hanzi: Record<string, unknown> = {}
   await Promise.all(
@@ -133,11 +134,11 @@ async function replayFile(data: ReplayData): Promise<Blob> {
 
 export async function build(kind: ExportKind, b: Board): Promise<{ name: string; blob: Blob }> {
   if (kind === 'html') {
-    if (!b.replay) throw new Error('没有会议数据')
+    if (!b.replay) throw new Error(msg().doc.noData)
     return { name: fileName('html'), blob: await replayFile(b.replay) }
   }
   if (kind === 'pdf') {
-    if (!b.replay) throw new Error('没有会议数据')
+    if (!b.replay) throw new Error(msg().doc.noData)
     const { meetingPdf } = await import('./board/meetingPdf.ts')
     const bytes = await meetingPdf(b.replay)
     return { name: fileName('pdf'), blob: new Blob([bytes as BlobPart], { type: 'application/pdf' }) }

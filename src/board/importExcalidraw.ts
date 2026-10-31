@@ -5,6 +5,7 @@
 
 import { type Graph, emptyGraph } from '../engine/graph.ts'
 import { applyOps, parseOps } from '../engine/ops.ts'
+import { msg } from '../i18n/index.ts'
 
 interface El {
   id: string
@@ -30,7 +31,6 @@ export interface Imported {
 }
 
 const SHAPES = new Set(['rectangle', 'ellipse', 'diamond'])
-const LOOSE_TOPIC = '白板上的文字'
 
 /** 操作里的名字不能带「」，换行也压成一行 */
 const clean = (s: string) =>
@@ -45,9 +45,9 @@ export function importExcalidraw(json: string): Imported {
   try {
     data = JSON.parse(json)
   } catch {
-    throw new Error('不是有效的 .excalidraw 文件（不是 JSON）')
+    throw new Error(msg().errors.notJson)
   }
-  if (!Array.isArray(data.elements)) throw new Error('不是有效的 .excalidraw 文件（没有 elements）')
+  if (!Array.isArray(data.elements)) throw new Error(msg().errors.noElements)
   const els = data.elements.filter((e) => e && !e.isDeleted)
   const textOf = (e: El) => clean(e.originalText ?? e.text ?? '')
   // 绑在框或箭头上的字
@@ -70,7 +70,7 @@ export function importExcalidraw(json: string): Imported {
   let blank = 0
   for (const e of nodeEls) {
     let name = e.type === 'text' ? textOf(e) : (bound.get(e.id) ?? '')
-    if (!name) name = `框 ${++blank}`
+    if (!name) name = msg().errors.blankBox(++blank)
     // 同名的两个框不能合成一个
     const n = (used.get(name) ?? 0) + 1
     used.set(name, n)
@@ -93,7 +93,7 @@ export function importExcalidraw(json: string): Imported {
   for (const f of els.filter((e) => e.type === 'frame' || e.type === 'magicframe')) {
     const members = nodeEls.filter((e) => e.frameId === f.id).map((e) => `「${label.get(e.id)}」`)
     if (!members.length) continue
-    ops.push(`G 「${clean(f.name ?? '') || `分组 ${groups + 1}`}」 ${members.join(' ')}`)
+    ops.push(`G 「${clean(f.name ?? '') || msg().errors.group(groups + 1)}」 ${members.join(' ')}`)
     groups++
   }
   // 散字（标题、便签之类）
@@ -101,10 +101,10 @@ export function importExcalidraw(json: string): Imported {
     .filter((e) => e.type === 'text' && !e.containerId && !linked.has(e.id) && textOf(e))
     .sort((a, b) => pos(a) - pos(b))
   if (loose.length) {
-    ops.push(`T 「${LOOSE_TOPIC}」`)
-    for (const t of loose) ops.push(`L 「${LOOSE_TOPIC}」 「${textOf(t)}」`)
+    ops.push(`T 「${msg().errors.looseTopic}」`)
+    for (const t of loose) ops.push(`L 「${msg().errors.looseTopic}」 「${textOf(t)}」`)
   }
-  if (!nodeEls.length && !loose.length) throw new Error('这个 .excalidraw 里没有能转成板书的东西（带字的框、连线或文字）')
+  if (!nodeEls.length && !loose.length) throw new Error(msg().errors.nothingToImport)
 
   return { graph: applyOps(emptyGraph(), parseOps(ops.join('\n')), 'ink'), nodes: nodeEls.length, edges, groups, notes: loose.length }
 }

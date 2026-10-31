@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { diagnosticsInfo, isDesktop, llmStatus, updates } from '../desktop.ts'
 import { type DiagFile, cleanLog, makeZip, recentErrors, scrub } from '../engine/diagnostics.ts'
+import { msg, useT } from '../i18n/index.ts'
 import { Close } from './icons.tsx'
 
 interface Props {
@@ -25,13 +26,14 @@ async function collect(voice: Record<string, unknown>): Promise<DiagFile[]> {
   }
   const files: DiagFile[] = [
     { name: 'info.json', text: scrub(JSON.stringify(info, null, 2)) },
-    { name: 'errors.txt', text: recentErrors().join('\n') || '（没有报错）' },
+    { name: 'errors.txt', text: recentErrors().join('\n') || msg().diagnostics.noErrors },
   ]
   if (shell?.log) files.push({ name: 'llama-server.log', text: cleanLog(shell.log) })
   return files
 }
 
 export default function DiagnosticsPanel(p: Props) {
+  const s = useT().diagnostics
   const [files, setFiles] = useState<DiagFile[] | null>(null)
   useEffect(() => {
     void collect(p.voice).then(setFiles)
@@ -45,39 +47,39 @@ export default function DiagnosticsPanel(p: Props) {
     try {
       const path = await saveFile('boardcast-diagnostics.zip', new Blob([makeZip(files) as BlobPart], { type: 'application/zip' }))
       if (path) {
-        p.onSaved(true, `诊断信息存好了：${path}`)
+        p.onSaved(true, s.saved(path))
         p.onClose()
       }
     } catch (e) {
-      p.onSaved(false, `保存失败：${e instanceof Error ? e.message : String(e)}`)
+      p.onSaved(false, s.saveFailed(e instanceof Error ? e.message : String(e)))
     }
   }
 
   return (
-    <div className="modal" role="dialog" aria-label="导出诊断信息" onClick={(e) => e.target === e.currentTarget && p.onClose()}>
+    <div className="modal" role="dialog" aria-label={s.title} onClick={(e) => e.target === e.currentTarget && p.onClose()}>
       <div className="panel diagnostics">
         <header>
-          <h2>导出诊断信息</h2>
-          <button type="button" className="icon" onClick={p.onClose} aria-label="关闭">
+          <h2>{s.title}</h2>
+          <button type="button" className="icon" onClick={p.onClose} aria-label={s.close}>
             <Close size={16} />
           </button>
         </header>
-        <p className="hint">会打包下面这些文件，可以点开看内容。不包含会议内容、录音和 API key；用户名和像 key 的字符串已经抹掉了。</p>
-        {!files && <p className="hint">正在收集…</p>}
+        <p className="hint">{s.hint}</p>
+        {!files && <p className="hint">{s.collecting}</p>}
         {files?.map((f) => (
           <details key={f.name}>
             <summary>
-              {f.name} <small>{f.text.length} 字符</small>
+              {f.name} <small>{s.chars(f.text.length)}</small>
             </summary>
             <pre>{f.text}</pre>
           </details>
         ))}
         <div className="row end">
           <button type="button" className="ghost" onClick={p.onClose}>
-            取消
+            {s.cancel}
           </button>
           <button type="button" disabled={!files} onClick={() => void save()}>
-            导出 zip
+            {s.export}
           </button>
         </div>
       </div>

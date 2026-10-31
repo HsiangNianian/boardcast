@@ -1,0 +1,132 @@
+[
+  {
+    "id": "login-flow",
+    "name": "登录流程，带一次纠正",
+    "lang": "zh"
+  },
+  {
+    "id": "order-coref",
+    "name": "下单链路，靠指代串起来",
+    "lang": "zh"
+  },
+  {
+    "id": "noise",
+    "name": "大量闲聊里夹着两句有用的",
+    "lang": "zh"
+  },
+  {
+    "id": "groups-alias",
+    "name": "分组和别名",
+    "lang": "zh"
+  },
+  {
+    "id": "cause",
+    "name": "事故复盘的因果链",
+    "lang": "zh"
+  },
+  {
+    "id": "rename",
+    "name": "中途改名",
+    "lang": "zh"
+  },
+  {
+    "id": "delete",
+    "name": "删掉一个方案",
+    "lang": "zh"
+  },
+  {
+    "id": "steps",
+    "name": "招聘流程的步骤",
+    "lang": "zh"
+  },
+  {
+    "id": "mixed-lang",
+    "name": "中英混说",
+    "lang": "zh"
+  },
+  {
+    "id": "command",
+    "name": "主持人直接口令",
+    "lang": "zh"
+  },
+  {
+    "id": "bs-pipeline",
+    "name": "头脑风暴：舆情分析流水线",
+    "lang": "zh"
+  },
+  {
+    "id": "bs-division",
+    "name": "分工，中途调整一项",
+    "lang": "zh"
+  },
+  {
+    "id": "bs-options",
+    "name": "方案对比，否掉一个",
+    "lang": "zh"
+  },
+  {
+    "id": "bs-retro",
+    "name": "迭代复盘",
+    "lang": "zh"
+  },
+  {
+    "id": "bs-pricing",
+    "name": "定价，带公式",
+    "lang": "zh"
+  },
+  {
+    "id": "bs-mixed",
+    "name": "流程图和待办混在一起",
+    "lang": "zh"
+  },
+  {
+    "id": "bs-revise",
+    "name": "改条目",
+    "lang": "zh"
+  },
+  {
+    "id": "noise-long",
+    "name": "闲聊占了大半，有用的两句夹在中间",
+    "lang": "zh"
+  },
+  {
+    "id": "mark-target",
+    "name": "强调的是条目，不是话题",
+    "lang": "zh"
+  },
+  {
+    "id": "group-phrasing",
+    "name": "分组用「都属于」说出来",
+    "lang": "zh"
+  },
+  {
+    "id": "assign-shared",
+    "name": "一件事先给一个人，又加一个人",
+    "lang": "zh"
+  },
+  {
+    "id": "en-auth-correction",
+    "name": "Sign-in flow corrected to go through the gateway",
+    "lang": "en"
+  },
+  {
+    "id": "en-platform-groups",
+    "name": "Client and business-service groups with a BFF alias",
+    "lang": "en"
+  },
+  {
+    "id": "en-upload-branch",
+    "name": "File scanning branches to storage or quarantine",
+    "lang": "en"
+  },
+  {
+    "id": "en-release-priorities",
+    "name": "Release checklist with emphasis, a rejected item, and an open question",
+    "lang": "en"
+  },
+  {
+    "id": "en-owner-handoff",
+    "name": "Two owners swap tasks and receive a follow-up assignment",
+    "lang": "en"
+  }
+]

@@ -23,7 +23,7 @@ import {
 } from './desktop.ts'
 import { type Graph, emptyGraph } from './engine/graph.ts'
 import { type LlmConfig, proposeOps } from './engine/llm.ts'
-import { formatOps } from './engine/ops.ts'
+import { eraseDrafts, formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { History as EditHistory, type Selection, describe, exists, pinned, remove as removeSel, rename as renameSel, toggleMark } from './engine/edit.ts'
 import { MARKS, type Mark } from './engine/graph.ts'
@@ -401,6 +401,7 @@ export default function App() {
     steps: stepsRef.current,
     thumb: thumbRef.current,
     underlay: pagesRef.current[pageRef.current]?.underlay,
+    base: pagesRef.current[pageRef.current]?.base,
   })
 
   // Session 只建一次。以前跟着模型配置重建：远程出错临时拉起本地模型、地址一变，会开到一半板书就被换成空的
@@ -522,8 +523,8 @@ export default function App() {
       steps: stepsRef.current.length ? stepsRef.current : undefined,
       localOnly: localOnlyRef.current || undefined,
       glossary: meetingGlossaryRef.current.trim() || undefined,
-      // 只有一张板、但它垫着导入页时也要存 pages：底图存在这里
-      ...(pagesRef.current.length > 1 || pagesRef.current.some((p) => p.underlay)
+      // 只有一张板、但它垫着导入页或者带着底板时也要存 pages：底图、底板存在这里
+      ...(pagesRef.current.length > 1 || pagesRef.current.some((p) => p.underlay || p.base)
         ? { pages: pagesRef.current.map((p, i) => (i === pageRef.current ? capture() : p)), page: pageRef.current }
         : {}),
     }),
@@ -784,7 +785,7 @@ export default function App() {
                 lines,
                 pages: pagesRef.current.map((p, i) => {
                   const cur = i === page ? capture() : p
-                  return { graph: cur.graph, steps: cur.steps, underlay: cur.underlay, layout: cur.layout }
+                  return { graph: cur.graph, steps: cur.steps, underlay: cur.underlay, layout: cur.layout, base: cur.base }
                 }),
               }
             : undefined,
@@ -1266,6 +1267,60 @@ export default function App() {
   }
 
   /** 打开一场会；从搜索结果来的，跳到命中的板和那一句 */
+  /** 一场会有哪几张板（缩略图）：选底板用 */
+  async function boardsOf(id: string): Promise<(Thumb | undefined)[]> {
+    if (id === meeting.id) return pagesRef.current.map((p, i) => (i === pageRef.current ? thumbRef.current : p.thumb))
+    const m = await meetings.load(id).catch(() => null)
+    return m?.pages?.length ? m.pages.map((p) => p.thumb) : [undefined]
+  }
+
+  /**
+   * 带着旧板开新会（#49）：拿那场会的第 `at` 张板当底板，排版位置、导入页、这场会的术语都带过来。
+   * 底板上原样留着的东西用淡墨画，新会上加的、改的、划掉的用正常墨迹。
+   */
+  async function continueOn(id: string, at: number) {
+    exitReplay()
+    let src: Page | undefined
+    let from: string
+    let glossary: string
+    if (id === meeting.id) {
+      const all = [...pagesRef.current]
+      all[pageRef.current] = capture()
+      src = all[at]
+      from = snapshot(meeting).title
+      glossary = meetingGlossary
+    } else {
+      const m = await meetings.load(id).catch(() => null)
+      if (!m) {
+        setToast({ ok: false, text: t.app.openFailed })
+        return
+      }
+      src = m.pages?.length ? m.pages[at] : { graph: m.graph, layout: m.layout }
+      from = m.title
+      glossary = m.glossary ?? ''
+    }
+    if (!src) return
+    // 铅笔稿是没确认的，不带
+    const base = eraseDrafts(src.graph)
+    const page: Page = {
+      graph: base,
+      layout: src.layout,
+      base,
+      underlay: src.underlay,
+      thumb: src.thumb,
+      // 回放从底板开始：第一步就是整块旧板
+      steps: [{ t: Date.now(), line: 1, d: diffGraph(emptyGraph(), base) ?? {} }],
+    }
+    reset()
+    pagesRef.current = [page]
+    showPage(page)
+    setThumbs([page.thumb])
+    setMeetingGlossary(glossary)
+    // 按内容起名会和旧会同名，在历史里分不清
+    setMeeting((m) => ({ ...m, title: t.app.continuedTitle(from), titled: true }))
+    setLines([{ text: t.app.continuedNote(from, at + 1), manual: true, ms: 0, page: 0 }])
+  }
+
   async function openOther(id: string, hit?: Hit) {
     exitReplay()
     if (id !== meeting.id) {
@@ -1586,6 +1641,7 @@ export default function App() {
             selection={replay ? null : selection}
             layoutRev={layoutRev}
             underlay={pagesRef.current[page]?.underlay}
+            base={pagesRef.current[page]?.base}
             onMoveSel={replay ? undefined : moveSelection}
             onSelect={
               replay
@@ -1942,6 +1998,8 @@ export default function App() {
           onOpen={(id, hit) => void openOther(id, hit)}
           onNew={(keep) => reset(keep)}
           onRenamed={(id, title) => setMeeting((m) => (m.id === id ? { ...m, title, titled: true } : m))}
+          boardsOf={boardsOf}
+          onContinue={(id, at) => void continueOn(id, at)}
         />
       )}
       {pendingPdf && (

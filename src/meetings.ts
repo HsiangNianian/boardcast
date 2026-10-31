@@ -68,6 +68,8 @@ export interface Page {
   thumb?: Thumb
   /** 垫在底下的导入页（PDF 的一页、一张图片），data URL */
   underlay?: string
+  /** 带着旧板开会（接着某场会的某张板开的新会）：开会时那张板的样子。和它一样的地方用淡墨画 */
+  base?: Graph
 }
 
 /** 历史列表里显示的样子 */

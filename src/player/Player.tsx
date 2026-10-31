@@ -128,7 +128,7 @@ export default function Player({ data }: { data: ReplayData }) {
         )}
       </header>
       <main className="board replaying">
-        <InkBoard graph={graph} hot={new Set()} dark={false} messy={0.3} bottomInset={84} tidy={tidy} underlay={data.pages[page].underlay} />
+        <InkBoard graph={graph} hot={new Set()} dark={false} messy={0.3} bottomInset={84} tidy={tidy} underlay={data.pages[page].underlay} base={data.pages[page].base} />
         {total > 0 ? (
           <ReplayBar
             at={at}

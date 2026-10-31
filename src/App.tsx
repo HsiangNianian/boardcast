@@ -715,6 +715,19 @@ export default function App() {
         title: meeting.title,
         summary,
         pages: pagesRef.current.length > 1 ? pagesRef.current.map((p, i) => (i === page ? session.graph : p.graph)) : undefined,
+        replay:
+          kind === 'html' || kind === 'pdf'
+            ? {
+                title: meeting.title,
+                createdAt: meeting.createdAt,
+                summary: summary || undefined,
+                lines,
+                pages: pagesRef.current.map((p, i) => {
+                  const cur = i === page ? capture() : p
+                  return { graph: cur.graph, steps: cur.steps, underlay: cur.underlay, layout: cur.layout }
+                }),
+              }
+            : undefined,
         mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
       const where = await saveFile(name, blob)
       if (where) setToast({ ok: true, text: isDesktop ? `已保存：${where}` : `已下载：${where}` })
@@ -1322,6 +1335,14 @@ export default function App() {
                 <button type="button" role="menuitem" onClick={() => void exportAs('svg')}>
                   <span>SVG 矢量图</span>
                   <small>放大不糊，可以插进文档或者接着改</small>
+                </button>
+                <button type="button" role="menuitem" onClick={() => void exportAs('pdf')}>
+                  <span>整场会 PDF</span>
+                  <small>每张板一页，后面是摘要和会议记录；页面是图片，字不能复制</small>
+                </button>
+                <button type="button" role="menuitem" onClick={() => void exportAs('html')}>
+                  <span>回放网页</span>
+                  <small>一个 .html，发给没参会的人，双击就能看板书怎么长出来的</small>
                 </button>
                 <button type="button" role="menuitem" onClick={() => void exportAs('excalidraw')}>
                   <span>Excalidraw</span>

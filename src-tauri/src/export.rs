@@ -25,6 +25,8 @@ pub async fn export_save(
         "svg" => "SVG 矢量图",
         "md" => "Markdown",
         "excalidraw" => "Excalidraw",
+        "html" => "回放网页",
+        "pdf" => "PDF",
         _ => "文件",
     };
     // 对话框会阻塞，放到专门的线程里等

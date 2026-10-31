@@ -10,8 +10,9 @@ import { type SaidLine, toMarkdown } from './board/markdown.ts'
 import { type Look, scene } from './board/scene.ts'
 import { isDesktop } from './desktop.ts'
 import type { Graph } from './engine/graph.ts'
+import { type ReplayData, replayHtml, usedHan } from './player/data.ts'
 
-export type ExportKind = 'md' | 'png' | 'svg' | 'excalidraw'
+export type ExportKind = 'md' | 'png' | 'svg' | 'excalidraw' | 'html' | 'pdf'
 
 interface Board {
   graph: Graph
@@ -25,6 +26,8 @@ interface Board {
   summary?: string
   /** 一场会有几张板时，所有板（Markdown 按板分节） */
   pages?: Graph[]
+  /** 导出回放网页用：整场会的数据 */
+  replay?: ReplayData
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -106,7 +109,39 @@ async function excalidrawFile(b: Board): Promise<string> {
   return serializeAsJSON(scene(b.graph, l, new Set(), b.look), { viewBackgroundColor: b.paper }, {}, 'local')
 }
 
+/** 回放网页：播放器、整场会的数据、用到的汉字笔画，全塞进一个 HTML，双击就能看，不联网 */
+async function replayFile(data: ReplayData): Promise<Blob> {
+  const at = (p: string) => new URL(p, document.baseURI)
+  const res = await fetch(at('player/player.js'))
+  if (!res.ok) throw new Error('找不到回放播放器（player/player.js），开发时先跑一次 pnpm build:player')
+  const player = await res.text()
+  const hanzi: Record<string, unknown> = {}
+  await Promise.all(
+    usedHan(data).map(async (ch) => {
+      try {
+        const r = await fetch(at(`hanzi/${encodeURIComponent(ch)}.json`))
+        if (!r.ok) return
+        const d = await r.json()
+        hanzi[ch] = Array.isArray(d) ? d : d.medians
+      } catch {
+        // 缺一个字：播放器里那个字照常从网上取，取不到就空着
+      }
+    }),
+  )
+  return new Blob([replayHtml(data, player, hanzi)], { type: 'text/html' })
+}
+
 export async function build(kind: ExportKind, b: Board): Promise<{ name: string; blob: Blob }> {
+  if (kind === 'html') {
+    if (!b.replay) throw new Error('没有会议数据')
+    return { name: fileName('html'), blob: await replayFile(b.replay) }
+  }
+  if (kind === 'pdf') {
+    if (!b.replay) throw new Error('没有会议数据')
+    const { meetingPdf } = await import('./board/meetingPdf.ts')
+    const bytes = await meetingPdf(b.replay)
+    return { name: fileName('pdf'), blob: new Blob([bytes as BlobPart], { type: 'application/pdf' }) }
+  }
   if (kind === 'md') return { name: fileName('md'), blob: new Blob([toMarkdown(b.graph, b.lines, b.title, new Date(), b.summary, b.pages)], { type: 'text/markdown' }) }
   if (kind === 'excalidraw')
     return { name: fileName('excalidraw'), blob: new Blob([await excalidrawFile(b)], { type: 'application/json' }) }

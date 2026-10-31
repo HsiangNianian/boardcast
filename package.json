@@ -9,13 +9,14 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "node scripts/glyphs.mjs && vite",
-    "build": "node scripts/glyphs.mjs && tsc --noEmit && vite build",
+    "dev": "node scripts/glyphs.mjs && vite build -c vite.player.config.ts --logLevel warn && vite",
+    "build": "node scripts/glyphs.mjs && tsc --noEmit && vite build -c vite.player.config.ts && vite build",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/engine/*.test.ts\"",
     "eval": "node eval/run.ts",
     "tauri": "node scripts/fetch-llama.mjs && node scripts/fetch-voice.mjs && tauri",
-    "release": "node scripts/release.mjs"
+    "release": "node scripts/release.mjs",
+    "build:player": "vite build -c vite.player.config.ts"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.1",

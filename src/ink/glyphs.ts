@@ -23,6 +23,9 @@ const CDN = 'https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.1'
 const hz = (p: number[]): Pt => [p[0] / 1024, (900 - p[1]) / 1024]
 
 async function loadHanzi(ch: string): Promise<Glyph | null> {
+  // 导出的回放 HTML 把用到的字直接塞在页面里，不联网也能写
+  const embedded = (globalThis as { __boardcastHanzi?: Record<string, number[][][]> }).__boardcastHanzi?.[ch]
+  if (embedded) return { strokes: embedded.map((s) => s.map(hz)), advance: 1 }
   for (const base of ['/hanzi', CDN]) {
     try {
       const r = await fetch(`${base}/${encodeURIComponent(ch)}.json`)

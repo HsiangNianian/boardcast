@@ -11,7 +11,7 @@ import { type InkLook, type Piece, compose } from './compose.ts'
 import { localPoint } from '../ui/landscape.ts'
 import { hitTest, selectionBox, selectionLine } from './hit.ts'
 
-const WHITEBOARD: InkLook = {
+export const WHITEBOARD: InkLook = {
   paper: '#fbfbf8',
   ink: '#1d1f24',
   pencil: '#9aa0a6',

@@ -91,6 +91,19 @@ export const en = {
     feedbackHint: 'Packs version, model status, logs and recent errors into a zip. No meeting content.',
     diagnostics: 'Export diagnostics',
 
+    // —— Correction samples ——
+    samples: 'Correction samples',
+    samplesHint:
+      "When the model has just drawn what someone said and you fix it on the board (delete a line, rename, strike out, undo), that turn is kept: the board and words it saw, what it output, and what you changed it to. It stays in this device's meetings until you export it.",
+    samplesCounting: 'Counting…',
+    samplesCount: (n: number) => (n ? `${n} collected.` : 'None yet: fix something the model just drew wrong during a meeting.'),
+    exportCases: 'Export eval cases',
+    exportPairs: 'Export training data',
+    samplesCases: 'Eval cases use the eval/cases.json format and start from the board at the time: ',
+    samplesFile: '<file>',
+    samplesPairs: 'Training data is JSONL with prompt / chosen / rejected per line: use it as is for DPO, take prompt and chosen for SFT.',
+    samplesSaved: (where: string) => `Exported: ${where}`,
+
     // —— Glossary ——
     glossary: 'Glossary',
     glossaryHint:
@@ -442,6 +455,8 @@ export const en = {
     gotoPage: 'Go to this board',
     pageN: (n: number) => `Board ${n}`,
     editBadge: 'Edit',
+    fixBadge: 'kept as a correction',
+    fixTitle: 'You fixed what the model just drew: this turn is kept as a correction sample, export it from Settings as eval cases or training data',
     drawing: 'Drawing…',
     lineFellBack: ' · remote failed, local model drew this one',
     noChange: '(no changes)',

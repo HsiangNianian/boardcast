@@ -4,6 +4,7 @@
 // - 带版本号，以后改数据结构时可以迁移。
 
 import type { Thumb } from './board/thumb.ts'
+import type { Correction } from './engine/corrections.ts'
 import type { Step } from './engine/steps.ts'
 import type { Voice } from './engine/voices.ts'
 import type { LayoutMemory } from './board/layout.ts'
@@ -24,6 +25,8 @@ export interface MeetingLine extends Utterance {
   fellBack?: boolean
   /** 手写板上手动改的（删掉、改字、标记），不是会上说的话 */
   manual?: boolean
+  /** 这次手动修改改的是模型刚画的，那一轮记成了纠错样本 */
+  fix?: boolean
   /** 这句画在第几张板上（从 0 数） */
   page?: number
   /** Spoken lines: time spent in the shell (pause, recognition, voiceprint) */
@@ -58,6 +61,8 @@ export interface Meeting {
   /** 有几张板时：每张板的内容（当前这张和上面的 graph / layout / steps 一样），和现在在第几张 */
   pages?: Page[]
   page?: number
+  /** 模型刚画完就被手动改了的那几轮（纠错样本，可以导出成评测用例、训练数据） */
+  corrections?: Correction[]
 }
 
 /** 一张板 */
@@ -238,9 +243,7 @@ export const meetings = {
       let m = searchCache.get(info.id)
       if (m?.updatedAt !== info.updatedAt) {
         // 不读图：搜索用不着
-        const raw = isDesktop
-          ? await call<string | null>('meeting_load', { id: info.id }).then((t) => (t ? (JSON.parse(t) as Meeting) : null))
-          : ((await tx('readonly', (s) => s.get(info.id))) as Meeting | undefined) ?? null
+        const raw = await this.raw(info.id)
         if (!raw) continue
         m = { updatedAt: info.updatedAt, m: raw }
         searchCache.set(info.id, m)
@@ -250,11 +253,24 @@ export const meetings = {
     }
     return out
   },
-  async load(id: string): Promise<Meeting | null> {
-    const raw = isDesktop
+  /** 存着的样子，不读图 */
+  async raw(id: string): Promise<Meeting | null> {
+    return isDesktop
       ? await call<string | null>('meeting_load', { id }).then((t) => (t ? (JSON.parse(t) as Meeting) : null))
       : ((await tx('readonly', (s) => s.get(id))) as Meeting | undefined) ?? null
+  },
+  async load(id: string): Promise<Meeting | null> {
+    const raw = await this.raw(id)
     return raw ? normalize(await loadAssets(raw, assets, stored)) : null
+  },
+  /** 所有会议里攒下的纠错样本（最近改过的会议在前） */
+  async corrections(): Promise<{ id: string; corrections: Correction[] }[]> {
+    const out: { id: string; corrections: Correction[] }[] = []
+    for (const info of await this.list()) {
+      const m = await this.raw(info.id).catch(() => null)
+      if (m?.corrections?.length) out.push({ id: m.id, corrections: m.corrections })
+    }
+    return out
   },
   async save(meeting: Meeting): Promise<void> {
     const m = await stashAssets(meeting, assets, stored)

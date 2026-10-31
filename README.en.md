@@ -233,8 +233,11 @@ Run evaluation:
 ```sh
 pnpm eval -- --label my-model          # Write reports to eval/reports/
 node eval/run.ts --only login-flow -v  # Inspect operations for one meeting, utterance by utterance
+node eval/run.ts --file boardcast-corrections-*.cases.json  # Run correction samples exported from the app
 pnpm test                              # Engine unit tests; no model needed
 ```
+
+Correction samples: when the model has just drawn what someone said and you fix it on the board (delete a line, rename, strike out, undo), that turn is kept (the board, earlier lines and new line the model saw, its output, and what you changed the board to) and saved with the meeting on this device. Settings → Correction samples exports them as eval cases (the `eval/cases.json` format, starting from the board at the time) or as JSONL for DPO / SFT (`prompt` / `chosen` / `rejected`).
 
 ## Continuous integration (CI)
 

@@ -1934,6 +1934,24 @@ button.danger {
   color: var(--muted);
   border: 1px dashed var(--line-strong);
 }
+/* 设置里提到的命令别从中间断开 */
+.settings .hint code {
+  white-space: nowrap;
+}
+/* 这次修改记成了纠错样本 */
+.line .fix-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--muted);
+  vertical-align: 1px;
+  white-space: nowrap;
+  cursor: help;
+}
 
 .import-choice {
   position: fixed;

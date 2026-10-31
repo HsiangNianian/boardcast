@@ -388,7 +388,7 @@ fn launch(app: AppHandle, run: bool) {
                 generation,
                 LlmStatus {
                     state: "no-model".into(),
-                    message: Some("还没有模型，先下载一个".into()),
+                    message: Some("No model installed; download one in Settings → Manage models".into()),
                     ..base
                 },
             );
@@ -409,7 +409,7 @@ fn launch(app: AppHandle, run: bool) {
                 LlmStatus {
                     state: "idle".into(),
                     model: model_name,
-                    message: Some("正在用远程模型，内置模型用到时再启动".into()),
+                    message: Some("Using the remote model; the built-in model will start when needed".into()),
                     ..base
                 },
             );
@@ -422,7 +422,7 @@ fn launch(app: AppHandle, run: bool) {
                 LlmStatus {
                     state: "error".into(),
                     model: model_name,
-                    message: Some("安装包里没有找到 llama-server".into()),
+                    message: Some("llama-server was not found in the app installation".into()),
                     ..base
                 },
             );
@@ -514,7 +514,7 @@ fn launch(app: AppHandle, run: bool) {
                                 state: "error".into(),
                                 model: model_name,
                                 message: Some(format!(
-                                    "llama-server 意外退出（{code}），日志在 {}",
+                                    "llama-server exited unexpectedly ({code}); log: {}",
                                     log.display()
                                 )),
                                 ..base
@@ -532,7 +532,7 @@ fn launch(app: AppHandle, run: bool) {
             LlmStatus {
                 state: "error".into(),
                 model: model_name,
-                message: Some(format!("llama-server 没能启动，日志在 {}", log.display())),
+                message: Some(format!("llama-server failed to start; log: {}", log.display())),
                 ..base
             },
         );

@@ -103,7 +103,7 @@ impl Engine {
             num_threads: 1,
             ..Default::default()
         };
-        let vad = VoiceActivityDetector::create(&vad_config, 60.0).ok_or("断句模型加载失败")?;
+        let vad = VoiceActivityDetector::create(&vad_config, 60.0).ok_or("Couldn't load the speech detection model")?;
 
         let mut asr_config = OfflineRecognizerConfig::default();
         asr_config.model_config.sense_voice = OfflineSenseVoiceModelConfig {
@@ -114,7 +114,7 @@ impl Engine {
         };
         asr_config.model_config.tokens = Some(path(voice_files::TOKENS));
         asr_config.model_config.num_threads = 2;
-        let asr = OfflineRecognizer::create(&asr_config).ok_or("识别模型加载失败")?;
+        let asr = OfflineRecognizer::create(&asr_config).ok_or("Couldn't load the speech recognition model")?;
 
         let speaker_model = models.join(voice_files::SPEAKER);
         let speaker = if speaker_model.exists() {
@@ -399,14 +399,14 @@ pub fn voice_start(
 ) -> Result<(), String> {
     let source = Source::parse(source.as_deref());
     if !installed(&app) {
-        return Err("语音模型还没下载".into());
+        return Err("Download the speech recognition model first".into());
     }
     let voice = app.state::<Voice>();
     let mut running = voice.running.lock().unwrap();
     if running.is_some() {
         return Ok(());
     }
-    let models = base(&app).ok_or("找不到语音模型")?;
+    let models = base(&app).ok_or("Speech recognition model not found")?;
     let stop = Arc::new(AtomicBool::new(false));
     let flag = stop.clone();
     let handle = app.clone();
@@ -441,7 +441,7 @@ pub fn voice_start(
         }
         Err(_) => {
             stop.store(true, Ordering::SeqCst);
-            Err("打开收音超时".into())
+            Err("Timed out starting audio input".into())
         }
     }
 }
@@ -527,7 +527,7 @@ fn system_source(host: &cpal::Host) -> Result<(cpal::Device, bool), String> {
         .into_iter()
         .nth(pick)
         .map(|d| (d, false))
-        .ok_or_else(|| "找不到系统声音（PulseAudio / PipeWire 的回采源）".into())
+        .ok_or_else(|| "No system audio source found (PulseAudio / PipeWire monitor source)".into())
 }
 
 #[cfg(windows)]
@@ -535,12 +535,12 @@ fn system_source(host: &cpal::Host) -> Result<(cpal::Device, bool), String> {
     use cpal::traits::HostTrait;
     host.default_output_device()
         .map(|d| (d, true))
-        .ok_or_else(|| "找不到扬声器，收不了系统声音".into())
+        .ok_or_else(|| "No speakers found; can't capture system audio".into())
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]
 fn system_source(_host: &cpal::Host) -> Result<(cpal::Device, bool), String> {
-    Err("这个系统上暂时收不了系统声音（macOS 需要录屏权限，还没做）".into())
+    Err("System audio capture is not supported here yet (macOS requires screen recording permission)".into())
 }
 
 /// 打开一路声音：声卡回调里只把这一段转成单声道 f32，连同来源编号丢进通道，重活在外面的循环里做。
@@ -554,16 +554,16 @@ fn open_stream(
 ) -> Result<(cpal::Stream, i32), String> {
     use cpal::traits::DeviceTrait;
     let what = if src == 0 {
-        "麦克风"
+        "Microphone"
     } else {
-        "系统声音"
+        "System audio"
     };
     let supported = if loopback {
         dev.default_output_config()
     } else {
         dev.default_input_config()
     }
-    .map_err(|e| format!("{what}打不开：{e}"))?;
+    .map_err(|e| format!("{what} could not be opened: {e}"))?;
     let channels = supported.channels() as usize;
     let rate = supported.sample_rate() as i32;
     let config = supported.config();
@@ -582,7 +582,7 @@ fn open_stream(
                         .collect();
                     let _ = tx.send((src, mono));
                 },
-                move |err: cpal::Error| on_err(format!("{what}出错：{err}")),
+                move |err: cpal::Error| on_err(format!("{what} error: {err}")),
                 None,
             )
         }};
@@ -592,9 +592,9 @@ fn open_stream(
         cpal::SampleFormat::I16 => stream_of!(i16, |s: i16| s as f32 / 32768.0),
         cpal::SampleFormat::U16 => stream_of!(u16, |s: u16| (s as f32 - 32768.0) / 32768.0),
         cpal::SampleFormat::I32 => stream_of!(i32, |s: i32| s as f32 / 2147483648.0),
-        other => return Err(format!("{what}的采样格式 {other:?} 不支持")),
+        other => return Err(format!("{what} sample format {other:?} is not supported")),
     }
-    .map_err(|e| format!("{what}打不开：{e}"))?;
+    .map_err(|e| format!("{what} could not be opened: {e}"))?;
     Ok((stream, rate))
 }
 
@@ -638,7 +638,7 @@ fn run(
                     .and_then(|mut ds| ds.find(|d| d.description().is_ok_and(|x| x.name() == name)))
             });
         let Some(dev) = chosen.or_else(|| host.default_input_device()) else {
-            let _ = ready.send(Err("没有找到麦克风".into()));
+            let _ = ready.send(Err("No microphone found".into()));
             return;
         };
         match open_stream(&dev, false, 0, tx.clone(), on_err.clone()) {
@@ -650,7 +650,7 @@ fn run(
                 names.push(
                     dev.description()
                         .map(|d| d.name().to_string())
-                        .unwrap_or_else(|_| "麦克风".into()),
+                        .unwrap_or_else(|_| "Microphone".into()),
                 );
             }
             Err(msg) => {
@@ -668,7 +668,7 @@ fn run(
                 resamplers[1] = (rate != SAMPLE_RATE)
                     .then(|| LinearResampler::create(rate, SAMPLE_RATE))
                     .flatten();
-                names.push("系统声音".into());
+                names.push("System audio".into());
             }
             Err(msg) => {
                 let _ = ready.send(Err(msg));
@@ -679,7 +679,7 @@ fn run(
     drop(tx);
     for s in &streams {
         if let Err(err) = s.play() {
-            let _ = ready.send(Err(format!("收音打不开：{err}")));
+            let _ = ready.send(Err(format!("Couldn't start audio input: {err}")));
             return;
         }
     }

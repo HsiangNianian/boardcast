@@ -36,7 +36,7 @@ pub fn valid_id(id: &str) -> bool {
 pub async fn arxiv_pdf(id: String) -> Result<String, String> {
     let id = id.trim().to_string();
     if !valid_id(&id) {
-        return Err(format!("不是有效的 arXiv 编号：{id}"));
+        return Err(format!("Invalid arXiv ID: {id}"));
     }
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(15))
@@ -49,21 +49,21 @@ pub async fn arxiv_pdf(id: String) -> Result<String, String> {
         .get(&url)
         .send()
         .await
-        .map_err(|e| format!("连不上 arXiv：{e}"))?;
+        .map_err(|e| format!("Can't connect to arXiv: {e}"))?;
     // 跳转以后也必须还在 arxiv.org
     let host = resp.url().host_str().unwrap_or_default().to_string();
     if !(host == "arxiv.org" || host.ends_with(".arxiv.org")) {
-        return Err(format!("arXiv 跳转到了别的网站（{host}），没有下载"));
+        return Err(format!("arXiv redirected to another site ({host}); download canceled"));
     }
     if !resp.status().is_success() {
-        return Err(format!("arXiv 返回 {}：可能是编号不对", resp.status()));
+        return Err(format!("arXiv returned {}: the ID may be incorrect", resp.status()));
     }
-    let bytes = resp.bytes().await.map_err(|e| format!("下载失败：{e}"))?;
+    let bytes = resp.bytes().await.map_err(|e| format!("Download failed: {e}"))?;
     if bytes.len() > MAX {
-        return Err("PDF 太大了（超过 60 MB）".into());
+        return Err("PDF is too large (over 60 MB)".into());
     }
     if !bytes.starts_with(b"%PDF") {
-        return Err("arXiv 没有返回 PDF（这篇可能只有源码，或者还在处理中）".into());
+        return Err("arXiv returned no PDF (the paper may only have source files or may still be processing)".into());
     }
     Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
 }

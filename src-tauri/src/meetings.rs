@@ -24,7 +24,7 @@ fn dir(app: &AppHandle) -> Result<PathBuf, String> {
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("meetings");
-    std::fs::create_dir_all(&d).map_err(|e| format!("建不了会议目录：{e}"))?;
+    std::fs::create_dir_all(&d).map_err(|e| format!("Couldn't create the meetings folder: {e}"))?;
     Ok(d)
 }
 
@@ -34,7 +34,7 @@ fn valid(id: &str) -> Result<(), String> {
     {
         Ok(())
     } else {
-        Err(format!("会议编号不合法：{id}"))
+        Err(format!("Invalid meeting ID: {id}"))
     }
 }
 
@@ -48,7 +48,7 @@ fn valid_asset(key: &str) -> Result<(), String> {
     if ok {
         Ok(())
     } else {
-        Err(format!("图片名不合法：{key}"))
+        Err(format!("Invalid image name: {key}"))
     }
 }
 
@@ -58,7 +58,7 @@ fn summary(v: &Value) -> Option<MeetingInfo> {
         title: v
             .get("title")
             .and_then(Value::as_str)
-            .unwrap_or("未命名会议")
+            .unwrap_or("Untitled meeting")
             .to_string(),
         created_at: v.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0),
         updated_at: v.get("updatedAt").and_then(Value::as_f64).unwrap_or(0.0),
@@ -112,11 +112,11 @@ pub fn meeting_load(app: AppHandle, id: String) -> Result<Option<String>, String
 pub fn meeting_save(app: AppHandle, id: String, json: String) -> Result<(), String> {
     valid(&id)?;
     // 只存合法的 JSON，免得写进去以后再也读不出来
-    serde_json::from_str::<Value>(&json).map_err(|e| format!("会议内容不是合法的 JSON：{e}"))?;
+    serde_json::from_str::<Value>(&json).map_err(|e| format!("Meeting content is not valid JSON: {e}"))?;
     let d = dir(&app)?;
     let tmp = d.join(format!("{id}.json.tmp"));
-    std::fs::write(&tmp, json).map_err(|e| format!("保存会议失败：{e}"))?;
-    std::fs::rename(&tmp, d.join(format!("{id}.json"))).map_err(|e| format!("保存会议失败：{e}"))
+    std::fs::write(&tmp, json).map_err(|e| format!("Couldn't save the meeting: {e}"))?;
+    std::fs::rename(&tmp, d.join(format!("{id}.json"))).map_err(|e| format!("Couldn't save the meeting: {e}"))
 }
 
 #[tauri::command]
@@ -153,11 +153,11 @@ pub fn meeting_asset_save(
     }
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data.as_bytes())
-        .map_err(|e| format!("图片数据不对：{e}"))?;
-    std::fs::create_dir_all(&d).map_err(|e| format!("建不了图片目录：{e}"))?;
+        .map_err(|e| format!("Invalid image data: {e}"))?;
+    std::fs::create_dir_all(&d).map_err(|e| format!("Couldn't create the image folder: {e}"))?;
     let tmp = d.join(format!("{key}.tmp"));
-    std::fs::write(&tmp, bytes).map_err(|e| format!("保存图片失败：{e}"))?;
-    std::fs::rename(&tmp, &p).map_err(|e| format!("保存图片失败：{e}"))
+    std::fs::write(&tmp, bytes).map_err(|e| format!("Couldn't save the image: {e}"))?;
+    std::fs::rename(&tmp, &p).map_err(|e| format!("Couldn't save the image: {e}"))
 }
 
 /// 读一张图，返回 base64；没有就是 None

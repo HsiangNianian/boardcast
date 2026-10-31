@@ -3,8 +3,9 @@
 // pdf.js 按需加载；它要的字体映射（中文 PDF 离不开）、标准字体、wasm 由 vite 插件放在 /pdfjs/ 下。
 
 import type { Page } from '../meetings.ts'
+import { applyOps, parseOps } from '../engine/ops.ts'
 import { pageGraph } from '../engine/regions.ts'
-import { type Piece, blocks } from './blocks.ts'
+import { type PaperState, type TextPiece, analyzePage } from './paper.ts'
 
 /** 页面在板上的宽度（板书坐标）；底图按两倍渲染，放大看也清楚 */
 const WIDTH = 900
@@ -17,6 +18,12 @@ export interface PdfImport {
   total: number
   /** 没有文字层的页数（扫描件） */
   scanned: number
+  /** 看起来是论文（有摘要、带编号的章节、图注） */
+  paper: boolean
+  /** 整页都是参考文献、没建板的页数 */
+  refsSkipped: number
+  /** 文档标题：PDF 元数据里的，没有就取第一页字最大的那行 */
+  title?: string
 }
 
 export async function importPdf(data: ArrayBuffer, onPage?: (done: number, total: number) => void): Promise<PdfImport> {
@@ -38,9 +45,15 @@ export async function importPdf(data: ArrayBuffer, onPage?: (done: number, total
     throw new Error(/password/i.test(msg) ? '这个 PDF 有密码，先去掉密码再导入' : `PDF 打不开：${msg}`)
   }
   const total = doc.numPages
+  const meta = (await doc.getMetadata().catch(() => null))?.info as { Title?: string } | undefined
+  let title = meta?.Title?.trim() || undefined
   const n = Math.min(total, MAX_PAGES)
   const pages: Page[] = []
   let scanned = 0
+  let refsSkipped = 0
+  const state: PaperState = { inRefs: false }
+  const headings: string[] = []
+  let captions = 0
   for (let i = 1; i <= n; i++) {
     onPage?.(i - 1, n)
     const page = await doc.getPage(i)
@@ -57,19 +70,51 @@ export async function importPdf(data: ArrayBuffer, onPage?: (done: number, total
     const image = canvas.toDataURL('image/jpeg', 0.82)
 
     const content = await page.getTextContent()
-    const pieces: Piece[] = []
+    const pieces: TextPiece[] = []
     for (const it of content.items) {
       if (!('str' in it) || !it.str.trim()) continue
       const t = pdfjs.Util.transform(vp.transform, it.transform)
       const h = Math.hypot(t[2], t[3])
-      pieces.push({ text: it.str, x: t[4], y: t[5] - h, w: it.width * scale, h })
+      // 斜着、竖着的字（arXiv 侧边的标记）：变换矩阵带旋转
+      const rotated = Math.abs(it.transform[1]) > 0.01 || Math.abs(it.transform[2]) > 0.01
+      pieces.push({ text: it.str, x: t[4], y: t[5] - h, w: it.width * scale, h, rotated })
     }
-    const areas = blocks(pieces)
-    if (!areas.length) scanned++
-    pages.push({ graph: pageGraph({ w: vp.width, h: vp.height }, areas), underlay: image })
+    // 没有元数据标题：第一页字最大的那一行
+    const flat = pieces.filter((p) => !p.rotated)
+    if (i === 1 && !title && flat.length) {
+      // 竖排的 arXiv 标记不算（它的「字高」是整条竖排的长度）
+      const big = Math.max(...flat.map((p) => p.h))
+      const line = flat.filter((p) => p.h >= big * 0.95).sort((a, b) => a.y - b.y || a.x - b.x)
+      const text = line.map((p) => p.text).join(' ').replace(/\s+/g, ' ').trim()
+      if (text.length >= 4 && text.length <= 120) title = text
+    }
+    const wasRefs = state.inRefs
+    const { areas, headings: hs } = analyzePage(pieces, vp.width, vp.height, state)
     page.cleanup()
+    headings.push(...hs.filter((h) => !/^(Abstract|摘要|References|Bibliography|参考文献)/i.test(h)))
+    captions += areas.filter((a) => a.kind === 'figure' || a.kind === 'table').length
+    if (!areas.length) scanned++
+    // 整页都是参考文献：不建板（条目没用上，翻页反而碍事）
+    const refsOnly = areas.length > 0 && areas.every((a) => a.kind === 'reference' || (a.kind === 'heading' && /^(References|Bibliography|参考文献)/i.test(a.text)))
+    if (refsOnly && (wasRefs || state.inRefs) && pages.length) {
+      refsSkipped++
+      continue
+    }
+    pages.push({ graph: pageGraph({ w: vp.width, h: vp.height }, areas), underlay: image })
   }
   onPage?.(n, n)
   await task.destroy()
-  return { pages, total, scanned }
+  // 看起来是论文：第一张板上起一个「论文结构」话题，按节列出来，讨论时可以往上挂批注、问题
+  const paper = headings.length >= 2 && (captions > 0 || headings.some((h) => /^§1\b/.test(h)))
+  if (paper && pages.length) {
+    // 条目写成「Deep Residual Learning（§3）」：板书自己会给条目编号，章节号放后面；
+    // 也和第一页上的标题原文「§3 Deep Residual Learning」区分开，不然会被当成那块钉死的原文、挂不上
+    const clean = (s: string) => {
+      const m = /^§(\S+)\s+(.*)$/.exec(s.replace(/[「」\n]/g, ''))
+      return m ? `${m[2].slice(0, 28)}（§${m[1]}）` : s.replace(/[「」\n]/g, '').slice(0, 30)
+    }
+    const ops = ['T 「论文结构」', ...headings.slice(0, 30).map((h) => `L 「论文结构」 「${clean(h)}」`)].join('\n')
+    pages[0] = { ...pages[0], graph: applyOps(pages[0].graph, parseOps(ops), 'ink') }
+  }
+  return { pages, total, scanned, paper, refsSkipped, title: title?.slice(0, 80) }
 }

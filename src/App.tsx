@@ -1008,7 +1008,8 @@ export default function App() {
   // 一张板上的东西太多（自动适配会把字缩得很小），建议新开一张；每张只提一次
   useEffect(() => {
     if (replayRef.current || suggested.current.has(page)) return
-    if (session.graph.nodes.filter((n) => n.ink === 'ink').length < 30) return
+    // 只数板书本身；导入页上的原文不算
+    if (session.graph.nodes.filter((n) => n.ink === 'ink' && n.kind !== 'region').length < 30) return
     suggested.current.add(page)
     setSuggest(true)
   }, [graph, page, session])
@@ -1028,11 +1029,20 @@ export default function App() {
         setToast({ ok: true, text: `正在读 ${f.name}…` })
         const r = await importPdf(await f.arrayBuffer(), (done, total) => setToast({ ok: true, text: `正在读 ${f.name}：${done}/${total} 页` }))
         const extra = [
-          r.total > r.pages.length && `只导了前 ${MAX_PAGES} 页`,
+          r.total > MAX_PAGES && `只导了前 ${MAX_PAGES} 页`,
+          r.refsSkipped && `参考文献 ${r.refsSkipped} 页没建板`,
           r.scanned && `${r.scanned} 页是扫描件，没有能指认的文字`,
         ].filter(Boolean)
+        // 这场会还是空的、也没改过名：用文档的标题当会议名
+        const blank = !lines.length && !pagesRef.current.some((p) => p.underlay || p.graph.nodes.some((n) => n.ink === 'ink'))
+        if (blank && !meeting.titled && r.title) setMeeting((m) => ({ ...m, title: r.title!, titled: true }))
         addPages(r.pages, `导入了 ${f.name}（${r.pages.length} 页${extra.length ? `，${extra.join('，')}` : ''}）`)
-        setToast({ ok: true, text: `${f.name} 导入好了：每页一张板，开会时可以说「把这一段圈出来」` })
+        setToast({
+          ok: true,
+          text: r.paper
+            ? `${f.name} 导入好了：按论文的章节、图表、公式切好了，可以说「图 3 这里」「公式 5 有问题」`
+            : `${f.name} 导入好了：每页一张板，开会时可以说「把这一段圈出来」`,
+        })
         return
       }
       if (/^image\//.test(f.type) || /\.(png|jpe?g|webp|gif)$/i.test(f.name)) {

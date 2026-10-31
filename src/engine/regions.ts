@@ -6,6 +6,8 @@ import { type Graph, emptyGraph } from './graph.ts'
 /** 页面上的一块内容，坐标是板书坐标（页面左上角是原点） */
 export interface Area {
   text: string
+  /** 起好的名字（图 3：……、公式 (5)、§3 方法）；没有就用文字开头 */
+  name?: string
   x: number
   y: number
   w: number
@@ -20,7 +22,7 @@ export function pageGraph(size: { w: number; h: number }, areas: Area[]): Graph 
   g.underlay = { w: Math.round(size.w), h: Math.round(size.h) }
   const used = new Map<string, number>()
   for (const a of areas) {
-    const flat = a.text.replace(/\s+/g, ' ').trim()
+    const flat = (a.name ?? a.text).replace(/[「」]/g, '').replace(/\s+/g, ' ').trim()
     if (!flat) continue
     let label = flat.length > MAX ? `${flat.slice(0, MAX - 1)}…` : flat
     // 同样开头的两块（比如表格里的两行）不能合成一个

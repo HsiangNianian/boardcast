@@ -2,6 +2,18 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.12.0 - 2026-10-31
+
+### Features
+
+- **summary:** Summarize every board of the meeting (closes #26) ([`e4dc159`](https://github.com/HsiangNianian/boardcast/commit/e4dc15955a0d32d87ff5181b4a95772b1adb3b02))
+  - the summary gets the structure of all boards, one section per board, instead of only the current one
+  - on imported pages it only includes source text that was marked, annotated or connected, so a long PDF does not crowd out the transcript; each board is capped at 1500 characters
+  - the transcript marks where the discussion moved to another board, and the model is asked to note the board next to conclusions and to-dos
+  - a meeting with one board is summarized exactly as before
+
+**Full diff:** [v0.11.0...v0.12.0](https://github.com/HsiangNianian/boardcast/compare/v0.11.0...v0.12.0)
+
 ## 0.11.0 - 2026-10-31
 
 ### Features

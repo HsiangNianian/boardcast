@@ -2,6 +2,33 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.17.0 - 2026-10-31
+
+### Features
+
+- **board:** Mark a word, a sentence or a paragraph of the source text ([`cd35dea`](https://github.com/HsiangNianian/boardcast/commit/cd35deaaf181c376b45fff57d6702d7dbda4e199))
+  - PDF regions keep their text layer (lines and pieces with positions), so a mark can land on part of a block
+  - the M op takes a range: M n4 圈出 「predicting」 marks the words, M n4 圈出 句 「Most of the」 the whole sentence, and M n4 圈出 the block
+  - if the model picks the wrong block, the mark goes to the block on this board that holds those words; text that is found nowhere marks the block named
+  - matching ignores case and white space and sees through words broken at line ends; abbreviations such as e.g. and Fig. do not end a sentence
+  - a sentence over several lines is circled along its outline, underlined or struck per line
+  - by hand: selecting a source block shows 词 / 句 / 段, and clicking a mark toggles it on what was clicked; underline joins the manual marks
+  - marked words show in the entity list, the summary input and the Markdown export
+  - blocks imported before this version have no text layer and can only be marked whole; figures and tables are marked whole too
+- **meetings:** Search every meeting (closes #24) ([`a7bef75`](https://github.com/HsiangNianian/boardcast/commit/a7bef75cea30c8c16ccceb4063cda5c138b2b3a4))
+  - the meeting list has a search box over titles, spoken lines, board text (the full source text of imported pages too) and summaries
+  - several words must all appear in the meeting, not necessarily together; matches are highlighted in a short snippet
+  - clicking a hit opens the meeting, switches to its board, and scrolls the transcript to the line and flashes it
+  - the same matcher runs on desktop and web; loaded meetings are cached by update time so typing stays fast
+- **settings:** Export diagnostics for bug reports (closes #27) ([`2118821`](https://github.com/HsiangNianian/boardcast/commit/21188215b6ef82b543a12212741b405bf38db833))
+  - settings can export a zip with the version, platform, model and voice state, the tail of the llama-server log and recent front-end errors
+  - every file is shown before saving; no meeting content, audio or API keys are collected
+  - keys, bearer tokens and user names in paths are scrubbed, and log lines that are not plain ASCII are dropped in case they hold meeting text
+  - error toasts have a button to copy the details and stay up longer
+  - console errors and unhandled rejections are kept in a small ring buffer
+
+**Full diff:** [v0.16.0...v0.17.0](https://github.com/HsiangNianian/boardcast/compare/v0.16.0...v0.17.0)
+
 ## 0.16.0 - 2026-10-31
 
 ### Features

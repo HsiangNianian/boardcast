@@ -6,7 +6,9 @@
 // - 导出文件时的另存为对话框（export.rs）
 // - 会议的保存和读取（meetings.rs）
 // - 自动更新（updater.rs）
+// - 按 arXiv 编号下载论文（arxiv.rs）
 
+mod arxiv;
 mod export;
 mod llm;
 mod meetings;
@@ -54,6 +56,7 @@ pub fn run() {
             remote::remote_test,
             remote::remote_chat,
             export::export_save,
+            arxiv::arxiv_pdf,
             meetings::meetings_list,
             meetings::meeting_load,
             meetings::meeting_save,

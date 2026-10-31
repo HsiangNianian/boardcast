@@ -134,6 +134,15 @@ export interface UpdateProgress {
   total?: number
 }
 
+/** 按 arXiv 编号下载论文 PDF（外壳代下，只认 arxiv.org），返回字节 */
+export async function arxivPdf(id: string): Promise<Uint8Array> {
+  const b64 = await call<string>('arxiv_pdf', { id })
+  const bin = atob(b64)
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out
+}
+
 /** 自动更新：检查、下载安装并重启（成功的话 install 不会返回） */
 export const updates = {
   version: async () => (await import('@tauri-apps/api/app')).getVersion(),

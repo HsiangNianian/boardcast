@@ -26,7 +26,7 @@ export interface PdfImport {
   title?: string
 }
 
-export async function importPdf(data: ArrayBuffer, onPage?: (done: number, total: number) => void): Promise<PdfImport> {
+export async function importPdf(data: ArrayBuffer | Uint8Array, onPage?: (done: number, total: number) => void): Promise<PdfImport> {
   const pdfjs = await import('pdfjs-dist')
   pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
   const base = new URL('pdfjs/', document.baseURI).href

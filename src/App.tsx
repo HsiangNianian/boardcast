@@ -11,6 +11,7 @@ import {
   llmEnsure,
   type UpdateInfo,
   type VoiceSource,
+  arxivPdf,
   updates,
   llmStatus,
   llmStop,
@@ -1014,9 +1015,61 @@ export default function App() {
     setSuggest(true)
   }, [graph, page, session])
 
-  // —— 导入文件：.excalidraw 直接转成板书（PDF、图片在做） ——
+  // —— 导入：图片、PDF、.excalidraw、arXiv 链接 ——
   const fileInput = useRef<HTMLInputElement>(null)
   const [dropping, setDropping] = useState(false)
+  const [importMenu, setImportMenu] = useState(false)
+  const [arxivInput, setArxivInput] = useState('')
+
+  /** 导入一份 PDF（文件或者从 arXiv 下的） */
+  async function importPdfData(name: string, data: ArrayBuffer | Uint8Array) {
+    const { importPdf, MAX_PAGES } = await import('./board/importPdf.ts')
+    setToast({ ok: true, text: `正在读 ${name}…` })
+    const r = await importPdf(data, (done, total) => setToast({ ok: true, text: `正在读 ${name}：${done}/${total} 页` }))
+    const extra = [
+      r.total > MAX_PAGES && `只导了前 ${MAX_PAGES} 页`,
+      r.refsSkipped && `参考文献 ${r.refsSkipped} 页没建板`,
+      r.scanned && `${r.scanned} 页是扫描件，没有能指认的文字`,
+    ].filter(Boolean)
+    // 这场会还是空的、也没改过名：用文档的标题当会议名
+    const blank = !lines.length && !pagesRef.current.some((p) => p.underlay || p.graph.nodes.some((n) => n.ink === 'ink'))
+    if (blank && !meeting.titled && r.title) setMeeting((m) => ({ ...m, title: r.title!, titled: true }))
+    addPages(r.pages, `导入了 ${name}（${r.pages.length} 页${extra.length ? `，${extra.join('，')}` : ''}）`)
+    setToast({
+      ok: true,
+      text: r.paper
+        ? `${name} 导入好了：按论文的章节、图表、公式切好了，可以说「图 3 这里」「公式 5 有问题」`
+        : `${name} 导入好了：每页一张板，开会时可以说「把这一段圈出来」`,
+    })
+  }
+
+  /** 按 arXiv 链接或编号导入论文：桌面版由外壳下载 */
+  async function importArxiv(input: string) {
+    const { parseArxiv } = await import('./board/arxiv.ts')
+    const id = parseArxiv(input)
+    if (!id) {
+      setToast({ ok: false, text: '没认出 arXiv 编号：贴 arxiv.org/abs/… 的链接，或者 2401.12345 这样的编号' })
+      return
+    }
+    if (!isDesktop) {
+      setToast({ ok: false, text: '网页版下载不了 arXiv（浏览器不允许跨站取文件）：先下载 PDF 再拖进来' })
+      return
+    }
+    exitReplay()
+    if (waiting) {
+      setToast({ ok: false, text: '模型还在画，画完再导入' })
+      return
+    }
+    setImportMenu(false)
+    setArxivInput('')
+    try {
+      setToast({ ok: true, text: `正在从 arXiv 下载 ${id}…` })
+      await importPdfData(`arXiv ${id}`, await arxivPdf(id))
+    } catch (e) {
+      setToast({ ok: false, text: `导入失败：${errText(e)}` })
+    }
+  }
+
   async function importFile(f: File) {
     exitReplay()
     if (waiting) {
@@ -1025,24 +1078,7 @@ export default function App() {
     }
     try {
       if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
-        const { importPdf, MAX_PAGES } = await import('./board/importPdf.ts')
-        setToast({ ok: true, text: `正在读 ${f.name}…` })
-        const r = await importPdf(await f.arrayBuffer(), (done, total) => setToast({ ok: true, text: `正在读 ${f.name}：${done}/${total} 页` }))
-        const extra = [
-          r.total > MAX_PAGES && `只导了前 ${MAX_PAGES} 页`,
-          r.refsSkipped && `参考文献 ${r.refsSkipped} 页没建板`,
-          r.scanned && `${r.scanned} 页是扫描件，没有能指认的文字`,
-        ].filter(Boolean)
-        // 这场会还是空的、也没改过名：用文档的标题当会议名
-        const blank = !lines.length && !pagesRef.current.some((p) => p.underlay || p.graph.nodes.some((n) => n.ink === 'ink'))
-        if (blank && !meeting.titled && r.title) setMeeting((m) => ({ ...m, title: r.title!, titled: true }))
-        addPages(r.pages, `导入了 ${f.name}（${r.pages.length} 页${extra.length ? `，${extra.join('，')}` : ''}）`)
-        setToast({
-          ok: true,
-          text: r.paper
-            ? `${f.name} 导入好了：按论文的章节、图表、公式切好了，可以说「图 3 这里」「公式 5 有问题」`
-            : `${f.name} 导入好了：每页一张板，开会时可以说「把这一段圈出来」`,
-        })
+        await importPdfData(f.name, await f.arrayBuffer())
         return
       }
       if (/^image\//.test(f.type) || /\.(png|jpe?g|webp|gif)$/i.test(f.name)) {
@@ -1197,16 +1233,58 @@ export default function App() {
           <button type="button" className="icon" onClick={tidyUp} disabled={!graph.nodes.length} aria-label="整理排版" title="整理排版：整块重新排一次">
             <Tidy />
           </button>
-          <button
-            type="button"
-            className="icon"
-            onClick={() => fileInput.current?.click()}
-            disabled={!!replay}
-            aria-label="导入"
-            title="导入图片、PDF 或 .excalidraw（也可以直接拖到白板上）：图片和 PDF 垫在板下面，开会时在上面圈画批注；.excalidraw 转成板书接着画"
-          >
-            <Upload />
-          </button>
+          <div className="menu-anchor">
+            <button
+              type="button"
+              className={`icon${importMenu ? ' on' : ''}`}
+              onClick={() => setImportMenu(!importMenu)}
+              disabled={!!replay}
+              aria-haspopup="menu"
+              aria-expanded={importMenu}
+              aria-label="导入"
+              title="导入图片、PDF、.excalidraw 或 arXiv 论文（文件也可以直接拖到白板上）"
+            >
+              <Upload />
+            </button>
+            {importMenu && (
+              <div className="menu import-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setImportMenu(false)
+                    fileInput.current?.click()
+                  }}
+                >
+                  <span>选择文件…</span>
+                  <small>图片、PDF 垫在板下面圈画批注；.excalidraw 转成板书</small>
+                </button>
+                <form
+                  className="arxiv"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    void importArxiv(arxivInput)
+                  }}
+                >
+                  <span>arXiv 论文</span>
+                  <div>
+                    <input
+                      value={arxivInput}
+                      onChange={(e) => setArxivInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Escape' && setImportMenu(false)}
+                      placeholder="arxiv.org/abs/… 或 2401.12345"
+                      spellCheck={false}
+                      autoFocus
+                    />
+                    <button type="submit" className="small" disabled={!arxivInput.trim()}>
+                      导入
+                    </button>
+                  </div>
+                  {!isDesktop && <small>网页版下载不了，请用桌面版，或者先下载 PDF 再拖进来</small>}
+                </form>
+              </div>
+            )}
+          </div>
           <input
             ref={fileInput}
             type="file"

@@ -1635,6 +1635,47 @@ label.check input {
   font-size: 12px;
   font-weight: 400;
 }
+/* 导入菜单里的 arXiv 输入框 */
+.menu.import-menu {
+  min-width: 320px;
+}
+.menu .arxiv {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--line);
+}
+.menu .arxiv > span {
+  font-size: 14px;
+  font-weight: 500;
+}
+.menu .arxiv > div {
+  display: flex;
+  gap: 6px;
+}
+.menu .arxiv input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.menu .arxiv button.small {
+  display: inline-grid;
+  place-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 12px;
+}
+.menu .arxiv button.small:disabled {
+  background: var(--surface-2);
+  color: var(--faint);
+}
 .toast {
   position: fixed;
   top: 68px;

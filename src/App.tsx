@@ -42,7 +42,9 @@ import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Re
 import MeetingsPanel from './ui/MeetingsPanel.tsx'
 import ReplayBar, { SPEEDS } from './ui/ReplayBar.tsx'
 import PageStrip from './ui/PageStrip.tsx'
+import type { PdfImport } from './board/importPdf.ts'
 import { type Thumb, pageThumb, thumbOf } from './board/thumb.ts'
+import { navTarget, parseNav } from './engine/nav.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -382,7 +384,7 @@ export default function App() {
         },
         mention: (ids) => {
           setHot(new Set(ids))
-          if (ids.length) setTimeout(() => setHot(new Set()), 1500)
+          if (ids.length) setTimeout(() => setHot(new Set()), 3000)
         },
         llm: (r) =>
           setLines((ls) => {
@@ -613,6 +615,17 @@ export default function App() {
   function say(said: Utterance) {
     // 先按术语表纠正（说的和打的都纠）：内部叫法常被听成、打成别的字
     const u = { ...said, text: correct(said.text, termsRef.current) }
+    // 整句就是翻页：不用问模型，也不写板书
+    const nav = parseNav(u.text)
+    if (nav) {
+      const boards = pagesRef.current.map((p, i) => (i === pageRef.current ? session.graph : p.graph).underlay ?? {})
+      const to = navTarget(nav, boards, pageRef.current)
+      setLines((ls) => [...ls, { ...u, page: pageRef.current, ms: 0 }])
+      if (to < 0) setToast({ ok: false, text: '没有这一页的板' })
+      else if (waiting) setToast({ ok: false, text: '模型还在画，画完再翻页' })
+      else goPage(to)
+      return
+    }
     setLines((ls) => [...ls, { ...u, page: pageRef.current }])
     session.say(u)
   }
@@ -1035,20 +1048,31 @@ export default function App() {
   const [dropping, setDropping] = useState(false)
   const [importMenu, setImportMenu] = useState(false)
   const [arxivInput, setArxivInput] = useState('')
+  const [pendingPdf, setPendingPdf] = useState<{ name: string; r: PdfImport } | null>(null)
 
-  /** 导入一份 PDF（文件或者从 arXiv 下的） */
+  /** 导入一份 PDF（文件或者从 arXiv 下的）。这场会已经有内容时先问一声：一篇文档和正在开的会搅在一起很难翻 */
   async function importPdfData(name: string, data: ArrayBuffer | Uint8Array) {
     const { importPdf } = await import('./board/importPdf.ts')
     setToast({ ok: true, text: `正在读 ${name}…` })
     const r = await importPdf(data, (done, total) => setToast({ ok: true, text: `正在读 ${name}：${done}/${total} 页` }))
+    const blank = !lines.length && !pagesRef.current.some((p) => p.underlay || p.graph.nodes.some((n) => n.ink === 'ink'))
+    if (blank) {
+      placePdf(name, r, true)
+      return
+    }
+    setToast(null)
+    setPendingPdf({ name, r })
+  }
+
+  /** 把读好的 PDF 放上板；`fresh`：这场会是空的，可以用文档标题当会议名 */
+  function placePdf(name: string, r: PdfImport, fresh: boolean) {
     const extra = [
       r.refsSkipped && `参考文献 ${r.refsSkipped} 页没建板`,
       r.unread && `板到上限了，最后 ${r.unread} 页没导`,
       r.scanned && `${r.scanned} 页没有文字层，整页算一张图`,
     ].filter(Boolean)
     // 这场会还是空的、也没改过名：用文档的标题当会议名
-    const blank = !lines.length && !pagesRef.current.some((p) => p.underlay || p.graph.nodes.some((n) => n.ink === 'ink'))
-    if (blank && !meeting.titled && r.title) setMeeting((m) => ({ ...m, title: r.title!, titled: true }))
+    if (fresh && r.title) setMeeting((m) => (m.titled ? m : { ...m, title: r.title!, titled: true }))
     addPages(r.pages, `导入了 ${name}（共 ${r.total} 页，建了 ${r.pages.length} 张板${extra.length ? `，${extra.join('，')}` : ''}）`)
     setToast({
       ok: true,
@@ -1723,6 +1747,36 @@ export default function App() {
           onNew={(keep) => reset(keep)}
           onRenamed={(id, title) => setMeeting((m) => (m.id === id ? { ...m, title, titled: true } : m))}
         />
+      )}
+      {pendingPdf && (
+        <div className="import-choice" role="dialog" aria-label="导入到哪里">
+          <span>
+            {pendingPdf.name}（{pendingPdf.r.pages.length} 张板）放到哪里？
+          </span>
+          <button
+            type="button"
+            className="small"
+            onClick={() => {
+              const p = pendingPdf
+              setPendingPdf(null)
+              reset()
+              placePdf(p.name, p.r, true)
+            }}
+          >
+            新开一场会
+          </button>
+          <button
+            type="button"
+            className="ghost small"
+            onClick={() => {
+              const p = pendingPdf
+              setPendingPdf(null)
+              placePdf(p.name, p.r, false)
+            }}
+          >
+            加到这场会
+          </button>
+        </div>
       )}
       {toast && (
         <div className={`toast${toast.ok ? '' : ' err'}`} role="status">

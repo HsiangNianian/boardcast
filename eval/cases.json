@@ -1581,5 +1581,64 @@
         ]
       ]
     }
+  },
+  {
+    "id": "assign-shared",
+    "name": "一件事先给一个人，又加一个人",
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "豆包那块是交给小王来做的。"
+      },
+      {
+        "speaker": "B",
+        "text": "其实还有小李。"
+      },
+      {
+        "speaker": "B",
+        "text": "豆包交给小王和小李。"
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "小李"
+          ],
+          "items": [
+            [
+              "豆包"
+            ]
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "pointing-not-writing",
+    "name": "带大家看哪里，不写到板上",
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "我们先看摘要。"
+      },
+      {
+        "speaker": "A",
+        "text": "再看看引言。"
+      },
+      {
+        "speaker": "A",
+        "text": "好，我们去看 intro。"
+      }
+    ],
+    "gold": {
+      "forbidden_nodes": [
+        "先看",
+        "看摘要",
+        "看看引言",
+        "看 intro",
+        "intro"
+      ]
+    }
   }
 ]

@@ -53,7 +53,7 @@ export interface Graph {
   nextNode: number
   nextGroup: number
   /** 垫在底下的导入页（PDF 的一页、一张图片）的大小；图片本身存在会议的这张板里 */
-  underlay?: { w: number; h: number }
+  underlay?: { w: number; h: number; /** 这是导入文件的第几页 */ no?: number }
 }
 
 export function emptyGraph(): Graph {

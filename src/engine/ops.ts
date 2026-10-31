@@ -13,6 +13,7 @@
 //   K 引用 「备注」            在某个东西旁边写一句备注
 //   M 引用 划掉|圈出|下划线|星标   做标记；纠正时优先划掉而不是删掉
 //   I 引用 图标名              给东西配一个小图标
+//   H 引用                     指给大家看：高亮一下，板书不变
 // 通用：
 //   R 引用 「新名字」          改名，旧名字留作别名
 //   A 引用 「别名」            记一个别名
@@ -51,6 +52,7 @@ export type Op =
   | { op: 'K'; target: Ref; text: string }
   | { op: 'M'; target: Ref; mark: Mark }
   | { op: 'I'; target: Ref; icon: Icon }
+  | { op: 'H'; target: Ref }
 
 type Tok = { quoted: boolean; text: string }
 
@@ -87,6 +89,9 @@ export function parseOps(text: string): Op[] {
     switch (head.text) {
       case 'N':
         if (rest[0]?.text) ops.push({ op: 'N', name: rest[0].text })
+        break
+      case 'H':
+        if (a) ops.push({ op: 'H', target: a })
         break
       case 'T':
         if (rest[0]?.text) ops.push({ op: 'T', name: rest[0].text })
@@ -162,6 +167,8 @@ export function formatOps(ops: Op[]): string {
           return `M ${r(o.target)} ${o.mark}`
         case 'I':
           return `I ${r(o.target)} ${o.icon}`
+        case 'H':
+          return `H ${r(o.target)}`
         case 'G':
           return `G 「${o.group}」 ${o.members.map(r).join(' ')}`
         case 'D':
@@ -254,6 +261,9 @@ export function applyOps(graph: Graph, ops: Op[], ink: Ink = 'ink'): Graph {
         if (n && !n.marks.includes(o.mark)) n.marks.push(o.mark)
         break
       }
+      // 只是指一下，由 Session 负责高亮
+      case 'H':
+        break
       case 'I': {
         const n = get(resolve(g, o.target, false, ink))
         if (n) n.icon = o.icon

@@ -198,3 +198,11 @@ test('grammar only allows existing ids', () => {
   assert.match(gbnf, /ref ::= name \| "n1" \| "n2"|ref ::= name \| "n2" \| "n1"/)
   assert.match(grammar(emptyGraph()), /ref ::= name$/m)
 })
+
+test('pointing at something highlights it and leaves the board alone', () => {
+  const g = applyOps(emptyGraph(), parseOps('T 「方案」'))
+  const ops = parseOps('H n1')
+  assert.deepEqual(ops, [{ op: 'H', target: { id: 'n1' } }])
+  assert.equal(formatOps(ops), 'H n1')
+  assert.deepEqual(applyOps(g, ops), g)
+})

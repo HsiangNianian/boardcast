@@ -110,7 +110,7 @@ export async function importPdf(data: ArrayBuffer | Uint8Array, onPage?: (done: 
       const box = inkBox(ctx.getImageData(0, 0, canvas.width, canvas.height))
       if (box) areas.push({ text: '', name: `第 ${i} 页的图`, kind: 'figure', x: box.x / 2, y: box.y / 2, w: box.w / 2, h: box.h / 2 })
     }
-    pages.push({ graph: pageGraph({ w: vp.width, h: vp.height }, areas), underlay: image })
+    pages.push({ graph: pageGraph({ w: vp.width, h: vp.height, no: i }, areas), underlay: image })
   }
   onPage?.(total, total)
   await task.destroy()

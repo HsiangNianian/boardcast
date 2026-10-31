@@ -56,7 +56,10 @@ function Waveform({ level }: { level: number }) {
 /** 句首的「@名字 」：换说话人。名字里不能有空格，最长 12 个字 */
 export function splitSpeaker(line: string): { speaker?: string; text: string } {
   const m = /^[@＠](\S{1,12})\s+([\s\S]+)$/.exec(line.trim())
-  return m ? { speaker: m[1], text: m[2].trim() } : { text: line.trim() }
+  if (m) return { speaker: m[1], text: m[2].trim() }
+  // 从会议记录里复制的一句，第一行是单独一个字母的说话人
+  const copied = /^([A-Z])[ \t]*\n+([\s\S]+)$/.exec(line.trim())
+  return copied ? { speaker: copied[1], text: copied[2].trim() } : { text: line.trim() }
 }
 
 export default function Composer(p: Props) {

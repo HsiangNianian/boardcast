@@ -1907,3 +1907,29 @@ button.danger {
   color: var(--muted);
   border: 1px dashed var(--line-strong);
 }
+
+.import-choice {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 10px 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  color: var(--muted);
+}
+.import-choice span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.import-choice button {
+  flex: none;
+}

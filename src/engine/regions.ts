@@ -17,9 +17,9 @@ export interface Area {
 /** 名字太长时截一截：模型看到的实体表越短越好，指认一块原文看开头就够了 */
 const MAX = 36
 
-export function pageGraph(size: { w: number; h: number }, areas: Area[]): Graph {
+export function pageGraph(size: { w: number; h: number; no?: number }, areas: Area[]): Graph {
   const g = emptyGraph()
-  g.underlay = { w: Math.round(size.w), h: Math.round(size.h) }
+  g.underlay = { w: Math.round(size.w), h: Math.round(size.h), ...(size.no ? { no: size.no } : {}) }
   const used = new Map<string, number>()
   for (const a of areas) {
     const flat = (a.name ?? a.text).replace(/[「」]/g, '').replace(/\s+/g, ' ').trim()

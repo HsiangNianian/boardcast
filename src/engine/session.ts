@@ -3,7 +3,7 @@
 // 模型同一时间只跑一个请求。它忙的时候新来的句子先攒着，下一轮合并成一句处理：
 // 宁可跳过中间状态，也不能让板书越拖越晚。
 
-import { type Graph, emptyGraph } from './graph.ts'
+import { type Graph, emptyGraph, findNode } from './graph.ts'
 import { type LlmConfig, type LlmResult, proposeOps } from './llm.ts'
 import { type Op, applyOps, eraseDrafts, markDrafts, parseOps } from './ops.ts'
 import type { Utterance } from './prompt.ts'
@@ -69,6 +69,14 @@ export class Session {
       const ops = parseOps(r.text)
       this.graph = eraseDrafts(applyOps(this.graph, ops, 'ink'), drafts)
       this.on.graph?.(this.graph, 'ink')
+      // 指给大家看的：板书不变，高亮一下
+      const shown = ops.flatMap((o) => {
+        if (o.op !== 'H') return []
+        const t = o.target
+        const n = 'id' in t ? this.graph.nodes.find((x) => x.id === t.id) : findNode(this.graph, t.name)
+        return n ? [n.id] : []
+      })
+      if (shown.length) this.on.mention?.(shown)
       this.on.llm?.({ ...r, ops, batch })
     } catch (e) {
       this.on.error?.(e)

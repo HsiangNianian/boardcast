@@ -1771,6 +1771,7 @@ button.icon:disabled {
 }
 .meeting-list li {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 4px 4px 4px 0;
@@ -1940,4 +1941,53 @@ button.danger {
   margin-right: 4px;
   padding-right: 6px;
   border-right: 1px solid var(--line);
+}
+
+.meeting-search {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 10px;
+}
+.meeting-hits {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  order: 3;
+  flex-basis: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 2px 0 4px;
+}
+.meeting-hits button {
+  box-sizing: border-box;
+  white-space: normal;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  color: var(--muted);
+}
+.meeting-hits button:hover {
+  background: var(--line);
+}
+.meeting-hits small {
+  flex: none;
+  color: var(--faint);
+}
+.meeting-hits span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.meeting-hits mark,
+.line.jump {
+  /* 半透明：深色、浅色主题都看得清字 */
+  background: rgba(250, 204, 21, 0.3);
+}
+.meeting-hits mark {
+  color: inherit;
 }

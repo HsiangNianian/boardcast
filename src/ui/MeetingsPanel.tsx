@@ -1,6 +1,7 @@
 // 历史会议：最近改过的在前，可以打开、重命名、删除，也可以从这里开一场新会。
 
 import { useEffect, useState } from 'react'
+import type { Hit } from '../engine/search.ts'
 import { type MeetingInfo, meetings } from '../meetings.ts'
 import { Close, Plus } from './icons.tsx'
 
@@ -8,7 +9,7 @@ interface Props {
   currentId: string
   onClose: () => void
   /** 打开另一场会议（当前这场由调用方先存好） */
-  onOpen: (id: string) => void
+  onOpen: (id: string, hit?: Hit) => void
   /** 开一场新会议；`keepCurrent` 为 false 时当前这场刚被删掉，不用再存 */
   onNew: (keepCurrent: boolean) => void
   /** 改了名字：当前这场要同步到界面上 */
@@ -28,7 +29,43 @@ function when(t: number): string {
   return `${day} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+/** 命中的词高亮 */
+function Marked({ hit }: { hit: Hit }) {
+  const out: React.ReactNode[] = []
+  let at = 0
+  hit.marks.forEach(([a, b], i) => {
+    out.push(hit.text.slice(at, a), <mark key={i}>{hit.text.slice(a, b)}</mark>)
+    at = b
+  })
+  out.push(hit.text.slice(at))
+  return <>{out}</>
+}
+
+const PLACE = { title: '会议名', summary: '摘要', line: '会议记录', board: '板上' }
+
 export default function MeetingsPanel(p: Props) {
+  const [query, setQuery] = useState('')
+  const [found, setFound] = useState<Map<string, Hit[]> | null>(null)
+  // 边打字边搜，停一下才真的搜
+  useEffect(() => {
+    if (!query.trim()) {
+      setFound(null)
+      return
+    }
+    let stale = false
+    const t = setTimeout(() => {
+      void meetings
+        .search(query)
+        .then((r) => {
+          if (!stale) setFound(new Map(r.map((x) => [x.info.id, x.hits])))
+        })
+        .catch((e) => setError(String(e)))
+    }, 180)
+    return () => {
+      stale = true
+      clearTimeout(t)
+    }
+  }, [query])
   const [list, setList] = useState<MeetingInfo[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
@@ -83,8 +120,20 @@ export default function MeetingsPanel(p: Props) {
         <p className="hint">每场会议都会自动保存在这台电脑上，关掉应用再打开也能接着开。</p>
         {error && <p className="meta err">读取会议列表失败：{error}</p>}
         {list && !list.length && <p className="hint">还没有保存过的会议。说第一句话后就会自动保存。</p>}
+        {!!list?.length && (
+          <input
+            className="meeting-search"
+            type="search"
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜会议名、说过的话、板上的字、摘要"
+            aria-label="搜索会议"
+          />
+        )}
+        {found && !found.size && <p className="hint">没有搜到。</p>}
         <ul className="meeting-list">
-          {list?.map((m) => (
+          {list?.filter((m) => !found || found.has(m.id)).map((m) => (
             <li key={m.id} className={m.id === p.currentId ? 'current' : ''}>
               {editing === m.id ? (
                 <input
@@ -114,6 +163,25 @@ export default function MeetingsPanel(p: Props) {
                   </span>
                 </button>
               )}
+              {found?.get(m.id)?.length ? (
+                <div className="meeting-hits">
+                  {found.get(m.id)!.map((h, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        p.onOpen(m.id, h)
+                        p.onClose()
+                      }}
+                    >
+                      <small>{h.where === 'board' ? `第 ${(h.page ?? 0) + 1} 张板` : PLACE[h.where]}</small>
+                      <span>
+                        <Marked hit={h} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <div className="ops">
                 {confirming === m.id ? (
                   <>

@@ -45,6 +45,7 @@ import PageStrip from './ui/PageStrip.tsx'
 import type { PdfImport } from './board/importPdf.ts'
 import { type Thumb, pageThumb, thumbOf } from './board/thumb.ts'
 import { navTarget, parseNav } from './engine/nav.ts'
+import type { Hit } from './engine/search.ts'
 import { hasSpan, spanAt, toggleSpan } from './engine/spans.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
@@ -609,9 +610,20 @@ export default function App() {
   }, [mode, messy, weight, micChoice, voiceSource, diarize, autoUpdate, glossary, showLog])
 
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
+  // 从搜索结果跳过来的那一句：滚到它，亮一下
+  const [jumpLine, setJumpLine] = useState<number | null>(null)
   useEffect(() => {
-    listEnd.current?.scrollIntoView({ block: 'end' })
-  }, [lines, replay?.at])
+    if (jumpLine === null) listEnd.current?.scrollIntoView({ block: 'end' })
+  }, [lines, replay?.at, jumpLine])
+  useEffect(() => {
+    if (jumpLine === null) return
+    const t = setTimeout(() => document.querySelector('.line.jump')?.scrollIntoView({ block: 'center' }), 60)
+    const off = setTimeout(() => setJumpLine(null), 2500)
+    return () => {
+      clearTimeout(t)
+      clearTimeout(off)
+    }
+  }, [jumpLine])
 
   function say(said: Utterance) {
     // 先按术语表纠正（说的和打的都纠）：内部叫法常被听成、打成别的字
@@ -1160,12 +1172,23 @@ export default function App() {
     }
   }
 
-  async function openOther(id: string) {
+  /** 打开一场会；从搜索结果来的，跳到命中的板和那一句 */
+  async function openOther(id: string, hit?: Hit) {
     exitReplay()
-    if (lines.length || graph.nodes.length) await meetings.save(snapshot(meeting)).catch(() => undefined)
-    const m = await meetings.load(id).catch(() => null)
-    if (m) openMeeting(m)
-    else setToast({ ok: false, text: '打开会议失败：找不到这场会议' })
+    if (id !== meeting.id) {
+      if (lines.length || graph.nodes.length) await meetings.save(snapshot(meeting)).catch(() => undefined)
+      const m = await meetings.load(id).catch(() => null)
+      if (!m) {
+        setToast({ ok: false, text: '打开会议失败：找不到这场会议' })
+        return
+      }
+      openMeeting(m)
+    }
+    if (hit?.page !== undefined) goPage(hit.page)
+    if (hit?.line !== undefined) {
+      setShowLog(true)
+      setJumpLine(hit.line)
+    }
   }
 
   async function play() {
@@ -1679,7 +1702,7 @@ export default function App() {
               </button>
             )}
             <article
-              className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}`}
+              className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}${jumpLine === i ? ' jump' : ''}`}
             >
               {l.manual && <span className="who edit">改</span>}
               {l.speaker && (
@@ -1774,7 +1797,7 @@ export default function App() {
         <MeetingsPanel
           currentId={meeting.id}
           onClose={() => setShowMeetings(false)}
-          onOpen={(id) => void openOther(id)}
+          onOpen={(id, hit) => void openOther(id, hit)}
           onNew={(keep) => reset(keep)}
           onRenamed={(id, title) => setMeeting((m) => (m.id === id ? { ...m, title, titled: true } : m))}
         />

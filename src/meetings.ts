@@ -10,6 +10,7 @@ import type { LayoutMemory } from './board/layout.ts'
 import { isDesktop } from './desktop.ts'
 import type { Graph } from './engine/graph.ts'
 import type { Utterance } from './engine/prompt.ts'
+import { type Hit, type Searchable, searchMeeting } from './engine/search.ts'
 
 export const MEETING_VERSION = 1
 
@@ -216,12 +217,33 @@ const assets: AssetStore = {
 }
 /** 已经存过的图（「会议编号/图片名」），自动保存时跳过 */
 const stored = new Set<string>()
+/** 搜索用：读过的会议按更新时间缓存，边打字边搜不用每次把文件读一遍 */
+const searchCache = new Map<string, { updatedAt: number; m: Searchable }>()
 
 export const meetings = {
   /** 最近改过的在前 */
   async list(): Promise<MeetingInfo[]> {
     const all = isDesktop ? await call<MeetingInfo[]>('meetings_list') : (await tx('readonly', (s) => s.getAll())).map(info)
     return all.sort((a, b) => b.updatedAt - a.updatedAt)
+  },
+  /** 全文搜索：命中的会议和命中处，顺序同 list() */
+  async search(query: string): Promise<{ info: MeetingInfo; hits: Hit[] }[]> {
+    const out: { info: MeetingInfo; hits: Hit[] }[] = []
+    for (const info of await this.list()) {
+      let m = searchCache.get(info.id)
+      if (m?.updatedAt !== info.updatedAt) {
+        // 不读图：搜索用不着
+        const raw = isDesktop
+          ? await call<string | null>('meeting_load', { id: info.id }).then((t) => (t ? (JSON.parse(t) as Meeting) : null))
+          : ((await tx('readonly', (s) => s.get(info.id))) as Meeting | undefined) ?? null
+        if (!raw) continue
+        m = { updatedAt: info.updatedAt, m: raw }
+        searchCache.set(info.id, m)
+      }
+      const hits = searchMeeting(m.m, query)
+      if (hits) out.push({ info, hits })
+    }
+    return out
   },
   async load(id: string): Promise<Meeting | null> {
     const raw = isDesktop

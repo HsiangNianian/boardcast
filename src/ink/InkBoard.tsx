@@ -275,7 +275,8 @@ export default function InkBoard({
         const id = `w${i}-${j}-${p.key.length}`
         return (
           <g key={j}>
-            <mask id={id} maskUnits="userSpaceOnUse">
+            {/* 遮罩范围要写明：不写时默认按画布大小从原点算，原点左边、上边（坐标是负数）的新内容写的时候看不见，写完才突然冒出来 */}
+            <mask id={id} maskUnits="userSpaceOnUse" x={bounds.x0 - 200} y={bounds.y0 - 200} width={bounds.x1 - bounds.x0 + 400} height={bounds.y1 - bounds.y0 + 400}>
               <path
                 d={s.center}
                 fill="none"

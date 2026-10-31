@@ -2,6 +2,30 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.10.0 - 2026-10-31
+
+### Features
+
+- **eval:** Held-out test set, repeated runs and regression cases (closes #4, refs #5) ([`bd4d20c`](https://github.com/HsiangNianian/boardcast/commit/bd4d20ccd6020406af52557916f50b5112b28ee8))
+  - eval/holdout.json: 22 meetings that are not used for prompt tuning, covering corrections, coreference, long small talk, pure chatter, sprint plans, owner swaps, struck options, formulas, open questions, renames, deletes, mixed Chinese and English, groups, cause chains, retros, flowchart plus to-dos, nested items, moved items, loops and long-range references
+  - three regression cases in the dev set for the known failures: chatter around two useful sentences, emphasis that belongs on an item rather than its topic, groups announced with "都属于"
+  - run.ts takes --set dev|holdout|all and --repeat N, reports each metric as the mean and standard deviation across runs, and flags cases whose scores differ by 0.3 or more between runs
+  - score.ts: not_emphasized counts emphasis on the wrong node as a miss
+  - README: both default models measured on both sets on an RTX 3060 Laptop with the app's own llama-server settings (4B holdout: nodes 0.89, edges 0.71; 9B holdout: nodes 0.94, edges 0.84), the earlier model comparison kept for reference, and the typical held-out failures recorded without tuning to them
+  - at temperature 0 local inference is deterministic, so repeated runs are identical; the run-to-run differences in #5 come from batching during live use
+
+### Performance
+
+- **meetings:** Store imported page images outside the meeting file (closes #25) ([`f04f83b`](https://github.com/HsiangNianian/boardcast/commit/f04f83bb85360d81f1c7d4361026c32a6412fd43))
+  - page images are saved once, named by their content hash, and the meeting JSON keeps only an asset: reference, so autosave no longer rewrites megabytes of images every half second
+  - desktop: meetings/<id>/<hash>.jpg written via temp file and rename, with names restricted to hex hashes; deleting a meeting removes its folder
+  - web: a second IndexedDB store keyed by meeting id and image name; deleting a meeting removes its images
+  - images already stored are skipped on later saves; meetings saved with inline images load as before and are split on their next save; a missing image only drops the underlay
+  - fix: a meeting with a single imported page lost its underlay on reload because the boards list was only saved with two or more boards
+  - a two-page PDF meeting goes from about 300 KB to under 5 KB of JSON
+
+**Full diff:** [v0.9.0...v0.10.0](https://github.com/HsiangNianian/boardcast/compare/v0.9.0...v0.10.0)
+
 ## 0.9.0 - 2026-10-30
 
 ### Features

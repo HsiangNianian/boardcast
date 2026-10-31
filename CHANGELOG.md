@@ -2,6 +2,22 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.15.0 - 2026-10-31
+
+### Features
+
+- **export:** Whole-meeting PDF and a self-contained replay page (closes #23) ([`0e79b2e`](https://github.com/HsiangNianian/boardcast/commit/0e79b2e50b6afad89e736db20f1c984e0c78ad03))
+  - 回放网页 exports one .html with the player, the meeting data (boards, steps, transcript, summary, page images) and the stroke data of every character written on the boards; it opens offline with no requests, switches boards, replays each from empty with seek, pause and speed, and the transcript follows along
+  - the player is a separate IIFE build (vite.player.config.ts) that reuses InkBoard, ReplayBar and the app stylesheet; it is built before the app and shipped as player/player.js
+  - ELK is left out of the player (1.9 MB to 500 KB): each board's final layout memory is exported and restored before replay, and a small layered stand-in covers the rare case that still needs a fresh flowchart layout
+  - glyph loading reads characters embedded in the page before /hanzi and the CDN
+  - meeting text is escaped so it cannot close the embedded script
+  - 整场会 PDF draws every board (with its page image), then the summary and transcript, on canvases with system fonts and binds them with a small PDF writer (pdf.ts), A4 landscape; pages are images, so the text is not selectable
+  - the desktop save dialog knows .html and .pdf
+  - a two-board test meeting gives a 506 KB replay page and a 244 KB, 3-page PDF
+
+**Full diff:** [v0.14.0...v0.15.0](https://github.com/HsiangNianian/boardcast/compare/v0.14.0...v0.15.0)
+
 ## 0.14.0 - 2026-10-31
 
 ### Features

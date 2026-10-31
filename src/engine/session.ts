@@ -15,8 +15,8 @@ export interface SessionEvents {
   graph?: (g: Graph, why: 'draft' | 'ink') => void
   /** 这句话提到了哪些已有节点，用来做高亮 */
   mention?: (ids: string[]) => void
-  /** 模型的一轮结果，用来显示延迟和调试 */
-  llm?: (r: LlmResult & { ops: Op[]; batch: Utterance[] }) => void
+  /** 模型的一轮结果，用来显示延迟和调试。`queuedMs`: how long each line of the batch waited for the model */
+  llm?: (r: LlmResult & { ops: Op[]; batch: Utterance[]; queuedMs: number[] }) => void
   error?: (e: unknown) => void
 }
 
@@ -30,6 +30,8 @@ export class Session {
   /** 给模型看几句前文 */
   private context: number
   private pending: Utterance[] = []
+  /** When each pending line arrived (performance.now()) */
+  private pendingAt: number[] = []
   private busy = false
 
   constructor(llm: LlmConfig, on: SessionEvents = {}, context = 2) {
@@ -47,6 +49,7 @@ export class Session {
       this.on.graph?.(this.graph, 'draft')
     }
     this.pending.push(u)
+    this.pendingAt.push(performance.now())
     void this.pump()
   }
 
@@ -59,6 +62,8 @@ export class Session {
     if (this.busy || !this.pending.length) return
     this.busy = true
     const batch = this.pending.splice(0)
+    const started = performance.now()
+    const queuedMs = this.pendingAt.splice(0).map((t) => Math.round(started - t))
     const next: Utterance =
       batch.length === 1
         ? batch[0]
@@ -77,7 +82,7 @@ export class Session {
         return n ? [n.id] : []
       })
       if (shown.length) this.on.mention?.(shown)
-      this.on.llm?.({ ...r, ops, batch })
+      this.on.llm?.({ ...r, ops, batch, queuedMs })
     } catch (e) {
       this.on.error?.(e)
     } finally {

@@ -7,7 +7,7 @@ import type { Thumb } from './board/thumb.ts'
 import type { Step } from './engine/steps.ts'
 import type { Voice } from './engine/voices.ts'
 import type { LayoutMemory } from './board/layout.ts'
-import { isDesktop } from './desktop.ts'
+import { type HeardTiming, isDesktop } from './desktop.ts'
 import type { Graph } from './engine/graph.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { type Hit, type Searchable, searchMeeting } from './engine/search.ts'
@@ -26,6 +26,10 @@ export interface MeetingLine extends Utterance {
   manual?: boolean
   /** 这句画在第几张板上（从 0 数） */
   page?: number
+  /** Spoken lines: time spent in the shell (pause, recognition, voiceprint) */
+  heard?: HeardTiming
+  /** Time from reaching the app until the model started on it (it was busy with earlier lines) */
+  queueMs?: number
 }
 
 export interface Meeting {

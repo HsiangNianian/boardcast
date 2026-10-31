@@ -429,6 +429,16 @@ export const zh: Messages = {
     drawing: '画着…',
     lineFellBack: ' · 远程失败，这句用了本地模型',
     noChange: '（没有改动）',
+    timing: (s: { wait?: number; asr?: number; voiceprint?: number; queue?: number; model?: number }) =>
+      [
+        s.wait !== undefined && `停顿 ${s.wait}`,
+        s.asr !== undefined && `识别 ${s.asr}`,
+        s.voiceprint && `声纹 ${s.voiceprint}`,
+        s.queue !== undefined && `排队 ${s.queue}`,
+        s.model !== undefined && `模型 ${s.model}`,
+      ]
+        .filter(Boolean)
+        .join(' · ') + ' ms',
 
     // —— Manual edits, as written into the transcript ——
     undoNote: '撤销了上一步',

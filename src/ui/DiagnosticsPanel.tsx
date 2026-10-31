@@ -9,11 +9,13 @@ import { Close } from './icons.tsx'
 interface Props {
   /** 收音的状态，由 App 给 */
   voice: Record<string, unknown>
+  /** Where the time went in this meeting (numbers only, no content) */
+  timing: unknown
   onClose: () => void
   onSaved: (ok: boolean, text: string) => void
 }
 
-async function collect(voice: Record<string, unknown>): Promise<DiagFile[]> {
+async function collect(voice: Record<string, unknown>, timing: unknown): Promise<DiagFile[]> {
   const shell = isDesktop ? await diagnosticsInfo().catch(() => null) : null
   const status = await llmStatus()?.catch(() => null)
   const info = {
@@ -26,6 +28,7 @@ async function collect(voice: Record<string, unknown>): Promise<DiagFile[]> {
   }
   const files: DiagFile[] = [
     { name: 'info.json', text: scrub(JSON.stringify(info, null, 2)) },
+    { name: 'timing.json', text: JSON.stringify(timing, null, 2) },
     { name: 'errors.txt', text: recentErrors().join('\n') || msg().diagnostics.noErrors },
   ]
   if (shell?.log) files.push({ name: 'llama-server.log', text: cleanLog(shell.log) })
@@ -36,7 +39,7 @@ export default function DiagnosticsPanel(p: Props) {
   const s = useT().diagnostics
   const [files, setFiles] = useState<DiagFile[] | null>(null)
   useEffect(() => {
-    void collect(p.voice).then(setFiles)
+    void collect(p.voice, p.timing).then(setFiles)
     // 打开时收集一次，内容就是看到的这些
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

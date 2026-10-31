@@ -59,6 +59,66 @@ export function makeZip(files: DiagFile[]): Uint8Array {
   return Uint8Array.from([...parts.flat(), ...dir, ...end])
 }
 
+// —— Where the time goes ——
+
+/** One line's stages in ms: pause waited for, recognition, voiceprint, queue for the model, model */
+export interface Stages {
+  wait?: number
+  asr?: number
+  voiceprint?: number
+  queue?: number
+  model?: number
+}
+
+interface TimedLine {
+  ms?: number
+  manual?: boolean
+  queueMs?: number
+  heard?: { waitMs: number; asrMs: number; voiceprintMs: number; soft: boolean }
+}
+
+export function lineTiming(l: TimedLine): Stages {
+  return {
+    wait: l.heard?.waitMs,
+    asr: l.heard?.asrMs,
+    voiceprint: l.heard?.voiceprintMs,
+    queue: l.queueMs,
+    model: l.ms === undefined ? undefined : Math.round(l.ms),
+  }
+}
+
+const pct = (xs: number[], p: number) => {
+  const s = [...xs].sort((a, b) => a - b)
+  return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))]
+}
+
+/**
+ * p50 / p95 / max of each stage over a meeting's lines, plus the end-to-end time from the end of
+ * speech to the board. Only numbers: this goes into the diagnostics zip.
+ */
+export function timingReport(lines: TimedLine[], model?: string) {
+  const done = lines.filter((l) => !l.manual && l.ms !== undefined)
+  const stages = done.map(lineTiming)
+  const stat = (pick: (s: Stages) => number | undefined) => {
+    const xs = stages.map(pick).filter((x): x is number => x !== undefined)
+    return xs.length ? { n: xs.length, p50: pct(xs, 50), p95: pct(xs, 95), max: Math.max(...xs) } : null
+  }
+  const spoken = stages.filter((s) => s.wait !== undefined)
+  return {
+    model,
+    lines: done.length,
+    spoken: spoken.length,
+    softBreaks: done.filter((l) => l.heard?.soft).length,
+    waitMs: stat((s) => s.wait),
+    asrMs: stat((s) => s.asr),
+    voiceprintMs: stat((s) => s.voiceprint),
+    queueMs: stat((s) => s.queue),
+    modelMs: stat((s) => s.model),
+    /** Spoken lines only: end of speech → on the board */
+    totalMs: stat((s) => (s.wait === undefined ? undefined : (s.wait ?? 0) + (s.asr ?? 0) + (s.voiceprint ?? 0) + (s.queue ?? 0) + (s.model ?? 0))),
+  }
+}
+
 // —— 最近的报错 ——
 
 const MAX = 60

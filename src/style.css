@@ -1152,6 +1152,13 @@ label.check input {
   font-style: normal;
   color: var(--warn);
 }
+/* Where this line's time went: pause, recognition, queue, model */
+.line details p.timing {
+  margin: 6px 0 0;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
 .line details pre {
   margin: 6px 0 0;
   padding: 8px 10px;

@@ -85,6 +85,77 @@ fn two_sentences_with_a_pause_come_out_separately() {
 }
 
 #[test]
+fn continuous_talk_is_cut_at_short_breaths() {
+    let Some(dir) = dir() else {
+        eprintln!("跳过：没有设置 BOARDCAST_VOICE_DIR");
+        return;
+    };
+    let wave = Wave::read(&dir.join("zh.wav").to_string_lossy()).expect("读不到 zh.wav");
+    let s = wave.samples();
+    // The same sentence three times with only 0.35 s breaths (shorter than MIN_SILENCE) and a
+    // little room noise, like someone who keeps talking
+    let breath: Vec<f32> = (0..SAMPLE_RATE as usize * 7 / 20)
+        .map(|i| 0.001 * ((i * 7919) % 13) as f32 / 13.0)
+        .collect();
+    let mut audio = vec![];
+    for i in 0..3 {
+        if i > 0 {
+            audio.extend_from_slice(&breath);
+        }
+        audio.extend_from_slice(s);
+    }
+    let mut engine = Engine::load(&dir).expect("模型加载失败");
+    let (_, finals) = run(&mut engine, &audio);
+    let texts: Vec<_> = finals.iter().map(|h| h.text.as_str()).collect();
+    assert!(finals.len() >= 2, "one long sentence: {texts:?}");
+    // The first sentence comes out at the first breath, not after MAX_SPEECH, and in one piece
+    assert!(
+        finals[0].end < 7.0,
+        "first sentence ended at {:.1} s: {texts:?}",
+        finals[0].end
+    );
+    assert!(
+        texts[0].contains("开饭时间") && texts[0].contains('5'),
+        "{texts:?}"
+    );
+    assert!(finals[0].timing.soft, "{texts:?}");
+    // Nothing is said twice or lost at the cut
+    for w in finals.windows(2) {
+        assert!(
+            w[1].start >= w[0].end - 0.01,
+            "{:.2} < {:.2}",
+            w[1].start,
+            w[0].end
+        );
+    }
+    assert!(finals.iter().all(|h| !h.text.is_empty()));
+}
+
+#[test]
+fn soft_break_needs_a_long_sentence_and_a_dip() {
+    let loud = vec![0.1_f32; 200]; // 6.4 s of talking
+    assert_eq!(soft_break(&loud), None);
+    // A short sentence with a dip: not yet
+    let mut short = vec![0.1_f32; 60];
+    short.extend([0.001; SOFT_PAUSE]);
+    assert_eq!(soft_break(&short), None);
+    // Just past SOFT_MAX a gap between words (0.2 s) is not enough, a breath (0.32 s) is
+    let mut just = vec![0.1_f32; 120];
+    just.extend([0.001; 6]);
+    assert_eq!(soft_break(&just), None);
+    just.extend([0.001; SOFT_PAUSE - 6]);
+    assert_eq!(soft_break(&just), Some(SOFT_PAUSE / 2));
+    // Near MAX_SPEECH a short dip is enough
+    let mut late = vec![0.1_f32; 310];
+    late.extend([0.001; SOFT_PAUSE_MIN]);
+    assert_eq!(soft_break(&late), Some(SOFT_PAUSE_MIN / 2));
+    // A dip relative to the speaker's level counts even in a loud room
+    let mut loud_room = vec![0.4_f32; 200];
+    loud_room.extend([0.05; SOFT_PAUSE]);
+    assert!(soft_break(&loud_room).is_some());
+}
+
+#[test]
 fn voiceprints_tell_speakers_apart() {
     let Some(dir) = dir() else {
         eprintln!("跳过：没有设置 BOARDCAST_VOICE_DIR");

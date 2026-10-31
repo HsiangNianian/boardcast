@@ -5,6 +5,7 @@ import { type LayoutMemory, board } from './board/layout.ts'
 import type { Look } from './board/scene.ts'
 import {
   type Heard,
+  type HeardTiming,
   type LlmStatus,
   type VoiceStatus,
   isDesktop,
@@ -49,7 +50,7 @@ import { navTarget, parseNav } from './engine/nav.ts'
 import type { Hit } from './engine/search.ts'
 import { hasSpan, spanAt, toggleSpan } from './engine/spans.ts'
 import DiagnosticsPanel from './ui/DiagnosticsPanel.tsx'
-import { recentErrors } from './engine/diagnostics.ts'
+import { lineTiming, recentErrors, timingReport } from './engine/diagnostics.ts'
 import { type Action, actionFor } from './engine/shortcuts.ts'
 import { currentLang, msg, useT } from './i18n/index.ts'
 import { type SpokenLang, spokenLang } from './engine/lang.ts'
@@ -427,6 +428,7 @@ export default function App() {
                 out[i] = {
                   ...out[i],
                   ms: r.ms,
+                  queueMs: r.queuedMs[left - 1],
                   ops: left === r.batch.length ? formatOps(r.ops) || '-' : '',
                   via: r.via,
                   fellBack: !!r.fellBack,
@@ -654,7 +656,7 @@ export default function App() {
     }
   }, [jumpLine])
 
-  function say(said: Utterance) {
+  function say(said: Utterance, heard?: HeardTiming) {
     // Saying something in a recorded demo makes it your own meeting, saved from now on
     demoMeetingId.current = null
     // 先按术语表纠正（说的和打的都纠）：内部叫法常被听成、打成别的字
@@ -670,7 +672,7 @@ export default function App() {
       else goPage(to)
       return
     }
-    setLines((ls) => [...ls, { ...u, page: pageRef.current }])
+    setLines((ls) => [...ls, { ...u, page: pageRef.current, heard }])
     session.say(u)
   }
 
@@ -700,7 +702,7 @@ export default function App() {
           speakerRef.current = r.name
           setSpeaker(r.name)
         }
-        sayRef.current({ speaker: who, text: h.text })
+        sayRef.current({ speaker: who, text: h.text }, h.timing)
       }),
       on<string>('voice-partial', setPartial),
       on<number>('voice-level', setLevel),
@@ -1854,6 +1856,7 @@ export default function App() {
                     {l.ms !== undefined && useRemote && l.via && ` · ${l.via}`}
                     {l.fellBack && <em>{t.app.lineFellBack}</em>}
                   </summary>
+                  {l.ms !== undefined && (l.heard || l.queueMs) ? <p className="timing">{t.app.timing(lineTiming(l))}</p> : null}
                   {l.ops ? <pre>{l.ops}</pre> : <pre>{t.app.noChange}</pre>}
                 </details>
                 )}
@@ -1997,6 +2000,7 @@ export default function App() {
       {showDiag && (
         <DiagnosticsPanel
           voice={{ listening, device: mic ?? null, choice: micChoice ?? null, source: voiceSource, diarize, error: voiceErr }}
+          timing={timingReport(lines, llm.label)}
           onClose={() => setShowDiag(false)}
           onSaved={(ok, text) => setToast({ ok, text })}
         />

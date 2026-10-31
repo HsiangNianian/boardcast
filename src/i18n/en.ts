@@ -445,6 +445,16 @@ export const en = {
     drawing: 'Drawing…',
     lineFellBack: ' · remote failed, local model drew this one',
     noChange: '(no changes)',
+    timing: (s: { wait?: number; asr?: number; voiceprint?: number; queue?: number; model?: number }) =>
+      [
+        s.wait !== undefined && `pause ${s.wait}`,
+        s.asr !== undefined && `recognition ${s.asr}`,
+        s.voiceprint && `voice ${s.voiceprint}`,
+        s.queue !== undefined && `queue ${s.queue}`,
+        s.model !== undefined && `model ${s.model}`,
+      ]
+        .filter(Boolean)
+        .join(' · ') + ' ms',
 
     // —— Manual edits, as written into the transcript ——
     undoNote: 'Undid the last step',

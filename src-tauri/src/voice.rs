@@ -35,11 +35,27 @@ const WINDOW: usize = 512;
 /// 停顿多久算一句话说完。越短出字越快，但一句话中间换气也可能被切开
 const MIN_SILENCE: f32 = 0.45;
 /// 一句话最长多少秒，超过就强制切开，免得一直说不停时字幕迟迟不定稿
-const MAX_SPEECH: f32 = 12.0;
+const MAX_SPEECH: f32 = 10.0;
+/// Soft sentence break: once a sentence is this long (seconds), a short dip in loudness is enough
+/// to end it. People who talk continuously rarely pause for `MIN_SILENCE`, and waiting for
+/// `MAX_SPEECH` left the board seconds behind.
+const SOFT_MAX: f32 = 4.0;
+/// How many quiet windows (32 ms each) make a dip. Right after `SOFT_MAX` it takes a breath
+/// (about 0.32 s), so the small gaps between words don't cut a clause in half; the longer the
+/// sentence runs, the shorter the dip needed, down to about 0.13 s just before `MAX_SPEECH`.
+const SOFT_PAUSE: usize = 10;
+const SOFT_PAUSE_MIN: usize = 4;
+/// A window is quiet when its loudness is below this share of the sentence's median loudness
+const QUIET_RATIO: f32 = 0.3;
+/// …or below this absolute level (RMS of samples in [-1, 1]), for very quiet rooms
+const QUIET_FLOOR: f32 = 0.003;
 /// 说话过程中多久刷新一次临时字幕
 const PARTIAL_EVERY: Duration = Duration::from_millis(600);
-/// 检测到开口时往前多带一点，免得吃掉第一个字
-const PREROLL: usize = SAMPLE_RATE as usize / 4;
+/// 检测到开口时往前多带一点，免得吃掉第一个字. The VAD only reports speech after
+/// `min_speech_duration` (0.25 s) plus its own delay, and a soft break sends this buffer rather than
+/// the VAD's segment. SenseVoice also reads the first word better with some silence before it
+/// (with 0.25–0.8 s the test clip's 「开饭」 came out as 「开放」), so take a full second.
+const PREROLL: usize = SAMPLE_RATE as usize;
 /// 短于这个长度（样本数）的句子不算声纹：太短的「嗯」「对」声纹不准，前端会归给上一个说话的人
 const MIN_VOICEPRINT: usize = SAMPLE_RATE as usize * 4 / 5;
 
@@ -63,6 +79,48 @@ pub struct Heard {
     /// 这句话的声纹（单位长度）；没有声纹模型或者句子太短时为 None
     #[serde(skip_serializing_if = "Option::is_none")]
     pub voiceprint: Option<Vec<f32>>,
+    /// Where the time went before this sentence reached the app
+    pub timing: Timing,
+}
+
+/// Per-sentence timings, shown in the transcript and exported with diagnostics
+#[derive(Clone, Serialize, Default, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Timing {
+    /// Audio that had to arrive after the sentence ended before it was cut (the pause we waited for)
+    pub wait_ms: u32,
+    /// Recognizing the sentence
+    pub asr_ms: u32,
+    /// Computing its voiceprint
+    pub voiceprint_ms: u32,
+    /// Ended by a short dip in a long sentence, not by a real pause
+    pub soft: bool,
+}
+
+/// Loudness of one window
+fn rms(samples: &[f32]) -> f32 {
+    (samples.iter().map(|x| x * x).sum::<f32>() / samples.len().max(1) as f32).sqrt()
+}
+
+/// Where to softly end a long sentence. `rms` is the loudness of each window of the current
+/// sentence, oldest first. Returns how many windows from the end to cut at (the middle of the
+/// dip that just happened), or None while the sentence is still short or there is no dip.
+pub fn soft_break(rms: &[f32]) -> Option<usize> {
+    let n = rms.len();
+    if n * WINDOW < (SOFT_MAX * SAMPLE_RATE as f32) as usize {
+        return None;
+    }
+    let mut sorted = rms.to_vec();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    let quiet = (sorted[n / 2] * QUIET_RATIO).max(QUIET_FLOOR);
+    let run = rms.iter().rev().take_while(|&&r| r < quiet).count();
+    // One window less per second past SOFT_MAX
+    let over = (n * WINDOW) as f32 / SAMPLE_RATE as f32 - SOFT_MAX;
+    let need = (SOFT_PAUSE as f32 - over)
+        .round()
+        .clamp(SOFT_PAUSE_MIN as f32, SOFT_PAUSE as f32) as usize;
+    // After a cut the caller keeps only the tail, so this doesn't fire again on the same dip
+    (run >= need).then_some(run / 2)
 }
 
 /// 识别核心：喂 16 kHz 的单声道样本，吐出临时结果和定稿
@@ -74,6 +132,10 @@ pub struct Engine {
     pending: Vec<f32>,
     /// 当前这句话（从检测到开口开始，带一点前置）
     speech: Vec<f32>,
+    /// Loudness of each window in `speech`
+    loudness: Vec<f32>,
+    /// Everything before this sample (counted like `fed`) was already sent by a soft break
+    sent_until: usize,
     recent: Vec<f32>,
     in_speech: bool,
     last_partial: Instant,
@@ -103,7 +165,8 @@ impl Engine {
             num_threads: 1,
             ..Default::default()
         };
-        let vad = VoiceActivityDetector::create(&vad_config, 60.0).ok_or("Couldn't load the speech detection model")?;
+        let vad = VoiceActivityDetector::create(&vad_config, 60.0)
+            .ok_or("Couldn't load the speech detection model")?;
 
         let mut asr_config = OfflineRecognizerConfig::default();
         asr_config.model_config.sense_voice = OfflineSenseVoiceModelConfig {
@@ -114,7 +177,8 @@ impl Engine {
         };
         asr_config.model_config.tokens = Some(path(voice_files::TOKENS));
         asr_config.model_config.num_threads = 2;
-        let asr = OfflineRecognizer::create(&asr_config).ok_or("Couldn't load the speech recognition model")?;
+        let asr = OfflineRecognizer::create(&asr_config)
+            .ok_or("Couldn't load the speech recognition model")?;
 
         let speaker_model = models.join(voice_files::SPEAKER);
         let speaker = if speaker_model.exists() {
@@ -137,6 +201,8 @@ impl Engine {
             speaker,
             pending: vec![],
             speech: vec![],
+            loudness: vec![],
+            sent_until: 0,
             recent: vec![],
             in_speech: false,
             last_partial: Instant::now(),
@@ -186,6 +252,10 @@ impl Engine {
 
             if self.in_speech {
                 self.speech.extend_from_slice(&chunk);
+                self.loudness.push(rms(&chunk));
+                if let Some(back) = soft_break(&self.loudness) {
+                    self.soft_cut(back, out);
+                }
             } else {
                 self.recent.extend_from_slice(&chunk);
                 let n = self.recent.len();
@@ -196,6 +266,7 @@ impl Engine {
             if self.vad.detected() && !self.in_speech {
                 self.in_speech = true;
                 self.speech = std::mem::take(&mut self.recent);
+                self.loudness = self.speech.chunks(WINDOW).map(rms).collect();
                 self.last_partial = Instant::now();
             }
             self.drain_segments(out);
@@ -225,33 +296,69 @@ impl Engine {
         self.drain_segments(out);
     }
 
+    /// Recognize one finished sentence starting at sample `start` (counted like `fed`) and send it
+    fn finalize(&self, samples: &[f32], start: usize, soft: bool, out: &mut Vec<Event>) {
+        if samples.len() < WINDOW {
+            return;
+        }
+        let t = Instant::now();
+        let text = self.recognize(samples);
+        let asr_ms = t.elapsed().as_millis() as u32;
+        if text.is_empty() {
+            return;
+        }
+        let t = Instant::now();
+        let voiceprint = self.voiceprint(samples);
+        let voiceprint_ms = t.elapsed().as_millis() as u32;
+        let end = start + samples.len();
+        out.push(Event::Final(Heard {
+            text,
+            start: start as f32 / SAMPLE_RATE as f32,
+            end: end as f32 / SAMPLE_RATE as f32,
+            voiceprint,
+            timing: Timing {
+                wait_ms: (self.fed.saturating_sub(end) * 1000 / SAMPLE_RATE as usize) as u32,
+                asr_ms,
+                voiceprint_ms,
+                soft,
+            },
+        }));
+    }
+
+    /// End the sentence `back` windows before now, in the middle of a short dip, and keep the rest
+    /// as the start of the next one. The VAD still sees one long segment; `sent_until` makes
+    /// `drain_segments` skip the part already sent.
+    fn soft_cut(&mut self, back: usize, out: &mut Vec<Event>) {
+        let keep = (back * WINDOW).min(self.speech.len());
+        let head: Vec<f32> = self.speech.drain(..self.speech.len() - keep).collect();
+        let n = self.loudness.len();
+        self.loudness.drain(..n - back.min(n));
+        let start = self.fed - keep - head.len();
+        self.sent_until = self.fed - keep;
+        self.finalize(&head, start, true, out);
+        self.partial_text.clear();
+        self.last_partial = Instant::now();
+    }
+
     fn drain_segments(&mut self, out: &mut Vec<Event>) {
         while let Some(seg) = self.vad.front() {
-            let text = self.recognize(seg.samples());
-            let voiceprint = if text.is_empty() {
-                None
-            } else {
-                self.voiceprint(seg.samples())
-            };
-            let start = seg.start() as f32 / SAMPLE_RATE as f32;
-            let end = start + seg.n() as f32 / SAMPLE_RATE as f32;
+            let seg_start = seg.start().max(0) as usize;
+            let skip = self
+                .sent_until
+                .saturating_sub(seg_start)
+                .min(seg.samples().len());
+            self.finalize(&seg.samples()[skip..], seg_start + skip, false, out);
             self.vad.pop();
-            if !text.is_empty() {
-                out.push(Event::Final(Heard {
-                    text,
-                    start,
-                    end,
-                    voiceprint,
-                }));
-            }
             self.in_speech = self.vad.detected();
             self.speech.clear();
+            self.loudness.clear();
             self.partial_text.clear();
         }
         if !self.vad.detected() && self.in_speech && self.vad.is_empty() {
             // VAD 已经不认为在说话，但还没给出段落（太短被丢弃了），收尾
             self.in_speech = false;
             self.speech.clear();
+            self.loudness.clear();
             self.partial_text.clear();
         }
     }

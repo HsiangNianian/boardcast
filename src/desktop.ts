@@ -58,6 +58,17 @@ export interface Heard {
   end: number
   /** 这句话的声纹（单位长度）；没有声纹模型或者句子太短时没有 */
   voiceprint?: number[]
+  timing: HeardTiming
+}
+
+/** Where the time went in the shell before a sentence reached the app (see voice.rs `Timing`) */
+export interface HeardTiming {
+  /** Pause waited for after the sentence ended */
+  waitMs: number
+  asrMs: number
+  voiceprintMs: number
+  /** Ended at a short breath in a long sentence rather than a real pause */
+  soft: boolean
 }
 
 export interface Progress {

@@ -2,6 +2,21 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.13.0 - 2026-10-31
+
+### Features
+
+- **import:** Lay out paper PDFs by column, section, figure, table and equation (refs #32) ([`9aa8666`](https://github.com/HsiangNianian/boardcast/commit/9aa8666776d0aad3d63f1fdda93647ceabfae90f))
+  - a page analysis (board/paper.ts) replaces simple line merging for PDFs: rotated text (the arXiv side stamp) and page numbers are dropped, the column gutter is found even when a centered title and author block cross it, and lines never join across columns
+  - paragraphs split on first-line indents, short last lines and section headings (3., 3.1., IV., 一、, Abstract, References); numbered headings must start at the column edge and not read like a sentence, so figure labels like "3x3 conv" and body lines starting with a number are not headings
+  - captions (Figure 3., Fig. 2:, Table 1, 图 4) take the figure or table they belong to, axis labels, legends and table cells included; whether captions sit above or below is voted across the document, so stacked tables are not swapped; a figure number already used is a reference in the text, not another caption
+  - numbered equations merge with their number; regions are named the way people refer to them: §3 Deep Residual Learning, 图 1：…, 表 2：…, 公式 (5)
+  - pages that only hold references get no board; a paper gets a 论文结构 topic on its first board and its title as the meeting name
+  - the "too many items" hint no longer counts regions on an imported page
+  - checked on Deep Residual Learning (two columns, 12 pages) and Attention Is All You Need (one column, 15 pages); unit tests use a synthetic two-column page
+
+**Full diff:** [v0.12.0...v0.13.0](https://github.com/HsiangNianian/boardcast/compare/v0.12.0...v0.13.0)
+
 ## 0.12.0 - 2026-10-31
 
 ### Features

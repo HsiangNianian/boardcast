@@ -6,6 +6,7 @@ import { board } from '../board/layout.ts'
 import { replayTo } from '../engine/steps.ts'
 import InkBoard from '../ink/InkBoard.tsx'
 import ReplayBar, { SPEEDS } from '../ui/ReplayBar.tsx'
+import { useT } from '../i18n/index.ts'
 import type { ReplayData } from './data.ts'
 
 const dateText = (t: number) => {
@@ -108,18 +109,19 @@ export default function Player({ data }: { data: ReplayData }) {
     if (total && at < total) listEnd.current?.scrollIntoView({ block: 'end' })
   }, [at, total])
 
+  const t = useT()
   const many = data.pages.length > 1
   return (
     <div className="player">
       <header className="topbar">
         <b className="player-title">{data.title}</b>
-        <span className="player-meta">{dateText(data.createdAt)} · boardcast 回放</span>
+        <span className="player-meta">{dateText(data.createdAt)} · {t.doc.replay}</span>
         <span className="spacer" />
         {many && (
-          <nav className="player-pages" aria-label="板">
+          <nav className="player-pages" aria-label={t.pages.aria}>
             {data.pages.map((_, i) => (
               <button key={i} type="button" className={i === page ? 'on' : ''} onClick={() => go(i)}>
-                第 {i + 1} 张
+                {t.doc.boardShort(i + 1)}
               </button>
             ))}
           </nav>
@@ -149,19 +151,19 @@ export default function Player({ data }: { data: ReplayData }) {
         {data.summary && (
           <section className="summary">
             <div className="summary-head">
-              <h3>摘要</h3>
+              <h3>{t.doc.summary}</h3>
             </div>
             <Summary text={data.summary} />
           </section>
         )}
         <header>
-          <h2>会议记录</h2>
-          <span className="count">{data.lines.filter((l) => !l.manual).length} 句</span>
+          <h2>{t.doc.transcript}</h2>
+          <span className="count">{t.app.count(data.lines.filter((l) => !l.manual).length)}</span>
         </header>
         <div className="lines">
           {shownLines.map((l, i) => (
             <article key={i} className={`line${l.manual ? ' manual' : ''}${total && at < total && i === shownLines.length - 1 ? ' now' : ''}`}>
-              {l.manual ? <span className="who edit">改</span> : l.speaker ? <span className="who c0">{l.speaker.slice(0, 2)}</span> : <span />}
+              {l.manual ? <span className="who edit">{t.app.editBadge}</span> : l.speaker ? <span className="who c0">{l.speaker.slice(0, 2)}</span> : <span />}
               <div className="body">
                 <p>{l.text}</p>
               </div>

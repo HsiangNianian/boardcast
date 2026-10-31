@@ -6,7 +6,8 @@
 
 import type { Graph } from './graph.ts'
 import type { Term } from './glossary.ts'
-import { type Utterance, grammar, messages } from './prompt.ts'
+import { type Utterance, boardLang, grammar, messages } from './prompt.ts'
+import { msg } from '../i18n/index.ts'
 
 export interface LlmConfig {
   baseUrl: string
@@ -79,7 +80,7 @@ function body(cfg: LlmConfig, g: Graph, recent: Utterance[], next: Utterance, ex
     max_tokens: cfg.maxTokens ?? (cfg.flavor === 'openai' ? 1024 : 160),
   }
   if (cfg.flavor !== 'openai') {
-    b.grammar = grammar(g)
+    b.grammar = grammar(g, 8, boardLang(recent, next))
     b.cache_prompt = true
     if (cfg.noThink) b.chat_template_kwargs = { enable_thinking: false }
   } else if (extras && cfg.noThink !== false && !strictServers.has(cfg.baseUrl)) {
@@ -101,7 +102,7 @@ async function post(cfg: LlmConfig, b: Record<string, unknown>, signal?: AbortSi
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (cfg.apiKey) headers.authorization = `Bearer ${cfg.apiKey}`
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(b), signal })
-  if (!res.ok) throw new Error(`${cfg.label ?? '模型'} ${res.status}: ${await res.text()}`)
+  if (!res.ok) throw new Error(`${cfg.label ?? msg().errors.model} ${res.status}: ${await res.text()}`)
   return (await res.json()) as ChatResponse
 }
 

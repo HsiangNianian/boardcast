@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { type Catalog, type LlmStatus, type ModelInfo, type Progress, models, onProgress } from './desktop.ts'
+import { msg, useT } from './i18n/index.ts'
 
 const gb = (n: number) => `${(n / 1e9).toFixed(1)} GB`
 const mbps = (n: number) => `${(n / 1e6).toFixed(1)} MB/s`
@@ -9,10 +10,11 @@ const mbps = (n: number) => `${(n / 1e6).toFixed(1)} MB/s`
 function eta(p: Progress): string {
   if (!p.speed) return ''
   const s = Math.round((p.total - p.downloaded) / p.speed)
-  return s >= 60 ? `还要约 ${Math.ceil(s / 60)} 分钟` : `还要约 ${s} 秒`
+  return msg().models.eta(s)
 }
 
 export default function ModelPanel({ status, onClose }: { status: LlmStatus | null; onClose: () => void }) {
+  const s = useT().models
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [progress, setProgress] = useState<Record<string, Progress>>({})
   const [error, setError] = useState<string | null>(null)
@@ -51,19 +53,17 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
     catalog?.freeBytes === undefined ? 0 : Math.max(0, m.size - m.partial + 300_000_000 - catalog.freeBytes)
 
   return (
-    <div className="modal" role="dialog" aria-label="本地模型">
+    <div className="modal" role="dialog" aria-label={s.title}>
       <div className="panel">
         <header>
-          <h2>本地模型</h2>
-          <button className="ghost" onClick={onClose} aria-label="关闭">
-            关闭
+          <h2>{s.title}</h2>
+          <button className="ghost" onClick={onClose}>
+            {s.close}
           </button>
         </header>
         <p className="hint">
-          模型在本机运行，不上传任何内容。
-          {gpu
-            ? ` 检测到显卡：${gpu.name}${gpu.totalMib ? `（${(gpu.totalMib / 1024).toFixed(0)} GB）` : ''}。`
-            : ' 没有检测到可用的显卡，会用 CPU 运行。'}
+          {s.hint}
+          {gpu ? s.gpu(gpu.name, gpu.totalMib ? Math.round(gpu.totalMib / 1024) : undefined) : s.noGpu}
         </p>
 
         {catalog?.models.map((m) => {
@@ -74,22 +74,22 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
             <div key={m.id} className={`model ${m.selected ? 'current' : ''}`}>
               <div className="row1">
                 <b>{m.label}</b>
-                {m.recommended && <span className="tag rec">推荐</span>}
-                {m.selected && status?.state === 'ready' && <span className="tag on">正在使用</span>}
-                {(m.kind === 'voice' || m.kind === 'vision') && m.installed && <span className="tag on">已就绪</span>}
+                {m.recommended && <span className="tag rec">{s.recommended}</span>}
+                {m.selected && status?.state === 'ready' && <span className="tag on">{s.inUse}</span>}
+                {(m.kind === 'voice' || m.kind === 'vision') && m.installed && <span className="tag on">{s.ready}</span>}
                 <span className="size">{gb(m.size)}</span>
               </div>
               <div className="note">{m.note}</div>
 
               {(active || (m.partial > 0 && !m.installed)) && (
-                <div className="bar" aria-label="下载进度">
+                <div className="bar" aria-label={s.progressAria}>
                   <i style={{ width: `${(pct * 100).toFixed(1)}%` }} />
                 </div>
               )}
               {active && p && (
                 <div className="meta">
                   {p.state === 'verifying'
-                    ? (p.message ?? '校验中…')
+                    ? (p.message ?? s.verifying)
                     : `${(pct * 100).toFixed(1)}% · ${mbps(p.speed)} · ${p.source ?? ''} · ${eta(p)}`}
                 </div>
               )}
@@ -100,22 +100,22 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
                   <>
                     {m.kind === 'llm' && !m.selected && (
                       <button onClick={() => act(() => models.select(m.id))} disabled={!!busy}>
-                        使用这个
+                        {s.use}
                       </button>
                     )}
                     <button className="ghost" onClick={() => act(() => models.remove(m.id))} disabled={active}>
-                      删除
+                      {s.delete}
                     </button>
                   </>
                 ) : active ? (
                   <button className="ghost" onClick={() => act(() => models.cancel())}>
-                    暂停
+                    {s.pause}
                   </button>
                 ) : (
                   <>
-                    {lacking(m) > 0 && <span className="meta err">磁盘还差 {gb(lacking(m))}</span>}
+                    {lacking(m) > 0 && <span className="meta err">{s.lacking(gb(lacking(m)))}</span>}
                     <button onClick={() => act(() => models.download(m.id))} disabled={!!busy || lacking(m) > 0}>
-                      {m.partial > 0 ? `继续下载（已下 ${gb(m.partial)}）` : '下载'}
+                      {m.partial > 0 ? s.resume(gb(m.partial)) : s.download}
                     </button>
                   </>
                 )}
@@ -126,8 +126,9 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
 
         {error && <p className="meta err">{error}</p>}
         <p className="fine">
-          下载源依次是 ModelScope、hf-mirror、Hugging Face，断点续传，下完用官方登记的 sha256 校验。
-          {catalog?.freeBytes !== undefined && `模型目录所在的盘还剩 ${gb(catalog.freeBytes)}。`}模型目录：
+          {s.sources}
+          {catalog?.freeBytes !== undefined && s.free(gb(catalog.freeBytes))}
+          {s.dir}
           <code>{catalog?.dir}</code>
         </p>
       </div>

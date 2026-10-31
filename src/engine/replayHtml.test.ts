@@ -4,6 +4,10 @@ import { type ReplayData, replayHtml, usedHan } from '../player/data.ts'
 import { emptyGraph } from './graph.ts'
 import { applyOps, parseOps } from './ops.ts'
 import { diffGraph } from './steps.ts'
+import { setLangChoice } from '../i18n/index.ts'
+
+// These tests check the Chinese wording
+setLangChoice('zh')
 
 const g = applyOps(emptyGraph(), parseOps('E 「用户」 -> 「网关」 : 「请求」\nT 「待办」'))
 const data: ReplayData = {

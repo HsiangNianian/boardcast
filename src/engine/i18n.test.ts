@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { en } from '../i18n/en.ts'
-import { systemLang } from '../i18n/index.ts'
+import { toMarkdown } from '../board/markdown.ts'
+import { emptyGraph } from './graph.ts'
+import { setLangChoice, systemLang } from '../i18n/index.ts'
 import { zh } from '../i18n/zh.ts'
 
 test('system language picks the first one we have, English otherwise', () => {
@@ -27,4 +29,14 @@ test('English plurals', () => {
   assert.equal(en.app.count(1), '1 line')
   assert.equal(en.app.count(3), '3 lines')
   assert.equal(en.app.excalidrawNote('a.excalidraw', { nodes: 1, edges: 2, groups: 0, notes: 0 }), 'Imported a.excalidraw (1 box, 2 lines)')
+})
+
+test('exports follow the interface language', () => {
+  setLangChoice('en')
+  const md = toMarkdown(emptyGraph(), [{ speaker: 'A', text: 'hello', page: 0 }], undefined, new Date(2026, 9, 31, 9, 0), 'done', [emptyGraph(), emptyGraph()])
+  assert.match(md, /^# Meeting board\n/)
+  assert.match(md, /## Summary\n\ndone/)
+  assert.match(md, /## Transcript\n\n### Board 1\n\n- \*\*A\*\*: hello/)
+  setLangChoice('zh')
+  assert.match(toMarkdown(emptyGraph(), [{ text: 'x' }]), /^# 会议板书\n[\s\S]*## 会议记录/)
 })

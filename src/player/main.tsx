@@ -6,6 +6,7 @@ import appCss from '../style.css?inline'
 import playerCss from './player.css?inline'
 import Player from './Player.tsx'
 import type { ReplayData } from './data.ts'
+import { msg } from '../i18n/index.ts'
 
 const style = document.createElement('style')
 style.textContent = appCss + playerCss
@@ -14,4 +15,4 @@ document.head.append(style)
 const data = (window as { __boardcastData?: ReplayData }).__boardcastData
 const root = document.getElementById('root')!
 if (data) createRoot(root).render(<Player data={data} />)
-else root.textContent = '这个文件里没有会议数据'
+else root.textContent = msg().doc.noData

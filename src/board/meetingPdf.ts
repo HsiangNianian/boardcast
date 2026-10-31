@@ -2,6 +2,7 @@
 // 都画在画布上（中文用系统字体，不用往 PDF 里塞字体），转成 JPEG，交给 pdf.ts 装订。
 // 代价：PDF 里的字不能选中复制；要可复制的文字，用 Markdown 导出。
 
+import { msg } from '../i18n/index.ts'
 import { compose } from '../ink/compose.ts'
 import { WHITEBOARD } from '../ink/InkBoard.tsx'
 import type { ReplayData, ReplayPage } from '../player/data.ts'
@@ -91,12 +92,13 @@ interface TextLine {
 
 /** 摘要和会议记录排成一行行：Markdown 只认小节标题和条目 */
 function textLines(data: ReplayData): TextLine[] {
+  const t = msg().doc
   const out: TextLine[] = [{ text: data.title, size: 52, bold: true }]
   const d = new Date(data.createdAt)
   const p2 = (n: number) => String(n).padStart(2, '0')
   out.push({ text: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())} · boardcast`, size: 26, color: MUTED, gap: 8 })
   if (data.summary?.trim()) {
-    out.push({ text: '摘要', size: 38, bold: true, gap: 50 })
+    out.push({ text: t.summary, size: 38, bold: true, gap: 50 })
     for (const raw of data.summary.split('\n')) {
       const l = raw.trimEnd()
       if (!l.trim()) continue
@@ -109,16 +111,16 @@ function textLines(data: ReplayData): TextLine[] {
     }
   }
   if (data.lines.length) {
-    out.push({ text: '会议记录', size: 38, bold: true, gap: 50 })
+    out.push({ text: t.transcript, size: 38, bold: true, gap: 50 })
     const many = data.pages.length > 1
     let page: number | undefined
     for (const l of data.lines) {
       if (many && (l.page ?? 0) !== page) {
         page = l.page ?? 0
-        out.push({ text: `第 ${page + 1} 张板`, size: 26, color: MUTED, gap: 18 })
+        out.push({ text: t.board(page + 1), size: 26, color: MUTED, gap: 18 })
       }
-      if (l.manual) out.push({ text: `（改）${l.text}`, size: 26, color: MUTED, indent: 20 })
-      else out.push({ text: l.speaker ? `${l.speaker}：${l.text}` : l.text, size: 28, indent: 20 })
+      if (l.manual) out.push({ text: `${t.edited}${l.text}`, size: 26, color: MUTED, indent: 20 })
+      else out.push({ text: l.speaker ? `${l.speaker}${t.colon}${l.text}` : l.text, size: 28, indent: 20 })
     }
   }
   return out
@@ -145,7 +147,7 @@ async function textPages(data: ReplayData): Promise<PdfPage[]> {
   let n = 1
   const start = () => {
     ;[c, x] = canvas()
-    header(x, data.title, `会议记录 ${++n}`)
+    header(x, data.title, msg().doc.transcriptN(++n))
     y = 130
   }
   for (const t of textLines(data)) {
@@ -175,7 +177,7 @@ export async function meetingPdf(data: ReplayData, onPage?: (done: number, total
   const boards = data.pages.filter((p) => p.graph.nodes.length || p.underlay)
   for (const [i, p] of boards.entries()) {
     onPage?.(i, boards.length)
-    pages.push(await boardPage(p, data.title, boards.length > 1 ? `第 ${i + 1} 张板` : '板书'))
+    pages.push(await boardPage(p, data.title, boards.length > 1 ? msg().doc.board(i + 1) : msg().doc.boardSingle))
   }
   if (data.summary?.trim() || data.lines.length) pages.push(...(await textPages(data)))
   return makePdf(pages, A4_LANDSCAPE, data.title)

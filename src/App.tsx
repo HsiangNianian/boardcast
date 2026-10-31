@@ -50,8 +50,9 @@ import type { Hit } from './engine/search.ts'
 import { hasSpan, spanAt, toggleSpan } from './engine/spans.ts'
 import DiagnosticsPanel from './ui/DiagnosticsPanel.tsx'
 import { recentErrors } from './engine/diagnostics.ts'
-import { type Action, SHORTCUTS, actionFor } from './engine/shortcuts.ts'
-import { msg, useT } from './i18n/index.ts'
+import { type Action, actionFor } from './engine/shortcuts.ts'
+import { currentLang, msg, useT } from './i18n/index.ts'
+import { spokenLang } from './engine/lang.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -299,7 +300,14 @@ export default function App() {
     ro.observe(board)
     return () => ro.disconnect()
   }, [])
-  const [demo, setDemo] = useState(cases[0].id)
+  // Sample meetings in the interface language; all of them if there are none in it
+  const lang = currentLang()
+  const demos = useMemo(() => {
+    const mine = cases.filter((c) => spokenLang(c.turns.map((u) => u.text)) === lang)
+    return mine.length ? mine : cases
+  }, [lang])
+  const [demoPick, setDemo] = useState(demos[0].id)
+  const demo = demos.some((c) => c.id === demoPick) ? demoPick : demos[0].id
   const [playing, setPlaying] = useState(false)
   // 用 state 而不是 ref：切回铅笔模式时 Excalidraw 重新挂载，要让重画的 effect 再跑一次
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
@@ -841,12 +849,12 @@ export default function App() {
     editHistory.current.record(before)
     setUndoTick((t) => t + 1)
     setLayoutRev((n) => n + 1)
-    setLines((ls) => [...ls, { text: t.app.movedNote(describe(session.graph, sel)), manual: true, ms: 0, page: pageRef.current }])
+    setLines((ls) => [...ls, { text: t.app.movedNote(describe(session.graph, sel, t.doc)), manual: true, ms: 0, page: pageRef.current }])
   }
 
   function deleteSelection() {
     if (!selection) return
-    applyEdit(removeSel(session.graph, selection), t.app.deletedNote(describe(session.graph, selection)))
+    applyEdit(removeSel(session.graph, selection), t.app.deletedNote(describe(session.graph, selection, t.doc)))
     setSelection(null)
   }
 
@@ -868,7 +876,7 @@ export default function App() {
       return
     }
     const on = n?.marks.includes(mark)
-    applyEdit(toggleMark(session.graph, selection.id, mark), t.app.markNote(!!on, describe(session.graph, selection), t.app.marks[mark]))
+    applyEdit(toggleMark(session.graph, selection.id, mark), t.app.markNote(!!on, describe(session.graph, selection, t.doc), t.app.marks[mark]))
   }
 
   /** 说话人改名：会议记录、模型看的前文、声纹表一起改；改成已有的名字就是把两个人合成一个 */
@@ -885,7 +893,7 @@ export default function App() {
 
   function commitRename() {
     if (!selection || renaming === null) return
-    const before = describe(session.graph, selection)
+    const before = describe(session.graph, selection, t.doc)
     const next = renameSel(session.graph, selection, renaming)
     setRenaming(null)
     if (next !== session.graph) applyEdit(next, t.app.renamedNote(before, renaming.trim()))
@@ -1260,7 +1268,7 @@ export default function App() {
   }
 
   async function play() {
-    const c = cases.find((x) => x.id === demo)
+    const c = demos.find((x) => x.id === demo)
     if (!c) return
     reset()
     setPlaying(true)
@@ -1646,7 +1654,7 @@ export default function App() {
             <label className="demo-pick">
               <span>{t.app.demo}</span>
               <select value={demo} onChange={(e) => setDemo(e.target.value)} aria-label={t.app.demoAria}>
-                {cases.map((c) => (
+                {demos.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
@@ -1913,7 +1921,7 @@ export default function App() {
             </header>
             <table>
               <tbody>
-                {SHORTCUTS.map(([k, what]) => (
+                {t.shortcuts.map(([k, what]) => (
                   <tr key={k}>
                     <td>
                       <kbd>{k}</kbd>

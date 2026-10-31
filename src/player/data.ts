@@ -4,6 +4,7 @@ import type { LayoutMemory } from '../board/layout.ts'
 import type { Graph } from '../engine/graph.ts'
 import type { Step } from '../engine/steps.ts'
 import type { MeetingLine } from '../meetings.ts'
+import { msg } from '../i18n/index.ts'
 
 export interface ReplayPage {
   graph: Graph
@@ -56,7 +57,7 @@ export function replayHtml(data: ReplayData, player: string, hanzi: Record<strin
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="boardcast">
-<title>${escapeHtml(data.title)} · boardcast 回放</title>
+<title>${escapeHtml(data.title)} · ${escapeHtml(msg().doc.replay)}</title>
 </head>
 <body>
 <div id="root"></div>

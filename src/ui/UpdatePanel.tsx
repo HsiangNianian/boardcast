@@ -5,11 +5,13 @@ import { useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { type UpdateInfo, llmEnsure, updates } from '../desktop.ts'
+import { useT } from '../i18n/index.ts'
 
 const RELEASES = 'https://github.com/HsiangNianian/boardcast/releases'
 const mb = (n: number) => `${(n / 1048576).toFixed(1)} MB`
 
 export default function UpdatePanel({ info, onClose }: { info: UpdateInfo; onClose: () => void }) {
+  const s = useT().update
   const [busy, setBusy] = useState(false)
   const [got, setGot] = useState<{ done: number; total?: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -35,18 +37,15 @@ export default function UpdatePanel({ info, onClose }: { info: UpdateInfo; onClo
 
   const pct = got?.total ? Math.min(100, Math.round((100 * got.done) / got.total)) : null
   return (
-    <div className="modal" role="dialog" aria-label="有新版本" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
+    <div className="modal" role="dialog" aria-label={s.aria} onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="panel update">
         <header>
           <h2>
-            新版本 {info.version}
-            <small>
-              现在是 {info.current}
-              {info.date ? ` · ${info.date} 发布` : ''}
-            </small>
+            {s.title(info.version)}
+            <small>{s.current(info.current, info.date)}</small>
           </h2>
           <button className="ghost" onClick={onClose} disabled={busy}>
-            以后再说
+            {s.later}
           </button>
         </header>
         <div className="notes md">
@@ -56,11 +55,11 @@ export default function UpdatePanel({ info, onClose }: { info: UpdateInfo; onClo
             </Markdown>
           ) : (
             <p>
-              这一版的说明见{' '}
+              {s.notesBefore}{' '}
               <a href={`${RELEASES}/tag/v${info.version}`} target="_blank" rel="noreferrer">
                 GitHub Release
               </a>
-              。
+              {s.notesAfter}
             </p>
           )}
         </div>
@@ -69,16 +68,16 @@ export default function UpdatePanel({ info, onClose }: { info: UpdateInfo; onClo
             <i style={{ width: `${pct ?? 0}%` }} />
             <span>
               {got
-                ? `${pct !== null ? `${pct}% · ` : ''}${mb(got.done)}${got.total ? ` / ${mb(got.total)}` : ''}${pct === 100 ? ' · 正在安装，装完会自动重启' : ''}`
-                : '开始下载…'}
+                ? `${pct !== null ? `${pct}% · ` : ''}${mb(got.done)}${got.total ? ` / ${mb(got.total)}` : ''}${pct === 100 ? s.installing : ''}`
+                : s.starting}
             </span>
           </div>
         )}
         {err && <p className="meta err">{err}</p>}
         <div className="actions">
-          <p className="hint">会议都已经自动保存，重启后接着上次那场。</p>
+          <p className="hint">{s.saved}</p>
           <button onClick={() => void install()} disabled={busy}>
-            {busy ? '更新中…' : '下载并重启'}
+            {busy ? s.updating : s.install}
           </button>
         </div>
       </div>

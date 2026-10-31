@@ -4,6 +4,10 @@ import { StableLayout } from '../board/layout.ts'
 import { autoTitle, newMeetingId, normalize, type Meeting } from '../meetings.ts'
 import { emptyGraph } from './graph.ts'
 import { applyOps, parseOps } from './ops.ts'
+import { setLangChoice } from '../i18n/index.ts'
+
+// These tests check the Chinese wording
+setLangChoice('zh')
 
 test('a restored layout puts everything back where it was', async () => {
   const a = new StableLayout()

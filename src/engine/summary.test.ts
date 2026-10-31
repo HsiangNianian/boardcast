@@ -6,6 +6,10 @@ import type { ChatResponse, LlmConfig } from './llm.ts'
 import { applyOps, parseOps } from './ops.ts'
 import { pageGraph } from './regions.ts'
 import { boardsText, chunks, plainText, summarize, summaryMessages, tidySummary, transcript } from './summary.ts'
+import { setLangChoice } from '../i18n/index.ts'
+
+// These tests check the Chinese wording
+setLangChoice('zh')
 
 test('long transcripts are cut between sentences', () => {
   const lines = Array.from({ length: 10 }, (_, i) => ({ text: `${i}`.repeat(40) }))

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { type LlmStatus, type UpdateInfo, type VoiceSource, isDesktop, shell, updates, voice } from './desktop.ts'
 import { accelFrom } from './engine/shortcuts.ts'
 import { LANGS, LANG_NAMES, setLangChoice, useLangChoice, useT } from './i18n/index.ts'
-import { KEPT, SENT, hostOf, needsConsent, rememberConsent } from './privacy.ts'
+import { hostOf, needsConsent, rememberConsent } from './privacy.ts'
 import { type RemoteTest, type RemoteView, remote } from './remote.ts'
 
 export type RemoteState = { state: 'off' | 'checking' | 'ok' | 'fail'; ms?: number; message?: string }
@@ -61,11 +61,9 @@ export function errText(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-function messyName(n: number) {
-  return n < 25 ? '工整' : n < 45 ? '随手' : n < 70 ? '连写' : '龙飞凤舞'
-}
-
 export default function SettingsPanel(p: Props) {
+  const t = useT()
+  const s = t.settings
   const [wayland, setWayland] = useState(false)
   useEffect(() => {
     if (isDesktop) void shell.wayland().then(setWayland)
@@ -88,9 +86,9 @@ export default function SettingsPanel(p: Props) {
     setResult(null)
     setBusy('test')
     try {
-      const t = await remote.test(draft())
-      setResult({ ok: true, text: `连上了：${t.ms} ms，回复「${t.reply}」` })
-      return t
+      const r = await remote.test(draft())
+      setResult({ ok: true, text: s.connected(r.ms, r.reply) })
+      return r
     } catch (e) {
       setResult({ ok: false, text: errText(e) })
       return null
@@ -112,12 +110,12 @@ export default function SettingsPanel(p: Props) {
     setBusy('save')
     setResult(null)
     try {
-      const t = await remote.test(draft()).catch((e) => {
-        throw new Error(`没启用：${errText(e)}`)
+      const r = await remote.test(draft()).catch((e) => {
+        throw new Error(s.notEnabled(errText(e)))
       })
       await remote.save({ ...draft(), enabled: true })
       setApiKey('')
-      setResult({ ok: true, text: `已启用：${t.ms} ms，之后优先用这个模型出板书，出错时这一句改用本地模型` })
+      setResult({ ok: true, text: s.enabled(r.ms) })
     } catch (e) {
       await remote.save({ ...draft(), enabled: false }).catch(() => undefined)
       setApiKey('')
@@ -153,7 +151,7 @@ export default function SettingsPanel(p: Props) {
     try {
       const u = await updates.check()
       if (u) p.onUpdate(u)
-      else setChecked({ ok: true, text: '已经是最新版' })
+      else setChecked({ ok: true, text: s.upToDate })
     } catch (e) {
       setChecked({ ok: false, text: errText(e) })
     } finally {
@@ -166,37 +164,37 @@ export default function SettingsPanel(p: Props) {
   const enabled = p.remoteView?.enabled
 
   return (
-    <div className="modal" role="dialog" aria-label="设置" onClick={(e) => e.target === e.currentTarget && p.onClose()}>
+    <div className="modal" role="dialog" aria-label={s.title} onClick={(e) => e.target === e.currentTarget && p.onClose()}>
       <div className="panel settings">
         <header>
-          <h2>设置</h2>
+          <h2>{s.title}</h2>
           <button className="ghost" onClick={p.onClose}>
-            关闭
+            {s.close}
           </button>
         </header>
 
         <LanguagePicker />
 
         <section>
-          <h3>本地模型</h3>
+          <h3>{s.local}</h3>
           {isDesktop ? (
             <>
               <p className="hint">
-                {b?.state === 'ready' && `内置：${b.model} · ${b.device}${p.warming ? ' · 预热中…' : ''}`}
-                {b?.state === 'idle' && `内置：${b.model} · 待命（正在用远程模型，远程出错时自动启动兜底）`}
-                {b?.state === 'starting' && `正在启动 ${b.model ?? ''}（${b.device ?? ''}）…`}
+                {b?.state === 'ready' && s.builtinReady(b.model ?? '', b.device ?? '', p.warming)}
+                {b?.state === 'idle' && s.builtinIdle(b.model ?? '')}
+                {b?.state === 'starting' && s.builtinStarting(b.model ?? '', b.device ?? '')}
                 {(b?.state === 'no-model' || b?.state === 'error') && b.message}
-                {!b && '读取中…'}
+                {!b && s.loading}
               </p>
               {p.localUrl && <code className="addr">{p.localUrl}</code>}
               <div className="actions">
-                <button onClick={p.onManageModels}>管理模型</button>
+                <button onClick={p.onManageModels}>{s.manageModels}</button>
               </div>
             </>
           ) : (
             <label className="field">
               <span>
-                llama.cpp 服务地址 <i className={`dot ${p.localOnline === null ? '' : p.localOnline ? 'ok' : 'bad'}`} />
+                {s.llamaUrl} <i className={`dot ${p.localOnline === null ? '' : p.localOnline ? 'ok' : 'bad'}`} />
               </span>
               <input
                 value={p.localUrl}
@@ -210,14 +208,14 @@ export default function SettingsPanel(p: Props) {
 
         <section>
           <h3>
-            远程模型（OpenAI 兼容）
-            {enabled && rs.state === 'ok' && <span className="tag on">正在使用</span>}
-            {enabled && rs.state === 'fail' && <span className="tag err">连不上，暂时用本地</span>}
-            {enabled && rs.state === 'checking' && <span className="tag">检查中…</span>}
+            {s.remote}
+            {enabled && rs.state === 'ok' && <span className="tag on">{s.inUse}</span>}
+            {enabled && rs.state === 'fail' && <span className="tag err">{s.remoteDown}</span>}
+            {enabled && rs.state === 'checking' && <span className="tag">{s.checking}</span>}
           </h3>
           <p className="hint">
-            填了并确认能连上以后，优先用它出板书；某一句请求失败时，这一句改用本地模型。远程接口没有本地那样的输出语法约束，效果取决于模型本身。
-            {!isDesktop && ' 网页版的 key 存在这台电脑的浏览器里，而且很多服务商不允许浏览器直接调用，建议用桌面版。'}
+            {s.remoteHint}
+            {!isDesktop && s.remoteWebHint}
           </p>
           <label className="field">
             <span>Base URL</span>
@@ -235,41 +233,42 @@ export default function SettingsPanel(p: Props) {
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={p.remoteView?.keyHint ? `已保存 ${p.remoteView.keyHint}，不改就留空` : 'sk-…（本地服务不需要可以不填）'}
+              placeholder={p.remoteView?.keyHint ? s.keySaved(p.remoteView.keyHint) : s.keyPlaceholder}
               spellCheck={false}
               autoComplete="off"
             />
           </label>
           <label className="field">
-            <span>模型名</span>
+            <span>{s.modelName}</span>
             <input
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="比如 gpt-4o-mini、deepseek-chat、qwen-plus"
+              placeholder={s.modelPlaceholder}
               spellCheck={false}
               autoComplete="off"
             />
           </label>
           {consent && (
-            <div className="consent" role="alertdialog" aria-label="启用远程模型前确认">
+            <div className="consent" role="alertdialog" aria-label={s.consentAria}>
               <p>
-                启用以后，开会时这些内容会发到 <b>{hostOf(baseUrl)}</b>：
+                {s.consentSent} <b>{hostOf(baseUrl)}</b>
+                {s.consentSentEnd}
               </p>
               <ul>
-                {SENT.map((s) => (
-                  <li key={s}>{s}</li>
+                {s.sent.map((x) => (
+                  <li key={x}>{x}</li>
                 ))}
               </ul>
-              <p>不会发出去的：</p>
+              <p>{s.consentKeptTitle}</p>
               <ul>
-                {KEPT.map((s) => (
-                  <li key={s}>{s}</li>
+                {s.kept.map((x) => (
+                  <li key={x}>{x}</li>
                 ))}
               </ul>
-              <p className="hint">涉及敏感内容的会，可以在下面勾「这场会只用本地模型」。</p>
+              <p className="hint">{s.consentHint}</p>
               <div className="actions">
                 <button className="ghost" onClick={() => setConsent(false)}>
-                  先不用
+                  {s.notNow}
                 </button>
                 <button
                   onClick={() => {
@@ -277,7 +276,7 @@ export default function SettingsPanel(p: Props) {
                     void saveAndEnable()
                   }}
                 >
-                  知道了，启用
+                  {s.consentOk}
                 </button>
               </div>
             </div>
@@ -286,44 +285,44 @@ export default function SettingsPanel(p: Props) {
           {!result && enabled && rs.state === 'fail' && <p className="meta err">{rs.message}</p>}
           <div className="actions">
             <button className="ghost" onClick={() => void test()} disabled={!!busy || !baseUrl.trim() || !model.trim()}>
-              {busy === 'test' ? '测试中…' : '测试连接'}
+              {busy === 'test' ? s.testing : s.test}
             </button>
             {enabled && (
               <button className="ghost" onClick={() => void disable()} disabled={!!busy}>
-                停用
+                {s.disable}
               </button>
             )}
             <button onClick={requestEnable} disabled={!!busy || consent || !baseUrl.trim() || !model.trim()}>
-              {busy === 'save' ? '确认中…' : enabled ? '保存' : '保存并启用'}
+              {busy === 'save' ? s.confirming : enabled ? s.save : s.saveEnable}
             </button>
           </div>
           {enabled && (
             <>
               <label className="check">
                 <input type="checkbox" checked={p.localOnly} onChange={(e) => p.setLocalOnly(e.target.checked)} />
-                <span>这场会只用本地模型</span>
+                <span>{s.localOnly}</span>
               </label>
-              <p className="hint">按会议记住：勾上以后这场会的板书和摘要都不会发到远程接口，别的会照常用远程。</p>
+              <p className="hint">{s.localOnlyHint}</p>
             </>
           )}
         </section>
 
         <section>
-          <h3>快捷键</h3>
+          <h3>{s.keys}</h3>
           <div className="actions">
             <button type="button" className="ghost" onClick={p.onKeys}>
-              查看所有快捷键
+              {s.allKeys}
             </button>
           </div>
           {isDesktop && (
             <>
               <label className="field">
-                <span>全局开关收音（应用不在前台也能用）</span>
+                <span>{s.hotkey}</span>
                 <input
                   value={p.hotkey}
                   readOnly
-                  placeholder="已关闭"
-                  aria-label="全局快捷键"
+                  placeholder={s.hotkeyOff}
+                  aria-label={s.hotkeyAria}
                   onKeyDown={(e) => {
                     if (e.key === 'Tab') return
                     e.preventDefault()
@@ -333,11 +332,11 @@ export default function SettingsPanel(p: Props) {
                   }}
                 />
               </label>
-              <p className="hint">点一下输入框，按想要的组合键；按退格键关闭。</p>
+              <p className="hint">{s.hotkeyHint}</p>
               {p.hotkeyErr && <p className="meta err">{p.hotkeyErr}</p>}
               {wayland && (
                 <p className="hint">
-                  Wayland 下应用收不到全局按键：请在系统设置里加一个快捷键，命令填 <code>boardcast --toggle-mic</code>。
+                  {s.wayland1} <code>boardcast --toggle-mic</code>{s.wayland2}
                 </p>
               )}
             </>
@@ -345,34 +344,32 @@ export default function SettingsPanel(p: Props) {
         </section>
 
         <section>
-          <h3>反馈问题</h3>
-          <p className="hint">把版本、模型状态、日志和最近的报错打成一个 zip，不带会议内容。</p>
+          <h3>{s.feedback}</h3>
+          <p className="hint">{s.feedbackHint}</p>
           <button type="button" onClick={p.onDiagnostics}>
-            导出诊断信息
+            {s.diagnostics}
           </button>
         </section>
         <section>
-          <h3>术语表</h3>
-          <p className="hint">
-            公司内部的叫法（项目代号、服务名、英文缩写）。一行一条，写成「正确写法 = 常听错的写法, 另一种错写」，只写正确写法也行。说的和打的话都会先按它纠正（英文不分大小写、空格可有可无），模型起名也照这个写法。
-          </p>
+          <h3>{s.glossary}</h3>
+          <p className="hint">{s.glossaryHint}</p>
           <label className="field">
-            <span>所有会议</span>
+            <span>{s.allMeetings}</span>
             <textarea
               rows={4}
               value={p.glossary}
               onChange={(e) => p.setGlossary(e.target.value)}
-              placeholder={'MediaCrawler = 媒体爬虫, 美的爬虫\ngraphRAG\nClickHouse = 克里克豪斯'}
+              placeholder={s.glossaryPlaceholder}
               spellCheck={false}
             />
           </label>
           <label className="field">
-            <span>只用于这场会</span>
+            <span>{s.thisMeeting}</span>
             <textarea
               rows={3}
               value={p.meetingGlossary}
               onChange={(e) => p.setMeetingGlossary(e.target.value)}
-              placeholder="在白板上选中一个名字，点「加进术语」也会加到这里"
+              placeholder={s.thisMeetingPlaceholder}
               spellCheck={false}
             />
           </label>
@@ -380,55 +377,45 @@ export default function SettingsPanel(p: Props) {
 
         {isDesktop && (
           <section>
-            <h3>收音</h3>
-            <div className="seg sources" role="radiogroup" aria-label="收哪些声音">
-              {(
-                [
-                  ['mic', '麦克风'],
-                  ['both', '麦克风 + 系统声音'],
-                  ['system', '只收系统声音'],
-                ] as const
-              ).map(([v, label]) => (
+            <h3>{s.audio}</h3>
+            <div className="seg sources" role="radiogroup" aria-label={s.sourceAria}>
+              {(['mic', 'both', 'system'] as const).map((v) => (
                 <button key={v} type="button" role="radio" aria-checked={p.source === v} className={p.source === v ? 'on' : ''} onClick={() => p.setSource(v)}>
-                  {label}
+                  {s.sources[v]}
                 </button>
               ))}
             </div>
-            <p className="hint">
-              线上会议选「麦克风 + 系统声音」：自己说的从麦克风收，别人说的从扬声器里收（Linux 收默认输出设备，Windows 收默认扬声器；macOS 暂时不支持）。外放时麦克风会把别人的声音再收一遍，戴耳机效果最好。
-            </p>
-            <select value={p.mic} onChange={(e) => p.setMic(e.target.value)} aria-label="麦克风">
-              <option value="">系统默认</option>
+            <p className="hint">{s.sourceHint}</p>
+            <select value={p.mic} onChange={(e) => p.setMic(e.target.value)} aria-label={s.micAria}>
+              <option value="">{s.systemDefault}</option>
               {devices.map((d) => (
                 <option key={d} value={d}>
                   {d}
                 </option>
               ))}
-              {p.mic && !devices.includes(p.mic) && <option value={p.mic}>{p.mic}（没找到，会改用系统默认）</option>}
+              {p.mic && !devices.includes(p.mic) && <option value={p.mic}>{s.micMissing(p.mic)}</option>}
             </select>
-            <p className="hint">换了麦克风或者收音来源，下次点「开始收音」生效。</p>
+            <p className="hint">{s.micHint}</p>
             <label className="check">
               <input type="checkbox" checked={p.diarize} onChange={(e) => p.setDiarize(e.target.checked)} />
-              <span>按声音自动区分说话人</span>
+              <span>{s.diarize}</span>
             </label>
-            <p className="hint">新出现的声音依次记成 A、B、C；在会议记录里点头像可以改成真名，同一个声音以后都用这个名字。很短的句子（「嗯」「对」）算给上一个说话的人。</p>
+            <p className="hint">{s.diarizeHint}</p>
           </section>
         )}
 
         {isDesktop && (
           <section>
-            <h3>更新</h3>
-            <p className="hint">
-              当前版本 {version || '…'}。新版本从 GitHub Release 下载，装之前会校验签名。
-            </p>
+            <h3>{s.updates}</h3>
+            <p className="hint">{s.version(version)}</p>
             <label className="check">
               <input type="checkbox" checked={p.autoUpdate} onChange={(e) => p.setAutoUpdate(e.target.checked)} />
-              <span>打开应用时自动检查更新</span>
+              <span>{s.autoUpdate}</span>
             </label>
             {checked && <p className={`meta ${checked.ok ? 'okmsg' : 'err'}`}>{checked.text}</p>}
             <div className="actions">
               <button className="ghost" onClick={() => void checkNow()} disabled={checking}>
-                {checking ? '检查中…' : '检查更新'}
+                {checking ? s.checking : s.checkNow}
               </button>
             </div>
           </section>
@@ -438,8 +425,8 @@ export default function SettingsPanel(p: Props) {
           <section>
             <label className="messy">
               <span>
-                手写潦草度 <b>{p.messy}</b>
-                <i>{messyName(p.messy)}</i>
+                {s.messyLabel} <b>{p.messy}</b>
+                <i>{s.messy(p.messy)}</i>
               </span>
               <input
                 type="range"
@@ -447,13 +434,13 @@ export default function SettingsPanel(p: Props) {
                 max={100}
                 value={p.messy}
                 onChange={(e) => p.setMessy(Number(e.target.value))}
-                aria-label="潦草度"
+                aria-label={s.messyAria}
               />
             </label>
             <label className="messy">
               <span>
-                笔画粗细 <b>{p.weight}%</b>
-                <i>{p.weight < 80 ? '细' : p.weight <= 120 ? '适中' : p.weight <= 160 ? '粗' : '很粗'}</i>
+                {s.weightLabel} <b>{p.weight}%</b>
+                <i>{s.weightName(p.weight)}</i>
               </span>
               <input
                 type="range"
@@ -462,7 +449,7 @@ export default function SettingsPanel(p: Props) {
                 step={5}
                 value={p.weight}
                 onChange={(e) => p.setWeight(Number(e.target.value))}
-                aria-label="笔画粗细"
+                aria-label={s.weightLabel}
               />
             </label>
           </section>

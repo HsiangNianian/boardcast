@@ -3,6 +3,7 @@
 
 import { useEffect, useRef } from 'react'
 import type { Thumb } from '../board/thumb.ts'
+import { useT } from '../i18n/index.ts'
 import { Plus } from './icons.tsx'
 
 function Mini({ t }: { t?: Thumb }) {
@@ -35,13 +36,14 @@ export default function PageStrip(p: {
   suggest: boolean
   onDismiss: () => void
 }) {
+  const s = useT().pages
   // 板多了这一排要横着滚：切到哪张，就把哪张滚进来
   const nav = useRef<HTMLElement>(null)
   useEffect(() => {
     nav.current?.querySelector('.page.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [p.current, p.thumbs.length])
   return (
-    <nav className="pages" aria-label="板" ref={nav}>
+    <nav className="pages" aria-label={s.aria} ref={nav}>
       {p.thumbs.map((t, i) => (
         <button
           key={i}
@@ -50,24 +52,24 @@ export default function PageStrip(p: {
           onClick={() => p.onGo(i)}
           disabled={!!p.blocked && i !== p.current}
           aria-current={i === p.current ? 'page' : undefined}
-          aria-label={`第 ${i + 1} 张板`}
-          title={p.blocked && i !== p.current ? p.blocked : `第 ${i + 1} 张板`}
+          aria-label={s.board(i + 1)}
+          title={p.blocked && i !== p.current ? p.blocked : s.board(i + 1)}
         >
           <Mini t={t} />
           <span>{i + 1}</span>
         </button>
       ))}
-      <button type="button" className="page new" onClick={p.onNew} disabled={!!p.blocked} title={p.blocked ?? '新开一张板：这张留着，可以随时切回来'} aria-label="新开一张板">
+      <button type="button" className="page new" onClick={p.onNew} disabled={!!p.blocked} title={p.blocked ?? s.newTitle} aria-label={s.new}>
         <Plus size={16} />
       </button>
       {p.suggest && !p.blocked && (
         <div className="suggest" role="status">
-          <span>这张板上东西有点多了</span>
+          <span>{s.crowded}</span>
           <button type="button" className="small" onClick={p.onNew}>
-            新开一张
+            {s.newShort}
           </button>
           <button type="button" className="ghost small" onClick={p.onDismiss}>
-            不用
+            {s.dismiss}
           </button>
         </div>
       )}

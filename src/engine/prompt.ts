@@ -3,6 +3,7 @@
 
 import { type Term, glossaryLine } from './glossary.ts'
 import { type Graph, ICONS, MARKS, describe } from './graph.ts'
+import { type SpokenLang, spokenLang } from './lang.ts'
 
 export const SYSTEM = `你是会议板书员。大家在讨论，你根据「新的一句」更新白板。
 
@@ -108,8 +109,21 @@ function line(u: Utterance): string {
   return u.speaker ? `${u.speaker}：${u.text}` : u.text
 }
 
+/** Language the board should be written in, judged from the recent lines and the new one */
+export function boardLang(recent: Utterance[], next: Utterance): SpokenLang {
+  return spokenLang([...recent, next].map((u) => u.text))
+}
+
+/**
+ * English meetings: the system prompt and examples are Chinese (kept fixed so the server can reuse
+ * their KV cache), so say explicitly that the board stays in English. Chinese meetings get nothing
+ * extra, so their prompt is exactly what the eval measured.
+ */
+const ENGLISH_BOARD = '这场会说的是英文：板上的名字、条目、问题、备注都用英文写，照原话的叫法，不要翻译成中文。名字 1 到 4 个词，条目最多 8 个词。'
+
 export function userMessage(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = []): string {
   const parts = [`白板：\n${describe(g)}`]
+  if (boardLang(recent, next) === 'en') parts.unshift(ENGLISH_BOARD)
   // 术语表放在最前面：一场会里不变，llama-server 的前缀缓存能复用
   if (terms.length) parts.unshift(`术语（起名照这个写法）：${glossaryLine(terms)}`)
   if (recent.length) parts.push(`前文（已经画过了）：\n${recent.map(line).join('\n')}`)
@@ -133,7 +147,9 @@ const alt = (xs: readonly string[]) => xs.map((x) => `"${x}"`).join(' | ')
 /**
  * 每次调用按当前白板生成 GBNF：编号只能从现有节点里选，模型就写不出不存在的 n99。
  */
-export function grammar(g: Graph, maxOps = 8): string {
+export function grammar(g: Graph, maxOps = 8, lang: SpokenLang = 'zh'): string {
+  // English names need more characters than Chinese ones for the same content
+  const nameMax = lang === 'en' ? 48 : 20
   const ids = g.nodes.map((n) => `"${n.id}"`)
   // 长的放前面，避免 n1 抢先匹配 n12 的前缀
   ids.sort((a, b) => b.length - a.length)
@@ -157,6 +173,6 @@ export function grammar(g: Graph, maxOps = 8): string {
     'a ::= "A " ref " " name',
     'd ::= "D " ref',
     ref,
-    'name ::= "「" [^「」\\n]{1,20} "」"',
+    `name ::= "「" [^「」\\n]{1,${nameMax}} "」"`,
   ].join('\n')
 }

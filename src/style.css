@@ -873,6 +873,19 @@ kbd {
   color: var(--muted);
 }
 
+/* Web demo: where the samples come from, and what the web version can't do */
+.hero p.demo-note {
+  max-width: 440px;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.6;
+  pointer-events: auto;
+}
+.hero p.demo-note a {
+  color: var(--accent);
+  text-underline-offset: 2px;
+}
+
 @keyframes bc-pop {
   from {
     opacity: 0;
@@ -1290,6 +1303,12 @@ label.check input {
 }
 .panel .fine {
   font-size: 11px;
+}
+
+/* Web demo label in the top bar, links to the desktop app */
+a.chip.web-demo {
+  flex: none;
+  text-decoration: none;
 }
 
 /* 更新 */

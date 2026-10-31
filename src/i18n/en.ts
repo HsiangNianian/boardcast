@@ -416,6 +416,13 @@ export const en = {
     waitModel: 'Waiting for the model…',
     demo: 'Sample',
     demoAria: 'Sample meeting',
+    demoFailed: (e: string) => `Couldn't load the sample meeting: ${e}`,
+    recordedHint: 'Samples were recorded earlier with the built-in model, so they play without one. To try your own sentences,',
+    connectModel: 'connect an OpenAI-compatible API',
+    webDemo: 'Web demo',
+    webDemoTitle: 'This is a web demo. Install the desktop app for local models, voice input and meetings saved on your computer.',
+    webNotice: 'This is a web demo: no local model or voice input, and meetings stay in this browser only.',
+    getDesktop: 'Get the desktop app',
 
     // —— Transcript ——
     count: (n: number) => plural(n, 'line'),

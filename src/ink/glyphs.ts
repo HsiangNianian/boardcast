@@ -26,7 +26,9 @@ async function loadHanzi(ch: string): Promise<Glyph | null> {
   // 导出的回放 HTML 把用到的字直接塞在页面里，不联网也能写
   const embedded = (globalThis as { __boardcastHanzi?: Record<string, number[][][]> }).__boardcastHanzi?.[ch]
   if (embedded) return { strokes: embedded.map((s) => s.map(hz)), advance: 1 }
-  for (const base of ['/hanzi', CDN]) {
+  // Relative to the page, so it also works under a sub-path (GitHub Pages serves /boardcast/)
+  const local = typeof document === 'undefined' ? '/hanzi' : new URL('hanzi', document.baseURI).href
+  for (const base of [local, CDN]) {
     try {
       const r = await fetch(`${base}/${encodeURIComponent(ch)}.json`)
       if (!r.ok) continue

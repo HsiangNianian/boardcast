@@ -52,7 +52,8 @@ import DiagnosticsPanel from './ui/DiagnosticsPanel.tsx'
 import { recentErrors } from './engine/diagnostics.ts'
 import { type Action, actionFor } from './engine/shortcuts.ts'
 import { currentLang, msg, useT } from './i18n/index.ts'
-import { spokenLang } from './engine/lang.ts'
+import { type SpokenLang, spokenLang } from './engine/lang.ts'
+import { type DemoInfo, demoIndex, demoMeeting, loadDemo } from './demo.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -88,6 +89,15 @@ function save(key: string, value: string) {
     /* 存不了就算了 */
   }
 }
+
+/** Sample meetings in the given language; all of them if there are none in it */
+function inLang<T extends { lang: SpokenLang }>(xs: T[], lang: SpokenLang): T[] {
+  const mine = xs.filter((x) => x.lang === lang)
+  return mine.length ? mine : xs
+}
+
+const LIVE_DEMOS = cases.map((c) => ({ id: c.id, name: c.name, lang: spokenLang(c.turns.map((u) => u.text)) }))
+const RELEASES = 'https://github.com/HsiangNianian/boardcast/releases/latest'
 
 function useSystemDark(): boolean {
   const q = '(prefers-color-scheme: dark)'
@@ -300,14 +310,16 @@ export default function App() {
     ro.observe(board)
     return () => ro.disconnect()
   }, [])
-  // Sample meetings in the interface language; all of them if there are none in it
+  // Sample meetings: with a model they are played live; without one (the web demo) the ones
+  // recorded by eval/record.ts are replayed. The list itself is worked out once `ready` is known.
   const lang = currentLang()
-  const demos = useMemo(() => {
-    const mine = cases.filter((c) => spokenLang(c.turns.map((u) => u.text)) === lang)
-    return mine.length ? mine : cases
-  }, [lang])
-  const [demoPick, setDemo] = useState(demos[0].id)
-  const demo = demos.some((c) => c.id === demoPick) ? demoPick : demos[0].id
+  const [recordedDemos, setRecordedDemos] = useState<DemoInfo[]>([])
+  useEffect(() => {
+    if (!isDesktop) void demoIndex().then(setRecordedDemos)
+  }, [])
+  const [demoPick, setDemo] = useState('')
+  /** Id of the meeting opened from a recorded demo: it is not saved */
+  const demoMeetingId = useRef<string | null>(null)
   const [playing, setPlaying] = useState(false)
   // 用 state 而不是 ref：切回铅笔模式时 Excalidraw 重新挂载，要让重画的 effect 再跑一次
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
@@ -518,8 +530,8 @@ export default function App() {
 
   // 板书或会议记录一变，停半秒存一次；空会议不存
   useEffect(() => {
-    // 回放时画面上是过去某一刻的板，不存
-    if (!restored || replayRef.current) return
+    // 回放时画面上是过去某一刻的板，不存；放的录好的示例会议也不存
+    if (!restored || replayRef.current || meeting.id === demoMeetingId.current) return
     if (!lines.length && !graph.nodes.length) return
     const t = setTimeout(() => {
       const m = snapshot(meeting)
@@ -643,6 +655,8 @@ export default function App() {
   }, [jumpLine])
 
   function say(said: Utterance) {
+    // Saying something in a recorded demo makes it your own meeting, saved from now on
+    demoMeetingId.current = null
     // 先按术语表纠正（说的和打的都纠）：内部叫法常被听成、打成别的字
     const u = { ...said, text: correct(said.text, termsRef.current) }
     // 整句就是翻页：不用问模型，也不写板书
@@ -782,7 +796,8 @@ export default function App() {
 
   /** 新会议：当前这场已经自动存下了，换一个新编号从空板开始；`keepCurrent` 为 false 时当前这场刚被删掉，不再存 */
   function reset(keepCurrent = true) {
-    if (keepCurrent && (lines.length || graph.nodes.length)) void meetings.save(snapshot(meeting)).catch(() => undefined)
+    if (keepCurrent && (lines.length || graph.nodes.length) && meeting.id !== demoMeetingId.current)
+      void meetings.save(snapshot(meeting)).catch(() => undefined)
     board.reset()
     session.graph = emptyGraph()
     session.history = []
@@ -1252,7 +1267,7 @@ export default function App() {
   async function openOther(id: string, hit?: Hit) {
     exitReplay()
     if (id !== meeting.id) {
-      if (lines.length || graph.nodes.length) await meetings.save(snapshot(meeting)).catch(() => undefined)
+      if ((lines.length || graph.nodes.length) && meeting.id !== demoMeetingId.current) await meetings.save(snapshot(meeting)).catch(() => undefined)
       const m = await meetings.load(id).catch(() => null)
       if (!m) {
         setToast({ ok: false, text: t.app.openFailed })
@@ -1268,7 +1283,8 @@ export default function App() {
   }
 
   async function play() {
-    const c = demos.find((x) => x.id === demo)
+    if (recordedOnly) return playRecorded()
+    const c = cases.find((x) => x.id === demo)
     if (!c) return
     reset()
     setPlaying(true)
@@ -1279,8 +1295,29 @@ export default function App() {
     setPlaying(false)
   }
 
+  /** Replay a recorded sample meeting: no model needed */
+  async function playRecorded() {
+    if (!demo) return
+    try {
+      const d = await loadDemo(demo)
+      reset()
+      const id = newMeetingId()
+      demoMeetingId.current = id
+      openMeeting(demoMeeting(d, id))
+      // reset() only queues leaving an earlier replay; startReplay() checks the ref
+      replayRef.current = null
+      startReplay()
+    } catch (e) {
+      setToast({ ok: false, text: t.app.demoFailed(errText(e)) })
+    }
+  }
+
   // 现在是哪个模型在画
   const ready = remoteOn || !!online
+  /** No model, but recorded sample meetings to replay (the web demo) */
+  const recordedOnly = !ready && recordedDemos.length > 0
+  const demos = recordedOnly ? inLang(recordedDemos, lang) : inLang(LIVE_DEMOS, lang)
+  const demo = demos.some((c) => c.id === demoPick) ? demoPick : demos[0]?.id
   let status: string
   const localName = builtin?.model?.replace(/\.gguf$/, '')
   if (remoteOn) {
@@ -1343,6 +1380,11 @@ export default function App() {
           <button type="button" className="chip new-version" onClick={() => setShowUpdate(true)} title={t.app.newVersionTitle}>
             {t.app.newVersion(update.version)}
           </button>
+        )}
+        {!isDesktop && (
+          <a className="chip web-demo" href={RELEASES} target="_blank" rel="noreferrer" title={t.app.webDemoTitle}>
+            {t.app.webDemo}
+          </a>
         )}
         <span className="spacer" />
         <div className="seg" role="radiogroup" aria-label={t.app.styleAria}>
@@ -1647,8 +1689,8 @@ export default function App() {
                   {t.app.startMic}
                 </button>
               )}
-              <button type="button" className={isDesktop ? 'secondary' : 'primary'} onClick={() => void play()} disabled={!ready || playing}>
-                {ready ? t.app.playDemo : t.app.waitModel}
+              <button type="button" className={isDesktop ? 'secondary' : 'primary'} onClick={() => void play()} disabled={(!ready && !recordedOnly) || playing}>
+                {ready || recordedOnly ? t.app.playDemo : t.app.waitModel}
               </button>
             </div>
             <label className="demo-pick">
@@ -1661,6 +1703,22 @@ export default function App() {
                 ))}
               </select>
             </label>
+            {recordedOnly && (
+              <p className="demo-note">
+                {t.app.recordedHint}{' '}
+                <button type="button" className="link" onClick={() => setShowSettings(true)}>
+                  {t.app.connectModel}
+                </button>
+              </p>
+            )}
+            {!isDesktop && (
+              <p className="demo-note">
+                {t.app.webNotice}{' '}
+                <a href={RELEASES} target="_blank" rel="noreferrer">
+                  {t.app.getDesktop}
+                </a>
+              </p>
+            )}
           </div>
         )}
 
@@ -1729,7 +1787,8 @@ export default function App() {
             <Close size={16} />
           </button>
         </header>
-        {(summing || summary) && !replay && (
+        {/* Hidden while replaying, back once the replay reaches the end (e.g. a finished sample meeting) */}
+        {(summing || summary) && (!replay || replay.at >= replay.total) && (
           <Suspense fallback={null}>
             <Summary
               text={summary}

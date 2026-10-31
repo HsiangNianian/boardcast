@@ -400,6 +400,13 @@ export const zh: Messages = {
     waitModel: '等模型就绪…',
     demo: '示例',
     demoAria: '示例会议',
+    demoFailed: (e: string) => `示例会议加载失败：${e}`,
+    recordedHint: '示例是事先用内置模型录好的，不需要模型也能放。想自己打字试，',
+    connectModel: '接一个 OpenAI 兼容接口',
+    webDemo: '网页演示',
+    webDemoTitle: '这是网页演示版。本地模型、语音输入、会议存在自己电脑上，请装桌面版。',
+    webNotice: '这是网页演示版：没有本地模型和语音输入，会议只存在这个浏览器里。',
+    getDesktop: '下载桌面版',
 
     // —— Transcript ——
     count: (n: number) => `${n} 句`,

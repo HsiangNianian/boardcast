@@ -320,5 +320,97 @@
     "gold": {
       "forbidden_nodes": ["空调", "吃饭", "天气"]
     }
+  },
+  {
+    "id": "h-en-publish-correction",
+    "name": "Publishing needs legal review before going live",
+    "turns": [
+      { "speaker": "Elena", "text": "For publishing, the Editor sends updates to the CMS, and the CMS sends them straight to the Website." },
+      { "speaker": "Marcus", "text": "Actually, every CMS update needs Legal review before it reaches the Website. Remove the direct CMS-to-Website link." },
+      { "speaker": "Elena", "text": "Right, CMS to Legal review, then Legal review to Website once it's approved." },
+      { "speaker": "June", "text": "The Website then notifies the Search index about the update." },
+      { "speaker": "Marcus", "text": "By the way, Content manager is our team name for the CMS, not another system." },
+      { "speaker": "June", "text": "Do translations need separate approval? Leave that undecided for now." }
+    ],
+    "gold": {
+      "nodes": [["Editor", "Content editor"], ["CMS", "Content manager", "Content management system"], ["Legal review", "Legal approval"], ["Website", "Public website"], ["Search index", "Search indexing service"]],
+      "edges": [["Editor", "CMS"], ["CMS", "Legal review"], ["Legal review", "Website"], ["Website", "Search index"]],
+      "forbidden_edges": [["CMS", "Website"]],
+      "questions": [["Translation approval", "Translations", "Separate approval"]]
+    }
+  },
+  {
+    "id": "h-en-observability-groups",
+    "name": "Telemetry collection and monitoring groups",
+    "turns": [
+      { "speaker": "SRE", "text": "The Telemetry agent forwards metrics to the Collector." },
+      { "speaker": "Backend", "text": "The Collector writes them to the Metrics store." },
+      { "speaker": "Support", "text": "The Dashboard reads from the Metrics store so we can see what's happening." },
+      { "speaker": "SRE", "text": "The Telemetry agent and Collector belong together in a Collection group." },
+      { "speaker": "Backend", "text": "And put the Metrics store and Dashboard together in a Monitoring group." }
+    ],
+    "gold": {
+      "nodes": [["Telemetry agent", "Metrics agent", "Telemetry client"], ["Collector", "Metrics collector", "Collection service"], ["Metrics store", "Metrics database", "Time series database"], ["Dashboard", "Monitoring dashboard"]],
+      "edges": [["Telemetry agent", "Collector"], ["Collector", "Metrics store"], ["Metrics store", "Dashboard"]],
+      "either_direction": [["Metrics store", "Dashboard"]],
+      "groups": [["Telemetry agent", "Collector"], ["Metrics store", "Dashboard"]]
+    }
+  },
+  {
+    "id": "h-en-stock-branch",
+    "name": "Stock availability branches with a backorder retry loop",
+    "turns": [
+      { "speaker": "Lena", "text": "Checkout sends each order to Stock check." },
+      { "speaker": "Omar", "text": "If stock is available, Stock check passes the order to Packing." },
+      { "speaker": "Tess", "text": "When it's out of stock, Stock check sends it to the Backorder queue instead." },
+      { "speaker": "Omar", "text": "Once stock is replenished, the Backorder queue retries through Stock check." },
+      { "speaker": "Lena", "text": "Packing then hands the parcel to the Courier." },
+      { "speaker": "Tess", "text": "Right, backorders can't skip Stock check and jump straight to Packing." }
+    ],
+    "gold": {
+      "nodes": [["Checkout", "Checkout service"], ["Stock check", "Inventory check", "Check stock"], ["Packing", "Packing station", "Pack order"], ["Backorder queue", "Backorders", "Backorder backlog"], ["Courier", "Delivery carrier", "Shipping carrier"]],
+      "edges": [["Checkout", "Stock check"], ["Stock check", "Packing"], ["Stock check", "Backorder queue"], ["Backorder queue", "Stock check"], ["Packing", "Courier"]],
+      "forbidden_edges": [["Backorder queue", "Packing"]]
+    }
+  },
+  {
+    "id": "h-en-backup-options",
+    "name": "Choose a backup approach while retention remains open",
+    "turns": [
+      { "speaker": "PM", "text": "Under Backup options, list Managed backups, Nightly scripts, and Manual exports." },
+      { "speaker": "SRE", "text": "Manual exports won't work for us. Cross that option out." },
+      { "speaker": "Developer", "text": "Nightly scripts would tie up whoever is on call. Cross those out as well." },
+      { "speaker": "PM", "text": "Then choose Managed backups. Put a star beside that one." },
+      { "speaker": "SRE", "text": "Do we keep backups for thirty days or ninety? Leave the retention period as an open question." },
+      { "speaker": "Developer", "text": "Agreed, we can't settle retention until the compliance team replies." }
+    ],
+    "gold": {
+      "topics": [
+        { "title": ["Backup options", "Backup approaches", "Backup strategy"], "items": [["Managed backups", "Managed backup service"], ["Nightly scripts", "Nightly backup scripts"], ["Manual exports", "Manual backup exports"]] }
+      ],
+      "struck": [["Manual exports", "Manual backup exports"], ["Nightly scripts", "Nightly backup scripts"]],
+      "emphasized": [["Managed backups", "Managed backup service"]],
+      "not_emphasized": [["Backup options", "Backup approaches", "Backup strategy"]],
+      "questions": [["Backup retention", "Retention period", "Thirty days or ninety"]]
+    }
+  },
+  {
+    "id": "h-en-workshop-plan",
+    "name": "Workshop checklist with subitems, a budget formula, and an unassigned task",
+    "turns": [
+      { "speaker": "Facilitator", "text": "The Workshop checklist needs three things: Book venue, Invite speakers, and Prepare exercises." },
+      { "speaker": "Operations", "text": "Put Confirm room capacity under Book venue." },
+      { "speaker": "Engineer", "text": "Under Prepare exercises, add Test demo setup." },
+      { "speaker": "Operations", "text": "For the budget, write this formula: Total cost equals Venue fee plus Attendees times Meal cost." },
+      { "speaker": "Facilitator", "text": "Who owns accessibility arrangements? Keep that open for now." },
+      { "speaker": "Engineer", "text": "No owner yet. Let's record it as a question." }
+    ],
+    "gold": {
+      "topics": [
+        { "title": ["Workshop checklist", "Workshop plan"], "items": [["Book venue", "Venue booking"], ["Invite speakers", "Speaker invitations"], ["Prepare exercises", "Exercise preparation"], ["Confirm room capacity", "Check room capacity", "Room capacity"], ["Test demo setup", "Demo setup test"]] }
+      ],
+      "formulas": [["Total cost = Venue fee + Attendees * Meal cost", "Venue fee", "Meal cost"]],
+      "questions": [["Accessibility owner", "Accessibility arrangements", "Who owns accessibility"]]
+    }
   }
 ]

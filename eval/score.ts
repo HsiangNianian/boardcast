@@ -52,7 +52,27 @@ export interface Score {
   extra: string[]
 }
 
+/** Lower-case words of a label with no Han in it; hyphens, underscores and punctuation split words */
+const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+
+/**
+ * English labels match word by word: "Auth-service" equals "Auth service" (and "ClickHouse" equals
+ * "Click House"), and a partial match
+ * has to be whole consecutive words ("Auth" in "Auth service", but not "API" in "Capital").
+ */
+function sameWords(a: string, b: string): 0 | 1 | 2 {
+  const x = words(a)
+  const y = words(b)
+  if (!x.length || !y.length) return 0
+  // "ClickHouse" and "Click House" are the same name
+  if (x.join('') === y.join('')) return 2
+  const [s, l] = x.length <= y.length ? [x, y] : [y, x]
+  for (let i = 0; i + s.length <= l.length; i++) if (s.every((w, j) => l[i + j] === w)) return 1
+  return 0
+}
+
 function same(a: string, b: string): 0 | 1 | 2 {
+  if (!/\p{Script=Han}/u.test(a + b)) return sameWords(a, b)
   const x = norm(a)
   const y = norm(b)
   if (!x || !y) return 0

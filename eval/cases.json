@@ -1640,5 +1640,388 @@
         "intro"
       ]
     }
+  },
+  {
+    "id": "en-auth-correction",
+    "name": "Sign-in flow corrected to go through the gateway",
+    "turns": [
+      {
+        "speaker": "Alex",
+        "text": "Let's sketch sign-in. The Web app calls the Auth service directly."
+      },
+      {
+        "speaker": "Priya",
+        "text": "Small correction: the Web app has to go through the API gateway. The gateway then forwards the request to the Auth service."
+      },
+      {
+        "speaker": "Alex",
+        "text": "Right, remove that direct arrow from the Web app to the Auth service."
+      },
+      {
+        "speaker": "Sam",
+        "text": "The Auth service looks up the account in the User database."
+      },
+      {
+        "speaker": "Priya",
+        "text": "We usually just call that service Auth. It's the same thing as Authentication service."
+      },
+      {
+        "speaker": "Sam",
+        "text": "Should we keep sessions in Redis? Leave that as an open question for now."
+      }
+    ],
+    "gold": {
+      "nodes": [
+        [
+          "Web app",
+          "Web client",
+          "Browser app"
+        ],
+        [
+          "API gateway",
+          "Gateway"
+        ],
+        [
+          "Auth service",
+          "Auth",
+          "Authentication service"
+        ],
+        [
+          "User database",
+          "User DB",
+          "Users database"
+        ]
+      ],
+      "edges": [
+        [
+          "Web app",
+          "API gateway"
+        ],
+        [
+          "API gateway",
+          "Auth service"
+        ],
+        [
+          "Auth service",
+          "User database"
+        ]
+      ],
+      "forbidden_edges": [
+        [
+          "Web app",
+          "Auth service"
+        ]
+      ],
+      "questions": [
+        [
+          "Session storage",
+          "Sessions in Redis",
+          "Redis sessions",
+          "Redis"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "en-platform-groups",
+    "name": "Client and business-service groups with a BFF alias",
+    "turns": [
+      {
+        "speaker": "Maya",
+        "text": "The Customer portal and Mobile app both call the Backend for frontend."
+      },
+      {
+        "speaker": "Noah",
+        "text": "We call that layer BFF. It forwards requests to the Account service and the Catalog service."
+      },
+      {
+        "speaker": "Maya",
+        "text": "Put the Customer portal and Mobile app together in a Clients group."
+      },
+      {
+        "speaker": "Ivy",
+        "text": "The Account service and Catalog service belong together in a Business services group."
+      },
+      {
+        "speaker": "Noah",
+        "text": "Keep BFF between those two groups, on its own."
+      }
+    ],
+    "gold": {
+      "nodes": [
+        [
+          "Customer portal",
+          "Customer web portal",
+          "Web portal"
+        ],
+        [
+          "Mobile app",
+          "Mobile client"
+        ],
+        [
+          "BFF",
+          "Backend for frontend",
+          "Backend-for-frontend"
+        ],
+        [
+          "Account service",
+          "Accounts",
+          "Account management"
+        ],
+        [
+          "Catalog service",
+          "Product catalog",
+          "Catalog"
+        ]
+      ],
+      "edges": [
+        [
+          "Customer portal",
+          "BFF"
+        ],
+        [
+          "Mobile app",
+          "BFF"
+        ],
+        [
+          "BFF",
+          "Account service"
+        ],
+        [
+          "BFF",
+          "Catalog service"
+        ]
+      ],
+      "groups": [
+        [
+          "Customer portal",
+          "Mobile app"
+        ],
+        [
+          "Account service",
+          "Catalog service"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "en-upload-branch",
+    "name": "File scanning branches to storage or quarantine",
+    "turns": [
+      {
+        "speaker": "Jordan",
+        "text": "The Upload API sends every file to the Virus scanner."
+      },
+      {
+        "speaker": "Riley",
+        "text": "If the scanner says the file is clean, it goes to Object storage."
+      },
+      {
+        "speaker": "Casey",
+        "text": "If it finds malware, send the file to Quarantine instead."
+      },
+      {
+        "speaker": "Jordan",
+        "text": "Object storage then notifies the Indexer so the clean file becomes searchable."
+      },
+      {
+        "speaker": "Riley",
+        "text": "Right, files in Quarantine must never go straight into Object storage."
+      }
+    ],
+    "gold": {
+      "nodes": [
+        [
+          "Upload API",
+          "Upload service",
+          "File upload"
+        ],
+        [
+          "Virus scanner",
+          "Malware scanner",
+          "Virus scan"
+        ],
+        [
+          "Object storage",
+          "Object store",
+          "Blob storage"
+        ],
+        [
+          "Quarantine",
+          "Quarantine storage"
+        ],
+        [
+          "Indexer",
+          "Indexing service",
+          "Search indexer"
+        ]
+      ],
+      "edges": [
+        [
+          "Upload API",
+          "Virus scanner"
+        ],
+        [
+          "Virus scanner",
+          "Object storage"
+        ],
+        [
+          "Virus scanner",
+          "Quarantine"
+        ],
+        [
+          "Object storage",
+          "Indexer"
+        ]
+      ],
+      "forbidden_edges": [
+        [
+          "Quarantine",
+          "Object storage"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "en-release-priorities",
+    "name": "Release checklist with emphasis, a rejected item, and an open question",
+    "turns": [
+      {
+        "speaker": "Maya",
+        "text": "For the Release checklist, list Load testing, Accessibility audit, and Release notes."
+      },
+      {
+        "speaker": "Noah",
+        "text": "Star Load testing. That's the one we have to finish before launch."
+      },
+      {
+        "speaker": "Ivy",
+        "text": "Add a fourth item, Dark mode, to that same checklist."
+      },
+      {
+        "speaker": "Maya",
+        "text": "Actually, Dark mode is out for this release. Cross it out, but leave it visible."
+      },
+      {
+        "speaker": "Noah",
+        "text": "Do the Release notes need screenshots? Please keep that as an open question."
+      },
+      {
+        "speaker": "Ivy",
+        "text": "Yes, we haven't decided about screenshots yet."
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Release checklist",
+            "Launch checklist"
+          ],
+          "items": [
+            [
+              "Load testing",
+              "Load test",
+              "Performance testing"
+            ],
+            [
+              "Accessibility audit",
+              "Accessibility review"
+            ],
+            [
+              "Release notes",
+              "Changelog"
+            ],
+            [
+              "Dark mode",
+              "Dark theme"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "Dark mode",
+          "Dark theme"
+        ]
+      ],
+      "emphasized": [
+        [
+          "Load testing",
+          "Load test",
+          "Performance testing"
+        ]
+      ],
+      "not_emphasized": [
+        [
+          "Release checklist",
+          "Launch checklist"
+        ]
+      ],
+      "questions": [
+        [
+          "Screenshots in release notes",
+          "Release notes screenshots",
+          "Screenshots"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "en-owner-handoff",
+    "name": "Two owners swap tasks and receive a follow-up assignment",
+    "turns": [
+      {
+        "speaker": "Dana",
+        "text": "For owners, put API migration under Alex and Dashboard redesign under Priya."
+      },
+      {
+        "speaker": "Alex",
+        "text": "Could we swap? Priya knows the migration better than I do."
+      },
+      {
+        "speaker": "Priya",
+        "text": "That works. I'll take API migration, and Alex can take Dashboard redesign."
+      },
+      {
+        "speaker": "Dana",
+        "text": "Move those tasks to their new owners. Alex also gets Error reporting."
+      },
+      {
+        "speaker": "Alex",
+        "text": "Okay, Dashboard redesign and Error reporting are mine."
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Alex"
+          ],
+          "items": [
+            [
+              "Dashboard redesign",
+              "Redesign dashboard",
+              "Dashboard refresh"
+            ],
+            [
+              "Error reporting",
+              "Error reports"
+            ]
+          ]
+        },
+        {
+          "title": [
+            "Priya"
+          ],
+          "items": [
+            [
+              "API migration",
+              "Migrate the API"
+            ]
+          ]
+        }
+      ]
+    }
   }
 ]

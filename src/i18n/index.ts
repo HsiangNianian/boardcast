@@ -32,6 +32,9 @@ function preferred(): readonly string[] {
 }
 
 function stored(): LangChoice {
+  // Outside a browser (tests, the eval) there is nothing stored; Node's own experimental
+  // localStorage would only print a warning
+  if (typeof window === 'undefined') return 'system'
   try {
     const v = localStorage.getItem(KEY)
     return v === 'en' || v === 'zh' ? v : 'system'
@@ -65,12 +68,13 @@ export function langChoice(): LangChoice {
 
 export function setLangChoice(c: LangChoice) {
   choice = c
-  try {
-    if (c === 'system') localStorage.removeItem(KEY)
-    else localStorage.setItem(KEY, c)
-  } catch {
-    /* not persisted; still applies for this session */
-  }
+  if (typeof window !== 'undefined')
+    try {
+      if (c === 'system') localStorage.removeItem(KEY)
+      else localStorage.setItem(KEY, c)
+    } catch {
+      /* not persisted; still applies for this session */
+    }
   apply()
   // The picker shows the choice, which can change without the resolved language changing
   for (const f of listeners) f()

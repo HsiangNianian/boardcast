@@ -41,6 +41,20 @@ if (!sets[args.set!]) throw new Error(`--set 只能是 ${Object.keys(sets).join(
 const cases = sets[args.set!].flatMap(load).filter((c) => !args.only || args.only.split(',').includes(c.id))
 const repeat = Math.max(1, Number(args.repeat) || 1)
 
+// A model that can't be reached makes every case score 0, which reads like a real result: stop early instead
+const base = args['base-url']!.replace(/\/+$/, '')
+const healthy = await fetch(`${base}/health`, { signal: AbortSignal.timeout(5000) })
+  .then((r) => r.ok)
+  .catch(() => false)
+if (!healthy) {
+  console.error(
+    `Can't reach a llama-server at ${base} (GET /health failed).\n` +
+      'Start one, e.g. llama-server -m <model.gguf> --port 8080, or point --base-url at it.\n' +
+      "The desktop app's built-in model uses a random port; its address is shown in Settings → Local model.",
+  )
+  process.exit(1)
+}
+
 function pct(xs: number[], p: number): number {
   if (!xs.length) return NaN
   const s = [...xs].sort((a, b) => a - b)

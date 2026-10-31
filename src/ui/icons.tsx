@@ -188,3 +188,12 @@ export const Replay = (p: P) => (
     <path d="M10.5 9.3v5.4l4.3-2.7-4.3-2.7Z" />
   </Icon>
 )
+
+/** 另起一板：一条线上分出一个岔 */
+export const Fork = (p: P) => (
+  <Icon {...p}>
+    <path d="M6 4v11.3M17 8.7a8.8 8.8 0 0 1-8.8 8.8" />
+    <circle cx="6" cy="17.5" r="2.2" />
+    <circle cx="17" cy="6.5" r="2.2" />
+  </Icon>
+)

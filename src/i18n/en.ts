@@ -259,6 +259,9 @@ export const en = {
     speed: 'Speed',
     exit: 'Exit replay',
     exitTitle: 'Exit replay (Esc)',
+    fork: 'Fork board',
+    forkTitle: 'Start a new board from this moment: keep drawing from here, the original board stays as it is',
+    forkEmpty: 'Play to a point with something on the board, then fork from there',
   },
 
   /** Keyboard shortcut table: [keys, what it does] */
@@ -460,6 +463,7 @@ export const en = {
     undoNote: 'Undid the last step',
     redoNote: 'Redid a step',
     movedNote: (what: string) => `Moved ${what}`,
+    forkNote: (from: number, at: string, to: number) => `Board ${to} forked from board ${from} as it was at ${at}`,
     deletedNote: (what: string) => `Deleted ${what}`,
     markSpanNote: (removed: boolean, text: string, mark: string) => `${removed ? 'Removed' : 'Added'} ${mark} on "${text}"`,
     markNote: (removed: boolean, what: string, mark: string) => `${removed ? 'Removed' : 'Added'} ${mark} on ${what}`,

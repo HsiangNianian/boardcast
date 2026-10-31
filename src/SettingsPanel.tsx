@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { type LlmStatus, type UpdateInfo, type VoiceSource, isDesktop, shell, updates, voice } from './desktop.ts'
 import { accelFrom } from './engine/shortcuts.ts'
+import { LANGS, LANG_NAMES, setLangChoice, useLangChoice, useT } from './i18n/index.ts'
 import { KEPT, SENT, hostOf, needsConsent, rememberConsent } from './privacy.ts'
 import { type RemoteTest, type RemoteView, remote } from './remote.ts'
 
@@ -173,6 +174,8 @@ export default function SettingsPanel(p: Props) {
             关闭
           </button>
         </header>
+
+        <LanguagePicker />
 
         <section>
           <h3>本地模型</h3>
@@ -467,5 +470,24 @@ export default function SettingsPanel(p: Props) {
 
       </div>
     </div>
+  )
+}
+
+/** Interface language: system default or a pinned one. Names are shown in their own language. */
+function LanguagePicker() {
+  const t = useT()
+  const choice = useLangChoice()
+  return (
+    <section>
+      <h3>{t.lang.title}</h3>
+      <div className="seg sources" role="radiogroup" aria-label={t.lang.title}>
+        {(['system', ...LANGS] as const).map((v) => (
+          <button key={v} type="button" role="radio" aria-checked={choice === v} className={choice === v ? 'on' : ''} onClick={() => setLangChoice(v)}>
+            {v === 'system' ? t.lang.system : LANG_NAMES[v]}
+          </button>
+        ))}
+      </div>
+      <p className="hint">{t.lang.hint}</p>
+    </section>
   )
 }

@@ -2,6 +2,37 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.16.0 - 2026-10-31
+
+### Features
+
+- **board:** Point without writing, turn pages by voice, shared assignments (closes #33) ([`e944934`](https://github.com/HsiangNianian/boardcast/commit/e9449343a73a137c77f1ff8e0f9f7ad1fbc2e3e4))
+  - new op H: "我们先看摘要" highlights the block for 3 seconds and leaves nothing on the board
+  - a sentence that is only a page command (翻到第三页, 下一页, 第 5 张板) switches boards without asking the model; page numbers refer to the imported file, nearest copy first; talk that merely mentions a page still goes to the model
+  - work shared by several people goes under one topic (小王、小李), and a person is no longer nested under a person
+  - talk unrelated to the source text (assignments, todos) is not hung on source regions
+  - a first line with a lone capital letter, as copied from the transcript, is read as the speaker
+  - importing a PDF into a meeting that has content asks: new meeting or this one
+  - dev eval gains assign-shared and pointing-not-writing
+
+### Fixes
+
+- **import:** Cut real papers into paragraphs, not lines (refs #33) ([`14f1d26`](https://github.com/HsiangNianian/boardcast/commit/14f1d26c933a04ac66b38c67cec92b3307de6a9a))
+  - double-spaced lines form one paragraph: the gap limit follows the page's line pitch, words broken at line ends are rejoined, and an abstract indented on both sides is no longer cut per line
+  - the model sees a region's full text, not only the 36-character label, so a word read aloud lands on the block that holds it
+  - citation superscripts and subscripts stay inside their line, whatever order the pieces sort in
+  - once in the references, only an appendix, supporting information or a clearly larger numbered heading ends them; "J. Chem. Inf. Model." was read as a heading and let 6 pages of references through (14 skipped now, 7 before)
+  - reference pages are detected before rendering and no longer count towards the 40-board limit, so the SI is imported too
+  - headings: wide ones in a larger font and wrapped ones are recognized (§2.3, §3), numbered table rows are not
+  - captions: "Figure 2: (a)", "Table S1:" and "(continued)" are recognized
+  - pages with /Rotate 90 were treated as rotated text and came out empty; rotation is now judged after the page transform
+  - split page numbers ("S-", "6") are dropped; a page with no text layer becomes one figure region
+  - imported boards get thumbnails straight away, and they stay after a board is opened
+  - the thumbnails stay on one scrolling row, with the current board scrolled into view
+  - the import note says what happened: 共 48 页，建了 34 张板，参考文献 14 页没建板
+
+**Full diff:** [v0.15.0...v0.16.0](https://github.com/HsiangNianian/boardcast/compare/v0.15.0...v0.16.0)
+
 ## 0.15.0 - 2026-10-31
 
 ### Features

@@ -1642,6 +1642,8 @@ a.chip.web-demo {
   right: 0;
   z-index: 30;
   display: grid;
+  /* 按内容定宽（说明最宽 340px，再长就折行） */
+  width: max-content;
   min-width: 260px;
   padding: 4px;
   border: 1px solid var(--line);
@@ -1668,6 +1670,9 @@ a.chip.web-demo {
   color: var(--muted);
   font-size: 12px;
   font-weight: 400;
+  /* 说明长了（英文常常这样）就折行，别撑出菜单 */
+  max-width: 340px;
+  white-space: normal;
 }
 /* 导入菜单里的 arXiv 输入框 */
 .menu.import-menu {

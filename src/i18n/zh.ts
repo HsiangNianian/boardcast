@@ -494,4 +494,3 @@ export const zh: Messages = {
     keysHint: '只在手写模式生效；焦点在输入框里时不抢键。回放时空格播放或暂停，左右键一步步走，Esc 退出。',
   },
 }
-

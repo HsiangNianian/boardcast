@@ -1,6 +1,7 @@
 // 给本地小模型的提示词和语法约束。
 // 系统提示词和示例对话固定不变，放在最前面，llama-server 的 cache_prompt 能整段复用它们的 KV。
 
+import { type Term, glossaryLine } from './glossary.ts'
 import { type Graph, ICONS, MARKS, describe } from './graph.ts'
 
 export const SYSTEM = `你是会议板书员。大家在讨论，你根据「新的一句」更新白板。
@@ -88,21 +89,23 @@ function line(u: Utterance): string {
   return u.speaker ? `${u.speaker}：${u.text}` : u.text
 }
 
-export function userMessage(g: Graph, recent: Utterance[], next: Utterance): string {
+export function userMessage(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = []): string {
   const parts = [`白板：\n${describe(g)}`]
+  // 术语表放在最前面：一场会里不变，llama-server 的前缀缓存能复用
+  if (terms.length) parts.unshift(`术语（起名照这个写法）：${glossaryLine(terms)}`)
   if (recent.length) parts.push(`前文（已经画过了）：\n${recent.map(line).join('\n')}`)
   parts.push(`新的一句：${line(next)}`)
   return parts.join('\n')
 }
 
-export function messages(g: Graph, recent: Utterance[], next: Utterance): { role: string; content: string }[] {
+export function messages(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = []): { role: string; content: string }[] {
   return [
     { role: 'system', content: SYSTEM },
     ...EXAMPLES.flatMap(([u, a]) => [
       { role: 'user', content: u },
       { role: 'assistant', content: a },
     ]),
-    { role: 'user', content: userMessage(g, recent, next) },
+    { role: 'user', content: userMessage(g, recent, next, terms) },
   ]
 }
 

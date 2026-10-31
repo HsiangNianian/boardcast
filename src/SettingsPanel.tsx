@@ -23,6 +23,11 @@ interface Props {
   /** 这场会只用本地模型（按会议记住） */
   localOnly: boolean
   setLocalOnly: (on: boolean) => void
+  // 术语表：全局的，和这场会的
+  glossary: string
+  setGlossary: (s: string) => void
+  meetingGlossary: string
+  setMeetingGlossary: (s: string) => void
   // 语音
   mic: string
   setMic: (m: string) => void
@@ -288,6 +293,33 @@ export default function SettingsPanel(p: Props) {
               <p className="hint">按会议记住：勾上以后这场会的板书和摘要都不会发到远程接口，别的会照常用远程。</p>
             </>
           )}
+        </section>
+
+        <section>
+          <h3>术语表</h3>
+          <p className="hint">
+            公司内部的叫法（项目代号、服务名、英文缩写）。一行一条，写成「正确写法 = 常听错的写法, 另一种错写」，只写正确写法也行。说的和打的话都会先按它纠正（英文不分大小写、空格可有可无），模型起名也照这个写法。
+          </p>
+          <label className="field">
+            <span>所有会议</span>
+            <textarea
+              rows={4}
+              value={p.glossary}
+              onChange={(e) => p.setGlossary(e.target.value)}
+              placeholder={'MediaCrawler = 媒体爬虫, 美的爬虫\ngraphRAG\nClickHouse = 克里克豪斯'}
+              spellCheck={false}
+            />
+          </label>
+          <label className="field">
+            <span>只用于这场会</span>
+            <textarea
+              rows={3}
+              value={p.meetingGlossary}
+              onChange={(e) => p.setMeetingGlossary(e.target.value)}
+              placeholder="在白板上选中一个名字，点「加进术语」也会加到这里"
+              spellCheck={false}
+            />
+          </label>
         </section>
 
         {isDesktop && (

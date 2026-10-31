@@ -5,6 +5,7 @@
 // 远程失败时可以退回 `fallback`（一般是内置的本地模型），这一句照样能出板书。
 
 import type { Graph } from './graph.ts'
+import type { Term } from './glossary.ts'
 import { type Utterance, grammar, messages } from './prompt.ts'
 
 export interface LlmConfig {
@@ -69,10 +70,10 @@ export function chatUrl(base: string): string {
  */
 const strictServers = new Set<string>()
 
-function body(cfg: LlmConfig, g: Graph, recent: Utterance[], next: Utterance, extras = true): Record<string, unknown> {
+function body(cfg: LlmConfig, g: Graph, recent: Utterance[], next: Utterance, extras = true, terms: Term[] = []): Record<string, unknown> {
   const b: Record<string, unknown> = {
     model: cfg.model ?? 'local',
-    messages: messages(g, recent, next),
+    messages: messages(g, recent, next, terms),
     temperature: 0,
     // 远程模型可能是推理模型，先想再答，给够余量；本地有语法约束，160 足够
     max_tokens: cfg.maxTokens ?? (cfg.flavor === 'openai' ? 1024 : 160),
@@ -110,20 +111,22 @@ export async function proposeOps(
   recent: Utterance[],
   next: Utterance,
   signal?: AbortSignal,
+  /** 术语表：起名照标准写法 */
+  terms: Term[] = [],
 ): Promise<LlmResult> {
   const t0 = performance.now()
   let data: ChatResponse
   try {
     try {
-      data = await post(cfg, body(cfg, g, recent, next), signal)
+      data = await post(cfg, body(cfg, g, recent, next, true, terms), signal)
     } catch (e) {
       if (cfg.flavor !== 'openai' || strictServers.has(cfg.baseUrl) || !rejectsExtras(e)) throw e
       strictServers.add(cfg.baseUrl)
-      data = await post(cfg, body(cfg, g, recent, next, false), signal)
+      data = await post(cfg, body(cfg, g, recent, next, false, terms), signal)
     }
   } catch (e) {
     if (!cfg.fallback || signal?.aborted) throw e
-    const r = await proposeOps(cfg.fallback, g, recent, next, signal)
+    const r = await proposeOps(cfg.fallback, g, recent, next, signal, terms)
     return { ...r, fellBack: String(e) }
   }
   const ms = performance.now() - t0

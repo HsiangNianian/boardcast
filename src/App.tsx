@@ -27,6 +27,7 @@ import type { Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
 import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
 import { summarize } from './engine/summary.ts'
+import { correct, parseGlossary } from './engine/glossary.ts'
 import { type Voice, identify, renameVoice } from './engine/voices.ts'
 import { type Meeting, type MeetingLine, type Page, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
 import InkBoard from './ink/InkBoard.tsx'
@@ -151,6 +152,14 @@ export default function App() {
   const [remoteView, setRemoteView] = useState<RemoteView | null>(null)
   // 这场会只用本地模型（按会议记住）：开着远程也不发出去
   const [localOnly, setLocalOnly] = useState(false)
+  // 术语表：全局的存在本机，这场会的跟着会议存
+  const [glossary, setGlossary] = useState(() => load('boardcast.glossary', ''))
+  const [meetingGlossary, setMeetingGlossary] = useState('')
+  const meetingGlossaryRef = useRef('')
+  meetingGlossaryRef.current = meetingGlossary
+  const terms = useMemo(() => parseGlossary(`${glossary}\n${meetingGlossary}`), [glossary, meetingGlossary])
+  const termsRef = useRef(terms)
+  termsRef.current = terms
   const localOnlyRef = useRef(false)
   localOnlyRef.current = localOnly
   const [remoteState, setRemoteState] = useState<RemoteState>({ state: 'off' })
@@ -402,6 +411,9 @@ export default function App() {
   useEffect(() => {
     session.llm = llm
   }, [llm, session])
+  useEffect(() => {
+    session.terms = terms
+  }, [terms, session])
 
   // —— 会议：自动保存，下次打开接着开 ——
   type MeetingMeta = Pick<Meeting, 'id' | 'title' | 'titled' | 'createdAt'>
@@ -440,6 +452,7 @@ export default function App() {
       voicesRef.current = m.voices ?? []
       setRenamingWho(null)
       setLocalOnly(!!m.localOnly)
+      setMeetingGlossary(m.glossary ?? '')
       setMeeting({ id: m.id, title: m.title, titled: m.titled, createdAt: m.createdAt })
       save('boardcast.meeting', m.id)
     },
@@ -472,6 +485,7 @@ export default function App() {
       voices: voicesRef.current.length ? voicesRef.current : undefined,
       steps: stepsRef.current.length ? stepsRef.current : undefined,
       localOnly: localOnlyRef.current || undefined,
+      glossary: meetingGlossaryRef.current.trim() || undefined,
       // 只有一张板、但它垫着导入页时也要存 pages：底图存在这里
       ...(pagesRef.current.length > 1 || pagesRef.current.some((p) => p.underlay)
         ? { pages: pagesRef.current.map((p, i) => (i === pageRef.current ? capture() : p)), page: pageRef.current }
@@ -496,7 +510,7 @@ export default function App() {
         .catch((e) => console.error('保存会议失败', e))
     }, 500)
     return () => clearTimeout(t)
-  }, [graph, lines, summary, localOnly, page, meeting, restored, snapshot])
+  }, [graph, lines, summary, localOnly, meetingGlossary, page, meeting, restored, snapshot])
 
   // 墨线板书变了就记一步（铅笔稿不记）；会议记录说到第几句也记下，回放时字幕跟着走
   useEffect(() => {
@@ -584,16 +598,19 @@ export default function App() {
     save('boardcast.mic', micChoice)
     save('boardcast.source', voiceSource)
     save('boardcast.diarize', diarize ? 'on' : 'off')
+    save('boardcast.glossary', glossary)
     save('boardcast.autoupdate', autoUpdate ? 'on' : 'off')
     save('boardcast.log', showLog ? 'open' : 'closed')
-  }, [mode, messy, weight, micChoice, voiceSource, diarize, autoUpdate, showLog])
+  }, [mode, messy, weight, micChoice, voiceSource, diarize, autoUpdate, glossary, showLog])
 
   // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
   useEffect(() => {
     listEnd.current?.scrollIntoView({ block: 'end' })
   }, [lines, replay?.at])
 
-  function say(u: Utterance) {
+  function say(said: Utterance) {
+    // 先按术语表纠正（说的和打的都纠）：内部叫法常被听成、打成别的字
+    const u = { ...said, text: correct(said.text, termsRef.current) }
     setLines((ls) => [...ls, { ...u, page: pageRef.current }])
     session.say(u)
   }
@@ -722,6 +739,7 @@ export default function App() {
     recorded.current = emptyGraph()
     setReplay(null)
     setLocalOnly(false)
+    setMeetingGlossary('')
     pagesRef.current = [{ graph: emptyGraph() }]
     pageRef.current = 0
     setPage(0)
@@ -908,6 +926,19 @@ export default function App() {
     return () => clearTimeout(t)
     // seekReplay 每次渲染都是新的，读的是 ref，不用放进依赖
   }, [replay])
+
+  /** 选中的名字加进这场会的术语表 */
+  function addTerm() {
+    if (selection?.kind !== 'node') return
+    const label = session.graph.nodes.find((n) => n.id === selection.id)?.label
+    if (!label) return
+    if (terms.some((t) => t.term === label)) {
+      setToast({ ok: true, text: `「${label}」已经在术语表里了` })
+      return
+    }
+    setMeetingGlossary((g) => (g.trim() ? `${g.trimEnd()}\n${label}` : label))
+    setToast({ ok: true, text: `已把「${label}」加进这场会的术语表，可以在设置里补上常听错的写法` })
+  }
 
   /** 把一张板放到画面上：板书、排版、回放记录都换成它的 */
   function showPage(p: Page) {
@@ -1318,6 +1349,11 @@ export default function App() {
                         {m}
                       </button>
                     ))}
+                  {selection.kind === 'node' && !pinned(session.graph, selection) && (
+                    <button type="button" onClick={addTerm} title="把这个名字加进这场会的术语表：之后语音听错、模型写偏都按它纠正">
+                      加进术语
+                    </button>
+                  )}
                   {!pinned(session.graph, selection) && (
                     <button type="button" className="del" onClick={deleteSelection}>
                       删除
@@ -1540,6 +1576,10 @@ export default function App() {
           remoteState={remoteState}
           onRemoteChanged={() => void checkRemote()}
           localOnly={localOnly}
+          glossary={glossary}
+          setGlossary={setGlossary}
+          meetingGlossary={meetingGlossary}
+          setMeetingGlossary={setMeetingGlossary}
           setLocalOnly={setLocalOnly}
           mic={micChoice}
           setMic={setMicChoice}

@@ -47,6 +47,8 @@ export interface Meeting {
   steps?: Step[]
   /** 这场会只用本地模型，不发到远程接口 */
   localOnly?: boolean
+  /** 这场会自己的术语（和全局的合在一起用），一行一条 */
+  glossary?: string
   /** 有几张板时：每张板的内容（当前这张和上面的 graph / layout / steps 一样），和现在在第几张 */
   pages?: Page[]
   page?: number

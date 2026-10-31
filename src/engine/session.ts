@@ -7,6 +7,7 @@ import { type Graph, emptyGraph } from './graph.ts'
 import { type LlmConfig, type LlmResult, proposeOps } from './llm.ts'
 import { type Op, applyOps, eraseDrafts, markDrafts, parseOps } from './ops.ts'
 import type { Utterance } from './prompt.ts'
+import type { Term } from './glossary.ts'
 import { mentions, quickOps } from './rules.ts'
 
 export interface SessionEvents {
@@ -23,6 +24,8 @@ export class Session {
   graph: Graph = emptyGraph()
   history: Utterance[] = []
   llm: LlmConfig
+  /** 术语表（全局的加这场会的），给模型起名用 */
+  terms: Term[] = []
   private on: SessionEvents
   /** 给模型看几句前文 */
   private context: number
@@ -62,7 +65,7 @@ export class Session {
         : { text: batch.map((u) => (u.speaker ? `${u.speaker}：${u.text}` : u.text)).join(' ') }
     try {
       const drafts = markDrafts(this.graph)
-      const r = await proposeOps(this.llm, this.graph, this.history.slice(-this.context), next)
+      const r = await proposeOps(this.llm, this.graph, this.history.slice(-this.context), next, undefined, this.terms)
       const ops = parseOps(r.text)
       this.graph = eraseDrafts(applyOps(this.graph, ops, 'ink'), drafts)
       this.on.graph?.(this.graph, 'ink')

@@ -2,6 +2,60 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.19.0-1 - 2026-10-31
+
+### Features
+
+- **i18n:** Add English UI foundation (refs #20) ([`542b1eb`](https://github.com/HsiangNianian/boardcast/commit/542b1eb89cc580a06a71e082516e6064a6e99877))
+  - add typed English and Chinese dictionaries, system language detection and a Settings language override
+  - extract App strings, default HTML to English and test language detection and dictionary parity
+  - leave other panels for the next step of #20
+- **i18n:** English UI throughout; board and summary follow the meeting language (refs #20) ([`5647415`](https://github.com/HsiangNianian/boardcast/commit/5647415aa05fbd43902574747e74820b78305f0a))
+  - extract strings from all panels (settings incl. a language picker, composer, meetings, models, summary, diagnostics, update, board strip, replay bar, shortcut table, splash) and from non-UI modules (errors, auto titles, edit notes)
+  - exported Markdown/PDF and the replay page use the interface language; the replay page follows the viewer's language
+  - new engine/lang.ts guesses the spoken language; English meetings get an English-board hint and a longer label limit, Chinese prompts are unchanged
+  - summaries of English meetings use English instructions and headings (Conclusions / Decisions / To-dos / Open questions)
+  - sample meetings are filtered by interface language
+  - tests pin Chinese where they assert Chinese wording; new tests for language detection, English summaries and English exports
+- **i18n:** English messages from the desktop shell (refs #20) ([`740f08a`](https://github.com/HsiangNianian/boardcast/commit/740f08a83abf0e9269dcdf4e6963a67d3133277c))
+  - errors, status and progress messages from models, voice, meetings, export, arXiv, remote API, updater and tray are now English
+  - model catalog labels and notes shown in the model manager are English
+  - comments, stderr logs and speech-recognition test fixtures stay as they were
+- **engine:** English examples for English meetings (refs #20) ([`73a9079`](https://github.com/HsiangNianian/boardcast/commit/73a9079cf37e2b9010cbff93670152f550203185))
+  - English meetings get the few-shot examples in English, so lines get English labels too instead of 调用/转发; the system prompt and Chinese examples are unchanged, so Chinese results are identical
+  - the loose-items heading on the board follows the board's language (Open / 待定)
+  - English eval cases with Qwen3.5-4B: node F1 0.93 → 0.97, edge F1 0.71 → 0.83, topics and items 1.00, groups 1.00; holdout English cases improved as well
+- **web:** Public web demo on GitHub Pages (closes #30) ([`e653c58`](https://github.com/HsiangNianian/boardcast/commit/e653c586b332ed12df8a89f587f5170134a16a6f))
+  - eval/record.ts plays each sample meeting through a real model once and saves the board steps, transcript and summary to public/demos/; boards with no changes, and English boards with Chinese on them, are skipped
+  - without a model the web version replays a recorded sample in the interface language, and shows its summary when the replay ends; the demo meeting is not saved
+  - a "Web demo" label and notes say what the web version can't do, link to the desktop app, and invite connecting an OpenAI-compatible API to type your own
+  - the Pages workflow builds with BOARDCAST_BASE=/<repo>/ and deploys dist; glyph data is fetched relative to the page, so it works under the sub-path
+  - READMEs link to https://hsiangnianian.github.io/boardcast/
+- **voice:** Cut long sentences at breaths and time every stage ([`e887901`](https://github.com/HsiangNianian/boardcast/commit/e887901c8676d4ce22502fc5dd950de73becb468))
+  - after 4 s of talking a breath is enough to end a sentence (0.32 s at first, shorter as the sentence runs on, 0.13 s just before the 10 s cap), instead of waiting for a 0.45 s pause or 12 s
+  - the gaps between words don't cut a clause in half; a test feeds real speech with 0.35 s breaths and checks each sentence comes out whole
+  - one second of pre-roll so the first word isn't lost when a soft break sends the buffer
+  - every sentence carries its timings (pause waited for, recognition, voiceprint, queue for the model, model), shown in the transcript and exported as timing.json with diagnostics (numbers only)
+
+### Fixes
+
+- **eval:** Stop when the model can't be reached instead of scoring zeros ([`e79d0b6`](https://github.com/HsiangNianian/boardcast/commit/e79d0b62fa09cb6fc3f5de8f99010035b203622c))
+  - check GET /health first and explain how to start llama-server or set --base-url
+  - skip Node's experimental localStorage outside the browser, which only printed a warning
+
+### Documentation
+
+- English README and English eval cases (refs #20) ([`ae6e54e`](https://github.com/HsiangNianian/boardcast/commit/ae6e54ec87f40d09bb6622c2dea859afa7581c57))
+  - README.en.md is the English version; both READMEs link to each other at the top
+  - 5 English cases each in the dev and holdout sets
+  - the scorer matches English labels word by word: hyphens count as spaces, no partial matches inside words, and ClickHouse equals Click House
+
+### Maintenance
+
+- Apply pre-commit fixes ([`e1f31e4`](https://github.com/HsiangNianian/boardcast/commit/e1f31e43f8fc558915558568f4622c9dd63c7830))
+
+**Full diff:** [v0.18.0...v0.19.0-1](https://github.com/HsiangNianian/boardcast/compare/v0.18.0...v0.19.0-1)
+
 ## 0.18.0 - 2026-10-31
 
 ### Features

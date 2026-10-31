@@ -2026,3 +2026,23 @@ button.danger {
 .toast button {
   margin-left: 10px;
 }
+
+.panel.keys header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel.keys table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.panel.keys td {
+  padding: 4px 8px 4px 0;
+  overflow-wrap: anywhere;
+}
+.panel.keys kbd {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+  white-space: nowrap;
+}

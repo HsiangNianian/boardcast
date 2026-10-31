@@ -8,6 +8,7 @@ import {
   type LlmStatus,
   type VoiceStatus,
   isDesktop,
+  shell,
   llmEnsure,
   type UpdateInfo,
   type VoiceSource,
@@ -49,6 +50,7 @@ import type { Hit } from './engine/search.ts'
 import { hasSpan, spanAt, toggleSpan } from './engine/spans.ts'
 import DiagnosticsPanel from './ui/DiagnosticsPanel.tsx'
 import { recentErrors } from './engine/diagnostics.ts'
+import { type Action, SHORTCUTS, actionFor } from './engine/shortcuts.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -274,6 +276,9 @@ export default function App() {
   }
   // 导出菜单和保存后的提示
   const [exportMenu, setExportMenu] = useState(false)
+  const [showKeys, setShowKeys] = useState(false)
+  const [hotkey, setHotkey] = useState(() => load('boardcast.hotkey', 'Ctrl+Shift+Space'))
+  const [hotkeyErr, setHotkeyErr] = useState<string | null>(null)
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null)
   useEffect(() => {
     if (!toast) return
@@ -886,8 +891,62 @@ export default function App() {
   }
 
   // 键盘：撤销 / 重做 / 删除 / 取消选中。焦点在输入框里时不管；铅笔模式交给 Excalidraw 自己处理
-  const keys = useRef({ undo, redo, deleteSelection, toggleReplay, seekReplay, exitReplay })
-  keys.current = { undo, redo, deleteSelection, toggleReplay, seekReplay, exitReplay }
+  const run = (a: Action) => {
+    const replaying = !!replayRef.current
+    if (a === 'help') setShowKeys((v) => !v)
+    else if (a === 'replay') (replaying ? exitReplay() : startReplay())
+    else if (replaying) return
+    else if (a === 'import') fileInput.current?.click()
+    else if (a === 'summary') void makeSummary()
+    else if (waiting) setToast({ ok: false, text: '模型还在画，画完再翻页' })
+    else if (a === 'newPage') newPage()
+    else goPage(pageRef.current + (a === 'nextPage' ? 1 : -1))
+  }
+  const keys = useRef({ undo, redo, deleteSelection, toggleReplay, seekReplay, exitReplay, run, toggleMic, listening })
+  keys.current = { undo, redo, deleteSelection, toggleReplay, seekReplay, exitReplay, run, toggleMic, listening }
+  // 按住空格说话：只有这次是按住才开的，松开才停
+  const held = useRef(false)
+  useEffect(() => {
+    const blocked = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement
+      // 键盘移到按钮上时，空格还是点按钮；鼠标点过的按钮留着焦点，不算
+      return !!t.closest('input:not([type=range]), textarea, select, [contenteditable]') || !!t.closest('.modal') || (t.tagName === 'BUTTON' && t.matches(':focus-visible'))
+    }
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || !isDesktop || mode !== 'ink' || replayRef.current || blocked(e)) return
+      e.preventDefault()
+      if (e.repeat || held.current || keys.current.listening) return
+      held.current = true
+      void keys.current.toggleMic()
+    }
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || !held.current) return
+      e.preventDefault()
+      held.current = false
+      // 多收一小会儿，免得切掉最后一个字；停下时引擎会把没说完的这句收尾
+      setTimeout(() => void voice.stop(), 300)
+    }
+    addEventListener('keydown', down)
+    addEventListener('keyup', up)
+    return () => {
+      removeEventListener('keydown', down)
+      removeEventListener('keyup', up)
+    }
+  }, [mode])
+  // 全局快捷键、托盘、boardcast --toggle-mic
+  useEffect(() => {
+    if (!isDesktop) return
+    const off = shell.onToggle(() => void keys.current.toggleMic())
+    return () => void off.then((f) => f())
+  }, [])
+  useEffect(() => {
+    if (!isDesktop) return
+    save('boardcast.hotkey', hotkey)
+    shell
+      .setShortcut(hotkey || null)
+      .then(() => setHotkeyErr(null))
+      .catch((e) => setHotkeyErr(errText(e)))
+  }, [hotkey])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // 焦点在文字输入框里时不管（回放的进度条不算）
@@ -904,6 +963,13 @@ export default function App() {
         return
       }
       if (mode !== 'ink') return
+      if (document.querySelector('.modal')) return
+      const action = actionFor(e)
+      if (action) {
+        e.preventDefault()
+        keys.current.run(action)
+        return
+      }
       const mod = e.ctrlKey || e.metaKey
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault()
@@ -1758,6 +1824,13 @@ export default function App() {
       {showSettings && (
         <SettingsPanel
           onClose={() => setShowSettings(false)}
+          hotkey={hotkey}
+          setHotkey={setHotkey}
+          hotkeyErr={hotkeyErr}
+          onKeys={() => {
+            setShowSettings(false)
+            setShowKeys(true)
+          }}
           onDiagnostics={() => {
             setShowSettings(false)
             setShowDiag(true)
@@ -1838,6 +1911,31 @@ export default function App() {
           >
             加到这场会
           </button>
+        </div>
+      )}
+      {showKeys && (
+        <div className="modal" role="dialog" aria-label="快捷键" onClick={(e) => e.target === e.currentTarget && setShowKeys(false)}>
+          <div className="panel keys">
+            <header>
+              <h2>快捷键</h2>
+              <button type="button" className="icon" onClick={() => setShowKeys(false)} aria-label="关闭">
+                <Close size={16} />
+              </button>
+            </header>
+            <table>
+              <tbody>
+                {SHORTCUTS.map(([k, what]) => (
+                  <tr key={k}>
+                    <td>
+                      <kbd>{k}</kbd>
+                    </td>
+                    <td>{what}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="hint">只在手写模式生效；焦点在输入框里时不抢键。回放时空格播放或暂停，左右键一步步走，Esc 退出。</p>
+          </div>
         </div>
       )}
       {showDiag && (

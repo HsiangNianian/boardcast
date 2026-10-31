@@ -143,6 +143,13 @@ export async function arxivPdf(id: string): Promise<Uint8Array> {
   return out
 }
 
+/** 应用不在前台时开关收音 */
+export const shell = {
+  setShortcut: (accel: string | null) => call<void>('shortcut_set', { accel }),
+  wayland: () => call<boolean>('session_wayland'),
+  onToggle: (cb: () => void) => on<unknown>('mic-toggle', cb),
+}
+
 /** 诊断信息：系统和 llama-server 日志的末尾 */
 export const diagnosticsInfo = () => call<{ os: string; arch: string; log: string | null }>('diagnostics_info')
 

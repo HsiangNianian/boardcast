@@ -15,6 +15,7 @@ mod llm;
 mod meetings;
 mod models;
 mod remote;
+mod shell;
 mod updater;
 mod voice;
 
@@ -23,6 +24,15 @@ use tauri::{Manager, RunEvent};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 单实例要最先注册：再启动一次时转给开着的那个
+        .plugin(tauri_plugin_single_instance::init(|app, args, _| {
+            if args.iter().any(|a| a == shell::TOGGLE_ARG) {
+                shell::toggle(app);
+            } else {
+                shell::show_window(app);
+            }
+        }))
+        .plugin(shell::shortcut_plugin())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updater::Pending::default())
@@ -30,6 +40,9 @@ pub fn run() {
         .manage(models::Downloads::default())
         .manage(voice::Voice::default())
         .setup(|app| {
+            if let Err(e) = shell::init_tray(app.handle()) {
+                eprintln!("托盘启动失败：{e}");
+            }
             // 启用了远程模型就先不拉起内置模型（不占显存、不预热），远程不可用时前端再叫它起来
             if remote::enabled(app.handle()) {
                 llm::stand_by(app.handle().clone());
@@ -40,6 +53,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             diagnostics::diagnostics_info,
+            shell::shortcut_set,
+            shell::session_wayland,
             llm::llm_status,
             llm::llm_restart,
             llm::llm_ensure,

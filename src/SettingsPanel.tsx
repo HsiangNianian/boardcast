@@ -1,13 +1,18 @@
 // 设置：不常用的东西都放这里，主页面只留说话、收音和板书本身。
 
 import { useEffect, useState } from 'react'
-import { type LlmStatus, type UpdateInfo, type VoiceSource, isDesktop, updates, voice } from './desktop.ts'
+import { type LlmStatus, type UpdateInfo, type VoiceSource, isDesktop, shell, updates, voice } from './desktop.ts'
+import { accelFrom } from './engine/shortcuts.ts'
 import { KEPT, SENT, hostOf, needsConsent, rememberConsent } from './privacy.ts'
 import { type RemoteTest, type RemoteView, remote } from './remote.ts'
 
 export type RemoteState = { state: 'off' | 'checking' | 'ok' | 'fail'; ms?: number; message?: string }
 
 interface Props {
+  hotkey: string
+  setHotkey: (v: string) => void
+  hotkeyErr: string | null
+  onKeys: () => void
   onDiagnostics: () => void
   onClose: () => void
   // 本地模型
@@ -60,6 +65,10 @@ function messyName(n: number) {
 }
 
 export default function SettingsPanel(p: Props) {
+  const [wayland, setWayland] = useState(false)
+  useEffect(() => {
+    if (isDesktop) void shell.wayland().then(setWayland)
+  }, [])
   // —— 远程模型的表单 ——
   const [baseUrl, setBaseUrl] = useState(p.remoteView?.baseUrl ?? '')
   const [apiKey, setApiKey] = useState('')
@@ -292,6 +301,42 @@ export default function SettingsPanel(p: Props) {
                 <span>这场会只用本地模型</span>
               </label>
               <p className="hint">按会议记住：勾上以后这场会的板书和摘要都不会发到远程接口，别的会照常用远程。</p>
+            </>
+          )}
+        </section>
+
+        <section>
+          <h3>快捷键</h3>
+          <div className="actions">
+            <button type="button" className="ghost" onClick={p.onKeys}>
+              查看所有快捷键
+            </button>
+          </div>
+          {isDesktop && (
+            <>
+              <label className="field">
+                <span>全局开关收音（应用不在前台也能用）</span>
+                <input
+                  value={p.hotkey}
+                  readOnly
+                  placeholder="已关闭"
+                  aria-label="全局快捷键"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Tab') return
+                    e.preventDefault()
+                    if (e.key === 'Backspace' || e.key === 'Delete') p.setHotkey('')
+                    const a = accelFrom(e)
+                    if (a) p.setHotkey(a)
+                  }}
+                />
+              </label>
+              <p className="hint">点一下输入框，按想要的组合键；按退格键关闭。</p>
+              {p.hotkeyErr && <p className="meta err">{p.hotkeyErr}</p>}
+              {wayland && (
+                <p className="hint">
+                  Wayland 下应用收不到全局按键：请在系统设置里加一个快捷键，命令填 <code>boardcast --toggle-mic</code>。
+                </p>
+              )}
             </>
           )}
         </section>

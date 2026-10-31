@@ -17,7 +17,7 @@ tokio = { version = "1", features = ["full"] }
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 模型下载：断点续传、边下边算 sha256
@@ -34,6 +34,9 @@ sherpa-onnx = "2.0.1"
 tauri-plugin-dialog = "2"
 base64 = "0.22"
 tauri-plugin-updater = "2"
+# 应用不在前台时开关收音：全局快捷键；再启动一次带 --toggle-mic 就转给已经开着的那个
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
 
 # 应用崩溃或被强制结束时，让 llama-server 跟着退出，不留下占着显存的孤儿进程
 [target.'cfg(target_os = "linux")'.dependencies]

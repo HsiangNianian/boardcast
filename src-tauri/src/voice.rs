@@ -339,6 +339,7 @@ fn installed(app: &AppHandle) -> bool {
 }
 
 fn set_status(app: &AppHandle, s: VoiceStatus) {
+    crate::shell::set_listening(app, s.listening);
     *app.state::<Voice>().status.lock().unwrap() = s.clone();
     let _ = app.emit("voice-status", s);
 }

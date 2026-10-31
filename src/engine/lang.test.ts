@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { spokenLang } from './lang.ts'
-import { boardLang, grammar, userMessage } from './prompt.ts'
+import { boardLang, grammar, messages, userMessage } from './prompt.ts'
 import { emptyGraph } from './graph.ts'
 import { summaryMessages, tidySummary, transcript } from './summary.ts'
 
@@ -21,6 +21,11 @@ test('English meetings ask for an English board; Chinese prompts are unchanged',
   const zh = userMessage(g, [], { text: '用户先打开小程序，小程序去调登录接口。' })
   assert.doesNotMatch(zh, /英文/)
   assert.equal(boardLang([{ text: 'We need three things.' }], { text: '好' }), 'en')
+  // English meetings get English examples, so lines get English labels too; Chinese keep theirs
+  const shown = (text: string) => messages(g, [], { text }).map((m) => m.content).join('\n')
+  assert.match(shown('The app calls the login API.'), /: 「calls」/)
+  assert.doesNotMatch(shown('The app calls the login API.'), /: 「调用」/)
+  assert.match(shown('小程序去调登录接口。'), /: 「调用」/)
   assert.match(grammar(g, 8, 'en'), /\{1,48\} "」"$/)
   assert.match(grammar(g), /\{1,20\} "」"$/)
 })

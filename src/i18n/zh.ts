@@ -160,6 +160,9 @@ export const zh: Messages = {
     delete: '删除',
     cancel: '取消',
     rename: '重命名',
+    continue: '接着开会',
+    continueTitle: '拿这场会的板当底板开一场新会：原来的内容用淡墨，新会上加的、改的、划掉的用正常墨迹',
+    pickBoard: '接着哪张板？',
   },
 
   models: {
@@ -444,6 +447,8 @@ export const zh: Messages = {
     undoNote: '撤销了上一步',
     redoNote: '重做了一步',
     movedNote: (what: string) => `挪了${what}的位置`,
+    continuedTitle: (title: string) => `${title}（续）`,
+    continuedNote: (title: string, page: number) => `接着「${title}」的第 ${page} 张板开会：原来的内容用淡墨，这场会的改动用正常墨迹`,
     deletedNote: (what: string) => `删掉了${what}`,
     markSpanNote: (removed: boolean, text: string, mark: string) => `${removed ? '去掉了' : '加上了'}「${text}」的${mark}`,
     markNote: (removed: boolean, what: string, mark: string) => `${removed ? '去掉了' : '加上了'}${what}的${mark}`,

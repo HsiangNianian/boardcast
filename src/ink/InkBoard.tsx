@@ -59,6 +59,7 @@ export default function InkBoard({
   onMoveSel,
   layoutRev = 0,
   underlay,
+  base,
 }: {
   graph: Graph
   hot: Set<string>
@@ -80,6 +81,8 @@ export default function InkBoard({
   layoutRev?: number
   /** 垫在底下的导入页（PDF 的一页、一张图片），左上角对齐板书原点，大小是 graph.underlay */
   underlay?: string
+  /** 带着旧板开会时的底板：上面原样留下的东西用淡墨 */
+  base?: Graph
 }) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
@@ -110,7 +113,7 @@ export default function InkBoard({
     let stale = false
     void (async () => {
       const l = await board.layout(graph)
-      const ps = await compose(graph, l, hot, look, messy, weight)
+      const ps = await compose(graph, l, hot, look, messy, weight, base)
       if (stale) return
       setLay(l)
       // 给第一次出现的笔画排上写字的时间：接在正在写的东西后面。
@@ -161,7 +164,7 @@ export default function InkBoard({
     return () => {
       stale = true
     }
-  }, [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev])
+  }, [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev, base])
 
   // 画布尺寸放进 state：第一次渲染时 ref 还没挂上，窗口缩放时也要重新适配
   const [[W, H], setSize] = useState<[number, number]>([1000, 700])

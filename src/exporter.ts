@@ -1,19 +1,20 @@
-// 导出：Markdown、PNG、SVG、.excalidraw。
+// 导出：Markdown、PNG、SVG、动态 SVG、.excalidraw。
 // - PNG / SVG：手写模式把画面上的 SVG 按内容范围裁出来（PNG 再栅格化），看到什么导出什么；铅笔模式用 Excalidraw 自己的导出；
 // - .excalidraw：铅笔模式带上手动改过的内容；手写模式按同一份排版现生成一份；
 // - 桌面版弹系统的另存为对话框（外壳代写文件），网页版直接下载。
 
 import { exportToBlob, exportToSvg, serializeAsJSON } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import { board } from './board/layout.ts'
+import { StableLayout, board } from './board/layout.ts'
 import { type SaidLine, toMarkdown } from './board/markdown.ts'
 import { type Look, scene } from './board/scene.ts'
 import { isDesktop } from './desktop.ts'
 import type { Graph } from './engine/graph.ts'
+import { type Step, inkOnly } from './engine/steps.ts'
 import { type ReplayData, replayHtml, usedHan } from './player/data.ts'
 import { msg } from './i18n/index.ts'
 
-export type ExportKind = 'md' | 'png' | 'svg' | 'excalidraw' | 'html' | 'pdf'
+export type ExportKind = 'md' | 'png' | 'svg' | 'anim' | 'excalidraw' | 'html' | 'pdf'
 
 interface Board {
   graph: Graph
@@ -29,6 +30,11 @@ interface Board {
   pages?: Graph[]
   /** 导出回放网页用：整场会的数据 */
   replay?: ReplayData
+  /** 动态 SVG 用：这张板的回放记录（定先后）、导入页的底图、笔迹的潦草度和粗细（和白板上一样） */
+  steps?: Step[]
+  underlay?: string
+  messy?: number
+  weight?: number
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -80,6 +86,28 @@ async function inkPng(b: Board): Promise<Blob> {
   } finally {
     URL.revokeObjectURL(url)
   }
+}
+
+/** 动态 SVG：这张板最终的样子，按会上画出来的先后一笔一笔写出来，写完停在全貌（见 ink/animate.ts） */
+async function animSvg(b: Board): Promise<string> {
+  const [{ compose }, { WHITEBOARD }, { animatedSvg, ranks, timeline }] = await Promise.all([
+    import('./ink/compose.ts'),
+    import('./ink/InkBoard.tsx'),
+    import('./ink/animate.ts'),
+  ])
+  // 铅笔稿是一闪而过的，不算板书
+  const g = inkOnly(b.graph)
+  if (!g.nodes.length) throw new Error(msg().errors.emptyBoard)
+  // 另用一份排版，从白板现在的位置开始排：看到的和导出的一样，也不动白板自己的排版记忆
+  const layout = new StableLayout()
+  layout.restore(board.snapshot())
+  const l = await layout.layout(g)
+  const pieces = await compose(g, l, new Set(), WHITEBOARD, b.messy ?? 0.3, b.weight ?? 1)
+  const { timed } = timeline(pieces, ranks(g, l, b.steps ?? [], pieces.map((p) => p.key)))
+  const P = 48
+  const box = { x: l.bounds.x0 - P, y: l.bounds.y0 - P, w: l.bounds.x1 - l.bounds.x0 + 2 * P, h: l.bounds.y1 - l.bounds.y0 + 2 * P }
+  const u = g.underlay
+  return animatedSvg(timed, box, WHITEBOARD.paper, b.underlay && u ? { href: b.underlay, w: u.w, h: u.h } : undefined)
 }
 
 async function pencilSvg(api: ExcalidrawImperativeAPI, paper: string): Promise<string> {
@@ -146,6 +174,7 @@ export async function build(kind: ExportKind, b: Board): Promise<{ name: string;
   if (kind === 'md') return { name: fileName('md'), blob: new Blob([toMarkdown(b.graph, b.lines, b.title, new Date(), b.summary, b.pages)], { type: 'text/markdown' }) }
   if (kind === 'excalidraw')
     return { name: fileName('excalidraw'), blob: new Blob([await excalidrawFile(b)], { type: 'application/json' }) }
+  if (kind === 'anim') return { name: fileName('anim.svg'), blob: new Blob([await animSvg(b)], { type: 'image/svg+xml' }) }
   if (kind === 'svg') {
     const svg = b.mode === 'pencil' && b.api ? await pencilSvg(b.api, b.paper) : (await inkSvg(b)).svg
     return { name: fileName('svg'), blob: new Blob([svg], { type: 'image/svg+xml' }) }

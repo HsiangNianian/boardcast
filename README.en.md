@@ -188,6 +188,7 @@ Use the export button in the top bar, available when the board has content:
 - **Markdown**: the meeting name becomes the title, followed by the summary if present. Multiple boards each get a section, and transcript entries are separated by board too. Topics become headings with numbered items, preserving strike-throughs, circles, and stars. Flowcharts become Mermaid diagrams, followed by the meeting transcript.
 - **PNG**: exports what you see. Handwriting mode crops to the content at 2× resolution, using a whiteboard or blackboard according to the current theme. Pencil mode includes your manual edits.
 - **SVG**: scalable vector graphics that stay sharp when enlarged, ready to embed in documents or edit in vector software. Handwriting mode preserves the chalk or marker texture.
+- **Animated SVG**: a `.anim.svg` that writes the board's final state stroke by stroke, in the order it was drawn during the meeting. It finishes in about 12 seconds however long the meeting ran, then stays on the full board. It uses CSS animation only, no scripts, so it plays inside an `<img>` in a GitHub README, a doc, or a chat. With "reduce motion" turned on it shows the full board straight away. Whiteboard ink, with your messiness and stroke weight.
 - **Excalidraw**: a `.excalidraw` file you can drag into [excalidraw.com](https://excalidraw.com) to keep editing.
 - **Full meeting PDF**: one board per page, including imported backgrounds, followed by the summary and transcript, in landscape A4. Pages are images; Chinese text is rendered with system fonts instead of embedding fonts in the PDF. Text cannot be selected or copied, so use Markdown when you need copyable text.
 - **Replay webpage**: a single `.html` file to share with people who missed the meeting. Double-click to open it in a browser, switch between boards, replay each from an empty board, scrub the timeline, and change playback speed. The summary and transcript appear on the right, with the transcript following playback. The player, meeting data, imported page images, and all required Chinese stroke data are bundled in the file. No network connection or boardcast installation is needed; a typical meeting is a few hundred KB.
@@ -266,6 +267,7 @@ pnpm release 0.2.0 --push      # Also push the commit and tag, triggering the Re
 - [x] Handwriting mode: animation in stroke order, whiteboard marker / blackboard chalk, adjustable messiness
 - [x] Small icons in handwriting mode
 - [x] SVG export
+- [x] Animated SVG export: the board writes itself in meeting order (#53)
 - [x] Voice input: microphone → Silero utterance detection → SenseVoice transcription with punctuation, plus provisional captions while speaking
 - [x] Speaker identification by voice: CAM++ voiceprints, online clustering, editable names
 - [x] System audio for other participants in online meetings: Linux and Windows; macOS not implemented yet

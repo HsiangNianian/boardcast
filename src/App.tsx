@@ -788,6 +788,9 @@ export default function App() {
                 }),
               }
             : undefined,
+        ...(kind === 'anim'
+          ? { steps: stepsRef.current, underlay: pagesRef.current[page]?.underlay, messy: messyLater / 100, weight: weightLater / 100 }
+          : {}),
         mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
       const where = await saveFile(name, blob)
       if (where) setToast({ ok: true, text: isDesktop ? t.app.saved(where) : t.app.downloaded(where) })
@@ -1519,6 +1522,10 @@ export default function App() {
                 <button type="button" role="menuitem" onClick={() => void exportAs('svg')}>
                   <span>{t.app.exportSvg}</span>
                   <small>{t.app.exportSvgHint}</small>
+                </button>
+                <button type="button" role="menuitem" onClick={() => void exportAs('anim')}>
+                  <span>{t.app.exportAnim}</span>
+                  <small>{t.app.exportAnimHint}</small>
                 </button>
                 <button type="button" role="menuitem" onClick={() => void exportAs('pdf')}>
                   <span>{t.app.exportPdf}</span>

@@ -2,6 +2,19 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.11.0 - 2026-10-31
+
+### Features
+
+- **glossary:** Correct in-house names and have the model use them (closes #22) ([`4bfdce1`](https://github.com/HsiangNianian/boardcast/commit/4bfdce1d8d64896acf49c9bd66b9f9d7a3b4709b))
+  - settings get a glossary, one term per line as "正确写法 = 错写, 错写", in two parts: one for all meetings kept on this computer and one saved with the meeting
+  - every sentence, spoken or typed, is corrected before it reaches the board: English terms match whole words, case-insensitively, with optional spaces or hyphens between words (media crawler, Graph RAG), and longer forms are replaced first
+  - the glossary is put in front of the board in the model's message, so it stays in the prefix cache and the model names things the standard way
+  - a "加进术语" button on a selected node adds its name to the meeting's glossary
+  - tests cover parsing, whole-word correction, mixed Chinese and English terms and the prompt line
+
+**Full diff:** [v0.10.0...v0.11.0](https://github.com/HsiangNianian/boardcast/compare/v0.10.0...v0.11.0)
+
 ## 0.10.0 - 2026-10-31
 
 ### Features

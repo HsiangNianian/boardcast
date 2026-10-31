@@ -196,7 +196,7 @@ The desktop app opens the system's Save As dialog. The web version downloads the
 
 ### Automatic updates
 
-Shortly after opening, the desktop app checks GitHub for the latest stable release. When one is available, "New version x.y.z" appears in the top bar. Open it to read release notes. "Download and restart" shows download progress, verifies the package signature (only packages signed with this project's private key are accepted), stops audio capture and the built-in model, installs, and restarts into the same meeting. If downloading fails, nothing changes and the meeting continues. Disable automatic checks or check manually under "Settings → Updates." Prereleases with suffixes such as `-rc.1` are not offered. Automatic updates are available from v0.7.0 onward; earlier versions need one manual download.
+Shortly after opening, the desktop app checks GitHub for the latest stable release. When one is available, "New version x.y.z" appears in the top bar. Open it to read release notes. "Download and restart" shows download progress, verifies the package signature (only packages signed with this project's private key are accepted), stops audio capture and the built-in model, installs, and restarts into the same meeting. If downloading fails, nothing changes and the meeting continues. Disable automatic checks or check manually under "Settings → Updates." Prereleases with suffixes such as `-1` are not offered. Automatic updates are available from v0.7.0 onward; earlier versions need one manual download.
 
 ### Interface
 
@@ -256,7 +256,7 @@ pnpm release 0.2.0 --push      # Also push the commit and tag, triggering the Re
 - The changelog groups entries by type: Features, Fixes, Documentation, Build and CI, and so on. Bullet points beginning with `- ` in commit bodies are preserved as subitems. Each entry links to its commit, with a comparison against the previous release at the end.
 - Without `--push`, you can edit the wording in CHANGELOG.md before pushing. The release body uses exactly the section that was pushed.
 - Manually pushed tags work too. If CHANGELOG.md has no section for that version, the release body is generated from commits since the previous tag.
-- Versions with a suffix such as `-rc.1` are marked as prereleases. All others, including 0.x, are stable releases. If a platform build fails, the release stays a draft; fix the problem and rerun Actions manually for that tag.
+- Versions with a suffix such as `0.19.0-1` are marked as prereleases. All others, including 0.x, are stable releases. The suffix must be a number: the Windows MSI rejects `-rc.1`; prereleases skip the RPM (RPM versions can't contain `-`). If a platform build fails, the release stays a draft; fix the problem and rerun Actions manually for that tag.
 - Automatic updates: the Release workflow signs update packages using the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and its password, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. tauri-action collects update metadata in `latest.json` and uploads it to the release. The app's public key is in `plugins.updater` in `tauri.conf.json`. Update packages are built only for releases using `src-tauri/tauri.updater.conf.json`; ordinary CI does not need the private key. Losing that key prevents installed versions from updating automatically, so users would need to download a new version manually.
 
 ## Roadmap

@@ -24,6 +24,10 @@ const die = (msg) => {
 }
 
 if (!version || !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version)) die('usage: pnpm release <x.y.z> [--push | --dry-run]')
+// Pre-releases: the Windows MSI only takes a numeric pre-release part (<= 65535), so 0.2.0-1, not 0.2.0-rc.1
+const pre = version.split('-')[1]
+if (pre !== undefined && !(/^\d+$/.test(pre) && Number(pre) <= 65535))
+  die(`pre-release part must be a number up to 65535 (the Windows MSI rejects anything else): use e.g. ${version.split('-')[0]}-1`)
 const tag = `v${version}`
 if (!dry && git('status', '--porcelain')) die('working tree is not clean; commit or stash first')
 try {

@@ -11,6 +11,7 @@
 // 7. 公式和它的编号合成一块，叫「公式 (5)」。
 // 纯函数，坐标是板书坐标（页面左上角为原点，y 向下）。
 
+import type { RegionRow } from '../engine/graph.ts'
 import type { Area } from '../engine/regions.ts'
 
 export interface TextPiece {
@@ -62,6 +63,7 @@ interface Line {
   kind: BlockKind
   /** 图表、公式的编号 */
   num?: string
+  row?: RegionRow
 }
 
 const latin = (ch: string | undefined) => !!ch && /[A-Za-z0-9,.;:)]/.test(ch)
@@ -161,6 +163,8 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
   for (const l of lines) {
     const ordered = parts.get(l)!.sort((a, b) => a.x - b.x)
     const big = Math.max(...ordered.map((p) => p.h))
+    const round = (v: number) => Math.round(v * 10) / 10
+    l.row = { y: Math.round(l.y), h: Math.round(l.h), segs: ordered.map((p) => ({ t: p.text.trim(), x: round(p.x), w: round(p.w) })) }
     l.text = ordered.reduce((s, p) => (!s ? p.text.trim() : p.h < big * 0.8 ? s + p.text.trim() : join(s, p.text.trim())), '')
     // 「S-」「6」这样分成两片的页码，拼好才认得出来
     if (PAGE_NO.test(l.text) && (l.y > H * 0.9 || l.y + l.h < H * 0.07)) l.text = ''
@@ -237,7 +241,7 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
   const live = lines.filter((l) => l.text)
 
   // —— 4. 拼段落 ——
-  type Block = PaperArea & { side: Side; lh: number; lines: number; num?: string; lastRight?: number }
+  type Block = PaperArea & { side: Side; lh: number; lines: number; num?: string; lastRight?: number; rows: RegionRow[] }
   // 这一页的行距：双倍行距的稿子（投稿版常见）行与行之间空着将近一行，不能当成段落的分界
   const pitches = new Map<Side, number[]>()
   const bySide = [...live].sort((a, b) => a.y - b.y)
@@ -269,6 +273,7 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
       prev.text = joinLine(prev.text, l.text)
       prev.w = Math.max(prev.x + prev.w, l.x + l.w) - prev.x
       prev.h = l.y + l.h - prev.y
+      if (l.row) prev.rows.push(l.row)
       continue
     }
     const glue =
@@ -292,9 +297,10 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
       prev.x = x0
       prev.h = l.y + l.h - prev.y
       prev.lines++
+      if (l.row) prev.rows.push(l.row)
       prev.lastRight = l.x + l.w
     } else
-      blocks.push({ text: l.text, x: l.x, y: l.y, w: l.w, h: l.h, kind: l.kind, side: l.side, lh: l.h, lines: 1, num: l.num, lastRight: l.x + l.w })
+      blocks.push({ text: l.text, x: l.x, y: l.y, w: l.w, h: l.h, kind: l.kind, side: l.side, lh: l.h, lines: 1, num: l.num, lastRight: l.x + l.w, rows: l.row ? [l.row] : [] })
   }
 
   // —— 5. 图表：从图注往上或往下找图表本身占的地方，里面的零碎文字（表格的格子、坐标轴、图例）并进来 ——
@@ -381,6 +387,7 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
   }
   const areas = blocks
     .filter((b) => !gone.has(b))
-    .map(({ text, x, y, w, h, kind, name }) => ({ text, x, y, w, h, kind, ...(name ? { name } : {}) }))
+    // 图表的文字零零碎碎，圈就圈整块
+    .map(({ text, x, y, w, h, kind, name, rows }) => ({ text, x, y, w, h, kind, ...(name ? { name } : {}), ...(kind === 'figure' || kind === 'table' ? {} : { rows }) }))
   return { areas, headings, columns: g === null ? 1 : 2 }
 }

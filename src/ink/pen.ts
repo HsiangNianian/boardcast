@@ -168,6 +168,21 @@ export function line(a: Pt, b: Pt, r: () => number, sag = 0.02): Stroke {
   return [a, mid, b]
 }
 
+/** 圈住跨行的一句话：沿着几行的外缘走一圈 */
+export function outline(boxes: { x: number; y: number; w: number; h: number }[], pad: number, r: () => number): Stroke {
+  const right: Pt[] = []
+  const left: Pt[] = []
+  for (const b of boxes) {
+    right.push([b.x + b.w + pad, b.y - pad / 2], [b.x + b.w + pad, b.y + b.h + pad / 2])
+    left.unshift([b.x - pad, b.y + b.h + pad / 2], [b.x - pad, b.y - pad / 2])
+  }
+  const corners = [...right, ...left]
+  corners.push(corners[0])
+  const pts: Stroke = []
+  for (let i = 0; i + 1 < corners.length; i++) pts.push(...line(corners[i], corners[i + 1], r, 0.008))
+  return pts
+}
+
 /** 圈：一圈多一点，起点和终点错开，像真的随手圈起来 */
 export function loop(cx: number, cy: number, rx: number, ry: number, r: () => number): Stroke {
   const start = r() * Math.PI * 2

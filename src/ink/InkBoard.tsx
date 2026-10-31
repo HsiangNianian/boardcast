@@ -72,7 +72,7 @@ export default function InkBoard({
   weight?: number
   /** 手动修改：选中的东西、点选回调、浮在选中物上方的按钮 */
   selection?: Selection | null
-  onSelect?: (sel: Selection | null) => void
+  onSelect?: (sel: Selection | null, at?: { x: number; y: number }) => void
   toolbar?: ReactNode
   /** 把选中的框或话题拖到了新位置（画板坐标的位移） */
   onMoveSel?: (sel: Selection, dx: number, dy: number) => void
@@ -227,7 +227,7 @@ export default function InkBoard({
     if (!p || p.moved || !onSelect || !lay) return
     // 点了一下（没拖动）：看点中了什么；点空白就取消选中
     const [x, y] = at(e)
-    onSelect(hitTest(lay, graph, v.x + x / v.k, v.y + y / v.k, 8 / v.k))
+    onSelect(hitTest(lay, graph, v.x + x / v.k, v.y + y / v.k, 8 / v.k), { x: v.x + x / v.k, y: v.y + y / v.k })
   }
   const onMove = (e: PointerEvent) => {
     if (moveFrom.current) {

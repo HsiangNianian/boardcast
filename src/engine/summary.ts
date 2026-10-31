@@ -59,7 +59,7 @@ function boardText(g: Graph): string {
   const touched = new Set(g.nodes.filter((n) => n.parent).map((n) => n.parent!))
   for (const e of g.edges) touched.add(e.from).add(e.to)
   const out = cloneGraph(g)
-  out.nodes = out.nodes.filter((n) => n.kind !== 'region' || n.marks.length || touched.has(n.id))
+  out.nodes = out.nodes.filter((n) => n.kind !== 'region' || n.marks.length || n.spans?.length || touched.has(n.id))
   return describe(out)
 }
 

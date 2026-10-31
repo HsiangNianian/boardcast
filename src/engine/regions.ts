@@ -1,7 +1,7 @@
 // 导入页（PDF 的一页、一张图片）变成一块板：页面大小记在 underlay 上，
 // 页面上一块块内容（一段字、一个标题、一张表）变成钉在原位的「原文」节点，模型开会时只能在上面圈画、连线、写批注。
 
-import { type Graph, emptyGraph } from './graph.ts'
+import { type Graph, type RegionRow, emptyGraph } from './graph.ts'
 
 /** 页面上的一块内容，坐标是板书坐标（页面左上角是原点） */
 export interface Area {
@@ -12,6 +12,8 @@ export interface Area {
   y: number
   w: number
   h: number
+  /** 文字层，有的话可以圈到词和句 */
+  rows?: RegionRow[]
 }
 
 /** 名字太长时截一截：模型看到的实体表越短越好，指认一块原文看开头就够了 */
@@ -38,6 +40,7 @@ export function pageGraph(size: { w: number; h: number; no?: number }, areas: Ar
       ink: 'ink',
       at: { x: Math.round(a.x), y: Math.round(a.y), w: Math.round(a.w), h: Math.round(a.h) },
       ...(flat.length > MAX ? { text: flat } : {}),
+      ...(a.rows?.length ? { rows: a.rows } : {}),
     })
   }
   return g

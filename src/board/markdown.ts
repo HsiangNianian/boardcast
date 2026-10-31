@@ -131,11 +131,12 @@ function board(g: Graph, out: string[], h: string) {
   }
 
   // 导入页上被圈画过、写了批注的原文
-  const pins = g.nodes.filter((n) => live(n) && n.kind === 'region' && (n.marks.length || children(g, n.id).some(live)))
+  const pins = g.nodes.filter((n) => live(n) && n.kind === 'region' && (n.marks.length || n.spans?.length || children(g, n.id).some(live)))
   if (pins.length) {
     out.push(`${h} 原文标注`, '')
     for (const n of pins) {
       out.push(`- ${marked(n)}`)
+      for (const s of n.spans ?? []) out.push(`   - ${s.mark}：${s.text}`)
       for (const c of children(g, n.id).filter(live)) out.push(`   - ${attachLine(c)}`)
     }
     out.push('')

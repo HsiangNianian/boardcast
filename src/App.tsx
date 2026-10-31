@@ -45,6 +45,7 @@ import PageStrip from './ui/PageStrip.tsx'
 import type { PdfImport } from './board/importPdf.ts'
 import { type Thumb, pageThumb, thumbOf } from './board/thumb.ts'
 import { navTarget, parseNav } from './engine/nav.ts'
+import { hasSpan, spanAt, toggleSpan } from './engine/spans.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -828,9 +829,23 @@ export default function App() {
     setSelection(null)
   }
 
+  /** 选中的原文：手动圈画按这个范围，点到的那个词或那句话 */
+  const [markUnit, setMarkUnit] = useState<'word' | 'sentence' | 'block'>('block')
+  const selectedAt = useRef<{ x: number; y: number } | undefined>(undefined)
+  const unitSpan = (mark: Mark) => {
+    if (selection?.kind !== 'node' || markUnit === 'block' || !selectedAt.current) return null
+    const n = session.graph.nodes.find((x) => x.id === selection.id)
+    return n?.rows ? spanAt(n.rows, selectedAt.current.x, selectedAt.current.y, mark, markUnit) : null
+  }
+
   function markSelection(mark: Mark) {
     if (selection?.kind !== 'node') return
     const n = session.graph.nodes.find((x) => x.id === selection.id)
+    const span = unitSpan(mark)
+    if (span) {
+      applyEdit(toggleSpan(session.graph, selection.id, span), `${hasSpan(n, span) ? '去掉了' : '加上了'}「${span.text.slice(0, 30)}」的${mark}`)
+      return
+    }
     const on = n?.marks.includes(mark)
     applyEdit(toggleMark(session.graph, selection.id, mark), `${on ? '去掉了' : '加上了'}${describe(session.graph, selection)}的${mark}`)
   }
@@ -1432,7 +1447,8 @@ export default function App() {
             onSelect={
               replay
                 ? undefined
-                : (sel) => {
+                : (sel, at) => {
+                    selectedAt.current = at
                     setSelection(sel)
                     setRenaming(null)
                   }
@@ -1475,12 +1491,27 @@ export default function App() {
                     改字
                   </button>
                   )}
+                  {selection.kind === 'node' && session.graph.nodes.find((n) => n.id === selection.id)?.rows && (
+                    <span className="mark-unit" role="group" aria-label="圈画范围">
+                      {(
+                        [
+                          ['word', '词'],
+                          ['sentence', '句'],
+                          ['block', '段'],
+                        ] as const
+                      ).map(([u, label]) => (
+                        <button key={u} type="button" className={markUnit === u ? 'on' : ''} aria-pressed={markUnit === u} onClick={() => setMarkUnit(u)}>
+                          {label}
+                        </button>
+                      ))}
+                    </span>
+                  )}
                   {selection.kind === 'node' &&
-                    (['划掉', '圈出', '星标'] as const).map((m) => (
+                    (['划掉', '圈出', '下划线', '星标'] as const).map((m) => (
                       <button
                         key={m}
                         type="button"
-                        className={session.graph.nodes.find((n) => n.id === selection.id)?.marks.includes(m) ? 'on' : ''}
+                        className={(unitSpan(m) ? hasSpan(session.graph.nodes.find((n) => n.id === selection.id), unitSpan(m)) : session.graph.nodes.find((n) => n.id === selection.id)?.marks.includes(m)) ? 'on' : ''}
                         onClick={() => markSelection(m)}
                       >
                         {m}

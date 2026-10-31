@@ -17,6 +17,27 @@ export type Mark = (typeof MARKS)[number]
 export const ICONS = ['数据库', '表格', '手机', '人', '服务器', '文档', '云', '图表', '消息'] as const
 export type Icon = (typeof ICONS)[number]
 
+/** 原文的一行：高度和这一行的文字碎片。按它定位一个词、一句话（见 spans.ts） */
+export interface RegionRow {
+  y: number
+  h: number
+  segs: { t: string; x: number; w: number }[]
+}
+
+export interface Box {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** 标记在原文的一个词或一句话上；一句话跨行时每行一个框 */
+export interface Span {
+  mark: Mark
+  text: string
+  boxes: Box[]
+}
+
 export interface Node {
   id: string
   label: string
@@ -32,6 +53,10 @@ export interface Node {
   at?: { x: number; y: number; w: number; h: number }
   /** region 的全文：label 只是开头，模型要看全文才知道一个词在哪一段 */
   text?: string
+  /** region 的文字层，一行一条 */
+  rows?: RegionRow[]
+  /** region 上圈画的词、句；marks 是整块的 */
+  spans?: Span[]
 }
 
 export interface Edge {
@@ -126,6 +151,7 @@ export function describe(g: Graph): string {
     if (n.aliases.length) extra.push(`又称 ${n.aliases.join('/')}`)
     if (n.group) extra.push(`在 ${n.group}`)
     if (n.marks.length) extra.push(n.marks.join('、'))
+    for (const s of n.spans ?? []) extra.push(`${s.mark}「${s.text.slice(0, 20)}」`)
     if (n.icon) extra.push(`图标 ${n.icon}`)
     const shown = n.text ? (n.text.length > REGION_TEXT ? `${n.text.slice(0, REGION_TEXT)}…` : n.text) : n.label
     lines.push(`${'  '.repeat(depth)}${n.id} ${TAG[n.kind]}${shown}${extra.length ? `（${extra.join('，')}）` : ''}`)

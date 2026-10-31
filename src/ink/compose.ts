@@ -6,7 +6,7 @@ import { FONT, TITLE } from '../board/layout.ts'
 import type { Graph, Node } from '../engine/graph.ts'
 import { type Pt, type Stroke, glyph } from './glyphs.ts'
 import { inkIcon } from './icons.ts'
-import { type Inked, arrow, box, ink, line, loop, placeGlyph, rng, strike } from './pen.ts'
+import { type Inked, arrow, box, ink, line, loop, outline, placeGlyph, rng, strike } from './pen.ts'
 
 export interface InkLook {
   paper: string
@@ -143,6 +143,19 @@ export async function compose(
     if (n.marks.includes('下划线')) add(`${n.id}|u`, c, 1, [line([x - 2, y + h + 6], [x + w + 4, y + h + 4], r, 0.01)], penFor(FONT))
     if (n.marks.includes('划掉')) add(`${n.id}|x`, c, 1, h > 40 ? [line([x, y], [x + w, y + h], r, 0.02), line([x + w, y], [x, y + h], r, 0.02)] : strike(x, y + h / 2, w, r), penFor(FONT) * 1.1)
     if (n.marks.includes('星标')) add(`${n.id}|s`, c, 1, await write('★', x - FONT - 10, y + (h - FONT) / 2, FONT, `${n.id}s`, messy), penFor(FONT))
+    // 圈画在一个词、一句话上的
+    for (const s of n.spans ?? []) {
+      const key = `${n.id}|${s.mark}|${s.boxes.map((b) => `${b.x},${b.y}`).join(';')}`
+      const sr = rng(key)
+      const thin = penFor(FONT) * 0.8
+      if (s.mark === '圈出') {
+        const b = s.boxes[0]
+        add(key, c, 1, [s.boxes.length === 1 ? loop(b.x + b.w / 2, b.y + b.h / 2, b.w / 2 + 6, b.h / 2 + 4, sr) : outline(s.boxes, 4, sr)], thin)
+      }
+      if (s.mark === '下划线') add(key, c, 1, s.boxes.map((b) => line([b.x, b.y + b.h + 2], [b.x + b.w, b.y + b.h + 2], sr, 0.004)), thin)
+      if (s.mark === '划掉') add(key, c, 1, s.boxes.flatMap((b) => strike(b.x, b.y + b.h / 2, b.w, sr)), thin)
+      if (s.mark === '星标') add(key, c, 1, await write('★', s.boxes[0].x - 14, s.boxes[0].y, 12, key, messy), thin)
+    }
   }
   // 边栏里的批注：一根细线连回它说的那块原文
   for (const row of l.regions.find((x) => x.id === '__margin')?.rows ?? []) {

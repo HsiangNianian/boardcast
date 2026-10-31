@@ -1933,3 +1933,11 @@ button.danger {
 .import-choice button {
   flex: none;
 }
+
+.mark-unit {
+  display: inline-flex;
+  gap: 2px;
+  margin-right: 4px;
+  padding-right: 6px;
+  border-right: 1px solid var(--line);
+}

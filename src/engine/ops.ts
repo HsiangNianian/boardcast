@@ -11,7 +11,8 @@
 //   Q [引用] 「问题」          记一个待定的问题，可以挂在某个东西旁边
 //   F [引用] 「公式」          记一个公式或短表达式
 //   K 引用 「备注」            在某个东西旁边写一句备注
-//   M 引用 划掉|圈出|下划线|星标   做标记；纠正时优先划掉而不是删掉
+//   M 引用 划掉|圈出|下划线|星标 [句] [「原文」]   做标记；纠正时优先划掉而不是删掉。
+//                              原文上可以只标一个词（「原文」）或者它所在的整句（句 「原文」）
 //   I 引用 图标名              给东西配一个小图标
 //   H 引用                     指给大家看：高亮一下，板书不变
 // 通用：
@@ -35,6 +36,7 @@ import {
   norm,
   subtree,
 } from './graph.ts'
+import { addSpan, locate } from './spans.ts'
 
 export type Ref = { id: string } | { name: string }
 
@@ -50,7 +52,7 @@ export type Op =
   | { op: 'L'; parent: Ref; name: string }
   | { op: 'Q' | 'F'; parent?: Ref; text: string }
   | { op: 'K'; target: Ref; text: string }
-  | { op: 'M'; target: Ref; mark: Mark }
+  | { op: 'M'; target: Ref; mark: Mark; quote?: string; sentence?: boolean }
   | { op: 'I'; target: Ref; icon: Icon }
   | { op: 'H'; target: Ref }
 
@@ -121,8 +123,11 @@ export function parseOps(text: string): Op[] {
         else if (rest[0]?.text) ops.push({ op: head.text, text: rest[0].text })
         break
       case 'M':
-        if (a && (MARKS as readonly string[]).includes(second ?? ''))
-          ops.push({ op: 'M', target: a, mark: second as Mark })
+        if (a && (MARKS as readonly string[]).includes(second ?? '')) {
+          const sentence = rest[2]?.text === '句' && !rest[2].quoted
+          const quote = rest[sentence ? 3 : 2]
+          ops.push({ op: 'M', target: a, mark: second as Mark, ...(quote?.quoted && quote.text ? { quote: quote.text, ...(sentence ? { sentence } : {}) } : {}) })
+        }
         break
       case 'I':
         if (a && (ICONS as readonly string[]).includes(second ?? ''))
@@ -164,7 +169,7 @@ export function formatOps(ops: Op[]): string {
         case 'K':
           return `K ${r(o.target)} 「${o.text}」`
         case 'M':
-          return `M ${r(o.target)} ${o.mark}`
+          return `M ${r(o.target)} ${o.mark}${o.quote ? `${o.sentence ? ' 句' : ''} 「${o.quote}」` : ''}`
         case 'I':
           return `I ${r(o.target)} ${o.icon}`
         case 'H':
@@ -258,6 +263,21 @@ export function applyOps(graph: Graph, ops: Op[], ink: Ink = 'ink'): Graph {
       }
       case 'M': {
         const n = get(resolve(g, o.target, false, ink))
+        if (n && o.quote && n.kind === 'region') {
+          // 模型挑错块也没关系：这张板上哪块真有这些字，就标在哪块
+          const unit = o.sentence ? 'sentence' : 'word'
+          const hosts = [n, ...g.nodes.filter((x) => x !== n && x.kind === 'region')]
+          let found = false
+          for (const h of hosts) {
+            const s = h.rows && locate(h.rows, o.quote, o.mark, unit)
+            if (!s) continue
+            addSpan(h, s)
+            touch(h.id)
+            found = true
+            break
+          }
+          if (found) break
+        }
         if (n && !n.marks.includes(o.mark)) n.marks.push(o.mark)
         break
       }

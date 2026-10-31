@@ -420,7 +420,8 @@ export const zh: Messages = {
     renameFrom: '把',
     renameTo: '改成',
     renameSpeaker: '改名',
-    renameSpeakerTitle: (name: string) => `给「${name}」改名`,
+    renameSpeakerTitle: (name: string) => `给「${name}」改名；鼠标停在这里，白板上会标出${name}提的东西`,
+    raisedByTitle: (name: string) => `${name}提的：点一下跳到会议记录里那句话`,
     cancel: '取消',
     logEmpty: '还没有人说话。说的每一句和它画出来的东西都会记在这里。',
     gotoPage: '切到这张板',
@@ -428,7 +429,11 @@ export const zh: Messages = {
     editBadge: '改',
     drawing: '画着…',
     lineFellBack: ' · 远程失败，这句用了本地模型',
+    lineFellBackShort: ' · 本地补画',
     noChange: '（没有改动）',
+    drawnWithNext: '（和后面几句攒在一起画的，画了什么记在那批的最后一句上）',
+    lineFailed: '没画上',
+    lineFailedDetail: '（模型这一轮出错了，这句没画到板上）',
     timing: (s: { wait?: number; asr?: number; voiceprint?: number; queue?: number; model?: number }) =>
       [
         s.wait !== undefined && `停顿 ${s.wait}`,

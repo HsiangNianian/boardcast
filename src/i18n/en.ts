@@ -436,7 +436,8 @@ export const en = {
     renameFrom: 'Rename',
     renameTo: 'to',
     renameSpeaker: 'Rename',
-    renameSpeakerTitle: (name: string) => `Rename "${name}"`,
+    renameSpeakerTitle: (name: string) => `Rename "${name}"; hover to see on the board what ${name} raised`,
+    raisedByTitle: (name: string) => `Raised by ${name}: click to jump to where it was said`,
     cancel: 'Cancel',
     logEmpty: 'Nobody has spoken yet. Every sentence, and what it drew, shows up here.',
     gotoPage: 'Go to this board',
@@ -444,7 +445,11 @@ export const en = {
     editBadge: 'Edit',
     drawing: 'Drawing…',
     lineFellBack: ' · remote failed, local model drew this one',
+    lineFellBackShort: ' · local fallback',
     noChange: '(no changes)',
+    drawnWithNext: '(drawn together with the lines after it; the changes are listed on the last line of that batch)',
+    lineFailed: 'not drawn',
+    lineFailedDetail: '(the model failed on this round, so this line did not reach the board)',
     timing: (s: { wait?: number; asr?: number; voiceprint?: number; queue?: number; model?: number }) =>
       [
         s.wait !== undefined && `pause ${s.wait}`,

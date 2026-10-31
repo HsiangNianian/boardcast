@@ -29,6 +29,8 @@ import { History as EditHistory, type Selection, describe, exists, pinned, remov
 import { MARKS, type Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
 import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
+import { firstSeen, renameBy, renameByInSteps, saidAt } from './engine/attribute.ts'
+import { settle } from './engine/pending.ts'
 import { summarize } from './engine/summary.ts'
 import { correct, parseGlossary } from './engine/glossary.ts'
 import { type Voice, identify, renameVoice } from './engine/voices.ts'
@@ -44,6 +46,7 @@ import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Re
 import MeetingsPanel from './ui/MeetingsPanel.tsx'
 import ReplayBar, { SPEEDS } from './ui/ReplayBar.tsx'
 import PageStrip from './ui/PageStrip.tsx'
+import { SPEAKER_MARKERS, initial, speakerSlot } from './ui/speakers.ts'
 import type { PdfImport } from './board/importPdf.ts'
 import { type Thumb, pageThumb, thumbOf } from './board/thumb.ts'
 import { navTarget, parseNav } from './engine/nav.ts'
@@ -276,9 +279,15 @@ export default function App() {
   const summingFor = useRef<AbortController | null>(null)
   const [graph, setGraph] = useState<Graph>(emptyGraph)
   const [hot, setHot] = useState<Set<string>>(new Set())
+  /** 溯源：鼠标停在哪个说话人上，白板就标出他提的东西 */
+  const [traceWho, setTraceWho] = useState<string | null>(null)
   const [speaker, setSpeaker] = useState('A')
   // 会议记录栏：窄屏默认收起
   const [showLog, setShowLog] = useState(() => load('boardcast.log', innerWidth > 1100 ? 'open' : 'closed') === 'open')
+  // 会议记录收起来了，悬停的说话人也就没了
+  useEffect(() => {
+    if (!showLog) setTraceWho(null)
+  }, [showLog])
   // 启动动画每次打开应用放一次
   const [splash, setSplash] = useState(true)
   // 「整理排版」：忘掉记住的位置，整块重新排一次
@@ -418,29 +427,22 @@ export default function App() {
           setHot(new Set(ids))
           if (ids.length) setTimeout(() => setHot(new Set()), 3000)
         },
+        // 一批里的每句都标上这一轮的耗时；画了什么记在这批的最后一句上（前面几句的 ops 是空串）
         llm: (r) =>
-          setLines((ls) => {
-            // 一批里的每句都标上这一轮的耗时
-            const out = [...ls]
-            let left = r.batch.length
-            for (let i = out.length - 1; i >= 0 && left > 0; i--) {
-              if (out[i].ms === undefined) {
-                out[i] = {
-                  ...out[i],
-                  ms: r.ms,
-                  queueMs: r.queuedMs[left - 1],
-                  ops: left === r.batch.length ? formatOps(r.ops) || '-' : '',
-                  via: r.via,
-                  fellBack: !!r.fellBack,
-                }
-                left--
-              }
-            }
-            return out
-          }),
-        error: (e) => {
+          setLines((ls) =>
+            settle(ls, r.batch, (k) => ({
+              ms: r.ms,
+              queueMs: r.queuedMs[k],
+              ops: k === r.batch.length - 1 ? formatOps(r.ops) || '-' : '',
+              via: r.via,
+              fellBack: !!r.fellBack,
+            })),
+          ),
+        error: (e, batch) => {
           console.error(e)
           setOnline(false)
+          // 这几句不会再画了：别一直挂着「画着…」（还会挡住翻页、导入）
+          setLines((ls) => settle(ls, batch, () => ({ ms: 0, ops: '', failed: true })))
         },
       })
   const session = sessionRef.current
@@ -906,6 +908,38 @@ export default function App() {
     session.history = session.history.map(fix)
     voicesRef.current = renameVoice(voicesRef.current, from, to)
     if (speakerRef.current.trim() === from) setSpeaker(to)
+    // 板书上记的「谁提的」也跟着改：这张板、别的板、回放记录、撤销记录
+    const g = renameBy(session.graph, from, to)
+    session.graph = g
+    lastInk.current = renameBy(lastInk.current, from, to)
+    recorded.current = renameBy(recorded.current, from, to)
+    stepsRef.current = renameByInSteps(stepsRef.current, from, to)
+    pagesRef.current = pagesRef.current.map((p) => ({ ...p, graph: renameBy(p.graph, from, to), ...(p.steps ? { steps: renameByInSteps(p.steps, from, to) } : {}) }))
+    editHistory.current.map((x) => ({ ...x, graph: renameBy(x.graph, from, to) }))
+    if (!replayRef.current) setGraph(g)
+  }
+
+  /** 选中的那条板书是谁提的，和它的名字（找会议记录里那句话用） */
+  const raisedBy = (sel: Selection | null): { who: string; names: string[] } | null => {
+    if (!sel) return null
+    const g = session.graph
+    if (sel.kind === 'node') {
+      const n = g.nodes.find((x) => x.id === sel.id)
+      return n?.by ? { who: n.by, names: [n.label, ...n.aliases] } : null
+    }
+    const e = g.edges.find((x) => x.from === sel.from && x.to === sel.to)
+    const name = (id: string) => g.nodes.find((x) => x.id === id)?.label ?? ''
+    return e?.by ? { who: e.by, names: [name(e.from), name(e.to), e.label ?? ''] } : null
+  }
+
+  /** 跳到会议记录里提出这条板书的那句话 */
+  function jumpToRaised(sel: Selection) {
+    const r = raisedBy(sel)
+    if (!r) return
+    const i = saidAt(linesRef.current, r.who, r.names, pageRef.current, firstSeen(stepsRef.current, sel))
+    if (i === undefined) return
+    setShowLog(true)
+    setJumpLine(i)
   }
 
   function commitRename() {
@@ -1345,6 +1379,8 @@ export default function App() {
     if (speaker.trim() && !seen.includes(speaker.trim())) seen.push(speaker.trim())
     return seen
   }, [lines, speaker])
+  const trace = traceWho ? { who: traceWho, color: SPEAKER_MARKERS[speakerSlot(speakers, traceWho)] } : null
+  const selRaised = raisedBy(selection)
 
   const empty = lines.length === 0 && graph.nodes.length === 0 && !partial
   /** 会上说的话（不算手动修改） */
@@ -1586,6 +1622,7 @@ export default function App() {
             selection={replay ? null : selection}
             layoutRev={layoutRev}
             underlay={pagesRef.current[page]?.underlay}
+            trace={trace}
             onMoveSel={replay ? undefined : moveSelection}
             onSelect={
               replay
@@ -1620,6 +1657,11 @@ export default function App() {
                 </form>
               ) : (
                 <>
+                  {selRaised && (
+                    <button type="button" className="by" onClick={() => jumpToRaised(selection)} title={t.app.raisedByTitle(selRaised.who)}>
+                      <span className={`who c${speakerSlot(speakers, selRaised.who)}`}>{selRaised.who}</span>
+                    </button>
+                  )}
                   {!pinned(session.graph, selection) && (
                   <button
                     type="button"
@@ -1822,7 +1864,8 @@ export default function App() {
             </button>
           </form>
         )}
-        <div className="lines">
+        {/* 悬停的那句可能在鼠标底下消失（回放往回跳），移出整个列表时总归取消溯源 */}
+        <div className="lines" onMouseLeave={() => setTraceWho(null)}>
           {lines.length === 0 && !partial && <p className="empty">{t.app.logEmpty}</p>}
           {shown.map((l, i) => (
             <Fragment key={i}>
@@ -1832,32 +1875,49 @@ export default function App() {
               </button>
             )}
             <article
-              className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}${jumpLine === i ? ' jump' : ''}`}
+              className={`line${l.ms === undefined ? ' pending' : ''}${l.failed ? ' failed' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}${jumpLine === i ? ' jump' : ''}`}
             >
               {l.manual && <span className="who edit">{t.app.editBadge}</span>}
               {l.speaker && (
                 <span
-                  className={`who c${speakers.indexOf(l.speaker) % 6}`}
+                  className={`who c${speakerSlot(speakers, l.speaker)}`}
                   role="button"
                   tabIndex={0}
                   title={t.app.renameSpeakerTitle(l.speaker)}
+                  aria-label={t.app.renameSpeakerTitle(l.speaker)}
                   onClick={() => setRenamingWho(l.speaker!)}
                   onKeyDown={(e) => e.key === 'Enter' && setRenamingWho(l.speaker!)}
+                  onMouseEnter={() => setTraceWho(l.speaker!)}
+                  onMouseLeave={() => setTraceWho(null)}
+                  onFocus={() => setTraceWho(l.speaker!)}
+                  onBlur={() => setTraceWho(null)}
                 >
-                  {l.speaker}
+                  {initial(l.speaker)}
                 </span>
               )}
               <div className="body">
+                {/* 名字一行；耗时浮在这一行的右边，点开看这句画了什么 */}
+                {!l.manual && (
+                  <div className="head">
+                    {l.speaker && (
+                      <span className="name" onMouseEnter={() => setTraceWho(l.speaker!)} onMouseLeave={() => setTraceWho(null)}>
+                        {l.speaker}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <p>{l.text}</p>
                 {!l.manual && (
                 <details>
                   <summary>
-                    {l.ms === undefined ? t.app.drawing : `${Math.round(l.ms)} ms`}
-                    {l.ms !== undefined && useRemote && l.via && ` · ${l.via}`}
-                    {l.fellBack && <em>{t.app.lineFellBack}</em>}
+                    {l.failed ? <em>{t.app.lineFailed}</em> : l.ms === undefined ? t.app.drawing : `${Math.round(l.ms)} ms`}
+                    {l.ms !== undefined && !l.failed && useRemote && l.via && ` · ${l.via}`}
+                    {l.fellBack && <em>{t.app.lineFellBackShort}</em>}
                   </summary>
-                  {l.ms !== undefined && (l.heard || l.queueMs) ? <p className="timing">{t.app.timing(lineTiming(l))}</p> : null}
-                  {l.ops ? <pre>{l.ops}</pre> : <pre>{t.app.noChange}</pre>}
+                  {l.fellBack && <p className="timing warn">{t.app.lineFellBack.replace(/^ · /, '')}</p>}
+                  {l.ms !== undefined && !l.failed && (l.heard || l.queueMs) ? <p className="timing">{t.app.timing(lineTiming(l))}</p> : null}
+                  {/* 空串：和后面几句攒成一批画的，画了什么记在那批的最后一句上；'-'：这一轮没改板书 */}
+                  <pre>{l.failed ? t.app.lineFailedDetail : l.ops === '' ? t.app.drawnWithNext : !l.ops || l.ops === '-' ? t.app.noChange : l.ops}</pre>
                 </details>
                 )}
               </div>
@@ -1866,8 +1926,9 @@ export default function App() {
           ))}
           {partial && !replay && (
             <article className="line partial" aria-live="polite">
-              {speaker.trim() && <span className={`who c${speakers.indexOf(speaker.trim()) % 6}`}>{speaker.trim()}</span>}
+              {speaker.trim() && <span className={`who c${speakerSlot(speakers, speaker.trim())}`}>{initial(speaker.trim())}</span>}
               <div className="body">
+                <div className="head">{speaker.trim() && <span className="name">{speaker.trim()}</span>}</div>
                 <p>{partial}…</p>
               </div>
             </article>

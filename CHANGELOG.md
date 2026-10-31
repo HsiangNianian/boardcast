@@ -2,6 +2,19 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.14.0 - 2026-10-31
+
+### Features
+
+- **import:** Import papers straight from an arXiv link (refs #32) ([`4bf1a3c`](https://github.com/HsiangNianian/boardcast/commit/4bf1a3cd9283fccfa452eff72652b30815a582f4))
+  - the import button opens a menu: choose a file, or paste an arXiv link or id (arxiv.org/abs/..., /pdf/...v2.pdf, arXiv:2401.12345, a bare id, old-style cs/0112017)
+  - the desktop shell downloads the PDF (arxiv_pdf): only valid arXiv ids, only from arxiv.org even after redirects, at most 60 MB, and the response must be a PDF
+  - the download goes through the same PDF import, so papers get the column, section, figure and table layout and the paper title as the meeting name
+  - the web build explains that browsers cannot fetch from arXiv and asks for the PDF instead
+  - tests: id parsing, id validation in Rust, and an ignored test that downloads a real paper
+
+**Full diff:** [v0.13.0...v0.14.0](https://github.com/HsiangNianian/boardcast/compare/v0.13.0...v0.14.0)
+
 ## 0.13.0 - 2026-10-31
 
 ### Features

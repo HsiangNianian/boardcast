@@ -42,7 +42,7 @@ import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Re
 import MeetingsPanel from './ui/MeetingsPanel.tsx'
 import ReplayBar, { SPEEDS } from './ui/ReplayBar.tsx'
 import PageStrip from './ui/PageStrip.tsx'
-import { type Thumb, thumbOf } from './board/thumb.ts'
+import { type Thumb, pageThumb, thumbOf } from './board/thumb.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
 
@@ -550,7 +550,8 @@ export default function App() {
     void board.layout(graph).then(async (l) => {
       if (stale) return
       if (!replayRef.current) {
-        const t = thumbOf(l)
+        // 导入页：画原文块的位置，一眼认得出是哪一页
+        const t = graph.underlay ? pageThumb(graph) : thumbOf(l)
         thumbRef.current = t
         setThumbs((ts) => ts.map((x, i) => (i === pageRef.current ? t : x)))
       }
@@ -1009,7 +1010,8 @@ export default function App() {
     const cur = all[pageRef.current]
     const blank = !cur.underlay && !cur.graph.nodes.some((n) => n.ink === 'ink')
     const at = blank ? pageRef.current : all.length
-    all.splice(at, blank ? 1 : 0, ...add)
+    // 没打开过的板也要有缩略图，翻页时认得出来
+    all.splice(at, blank ? 1 : 0, ...add.map((p) => (p.thumb ? p : { ...p, thumb: pageThumb(p.graph) })))
     pagesRef.current = all
     pageRef.current = at
     showPage(all[at])
@@ -1036,18 +1038,18 @@ export default function App() {
 
   /** 导入一份 PDF（文件或者从 arXiv 下的） */
   async function importPdfData(name: string, data: ArrayBuffer | Uint8Array) {
-    const { importPdf, MAX_PAGES } = await import('./board/importPdf.ts')
+    const { importPdf } = await import('./board/importPdf.ts')
     setToast({ ok: true, text: `正在读 ${name}…` })
     const r = await importPdf(data, (done, total) => setToast({ ok: true, text: `正在读 ${name}：${done}/${total} 页` }))
     const extra = [
-      r.total > MAX_PAGES && `只导了前 ${MAX_PAGES} 页`,
       r.refsSkipped && `参考文献 ${r.refsSkipped} 页没建板`,
-      r.scanned && `${r.scanned} 页是扫描件，没有能指认的文字`,
+      r.unread && `板到上限了，最后 ${r.unread} 页没导`,
+      r.scanned && `${r.scanned} 页没有文字层，整页算一张图`,
     ].filter(Boolean)
     // 这场会还是空的、也没改过名：用文档的标题当会议名
     const blank = !lines.length && !pagesRef.current.some((p) => p.underlay || p.graph.nodes.some((n) => n.ink === 'ink'))
     if (blank && !meeting.titled && r.title) setMeeting((m) => ({ ...m, title: r.title!, titled: true }))
-    addPages(r.pages, `导入了 ${name}（${r.pages.length} 页${extra.length ? `，${extra.join('，')}` : ''}）`)
+    addPages(r.pages, `导入了 ${name}（共 ${r.total} 页，建了 ${r.pages.length} 张板${extra.length ? `，${extra.join('，')}` : ''}）`)
     setToast({
       ok: true,
       text: r.paper

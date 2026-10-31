@@ -117,3 +117,104 @@ test('sentence-like lines and figure labels are not section headings', () => {
   )
   assert.deepEqual(r.headings, [])
 })
+
+// 单栏、双倍行距的投稿稿：字高 18、行距 35
+const wide = (y: number, text: string, x = 106, w = 688, h = 18): TextPiece => ({ text, x, y, w, h })
+
+test('double-spaced lines still form a paragraph, and broken words are rejoined', () => {
+  const r = analyzePage(
+    [
+      wide(100, 'Computational chemistry has become a tool for probing, predicting, and more automa-', 132, 662),
+      wide(135, 'tion of many multi-step tasks across codes and platforms in the daily work of people'),
+      wide(170, 'who run them on clusters.', 106, 300),
+      wide(205, 'One major line of prior work approaches this problem through workflows of many steps', 132, 662),
+      wide(240, 'and is still only one of them.', 106, 300),
+    ],
+    900,
+    1165,
+  )
+  assert.equal(r.areas.length, 2)
+  assert.ok(r.areas[0].text.includes('predicting'))
+  assert.ok(r.areas[0].text.includes('automation of many'))
+})
+
+test('an abstract indented on both sides stays one paragraph', () => {
+  const r = analyzePage(
+    [100, 133, 166].map((y, i) => wide(y, 'This work presents a decoupled framework for computational chemistry automation here', i ? 150 : 174, i ? 600 : 576, 16)).concat(
+      Array.from({ length: 4 }, (_, i) => wide(300 + i * 35, 'Filler body text so the page has its full width across the whole column of the page')),
+    ),
+    900,
+    1165,
+  )
+  assert.equal(r.areas.filter((a) => a.text.startsWith('This work')).length, 1)
+  assert.ok(r.areas[0].text.length > 200)
+})
+
+test('citation superscripts stay inside their line, wherever they sort', () => {
+  const r = analyzePage(
+    [
+      { text: '4', x: 190, y: 1000, w: 6, h: 12 },
+      { text: ' and QMflows,', x: 197, y: 1001, w: 100, h: 18 },
+      { text: '5', x: 298, y: 1000, w: 6, h: 12 },
+      { text: 'as well as other systems for science', x: 310, y: 1001, w: 480, h: 18 },
+      { text: 'FireWorks,', x: 106, y: 1002, w: 83, h: 18 },
+    ],
+    900,
+    1165,
+  )
+  assert.equal(r.areas.length, 1)
+  assert.ok(r.areas[0].text.startsWith('FireWorks,4 and QMflows,5'), r.areas[0].text)
+})
+
+test('wide numbered headings and wrapped headings are recognized', () => {
+  const body = Array.from({ length: 6 }, (_, i) => wide(200 + i * 35, 'Plain body text that fills up the whole line of the column for this little test page'))
+  const r = analyzePage(
+    [wide(100, '2.3 The Agent Taskboard Manifest and the DPDispatcher Skill of Everything', 106, 680, 22), wide(128, 'Automation Here', 106, 150, 22), ...body],
+    900,
+    1165,
+  )
+  assert.equal(r.headings[0], '§2.3 The Agent Taskboard Manifest and the DPDispatcher Skill of Everything Automation Here')
+})
+
+test('a caption may open with a bracket, and split page numbers are dropped', () => {
+  const r = analyzePage(
+    [
+      wide(100, 'Figure 2: (a) Schematic of the loop', 106, 300),
+      { text: 'S-', x: 440, y: 1100, w: 12, h: 18 },
+      { text: '6', x: 452, y: 1100, w: 8, h: 18 },
+    ],
+    900,
+    1165,
+  )
+  assert.equal(r.areas.length, 1)
+  assert.equal(r.areas[0].kind, 'figure')
+})
+
+test('initials and journal names do not end the reference list', () => {
+  const state: PaperState = { inRefs: false }
+  analyzePage([wide(100, 'References', 106, 100, 25), wide(150, '(1) Wu, T.; Sun, M. A review of things. Small 2020, 1.')], 900, 1165, state)
+  const page = analyzePage(
+    [wide(100, '(53) Case, D. A.; Aktulga, H. M. Something long about software tools for simulation'), wide(135, 'J. Chem. Inf. Model. 2025, 65,', 145, 300), wide(170, '(54) Zhou, G.; Gao, Z. Another entry of the reference list that goes on for a while')],
+    900,
+    1165,
+    state,
+  )
+  assert.ok(state.inRefs)
+  assert.ok(page.areas.every((a) => a.kind === 'reference'))
+  assert.equal(page.areas.length, 2)
+  analyzePage([wide(100, 'Supporting Information:', 284, 333, 30)], 900, 1165, state)
+  assert.ok(!state.inRefs)
+})
+
+test('a page with only its number has nothing to point at', () => {
+  assert.equal(analyzePage([{ text: 'S-6', x: 48, y: 325, w: 18, h: 14 }], 900, 700).areas.length, 0)
+})
+
+test('numbered table rows are not section headings, and a continued table keeps its caption', () => {
+  const state: PaperState = { inRefs: false }
+  const row = (y: number, n: string): TextPiece[] => [wide(y, `${n} Agent tool call`, 86, 66, 7), wide(y, 'read; path: skills/SKILL.md', 300, 200, 7), wide(y, '1,835', 667, 19, 7)]
+  const first = analyzePage([wide(50, 'Table S1: Cleaned interaction trace.', 200, 400, 10), ...row(80, '9'), ...row(95, '10')], 900, 700, state)
+  assert.deepEqual(first.headings, [])
+  const next = analyzePage([wide(50, 'Table S1: Cleaned interaction trace (continued).', 200, 400, 10), ...row(80, '11')], 900, 700, state)
+  assert.equal(next.areas.filter((a) => a.kind === 'table').length, 1)
+})

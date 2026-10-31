@@ -66,3 +66,10 @@ test('the page size survives replay', () => {
   assert.deepEqual(d.underlay, { w: 800, h: 1000 })
   assert.deepEqual(replayTo([{ t: 0, line: 0, d }], 1).underlay, { w: 800, h: 1000 })
 })
+
+test('the model sees the whole paragraph, not just the start of the label', () => {
+  const words = 'Computational chemistry has become an indispensable tool for probing, predicting, and rationalizing systems.'
+  const g = pageGraph({ w: 800, h: 1000 }, [{ text: words, x: 0, y: 0, w: 700, h: 200 }])
+  assert.ok(g.nodes[0].label.length <= 36)
+  assert.ok(describe(g).includes('predicting'))
+})

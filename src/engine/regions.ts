@@ -37,6 +37,7 @@ export function pageGraph(size: { w: number; h: number }, areas: Area[]): Graph 
       marks: [],
       ink: 'ink',
       at: { x: Math.round(a.x), y: Math.round(a.y), w: Math.round(a.w), h: Math.round(a.h) },
+      ...(flat.length > MAX ? { text: flat } : {}),
     })
   }
   return g

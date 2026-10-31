@@ -1,6 +1,7 @@
 // 一场会的几张板：白板左上角一排缩略图，点一下切过去，最后一个「+」新开一张。
 // 板上东西多了，旁边冒出一句「新开一张？」的建议。
 
+import { useEffect, useRef } from 'react'
 import type { Thumb } from '../board/thumb.ts'
 import { Plus } from './icons.tsx'
 
@@ -34,8 +35,13 @@ export default function PageStrip(p: {
   suggest: boolean
   onDismiss: () => void
 }) {
+  // 板多了这一排要横着滚：切到哪张，就把哪张滚进来
+  const nav = useRef<HTMLElement>(null)
+  useEffect(() => {
+    nav.current?.querySelector('.page.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [p.current, p.thumbs.length])
   return (
-    <nav className="pages" aria-label="板">
+    <nav className="pages" aria-label="板" ref={nav}>
       {p.thumbs.map((t, i) => (
         <button
           key={i}

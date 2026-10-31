@@ -1,6 +1,7 @@
 // 板的缩略图：不真的渲染一遍，只从排版结果里取出框、文字行和连线的位置，画成一张示意的小图。
 // 坐标先缩到 THUMB 宽的盒子里、取整，跟着会议存下来，切到别的板时也能显示。
 
+import type { Graph } from '../engine/graph.ts'
 import type { Layout } from './layout.ts'
 
 /** 缩略图坐标系的宽度；高度按比例 */
@@ -18,6 +19,25 @@ export interface Thumb {
 }
 
 const MAX = 160
+
+/** 导入页还没打开过、没有排版结果：直接按页面和原文块的位置画，每块原文画成几行 */
+export function pageThumb(g: Graph): Thumb | undefined {
+  const page = g.underlay
+  if (!page) return undefined
+  const k = THUMB / Math.max(page.w, page.h * 1.6)
+  const rows: Thumb['rows'] = []
+  for (const n of g.nodes) {
+    if (!n.at) continue
+    const x = Math.round(n.at.x * k)
+    const w = Math.max(1, Math.round(n.at.w * k))
+    const y0 = Math.round(n.at.y * k)
+    const count = Math.max(1, Math.floor((n.at.h * k) / 3))
+    for (let i = 0; i < count; i++) rows.push([x, y0 + i * 3, w, 0])
+  }
+  const w = Math.round(page.w * k)
+  const h = Math.round(page.h * k)
+  return { w, h, boxes: [[0, 0, w, h]], rows: rows.slice(0, MAX * 2), lines: [] }
+}
 
 export function thumbOf(l: Layout): Thumb | undefined {
   const { x0, y0, x1, y1 } = l.bounds

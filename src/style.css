@@ -521,10 +521,14 @@ button.where:hover {
   align-items: flex-start;
   gap: 6px;
   max-width: calc(100% - 24px);
-  flex-wrap: wrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  /* 给缩略图的阴影留地方，不然被滚动区裁掉 */
+  padding: 2px 2px 6px;
 }
 .pages .page {
   position: relative;
+  flex: none;
   display: grid;
   place-items: center;
   width: 72px;
@@ -569,6 +573,10 @@ button.where:hover {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: none;
+  /* 板多了这一排会滚动，建议一直留在看得见的地方 */
+  position: sticky;
+  right: 0;
   height: 46px;
   padding: 0 8px 0 12px;
   border: 1px solid var(--line);

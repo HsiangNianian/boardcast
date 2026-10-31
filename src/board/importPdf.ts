@@ -6,17 +6,20 @@ import type { Page } from '../meetings.ts'
 import { applyOps, parseOps } from '../engine/ops.ts'
 import { pageGraph } from '../engine/regions.ts'
 import { type PaperState, type TextPiece, analyzePage } from './paper.ts'
+import { inkBox } from './segment.ts'
 
 /** 页面在板上的宽度（板书坐标）；底图按两倍渲染，放大看也清楚 */
 const WIDTH = 900
-/** 最多导入多少页：每页一张图存在会议里，太多会让会议文件很大 */
+/** 最多建多少张板：每张一张图存在会议里，太多会让会议文件很大 */
 export const MAX_PAGES = 40
 
 export interface PdfImport {
   pages: Page[]
-  /** PDF 一共几页（超过上限的没导） */
+  /** PDF 一共几页 */
   total: number
-  /** 没有文字层的页数（扫描件） */
+  /** 板建够了上限，后面还有多少页没看 */
+  unread: number
+  /** 没有文字层的页数（扫描件、整页的图） */
   scanned: number
   /** 看起来是论文（有摘要、带编号的章节、图注） */
   paper: boolean
@@ -47,27 +50,19 @@ export async function importPdf(data: ArrayBuffer | Uint8Array, onPage?: (done: 
   const total = doc.numPages
   const meta = (await doc.getMetadata().catch(() => null))?.info as { Title?: string } | undefined
   let title = meta?.Title?.trim() || undefined
-  const n = Math.min(total, MAX_PAGES)
   const pages: Page[] = []
   let scanned = 0
   let refsSkipped = 0
   const state: PaperState = { inRefs: false }
   const headings: string[] = []
   let captions = 0
-  for (let i = 1; i <= n; i++) {
-    onPage?.(i - 1, n)
+  let read = 0
+  for (let i = 1; i <= total && pages.length < MAX_PAGES; i++) {
+    onPage?.(i - 1, total)
+    read = i
     const page = await doc.getPage(i)
     const scale = WIDTH / page.getViewport({ scale: 1 }).width
     const vp = page.getViewport({ scale })
-
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.round(vp.width * 2)
-    canvas.height = Math.round(vp.height * 2)
-    const ctx = canvas.getContext('2d')!
-    ctx.fillStyle = '#fff'
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-    await page.render({ canvas, canvasContext: ctx, viewport: page.getViewport({ scale: scale * 2 }) }).promise
-    const image = canvas.toDataURL('image/jpeg', 0.82)
 
     const content = await page.getTextContent()
     const pieces: TextPiece[] = []
@@ -75,8 +70,8 @@ export async function importPdf(data: ArrayBuffer | Uint8Array, onPage?: (done: 
       if (!('str' in it) || !it.str.trim()) continue
       const t = pdfjs.Util.transform(vp.transform, it.transform)
       const h = Math.hypot(t[2], t[3])
-      // 斜着、竖着的字（arXiv 侧边的标记）：变换矩阵带旋转
-      const rotated = Math.abs(it.transform[1]) > 0.01 || Math.abs(it.transform[2]) > 0.01
+      // 斜着、竖着的字（arXiv 侧边的标记）：看转到页面方向以后的矩阵，横放的页面（/Rotate 90）里字其实是正的
+      const rotated = Math.abs(t[1]) > 0.01 || Math.abs(t[2]) > 0.01
       pieces.push({ text: it.str, x: t[4], y: t[5] - h, w: it.width * scale, h, rotated })
     }
     // 没有元数据标题：第一页字最大的那一行
@@ -90,19 +85,34 @@ export async function importPdf(data: ArrayBuffer | Uint8Array, onPage?: (done: 
     }
     const wasRefs = state.inRefs
     const { areas, headings: hs } = analyzePage(pieces, vp.width, vp.height, state)
-    page.cleanup()
     headings.push(...hs.filter((h) => !/^(Abstract|摘要|References|Bibliography|参考文献)/i.test(h)))
     captions += areas.filter((a) => a.kind === 'figure' || a.kind === 'table').length
-    if (!areas.length) scanned++
-    // 整页都是参考文献：不建板（条目没用上，翻页反而碍事）
+    // 整页都是参考文献：不建板（条目没用上，翻页反而碍事），也不用渲染
     const refsOnly = areas.length > 0 && areas.every((a) => a.kind === 'reference' || (a.kind === 'heading' && /^(References|Bibliography|参考文献)/i.test(a.text)))
     if (refsOnly && (wasRefs || state.inRefs) && pages.length) {
       refsSkipped++
+      page.cleanup()
       continue
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(vp.width * 2)
+    canvas.height = Math.round(vp.height * 2)
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    await page.render({ canvas, canvasContext: ctx, viewport: page.getViewport({ scale: scale * 2 }) }).promise
+    const image = canvas.toDataURL('image/jpeg', 0.82)
+    page.cleanup()
+    // 没有文字层的页（整页的图、扫描件）：内容占的地方算一整块，开会时能指
+    if (!areas.length) {
+      scanned++
+      const box = inkBox(ctx.getImageData(0, 0, canvas.width, canvas.height))
+      if (box) areas.push({ text: '', name: `第 ${i} 页的图`, kind: 'figure', x: box.x / 2, y: box.y / 2, w: box.w / 2, h: box.h / 2 })
     }
     pages.push({ graph: pageGraph({ w: vp.width, h: vp.height }, areas), underlay: image })
   }
-  onPage?.(n, n)
+  onPage?.(total, total)
   await task.destroy()
   // 看起来是论文：第一张板上起一个「论文结构」话题，按节列出来，讨论时可以往上挂批注、问题
   const paper = headings.length >= 2 && (captions > 0 || headings.some((h) => /^§1\b/.test(h)))
@@ -116,5 +126,5 @@ export async function importPdf(data: ArrayBuffer | Uint8Array, onPage?: (done: 
     const ops = ['T 「论文结构」', ...headings.slice(0, 30).map((h) => `L 「论文结构」 「${clean(h)}」`)].join('\n')
     pages[0] = { ...pages[0], graph: applyOps(pages[0].graph, parseOps(ops), 'ink') }
   }
-  return { pages, total, scanned, paper, refsSkipped, title: title?.slice(0, 80) }
+  return { pages, total, unread: total - read, scanned, paper, refsSkipped, title: title?.slice(0, 80) }
 }

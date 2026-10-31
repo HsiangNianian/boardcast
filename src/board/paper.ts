@@ -66,13 +66,21 @@ interface Line {
 
 const latin = (ch: string | undefined) => !!ch && /[A-Za-z0-9,.;:)]/.test(ch)
 const join = (a: string, b: string) => (latin(a.at(-1)) && /[A-Za-z0-9(]/.test(b[0] ?? '') ? `${a} ${b}` : a + b)
+/** 接上下一行：行尾断词的连字符去掉（「automa-」「tion」） */
+const joinLine = (a: string, b: string) => (/[a-z]-$/.test(a) && /^[a-z]/.test(b) ? a.slice(0, -1) + b : join(a, b))
 
 // 图注、表注：编号后面紧跟「.」「:」，再是大写字母或汉字。正文里引用图表（「Fig. 3).」「Table 3 shows」）不算
-const CAPTION = /^(Figure|FIGURE|Fig\.?|图|Table|TABLE|Tab\.?|表)\s*([0-9]+|[IVX]+)\s*[.:：．]\s*(?=[A-Z\p{Script=Han}])/u
+const CAPTION = /^(Figure|FIGURE|Fig\.?|图|Table|TABLE|Tab\.?|表)\s*(S?[0-9]+|[IVX]+)\s*[.:：．]\s*(?=[A-Z(（\p{Script=Han}])/u
 // 编号后面要跟大写字母或者汉字（「3 x3 conv」这种图里的标注不算）
 const NUMBERED = /^((?:\d+\.)*\d+\.?|[IVX]+\.|[A-Z]\.|[一二三四五六七八九十]+、|第[一二三四五六七八九十\d]+[章节])\s*(?=[A-Z][A-Za-z]|\p{Script=Han})/u
-const NAMED = /^(Abstract|Introduction|Related Work|Conclusions?|Acknowledge?ments?|References|Bibliography|Appendix|摘要|引言|结论|致谢|参考文献|附录)\b/i
+const NAMED = /^(Abstract|Introduction|Related Work|Conclusions?|Acknowledge?ments?|References|Bibliography|Appendix|Supporting Information|Supplementary (?:Information|Materials?)|摘要|引言|结论|致谢|参考文献|附录|补充材料)/i
 const REFS = /^(References|Bibliography|参考文献)\s*$/i
+// 参考文献后面接的另一部分：附录、补充材料
+const AFTER_REFS = /^(Appendix|附录|Supporting Information|Supplementary (Information|Materials?)|补充材料)/i
+// 一条参考文献的开头：[12]、(12)、12.
+const REF_ENTRY = /^(\[\d+\]|\(\d+\)|\d+\.\s)/
+// 页码：3、S-6、A12
+const PAGE_NO = /^\s*(\d{1,4}|[A-Z]-?\d{1,4})\s*$/
 const EQNUM = /\((\d+[a-z]?)\)\s*$/
 
 function median(xs: number[]): number {
@@ -108,7 +116,7 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
   // —— 1. 去掉旋转的字、页码 ——
   const ps = pieces.filter((p) => {
     if (p.rotated || !p.text.trim() || p.w <= 0 || p.h <= 0) return false
-    const pageNo = /^\s*\d{1,4}\s*$/.test(p.text) && (p.y > H * 0.9 || p.y + p.h < H * 0.07)
+    const pageNo = PAGE_NO.test(p.text) && (p.y > H * 0.9 || p.y + p.h < H * 0.07)
     return !pageNo
   })
   const g = gutter(ps, W)
@@ -116,36 +124,62 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
   const body = median(ps.map((p) => p.h))
 
   // —— 2. 拼行（不跨栏缝） ——
+  // 先拼正常字号的，上标、下标最后贴上去：它们的 y 和正文差一点，先拼会把一行拆散。
+  // 斜体的 y 也可能差一点，排在同一行左边的字前面，所以左右两边都要能接上
+  const small = (p: TextPiece) => p.h < body * 0.8
   const lines: Line[] = []
-  for (const p of [...ps].sort((a, b) => a.y - b.y || a.x - b.x)) {
+  const parts = new Map<Line, TextPiece[]>()
+  for (const p of [...ps].sort((a, b) => Number(small(a)) - Number(small(b)) || a.y - b.y || a.x - b.x)) {
     const side = sideOf(p.x, p.w)
-    const hit = lines.find(
-      (l) =>
+    const hit = lines.find((l) => {
+      const near = Math.max(l.h, p.h) * 1.5
+      const overlap = Math.min(l.y + l.h, p.y + p.h) - Math.max(l.y, p.y)
+      return (
         l.side === side &&
-        Math.abs(l.y + l.h / 2 - (p.y + p.h / 2)) < Math.min(l.h, p.h) * 0.5 &&
-        p.x >= l.x - 1 &&
-        p.x - (l.x + l.w) < Math.max(l.h, p.h) * 1.5,
-    )
+        (Math.abs(l.y + l.h / 2 - (p.y + p.h / 2)) < Math.min(l.h, p.h) * 0.5 || (small(p) && overlap >= p.h * 0.4)) &&
+        p.x + p.w > l.x - near &&
+        p.x - (l.x + l.w) < near
+      )
+    })
     if (hit) {
-      hit.text = join(hit.text, p.text.trim())
+      parts.get(hit)!.push(p)
+      const x0 = Math.min(hit.x, p.x)
       const x1 = Math.max(hit.x + hit.w, p.x + p.w)
       const y0 = Math.min(hit.y, p.y)
       hit.h = Math.max(hit.y + hit.h, p.y + p.h) - y0
       hit.y = y0
-      hit.w = x1 - hit.x
+      hit.x = x0
+      hit.w = x1 - x0
       hit.side = sideOf(hit.x, hit.w)
-    } else lines.push({ text: p.text.trim(), x: p.x, y: p.y, w: p.w, h: p.h, side, kind: 'text' })
+    } else {
+      const l: Line = { text: '', x: p.x, y: p.y, w: p.w, h: p.h, side, kind: 'text' }
+      lines.push(l)
+      parts.set(l, [p])
+    }
   }
+  // 从左到右拼字；小一号的（引用上标、下标）紧贴前面的字
+  for (const l of lines) {
+    const ordered = parts.get(l)!.sort((a, b) => a.x - b.x)
+    const big = Math.max(...ordered.map((p) => p.h))
+    l.text = ordered.reduce((s, p) => (!s ? p.text.trim() : p.h < big * 0.8 ? s + p.text.trim() : join(s, p.text.trim())), '')
+    // 「S-」「6」这样分成两片的页码，拼好才认得出来
+    if (PAGE_NO.test(l.text) && (l.y > H * 0.9 || l.y + l.h < H * 0.07)) l.text = ''
+  }
+  // 整页只有一个编号：整页的图，页码在哪都有可能（横放的页面在左边）
+  const written = lines.filter((l) => l.text)
+  if (written.length === 1 && PAGE_NO.test(written[0].text)) written[0].text = ''
 
   // —— 3. 行分类 ——
   const colWidth = (s: Side) => (g === null || s === 'span' ? W * 0.8 : W * 0.4)
   for (const l of lines) {
+    if (!l.text) continue
     const cap = CAPTION.exec(l.text)
     if (cap) {
       const kind = /^(Table|TABLE|Tab|表)/.test(cap[1]) ? 'table' : 'figure'
       state.captions ??= new Set()
       const key = `${kind} ${cap[2]}`
-      if (!state.captions.has(key)) {
+      // 跨页的表每页都写一遍表注，后面带 (continued)
+      if (!state.captions.has(key) || /\(continued\)|（续）/i.test(l.text)) {
         state.captions.add(key)
         l.kind = kind
         l.num = cap[2]
@@ -158,17 +192,24 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
       continue
     }
     // 标题一般不长、不以句号结尾；编号带点的（「4.3. 」「4. 」）可以和栏一样宽，长标题常见
-    const wideOk = l.w < colWidth(l.side) * 0.9 || (/^\d+(\.\d+)*\.\s/.test(l.text) && l.w <= colWidth(l.side) * 1.02)
+    // 字号比正文大的标题也可以写满一行
+    const wideOk = l.w < colWidth(l.side) * 0.9 || l.h >= body * 1.1 || (/^\d+(\.\d+)*\.\s/.test(l.text) && l.w <= colWidth(l.side) * 1.02)
     const short = l.text.length <= 80 && wideOk && !/[.。]$/.test(l.text.replace(/^[\d.]+\s*/, '')) && !/:\/\//.test(l.text)
     // 带编号的标题要从栏的左边起（行中间冒出来的「4 For each…」是脚注号）
     const atLeft = l.x - Math.min(...lines.filter((o) => o.side === l.side).map((o) => o.x)) < body * 2
     // 像句子的不是标题：没带点的大编号（「10 The responses are…」是正文里冒出来的数字），或者有 is / are / we 之类
     const lead = /^(\d+)\s/.exec(l.text)
     const sentence = (lead && Number(lead[1]) > 20) || /\b(is|are|was|were|we|our|this|that)\b/i.test(l.text.replace(NUMBERED, ''))
-    if (short && l.h >= body * 0.9 && ((NUMBERED.test(l.text) && atLeft && !sentence) || NAMED.test(l.text)) && !(state.inRefs && /^\[\d+\]/.test(l.text))) {
-      // 编号后面直接跟正文的长句不算标题（「1 http://…」脚注、「2 This hypothesis…」）
-      if (NAMED.test(l.text) && /^(Appendix|附录)/i.test(l.text)) state.inRefs = false
-      if (!NAMED.test(l.text) && state.inRefs) state.inRefs = false
+    const bigger = l.h >= body * 1.15
+    // 标题独占一行；同一高度还有别的字，是表格的一行（「9  Agent tool call  read…  1,835」）
+    const inRow = lines.some((o) => o !== l && o.text && o.side === l.side && Math.min(o.y + o.h, l.y + l.h) - Math.max(o.y, l.y) > Math.min(o.h, l.h) * 0.5)
+    // 「J. Chem.」「K. Anderson」是人名、刊名的缩写：单个字母编号的标题字号要比正文大
+    const initial = /^[A-Z]\.\s/.test(l.text) && !bigger
+    // 进了参考文献以后，只有附录、补充材料，或者字号明显大的带编号标题才算另一部分；条目里什么样的开头都有
+    const inList = state.inRefs && !AFTER_REFS.test(l.text) && !(NUMBERED.test(l.text) && bigger)
+    // 编号后面直接跟正文的长句不算标题（「1 http://…」脚注、「2 This hypothesis…」）
+    if (short && l.h >= body * 0.9 && ((NUMBERED.test(l.text) && atLeft && !sentence && !initial && !inRow) || NAMED.test(l.text)) && !inList) {
+      state.inRefs = false
       l.kind = 'heading'
       continue
     }
@@ -197,6 +238,16 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
 
   // —— 4. 拼段落 ——
   type Block = PaperArea & { side: Side; lh: number; lines: number; num?: string; lastRight?: number }
+  // 这一页的行距：双倍行距的稿子（投稿版常见）行与行之间空着将近一行，不能当成段落的分界
+  const pitches = new Map<Side, number[]>()
+  const bySide = [...live].sort((a, b) => a.y - b.y)
+  const lastOf = new Map<Side, Line>()
+  for (const l of bySide) {
+    const before = lastOf.get(l.side)
+    if (before && l.y > before.y) (pitches.get(l.side) ?? pitches.set(l.side, []).get(l.side)!).push(l.y - before.y)
+    lastOf.set(l.side, l)
+  }
+  const leading = (s: Side, lh: number) => Math.max(lh * 0.9, (median(pitches.get(s) ?? []) - lh) * 1.3)
   const blocks: Block[] = []
   const order: Side[] = ['span', 'left', 'right']
   const right = (s: Side) => Math.max(...live.filter((l) => l.side === s).map((l) => l.x + l.w))
@@ -204,21 +255,38 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
   for (const l of sorted) {
     const prev = blocks.findLast((b) => b.side === l.side)
     const lastLine = prev && { right: prev.x + prev.w, bottom: prev.y + prev.h }
+    // 一行写不下的标题：字号一样大、左边对齐、紧挨着的下一行
+    if (
+      prev?.kind === 'heading' &&
+      l.kind === 'text' &&
+      l.h >= body * 1.1 &&
+      Math.abs(l.h - prev.lh) < prev.lh * 0.15 &&
+      // 悬挂缩进的标题，第二行和编号后面的字对齐
+      l.x > prev.x - l.h &&
+      l.x < prev.x + l.h * 2 &&
+      l.y - lastLine!.bottom < l.h * 1.5
+    ) {
+      prev.text = joinLine(prev.text, l.text)
+      prev.w = Math.max(prev.x + prev.w, l.x + l.w) - prev.x
+      prev.h = l.y + l.h - prev.y
+      continue
+    }
     const glue =
       prev &&
       // 正文行、参考文献条目的续行可以接上去；图注、表注的续行是正文行
-      (l.kind === 'text' || (l.kind === 'reference' && !/^\[\d+\]/.test(l.text))) &&
+      (l.kind === 'text' || (l.kind === 'reference' && !REF_ENTRY.test(l.text))) &&
       (prev.kind === 'text' || prev.kind === 'reference' || ((prev.kind === 'figure' || prev.kind === 'table') && prev.lines < 6)) &&
-      l.y - lastLine!.bottom < Math.max(prev.lh, l.h) * 0.9 &&
+      l.y - lastLine!.bottom < Math.max(Math.max(prev.lh, l.h) * 0.9, leading(l.side, l.h)) &&
       l.y >= lastLine!.bottom - prev.lh * 0.6 &&
       // 字号差不多；带上标（脚注号、10⁴）的行会高一点，和正文差得不多也算
       (Math.max(prev.lh, l.h) / Math.min(prev.lh, l.h) < 1.3 || (Math.abs(prev.lh - body) < body * 0.25 && l.h < body * 1.7 && l.h > body * 0.8)) &&
       // 首行缩进：新段落
       !(l.kind === 'text' && l.x > prev.x + l.h * 0.8) &&
       // 上一段最后一行没写满：段落结束了（图注、表注不管）
-      !(prev.kind === 'text' && prev.lastRight !== undefined && prev.lastRight < right(l.side) - l.h * 2.5)
+      // 比这一行短得多才算：四周都缩进的摘要，每行都到不了页面的右边
+      !(prev.kind === 'text' && prev.lastRight !== undefined && prev.lastRight < Math.min(right(l.side), l.x + l.w) - l.h * 2.5)
     if (glue) {
-      prev.text = join(prev.text, l.text)
+      prev.text = joinLine(prev.text, l.text)
       const x0 = Math.min(prev.x, l.x)
       prev.w = Math.max(prev.x + prev.w, l.x + l.w) - x0
       prev.x = x0

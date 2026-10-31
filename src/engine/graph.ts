@@ -30,6 +30,8 @@ export interface Node {
   ink: Ink
   /** region 在底图上的位置（板书坐标） */
   at?: { x: number; y: number; w: number; h: number }
+  /** region 的全文：label 只是开头，模型要看全文才知道一个词在哪一段 */
+  text?: string
 }
 
 export interface Edge {
@@ -111,6 +113,9 @@ const TAG: Record<Kind, string> = {
   region: '[原文] ',
 }
 
+/** 实体表里一块原文最多给多少字 */
+const REGION_TEXT = 3000
+
 /** 给模型看的紧凑实体表。越短越好：它决定了每次要重新读入多少 token。 */
 export function describe(g: Graph): string {
   if (g.nodes.length === 0 && g.groups.length === 0) return '（空）'
@@ -122,7 +127,8 @@ export function describe(g: Graph): string {
     if (n.group) extra.push(`在 ${n.group}`)
     if (n.marks.length) extra.push(n.marks.join('、'))
     if (n.icon) extra.push(`图标 ${n.icon}`)
-    lines.push(`${'  '.repeat(depth)}${n.id} ${TAG[n.kind]}${n.label}${extra.length ? `（${extra.join('，')}）` : ''}`)
+    const shown = n.text ? (n.text.length > REGION_TEXT ? `${n.text.slice(0, REGION_TEXT)}…` : n.text) : n.label
+    lines.push(`${'  '.repeat(depth)}${n.id} ${TAG[n.kind]}${shown}${extra.length ? `（${extra.join('，')}）` : ''}`)
     for (const c of children(g, n.id)) line(c, depth + 1)
   }
   for (const n of g.nodes) if (!n.parent || !g.nodes.some((p) => p.id === n.parent)) line(n, 0)

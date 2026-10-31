@@ -142,3 +142,23 @@ export function segment(img: Pixels): Area[] {
   const within = (a: Area, b: Area) => a !== b && a.x >= b.x - 2 && a.y >= b.y - 2 && a.x + a.w <= b.x + b.w + 2 && a.y + a.h <= b.y + b.h + 2
   return out.filter((a) => !out.some((b) => within(a, b)))
 }
+
+/** 页面上有内容的范围（四周的白边不算）；一片空白返回 null。隔几个像素看一个就够了 */
+export function inkBox(img: Pixels, step = 4): { x: number; y: number; w: number; h: number } | null {
+  const { width: W, height: H, data } = img
+  let x0 = W
+  let y0 = H
+  let x1 = -1
+  let y1 = -1
+  for (let y = 0; y < H; y += step)
+    for (let x = 0; x < W; x += step) {
+      const i = (y * W + x) * 4
+      if (data[i + 3] > 40 && Math.min(data[i], data[i + 1], data[i + 2]) < 230) {
+        x0 = Math.min(x0, x)
+        x1 = Math.max(x1, x)
+        y0 = Math.min(y0, y)
+        y1 = Math.max(y1, y)
+      }
+    }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + step, h: y1 - y0 + step }
+}

@@ -445,6 +445,9 @@ export const en = {
     drawing: 'Drawing…',
     lineFellBack: ' · remote failed, local model drew this one',
     noChange: '(no changes)',
+    drawnWithNext: '(drawn together with the lines after it; the changes are listed on the last line of that batch)',
+    lineFailed: 'not drawn',
+    lineFailedDetail: '(the model failed on this round, so this line did not reach the board)',
     timing: (s: { wait?: number; asr?: number; voiceprint?: number; queue?: number; model?: number }) =>
       [
         s.wait !== undefined && `pause ${s.wait}`,

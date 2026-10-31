@@ -17,7 +17,8 @@ export interface SessionEvents {
   mention?: (ids: string[]) => void
   /** 模型的一轮结果，用来显示延迟和调试。`queuedMs`: how long each line of the batch waited for the model */
   llm?: (r: LlmResult & { ops: Op[]; batch: Utterance[]; queuedMs: number[] }) => void
-  error?: (e: unknown) => void
+  /** 模型这一轮出错了；`batch` 是这一轮的几句话，它们不会再画了 */
+  error?: (e: unknown, batch: Utterance[]) => void
 }
 
 export class Session {
@@ -84,7 +85,7 @@ export class Session {
       if (shown.length) this.on.mention?.(shown)
       this.on.llm?.({ ...r, ops, batch, queuedMs })
     } catch (e) {
-      this.on.error?.(e)
+      this.on.error?.(e, batch)
     } finally {
       this.history.push(...batch)
       this.busy = false

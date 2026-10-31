@@ -29,6 +29,7 @@ import { History as EditHistory, type Selection, describe, exists, pinned, remov
 import { MARKS, type Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
 import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
+import { settle } from './engine/pending.ts'
 import { summarize } from './engine/summary.ts'
 import { correct, parseGlossary } from './engine/glossary.ts'
 import { type Voice, identify, renameVoice } from './engine/voices.ts'
@@ -418,29 +419,22 @@ export default function App() {
           setHot(new Set(ids))
           if (ids.length) setTimeout(() => setHot(new Set()), 3000)
         },
+        // 一批里的每句都标上这一轮的耗时；画了什么记在这批的最后一句上（前面几句的 ops 是空串）
         llm: (r) =>
-          setLines((ls) => {
-            // 一批里的每句都标上这一轮的耗时
-            const out = [...ls]
-            let left = r.batch.length
-            for (let i = out.length - 1; i >= 0 && left > 0; i--) {
-              if (out[i].ms === undefined) {
-                out[i] = {
-                  ...out[i],
-                  ms: r.ms,
-                  queueMs: r.queuedMs[left - 1],
-                  ops: left === r.batch.length ? formatOps(r.ops) || '-' : '',
-                  via: r.via,
-                  fellBack: !!r.fellBack,
-                }
-                left--
-              }
-            }
-            return out
-          }),
-        error: (e) => {
+          setLines((ls) =>
+            settle(ls, r.batch, (k) => ({
+              ms: r.ms,
+              queueMs: r.queuedMs[k],
+              ops: k === r.batch.length - 1 ? formatOps(r.ops) || '-' : '',
+              via: r.via,
+              fellBack: !!r.fellBack,
+            })),
+          ),
+        error: (e, batch) => {
           console.error(e)
           setOnline(false)
+          // 这几句不会再画了：别一直挂着「画着…」（还会挡住翻页、导入）
+          setLines((ls) => settle(ls, batch, () => ({ ms: 0, ops: '', failed: true })))
         },
       })
   const session = sessionRef.current
@@ -1832,7 +1826,7 @@ export default function App() {
               </button>
             )}
             <article
-              className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}${jumpLine === i ? ' jump' : ''}`}
+              className={`line${l.ms === undefined ? ' pending' : ''}${l.failed ? ' failed' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}${jumpLine === i ? ' jump' : ''}`}
             >
               {l.manual && <span className="who edit">{t.app.editBadge}</span>}
               {l.speaker && (
@@ -1852,12 +1846,13 @@ export default function App() {
                 {!l.manual && (
                 <details>
                   <summary>
-                    {l.ms === undefined ? t.app.drawing : `${Math.round(l.ms)} ms`}
-                    {l.ms !== undefined && useRemote && l.via && ` · ${l.via}`}
+                    {l.failed ? <em>{t.app.lineFailed}</em> : l.ms === undefined ? t.app.drawing : `${Math.round(l.ms)} ms`}
+                    {l.ms !== undefined && !l.failed && useRemote && l.via && ` · ${l.via}`}
                     {l.fellBack && <em>{t.app.lineFellBack}</em>}
                   </summary>
-                  {l.ms !== undefined && (l.heard || l.queueMs) ? <p className="timing">{t.app.timing(lineTiming(l))}</p> : null}
-                  {l.ops ? <pre>{l.ops}</pre> : <pre>{t.app.noChange}</pre>}
+                  {l.ms !== undefined && !l.failed && (l.heard || l.queueMs) ? <p className="timing">{t.app.timing(lineTiming(l))}</p> : null}
+                  {/* 空串：和后面几句攒成一批画的，画了什么记在那批的最后一句上；'-'：这一轮没改板书 */}
+                  <pre>{l.failed ? t.app.lineFailedDetail : l.ops === '' ? t.app.drawnWithNext : !l.ops || l.ops === '-' ? t.app.noChange : l.ops}</pre>
                 </details>
                 )}
               </div>

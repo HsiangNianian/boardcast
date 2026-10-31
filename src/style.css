@@ -1152,6 +1152,9 @@ label.check input {
   font-style: normal;
   color: var(--warn);
 }
+.line.failed details summary em {
+  color: var(--bad);
+}
 /* Where this line's time went: pause, recognition, queue, model */
 .line details p.timing {
   margin: 6px 0 0;

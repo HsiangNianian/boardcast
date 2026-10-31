@@ -429,6 +429,9 @@ export const zh: Messages = {
     drawing: '画着…',
     lineFellBack: ' · 远程失败，这句用了本地模型',
     noChange: '（没有改动）',
+    drawnWithNext: '（和后面几句攒在一起画的，画了什么记在那批的最后一句上）',
+    lineFailed: '没画上',
+    lineFailedDetail: '（模型这一轮出错了，这句没画到板上）',
     timing: (s: { wait?: number; asr?: number; voiceprint?: number; queue?: number; model?: number }) =>
       [
         s.wait !== undefined && `停顿 ${s.wait}`,

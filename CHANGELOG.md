@@ -2,6 +2,21 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.18.0 - 2026-10-31
+
+### Features
+
+- **shortcuts:** Hold to talk, global mic toggle, tray and keyboard shortcuts (closes #19) ([`a4a4f18`](https://github.com/HsiangNianian/boardcast/commit/a4a4f1877c2bdff2e730c78fbb61907983f53b31))
+  - hold Space to talk on desktop; release keeps listening for 300 ms and the engine finishes the sentence
+  - PageUp/PageDown and Ctrl+[ / Ctrl+] switch boards, Ctrl+Shift+N opens a board, Ctrl+O imports, Ctrl+Shift+R toggles replay, Ctrl+Shift+S summarizes, ? lists them all
+  - these work in handwriting mode only, so they do not clash with Excalidraw, and they leave text fields and dialogs alone
+  - a global shortcut toggles the mic while the app is in the background, Ctrl+Shift+Space by default, changeable in settings
+  - Wayland does not let apps listen for global keys: `boardcast --toggle-mic` reaches the running instance, and settings explain how to bind it
+  - single instance: a second launch shows the existing window
+  - tray icon with a red dot while listening, and a menu to toggle the mic, show the window and quit; on Linux it is skipped when appindicator is missing rather than crashing
+
+**Full diff:** [v0.17.0...v0.18.0](https://github.com/HsiangNianian/boardcast/compare/v0.17.0...v0.18.0)
+
 ## 0.17.0 - 2026-10-31
 
 ### Features

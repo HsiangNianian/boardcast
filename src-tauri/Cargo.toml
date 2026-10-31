@@ -1,6 +1,6 @@
 [package]
 name = "boardcast"
-version = "0.17.0"
+version = "0.18.0"
 description = "Talk, and the whiteboard draws itself."
 authors = ["HsiangNianian"]
 license = "MIT"

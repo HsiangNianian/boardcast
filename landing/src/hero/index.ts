@@ -47,7 +47,8 @@ export function initHero(): HeroApi {
   const hero = document.querySelector<HTMLElement>('.hero')!
   const frame = hero.querySelector<HTMLElement>('.frame')!
   const canvas = frame.querySelector<HTMLCanvasElement>('.hero-ink')!
-  const valEl = frame.querySelector<HTMLOutputElement>('.base-val')!
+  const valEl = frame.querySelector<HTMLOutputElement>('.val-messy')!
+  const wValEl = frame.querySelector<HTMLOutputElement>('.val-weight')!
   const still = reduceMotion()
 
   let geo = measureHero(frame)
@@ -59,7 +60,12 @@ export function initHero(): HeroApi {
   let target = 0.12
   let messy = target
   let built = -1
-  let board: Board = compose(geo, messy)
+  // 粗细推杆：推子位置 0..1 → 笔宽倍数 0.5×..2×（指数刻度，1× 正好在中间；再粗汉字就糊成一团了）
+  const toWeight = (v: number) => 0.5 * 4 ** v
+  let wTarget = toWeight(0.5)
+  let weight = wTarget
+  let wBuilt = weight
+  let board: Board = compose(geo, messy, weight)
   const introAt = still ? -1e9 : performance.now() + 120
   let introDone = still
   let idleSince = 0
@@ -75,8 +81,11 @@ export function initHero(): HeroApi {
     return s
   }
 
-  const fader = new Fader(frame.querySelector('.fader')!, target, (v) => {
+  const fader = new Fader(frame.querySelector('.fader-messy')!, target, (v) => {
     target = v
+  })
+  const wFader = new Fader(frame.querySelector('.fader-weight')!, 0.5, (v) => {
+    wTarget = toWeight(v)
   })
   const talk = new Talk(frame.querySelector('.talk')!, frame, {
     block: (id) => board.blocks[id]?.box ?? null,
@@ -90,8 +99,9 @@ export function initHero(): HeroApi {
   talk.start(performance.now() + 900, still)
 
   const rebuild = () => {
-    board = compose(geo, messy)
+    board = compose(geo, messy, weight)
     built = messy
+    wBuilt = weight
     cacheOk = false
   }
 
@@ -140,14 +150,19 @@ export function initHero(): HeroApi {
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
     fader.update(now)
+    wFader.update(now)
     // 板书跟着推子走，但带一点阻尼：像是被拖着变形
-    messy += (target - messy) * (1 - Math.exp(-dt / 0.07))
+    const ease = 1 - Math.exp(-dt / 0.07)
+    messy += (target - messy) * ease
     if (Math.abs(target - messy) < 0.0008) messy = target
-    if (Math.abs(messy - built) > 0.0012) {
+    weight += (wTarget - weight) * ease
+    if (Math.abs(wTarget - weight) < 0.002) weight = wTarget
+    if (Math.abs(messy - built) > 0.0012 || Math.abs(weight - wBuilt) > 0.004) {
       rebuild()
       idleSince = now
     }
     valEl.value = messy.toFixed(2)
+    wValEl.value = `${weight.toFixed(1)}×`
 
     // 词块：对话提到 / 划过对话 → 浮起、笔触加深；鼠标碰到 → 弹一下、轻轻呼吸
     for (const s of states.values()) {
@@ -170,7 +185,7 @@ export function initHero(): HeroApi {
     const skip = new Set(active.map(([id]) => id))
     // 静下来以后，整块板烤成一张图，每帧只贴图；有词块在动时，整块现画（动的那几块单独画）
     ctx.clearRect(0, 0, geo.W, geo.H)
-    if (introDone && messy === target && now - idleSince > 60 && !active.length) {
+    if (introDone && messy === target && weight === wTarget && now - idleSince > 60 && !active.length) {
       if (!cacheOk) {
         cctx.clearRect(0, 0, geo.W, geo.H)
         drawItems(cctx, t)
@@ -218,6 +233,7 @@ export function initHero(): HeroApi {
     cctx = fitCanvas(cache, geo.W, geo.H).ctx
     rebuild()
     fader.layout()
+    wFader.layout()
     talk.relayout(performance.now())
     for (const fn of listeners) fn()
   }

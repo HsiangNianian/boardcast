@@ -189,6 +189,8 @@ export interface PieceOpts {
   step?: number
   gap?: number
   press?: (t: number, p: Pt) => number
+  /** 笔画粗细的倍数：只改笔头宽度，不改字形（手抖、补点仍按原笔宽算，推粗细时字不会跟着变形） */
+  weight?: number
 }
 
 export function makePiece(id: string, color: string, raws: (Stroke | RawMark)[], pen: number, messy: number, o: PieceOpts = {}): Piece {
@@ -208,7 +210,7 @@ export function makePiece(id: string, color: string, raws: (Stroke | RawMark)[],
     const f1 = isStroke ? 0.5 + r() * 2 : raw.f1
     const ph = isStroke ? r() * Math.PI * 2 : raw.ph
     const thin = isStroke ? undefined : raw.thin
-    const size = thin !== undefined ? pen * 0.42 : pen
+    const size = (thin !== undefined ? pen * 0.42 : pen) * (o.weight ?? 1)
     const pts = wobble(densify(src, step), thin !== undefined ? amp * 0.5 : amp, f1, ph)
     const L = polyLength(pts)
     let press: number[] | undefined
@@ -229,10 +231,11 @@ export function makePiece(id: string, color: string, raws: (Stroke | RawMark)[],
       if (y > box.y1) box.y1 = y
     }
   }
-  box.x0 -= pen
-  box.y0 -= pen
-  box.x1 += pen
-  box.y1 += pen
+  const pad = pen * Math.max(1, o.weight ?? 1)
+  box.x0 -= pad
+  box.y0 -= pad
+  box.x1 += pad
+  box.y1 += pad
   return { id, color, alpha: o.alpha ?? 1, marks, len: Math.max(1, len - gap), gap, box }
 }
 

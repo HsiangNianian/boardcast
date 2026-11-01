@@ -359,6 +359,33 @@ canvas {
   transform: skewX(-8deg);
 }
 
+.fader-end-thin {
+  font-weight: 200;
+}
+
+.fader-end-bold {
+  font-weight: 900;
+}
+
+/* 一组控件：标签 + 读数 + 推杆。两组之间一根细竖线隔开 */
+.ctl {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: clamp(12px, 1.4vw, 22px);
+  min-width: 0;
+}
+
+.ctl-messy {
+  flex: 3;
+}
+
+.ctl-weight {
+  flex: 2;
+  padding-left: clamp(12px, 1.4vw, 22px);
+  border-left: 1px solid var(--rule);
+}
+
 .fader-track {
   position: relative;
   flex: 1;
@@ -896,7 +923,7 @@ canvas {
     inset: auto;
     min-height: calc(100svh - 2 * var(--g));
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(52svh, 1fr) var(--base-h);
+    grid-template-rows: auto minmax(52svh, 1fr) auto;
   }
 
   .col-left {
@@ -929,9 +956,35 @@ canvas {
   .base {
     grid-column: 1;
     grid-row: 3;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
   }
 
-  .base-meta .rec,
+  /* 窄屏：两根推杆上下叠放 */
+  .ctl {
+    flex: none;
+    height: 50px;
+  }
+
+  .ctl-weight {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  /* 两根推杆的轨道上下对齐 */
+  .ctl .base-meta {
+    min-width: 7.6em;
+    justify-content: space-between;
+  }
+
+  .fader-end {
+    min-width: 2.4em;
+    text-align: center;
+  }
+
+  .base .rec,
   .base-label em,
   .base-hint {
     display: none;

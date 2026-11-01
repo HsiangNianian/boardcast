@@ -50,19 +50,36 @@
           <canvas class="hero-ink" aria-hidden="true"></canvas>
           <p class="sr-only">示意：一场关于登录改版的讨论，旁边的白板随着对话自己写出话题、条目、划掉的旧方案和圈出的新方案。</p>
           <div class="base">
-            <div class="base-meta">
-              <span class="rec"><i></i>LIVE</span>
-              <span class="base-label">潦草度<em>MESSINESS</em></span>
-              <output class="base-val">0.12</output>
-            </div>
-            <div class="fader" role="slider" tabindex="0" aria-label="板书的潦草度：从工整到狂草" aria-valuemin="0" aria-valuemax="100" aria-valuenow="12">
-              <span class="fader-end">工整</span>
-              <div class="fader-track">
-                <canvas class="fader-ticks" aria-hidden="true"></canvas>
-                <div class="fader-groove"></div>
-                <div class="fader-cap"><i></i></div>
+            <span class="rec"><i></i>LIVE</span>
+            <div class="ctl ctl-messy">
+              <div class="base-meta">
+                <span class="base-label">潦草度<em>MESSINESS</em></span>
+                <output class="base-val val-messy">0.12</output>
               </div>
-              <span class="fader-end fader-end-wild">狂草</span>
+              <div class="fader fader-messy" role="slider" tabindex="0" aria-label="板书的潦草度：从工整到狂草" aria-valuemin="0" aria-valuemax="100" aria-valuenow="12">
+                <span class="fader-end">工整</span>
+                <div class="fader-track">
+                  <canvas class="fader-ticks" aria-hidden="true"></canvas>
+                  <div class="fader-groove"></div>
+                  <div class="fader-cap"><i></i></div>
+                </div>
+                <span class="fader-end fader-end-wild">狂草</span>
+              </div>
+            </div>
+            <div class="ctl ctl-weight">
+              <div class="base-meta">
+                <span class="base-label">粗细<em>WEIGHT</em></span>
+                <output class="base-val val-weight">1.0×</output>
+              </div>
+              <div class="fader fader-weight" role="slider" tabindex="0" aria-label="板书的笔画粗细：从细到粗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+                <span class="fader-end fader-end-thin">细</span>
+                <div class="fader-track">
+                  <canvas class="fader-ticks" aria-hidden="true"></canvas>
+                  <div class="fader-groove"></div>
+                  <div class="fader-cap"><i></i></div>
+                </div>
+                <span class="fader-end fader-end-bold">粗</span>
+              </div>
             </div>
             <a class="base-hint" href="#act-connect">往下滑<span aria-hidden="true">↓</span></a>
           </div>

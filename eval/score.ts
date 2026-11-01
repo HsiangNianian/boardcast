@@ -26,6 +26,8 @@ export interface Gold {
   topics?: { title: Names; items: Names[] }[]
   /** 应该被划掉的 */
   struck?: Names[]
+  /** 明确要求保留的节点 */
+  not_struck?: Names[]
   /** 应该被强调的（星标、圈出、下划线都算） */
   emphasized?: Names[]
   /** 不该被强调的（比如强调落到了话题上，而不是被强调的那一条）：强调了算一次标记没命中 */
@@ -44,6 +46,9 @@ export interface Score {
   topicR: number | null
   itemP: number | null
   itemR: number | null
+  /** 整个节点的划掉；gold.struck 显式为空时用于检查误划 */
+  strikeP: number | null
+  strikeR: number | null
   /** 划掉、强调、问题、公式的命中率 */
   markAcc: number | null
   groupAcc: number | null
@@ -155,6 +160,24 @@ export function score(g: Graph, gold: Gold): Score {
   }
   const predItems = g.nodes.filter((n) => n.kind === 'item')
 
+  // 划掉单独计分：一对一匹配，重复或误划也计入预测总数。
+  const strikeGold = gold.struck ?? []
+  const strikePred = g.nodes.filter((n) => n.marks.includes('划掉'))
+  const strikeMatched = new Set<string>()
+  let strikeTP = 0
+  for (const level of [2, 1]) {
+    for (const [i, want] of strikeGold.entries()) {
+      if (strikeMatched.has(`gold:${i}`)) continue
+      const hit = strikePred.find((n) => !strikeMatched.has(n.id) && best(names(n), want) >= level)
+      if (hit) {
+        strikeMatched.add(`gold:${i}`)
+        strikeMatched.add(hit.id)
+        strikeTP++
+      }
+    }
+  }
+  const scoreStrike = gold.struck !== undefined || gold.not_struck !== undefined
+
   // 标记
   let markHit = 0
   let markAll = 0
@@ -167,6 +190,11 @@ export function score(g: Graph, gold: Gold): Score {
   for (const s of gold.struck ?? []) has(s, (n) => n.marks.includes('划掉'), '没划掉')
   for (const s of gold.emphasized ?? [])
     has(s, (n) => n.marks.some((m) => m === '星标' || m === '圈出' || m === '下划线'), '没强调')
+  for (const s of gold.not_struck ?? []) {
+    markAll++
+    if (g.nodes.some((n) => n.marks.includes('划掉') && best(names(n), s) >= 1)) markMiss.push(`不该划掉：${s[0]}`)
+    else markHit++
+  }
   for (const s of gold.not_emphasized ?? []) {
     markAll++
     const wrong = g.nodes.some((n) => n.marks.some((m) => m === '星标' || m === '圈出' || m === '下划线') && best(names(n), s) >= 1)
@@ -221,6 +249,8 @@ export function score(g: Graph, gold: Gold): Score {
     topicR: topics.length ? topics.filter((t) => taken.has(t.key)).length / topics.length : null,
     itemP: items.length ? ratio(itemTP, predItems.length) : null,
     itemR: items.length ? itemTP / items.length : null,
+    strikeP: scoreStrike ? ratio(strikeTP, strikePred.length) : null,
+    strikeR: scoreStrike ? ratio(strikeTP, strikeGold.length) : null,
     markAcc: markAll ? markHit / markAll : null,
     groupAcc,
     violations,

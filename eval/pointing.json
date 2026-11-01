@@ -1,0 +1,1752 @@
+[
+  {
+    "id": "pointing-zh-strike-one",
+    "name": "zh: strike-one",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "发布计划",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "灰度发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "全量发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "监控告警",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "把这个划掉，暂时不做。",
+        "pointing": [
+          "n2"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "发布计划"
+          ],
+          "items": [
+            [
+              "灰度发布"
+            ],
+            [
+              "全量发布"
+            ],
+            [
+              "监控告警"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "灰度发布"
+        ]
+      ],
+      "not_struck": [
+        [
+          "发布计划"
+        ],
+        [
+          "全量发布"
+        ],
+        [
+          "监控告警"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-zh-strike-two",
+    "name": "zh: strike-two",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "发布计划",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "灰度发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "全量发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "监控告警",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "这两个都不做了，都划掉。",
+        "pointing": [
+          "n2",
+          "n3"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "发布计划"
+          ],
+          "items": [
+            [
+              "灰度发布"
+            ],
+            [
+              "全量发布"
+            ],
+            [
+              "监控告警"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "灰度发布"
+        ],
+        [
+          "全量发布"
+        ]
+      ],
+      "not_struck": [
+        [
+          "发布计划"
+        ],
+        [
+          "监控告警"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-zh-keep",
+    "name": "zh: keep",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "发布计划",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "灰度发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "全量发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "监控告警",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "这个保留，不要划掉。",
+        "pointing": [
+          "n2"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "发布计划"
+          ],
+          "items": [
+            [
+              "灰度发布"
+            ],
+            [
+              "全量发布"
+            ],
+            [
+              "监控告警"
+            ]
+          ]
+        }
+      ],
+      "struck": [],
+      "not_struck": [
+        [
+          "发布计划"
+        ],
+        [
+          "灰度发布"
+        ],
+        [
+          "全量发布"
+        ],
+        [
+          "监控告警"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-zh-emphasize",
+    "name": "zh: emphasize",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "发布计划",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "灰度发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "全量发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "监控告警",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "这个是重点，标个星。",
+        "pointing": [
+          "n3"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "发布计划"
+          ],
+          "items": [
+            [
+              "灰度发布"
+            ],
+            [
+              "全量发布"
+            ],
+            [
+              "监控告警"
+            ]
+          ]
+        }
+      ],
+      "struck": [],
+      "not_struck": [
+        [
+          "发布计划"
+        ],
+        [
+          "灰度发布"
+        ],
+        [
+          "全量发布"
+        ],
+        [
+          "监控告警"
+        ]
+      ],
+      "emphasized": [
+        [
+          "全量发布"
+        ]
+      ],
+      "not_emphasized": [
+        [
+          "发布计划"
+        ],
+        [
+          "灰度发布"
+        ],
+        [
+          "监控告警"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-zh-explicit-override",
+    "name": "zh: explicit-override",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "发布计划",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "灰度发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "全量发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "监控告警",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "灰度发布保留，全量发布划掉。",
+        "pointing": [
+          "n2"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "发布计划"
+          ],
+          "items": [
+            [
+              "灰度发布"
+            ],
+            [
+              "全量发布"
+            ],
+            [
+              "监控告警"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "全量发布"
+        ]
+      ],
+      "not_struck": [
+        [
+          "发布计划"
+        ],
+        [
+          "灰度发布"
+        ],
+        [
+          "监控告警"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-zh-add-item",
+    "name": "zh: add-item",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "发布计划",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "灰度发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "全量发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "监控告警",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "在这个话题下面补一条：回滚演练。",
+        "pointing": [
+          "n1"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "发布计划"
+          ],
+          "items": [
+            [
+              "灰度发布"
+            ],
+            [
+              "全量发布"
+            ],
+            [
+              "监控告警"
+            ],
+            [
+              "回滚演练"
+            ]
+          ]
+        }
+      ],
+      "struck": [],
+      "not_struck": [
+        [
+          "发布计划"
+        ],
+        [
+          "灰度发布"
+        ],
+        [
+          "全量发布"
+        ],
+        [
+          "监控告警"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-zh-switch",
+    "name": "zh: selection changes between turns",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "发布计划",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "灰度发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "全量发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "监控告警",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "这个划掉。",
+        "pointing": [
+          "n2"
+        ]
+      },
+      {
+        "text": "这个标星，保留。",
+        "pointing": [
+          "n3"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "发布计划"
+          ],
+          "items": [
+            [
+              "灰度发布"
+            ],
+            [
+              "全量发布"
+            ],
+            [
+              "监控告警"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "灰度发布"
+        ]
+      ],
+      "not_struck": [
+        [
+          "发布计划"
+        ],
+        [
+          "全量发布"
+        ],
+        [
+          "监控告警"
+        ]
+      ],
+      "emphasized": [
+        [
+          "全量发布"
+        ]
+      ],
+      "not_emphasized": [
+        [
+          "灰度发布"
+        ],
+        [
+          "监控告警"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-en-strike-one",
+    "name": "en: strike-one",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Release plan",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "Canary rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "Full rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "Monitoring alerts",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "Cross this out; we will not do it.",
+        "pointing": [
+          "n2"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Release plan"
+          ],
+          "items": [
+            [
+              "Canary rollout"
+            ],
+            [
+              "Full rollout"
+            ],
+            [
+              "Monitoring alerts"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "Canary rollout"
+        ]
+      ],
+      "not_struck": [
+        [
+          "Release plan"
+        ],
+        [
+          "Full rollout"
+        ],
+        [
+          "Monitoring alerts"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-en-strike-two",
+    "name": "en: strike-two",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Release plan",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "Canary rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "Full rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "Monitoring alerts",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "Cancel both of these; cross them both out.",
+        "pointing": [
+          "n2",
+          "n3"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Release plan"
+          ],
+          "items": [
+            [
+              "Canary rollout"
+            ],
+            [
+              "Full rollout"
+            ],
+            [
+              "Monitoring alerts"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "Canary rollout"
+        ],
+        [
+          "Full rollout"
+        ]
+      ],
+      "not_struck": [
+        [
+          "Release plan"
+        ],
+        [
+          "Monitoring alerts"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-en-keep",
+    "name": "en: keep",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Release plan",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "Canary rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "Full rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "Monitoring alerts",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "Keep this one; do not cross it out.",
+        "pointing": [
+          "n2"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Release plan"
+          ],
+          "items": [
+            [
+              "Canary rollout"
+            ],
+            [
+              "Full rollout"
+            ],
+            [
+              "Monitoring alerts"
+            ]
+          ]
+        }
+      ],
+      "struck": [],
+      "not_struck": [
+        [
+          "Release plan"
+        ],
+        [
+          "Canary rollout"
+        ],
+        [
+          "Full rollout"
+        ],
+        [
+          "Monitoring alerts"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-en-emphasize",
+    "name": "en: emphasize",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Release plan",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "Canary rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "Full rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "Monitoring alerts",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "This is important; mark it with a star.",
+        "pointing": [
+          "n3"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Release plan"
+          ],
+          "items": [
+            [
+              "Canary rollout"
+            ],
+            [
+              "Full rollout"
+            ],
+            [
+              "Monitoring alerts"
+            ]
+          ]
+        }
+      ],
+      "struck": [],
+      "not_struck": [
+        [
+          "Release plan"
+        ],
+        [
+          "Canary rollout"
+        ],
+        [
+          "Full rollout"
+        ],
+        [
+          "Monitoring alerts"
+        ]
+      ],
+      "emphasized": [
+        [
+          "Full rollout"
+        ]
+      ],
+      "not_emphasized": [
+        [
+          "Release plan"
+        ],
+        [
+          "Canary rollout"
+        ],
+        [
+          "Monitoring alerts"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-en-explicit-override",
+    "name": "en: explicit-override",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Release plan",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "Canary rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "Full rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "Monitoring alerts",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "Keep Canary rollout and cross out Full rollout.",
+        "pointing": [
+          "n2"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Release plan"
+          ],
+          "items": [
+            [
+              "Canary rollout"
+            ],
+            [
+              "Full rollout"
+            ],
+            [
+              "Monitoring alerts"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "Full rollout"
+        ]
+      ],
+      "not_struck": [
+        [
+          "Release plan"
+        ],
+        [
+          "Canary rollout"
+        ],
+        [
+          "Monitoring alerts"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-en-add-item",
+    "name": "en: add-item",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Release plan",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "Canary rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "Full rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "Monitoring alerts",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "Add rollback rehearsal under this topic.",
+        "pointing": [
+          "n1"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Release plan"
+          ],
+          "items": [
+            [
+              "Canary rollout"
+            ],
+            [
+              "Full rollout"
+            ],
+            [
+              "Monitoring alerts"
+            ],
+            [
+              "Rollback rehearsal"
+            ]
+          ]
+        }
+      ],
+      "struck": [],
+      "not_struck": [
+        [
+          "Release plan"
+        ],
+        [
+          "Canary rollout"
+        ],
+        [
+          "Full rollout"
+        ],
+        [
+          "Monitoring alerts"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-en-switch",
+    "name": "en: selection changes between turns",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Release plan",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "Canary rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "Full rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "Monitoring alerts",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "Cross this one out.",
+        "pointing": [
+          "n2"
+        ]
+      },
+      {
+        "text": "Star this one and keep it.",
+        "pointing": [
+          "n3"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Release plan"
+          ],
+          "items": [
+            [
+              "Canary rollout"
+            ],
+            [
+              "Full rollout"
+            ],
+            [
+              "Monitoring alerts"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "Canary rollout"
+        ]
+      ],
+      "not_struck": [
+        [
+          "Release plan"
+        ],
+        [
+          "Full rollout"
+        ],
+        [
+          "Monitoring alerts"
+        ]
+      ],
+      "emphasized": [
+        [
+          "Full rollout"
+        ]
+      ],
+      "not_emphasized": [
+        [
+          "Canary rollout"
+        ],
+        [
+          "Monitoring alerts"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-zh-strike-other",
+    "name": "zh: same words, different selected item",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "发布计划",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "灰度发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "全量发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "监控告警",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "把这个划掉，暂时不做。",
+        "pointing": [
+          "n4"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "发布计划"
+          ],
+          "items": [
+            [
+              "灰度发布"
+            ],
+            [
+              "全量发布"
+            ],
+            [
+              "监控告警"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "监控告警"
+        ]
+      ],
+      "not_struck": [
+        [
+          "发布计划"
+        ],
+        [
+          "灰度发布"
+        ],
+        [
+          "全量发布"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-zh-other-topic-add-item",
+    "name": "zh: same words, different selected topic",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "发布计划",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "灰度发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "全量发布",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "监控告警",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n5",
+          "label": "运维计划",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 6,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "在这个话题下面补一条：回滚演练。",
+        "pointing": [
+          "n5"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "发布计划"
+          ],
+          "items": [
+            [
+              "灰度发布"
+            ],
+            [
+              "全量发布"
+            ],
+            [
+              "监控告警"
+            ]
+          ]
+        },
+        {
+          "title": [
+            "运维计划"
+          ],
+          "items": [
+            [
+              "回滚演练"
+            ]
+          ]
+        }
+      ],
+      "struck": [],
+      "not_struck": [
+        [
+          "发布计划"
+        ],
+        [
+          "灰度发布"
+        ],
+        [
+          "全量发布"
+        ],
+        [
+          "监控告警"
+        ],
+        [
+          "运维计划"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-en-strike-other",
+    "name": "en: same words, different selected item",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Release plan",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "Canary rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "Full rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "Monitoring alerts",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "Cross this out; we will not do it.",
+        "pointing": [
+          "n4"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Release plan"
+          ],
+          "items": [
+            [
+              "Canary rollout"
+            ],
+            [
+              "Full rollout"
+            ],
+            [
+              "Monitoring alerts"
+            ]
+          ]
+        }
+      ],
+      "struck": [
+        [
+          "Monitoring alerts"
+        ]
+      ],
+      "not_struck": [
+        [
+          "Release plan"
+        ],
+        [
+          "Canary rollout"
+        ],
+        [
+          "Full rollout"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "pointing-en-other-topic-add-item",
+    "name": "en: same words, different selected topic",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Release plan",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "Canary rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n3",
+          "label": "Full rollout",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n4",
+          "label": "Monitoring alerts",
+          "aliases": [],
+          "kind": "item",
+          "marks": [],
+          "ink": "ink",
+          "parent": "n1"
+        },
+        {
+          "id": "n5",
+          "label": "Operations plan",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 6,
+      "nextGroup": 1
+    },
+    "turns": [
+      {
+        "text": "Add rollback rehearsal under this topic.",
+        "pointing": [
+          "n5"
+        ]
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Release plan"
+          ],
+          "items": [
+            [
+              "Canary rollout"
+            ],
+            [
+              "Full rollout"
+            ],
+            [
+              "Monitoring alerts"
+            ]
+          ]
+        },
+        {
+          "title": [
+            "Operations plan"
+          ],
+          "items": [
+            [
+              "Rollback rehearsal"
+            ]
+          ]
+        }
+      ],
+      "struck": [],
+      "not_struck": [
+        [
+          "Release plan"
+        ],
+        [
+          "Canary rollout"
+        ],
+        [
+          "Full rollout"
+        ],
+        [
+          "Monitoring alerts"
+        ],
+        [
+          "Operations plan"
+        ]
+      ]
+    }
+  }
+]

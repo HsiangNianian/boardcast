@@ -65,6 +65,7 @@ jobs:
           exit 1
 
       - run: node eval/run.ts --label "$LABEL"
+      - run: node eval/run.ts --label "$LABEL" --set pointing
 
       - uses: actions/upload-artifact@v4
         if: always()

@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useT } from '../i18n/index.ts'
 import { ArrowUp, ChevronDown, ChevronUp, Mic, Stop } from './icons.tsx'
+import { initial } from './speakers.ts'
 
 interface Props {
   /** 发一句话；speaker 是这句的说话人（句首的 @名字 已经拆出来了） */
@@ -157,14 +158,9 @@ export default function Composer(p: Props) {
               send()
             }}
           >
-            <button
-              type="button"
-              className={`who ${color(p.speaker)}`}
-              onClick={nextSpeaker}
-              title={c.speakerTitle}
-              aria-label={c.speakerAria(p.speaker)}
-            >
-              {p.speaker.slice(0, 2)}
+            <button type="button" className={`who${initial(p.speaker) === p.speaker ? ' solo' : ''}`} onClick={nextSpeaker} title={c.speakerTitle} aria-label={c.speakerAria(p.speaker)}>
+              <span className={`av ${color(p.speaker)}`}>{initial(p.speaker)}</span>
+              {initial(p.speaker) !== p.speaker && <span className="name">{p.speaker}</span>}
             </button>
             <textarea
               ref={area}

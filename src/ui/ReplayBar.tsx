@@ -1,12 +1,13 @@
-// 回放时底部的控制条：播放 / 暂停、进度（可拖）、时间、倍速、退出。占输入栏的位置。
+// 回放时底部的控制条：播放 / 暂停、进度（可拖）、时间、倍速、从这一刻另起一板、退出。占输入栏的位置。
 
 import type { CSSProperties } from 'react'
 import { useT } from '../i18n/index.ts'
-import { Close, Pause, Play } from './icons.tsx'
+import { Close, Fork, Pause, Play } from './icons.tsx'
 
 export const SPEEDS = [1, 2, 4] as const
 
-const clock = (ms: number) => {
+/** 毫秒 → 「3:07」「1:02:45」 */
+export const clock = (ms: number) => {
   const s = Math.max(0, Math.round(ms / 1000))
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
@@ -26,6 +27,8 @@ export default function ReplayBar(p: {
   onToggle: () => void
   onSeek: (at: number) => void
   onSpeed: () => void
+  /** 从这一刻另起一张板；不给就没有这个按钮（导出的回放网页） */
+  onFork?: () => void
   onExit: () => void
 }) {
   const s = useT().replayBar
@@ -50,6 +53,12 @@ export default function ReplayBar(p: {
         <button type="button" className="speed" onClick={p.onSpeed} title={s.speed}>
           {p.speed}×
         </button>
+        {p.onFork && (
+          <button type="button" className="fork" onClick={p.onFork} disabled={!p.at} aria-label={s.fork} title={p.at ? s.forkTitle : s.forkEmpty}>
+            <Fork size={15} />
+            <span>{s.fork}</span>
+          </button>
+        )}
         <button type="button" className="icon" onClick={p.onExit} aria-label={s.exit} title={s.exitTitle}>
           <Close size={16} />
         </button>

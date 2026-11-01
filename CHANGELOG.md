@@ -2,6 +2,28 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.20.0 - 2026-11-01
+
+### Features
+
+- **board:** Circle nodes, items, topics or imported source paragraphs before saying "this" or "these two". Supports mouse and touch, multiple loops, merging, undo and cancellation. The next utterance carries the targets; the transcript records them and exports omit temporary loops. ([#59](https://github.com/HsiangNianian/boardcast/pull/59))
+- **site:** Open GitHub Pages to the official landing page and scroll into the interactive demo at the bottom. The demo also opens separately at `/boardcast/demo/`. ([#63](https://github.com/HsiangNianian/boardcast/pull/63))
+
+### Fixes
+
+- Keep each queued pointing utterance attached to its own targets and retain references in recent context; ordinary speech can still be batched.
+- Preserve targets near the corners of merged loops.
+- Discard unfinished strokes on Escape, touch cancellation, lost capture or tool changes; ignore competing pointers and consume each circle only once.
+- Keep transcript and board-strip scrolling inside the embedded demo instead of moving the landing page.
+
+### Validation
+
+- 159 unit tests, TypeScript and production build passed.
+- Qwen3.5-4B-Q4_K_M: 18 synthetic pointing cases, repeated three times, scored 1.000 for item F1, strike F1 and mark accuracy with zero request errors. Mouse and simulated touch were checked against the real model.
+- General holdout results remain unchanged from v0.19.1, including one existing model error. The pointing evaluation does not cover microphone/ASR timing or physical mobile devices.
+
+**Full diff:** [v0.19.1...v0.20.0](https://github.com/HsiangNianian/boardcast/compare/v0.19.1...v0.20.0)
+
 ## 0.19.1 - 2026-11-01
 
 ### Fixes

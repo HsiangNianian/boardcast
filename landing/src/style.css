@@ -826,6 +826,53 @@ canvas {
   color: var(--ink);
 }
 
+.demo {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  height: calc(100svh - 2 * var(--g));
+  min-height: 480px;
+  margin: 0 var(--g) var(--g);
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  scroll-margin-top: var(--g);
+}
+
+.demo-heading {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px clamp(16px, 3vw, 40px);
+  border-bottom: 1px solid var(--rule);
+}
+
+.demo-heading h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.demo-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.demo-heading a {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.demo iframe {
+  display: block;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border: 0;
+}
+
 /* 墨线画布：盖在整页上，不挡鼠标 */
 .stage {
   position: fixed;

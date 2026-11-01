@@ -8,7 +8,9 @@ English | [中文](README.md)
 
 This is an early prototype. In the desktop app, you can speak into your microphone to build a board, type instead, or replay a sample meeting.
 
-**[Try it in your browser](https://hsiangnianian.github.io/boardcast/)**: a web demo that replays sample meetings stroke by stroke (recorded earlier with the built-in model, so no model is needed); connect an OpenAI-compatible API to type your own. For real use install the desktop app: local models, voice input, and meetings saved on your computer.
+**[Website](https://hsiangnianian.github.io/boardcast/)**: scroll to the bottom to use the interactive demo directly.
+
+**[Open the demo separately](https://hsiangnianian.github.io/boardcast/demo/)**: replay sample meetings stroke by stroke (recorded earlier with the built-in model, so no model is needed); connect an OpenAI-compatible API to type your own. For real use install the desktop app: local models, voice input, and meetings saved on your computer.
 
 Switch between two board styles in the bottom-left corner:
 

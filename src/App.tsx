@@ -133,8 +133,12 @@ export default function App() {
     save('boardcast.theme', theme)
   }, [theme])
 
-  // 桌面版一开始留空，等内置模型就绪后由外壳告诉我们地址；网页版用上次填的
-  const [baseUrl, setBaseUrl] = useState(() => (isDesktop ? '' : load('boardcast.llm', 'http://127.0.0.1:8080')))
+  // 桌面版等待内置服务地址；网页版默认不探测，保留旧版手动配置过的非默认地址。
+  const [baseUrl, setBaseUrl] = useState(() => {
+    if (isDesktop) return ''
+    const previous = load('boardcast.llm', '')
+    return load('boardcast.localLlm', previous === 'http://127.0.0.1:8080' ? '' : previous)
+  })
   const [online, setOnline] = useState<boolean | null>(null)
   // 桌面版：内置的 llama-server 由外壳拉起，就绪后自动用它的地址
   const [builtin, setBuiltin] = useState<LlmStatus | null>(null)
@@ -580,21 +584,48 @@ export default function App() {
 
   useEffect(() => {
     // 桌面版的地址是内置服务每次启动时随机分配的端口，记下来下次也用不上
-    if (!isDesktop) save('boardcast.llm', baseUrl)
+    if (!isDesktop) save('boardcast.localLlm', baseUrl)
     if (!baseUrl) {
-      setOnline(false)
+      // 没填地址：不是「连不上」，只是没配置，设置里的状态点不标红
+      setOnline(null)
       return
     }
     let alive = true
+    // 连得上就每 5 秒看一眼；网页版连不上就越等越久（最多一分钟），免得没开本地模型时满屏报错。
+    // 桌面版不退避：内置服务刚启动、模型还在加载时，要尽快看到它好了。
+    // 页面切到后台时先不看，切回来立刻看一次
+    const backoff = (w: number) => (isDesktop ? 5000 : Math.min(60000, w * 2))
+    let wait = 5000
+    let t = 0
+    const next = () => {
+      clearTimeout(t)
+      if (alive && document.visibilityState === 'visible') t = window.setTimeout(ping, wait)
+    }
     const ping = () =>
-      fetch(`${baseUrl}/health`)
-        .then((r) => alive && setOnline(r.ok))
-        .catch(() => alive && setOnline(false))
+      fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(5000) })
+        .then((r) => {
+          if (!alive) return
+          setOnline(r.ok)
+          wait = r.ok ? 5000 : backoff(wait)
+        })
+        .catch(() => {
+          if (!alive) return
+          setOnline(false)
+          wait = backoff(wait)
+        })
+        .finally(next)
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return clearTimeout(t)
+      wait = 5000
+      clearTimeout(t)
+      void ping()
+    }
     void ping()
-    const t = setInterval(ping, 5000)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       alive = false
-      clearInterval(t)
+      clearTimeout(t)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [baseUrl])
 

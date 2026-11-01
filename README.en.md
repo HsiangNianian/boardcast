@@ -222,7 +222,7 @@ pnpm test                      # Engine unit tests; no model needed
 pnpm build                     # Type check, replay player and production web build
 ```
 
-To use your own local model in the web app, start llama.cpp in another terminal and configure the local address in the app:
+To use your own local model in the web app, start llama.cpp in another terminal and configure the local address in the app (it starts empty, and nothing is contacted until you fill it in):
 
 ```sh
 llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080 -c 4096 --jinja -np 1

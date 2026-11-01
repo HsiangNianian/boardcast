@@ -54,6 +54,9 @@ interface Props {
   /** 笔画粗细，百分比 */
   weight: number
   setWeight: (n: number) => void
+  /** 纠错样本：一共攒了几条能导出的；导出成评测用例或偏好数据，返回存到哪儿（取消时 null） */
+  countSamples: () => Promise<number>
+  exportSamples: (kind: 'cases' | 'pairs') => Promise<string | null>
 }
 
 /** 错误对象只要它的消息，不要前面的「Error: 」 */
@@ -156,6 +159,27 @@ export default function SettingsPanel(p: Props) {
       setChecked({ ok: false, text: errText(e) })
     } finally {
       setChecking(false)
+    }
+  }
+
+  // —— 纠错样本 ——
+  const [samples, setSamples] = useState<number | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exported, setExported] = useState<{ ok: boolean; text: string } | null>(null)
+  // 打开设置时数一次（要把所有会议读一遍）
+  useEffect(() => {
+    void p.countSamples().then(setSamples, () => setSamples(0))
+  }, [])
+  async function exportSamples(kind: 'cases' | 'pairs') {
+    setExporting(true)
+    setExported(null)
+    try {
+      const where = await p.exportSamples(kind)
+      if (where) setExported({ ok: true, text: s.samplesSaved(where) })
+    } catch (e) {
+      setExported({ ok: false, text: errText(e) })
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -349,6 +373,25 @@ export default function SettingsPanel(p: Props) {
           <button type="button" onClick={p.onDiagnostics}>
             {s.diagnostics}
           </button>
+        </section>
+        <section>
+          <h3>{s.samples}</h3>
+          <p className="hint">{s.samplesHint}</p>
+          <p className="meta">{samples === null ? s.samplesCounting : s.samplesCount(samples)}</p>
+          <div className="actions">
+            <button type="button" onClick={() => void exportSamples('cases')} disabled={!samples || exporting}>
+              {s.exportCases}
+            </button>
+            <button type="button" className="ghost" onClick={() => void exportSamples('pairs')} disabled={!samples || exporting}>
+              {s.exportPairs}
+            </button>
+          </div>
+          <p className="hint">
+            {s.samplesCases}
+            <code>node eval/run.ts --file {s.samplesFile}</code>
+          </p>
+          <p className="hint">{s.samplesPairs}</p>
+          {exported && <p className={`meta ${exported.ok ? 'okmsg' : 'err'}`}>{exported.text}</p>}
         </section>
         <section>
           <h3>{s.glossary}</h3>

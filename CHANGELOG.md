@@ -2,7 +2,18 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
-## 0.19.0-2 - 2026-10-31
+## 0.19.1 - 2026-11-01
+
+### Fixes
+
+- Improve English handwriting and meeting fidelity ([`f4f17fe`](https://github.com/HsiangNianian/boardcast/commit/f4f17fe97cb5c4d1b6fb7d779d7881948ba2fe2c))
+- **summary:** Retain conservative chunking and explicit board facts ([`f9541d9`](https://github.com/HsiangNianian/boardcast/commit/f9541d9425999493ee643bf39a22826f5c751f27))
+
+**Full diff:** [v0.19.0...v0.19.1](https://github.com/HsiangNianian/boardcast/compare/v0.19.0...v0.19.1)
+
+## 0.19.0 - 2026-11-01
+
+This release includes everything from the 0.19.0-2 pre-release.
 
 ### Features
 
@@ -36,12 +47,47 @@ All notable changes to boardcast. Generated from Conventional Commits by `pnpm r
   - the gaps between words don't cut a clause in half; a test feeds real speech with 0.35 s breaths and checks each sentence comes out whole
   - one second of pre-roll so the first word isn't lost when a soft break sends the buffer
   - every sentence carries its timings (pause waited for, recognition, voiceprint, queue for the model, model), shown in the transcript and exported as timing.json with diagnostics (numbers only)
+- **replay:** Fork a new board from any moment of a replay (closes #50) ([`55569e9`](https://github.com/HsiangNianian/boardcast/commit/55569e99f7ac12fe0a21efdeb88db36ed844152b))
+  - the replay bar has a "Fork board" button: it leaves the replay and adds a board at the end with the board, layout and replay steps as they were at that moment; the original board is untouched
+  - the transcript notes which board and moment the new one came from
+  - the button is disabled on the empty first step, hidden while the model is drawing, and absent from the exported replay page
+  - a test checks a forked board replays on its own, keeps counting node ids, and leaves the original steps alone
+- **board:** Trace board items back to who raised them (closes #51) ([`e1944b0`](https://github.com/HsiangNianian/boardcast/commit/e1944b0ed36edd8a6af41ce0a5baa477743ad476))
+  - each node and line remembers who said it when it was first drawn in ink; in a batch of several speakers it goes to whoever's words match the name, and is left blank rather than guessed; later renames, marks and moves keep the original speaker
+  - hover a speaker in the transcript and the board marks what they raised with a highlighter in their colour while the rest fades; the board doesn't re-fit while you do
+  - select an item and the toolbar shows who raised it; click to jump to that line in the transcript
+  - renaming a speaker carries over to every board, the replay steps and undo history
+  - transcript lines get a one-character avatar (surname, or the number of "speaker 2") with the full name and timing on a header row; the composer's speaker tag becomes an avatar-and-name pill
+  - the prompt is unchanged
+- **export:** Animated SVG that writes the board stroke by stroke (refs #53) ([`d33d692`](https://github.com/HsiangNianian/boardcast/commit/d33d6923f7ca79c9bea25a39bb96d2a796faeedd))
+  - new export "Animated SVG" (.anim.svg): the board's final state is written stroke by stroke in the order it was drawn during the meeting (from the replay steps; marks wait for the round they were added in), then stays on the full board
+  - however long the meeting, writing is squeezed into about 12 seconds, with a short pause between rounds
+  - CSS animation only, no scripts, so it plays inside an <img> in a README, doc or chat; reduced-motion shows the full board at once
+  - same pen as the board (whiteboard ink, your messiness and weight), imported page underneath; a typical board is a few hundred KB
+- **eval:** Keep hand fixes of the model's last turn as eval cases and training pairs (closes #52) ([`ad59c7d`](https://github.com/HsiangNianian/boardcast/commit/ad59c7d82b5bc0c6ba86a11f6d85cf0e1f342c6f))
+  - When the model has just drawn a turn and the user fixes what it drew on the
+  - Only fixes that touch what the turn drew start a sample; follow-up fixes within
+  - Samples are saved with the meeting as diffs; transcript lines mark the fixes
+  - Settings > Correction samples exports them as eval cases (eval/cases.json
+  - eval/run.ts takes --file and cases with a starting board, history and terms;
+- **board:** Continue a meeting on an old board, with faded ink for what was there (closes #49) ([`3620abf`](https://github.com/HsiangNianian/boardcast/commit/3620abf3cee61c5a577518a36d6572a6cc35b671))
+  - "Continue on it" in the meeting list starts a new meeting on a board of an
+  - The board keeps a snapshot of the base it started from; what is unchanged
+  - Applies on screen, in PNG / SVG / PDF exports, in the replay page and in
+  - The model's prompt is unchanged
 
 ### Fixes
 
 - **eval:** Stop when the model can't be reached instead of scoring zeros ([`e79d0b6`](https://github.com/HsiangNianian/boardcast/commit/e79d0b62fa09cb6fc3f5de8f99010035b203622c))
   - check GET /health first and explain how to start llama-server or set --base-url
   - skip Node's experimental localStorage outside the browser, which only printed a warning
+- **log:** Put model timings on the lines they belong to, and settle lines when the model fails ([`faaaccc`](https://github.com/HsiangNianian/boardcast/commit/faaaccc16a04af8600ca07fa020fe1de1071e609))
+  - when lines queued up while the model was busy, each result was written onto the newest waiting lines instead of the ones it was made from, so timings and changes showed on the wrong lines; results are now matched to the batch's own lines, oldest first
+  - when a model round failed, its lines stayed on "drawing…" forever and kept blocking board switching and imports; they are now marked "not drawn"
+  - lines drawn together with the next ones say so instead of "(no changes)"; failed lines are left out of the timing report
+- **ink:** New strokes left of or above the origin are written, not popped in ([`2612bc2`](https://github.com/HsiangNianian/boardcast/commit/2612bc2ee4e9a432468019e8da1228c94743ce08))
+  - the writing masks had no region, so browsers clipped them to a box anchored at the origin; ink at negative coordinates stayed invisible while being written and only appeared once finished
+  - masks now cover the board's bounds with a margin
 
 ### Documentation
 
@@ -60,8 +106,10 @@ All notable changes to boardcast. Generated from Conventional Commits by `pnpm r
 ### Maintenance
 
 - Apply pre-commit fixes ([`e1f31e4`](https://github.com/HsiangNianian/boardcast/commit/e1f31e43f8fc558915558568f4622c9dd63c7830))
+- [ImgBot] Optimize images ([`a34141e`](https://github.com/HsiangNianian/boardcast/commit/a34141e81c62f342d6270f12aafb81d634dadad8))
+- Apply pre-commit fixes ([`aec029e`](https://github.com/HsiangNianian/boardcast/commit/aec029eb852ee490be77af4e6e607203163e428f))
 
-**Full diff:** [v0.18.0...v0.19.0-2](https://github.com/HsiangNianian/boardcast/compare/v0.18.0...v0.19.0-2)
+**Full diff:** [v0.18.0...v0.19.0](https://github.com/HsiangNianian/boardcast/compare/v0.18.0...v0.19.0)
 
 ## 0.18.0 - 2026-10-31
 

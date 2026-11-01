@@ -26,7 +26,7 @@ export interface Gold {
   topics?: { title: Names; items: Names[] }[]
   /** 应该被划掉的 */
   struck?: Names[]
-  /** 明确要求保留的节点 */
+  /** 不该被划掉的（用户把模型的划掉去掉了）：划掉了算一次标记没命中 */
   not_struck?: Names[]
   /** 应该被强调的（星标、圈出、下划线都算） */
   emphasized?: Names[]

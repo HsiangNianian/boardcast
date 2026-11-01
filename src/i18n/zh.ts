@@ -81,6 +81,19 @@ export const zh: Messages = {
     feedbackHint: '把版本、模型状态、日志和最近的报错打成一个 zip，不带会议内容。',
     diagnostics: '导出诊断信息',
 
+    // —— Correction samples ——
+    samples: '纠错样本',
+    samplesHint:
+      '模型刚画完一句，你紧接着在手写板上改了它画的东西（删线、改名、划掉、撤销），这一轮就会自动记下：它看到的板书和那句话、它的输出、你改完的样子。只存在本机的会议里，导出才会离开这台电脑。',
+    samplesCounting: '正在数…',
+    samplesCount: (n: number) => (n ? `一共攒了 ${n} 条。` : '还没有：开会时改一下模型刚画错的地方就有了。'),
+    exportCases: '导出评测用例',
+    exportPairs: '导出训练数据',
+    samplesCases: '评测用例和 eval/cases.json 同一个格式，从当时的板书接着跑：',
+    samplesFile: '<文件>',
+    samplesPairs: '训练数据是 JSONL，一行一条 prompt / chosen / rejected：DPO 直接用，SFT 取 prompt 和 chosen。',
+    samplesSaved: (where: string) => `已导出：${where}`,
+
     // —— Glossary ——
     glossary: '术语表',
     glossaryHint:
@@ -160,6 +173,9 @@ export const zh: Messages = {
     delete: '删除',
     cancel: '取消',
     rename: '重命名',
+    continue: '接着开会',
+    continueTitle: '拿这场会的板当底板开一场新会：原来的内容用淡墨，新会上加的、改的、划掉的用正常墨迹',
+    pickBoard: '接着哪张板？',
   },
 
   models: {
@@ -301,6 +317,7 @@ export const zh: Messages = {
     notOpenAI: '返回里没有 choices[0].message.content，不像是 OpenAI 兼容接口',
     builtinTimeout: '内置模型启动超时',
     noBoard: '找不到白板',
+    emptyBoard: '板上还没有东西，画点什么再导出',
     imageFailed: '生成图片失败',
     noPlayer: '找不到回放播放器（player/player.js），开发时先跑一次 pnpm build:player',
     pdfPassword: '这个 PDF 有密码，先去掉密码再导入',
@@ -370,6 +387,8 @@ export const zh: Messages = {
     exportPngPencil: '铅笔板书，含手动改动',
     exportSvg: 'SVG 矢量图',
     exportSvgHint: '放大不糊，可以插进文档或者接着改',
+    exportAnim: '动态 SVG',
+    exportAnimHint: '插进 README、文档、群聊，自己一笔一笔写出来',
     exportPdf: '整场会 PDF',
     exportPdfHint: '每张板一页，后面是摘要和会议记录；页面是图片，字不能复制',
     exportHtml: '回放网页',
@@ -423,7 +442,8 @@ export const zh: Messages = {
     renameFrom: '把',
     renameTo: '改成',
     renameSpeaker: '改名',
-    renameSpeakerTitle: (name: string) => `给「${name}」改名`,
+    renameSpeakerTitle: (name: string) => `给「${name}」改名；鼠标停在这里，白板上会标出${name}提的东西`,
+    raisedByTitle: (name: string) => `${name}提的：点一下跳到会议记录里那句话`,
     cancel: '取消',
     logEmpty: '还没有人说话。说的每一句和它画出来的东西都会记在这里。',
     gotoPage: '切到这张板',
@@ -439,9 +459,15 @@ export const zh: Messages = {
     andMore: (names: string, n: number) => `${names} 等 ${n} 样`,
     circleEmpty: '这一圈里没圈住板书，再圈一次',
     listSep: '、',
+    fixBadge: '记为纠错样本',
+    fixTitle: '改的是模型刚画的：这一轮记成了纠错样本，可以在设置里导出成评测用例或训练数据',
     drawing: '画着…',
     lineFellBack: ' · 远程失败，这句用了本地模型',
+    lineFellBackShort: ' · 本地补画',
     noChange: '（没有改动）',
+    drawnWithNext: '（和后面几句攒在一起画的，画了什么记在那批的最后一句上）',
+    lineFailed: '没画上',
+    lineFailedDetail: '（模型这一轮出错了，这句没画到板上）',
     timing: (s: { wait?: number; asr?: number; voiceprint?: number; queue?: number; model?: number }) =>
       [
         s.wait !== undefined && `停顿 ${s.wait}`,
@@ -457,6 +483,8 @@ export const zh: Messages = {
     undoNote: '撤销了上一步',
     redoNote: '重做了一步',
     movedNote: (what: string) => `挪了${what}的位置`,
+    continuedTitle: (title: string) => `${title}（续）`,
+    continuedNote: (title: string, page: number) => `接着「${title}」的第 ${page} 张板开会：原来的内容用淡墨，这场会的改动用正常墨迹`,
     forkNote: (from: number, at: string, to: number) => `从第 ${from} 张板回放到 ${at} 的那一刻，另起了第 ${to} 张板`,
     deletedNote: (what: string) => `删掉了${what}`,
     markSpanNote: (removed: boolean, text: string, mark: string) => `${removed ? '去掉了' : '加上了'}「${text}」的${mark}`,

@@ -73,6 +73,8 @@ export interface Stages {
 interface TimedLine {
   ms?: number
   manual?: boolean
+  /** 模型出错没画上的不算耗时 */
+  failed?: boolean
   queueMs?: number
   heard?: { waitMs: number; asrMs: number; voiceprintMs: number; soft: boolean }
 }
@@ -97,7 +99,7 @@ const pct = (xs: number[], p: number) => {
  * speech to the board. Only numbers: this goes into the diagnostics zip.
  */
 export function timingReport(lines: TimedLine[], model?: string) {
-  const done = lines.filter((l) => !l.manual && l.ms !== undefined)
+  const done = lines.filter((l) => !l.manual && !l.failed && l.ms !== undefined)
   const stages = done.map(lineTiming)
   const stat = (pick: (s: Stages) => number | undefined) => {
     const xs = stages.map(pick).filter((x): x is number => x !== undefined)

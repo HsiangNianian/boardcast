@@ -23,15 +23,18 @@ import {
 } from './desktop.ts'
 import { type Graph, emptyGraph } from './engine/graph.ts'
 import { type LlmConfig, proposeOps } from './engine/llm.ts'
-import { formatOps } from './engine/ops.ts'
+import { eraseDrafts, formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { History as EditHistory, type Selection, describe, exists, pinned, remove as removeSel, rename as renameSel, toggleMark } from './engine/edit.ts'
 import { MARKS, type Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
 import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
 import { latest } from './engine/pointing.ts'
+import { firstSeen, renameBy, renameByInSteps, saidAt } from './engine/attribute.ts'
+import { settle } from './engine/pending.ts'
 import { summarize } from './engine/summary.ts'
 import { correct, parseGlossary } from './engine/glossary.ts'
+import { Corrections, casesFile, gather, pairsFile } from './engine/corrections.ts'
 import { type Voice, identify, renameVoice } from './engine/voices.ts'
 import { type Meeting, type MeetingLine, type Page, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
 import InkBoard from './ink/InkBoard.tsx'
@@ -45,6 +48,7 @@ import { Auto, Close, Download, Gear, History, Lasso, Moon, Pen, Pencil, Plus, R
 import MeetingsPanel from './ui/MeetingsPanel.tsx'
 import ReplayBar, { SPEEDS, clock } from './ui/ReplayBar.tsx'
 import PageStrip from './ui/PageStrip.tsx'
+import { SPEAKER_MARKERS, initial, speakerSlot } from './ui/speakers.ts'
 import type { PdfImport } from './board/importPdf.ts'
 import { type Thumb, pageThumb, thumbOf } from './board/thumb.ts'
 import { navTarget, parseNav } from './engine/nav.ts'
@@ -277,9 +281,15 @@ export default function App() {
   const summingFor = useRef<AbortController | null>(null)
   const [graph, setGraph] = useState<Graph>(emptyGraph)
   const [hot, setHot] = useState<Set<string>>(new Set())
+  /** 溯源：鼠标停在哪个说话人上，白板就标出他提的东西 */
+  const [traceWho, setTraceWho] = useState<string | null>(null)
   const [speaker, setSpeaker] = useState('A')
   // 会议记录栏：窄屏默认收起
   const [showLog, setShowLog] = useState(() => load('boardcast.log', innerWidth > 1100 ? 'open' : 'closed') === 'open')
+  // 会议记录收起来了，悬停的说话人也就没了
+  useEffect(() => {
+    if (!showLog) setTraceWho(null)
+  }, [showLog])
   // 启动动画每次打开应用放一次
   const [splash, setSplash] = useState(true)
   // 「整理排版」：忘掉记住的位置，整块重新排一次
@@ -367,6 +377,8 @@ export default function App() {
   /** 撤销的一步：板书 + 排版记住的位置（拖动只改位置；撤销删除时东西也回到原处） */
   type Snap = { graph: Graph; layout: LayoutMemory }
   const editHistory = useRef(new EditHistory<Snap>())
+  /** 模型刚画完就被手动改了的那几轮，记成纠错样本（跟着会议存） */
+  const fixes = useRef(new Corrections())
   /** 排版记忆变了（拖动、撤销）就加一，让白板重新排版 */
   const [layoutRev, setLayoutRev] = useState(0)
   /** 最近一张墨线板（不含铅笔稿）：撤销时退回到这里 */
@@ -402,6 +414,7 @@ export default function App() {
     steps: stepsRef.current,
     thumb: thumbRef.current,
     underlay: pagesRef.current[pageRef.current]?.underlay,
+    base: pagesRef.current[pageRef.current]?.base,
   })
 
   // Session 只建一次。以前跟着模型配置重建：远程出错临时拉起本地模型、地址一变，会开到一半板书就被换成空的
@@ -419,29 +432,33 @@ export default function App() {
           setHot(new Set(ids))
           if (ids.length) setTimeout(() => setHot(new Set()), 3000)
         },
-        llm: (r) =>
-          setLines((ls) => {
-            // 一批里的每句都标上这一轮的耗时
-            const out = [...ls]
-            let left = r.batch.length
-            for (let i = out.length - 1; i >= 0 && left > 0; i--) {
-              if (out[i].ms === undefined) {
-                out[i] = {
-                  ...out[i],
-                  ms: r.ms,
-                  queueMs: r.queuedMs[left - 1],
-                  ops: left === r.batch.length ? formatOps(r.ops) || '-' : '',
-                  via: r.via,
-                  fellBack: !!r.fellBack,
-                }
-                left--
-              }
-            }
-            return out
-          }),
-        error: (e) => {
+        llm: (r) => {
+          fixes.current.round({
+            at: Date.now(),
+            page: pageRef.current,
+            seen: r.seen,
+            context: r.context,
+            said: r.said,
+            terms: sessionRef.current?.terms,
+            ops: r.ops,
+            drawn: sessionRef.current?.graph ?? r.seen,
+          })
+          // 一批里的每句都标上这一轮的耗时；画了什么记在这批的最后一句上（前面几句的 ops 是空串）
+          setLines((ls) =>
+            settle(ls, r.batch, (k) => ({
+              ms: r.ms,
+              queueMs: r.queuedMs[k],
+              ops: k === r.batch.length - 1 ? formatOps(r.ops) || '-' : '',
+              via: r.via,
+              fellBack: !!r.fellBack,
+            })),
+          )
+        },
+        error: (e, batch) => {
           console.error(e)
           setOnline(false)
+          // 这几句不会再画了：别一直挂着「画着…」（还会挡住翻页、导入）
+          setLines((ls) => settle(ls, batch, () => ({ ms: 0, ops: '', failed: true })))
         },
       })
   const session = sessionRef.current
@@ -465,6 +482,7 @@ export default function App() {
     (m: Meeting) => {
       board.restore(m.layout)
       editHistory.current.clear()
+      fixes.current.load(m.corrections)
       lastInk.current = m.graph
       setSelection(null)
       session.graph = m.graph
@@ -523,8 +541,9 @@ export default function App() {
       steps: stepsRef.current.length ? stepsRef.current : undefined,
       localOnly: localOnlyRef.current || undefined,
       glossary: meetingGlossaryRef.current.trim() || undefined,
-      // 只有一张板、但它垫着导入页时也要存 pages：底图存在这里
-      ...(pagesRef.current.length > 1 || pagesRef.current.some((p) => p.underlay)
+      corrections: fixes.current.list.length ? fixes.current.list : undefined,
+      // 只有一张板、但它垫着导入页或者带着底板时也要存 pages：底图、底板存在这里
+      ...(pagesRef.current.length > 1 || pagesRef.current.some((p) => p.underlay || p.base)
         ? { pages: pagesRef.current.map((p, i) => (i === pageRef.current ? capture() : p)), page: pageRef.current }
         : {}),
     }),
@@ -839,16 +858,36 @@ export default function App() {
                 lines,
                 pages: pagesRef.current.map((p, i) => {
                   const cur = i === page ? capture() : p
-                  return { graph: cur.graph, steps: cur.steps, underlay: cur.underlay, layout: cur.layout }
+                  return { graph: cur.graph, steps: cur.steps, underlay: cur.underlay, layout: cur.layout, base: cur.base }
                 }),
               }
             : undefined,
+        ...(kind === 'anim'
+          ? { steps: stepsRef.current, underlay: pagesRef.current[page]?.underlay, messy: messyLater / 100, weight: weightLater / 100 }
+          : {}),
         mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
       const where = await saveFile(name, blob)
       if (where) setToast({ ok: true, text: isDesktop ? t.app.saved(where) : t.app.downloaded(where) })
     } catch (e) {
       setToast({ ok: false, text: t.app.exportFailed(errText(e)) })
     }
+  }
+
+  /** 所有会议里的纠错样本：存着的，加上这场会里还没来得及存的 */
+  async function allFixes() {
+    const saved = await meetings.corrections().catch(() => [])
+    return [{ id: meeting.id, corrections: fixes.current.list }, ...saved.filter((m) => m.id !== meeting.id)]
+  }
+
+  /** 导出纠错样本：评测用例（eval/cases.json 的格式）或者偏好数据（JSONL） */
+  async function exportFixes(kind: 'cases' | 'pairs'): Promise<string | null> {
+    const all = await allFixes()
+    const d = new Date()
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const { saveFile } = await import('./exporter.ts')
+    return kind === 'cases'
+      ? saveFile(`boardcast-corrections-${day}.cases.json`, new Blob([casesFile(all)], { type: 'application/json' }))
+      : saveFile(`boardcast-corrections-${day}.dpo.jsonl`, new Blob([pairsFile(all)], { type: 'application/x-ndjson' }))
   }
 
   /** 新会议：当前这场已经自动存下了，换一个新编号从空板开始；`keepCurrent` 为 false 时当前这场刚被删掉，不再存 */
@@ -859,6 +898,7 @@ export default function App() {
     session.graph = emptyGraph()
     session.history = []
     editHistory.current.clear()
+    fixes.current.load([])
     lastInk.current = session.graph
     setSelection(null)
     setGraph(session.graph)
@@ -892,7 +932,9 @@ export default function App() {
     lastInk.current = next
     setGraph(next)
     setUndoTick((t) => t + 1)
-    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current }])
+    // 改的是模型刚画的：这一轮记成纠错样本
+    const fix = fixes.current.edit(next, note) || undefined
+    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current, fix }])
     setSelection((sel) => (sel && exists(next, sel) ? sel : null))
   }
 
@@ -906,8 +948,10 @@ export default function App() {
     setLayoutRev((n) => n + 1)
     setUndoTick((t) => t + 1)
     setSelection(null)
+    // 撤销模型刚画的一轮，也是在说它画错了
+    const fix = fixes.current.edit(g, note) || undefined
     // 也记进会议记录：不然记录里还写着「删掉了……」，看着像没恢复
-    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current }])
+    setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current, fix }])
   }
   const now = (): Snap => ({ graph: session.graph, layout: board.snapshot() })
   // 板上画着圈时，撤销先撤圈（不进板书的撤销记录）
@@ -962,6 +1006,38 @@ export default function App() {
     session.history = session.history.map(fix)
     voicesRef.current = renameVoice(voicesRef.current, from, to)
     if (speakerRef.current.trim() === from) setSpeaker(to)
+    // 板书上记的「谁提的」也跟着改：这张板、别的板、回放记录、撤销记录
+    const g = renameBy(session.graph, from, to)
+    session.graph = g
+    lastInk.current = renameBy(lastInk.current, from, to)
+    recorded.current = renameBy(recorded.current, from, to)
+    stepsRef.current = renameByInSteps(stepsRef.current, from, to)
+    pagesRef.current = pagesRef.current.map((p) => ({ ...p, graph: renameBy(p.graph, from, to), ...(p.steps ? { steps: renameByInSteps(p.steps, from, to) } : {}) }))
+    editHistory.current.map((x) => ({ ...x, graph: renameBy(x.graph, from, to) }))
+    if (!replayRef.current) setGraph(g)
+  }
+
+  /** 选中的那条板书是谁提的，和它的名字（找会议记录里那句话用） */
+  const raisedBy = (sel: Selection | null): { who: string; names: string[] } | null => {
+    if (!sel) return null
+    const g = session.graph
+    if (sel.kind === 'node') {
+      const n = g.nodes.find((x) => x.id === sel.id)
+      return n?.by ? { who: n.by, names: [n.label, ...n.aliases] } : null
+    }
+    const e = g.edges.find((x) => x.from === sel.from && x.to === sel.to)
+    const name = (id: string) => g.nodes.find((x) => x.id === id)?.label ?? ''
+    return e?.by ? { who: e.by, names: [name(e.from), name(e.to), e.label ?? ''] } : null
+  }
+
+  /** 跳到会议记录里提出这条板书的那句话 */
+  function jumpToRaised(sel: Selection) {
+    const r = raisedBy(sel)
+    if (!r) return
+    const i = saidAt(linesRef.current, r.who, r.names, pageRef.current, firstSeen(stepsRef.current, sel))
+    if (i === undefined) return
+    setShowLog(true)
+    setJumpLine(i)
   }
 
   function commitRename() {
@@ -1155,6 +1231,7 @@ export default function App() {
     session.graph = p.graph
     board.restore(p.layout)
     editHistory.current.clear()
+    fixes.current.reset()
     lastInk.current = p.graph
     stepsRef.current = p.steps ?? []
     recorded.current = replayTo(stepsRef.current, stepsRef.current.length)
@@ -1355,6 +1432,60 @@ export default function App() {
   }
 
   /** 打开一场会；从搜索结果来的，跳到命中的板和那一句 */
+  /** 一场会有哪几张板（缩略图）：选底板用 */
+  async function boardsOf(id: string): Promise<(Thumb | undefined)[]> {
+    if (id === meeting.id) return pagesRef.current.map((p, i) => (i === pageRef.current ? thumbRef.current : p.thumb))
+    const m = await meetings.load(id).catch(() => null)
+    return m?.pages?.length ? m.pages.map((p) => p.thumb) : [undefined]
+  }
+
+  /**
+   * 带着旧板开新会（#49）：拿那场会的第 `at` 张板当底板，排版位置、导入页、这场会的术语都带过来。
+   * 底板上原样留着的东西用淡墨画，新会上加的、改的、划掉的用正常墨迹。
+   */
+  async function continueOn(id: string, at: number) {
+    exitReplay()
+    let src: Page | undefined
+    let from: string
+    let glossary: string
+    if (id === meeting.id) {
+      const all = [...pagesRef.current]
+      all[pageRef.current] = capture()
+      src = all[at]
+      from = snapshot(meeting).title
+      glossary = meetingGlossary
+    } else {
+      const m = await meetings.load(id).catch(() => null)
+      if (!m) {
+        setToast({ ok: false, text: t.app.openFailed })
+        return
+      }
+      src = m.pages?.length ? m.pages[at] : { graph: m.graph, layout: m.layout }
+      from = m.title
+      glossary = m.glossary ?? ''
+    }
+    if (!src) return
+    // 铅笔稿是没确认的，不带
+    const base = eraseDrafts(src.graph)
+    const page: Page = {
+      graph: base,
+      layout: src.layout,
+      base,
+      underlay: src.underlay,
+      thumb: src.thumb,
+      // 回放从底板开始：第一步就是整块旧板
+      steps: [{ t: Date.now(), line: 1, d: diffGraph(emptyGraph(), base) ?? {} }],
+    }
+    reset()
+    pagesRef.current = [page]
+    showPage(page)
+    setThumbs([page.thumb])
+    setMeetingGlossary(glossary)
+    // 按内容起名会和旧会同名，在历史里分不清
+    setMeeting((m) => ({ ...m, title: t.app.continuedTitle(from), titled: true }))
+    setLines([{ text: t.app.continuedNote(from, at + 1), manual: true, ms: 0, page: 0 }])
+  }
+
   async function openOther(id: string, hit?: Hit) {
     exitReplay()
     if (id !== meeting.id) {
@@ -1434,6 +1565,8 @@ export default function App() {
     if (speaker.trim() && !seen.includes(speaker.trim())) seen.push(speaker.trim())
     return seen
   }, [lines, speaker])
+  const trace = traceWho ? { who: traceWho, color: SPEAKER_MARKERS[speakerSlot(speakers, traceWho)] } : null
+  const selRaised = raisedBy(selection)
 
   const empty = lines.length === 0 && graph.nodes.length === 0 && !partial
   /** 会上说的话（不算手动修改） */
@@ -1627,6 +1760,10 @@ export default function App() {
                   <span>{t.app.exportSvg}</span>
                   <small>{t.app.exportSvgHint}</small>
                 </button>
+                <button type="button" role="menuitem" onClick={() => void exportAs('anim')}>
+                  <span>{t.app.exportAnim}</span>
+                  <small>{t.app.exportAnimHint}</small>
+                </button>
                 <button type="button" role="menuitem" onClick={() => void exportAs('pdf')}>
                   <span>{t.app.exportPdf}</span>
                   <small>{t.app.exportPdfHint}</small>
@@ -1710,6 +1847,8 @@ export default function App() {
             lasso={!replay && lasso}
             onCircle={onCircle}
             circles={circles.map((c) => c.loop)}
+            base={pagesRef.current[page]?.base}
+            trace={trace}
             onMoveSel={replay ? undefined : moveSelection}
             onSelect={
               replay
@@ -1744,6 +1883,11 @@ export default function App() {
                 </form>
               ) : (
                 <>
+                  {selRaised && (
+                    <button type="button" className="by" onClick={() => jumpToRaised(selection)} title={t.app.raisedByTitle(selRaised.who)}>
+                      <span className={`who c${speakerSlot(speakers, selRaised.who)}`}>{selRaised.who}</span>
+                    </button>
+                  )}
                   {!pinned(session.graph, selection) && (
                   <button
                     type="button"
@@ -1947,7 +2091,8 @@ export default function App() {
             </button>
           </form>
         )}
-        <div className="lines">
+        {/* 悬停的那句可能在鼠标底下消失（回放往回跳），移出整个列表时总归取消溯源 */}
+        <div className="lines" onMouseLeave={() => setTraceWho(null)}>
           {lines.length === 0 && !partial && <p className="empty">{t.app.logEmpty}</p>}
           {shown.map((l, i) => (
             <Fragment key={i}>
@@ -1957,24 +2102,44 @@ export default function App() {
               </button>
             )}
             <article
-              className={`line${l.ms === undefined ? ' pending' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}${jumpLine === i ? ' jump' : ''}`}
+              className={`line${l.ms === undefined ? ' pending' : ''}${l.failed ? ' failed' : ''}${l.manual ? ' manual' : ''}${replay && i === shown.length - 1 ? ' now' : ''}${jumpLine === i ? ' jump' : ''}`}
             >
               {l.manual && <span className="who edit">{t.app.editBadge}</span>}
               {l.speaker && (
                 <span
-                  className={`who c${speakers.indexOf(l.speaker) % 6}`}
+                  className={`who c${speakerSlot(speakers, l.speaker)}`}
                   role="button"
                   tabIndex={0}
                   title={t.app.renameSpeakerTitle(l.speaker)}
+                  aria-label={t.app.renameSpeakerTitle(l.speaker)}
                   onClick={() => setRenamingWho(l.speaker!)}
                   onKeyDown={(e) => e.key === 'Enter' && setRenamingWho(l.speaker!)}
+                  onMouseEnter={() => setTraceWho(l.speaker!)}
+                  onMouseLeave={() => setTraceWho(null)}
+                  onFocus={() => setTraceWho(l.speaker!)}
+                  onBlur={() => setTraceWho(null)}
                 >
-                  {l.speaker}
+                  {initial(l.speaker)}
                 </span>
               )}
               <div className="body">
+                {/* 名字一行；耗时浮在这一行的右边，点开看这句画了什么 */}
+                {!l.manual && (
+                  <div className="head">
+                    {l.speaker && (
+                      <span className="name" onMouseEnter={() => setTraceWho(l.speaker!)} onMouseLeave={() => setTraceWho(null)}>
+                        {l.speaker}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <p>
                   {l.text}
+                  {l.fix && (
+                    <span className="fix-tag" title={t.app.fixTitle}>
+                      {t.app.fixBadge}
+                    </span>
+                  )}
                   {l.pointing?.length ? (
                     <span className="point-tag" title={t.app.pointedTitle}>
                       {t.app.pointedAt(l.pointing.map((id) => nameOn(l.page ?? 0, id)).join(t.app.listSep))}
@@ -1984,12 +2149,14 @@ export default function App() {
                 {!l.manual && (
                 <details>
                   <summary>
-                    {l.ms === undefined ? t.app.drawing : `${Math.round(l.ms)} ms`}
-                    {l.ms !== undefined && useRemote && l.via && ` · ${l.via}`}
-                    {l.fellBack && <em>{t.app.lineFellBack}</em>}
+                    {l.failed ? <em>{t.app.lineFailed}</em> : l.ms === undefined ? t.app.drawing : `${Math.round(l.ms)} ms`}
+                    {l.ms !== undefined && !l.failed && useRemote && l.via && ` · ${l.via}`}
+                    {l.fellBack && <em>{t.app.lineFellBackShort}</em>}
                   </summary>
-                  {l.ms !== undefined && (l.heard || l.queueMs) ? <p className="timing">{t.app.timing(lineTiming(l))}</p> : null}
-                  {l.ops ? <pre>{l.ops}</pre> : <pre>{t.app.noChange}</pre>}
+                  {l.fellBack && <p className="timing warn">{t.app.lineFellBack.replace(/^ · /, '')}</p>}
+                  {l.ms !== undefined && !l.failed && (l.heard || l.queueMs) ? <p className="timing">{t.app.timing(lineTiming(l))}</p> : null}
+                  {/* 空串：和后面几句攒成一批画的，画了什么记在那批的最后一句上；'-'：这一轮没改板书 */}
+                  <pre>{l.failed ? t.app.lineFailedDetail : l.ops === '' ? t.app.drawnWithNext : !l.ops || l.ops === '-' ? t.app.noChange : l.ops}</pre>
                 </details>
                 )}
               </div>
@@ -1998,8 +2165,9 @@ export default function App() {
           ))}
           {partial && !replay && (
             <article className="line partial" aria-live="polite">
-              {speaker.trim() && <span className={`who c${speakers.indexOf(speaker.trim()) % 6}`}>{speaker.trim()}</span>}
+              {speaker.trim() && <span className={`who c${speakerSlot(speakers, speaker.trim())}`}>{initial(speaker.trim())}</span>}
               <div className="body">
+                <div className="head">{speaker.trim() && <span className="name">{speaker.trim()}</span>}</div>
                 <p>{partial}…</p>
               </div>
             </article>
@@ -2064,6 +2232,8 @@ export default function App() {
           setMessy={setMessy}
           weight={weight}
           setWeight={setWeight}
+          countSamples={async () => gather(await allFixes()).length}
+          exportSamples={exportFixes}
         />
       )}
       {showModels && <ModelPanel status={builtin} onClose={() => setShowModels(false)} />}
@@ -2074,6 +2244,8 @@ export default function App() {
           onOpen={(id, hit) => void openOther(id, hit)}
           onNew={(keep) => reset(keep)}
           onRenamed={(id, title) => setMeeting((m) => (m.id === id ? { ...m, title, titled: true } : m))}
+          boardsOf={boardsOf}
+          onContinue={(id, at) => void continueOn(id, at)}
         />
       )}
       {pendingPdf && (

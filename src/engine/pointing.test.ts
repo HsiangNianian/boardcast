@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { emptyGraph } from './graph.ts'
 import { applyOps, parseOps } from './ops.ts'
 import { latest } from './pointing.ts'
-import { pointingLine, userMessage } from './prompt.ts'
+import { type Utterance, pointingLine, userMessage } from './prompt.ts'
 import { Session } from './session.ts'
 
 const board = () => applyOps(emptyGraph(), parseOps('E 「订单服务」 -> 「库存服务」\nN 「数据库」'))
@@ -37,6 +37,7 @@ test('a long block of imported text is named by its first few characters', () =>
 
 test('lines batched while the model is busy carry what was pointed at', async () => {
   const sent: string[] = []
+  const recorded: Utterance[] = []
   let release: () => void = () => {}
   const first = new Promise<void>((r) => (release = r))
   const s = new Session({
@@ -47,13 +48,14 @@ test('lines batched while the model is busy carry what was pointed at', async ()
       if (sent.length === 1) await first
       return { choices: [{ message: { content: '-' } }] }
     },
-  })
+  }, { llm: (r) => recorded.push(r.said) })
   s.graph = board()
   s.say({ text: '先说一句' })
   s.say({ text: '从这个', pointing: ['n1'] })
   s.say({ text: '连到这个', pointing: ['n3'] })
   release()
   await s.drain()
+  assert.deepEqual(recorded, [{ text: '先说一句' }, { text: '从这个 连到这个', pointing: ['n1', 'n3'] }])
   assert.equal(sent.length, 2)
   assert.ok(!sent[0].includes('手指着'))
   assert.ok(sent[1].endsWith('当前手指着：n1（订单服务）、n3（数据库）\n新的一句：从这个 连到这个'), sent[1])

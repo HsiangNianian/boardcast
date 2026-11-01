@@ -27,6 +27,8 @@ pub async fn export_save(
         "excalidraw" => "Excalidraw",
         "html" => "Replay page",
         "pdf" => "PDF",
+        "json" => "JSON",
+        "jsonl" => "JSON Lines",
         _ => "File",
     };
     // 对话框会阻塞，放到专门的线程里等

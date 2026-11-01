@@ -90,6 +90,11 @@ export class History<T = Graph> {
     this.past = []
     this.future = []
   }
+  /** 记下的每一步都换个样子（比如说话人改了名，板书上记的名字跟着改） */
+  map(f: (x: T) => T) {
+    this.past = this.past.map(f)
+    this.future = this.future.map(f)
+  }
   get canUndo() {
     return this.past.length > 0
   }

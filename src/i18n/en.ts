@@ -91,6 +91,19 @@ export const en = {
     feedbackHint: 'Packs version, model status, logs and recent errors into a zip. No meeting content.',
     diagnostics: 'Export diagnostics',
 
+    // —— Correction samples ——
+    samples: 'Correction samples',
+    samplesHint:
+      "When the model has just drawn what someone said and you fix it on the board (delete a line, rename, strike out, undo), that turn is kept: the board and words it saw, what it output, and what you changed it to. It stays in this device's meetings until you export it.",
+    samplesCounting: 'Counting…',
+    samplesCount: (n: number) => (n ? `${n} collected.` : 'None yet: fix something the model just drew wrong during a meeting.'),
+    exportCases: 'Export eval cases',
+    exportPairs: 'Export training data',
+    samplesCases: 'Eval cases use the eval/cases.json format and start from the board at the time: ',
+    samplesFile: '<file>',
+    samplesPairs: 'Training data is JSONL with prompt / chosen / rejected per line: use it as is for DPO, take prompt and chosen for SFT.',
+    samplesSaved: (where: string) => `Exported: ${where}`,
+
     // —— Glossary ——
     glossary: 'Glossary',
     glossaryHint:
@@ -173,6 +186,9 @@ export const en = {
     delete: 'Delete',
     cancel: 'Cancel',
     rename: 'Rename',
+    continue: 'Continue on it',
+    continueTitle: "Start a new meeting on this meeting's board: what was there stays in faded ink, what the new meeting adds, renames or strikes out is in full ink",
+    pickBoard: 'Which board?',
   },
 
   models: {
@@ -316,6 +332,7 @@ export const en = {
     notOpenAI: "The reply has no choices[0].message.content — this doesn't look like an OpenAI-compatible API",
     builtinTimeout: 'The built-in model took too long to start',
     noBoard: "Couldn't find the board",
+    emptyBoard: 'Nothing on the board yet — draw something first',
     imageFailed: "Couldn't create the image",
     noPlayer: "Replay player not found (player/player.js); in development run 'pnpm build:player' once",
     pdfPassword: 'This PDF is password-protected; remove the password and import it again',
@@ -385,6 +402,8 @@ export const en = {
     exportPngPencil: 'Pencil board, including your edits',
     exportSvg: 'SVG vector',
     exportSvgHint: 'Stays sharp when zoomed; paste into docs or keep editing',
+    exportAnim: 'Animated SVG',
+    exportAnimHint: 'Drop into a README or chat; it writes itself stroke by stroke',
     exportPdf: 'Whole meeting PDF',
     exportPdfHint: 'One page per board, then summary and transcript; pages are images, text is not selectable',
     exportHtml: 'Replay page',
@@ -439,7 +458,8 @@ export const en = {
     renameFrom: 'Rename',
     renameTo: 'to',
     renameSpeaker: 'Rename',
-    renameSpeakerTitle: (name: string) => `Rename "${name}"`,
+    renameSpeakerTitle: (name: string) => `Rename "${name}"; hover to see on the board what ${name} raised`,
+    raisedByTitle: (name: string) => `Raised by ${name}: click to jump to where it was said`,
     cancel: 'Cancel',
     logEmpty: 'Nobody has spoken yet. Every sentence, and what it drew, shows up here.',
     gotoPage: 'Go to this board',
@@ -455,9 +475,15 @@ export const en = {
     andMore: (names: string, n: number) => `${names} and ${n - 3} more`,
     circleEmpty: 'That loop has nothing from the board in it; try again',
     listSep: ', ',
+    fixBadge: 'kept as a correction',
+    fixTitle: 'You fixed what the model just drew: this turn is kept as a correction sample, export it from Settings as eval cases or training data',
     drawing: 'Drawing…',
     lineFellBack: ' · remote failed, local model drew this one',
+    lineFellBackShort: ' · local fallback',
     noChange: '(no changes)',
+    drawnWithNext: '(drawn together with the lines after it; the changes are listed on the last line of that batch)',
+    lineFailed: 'not drawn',
+    lineFailedDetail: '(the model failed on this round, so this line did not reach the board)',
     timing: (s: { wait?: number; asr?: number; voiceprint?: number; queue?: number; model?: number }) =>
       [
         s.wait !== undefined && `pause ${s.wait}`,
@@ -473,6 +499,8 @@ export const en = {
     undoNote: 'Undid the last step',
     redoNote: 'Redid a step',
     movedNote: (what: string) => `Moved ${what}`,
+    continuedTitle: (title: string) => `${title} (cont.)`,
+    continuedNote: (title: string, page: number) => `Continued on board ${page} of "${title}": what was there is in faded ink, this meeting's changes in full ink`,
     forkNote: (from: number, at: string, to: number) => `Board ${to} forked from board ${from} as it was at ${at}`,
     deletedNote: (what: string) => `Deleted ${what}`,
     markSpanNote: (removed: boolean, text: string, mark: string) => `${removed ? 'Removed' : 'Added'} ${mark} on "${text}"`,

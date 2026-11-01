@@ -85,8 +85,7 @@ export default function Composer(p: Props) {
       const t = e.target as HTMLElement
       if (e.key !== '/' || t.closest('input, textarea, select, [contenteditable]')) return
       e.preventDefault()
-      setOpen(true)
-      requestAnimationFrame(() => area.current?.focus())
+      openInput()
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
@@ -99,6 +98,11 @@ export default function Composer(p: Props) {
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`
   }, [text, open])
+
+  function openInput() {
+    setOpen(true)
+    requestAnimationFrame(() => area.current?.focus())
+  }
 
   function send() {
     // 只写了「@名字」：换人，不发
@@ -181,7 +185,7 @@ export default function Composer(p: Props) {
             />
           </form>
         ) : (
-          <button type="button" className="write idle" onClick={() => setOpen(true)}>
+          <button type="button" className="write idle" onClick={openInput}>
             <span>{p.listening ? c.idleListening(p.micName ?? '') : c.idle}</span>
             <kbd>/</kbd>
           </button>
@@ -201,7 +205,7 @@ export default function Composer(p: Props) {
         >
           {p.where.cloud ? c.cloud : c.local}
         </button>
-        <button type="button" className="fold" onClick={() => setOpen(!open)} aria-label={open ? c.collapse : c.expand} title={open ? c.collapse : c.expand}>
+        <button type="button" className="fold" onClick={() => (open ? setOpen(false) : openInput())} aria-label={open ? c.collapse : c.expand} title={open ? c.collapse : c.expand}>
           {open ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </button>
       </div>

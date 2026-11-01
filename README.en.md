@@ -24,7 +24,7 @@ boardcast turns a discussion into a growing whiteboard. Flows, notes, assignment
 
 Speech recognition and model inference run on your computer by default. Once the models are downloaded, you can work offline. You can also connect an OpenAI-compatible API for a larger model. The interface always shows whether the active model is local or in the cloud.
 
-[Get started](#get-started) · [What you can do](#what-you-can-do) · [Models and privacy](#models-and-privacy) · [FAQ](#faq) · [Development and evaluation](#development-and-evaluation)
+[Get started](#get-started) · [What you can do](#what-you-can-do) · [How it works](#how-it-works) · [Models and privacy](#models-and-privacy) · [FAQ](#faq) · [Development and evaluation](#development-and-evaluation)
 
 ## Get started
 
@@ -90,6 +90,40 @@ PDF imports are limited to 40 retained pages. Scans without a text layer appear 
 | **Excalidraw** | Further editing in Excalidraw. |
 | **Meeting PDF** | One board per page, followed by the summary and transcript. Pages are rasterized; use Markdown for selectable text. |
 | **Replay page** | A standalone HTML file containing the player, boards, transcript and assets. Open it offline in a browser without installing boardcast. |
+
+## How it works
+
+The core is still “rules respond first, the model confirms.” Speech, typing and circled references share one utterance entry point. Imported material and edits on the handwriting board feed the same graph state:
+
+```mermaid
+flowchart TB
+    accTitle: How boardcast turns a discussion into a board
+    accDescr: Final speech or typed text is corrected with the glossary and bound to circled targets, then sent to rule and model lanes. Graph updates feed incremental layout and rendering, while utterances and board changes are saved for replay.
+
+    voice["Microphone / system audio<br/>Silero segmentation → SenseVoice transcription<br/>CAM++ speaker embeddings"] -->|Final transcript| turn["Glossary correction<br/>Bind this utterance to circled targets"]
+    text["Typed text"] --> turn
+    circles["Drawn circles<br/>Up to 8 targets"] -.-> turn
+
+    turn --> slow["Model lane · one request at a time<br/>Local llama.cpp / optional compatible API"]
+    turn --> fast["Fast lane · local rules<br/>Highlight mentions / draft explicit connections"]
+    slow -->|Apply operations| boardState["Current board graph"]
+    fast -->|Temporary draft| boardState
+    boardState -.->|Next-turn context| slow
+    edits["Imported material<br/>Manual edits in handwriting mode"] --> boardState
+
+    boardState --> layout["Incremental layout<br/>Note regions / flowcharts"]
+    layout --> view["Handwritten strokes / Excalidraw"]
+    fast -.->|Temporary highlight| view
+    boardState ---> saved["Local storage<br/>Step-by-step replay / export"]
+    turn -.->|Transcript| saved
+```
+
+- **Only finalized speech updates the board.** Provisional captions are display-only. Finalized or typed utterances receive glossary corrections and their circled targets. Standalone page-navigation commands switch boards without a model call.
+- **The model reads context and emits operations.** It receives current entities, aliases and imported source text, the last two utterances, the glossary and current circled targets. Code parses and applies connections, items and marks. Confirmed fast-lane drafts become ink; unconfirmed drafts are cleared.
+- **Queueing preserves references.** Only one board-generation request runs at a time. Ordinary utterances can be batched; utterances with circled targets are processed separately, and recent context retains each utterance's original targets.
+- **Local and remote constraints differ.** llama.cpp uses GBNF to constrain syntax and reuses the prompt prefix cache. Compatible APIs do not receive those grammar constraints; a failed request tries a local fallback when available. Valid syntax does not guarantee correct meaning.
+- **Code controls layout and strokes.** Notes occupy regions; flowcharts start with ELK, then keep existing nodes in place where possible and add new ones incrementally. Imported source regions stay fixed. Handwriting draws strokes; pencil mode uses Excalidraw.
+- **Replay does not rerun the model.** Meetings save utterances and board changes for replay and export. Summaries are a separate request to the active model, using the transcript and all boards.
 
 ## Models and privacy
 
@@ -190,20 +224,7 @@ llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080 -c 4096 --jinja
 ```
 
 <details>
-<summary><strong>How it works and where to look</strong></summary>
-
-```text
-Microphone / system audio → Silero → SenseVoice ┐
-                                               ├→ Entities, glossary, circled targets
-Typed text ────────────────────────────────────┘               ↓
-                                                   Rules + model graph operations
-                                                              ↓
-                                               Incremental layout → Ink / Excalidraw
-                                                              ↓
-                                                 Save, summarize, replay and export
-```
-
-The model emits graph operations, not images. Code maintains nodes, aliases and context; local inference uses GBNF to constrain operation syntax. Valid syntax does not guarantee correct meaning. Ordinary utterances can be batched, while circled references are processed separately. Layout tries to keep existing content still; “Rearrange” explicitly requests a full layout.
+<summary><strong>Code map</strong></summary>
 
 | Entry point | Contents |
 |---|---|

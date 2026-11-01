@@ -134,7 +134,10 @@ export default function App() {
   }, [theme])
 
   // 桌面版一开始留空，等内置模型就绪后由外壳告诉我们地址；网页版用上次填的
-  const [baseUrl, setBaseUrl] = useState(() => (isDesktop ? '' : load('boardcast.llm', 'http://127.0.0.1:8080')))
+  // 网页版的本地模型地址默认留空：来看演示的人本机一般没有模型，留空就不去探测，
+  // 免得一打开就不停地连 127.0.0.1 报错。用自己的 llama-server 时在设置里填上。
+  // 换了个键名：旧的 boardcast.llm 会被自动存成默认地址，分不清是不是用户自己填的
+  const [baseUrl, setBaseUrl] = useState(() => (isDesktop ? '' : load('boardcast.localLlm', '')))
   const [online, setOnline] = useState<boolean | null>(null)
   // 桌面版：内置的 llama-server 由外壳拉起，就绪后自动用它的地址
   const [builtin, setBuiltin] = useState<LlmStatus | null>(null)
@@ -580,9 +583,10 @@ export default function App() {
 
   useEffect(() => {
     // 桌面版的地址是内置服务每次启动时随机分配的端口，记下来下次也用不上
-    if (!isDesktop) save('boardcast.llm', baseUrl)
+    if (!isDesktop) save('boardcast.localLlm', baseUrl)
     if (!baseUrl) {
-      setOnline(false)
+      // 没填地址：不是「连不上」，只是没配置，设置里的状态点不标红
+      setOnline(null)
       return
     }
     let alive = true

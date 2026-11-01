@@ -183,7 +183,7 @@ pnpm test                      # 引擎单元测试，无需模型
 pnpm build                     # 类型检查、回放播放器和网页生产构建
 ```
 
-只跑网页时，若要用自己的本地模型，可另开终端运行 llama.cpp，再在应用里配置本地地址：
+只跑网页时，若要用自己的本地模型，可另开终端运行 llama.cpp，再在应用里配置本地地址（默认留空，不填就不会去连本地模型）：
 
 ```sh
 llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080 -c 4096 --jinja -np 1

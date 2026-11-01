@@ -2,6 +2,15 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.19.1 - 2026-11-01
+
+### Fixes
+
+- Improve English handwriting and meeting fidelity ([`f4f17fe`](https://github.com/HsiangNianian/boardcast/commit/f4f17fe97cb5c4d1b6fb7d779d7881948ba2fe2c))
+- **summary:** Retain conservative chunking and explicit board facts ([`f9541d9`](https://github.com/HsiangNianian/boardcast/commit/f9541d9425999493ee643bf39a22826f5c751f27))
+
+**Full diff:** [v0.19.0...v0.19.1](https://github.com/HsiangNianian/boardcast/compare/v0.19.0...v0.19.1)
+
 ## 0.19.0 - 2026-11-01
 
 This release includes everything from the 0.19.0-2 pre-release.

@@ -30,6 +30,8 @@ export interface MeetingLine extends Utterance {
   heard?: HeardTiming
   /** Time from reaching the app until the model started on it (it was busy with earlier lines) */
   queueMs?: number
+  /** 模型这一轮出错了，这句没画上 */
+  failed?: boolean
 }
 
 export interface Meeting {

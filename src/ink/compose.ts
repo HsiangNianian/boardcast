@@ -47,8 +47,8 @@ export const OLD_INK = 0.38
 /** 一笔；`thin` 是连笔时带出来的细丝，用更细的笔画 */
 type Mark = { pts: Stroke; thin?: boolean }
 
-/** 潦草度超过这个值，英文从印刷体换成连写体 */
-export const SCRIPT_AT = 0.45
+/** 默认潦草度也用英文连写体；调低时仍可写成印刷体 */
+export const SCRIPT_AT = 0.25
 
 const isLower = (ch: string) => /[a-z]/.test(ch)
 const isHan = (ch: string) => /[㐀-鿿]/.test(ch)

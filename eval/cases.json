@@ -2023,5 +2023,201 @@
         }
       ]
     }
+  },
+  {
+    "id": "en-progress-not-cancelled",
+    "name": "Implementation stalled: keep the proposal and record its status",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Queue management",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "manage",
+          "aliases": [],
+          "kind": "item",
+          "parent": "n1",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n3",
+          "label": "lock",
+          "aliases": [],
+          "kind": "item",
+          "parent": "n1",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n4",
+          "label": "remove people",
+          "aliases": [],
+          "kind": "item",
+          "parent": "n1",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n5",
+          "label": "multipath",
+          "aliases": [],
+          "kind": "item",
+          "parent": "n1",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n6",
+          "label": "KO",
+          "aliases": [],
+          "kind": "item",
+          "parent": "n1",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n7",
+          "label": "New work",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n8",
+          "label": "Quick address discovery",
+          "aliases": [],
+          "kind": "item",
+          "parent": "n7",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n9",
+          "label": "Quick talk",
+          "aliases": [],
+          "kind": "item",
+          "parent": "n7",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n10",
+          "label": "Flexxicast",
+          "aliases": [],
+          "kind": "topic",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n11",
+          "label": "Some drafts",
+          "aliases": [],
+          "kind": "note",
+          "parent": "n7",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n12",
+          "label": "Reliable reset",
+          "aliases": [],
+          "kind": "item",
+          "parent": "n10",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n13",
+          "label": "Asked by other working groups",
+          "aliases": [],
+          "kind": "note",
+          "parent": "n12",
+          "marks": [],
+          "ink": "ink"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 14,
+      "nextGroup": 1
+    },
+    "history": [
+      {
+        "speaker": "A",
+        "text": "U."
+      },
+      {
+        "speaker": "A",
+        "text": "There was quite a bit of urgency around this in terms of it being asked for by other working groups."
+      }
+    ],
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "Things seem to have stalled out a little bit on people implementing this and interruptping this."
+      }
+    ],
+    "gold": {
+      "not_struck": [
+        [
+          "Reliable reset"
+        ]
+      ],
+      "topics": [
+        {
+          "title": [
+            "Queue management"
+          ],
+          "items": [
+            [
+              "manage"
+            ],
+            [
+              "lock"
+            ],
+            [
+              "remove people"
+            ],
+            [
+              "multipath"
+            ],
+            [
+              "KO"
+            ]
+          ]
+        },
+        {
+          "title": [
+            "New work"
+          ],
+          "items": [
+            [
+              "Quick address discovery"
+            ],
+            [
+              "Quick talk"
+            ]
+          ]
+        },
+        {
+          "title": [
+            "Flexxicast"
+          ],
+          "items": [
+            [
+              "Reliable reset"
+            ]
+          ]
+        }
+      ]
+    }
   }
 ]

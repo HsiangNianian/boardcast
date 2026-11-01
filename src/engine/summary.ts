@@ -27,10 +27,14 @@ const WORDS = {
     tooLong: '会议记录太长，下面是逐段记下的要点：',
     partial: '你在帮人整理会议记录。这是一场长会议中的一段，记下这一段里的要点：说了什么结论、定了什么、谁要做什么、还有什么没定。每条一行，以「- 」开头。',
     system: '你在帮人写会议摘要。',
+    facts: `保留原话的主体、否定和进展，区分已有成果与后续工作。
+只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。
+只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。
+只总结会议记录（或分段笔记）中的事实，不从板书标记推测决定。`,
     rules: `只根据给出的内容写，不要编造；没有的部分写「无」。
 用简体中文，每条一行，以「- 」开头，简短。
 待办写成「- [ ] 事情（负责人：某某）」，没提到负责人就不写括号。
-白板有好几张时，结论、待办后面可以注明在哪张板上讨论的，比如「（第 2 张板）」。
+只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。
 严格按下面的格式输出，不要别的话：`,
   },
   en: {
@@ -48,10 +52,14 @@ const WORDS = {
     partial:
       "You are helping someone tidy up meeting notes. This is one part of a long meeting; note its key points: conclusions reached, what was decided, who will do what, and what is still open. One point per line, starting with '- '.",
     system: 'You are helping someone write a meeting summary.',
+    facts: `Preserve subjects, negations and progress; distinguish existing work from future work.
+Put only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.
+List only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them.
+Summarize facts from the transcript (or its notes) only; do not infer decisions from whiteboard marks.`,
     rules: `Write only from what is given, never make things up; write "None" for an empty section.
 Write in English, one short point per line, starting with "- ".
 Write to-dos as "- [ ] task (owner: name)"; leave out the parentheses if no owner was mentioned.
-With several boards, conclusions and to-dos may note which board they were discussed on, e.g. "(Board 2)".
+Mention a board number only when explicitly labeled in the source; do not infer board numbers from topics.
 Output exactly the format below and nothing else:`,
   },
 } as const
@@ -118,7 +126,7 @@ export function boardsText(boards: Graph[], max = 1500, lang: SpokenLang = 'zh')
 
 export function summaryMessages(g: Graph | Graph[], said: string, partial = false, lang: SpokenLang = 'zh'): ChatMessage[] {
   const w = WORDS[lang]
-  const system = partial ? w.partial : `${w.system}\n${rules(lang)}`
+  const system = partial ? `${w.partial}\n${w.facts}` : `${w.system}\n${w.facts}\n${rules(lang)}`
   const board = boardsText(Array.isArray(g) ? g : [g], undefined, lang)
   const user = partial ? `${w.fragment}\n${said}` : `${w.boardIntro}\n${board}\n\n${said}`
   return [
@@ -201,7 +209,9 @@ export async function summarize(
   const remote = cfg.flavor === 'openai'
   const lang = spokenLang(lines.map((l) => l.text))
   const w = WORDS[lang]
-  const parts = chunks(lines)
+  // English needs fewer tokens per character; keep short meetings intact to avoid a lossy merge.
+  // shortcut: character budgets approximate tokens; use tokenizer counts for dense code or variable context sizes.
+  const parts = chunks(lines, lang === 'en' ? 7000 : CHUNK)
   let said = `${w.transcript}\n${transcript(lines, lang) || w.noLines}`
   let last: LlmResult | undefined
   let calls = 0

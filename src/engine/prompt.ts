@@ -36,9 +36,9 @@ D 甲                   删除（说错了、画错了）
 4. 一条只写一件事。一句话里列了几样，就拆成几条 L，每条 2 到 10 个字。
 5. 「先说……」「第二块」「要改进的」「待办」这种分段，各起一个平级的 T 话题，不要套在别的话题下面。
 6. 已有的条目换了归属（还是给小王、归到后端），用 L 新的上级 「这个条目」，它会被挪过去。
-7. 连线画错了（不对、不是、改成）：X 掉错的线再加对的。方案、选项被否掉（不用了、划掉、先不做）：M 划掉，保留在板上。
+7. 只有原话明确否决或取消某个方案（不用了、划掉、先不做），才对它 M 划掉。进度慢、卡住、尚未实现、准备更新、已有实现、互操作测试都不是取消，用 K 记状态，不要划掉或删除。连线画错了（不对、不是、改成）：X 掉错的线再加对的。
 8. 有人说「重点」「最关键」「一定要」：M 星标或圈出。带问号、谁来、要不要、还没想好的事：Q，不要写成条目。
-9. 寒暄、跑题、情绪，或者只是复述白板上已有的内容，输出 -。句子里只要有白板上还没有的东西，就照常画，哪怕开头是「好」「那个」「总之」。
+9. 寒暄、跑题、情绪，或者只是复述白板上已有的内容，输出 -。句子残缺、还不能确定新信息时也输出 -，不要猜测。句子里有明确的新信息就照常画，哪怕开头是「好」「那个」「总之」。
 10. 实体表里标 [原文] 的是导入文件上的一段原文，位置固定：只能 M 标记、E 连线、K 写批注、Q 挂问题，不能改名、删除、往下挂条目。说到「这一段」「这里」「那张表」，或者念出原文里的一个词、一句话时，对应到全文里真有这些字的那块 [原文]。标记 [原文] 分三种范围：一个词 M 甲 圈出 「predicting」；一句话 M 甲 圈出 句 「这句里的几个词」；整段 M 甲 圈出。只念了几个词就只标这几个词；说了「这句」才用 句；说了「这段」「这一段」才标整段。原图上的线和箭头不在实体表里：要改原图上的某条线，就在线旁边那段 [原文] 上 M 划掉或 K 写批注，不要另画连线。和原文内容无关的事（分工、待办、别的话题）照常 T、L、E，不要挂到 [原文] 上。
 11. 只是在带大家看哪里（我们先看摘要、去看引言、再看看这段、看这张图）：H 那块，不要写 K，也不要 M。这种话本身不是内容，不要抄到板上。
 12. 分工按人起话题，事情挂在人下面。一件事是几个人一起做：把人名写在一个话题上（「小王、小李」），人名不要挂到人名下面。`
@@ -65,6 +65,10 @@ const EXAMPLES: [string, string][] = [
   [
     '白板：\nn1 [话题] 推送方案\n  n2 极光推送\n  n3 APNs 直推\n新的一句：极光就不用了，合同没续。那 MQ 要不要上还没想好。',
     'M n2 划掉\nK n2 「合同没续」\nQ n1 「要不要上 MQ」',
+  ],
+  [
+    '白板：\nn1 [话题] 发布\n  n2 同步功能\n  n3 旧导出（划掉）\n新的一句：同步已经实现了，联调有点卡住，下周更新版本再继续。',
+    'K n2 「已实现，联调卡住」\nK n2 「下周更新版本」',
   ],
   [
     '白板：\nn1 [话题] 热度\nn2 graphRAG\n新的一句：热度就按现在时间减发布时间算，算出来的结果喂给 graphRAG。',
@@ -126,6 +130,10 @@ const EXAMPLES_EN: [string, string][] = [
   [
     '白板：\nn1 [话题] Push options\n  n2 Firebase\n  n3 APNs direct\n新的一句：Drop Firebase, the contract was not renewed. And we have not decided whether to add a message queue.',
     'M n2 划掉\nK n2 「Contract not renewed」\nQ n1 「Add a message queue?」',
+  ],
+  [
+    '白板：\nn1 [话题] Release\n  n2 Sync support\n  n3 Old export（划掉）\n新的一句：Sync is already implemented. Interoperability testing has stalled, but we will update it next week and continue.',
+    'K n2 「Implemented; interoperability testing stalled」\nK n2 「Update next week」',
   ],
   [
     '白板：\nn1 [话题] Hotness\nn2 graphRAG\n新的一句：Hotness is just current time minus publish time, and the result feeds into graphRAG.',

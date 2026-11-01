@@ -66,9 +66,12 @@ export class Session {
   private async pump(): Promise<void> {
     if (this.busy || !this.pending.length) return
     this.busy = true
-    const batch = this.pending.splice(0)
+    // 指代随各自那句话发送，不能把两句「这个」的目标合成一份。
+    const pointed = this.pending.findIndex((u) => u.pointing?.length)
+    const count = pointed < 0 ? this.pending.length : Math.max(1, pointed)
+    const batch = this.pending.splice(0, count)
     const started = performance.now()
-    const queuedMs = this.pendingAt.splice(0).map((t) => Math.round(started - t))
+    const queuedMs = this.pendingAt.splice(0, count).map((t) => Math.round(started - t))
     const next: Utterance =
       batch.length === 1
         ? batch[0]

@@ -1,11 +1,12 @@
 // 离线评测：把合成会议逐句喂给引擎，比较最终板书和标注，统计每句的延迟。
 //
-//   node eval/run.ts [--base-url http://127.0.0.1:8080] [--label qwen3.5-4b] [--set dev|holdout|all] [--repeat 3] [--only login-flow]
+//   node eval/run.ts [--base-url http://127.0.0.1:8080] [--label qwen3.5-4b] [--set dev|holdout|pointing|all] [--repeat 3] [--only login-flow]
 //   node eval/run.ts --file ~/Downloads/boardcast-corrections.cases.json
 //
-// 两套用例：
+// 用例集：
 // - dev（eval/cases.json）：调提示词时用，分数偏乐观；
 // - holdout（eval/holdout.json）：不参与调参，只在发版前、换模型时看。看了分数不要回头改提示词去迁就它。
+// - pointing（eval/pointing.json）：固定初始板书，专测圈选指代，不混入原开发集。
 // --repeat N：每段跑 N 遍，报告平均值和波动（标准差），结果差得多的用例标「不稳定」。
 // --file：跑别的用例文件，比如应用里导出的纠错样本（设置 → 纠错样本）。那种用例带着当时的板书和前文，从那里接着说。
 //
@@ -45,12 +46,13 @@ interface Case {
 }
 
 const load = (file: string | URL) => JSON.parse(readFileSync(file, 'utf8')) as Case[]
-const sets: Record<string, string[]> = { dev: ['./cases.json'], holdout: ['./holdout.json'], all: ['./cases.json', './holdout.json'] }
+const sets: Record<string, string[]> = { dev: ['./cases.json'], holdout: ['./holdout.json'], pointing: ['./pointing.json'], all: ['./cases.json', './holdout.json', './pointing.json'] }
 if (!sets[args.set!]) throw new Error(`--set 只能是 ${Object.keys(sets).join(' / ')}`)
 const files = args.file ? [args.file] : sets[args.set!].map((f) => new URL(f, import.meta.url))
 /** 报告里写的用例集名字 */
 const setName = args.file ? basename(args.file).replace(/\.json$/, '') : args.set!
 const cases = files.flatMap(load).filter((c) => !args.only || args.only.split(',').includes(c.id))
+if (!cases.length) throw new Error('No matching evaluation cases')
 const repeat = Math.max(1, Number(args.repeat) || 1)
 
 // A model that can't be reached makes every case score 0, which reads like a real result: stop early instead
@@ -75,10 +77,11 @@ function pct(xs: number[], p: number): number {
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 const sd = (xs: number[]) => (xs.length > 1 ? Math.sqrt(xs.reduce((a, x) => a + (x - mean(xs)) ** 2, 0) / (xs.length - 1)) : 0)
 
-const KEYS = ['node', 'edge', 'topic', 'item', 'mark', 'group'] as const
+const KEYS = ['node', 'edge', 'topic', 'item', 'strike', 'mark', 'group'] as const
 type Key = (typeof KEYS)[number]
 type Metrics = Record<Key, number | null>
 
+let errors = 0
 const latencies: number[] = []
 const prefill: number[] = []
 const outTokens: number[] = []
@@ -115,10 +118,13 @@ for (let r = 0; r < repeat; r++) {
               `  (${res.ms.toFixed(0)} ms, 读入 ${res.promptEvaluated ?? '?'}/${res.promptTokens ?? '?'} tok, 输出 ${res.outputTokens ?? '?'} tok)`,
           )
         },
-        error: (e) => log.push(`! ${String(e)}`),
+        error: (e) => {
+          errors++
+          log.push(`! ${String(e)}`)
+        },
       },
     )
-    if (c.board) s.graph = c.board
+    if (c.board) s.graph = structuredClone(c.board)
     if (c.history) s.history = [...c.history]
     if (c.terms) s.terms = c.terms
     for (const t of c.turns) {
@@ -132,6 +138,7 @@ for (let r = 0; r < repeat; r++) {
       edge: c.gold.edges?.length ? f1(sc.edgeP, sc.edgeR) : null,
       topic: sc.topicR,
       item: sc.itemP !== null && sc.itemR !== null ? f1(sc.itemP, sc.itemR) : null,
+      strike: sc.strikeP !== null && sc.strikeR !== null ? f1(sc.strikeP, sc.strikeR) : null,
       mark: sc.markAcc,
       group: sc.groupAcc,
     }
@@ -187,7 +194,9 @@ const summary = [
   `| 连线 F1 | ${overall('edge')} |`,
   `| 话题召回 | ${overall('topic')} |`,
   `| 要点 F1（条目挂在对的话题下） | ${overall('item')} |`,
+  `| 划掉 F1（逐段宏平均，含误划） | ${overall('strike')} |`,
   `| 标记命中（划掉、强调、问题、公式） | ${overall('mark')} |`,
+  `| 请求错误（非零时分数不代表有效评测） | ${errors} |`,
   `| 分组正确率 | ${overall('group')} |`,
   `| 违规（该删没删、纠正没生效），每遍平均 | ${mean(runs.map((r) => r.violations)).toFixed(1)} |`,
   `| 单句延迟 p50 / p95 | ${pct(latencies, 50).toFixed(0)} / ${pct(latencies, 95).toFixed(0)} ms |`,
@@ -195,8 +204,8 @@ const summary = [
   `| 每句输出 token p50 | ${pct(outTokens, 50)} |`,
   ...(repeat > 1 ? [`| 不稳定的用例（某项分数各遍相差 ≥ 0.3） | ${shaky.length ? shaky.join('、') : '无'} |`] : []),
   '',
-  `| 用例 | 节点 | 连线 | 话题 | 要点 | 标记 | 分组 | 延迟 p50 ms |`,
-  '|---|---|---|---|---|---|---|---|',
+  `| 用例 | 节点 | 连线 | 话题 | 要点 | 划掉 F1 | 标记 | 分组 | 延迟 p50 ms |`,
+  '|---|---|---|---|---|---|---|---|---|',
   ...rows,
   '',
   ...cases.map((c) => details.get(c.id)!),
@@ -206,4 +215,6 @@ mkdirSync(new URL('./reports/', import.meta.url), { recursive: true })
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
 writeFileSync(new URL(`./reports/${args.label}-${setName}-${stamp}.md`, import.meta.url), summary)
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\n')
-console.log(summary.split('\n').slice(0, 20 + cases.length).join('\n'))
+console.log(summary.split('\n').slice(0, 23 + cases.length).join('\n'))
+
+if (errors) process.exitCode = 1

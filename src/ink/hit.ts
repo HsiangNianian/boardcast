@@ -88,3 +88,53 @@ export function selectionLine(l: Layout, sel: Selection): Pt[] | undefined {
   if (sel.kind !== 'edge') return undefined
   return l.diagram?.edges.find((e) => e.from === sel.from && e.to === sel.to)?.points ?? linkLine(l, sel.from, sel.to)
 }
+
+/** 点在不在一圈里（射线法；圈没画闭合也按首尾相连算） */
+export function insideLoop(loop: Pt[], x: number, y: number): boolean {
+  let hit = false
+  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+    const [xi, yi] = loop[i]
+    const [xj, yj] = loop[j]
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit
+  }
+  return hit
+}
+
+/**
+ * 画的一圈圈住了哪些东西：框、条目、话题标题、导入页的原文块，中心落在圈里就算。
+ * 从左到右、从上到下排（「从这个连到那个」）。圈得太多（超过 `max`）时，挂在别的圈中东西下面的就不单列了。
+ */
+export function circled(l: Layout, g: Graph, loop: Pt[], max = Infinity): string[] {
+  if (loop.length < 3) return []
+  const boxes = new Map<string, { x: number; y: number; w: number; h: number }>()
+  for (const b of l.diagram?.nodes ?? []) boxes.set(b.id, b)
+  const regionIds = new Set(l.regions.map((r) => r.id))
+  for (const [id, b] of l.anchors) if (!regionIds.has(id) && !boxes.has(id)) boxes.set(id, b)
+  for (const r of l.regions) {
+    const t = r.head && titleBox(l, r.head.id)
+    if (t) boxes.set(t.id, t)
+  }
+  const byId = new Map(g.nodes.map((n) => [n.id, n]))
+  let hits = [...boxes].filter(([id, b]) => byId.has(id) && insideLoop(loop, b.x + b.w / 2, b.y + b.h / 2))
+  if (hits.length > max) {
+    const ids = new Set(hits.map(([id]) => id))
+    const under = (id: string) => {
+      const seen = new Set<string>()
+      for (let p = byId.get(id)?.parent; p && !seen.has(p); p = byId.get(p)?.parent) {
+        if (ids.has(p)) return true
+        seen.add(p)
+      }
+      return false
+    }
+    hits = hits.filter(([id]) => !under(id))
+  }
+  const mid = (b: { x: number; y: number; w: number; h: number }): Pt => [b.x + b.w / 2, b.y + b.h / 2]
+  return hits
+    .sort(([, a], [, b]) => {
+      const [ax, ay] = mid(a)
+      const [bx, by] = mid(b)
+      // 差不多在一列上的按上下排
+      return Math.abs(ax - bx) > 24 ? ax - bx : ay - by
+    })
+    .map(([id]) => id)
+}

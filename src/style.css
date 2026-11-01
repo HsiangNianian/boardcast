@@ -2005,6 +2005,74 @@ button.danger {
   color: #fff;
 }
 
+/* —— 圈着说：圈选时画的虚线圈，等着随下一句话用掉 —— */
+.ink.lasso {
+  cursor: crosshair;
+}
+.ink-lasso {
+  pointer-events: none;
+}
+/* 圈选开着时白板上方的一条提示：圈着什么、撤销一圈、收起 */
+.board .lasso-hint {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 200px);
+  padding: 5px 6px 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--muted);
+  font-size: 13px;
+}
+.board .lasso-hint svg {
+  flex: none;
+  color: var(--ink);
+}
+.board .lasso-hint span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board .lasso-hint b {
+  color: var(--ink);
+  font-weight: 500;
+}
+.board .lasso-hint button {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .board .lasso-hint {
+    max-width: calc(100% - 24px);
+    top: 64px;
+  }
+}
+/* 会议记录里：这句说的时候圈着什么 */
+.line .point-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+  vertical-align: 1px;
+  white-space: nowrap;
+  cursor: help;
+}
+
 /* —— 手写板上的手动修改：选中框、浮动按钮 —— */
 .ink-selection rect,
 .ink-selection polyline {

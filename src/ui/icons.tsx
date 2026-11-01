@@ -189,6 +189,14 @@ export const Replay = (p: P) => (
   </Icon>
 )
 
+/** 圈选：一圈虚线，带一根收笔的小尾巴 */
+export const Lasso = (p: P) => (
+  <Icon {...p}>
+    <path d="M7.2 17.4C4.6 16.2 3 14.3 3 12c0-4.1 4-7.5 9-7.5s9 3.4 9 7.5-4 7.5-9 7.5c-.9 0-1.8-.1-2.6-.3" strokeDasharray="2.6 2.6" />
+    <path d="M7.2 17.4c-.6 1.2-1.6 2-2.9 2.3" />
+  </Icon>
+)
+
 /** 另起一板：一条线上分出一个岔 */
 export const Fork = (p: P) => (
   <Icon {...p}>

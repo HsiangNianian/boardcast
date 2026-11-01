@@ -29,6 +29,7 @@ import { History as EditHistory, type Selection, describe, exists, pinned, remov
 import { MARKS, type Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
 import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
+import { latest } from './engine/pointing.ts'
 import { firstSeen, renameBy, renameByInSteps, saidAt } from './engine/attribute.ts'
 import { settle } from './engine/pending.ts'
 import { summarize } from './engine/summary.ts'
@@ -43,7 +44,7 @@ import { type RemoteView, remote } from './remote.ts'
 import SettingsPanel, { type RemoteState, errText } from './SettingsPanel.tsx'
 import Composer from './ui/Composer.tsx'
 import type { ExportKind } from './exporter.ts'
-import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Replay as ReplayIcon, Sun, Tidy, Upload, Transcript as TranscriptIcon, Undo } from './ui/icons.tsx'
+import { Auto, Close, Download, Gear, History, Lasso, Moon, Pen, Pencil, Plus, Redo, Replay as ReplayIcon, Sun, Tidy, Upload, Transcript as TranscriptIcon, Undo } from './ui/icons.tsx'
 import MeetingsPanel from './ui/MeetingsPanel.tsx'
 import ReplayBar, { SPEEDS, clock } from './ui/ReplayBar.tsx'
 import PageStrip from './ui/PageStrip.tsx'
@@ -695,8 +696,67 @@ export default function App() {
       else goPage(to)
       return
     }
-    setLines((ls) => [...ls, { ...u, page: pageRef.current, heard }])
-    session.say(u)
+    // 板上圈着的东西（还在的）：随这句话告诉模型；圈用掉了就擦掉，圈选也收起来
+    const pointing = latest(circlesRef.current.flatMap((c) => c.ids).filter((id) => session.graph.nodes.some((n) => n.id === id)))
+    const v = pointing.length ? { ...u, pointing } : u
+    setLines((ls) => [...ls, { ...v, page: pageRef.current, heard }])
+    session.say(v)
+    if (circlesRef.current.length) clearCircles()
+  }
+
+  /** 第几张板上某个节点现在叫什么（会议记录里显示用；删掉了就显示编号） */
+  const nameOn = (at: number, id: string) =>
+    ((at === page ? graph : pagesRef.current[at]?.graph) ?? graph).nodes.find((n) => n.id === id)?.label ?? id
+
+  // —— 圈着说（#48）：打开圈选，在板上用虚线画一圈，圈住的东西就是下一句话里的「这里」「这个」「这俩」 ——
+  // 只认画出来的圈：鼠标停一下、点选都不算，免得误触；手机、电子屏上用手指画
+  const [lasso, setLasso] = useState(false)
+  type Circle = { loop: [number, number][]; ids: string[] }
+  const [circles, setCircles] = useState<Circle[]>([])
+  const circlesRef = useRef(circles)
+  circlesRef.current = circles
+  /** 画圈之前的样子，撤销一步一步退回去 */
+  const circlePast = useRef<Circle[][]>([])
+  /** 叠在一起的几圈（`merged`）已经合成了这一个大圈 */
+  function onCircle(loop: [number, number][], ids: string[], merged: number[]) {
+    if (!ids.length) {
+      setToast({ ok: true, text: t.app.circleEmpty })
+      return
+    }
+    const cs = circlesRef.current
+    circlePast.current.push(cs)
+    // 最多留三圈：「从这个连到那个」用两圈就够了
+    circlesRef.current = [...cs.filter((_, i) => !merged.includes(i)), { loop, ids }].slice(-3)
+    setCircles(circlesRef.current)
+  }
+  function undoCircle() {
+    const prev = circlePast.current.pop()
+    if (prev) {
+      circlesRef.current = prev
+      setCircles(prev)
+    }
+  }
+  function clearCircles() {
+    circlePast.current = []
+    circlesRef.current = []
+    setCircles([])
+    setLasso(false)
+  }
+  function toggleLasso() {
+    if (lasso) clearCircles()
+    else {
+      setLasso(true)
+      setSelection(null)
+    }
+  }
+  // 换了板、换了会、回放、换到铅笔模式：圈都不算了
+  const replaying = !!replay
+  useEffect(clearCircles, [page, meeting.id, replaying, mode])
+  /** 圈着的东西叫什么（提示条里显示，最多列三样） */
+  const circledNames = () => {
+    const ids = latest(circles.flatMap((c) => c.ids))
+    const names = ids.slice(0, 3).map((id) => nameOn(page, id))
+    return ids.length > 3 ? t.app.andMore(names.join(t.app.listSep), ids.length) : names.join(t.app.listSep)
   }
 
   // —— 语音输入（桌面版）：外壳负责收音、断句、识别，这里只接结果 ——
@@ -903,7 +963,8 @@ export default function App() {
     setLines((ls) => [...ls, { text: note, manual: true, ms: 0, page: pageRef.current, fix }])
   }
   const now = (): Snap => ({ graph: session.graph, layout: board.snapshot() })
-  const undo = () => stepTo(editHistory.current.undo(now()), t.app.undoNote)
+  // 板上画着圈时，撤销先撤圈（不进板书的撤销记录）
+  const undo = () => (circlePast.current.length ? undoCircle() : stepTo(editHistory.current.undo(now()), t.app.undoNote))
   const redo = () => stepTo(editHistory.current.redo(now()), t.app.redoNote)
 
   /** 拖动：把新位置写进排版记忆，记一步撤销 */
@@ -1088,6 +1149,8 @@ export default function App() {
       } else if (e.key === 'Escape') {
         setSelection(null)
         setRenaming(null)
+        // 收起圈选，画好的圈也不要了
+        clearCircles()
       }
     }
     addEventListener('keydown', onKey)
@@ -1589,7 +1652,25 @@ export default function App() {
           >
             <ReplayIcon />
           </button>
-          <button type="button" className="icon" onClick={undo} disabled={!!replay || !editHistory.current.canUndo} aria-label={t.app.undo} title={t.app.undoTitle}>
+          <button
+            type="button"
+            className={`icon${lasso ? ' on' : ''}`}
+            onClick={toggleLasso}
+            disabled={!!replay || mode !== 'ink'}
+            aria-pressed={lasso}
+            aria-label={t.app.lasso}
+            title={t.app.lassoTitle}
+          >
+            <Lasso />
+          </button>
+          <button
+            type="button"
+            className="icon"
+            onClick={undo}
+            disabled={!!replay || (!editHistory.current.canUndo && !circles.length)}
+            aria-label={t.app.undo}
+            title={t.app.undoTitle}
+          >
             <Undo />
           </button>
           <button type="button" className="icon" onClick={redo} disabled={!!replay || !editHistory.current.canRedo} aria-label={t.app.redo} title={t.app.redoTitle}>
@@ -1746,6 +1827,20 @@ export default function App() {
           void importFile(f)
         }}
       >
+        {lasso && !replay && mode === 'ink' && (
+          <div className="lasso-hint" role="status">
+            <Lasso size={15} />
+            <span>{circles.length ? t.app.lassoCircled(circledNames()) : t.app.lassoHint}</span>
+            {circles.length > 0 && (
+              <button type="button" className="ghost" onClick={undoCircle}>
+                {t.app.undo}
+              </button>
+            )}
+            <button type="button" className="ghost" onClick={clearCircles}>
+              {t.app.lassoCancel}
+            </button>
+          </div>
+        )}
         {mode === 'ink' ? (
           <InkBoard
             graph={graph}
@@ -1758,6 +1853,9 @@ export default function App() {
             selection={replay ? null : selection}
             layoutRev={layoutRev}
             underlay={pagesRef.current[page]?.underlay}
+            lasso={!replay && lasso}
+            onCircle={onCircle}
+            circles={circles.map((c) => c.loop)}
             base={pagesRef.current[page]?.base}
             trace={trace}
             onMoveSel={replay ? undefined : moveSelection}
@@ -2051,6 +2149,11 @@ export default function App() {
                       {t.app.fixBadge}
                     </span>
                   )}
+                  {l.pointing?.length ? (
+                    <span className="point-tag" title={t.app.pointedTitle}>
+                      {t.app.pointedAt(l.pointing.map((id) => nameOn(l.page ?? 0, id)).join(t.app.listSep))}
+                    </span>
+                  ) : null}
                 </p>
                 {!l.manual && (
                 <details>

@@ -46,6 +46,9 @@ export interface Score {
   topicR: number | null
   itemP: number | null
   itemR: number | null
+  /** 整个节点的划掉；gold.struck 显式为空时用于检查误划 */
+  strikeP: number | null
+  strikeR: number | null
   /** 划掉、强调、问题、公式的命中率 */
   markAcc: number | null
   groupAcc: number | null
@@ -157,6 +160,24 @@ export function score(g: Graph, gold: Gold): Score {
   }
   const predItems = g.nodes.filter((n) => n.kind === 'item')
 
+  // 划掉单独计分：一对一匹配，重复或误划也计入预测总数。
+  const strikeGold = gold.struck ?? []
+  const strikePred = g.nodes.filter((n) => n.marks.includes('划掉'))
+  const strikeMatched = new Set<string>()
+  let strikeTP = 0
+  for (const level of [2, 1]) {
+    for (const [i, want] of strikeGold.entries()) {
+      if (strikeMatched.has(`gold:${i}`)) continue
+      const hit = strikePred.find((n) => !strikeMatched.has(n.id) && best(names(n), want) >= level)
+      if (hit) {
+        strikeMatched.add(`gold:${i}`)
+        strikeMatched.add(hit.id)
+        strikeTP++
+      }
+    }
+  }
+  const scoreStrike = gold.struck !== undefined || gold.not_struck !== undefined
+
   // 标记
   let markHit = 0
   let markAll = 0
@@ -228,6 +249,8 @@ export function score(g: Graph, gold: Gold): Score {
     topicR: topics.length ? topics.filter((t) => taken.has(t.key)).length / topics.length : null,
     itemP: items.length ? ratio(itemTP, predItems.length) : null,
     itemR: items.length ? itemTP / items.length : null,
+    strikeP: scoreStrike ? ratio(strikeTP, strikePred.length) : null,
+    strikeR: scoreStrike ? ratio(strikeTP, strikeGold.length) : null,
     markAcc: markAll ? markHit / markAll : null,
     groupAcc,
     violations,

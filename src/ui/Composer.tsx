@@ -39,6 +39,18 @@ function load(key: string, fallback: string) {
 const loud = (level: number) => Math.min(1, Math.sqrt(level * 8))
 const N = 32
 
+/**
+ * 嵌在官网里（iframe）时不自动聚焦：iframe 是延迟加载的，滚到附近一加载完，
+ * 输入框抢焦点会把外层页面直接拽到演示那一段
+ */
+const embedded = (() => {
+  try {
+    return window.self !== window.top
+  } catch {
+    return true
+  }
+})()
+
 /** 最近一段音量画成一排细竖条，新的在右边 */
 function Waveform({ level }: { level: number }) {
   const [hist, setHist] = useState<number[]>(() => Array(N).fill(0))
@@ -176,11 +188,19 @@ export default function Composer(p: Props) {
               }}
               placeholder={p.listening ? c.placeholderListening : c.placeholder}
               aria-label={c.textAria}
-              autoFocus
+              autoFocus={!embedded}
             />
           </form>
         ) : (
-          <button type="button" className="write idle" onClick={() => setOpen(true)}>
+          <button
+            type="button"
+            className="write idle"
+            onClick={() => {
+              setOpen(true)
+              // 嵌入时输入框不自动聚焦，用户点开的这一下补上
+              if (embedded) requestAnimationFrame(() => area.current?.focus())
+            }}
+          >
             <span>{p.listening ? c.idleListening(p.micName ?? '') : c.idle}</span>
             <kbd>/</kbd>
           </button>

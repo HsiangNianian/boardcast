@@ -7,7 +7,8 @@
 
 export type Ink = 'draft' | 'ink'
 
-export type Kind = 'node' | 'topic' | 'item' | 'question' | 'formula' | 'note'
+/** region：导入的 PDF / 图片上的一块内容，钉在底图上的固定位置，只能被标记、连线、加备注 */
+export type Kind = 'node' | 'topic' | 'item' | 'question' | 'formula' | 'note' | 'region'
 
 export const MARKS = ['划掉', '圈出', '下划线', '星标'] as const
 export type Mark = (typeof MARKS)[number]
@@ -15,6 +16,27 @@ export type Mark = (typeof MARKS)[number]
 /** 图标库：模型只能从这里挑，画法见 board/icons.ts */
 export const ICONS = ['数据库', '表格', '手机', '人', '服务器', '文档', '云', '图表', '消息'] as const
 export type Icon = (typeof ICONS)[number]
+
+/** 原文的一行：高度和这一行的文字碎片。按它定位一个词、一句话（见 spans.ts） */
+export interface RegionRow {
+  y: number
+  h: number
+  segs: { t: string; x: number; w: number }[]
+}
+
+export interface Box {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** 标记在原文的一个词或一句话上；一句话跨行时每行一个框 */
+export interface Span {
+  mark: Mark
+  text: string
+  boxes: Box[]
+}
 
 export interface Node {
   id: string
@@ -27,6 +49,16 @@ export interface Node {
   marks: Mark[]
   icon?: Icon
   ink: Ink
+  /** region 在底图上的位置（板书坐标） */
+  at?: { x: number; y: number; w: number; h: number }
+  /** region 的全文：label 只是开头，模型要看全文才知道一个词在哪一段 */
+  text?: string
+  /** region 的文字层，一行一条 */
+  rows?: RegionRow[]
+  /** region 上圈画的词、句；marks 是整块的 */
+  spans?: Span[]
+  /** 谁提的：第一次写成墨线时那句话的说话人（见 attribute.ts） */
+  by?: string
 }
 
 export interface Edge {
@@ -34,6 +66,8 @@ export interface Edge {
   to: string
   label?: string
   ink: Ink
+  /** 谁提的，同 Node.by */
+  by?: string
 }
 
 export interface Group {
@@ -47,6 +81,8 @@ export interface Graph {
   groups: Group[]
   nextNode: number
   nextGroup: number
+  /** 垫在底下的导入页（PDF 的一页、一张图片）的大小；图片本身存在会议的这张板里 */
+  underlay?: { w: number; h: number; /** 这是导入文件的第几页 */ no?: number }
 }
 
 export function emptyGraph(): Graph {
@@ -55,11 +91,12 @@ export function emptyGraph(): Graph {
 
 export function cloneGraph(g: Graph): Graph {
   return {
-    nodes: g.nodes.map((n) => ({ ...n, aliases: [...n.aliases], marks: [...n.marks] })),
+    nodes: g.nodes.map((n) => ({ ...n, aliases: [...n.aliases], marks: [...n.marks], ...(n.at ? { at: { ...n.at } } : {}) })),
     edges: g.edges.map((e) => ({ ...e })),
     groups: g.groups.map((x) => ({ ...x })),
     nextNode: g.nextNode,
     nextGroup: g.nextGroup,
+    ...(g.underlay ? { underlay: { ...g.underlay } } : {}),
   }
 }
 
@@ -102,7 +139,11 @@ const TAG: Record<Kind, string> = {
   question: '[问题] ',
   formula: '[公式] ',
   note: '[备注] ',
+  region: '[原文] ',
 }
+
+/** 实体表里一块原文最多给多少字 */
+const REGION_TEXT = 3000
 
 /** 给模型看的紧凑实体表。越短越好：它决定了每次要重新读入多少 token。 */
 export function describe(g: Graph): string {
@@ -114,8 +155,10 @@ export function describe(g: Graph): string {
     if (n.aliases.length) extra.push(`又称 ${n.aliases.join('/')}`)
     if (n.group) extra.push(`在 ${n.group}`)
     if (n.marks.length) extra.push(n.marks.join('、'))
+    for (const s of n.spans ?? []) extra.push(`${s.mark}「${s.text.slice(0, 20)}」`)
     if (n.icon) extra.push(`图标 ${n.icon}`)
-    lines.push(`${'  '.repeat(depth)}${n.id} ${TAG[n.kind]}${n.label}${extra.length ? `（${extra.join('，')}）` : ''}`)
+    const shown = n.text ? (n.text.length > REGION_TEXT ? `${n.text.slice(0, REGION_TEXT)}…` : n.text) : n.label
+    lines.push(`${'  '.repeat(depth)}${n.id} ${TAG[n.kind]}${shown}${extra.length ? `（${extra.join('，')}）` : ''}`)
     for (const c of children(g, n.id)) line(c, depth + 1)
   }
   for (const n of g.nodes) if (!n.parent || !g.nodes.some((p) => p.id === n.parent)) line(n, 0)

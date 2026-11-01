@@ -1,0 +1,65 @@
+/* 回放 HTML：顶栏 + 白板 + 右边的摘要和会议记录 */
+.player {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  grid-template-rows: 56px 1fr;
+  height: 100vh;
+  background: var(--bg);
+}
+.player .topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+}
+.player-title {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.player-meta {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.player-pages {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+.player-pages button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.player-pages button.on {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.player .board {
+  position: relative;
+  min-height: 0;
+}
+.player .log {
+  display: flex;
+  min-height: 0;
+}
+.player .summary .md p.item,
+.player .summary .md p.todo {
+  margin: 2px 0;
+}
+@media (max-width: 760px) {
+  .player {
+    grid-template-columns: 1fr;
+    grid-template-rows: 56px 60vh 1fr;
+  }
+}

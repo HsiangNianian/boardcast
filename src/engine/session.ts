@@ -3,10 +3,12 @@
 // 模型同一时间只跑一个请求。它忙的时候新来的句子先攒着，下一轮合并成一句处理：
 // 宁可跳过中间状态，也不能让板书越拖越晚。
 
-import { type Graph, emptyGraph } from './graph.ts'
+import { attribute } from './attribute.ts'
+import { type Graph, emptyGraph, findNode } from './graph.ts'
 import { type LlmConfig, type LlmResult, proposeOps } from './llm.ts'
 import { type Op, applyOps, eraseDrafts, markDrafts, parseOps } from './ops.ts'
 import type { Utterance } from './prompt.ts'
+import type { Term } from './glossary.ts'
 import { mentions, quickOps } from './rules.ts'
 
 export interface SessionEvents {
@@ -14,19 +16,24 @@ export interface SessionEvents {
   graph?: (g: Graph, why: 'draft' | 'ink') => void
   /** 这句话提到了哪些已有节点，用来做高亮 */
   mention?: (ids: string[]) => void
-  /** 模型的一轮结果，用来显示延迟和调试 */
-  llm?: (r: LlmResult & { ops: Op[]; batch: Utterance[] }) => void
-  error?: (e: unknown) => void
+  /** 模型的一轮结果，用来显示延迟和调试。`queuedMs`: how long each line of the batch waited for the model */
+  llm?: (r: LlmResult & { ops: Op[]; batch: Utterance[]; queuedMs: number[] }) => void
+  /** 模型这一轮出错了；`batch` 是这一轮的几句话，它们不会再画了 */
+  error?: (e: unknown, batch: Utterance[]) => void
 }
 
 export class Session {
   graph: Graph = emptyGraph()
   history: Utterance[] = []
   llm: LlmConfig
+  /** 术语表（全局的加这场会的），给模型起名用 */
+  terms: Term[] = []
   private on: SessionEvents
   /** 给模型看几句前文 */
   private context: number
   private pending: Utterance[] = []
+  /** When each pending line arrived (performance.now()) */
+  private pendingAt: number[] = []
   private busy = false
 
   constructor(llm: LlmConfig, on: SessionEvents = {}, context = 2) {
@@ -44,6 +51,7 @@ export class Session {
       this.on.graph?.(this.graph, 'draft')
     }
     this.pending.push(u)
+    this.pendingAt.push(performance.now())
     void this.pump()
   }
 
@@ -56,19 +64,30 @@ export class Session {
     if (this.busy || !this.pending.length) return
     this.busy = true
     const batch = this.pending.splice(0)
+    const started = performance.now()
+    const queuedMs = this.pendingAt.splice(0).map((t) => Math.round(started - t))
     const next: Utterance =
       batch.length === 1
         ? batch[0]
         : { text: batch.map((u) => (u.speaker ? `${u.speaker}：${u.text}` : u.text)).join(' ') }
     try {
       const drafts = markDrafts(this.graph)
-      const r = await proposeOps(this.llm, this.graph, this.history.slice(-this.context), next)
+      const r = await proposeOps(this.llm, this.graph, this.history.slice(-this.context), next, undefined, this.terms)
       const ops = parseOps(r.text)
-      this.graph = eraseDrafts(applyOps(this.graph, ops, 'ink'), drafts)
+      // 这一轮新写成墨线的，记下是这批话里谁说的
+      this.graph = attribute(this.graph, eraseDrafts(applyOps(this.graph, ops, 'ink'), drafts), batch)
       this.on.graph?.(this.graph, 'ink')
-      this.on.llm?.({ ...r, ops, batch })
+      // 指给大家看的：板书不变，高亮一下
+      const shown = ops.flatMap((o) => {
+        if (o.op !== 'H') return []
+        const t = o.target
+        const n = 'id' in t ? this.graph.nodes.find((x) => x.id === t.id) : findNode(this.graph, t.name)
+        return n ? [n.id] : []
+      })
+      if (shown.length) this.on.mention?.(shown)
+      this.on.llm?.({ ...r, ops, batch, queuedMs })
     } catch (e) {
-      this.on.error?.(e)
+      this.on.error?.(e, batch)
     } finally {
       this.history.push(...batch)
       this.busy = false

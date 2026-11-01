@@ -1,0 +1,618 @@
+# Changelog
+
+All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
+
+## 0.19.0-2 - 2026-10-31
+
+### Features
+
+- **i18n:** Add English UI foundation (refs #20) ([`542b1eb`](https://github.com/HsiangNianian/boardcast/commit/542b1eb89cc580a06a71e082516e6064a6e99877))
+  - add typed English and Chinese dictionaries, system language detection and a Settings language override
+  - extract App strings, default HTML to English and test language detection and dictionary parity
+  - leave other panels for the next step of #20
+- **i18n:** English UI throughout; board and summary follow the meeting language (refs #20) ([`5647415`](https://github.com/HsiangNianian/boardcast/commit/5647415aa05fbd43902574747e74820b78305f0a))
+  - extract strings from all panels (settings incl. a language picker, composer, meetings, models, summary, diagnostics, update, board strip, replay bar, shortcut table, splash) and from non-UI modules (errors, auto titles, edit notes)
+  - exported Markdown/PDF and the replay page use the interface language; the replay page follows the viewer's language
+  - new engine/lang.ts guesses the spoken language; English meetings get an English-board hint and a longer label limit, Chinese prompts are unchanged
+  - summaries of English meetings use English instructions and headings (Conclusions / Decisions / To-dos / Open questions)
+  - sample meetings are filtered by interface language
+  - tests pin Chinese where they assert Chinese wording; new tests for language detection, English summaries and English exports
+- **i18n:** English messages from the desktop shell (refs #20) ([`740f08a`](https://github.com/HsiangNianian/boardcast/commit/740f08a83abf0e9269dcdf4e6963a67d3133277c))
+  - errors, status and progress messages from models, voice, meetings, export, arXiv, remote API, updater and tray are now English
+  - model catalog labels and notes shown in the model manager are English
+  - comments, stderr logs and speech-recognition test fixtures stay as they were
+- **engine:** English examples for English meetings (refs #20) ([`73a9079`](https://github.com/HsiangNianian/boardcast/commit/73a9079cf37e2b9010cbff93670152f550203185))
+  - English meetings get the few-shot examples in English, so lines get English labels too instead of 调用/转发; the system prompt and Chinese examples are unchanged, so Chinese results are identical
+  - the loose-items heading on the board follows the board's language (Open / 待定)
+  - English eval cases with Qwen3.5-4B: node F1 0.93 → 0.97, edge F1 0.71 → 0.83, topics and items 1.00, groups 1.00; holdout English cases improved as well
+- **web:** Public web demo on GitHub Pages (closes #30) ([`e653c58`](https://github.com/HsiangNianian/boardcast/commit/e653c586b332ed12df8a89f587f5170134a16a6f))
+  - eval/record.ts plays each sample meeting through a real model once and saves the board steps, transcript and summary to public/demos/; boards with no changes, and English boards with Chinese on them, are skipped
+  - without a model the web version replays a recorded sample in the interface language, and shows its summary when the replay ends; the demo meeting is not saved
+  - a "Web demo" label and notes say what the web version can't do, link to the desktop app, and invite connecting an OpenAI-compatible API to type your own
+  - the Pages workflow builds with BOARDCAST_BASE=/<repo>/ and deploys dist; glyph data is fetched relative to the page, so it works under the sub-path
+  - READMEs link to https://hsiangnianian.github.io/boardcast/
+- **voice:** Cut long sentences at breaths and time every stage ([`e887901`](https://github.com/HsiangNianian/boardcast/commit/e887901c8676d4ce22502fc5dd950de73becb468))
+  - after 4 s of talking a breath is enough to end a sentence (0.32 s at first, shorter as the sentence runs on, 0.13 s just before the 10 s cap), instead of waiting for a 0.45 s pause or 12 s
+  - the gaps between words don't cut a clause in half; a test feeds real speech with 0.35 s breaths and checks each sentence comes out whole
+  - one second of pre-roll so the first word isn't lost when a soft break sends the buffer
+  - every sentence carries its timings (pause waited for, recognition, voiceprint, queue for the model, model), shown in the transcript and exported as timing.json with diagnostics (numbers only)
+
+### Fixes
+
+- **eval:** Stop when the model can't be reached instead of scoring zeros ([`e79d0b6`](https://github.com/HsiangNianian/boardcast/commit/e79d0b62fa09cb6fc3f5de8f99010035b203622c))
+  - check GET /health first and explain how to start llama-server or set --base-url
+  - skip Node's experimental localStorage outside the browser, which only printed a warning
+
+### Documentation
+
+- English README and English eval cases (refs #20) ([`ae6e54e`](https://github.com/HsiangNianian/boardcast/commit/ae6e54ec87f40d09bb6622c2dea859afa7581c57))
+  - README.en.md is the English version; both READMEs link to each other at the top
+  - 5 English cases each in the dev and holdout sets
+  - the scorer matches English labels word by word: hyphens count as spaces, no partial matches inside words, and ClickHouse equals Click House
+
+### Build and CI
+
+- **release:** Pre-releases build without RPM and need a numeric suffix ([`b2f59d7`](https://github.com/HsiangNianian/boardcast/commit/b2f59d706884c144f6e5fb6719af584eaf5a89b8))
+  - RPM versions can't contain '-', so pre-release tags build deb and AppImage only on Linux; stable releases still ship the RPM
+  - the Windows MSI only accepts a numeric pre-release part, so pnpm release now rejects 0.x.y-rc.1 and suggests 0.x.y-1
+  - READMEs use 0.19.0-1 as the pre-release example
+
+### Maintenance
+
+- Apply pre-commit fixes ([`e1f31e4`](https://github.com/HsiangNianian/boardcast/commit/e1f31e43f8fc558915558568f4622c9dd63c7830))
+
+**Full diff:** [v0.18.0...v0.19.0-2](https://github.com/HsiangNianian/boardcast/compare/v0.18.0...v0.19.0-2)
+
+## 0.18.0 - 2026-10-31
+
+### Features
+
+- **shortcuts:** Hold to talk, global mic toggle, tray and keyboard shortcuts (closes #19) ([`a4a4f18`](https://github.com/HsiangNianian/boardcast/commit/a4a4f1877c2bdff2e730c78fbb61907983f53b31))
+  - hold Space to talk on desktop; release keeps listening for 300 ms and the engine finishes the sentence
+  - PageUp/PageDown and Ctrl+[ / Ctrl+] switch boards, Ctrl+Shift+N opens a board, Ctrl+O imports, Ctrl+Shift+R toggles replay, Ctrl+Shift+S summarizes, ? lists them all
+  - these work in handwriting mode only, so they do not clash with Excalidraw, and they leave text fields and dialogs alone
+  - a global shortcut toggles the mic while the app is in the background, Ctrl+Shift+Space by default, changeable in settings
+  - Wayland does not let apps listen for global keys: `boardcast --toggle-mic` reaches the running instance, and settings explain how to bind it
+  - single instance: a second launch shows the existing window
+  - tray icon with a red dot while listening, and a menu to toggle the mic, show the window and quit; on Linux it is skipped when appindicator is missing rather than crashing
+
+**Full diff:** [v0.17.0...v0.18.0](https://github.com/HsiangNianian/boardcast/compare/v0.17.0...v0.18.0)
+
+## 0.17.0 - 2026-10-31
+
+### Features
+
+- **board:** Mark a word, a sentence or a paragraph of the source text ([`cd35dea`](https://github.com/HsiangNianian/boardcast/commit/cd35deaaf181c376b45fff57d6702d7dbda4e199))
+  - PDF regions keep their text layer (lines and pieces with positions), so a mark can land on part of a block
+  - the M op takes a range: M n4 圈出 「predicting」 marks the words, M n4 圈出 句 「Most of the」 the whole sentence, and M n4 圈出 the block
+  - if the model picks the wrong block, the mark goes to the block on this board that holds those words; text that is found nowhere marks the block named
+  - matching ignores case and white space and sees through words broken at line ends; abbreviations such as e.g. and Fig. do not end a sentence
+  - a sentence over several lines is circled along its outline, underlined or struck per line
+  - by hand: selecting a source block shows 词 / 句 / 段, and clicking a mark toggles it on what was clicked; underline joins the manual marks
+  - marked words show in the entity list, the summary input and the Markdown export
+  - blocks imported before this version have no text layer and can only be marked whole; figures and tables are marked whole too
+- **meetings:** Search every meeting (closes #24) ([`a7bef75`](https://github.com/HsiangNianian/boardcast/commit/a7bef75cea30c8c16ccceb4063cda5c138b2b3a4))
+  - the meeting list has a search box over titles, spoken lines, board text (the full source text of imported pages too) and summaries
+  - several words must all appear in the meeting, not necessarily together; matches are highlighted in a short snippet
+  - clicking a hit opens the meeting, switches to its board, and scrolls the transcript to the line and flashes it
+  - the same matcher runs on desktop and web; loaded meetings are cached by update time so typing stays fast
+- **settings:** Export diagnostics for bug reports (closes #27) ([`2118821`](https://github.com/HsiangNianian/boardcast/commit/21188215b6ef82b543a12212741b405bf38db833))
+  - settings can export a zip with the version, platform, model and voice state, the tail of the llama-server log and recent front-end errors
+  - every file is shown before saving; no meeting content, audio or API keys are collected
+  - keys, bearer tokens and user names in paths are scrubbed, and log lines that are not plain ASCII are dropped in case they hold meeting text
+  - error toasts have a button to copy the details and stay up longer
+  - console errors and unhandled rejections are kept in a small ring buffer
+
+**Full diff:** [v0.16.0...v0.17.0](https://github.com/HsiangNianian/boardcast/compare/v0.16.0...v0.17.0)
+
+## 0.16.0 - 2026-10-31
+
+### Features
+
+- **board:** Point without writing, turn pages by voice, shared assignments (closes #33) ([`e944934`](https://github.com/HsiangNianian/boardcast/commit/e9449343a73a137c77f1ff8e0f9f7ad1fbc2e3e4))
+  - new op H: "我们先看摘要" highlights the block for 3 seconds and leaves nothing on the board
+  - a sentence that is only a page command (翻到第三页, 下一页, 第 5 张板) switches boards without asking the model; page numbers refer to the imported file, nearest copy first; talk that merely mentions a page still goes to the model
+  - work shared by several people goes under one topic (小王、小李), and a person is no longer nested under a person
+  - talk unrelated to the source text (assignments, todos) is not hung on source regions
+  - a first line with a lone capital letter, as copied from the transcript, is read as the speaker
+  - importing a PDF into a meeting that has content asks: new meeting or this one
+  - dev eval gains assign-shared and pointing-not-writing
+
+### Fixes
+
+- **import:** Cut real papers into paragraphs, not lines (refs #33) ([`14f1d26`](https://github.com/HsiangNianian/boardcast/commit/14f1d26c933a04ac66b38c67cec92b3307de6a9a))
+  - double-spaced lines form one paragraph: the gap limit follows the page's line pitch, words broken at line ends are rejoined, and an abstract indented on both sides is no longer cut per line
+  - the model sees a region's full text, not only the 36-character label, so a word read aloud lands on the block that holds it
+  - citation superscripts and subscripts stay inside their line, whatever order the pieces sort in
+  - once in the references, only an appendix, supporting information or a clearly larger numbered heading ends them; "J. Chem. Inf. Model." was read as a heading and let 6 pages of references through (14 skipped now, 7 before)
+  - reference pages are detected before rendering and no longer count towards the 40-board limit, so the SI is imported too
+  - headings: wide ones in a larger font and wrapped ones are recognized (§2.3, §3), numbered table rows are not
+  - captions: "Figure 2: (a)", "Table S1:" and "(continued)" are recognized
+  - pages with /Rotate 90 were treated as rotated text and came out empty; rotation is now judged after the page transform
+  - split page numbers ("S-", "6") are dropped; a page with no text layer becomes one figure region
+  - imported boards get thumbnails straight away, and they stay after a board is opened
+  - the thumbnails stay on one scrolling row, with the current board scrolled into view
+  - the import note says what happened: 共 48 页，建了 34 张板，参考文献 14 页没建板
+
+**Full diff:** [v0.15.0...v0.16.0](https://github.com/HsiangNianian/boardcast/compare/v0.15.0...v0.16.0)
+
+## 0.15.0 - 2026-10-31
+
+### Features
+
+- **export:** Whole-meeting PDF and a self-contained replay page (closes #23) ([`0e79b2e`](https://github.com/HsiangNianian/boardcast/commit/0e79b2e50b6afad89e736db20f1c984e0c78ad03))
+  - 回放网页 exports one .html with the player, the meeting data (boards, steps, transcript, summary, page images) and the stroke data of every character written on the boards; it opens offline with no requests, switches boards, replays each from empty with seek, pause and speed, and the transcript follows along
+  - the player is a separate IIFE build (vite.player.config.ts) that reuses InkBoard, ReplayBar and the app stylesheet; it is built before the app and shipped as player/player.js
+  - ELK is left out of the player (1.9 MB to 500 KB): each board's final layout memory is exported and restored before replay, and a small layered stand-in covers the rare case that still needs a fresh flowchart layout
+  - glyph loading reads characters embedded in the page before /hanzi and the CDN
+  - meeting text is escaped so it cannot close the embedded script
+  - 整场会 PDF draws every board (with its page image), then the summary and transcript, on canvases with system fonts and binds them with a small PDF writer (pdf.ts), A4 landscape; pages are images, so the text is not selectable
+  - the desktop save dialog knows .html and .pdf
+  - a two-board test meeting gives a 506 KB replay page and a 244 KB, 3-page PDF
+
+**Full diff:** [v0.14.0...v0.15.0](https://github.com/HsiangNianian/boardcast/compare/v0.14.0...v0.15.0)
+
+## 0.14.0 - 2026-10-31
+
+### Features
+
+- **import:** Import papers straight from an arXiv link (refs #32) ([`4bf1a3c`](https://github.com/HsiangNianian/boardcast/commit/4bf1a3cd9283fccfa452eff72652b30815a582f4))
+  - the import button opens a menu: choose a file, or paste an arXiv link or id (arxiv.org/abs/..., /pdf/...v2.pdf, arXiv:2401.12345, a bare id, old-style cs/0112017)
+  - the desktop shell downloads the PDF (arxiv_pdf): only valid arXiv ids, only from arxiv.org even after redirects, at most 60 MB, and the response must be a PDF
+  - the download goes through the same PDF import, so papers get the column, section, figure and table layout and the paper title as the meeting name
+  - the web build explains that browsers cannot fetch from arXiv and asks for the PDF instead
+  - tests: id parsing, id validation in Rust, and an ignored test that downloads a real paper
+
+**Full diff:** [v0.13.0...v0.14.0](https://github.com/HsiangNianian/boardcast/compare/v0.13.0...v0.14.0)
+
+## 0.13.0 - 2026-10-31
+
+### Features
+
+- **import:** Lay out paper PDFs by column, section, figure, table and equation (refs #32) ([`9aa8666`](https://github.com/HsiangNianian/boardcast/commit/9aa8666776d0aad3d63f1fdda93647ceabfae90f))
+  - a page analysis (board/paper.ts) replaces simple line merging for PDFs: rotated text (the arXiv side stamp) and page numbers are dropped, the column gutter is found even when a centered title and author block cross it, and lines never join across columns
+  - paragraphs split on first-line indents, short last lines and section headings (3., 3.1., IV., 一、, Abstract, References); numbered headings must start at the column edge and not read like a sentence, so figure labels like "3x3 conv" and body lines starting with a number are not headings
+  - captions (Figure 3., Fig. 2:, Table 1, 图 4) take the figure or table they belong to, axis labels, legends and table cells included; whether captions sit above or below is voted across the document, so stacked tables are not swapped; a figure number already used is a reference in the text, not another caption
+  - numbered equations merge with their number; regions are named the way people refer to them: §3 Deep Residual Learning, 图 1：…, 表 2：…, 公式 (5)
+  - pages that only hold references get no board; a paper gets a 论文结构 topic on its first board and its title as the meeting name
+  - the "too many items" hint no longer counts regions on an imported page
+  - checked on Deep Residual Learning (two columns, 12 pages) and Attention Is All You Need (one column, 15 pages); unit tests use a synthetic two-column page
+
+**Full diff:** [v0.12.0...v0.13.0](https://github.com/HsiangNianian/boardcast/compare/v0.12.0...v0.13.0)
+
+## 0.12.0 - 2026-10-31
+
+### Features
+
+- **summary:** Summarize every board of the meeting (closes #26) ([`e4dc159`](https://github.com/HsiangNianian/boardcast/commit/e4dc15955a0d32d87ff5181b4a95772b1adb3b02))
+  - the summary gets the structure of all boards, one section per board, instead of only the current one
+  - on imported pages it only includes source text that was marked, annotated or connected, so a long PDF does not crowd out the transcript; each board is capped at 1500 characters
+  - the transcript marks where the discussion moved to another board, and the model is asked to note the board next to conclusions and to-dos
+  - a meeting with one board is summarized exactly as before
+
+**Full diff:** [v0.11.0...v0.12.0](https://github.com/HsiangNianian/boardcast/compare/v0.11.0...v0.12.0)
+
+## 0.11.0 - 2026-10-31
+
+### Features
+
+- **glossary:** Correct in-house names and have the model use them (closes #22) ([`4bfdce1`](https://github.com/HsiangNianian/boardcast/commit/4bfdce1d8d64896acf49c9bd66b9f9d7a3b4709b))
+  - settings get a glossary, one term per line as "正确写法 = 错写, 错写", in two parts: one for all meetings kept on this computer and one saved with the meeting
+  - every sentence, spoken or typed, is corrected before it reaches the board: English terms match whole words, case-insensitively, with optional spaces or hyphens between words (media crawler, Graph RAG), and longer forms are replaced first
+  - the glossary is put in front of the board in the model's message, so it stays in the prefix cache and the model names things the standard way
+  - a "加进术语" button on a selected node adds its name to the meeting's glossary
+  - tests cover parsing, whole-word correction, mixed Chinese and English terms and the prompt line
+
+**Full diff:** [v0.10.0...v0.11.0](https://github.com/HsiangNianian/boardcast/compare/v0.10.0...v0.11.0)
+
+## 0.10.0 - 2026-10-31
+
+### Features
+
+- **eval:** Held-out test set, repeated runs and regression cases (closes #4, refs #5) ([`bd4d20c`](https://github.com/HsiangNianian/boardcast/commit/bd4d20ccd6020406af52557916f50b5112b28ee8))
+  - eval/holdout.json: 22 meetings that are not used for prompt tuning, covering corrections, coreference, long small talk, pure chatter, sprint plans, owner swaps, struck options, formulas, open questions, renames, deletes, mixed Chinese and English, groups, cause chains, retros, flowchart plus to-dos, nested items, moved items, loops and long-range references
+  - three regression cases in the dev set for the known failures: chatter around two useful sentences, emphasis that belongs on an item rather than its topic, groups announced with "都属于"
+  - run.ts takes --set dev|holdout|all and --repeat N, reports each metric as the mean and standard deviation across runs, and flags cases whose scores differ by 0.3 or more between runs
+  - score.ts: not_emphasized counts emphasis on the wrong node as a miss
+  - README: both default models measured on both sets on an RTX 3060 Laptop with the app's own llama-server settings (4B holdout: nodes 0.89, edges 0.71; 9B holdout: nodes 0.94, edges 0.84), the earlier model comparison kept for reference, and the typical held-out failures recorded without tuning to them
+  - at temperature 0 local inference is deterministic, so repeated runs are identical; the run-to-run differences in #5 come from batching during live use
+
+### Performance
+
+- **meetings:** Store imported page images outside the meeting file (closes #25) ([`f04f83b`](https://github.com/HsiangNianian/boardcast/commit/f04f83bb85360d81f1c7d4361026c32a6412fd43))
+  - page images are saved once, named by their content hash, and the meeting JSON keeps only an asset: reference, so autosave no longer rewrites megabytes of images every half second
+  - desktop: meetings/<id>/<hash>.jpg written via temp file and rename, with names restricted to hex hashes; deleting a meeting removes its folder
+  - web: a second IndexedDB store keyed by meeting id and image name; deleting a meeting removes its images
+  - images already stored are skipped on later saves; meetings saved with inline images load as before and are split on their next save; a missing image only drops the underlay
+  - fix: a meeting with a single imported page lost its underlay on reload because the boards list was only saved with two or more boards
+  - a two-page PDF meeting goes from about 300 KB to under 5 KB of JSON
+
+**Full diff:** [v0.9.0...v0.10.0](https://github.com/HsiangNianian/boardcast/compare/v0.9.0...v0.10.0)
+
+## 0.9.0 - 2026-10-30
+
+### Features
+
+- **import:** Import images and mark them up with the local vision model (closes #12) ([`12410b4`](https://github.com/HsiangNianian/boardcast/commit/12410b41364f4a4c65c468e09e188599df951feb))
+  - screenshots, whiteboard photos and diagrams become a board with the image as underlay, marked up the same way as PDF pages
+  - positions come from image processing (segment.ts): ink against the most common background, long straight lines removed with tolerance for hand-drawn wobble, gaps between characters bridged, connected runs merged into lines and lines into paragraphs
+  - each block is cropped and read by the built-in model's vision projector; blocks that read as nothing or only symbols (arrowheads) are dropped
+  - measured on an RTX 3060 with Qwen3.5-4B: the model reads text accurately but its own boxes drift by tens of pixels, which is why it only reads; a document screenshot takes about 5 s, a hand-drawn diagram up to 25 s
+  - the model catalog gets a vision component per LLM (mmproj-F16, 640 MB for 4B, 880 MB for 9B) from ModelScope / hf-mirror / Hugging Face; llama-server starts with --mmproj when the selected model's component is installed, and the status reports it
+  - images are only read locally; import asks for the vision component when it is missing
+  - the prompt tells the model that lines in the source image are not edges and should be changed by striking or annotating the text next to them
+  - tests: block finding on a synthetic page with a framed label and an arrow, reading cleanup, catalog pairing
+
+**Full diff:** [v0.8.0...v0.9.0](https://github.com/HsiangNianian/boardcast/compare/v0.8.0...v0.9.0)
+
+## 0.8.0 - 2026-10-30
+
+### Features
+
+- **import:** Import PDFs and mark them up during the meeting (refs #12) ([`f3f55d9`](https://github.com/HsiangNianian/boardcast/commit/f3f55d9140544dbb91a8fde2e8fe70669f6d07fa))
+  - each PDF page becomes a board: the page is rendered as an underlay in the top-left corner, and pdf.js's text layer is merged into lines and paragraphs that become pinned "原文" regions
+  - regions are graph nodes of kind region with a fixed position; the model sees them as [原文] in the entity table and can only mark, connect, annotate or attach questions to them, and applyOps restores any rename, delete or move
+  - marks are drawn on the page (circle, strike, underline, star), links between regions reuse the curved arrows, and notes go in a margin to the right of the page with a thin line back to their paragraph
+  - regions can be clicked and marked by hand; rename and delete are hidden for them
+  - other topics and flowcharts are laid out around the page; the page size is part of the graph so replay and thumbnails keep it
+  - PNG / SVG exports include the underlay, and Markdown gets a 原文标注 section
+  - up to 40 pages per import; scanned pages get an underlay but no regions; password-protected PDFs say so
+  - pdf.js loads on demand; a vite plugin serves its cmaps, standard fonts and wasm in dev and copies them into the build, and the desktop CSP allows wasm
+  - a cloud model only receives the text of the regions, never the page image
+
+### Build and CI
+
+- Stop XProtect before building the macOS .dmg ([`8e286a6`](https://github.com/HsiangNianian/boardcast/commit/8e286a6ca845f10e9422fc289dda70dd6367eba7))
+  - GitHub's macOS runners sometimes fail the .dmg with "hdiutil: create failed - Resource busy" because XProtect holds the new disk image; v0.7.0's release hit it
+  - kill XProtect before packaging in both CI and the Release workflow
+
+**Full diff:** [v0.7.0...v0.8.0](https://github.com/HsiangNianian/boardcast/compare/v0.7.0...v0.8.0)
+
+## 0.7.0 - 2026-10-30
+
+### Features
+
+- **desktop:** Update the app in place from GitHub releases (closes #17) ([`28dae69`](https://github.com/HsiangNianian/boardcast/commit/28dae69849ca38679a61572a557d69f8d13f28ff))
+  - the Tauri updater plugin checks latest.json on the latest GitHub release a few seconds after launch; a "新版本 x.y.z" button appears in the top bar when there is one
+  - the update panel renders the release notes and has "下载并重启": it shows download progress, verifies the signature, then stops listening and the built-in model, installs and restarts; a failed download leaves the meeting untouched, and a failed install brings the model back
+  - settings get an 更新 section: current version, a toggle for checking on launch, and a manual check
+  - both commands live in Rust (update_check, update_install), so the webview needs no updater permissions
+  - release builds sign update bundles with the TAURI_SIGNING_PRIVATE_KEY secret through tauri.updater.conf.json, and tauri-action uploads latest.json; regular CI builds need no key
+  - the public key is in tauri.conf.json, and a Rust test checks the updater config parses, since a bad one would crash the app on launch
+  - prereleases never become GitHub's latest release, so they are not offered
+- **voice:** Capture system audio for online meetings (refs #10) ([`8c5b1dd`](https://github.com/HsiangNianian/boardcast/commit/8c5b1ddd52b6284b7dcca0321df1331facc99e03))
+  - settings choose what to listen to: the microphone, the microphone plus system audio, or system audio only
+  - Linux reads the default output's PulseAudio / PipeWire monitor source; Windows opens the default speakers as a WASAPI loopback input; other systems say it is not supported yet
+  - each source is resampled to 16 kHz on its own and a Mixer sums them before sentence splitting and recognition
+  - the mixer does not wait for a source that has gone quiet (Windows loopback sends nothing while nothing plays): after 0.3 s it treats the gap as silence
+  - opening a stream is shared between microphone and system audio, with errors that say which one failed
+  - tests: the mixer is unit-tested, and an ignored hardware test reads one second of system audio (48 kHz monitor source on a Linux laptop)
+- **import:** Import .excalidraw drawings as boards (refs #12) ([`742b970`](https://github.com/HsiangNianian/boardcast/commit/742b970e4e377b5a58cc6282dc094086610b7230))
+  - an import button in the top bar, and files can be dropped onto the board
+  - boxes, ellipses and diamonds with text become flowchart nodes; arrows bound at both ends become edges, with the arrow's text as the label; frames become groups; loose text goes under a "白板上的文字" topic
+  - two boxes with the same text stay two nodes, and connected boxes without text get a name
+  - everything goes through ops and applyOps, so ids, dedupe and validation match what the model draws
+  - a drawing lands on a new board when the current one has content, is logged in the transcript, can be undone, and the model can keep adding to it
+  - drops are caught in the capture phase so Excalidraw's own drop handler on the pencil board does not replace the canvas; the desktop window passes file drops to the page (dragDropEnabled: false)
+  - invalid files are rejected with a reason
+
+**Full diff:** [v0.6.0...v0.7.0](https://github.com/HsiangNianian/boardcast/compare/v0.6.0...v0.7.0)
+
+## 0.6.0 - 2026-10-30
+
+### Features
+
+- **privacy:** Say what goes to a cloud model and mark cloud vs local (closes #18) ([`8126f7d`](https://github.com/HsiangNianian/boardcast/commit/8126f7d14d94a71d220fdc49fa395d3f29621919))
+  - before a cloud endpoint is enabled for the first time, settings list what will be sent (what is said and by whom, the board's text, the full transcript for summaries) and what is not (audio, meeting files); it is only enabled after the user confirms, once per host
+  - loopback endpoints (LM Studio, local vLLM, Ollama) are not cloud and need no confirmation
+  - the model status in the top bar and the composer show a 云端 / 本地 tag at all times; clicking the composer tag opens settings
+  - "这场会只用本地模型" keeps a meeting on the local model for both the board and summaries, is saved with the meeting, and starts the built-in model if it was idle
+  - the summary button's tooltip names the host the transcript goes to
+  - README states that boardcast is fully local by default and documents the privacy behaviour
+- **pages:** Several boards per meeting with thumbnails (closes #21) ([`1667b7e`](https://github.com/HsiangNianian/boardcast/commit/1667b7e66a1c7f38cbc2c7278c68105ab66e285f))
+  - a strip of board thumbnails in the board's top-left corner: click one to switch, "+" starts a new board and keeps the old one
+  - each board keeps its own graph, layout memory and replay steps; switching saves the current board first, clears undo and refits the view
+  - the model only sees the current board; something from an earlier board mentioned again is drawn anew on this one
+  - once a board holds 30 inked items, a one-time hint suggests starting a new board
+  - transcript lines record their board, and the transcript shows a "第 N 张板" divider that jumps to that board
+  - thumbnails are drawn from the layout (boxes, text rows, lines) rather than rendered, and are saved with the meeting
+  - meetings save all boards and the current one; a meeting is still titled after its first board
+  - Markdown export puts each board in its own section and splits the transcript by board
+  - switching is blocked while the model is still drawing or during replay
+  - the web build's status no longer says 本地 twice
+
+**Full diff:** [v0.5.0...v0.6.0](https://github.com/HsiangNianian/boardcast/compare/v0.5.0...v0.6.0)
+
+## 0.5.0 - 2026-10-30
+
+### Features
+
+- **replay:** Replay how the board grew during a meeting (closes #16) ([`6d079f1`](https://github.com/HsiangNianian/boardcast/commit/6d079f12c2805195c6c29cb283fa1af3b108b217))
+  - every change to the inked board is recorded as a diff against the previous version (nodes, edges and groups added, changed or removed, plus the id counters), with a timestamp and how many transcript lines there were
+  - recording diffs instead of ops keeps replay exact: pencil drafts take node ids before the model's ops, and manual edits and undo are not ops at all
+  - steps are saved with the meeting; meetings saved by older versions replay as a single step
+  - a replay button in the top bar starts from an empty board and writes each step in at the meeting's pace (gaps clamped to 0.9-3 s), with the transcript following along
+  - the replay bar replaces the composer: play / pause (space), a draggable progress bar or arrow keys to step, 1x / 2x / 4x, and Esc to leave; export works on the moment shown
+  - the current board and layout are restored on exit; nothing is autosaved or editable while replaying, and replay is unavailable while listening or while the model is still drawing
+
+**Full diff:** [v0.4.0...v0.5.0](https://github.com/HsiangNianian/boardcast/compare/v0.4.0...v0.5.0)
+
+## 0.4.0 - 2026-10-30
+
+### Features
+
+- **summary:** Render the summary as Markdown and copy it as source or plain text ([`7acf097`](https://github.com/HsiangNianian/boardcast/commit/7acf0970bbea6b88b21571d1e7ea8a516ead5e84))
+  - the summary is rendered with react-markdown and remark-gfm (todos show as checkboxes); raw HTML from the model is not rendered
+  - the pen button (or a double click) switches to editing the source, the check button goes back
+  - "复制原文" copies the Markdown, "仅文本" copies it without markup (bullets and boxes for todos)
+  - the renderer is lazy-loaded with the summary panel, so startup size is unchanged
+- **voice:** Tell speakers apart by their voice (refs #10) ([`a567e44`](https://github.com/HsiangNianian/boardcast/commit/a567e441db925165f13833308a84d886700aa1b9))
+  - each final sentence carries a unit-length CAM++ voiceprint (3D-Speaker, zh/en, 26 MB); sentences shorter than 0.8 s get none
+  - the app clusters voiceprints online per meeting: close enough to a known voice (cosine >= 0.45) means the same person, otherwise a new one named A, B, C...
+  - short sentences without a voiceprint go to the previous speaker
+  - click a speaker's avatar in the transcript to rename them; renaming to an existing name merges the two voices
+  - voiceprints are saved with the meeting, so speakers are still recognized after the mic is restarted or the meeting is reopened
+  - a setting turns it off and falls back to the speaker tag in the composer
+  - the speaker model is bundled by fetch-voice (hf-mirror, Hugging Face, then GitHub) and is optional: without it, voice input works as before
+  - CI and Release cache the model, and a Rust test checks it scores the same speaker well above a different one (0.60 vs 0.06 on the 3D-Speaker test clips)
+
+### Fixes
+
+- **summary:** Don't show an empty summary when a thinking model runs out of tokens ([`33aec54`](https://github.com/HsiangNianian/boardcast/commit/33aec549ca8e71f12e2b9aad6269a660e3335301))
+  - reasoning models such as deepseek spend max_tokens on thinking and return empty content; the summary then showed four "无" sections
+  - remote models now get 4096 tokens for the summary (2048 per chunk), and an empty answer is retried once with twice as much
+  - if it is still empty, say so instead of saving an empty summary (mentions thinking when finish_reason is length)
+  - headings written as ## 结论, **结论**, 【待办事项】 or 结论： are recognized; output with no recognizable section is kept as is
+  - remote requests time out after 180 s instead of 60 s, since long answers from thinking models can take longer
+  - content: null in a reply is handled
+- **summary:** Drop the model name from the summary header ([`7a4afab`](https://github.com/HsiangNianian/boardcast/commit/7a4afab27287d029811a0cca4f6ed0cbc4ae04ef))
+  - the header only shows progress while generating; which endpoint is used is already in the top bar and the button tooltip
+
+**Full diff:** [v0.3.0...v0.4.0](https://github.com/HsiangNianian/boardcast/compare/v0.3.0...v0.4.0)
+
+## 0.3.0 - 2026-10-30
+
+### Features
+
+- **ink:** Draw the small icons in handwriting mode ([`c8c4259`](https://github.com/HsiangNianian/boardcast/commit/c8c42591c1ab2921371491dcdd528f64c9b59cb0))
+  - icons (database, table, phone, person, server, document, cloud, chart, message) were only drawn on the pencil board
+  - the same shapes are now traced as pen strokes and written in order with the rest of the board: before topic titles, after items, and inside flowchart nodes with the label shifted right
+  - README roadmap updated
+- **board:** Export the board as SVG ([`0367c11`](https://github.com/HsiangNianian/boardcast/commit/0367c111017e21aa9d0b6f46ee5d8ac0c2afbee4))
+  - new "SVG 矢量图" entry in the export menu
+  - handwriting mode saves the cropped board SVG (chalk / marker texture included, unfinished strokes completed); pencil mode uses Excalidraw's SVG export on light paper
+  - PNG export now rasterizes the same SVG, so both stay identical
+  - the desktop save dialog filters .svg; README updated
+- **desktop:** Build for macOS (Apple Silicon) ([`13c03c9`](https://github.com/HsiangNianian/boardcast/commit/13c03c9bca662b6507e330e8bc1297a90f6f4b5e))
+  - fetch-llama downloads llama.cpp's Metal build for macos-arm64 / macos-x64 and keeps only the libX.0.dylib names the binaries load
+  - keep libggml-rpc on macOS: unlike Linux and Windows, llama-server and every library there link it directly
+  - add Info.plist with NSMicrophoneUsageDescription, without which macOS refuses microphone access
+  - CI and the Release workflow build, smoke-test and test on a macos-15 runner and upload the .dmg
+  - the app is not code-signed yet; README says how to allow it on first launch
+- **desktop:** Bundle the voice models in the installer ([`3c39d3b`](https://github.com/HsiangNianian/boardcast/commit/3c39d3bec3d0b00f7b9033770bc58c09a105880a))
+  - users no longer have to download speech recognition separately after installing; voice input works right away
+  - scripts/fetch-voice.mjs fetches SenseVoice int8, its tokens and Silero VAD (about 241 MB) into src-tauri/voice/ with sha256 checks, trying ModelScope, hf-mirror and Hugging Face like the in-app downloader, or copying from BOARDCAST_VOICE_DIR when it already has verified files
+  - it runs before the Tauri CLI and in beforeBuildCommand; voice/ is shipped as a resource next to llama/
+  - the app looks for the bundled models first and falls back to the downloaded ones; the model panel hides the voice entry when they are bundled
+  - CI and the Release workflow restore the cached voice models before packaging, so builds copy them instead of downloading
+- Save meetings automatically and reopen the last one (refs #13) ([`e62adfa`](https://github.com/HsiangNianian/boardcast/commit/e62adfa9ccb94a582d8ae66ec219d265e7425a4e))
+  - each meeting (board graph, model context, transcript, remembered layout positions) is saved half a second after it changes, as versioned JSON: one file per meeting under the app data meetings/ folder on desktop (written to a temp file then renamed), IndexedDB in the web build
+  - on launch the last meeting is reopened with the same layout, so you can keep talking where you left off; sentences cut off by a crash are marked as not drawn
+  - the eraser button becomes "new meeting": the current one stays saved and a fresh board starts
+  - meetings get a title from their first topic (or node, or sentence) until renamed
+  - StableLayout can snapshot and restore its memory; meeting ids are checked so they cannot escape the meetings folder
+  - fix: the Session is now created once and only its model config is updated; it used to be rebuilt on every config change, so starting the built-in model mid-meeting (remote fallback) swapped the meeting for an empty board
+- **ui:** Meeting list to open, rename and delete past meetings (closes #13) ([`15c9836`](https://github.com/HsiangNianian/boardcast/commit/15c9836b5da854a6bbc61702b5e7b4feb03b4218))
+  - the current meeting's name sits next to the wordmark; clicking it opens the meeting list, most recent first, with time and sentence count
+  - open another meeting (the current one is saved first), rename one (a renamed meeting keeps its name instead of being auto-titled), delete with a confirmation step, or start a new meeting from the top of the list
+  - deleting the meeting you are in starts a fresh one without saving it back
+- **ink:** Select, rename, mark and delete on the handwritten board, with undo (refs #14) ([`0b792db`](https://github.com/HsiangNianian/boardcast/commit/0b792dbc90fe02e7b53202087fb5b79b914480d5))
+  - click a flowchart node, item, topic title or edge to select it (a dashed outline); dragging still pans and clicking empty space clears the selection
+  - a small toolbar above the selection: rename (node names keep the old one as an alias; edge labels can be cleared), toggle strike / circle / star, delete (a topic takes its items with it)
+  - Delete removes the selection, Esc clears it, Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) undo and redo, plus undo / redo buttons in the top bar; each model round and each manual edit is one step
+  - manual edits, undo and redo are written to the transcript as edits, and the model's next sentence sees the edited board; edits do not count as sentences
+  - edit.ts and hit.ts are pure modules with tests; ink pieces carry a data-key for browser tests
+- **ink:** Drag flowchart nodes and topics to move them (closes #14) ([`0719033`](https://github.com/HsiangNianian/boardcast/commit/07190337e0bef46510659ca99a219461a95ec4b4))
+  - press on the selected box or topic and drag; a topic carries its items along
+  - the layout remembers the new spot and reroutes lines around it
+  - undo/redo now restore layout positions too, so undoing a delete puts things back where they were
+  - keep the floating toolbar inside the board near the edges
+- **summary:** One-click meeting summary in the log panel (closes #15) ([`8a25d20`](https://github.com/HsiangNianian/boardcast/commit/8a25d2042e42d7760fe35800f9dc7ddedab187ed))
+  - conclusions, decisions, todos with owners and open questions from the transcript plus the board
+  - uses the active model: remote when enabled, falling back to the built-in one
+  - long meetings are summarized in chunks, then merged
+  - the summary is editable, saved with the meeting and put first in the Markdown export
+  - Markdown export is titled with the meeting name
+  - the button tooltip says when the transcript goes to a remote endpoint
+
+### Fixes
+
+- **ink:** Put flowchart edge labels on the line they belong to ([`56c2a65`](https://github.com/HsiangNianian/boardcast/commit/56c2a657a752d36f339230cb47eaa6f6cbc6b736))
+  - labels were placed at the midpoint between the two endpoints, so on elbow or detour routes they floated away from the line and could cover a box
+  - write the label along the longest segment of the route: above a horizontal segment, right of a vertical one, and on the other side when that spot covers a node
+  - the placement lives in board/labels.ts with unit tests
+- **engine:** Drop references to node ids that don't exist ([`d3ace36`](https://github.com/HsiangNianian/boardcast/commit/d3ace366b67adfbe10eb230f01b7cb24e22ddd33))
+  - an unquoted reference that looks like an id (n12, g3) but isn't on the board used to be retried as a name, creating a node literally called "n12"
+  - local models are grammar-constrained to real ids, but remote models are not and sometimes invent them
+  - such references now resolve to nothing, so the op is skipped; bare words like 小程序 are still looked up by name
+- **ui:** Plain startup animation that finishes writing before it fades ([`bf9f727`](https://github.com/HsiangNianian/boardcast/commit/bf9f727bcd3ec22227034e6b815c35200b2eecf2))
+  - the splash timer started on mount, but the wordmark only begins writing once its glyphs load, so on a slow start it faded out after just "bo"
+  - start the timer when the wordmark is ready (Wordmark gets an onReady callback), with a 3 s cap
+  - drop the grainy colour clouds, which looked muddy in dark mode and were the last piece borrowed from typesafe.ai: plain theme background, the wordmark in the theme's ink, a hairline that grows while it writes
+  - exit with a short fade only, no blur or scale over the half-visible app
+- **desktop:** Download llama-server before tauri dev starts compiling ([`74291d2`](https://github.com/HsiangNianian/boardcast/commit/74291d2e6fe0584a51be69341b441a27de37e5d3))
+  - tauri dev runs beforeDevCommand in the background and compiles Rust at the same time, so on a fresh checkout the build script failed with "resource path llama doesn't exist" while fetch-llama was still downloading
+  - run fetch-llama in the "tauri" package script, before the Tauri CLI starts; beforeDevCommand is just the dev server now
+  - build.rs creates an empty llama/ when it is missing, so plain cargo build / cargo test work without fetching first
+- **ink:** Keep edge labels off other edges' lines ([`c719700`](https://github.com/HsiangNianian/boardcast/commit/c71970042ab3001767145286e5e697132a079e59))
+  - labels only avoided nodes, so a label placed next to its own line could still be crossed by another edge (e.g. a line straight through 锁库存)
+  - labels are now placed after every line is drawn, and each candidate spot (every segment, at the middle and either side, longest first) is checked against nodes, text rows, already placed labels and all edge lines
+  - cross-region arc labels go through the same search, with their old outside-of-the-curve spot tried first
+  - if no clean spot exists, the label gets a paper-coloured backing so it stays readable over the lines
+  - tests cover avoiding another edge's line and the backing fallback
+- **ui:** Hide Excalidraw's own menu, library and help on the pencil board ([`fd5afc6`](https://github.com/HsiangNianian/boardcast/commit/fd5afc6624463deb5b58b4c0ac6537b655730eaa))
+  - the hamburger menu, Library button, shortcut help and canvas hint made the pencil board look like an embedded Excalidraw, and the menu duplicated (and could fight with) our own export, clear and theme controls
+  - hide them; keep the drawing toolbar, zoom and undo, which editing needs
+  - set Excalidraw's language to zh-CN so the remaining tooltips match the app
+- **ci:** Use Windows' own tar when unpacking llama-server ([`f456726`](https://github.com/HsiangNianian/boardcast/commit/f4567263b0c10c24bb9b712f05b9e6af8db5a9e7))
+  - the desktop build step ran under shell: bash, which on Windows puts Git Bash's GNU tar first on PATH; it treated D:\ as a remote host and could not unpack the llama.cpp zip
+  - drop shell: bash from that step (the env var is set through env: anyway)
+  - fetch-llama now calls %SystemRoot%\System32\tar.exe (bsdtar) on Windows, so it works from any shell
+
+### Performance
+
+- Load Excalidraw, ELK and the exporters only when they are needed ([`ceaa556`](https://github.com/HsiangNianian/boardcast/commit/ceaa556d7f6129c7b645ca0896eeeef3284033fe))
+  - the startup bundle shrinks from 2.9 MB to 340 kB (111 kB gzipped)
+  - the pencil board (Excalidraw, with its fonts and mermaid/katex) is a lazy component loaded when you switch to pencil mode
+  - ELK is imported the first time a flowchart has to be laid out
+  - scene building and the PNG / Markdown / .excalidraw exporters are imported on use
+
+### Refactoring
+
+- **desktop:** Pick the recommended model with rfind and keep clippy clean in CI ([`8538255`](https://github.com/HsiangNianian/boardcast/commit/8538255c144747284cf398bb43d4a670deb4ad19))
+  - replace filter().last() with rfind() when choosing the largest model that fits in VRAM (clippy::double_ended_iterator_last)
+  - run cargo clippy with -D warnings on the Linux desktop job so new warnings fail CI
+
+### Dependencies
+
+- **deps:** Drop cheerio and lodash.pick from the dev tree ([`d5b6c11`](https://github.com/HsiangNianian/boardcast/commit/d5b6c11c01718e8abd061c8c1b06afe49b23f1b1))
+  - hersheytext is only used by scripts/glyphs.mjs to read its bundled font JSON, never its SVG parser
+  - override hersheytext>cheerio away, which also removes lodash.pick (Dependabot alert #16, no patched version upstream)
+  - the generated src/ink/hershey.json is unchanged
+
+### Build and CI
+
+- **release:** Don't let setup-node look for pnpm in the release-notes job ([`f3cec0a`](https://github.com/HsiangNianian/boardcast/commit/f3cec0ab811fcdd0da40a9fa788c1b4d7c2a169f))
+  - setup-node v5 enables a package-manager cache from package.json's packageManager field, which failed because that job never installs pnpm
+  - the job only runs node scripts/changelog.mjs, so turn the cache off there
+- **release:** Only mark suffixed versions as prereleases ([`4b7ba97`](https://github.com/HsiangNianian/boardcast/commit/4b7ba97d287c066605f15e1bd40f468c4210197d))
+  - 0.x releases are regular releases and become Latest
+  - -rc.1 style tags stay prereleases
+
+**Full diff:** [v0.2.0...v0.3.0](https://github.com/HsiangNianian/boardcast/compare/v0.2.0...v0.3.0)
+
+## 0.2.0 - 2026-10-29
+
+### Features
+
+- **ink:** Stroke thickness setting for the handwritten board ([`91faf57`](https://github.com/HsiangNianian/boardcast/commit/91faf5761a20bcfd0cfd50ae800d5897f5a20f0f))
+  - a "笔画粗细" slider (50%–200%) next to messiness in settings, remembered across launches
+  - every pen stroke is scaled in one place, while the hand wobble keeps its original amplitude so thicker strokes don't shake more
+
+### Fixes
+
+- **board:** Route new flowchart edges around other nodes ([`6a77f55`](https://github.com/HsiangNianian/boardcast/commit/6a77f55a34b1f034c3d21979a41ee7b4fd0e0546))
+  - the incremental router drew straight or elbow lines that could cut through boxes in between
+  - try the direct route first, then detour through a channel below or above the nodes in the way
+  - re-route kept edges when a newly placed node lands on them
+  - the layout test now checks that no edge crosses another node
+- **ink:** Keep chalk and marker strokes crisp at any zoom ([`4103dd4`](https://github.com/HsiangNianian/boardcast/commit/4103dd42004bf146141f8e3ca965048ecc6f6858))
+  - the texture filters were defined in board units: the chalk grain was finer than a screen pixel and turned into per-pixel noise, and the edge jitter (2.2 units) was wider than the 2-unit strokes, so small text dissolved into a blur
+  - scale the noise frequency and displacement with the current zoom so the grain stays about 2.5 px on screen and the jitter stays under half a stroke width
+  - erode less of each chalk stroke and filter in sRGB so strokes keep their brightness
+- **desktop:** Don't start or warm up the built-in model while a remote API is in use ([`495366b`](https://github.com/HsiangNianian/boardcast/commit/495366b44355a919d2b8b3e25ab00c5dde016ab2))
+  - with a remote endpoint enabled, the shell now leaves llama-server on stand-by (new "idle" state) instead of loading it at launch
+  - the front end warms the built-in model only when it is actually the one drawing
+  - if the remote check fails or the remote is turned off, the built-in model starts then; when the remote connects, a running built-in model is stopped to free VRAM
+  - a sentence the remote fails on starts the built-in model on demand, waits until it is ready and draws with it, so nothing is lost
+  - llm_ensure marks the state as starting under the lock, so two quick calls start only one server
+  - settings and the status chip show the stand-by state
+
+### Build and CI
+
+- **release:** Generate the changelog from Conventional Commits and publish releases with it ([`4933ff0`](https://github.com/HsiangNianian/boardcast/commit/4933ff047fe975062a5b7e36a2a544825b02c824))
+  - add `pnpm release <version> [--push | --dry-run]`: bump the version in package.json, Cargo.toml, Cargo.lock and tauri.conf.json, prepend the new section to CHANGELOG.md, commit `chore(release): vX.Y.Z` and tag
+  - scripts/changelog.mjs groups commits by type (Features, Fixes, Documentation, Build and CI, ...), keeps body bullets as sub-points, links each commit and the compare range
+  - the Release workflow uses the tag's CHANGELOG section as the release body (or generates it when the section is missing), uploads the three platform builds to that release, and publishes it only after all builds succeed
+  - tags can be rebuilt by hand from the Actions page
+  - backfill CHANGELOG.md with the 0.1.0 entry and document the release flow in the README
+- Fetch the sherpa-onnx prebuilt libs fresh on every build ([`842bf4f`](https://github.com/HsiangNianian/boardcast/commit/842bf4fc5c1bb82da8683c51b8d29cd4c72749cb))
+  - rust-cache prunes target/ before saving, so a restored target/sherpa-onnx-prebuilt/<version>/lib directory can exist without the static libraries in it, and the build script then skips the download
+  - stop caching that directory and delete it before building, so sherpa-onnx-sys always downloads and unpacks the libs
+  - same change in the release workflow
+
+**Full diff:** [v0.1.0...v0.2.0](https://github.com/HsiangNianian/boardcast/compare/v0.1.0...v0.2.0)
+
+## 0.1.0 - 2026-10-29
+
+### Features
+
+- Text-to-board prototype with local LLM graph ops, eval harness and three-platform CI ([`1019de9`](https://github.com/HsiangNianian/boardcast/commit/1019de9a849a6e0c81e4d0eef15422fa3e12ad7e))
+- Freeform boards with topics, nested items, questions, formulas, marks and icons ([`1a83da4`](https://github.com/HsiangNianian/boardcast/commit/1a83da49a780da3943094e4fbe7ac98dbc31291a))
+- Handwritten board mode that writes strokes in order, whiteboard marker and blackboard chalk ([`f696ca1`](https://github.com/HsiangNianian/boardcast/commit/f696ca181c007787131e72ee0e30cc49d90d5004))
+- Messiness slider for handwriting, with linked strokes and cursive lowercase ([`8d1d3cd`](https://github.com/HsiangNianian/boardcast/commit/8d1d3cdb10ef2e49b4884d3814cce0004635e6b7))
+- **desktop:** Bundle llama-server and launch it on startup (refs #2) ([`b76d389`](https://github.com/HsiangNianian/boardcast/commit/b76d3895803e22a99430a7e0c0f1bb76e1bace50))
+  - fetch the official Vulkan build per platform into src-tauri/llama and ship it as a resource
+  - pick the discrete GPU, fall back to CPU, watch the process, kill it with the app (PDEATHSIG / Job Object)
+  - the UI picks up the built-in server automatically and warms it up
+  - CI smoke-tests the bundled llama-server on every platform
+- **desktop:** Model downloader with resume, source fallback and sha256 checks (refs #3) ([`6c8bbd9`](https://github.com/HsiangNianian/boardcast/commit/6c8bbd9b896c718be01ef355f5ed0f3174e10ee5))
+  - catalog of Qwen3.5-4B / 9B Q4_K_M with sizes and Hugging Face sha256
+  - ModelScope first (direct), then hf-mirror and Hugging Face; resume across sources
+  - hash while downloading, verify before use, then select and restart llama-server
+  - model panel: recommended tier by VRAM, progress, pause, switch, delete
+  - offline downloader tests in CI, plus an ignored real-download test
+- **desktop:** Voice input with Silero VAD + SenseVoice; downloader checks disk space (refs #3) ([`8533c89`](https://github.com/HsiangNianian/boardcast/commit/8533c8961809638c1fe11d82d9ca5550625fe50d))
+  - capture the mic with cpal, resample to 16 kHz, cut sentences with Silero VAD
+  - live partial captions every 600 ms while speaking, final text per sentence feeds the board
+  - voice models (SenseVoice int8, tokens, Silero VAD) go through the downloader as one multi-file entry
+  - refuse to start a download when the disk does not have room, and say how much is missing
+  - CI runs real recognition tests on all three platforms
+- Settings panel, theme switch, custom OpenAI-compatible endpoint, mic selection ([`e63ca33`](https://github.com/HsiangNianian/boardcast/commit/e63ca338596ccac70cc9fac84cfa1885d9e44c0f))
+  - move models, mic, handwriting messiness and demo meetings into a settings panel; the main view keeps only talking, listening and the board
+  - theme button cycles system / light / dark
+  - remote endpoint: base URL, API key and model name; it is tested before being enabled and preferred afterwards, and a failed sentence falls back to the local model
+  - the desktop shell proxies remote requests and stores the key in remote.json (0600), never in the web view
+  - send only standard fields plus best-effort no-think flags, retry without them on servers that reject unknown fields, strip <think>
+  - pick a microphone; on Linux use PulseAudio so real input devices are listed instead of ALSA plugins, and fall back to the default when the chosen one is gone
+  - launch the bundled llama-server with -ngl auto so a model that does not fit in VRAM is partially offloaded instead of falling back to CPU only
+- **ui:** Redesign the shell, add a startup animation and force landscape on phones ([`0437354`](https://github.com/HsiangNianian/boardcast/commit/0437354d3e6c4081c1c878975f2fc869a76e688d))
+  - full-bleed board with a slim top bar (wordmark, model status, board style, icon buttons) and a collapsible transcript on the right
+  - floating input at the bottom center; live captions float above it, / focuses it
+  - startup animation writes "boardcast" with the board's own pen over a grainy gradient; skippable and reduced-motion aware
+  - neutral palette with hairlines; bundle DM Sans and JetBrains Mono locally
+  - empty-board welcome; auto-fit leaves room for the input
+  - fix the pencil board turning light gray in dark mode (Excalidraw inverts the canvas itself)
+  - rotate the app to landscape on portrait phones and map pointer coordinates for pan and zoom
+- **ui:** Slim input bar with live waveform, speaker tag and @name switching ([`a2c131a`](https://github.com/HsiangNianian/boardcast/commit/a2c131a2d68a8715037a5d570259f13c4f149732))
+  - replace the card-and-tray input with a single bar: mic (with a live waveform while listening) | speaker tag + text | send
+  - the speaker is a small tag in front of the input: click to cycle, or start a line with "@name " to switch (new names work too)
+  - live captions become one line above the bar with a thin accent in the speaker's color
+  - demo meetings move into the empty-board welcome
+- **board:** Incremental layout and Markdown / PNG / .excalidraw export ([`4e01116`](https://github.com/HsiangNianian/boardcast/commit/4e011161d8e414f926e0985a02a262311170e15b))
+  - StableLayout remembers where regions and flowchart nodes were placed; old content stays put as the board grows
+  - new regions go to the free spot that keeps the board landscape; a region that grows only pushes later regions down
+  - the flowchart is laid out by ELK once, then new nodes are placed next to the node they connect to, searching up and down for room without growing into other regions; routes whose endpoints did not move are kept
+  - the view only re-fits when new content leaves the screen, on the first stroke, or after "tidy up"
+  - add a "tidy up" button that forgets all positions and lays the board out again
+  - export Markdown (topics as numbered lists, flowchart as Mermaid, transcript), PNG (what you see: cropped hand-drawn SVG at 2x, or Excalidraw's own export in pencil mode) and .excalidraw
+  - desktop saves through the native save dialog (tauri-plugin-dialog); the web build downloads
+  - a bare "@name" in the input only switches the speaker
+  - tests for incremental layout stability and the Markdown export
+
+### Fixes
+
+- Submit on Enter in the input form; override vulnerable transitive deps from Excalidraw ([`e0aef56`](https://github.com/HsiangNianian/boardcast/commit/e0aef565d0364bcb8f6be6acc1c17bc9fd47d7c6))
+- Resolve glyph script paths on Windows; end hershey.json with a newline ([`a9fc741`](https://github.com/HsiangNianian/boardcast/commit/a9fc74179a9ca46c5ca2e97ffd1bfa315a454650))
+- **desktop:** Enable the windows-sys features the Job Object API needs ([`6bd9150`](https://github.com/HsiangNianian/boardcast/commit/6bd9150b0e72eb12b8f30d5a02821ed8e176a21a))
+- **desktop:** Don't show a stale server address before the built-in model is ready; document voice input ([`46059b7`](https://github.com/HsiangNianian/boardcast/commit/46059b7c684afedbc1d7fc0a235e05f515f831fb))
+
+### Documentation
+
+- Note the 9B eval model's license caveat and link the tracking issues ([`16f7a91`](https://github.com/HsiangNianian/boardcast/commit/16f7a919e5aef10c1c063eb8131b76da2b866a69))
+- Replace the eval table with licensed candidate models ([`03b8492`](https://github.com/HsiangNianian/boardcast/commit/03b84927a7930cf37e8049e1a446143aea862a5c))
+
+### Build and CI
+
+- Use a glob for node --test so Node 24 finds the tests ([`83bdb69`](https://github.com/HsiangNianian/boardcast/commit/83bdb69b773a2e67be5850b1256c5961fcf78168))
+- Add pre-commit config for pre-commit.ci ([`102eb65`](https://github.com/HsiangNianian/boardcast/commit/102eb651e9359458c113cfd8829275f282d6f1f1))
+- **release:** Install libasound2-dev for the voice input build on Linux ([`2f60ac9`](https://github.com/HsiangNianian/boardcast/commit/2f60ac948150e1fca5b7ce80eb4e77eca2221c06))
+- Keep the sherpa-onnx prebuilt libs when the Rust cache is restored ([`4a0bfe4`](https://github.com/HsiangNianian/boardcast/commit/4a0bfe4d416a1381663af5f2d27be4173d9ae5e6))
+  - rust-cache restored sherpa-onnx-sys's build-script output but not target/sherpa-onnx-prebuilt, so linking failed after Cargo.lock changed
+  - cache that directory and clean sherpa-onnx-sys before building so its build script re-checks the libs
+  - apply the same fix to the release workflow
+
+### Maintenance
+
+- Initial commit ([`efb8523`](https://github.com/HsiangNianian/boardcast/commit/efb8523471a623d85d3bda4884942d2ebff68fc5))
+- Cargo fmt ([`9ec2bce`](https://github.com/HsiangNianian/boardcast/commit/9ec2bce02235a2299ce27ff8942059ba673adf15))

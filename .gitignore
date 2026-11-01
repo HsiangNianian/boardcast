@@ -8,3 +8,6 @@ eval/reports/
 *.log
 .playwright-mcp/
 public/hanzi/
+src-tauri/llama/
+src-tauri/voice/
+public/player/

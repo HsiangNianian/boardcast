@@ -1,7 +1,9 @@
 // 给本地小模型的提示词和语法约束。
 // 系统提示词和示例对话固定不变，放在最前面，llama-server 的 cache_prompt 能整段复用它们的 KV。
 
+import { type Term, glossaryLine } from './glossary.ts'
 import { type Graph, ICONS, MARKS, describe } from './graph.ts'
+import { type SpokenLang, spokenLang } from './lang.ts'
 
 export const SYSTEM = `你是会议板书员。大家在讨论，你根据「新的一句」更新白板。
 
@@ -19,8 +21,9 @@ L 甲 「条目」           在话题或条目下面加一条
 Q 甲 「问题」           记一个还没定的问题，挂在甲旁边；不挂就写 Q 「问题」
 F 甲 「公式」           记公式或短表达式；不挂就写 F 「公式」
 K 甲 「备注」           在甲旁边写一句补充
-M 甲 划掉|圈出|下划线|星标
+M 甲 划掉|圈出|下划线|星标    [原文] 上可以再指定范围，见规则 10
 I 甲 ${ICONS.join('|')}
+H 甲                   只是指给大家看，高亮一下，板上不留字
 R 甲 「新名字」         改名
 A 甲 「别名」           记别名
 D 甲                   删除（说错了、画错了）
@@ -35,7 +38,10 @@ D 甲                   删除（说错了、画错了）
 6. 已有的条目换了归属（还是给小王、归到后端），用 L 新的上级 「这个条目」，它会被挪过去。
 7. 连线画错了（不对、不是、改成）：X 掉错的线再加对的。方案、选项被否掉（不用了、划掉、先不做）：M 划掉，保留在板上。
 8. 有人说「重点」「最关键」「一定要」：M 星标或圈出。带问号、谁来、要不要、还没想好的事：Q，不要写成条目。
-9. 寒暄、跑题、情绪，或者只是复述白板上已有的内容，输出 -。句子里只要有白板上还没有的东西，就照常画，哪怕开头是「好」「那个」「总之」。`
+9. 寒暄、跑题、情绪，或者只是复述白板上已有的内容，输出 -。句子里只要有白板上还没有的东西，就照常画，哪怕开头是「好」「那个」「总之」。
+10. 实体表里标 [原文] 的是导入文件上的一段原文，位置固定：只能 M 标记、E 连线、K 写批注、Q 挂问题，不能改名、删除、往下挂条目。说到「这一段」「这里」「那张表」，或者念出原文里的一个词、一句话时，对应到全文里真有这些字的那块 [原文]。标记 [原文] 分三种范围：一个词 M 甲 圈出 「predicting」；一句话 M 甲 圈出 句 「这句里的几个词」；整段 M 甲 圈出。只念了几个词就只标这几个词；说了「这句」才用 句；说了「这段」「这一段」才标整段。原图上的线和箭头不在实体表里：要改原图上的某条线，就在线旁边那段 [原文] 上 M 划掉或 K 写批注，不要另画连线。和原文内容无关的事（分工、待办、别的话题）照常 T、L、E，不要挂到 [原文] 上。
+11. 只是在带大家看哪里（我们先看摘要、去看引言、再看看这段、看这张图）：H 那块，不要写 K，也不要 M。这种话本身不是内容，不要抄到板上。
+12. 分工按人起话题，事情挂在人下面。一件事是几个人一起做：把人名写在一个话题上（「小王、小李」），人名不要挂到人名下面。`
 
 /** 示例用真正的多轮对话给出，小模型照着学比读规则可靠。 */
 const EXAMPLES: [string, string][] = [
@@ -76,6 +82,83 @@ const EXAMPLES: [string, string][] = [
     '白板：\nn1 [话题] 小王\n  n2 登录页\nn3 [话题] 老李\n  n4 接口\n  n5 导出报表\n新的一句：导出报表还是给小王吧。',
     'L n1 「导出报表」',
   ],
+  [
+    '白板：\nn1 [话题] 小陈\n  n2 支付\n前文（已经画过了）：\nA：支付那块交给小陈来做。\n新的一句：其实还有老周，他俩一起。',
+    'R n1 「小陈、老周」',
+  ],
+  [
+    '白板：\nn1 [原文] Deep networks are hard to train. We present a residual framework that eases training.\n新的一句：residual 这个词圈一下。',
+    'M n1 圈出 「residual」',
+  ],
+  [
+    '白板：\nn1 [原文] Deep networks are hard to train. We present a residual framework that eases training.\n新的一句：deep networks are hard to train 这句话划个线。',
+    'M n1 下划线 句 「Deep networks are hard」',
+  ],
+  [
+    '白板：\nn1 [原文] Abstract\nn2 [原文] This work presents a decoupled framework for automation.\nn3 [原文] §1 Introduction\n新的一句：好，我们先看看引言。',
+    'H n3',
+  ],
+]
+
+/**
+ * The same examples for English meetings. The system prompt stays Chinese (it is long and tuned),
+ * but with only Chinese examples the model labels lines in Chinese even when everything else is
+ * English. Op keywords, marks and icons are part of the grammar and stay as they are.
+ */
+const EXAMPLES_EN: [string, string][] = [
+  [
+    '白板：\n（空）\n新的一句：First the user opens the app, then the app calls the login API.',
+    'E 「User」 -> 「App」 : 「opens」\nE 「App」 -> 「Login API」 : 「calls」',
+  ],
+  [
+    '白板：\nn1 App\nn2 Login API\nn1(App) -> n2(Login API) calls\n新的一句：No, the app has to go through the gateway first, and the gateway forwards to login.',
+    'X n1 -> n2\nE n1 -> 「Gateway」\nE 「Gateway」 -> n2 : 「forwards」',
+  ],
+  [
+    '白板：\nn1 Order service\nn2 Inventory service\nn1(Order service) -> n2(Inventory service)\n新的一句：Put both of them in the trading domain. Inventory is also called stock.',
+    'G 「Trading domain」 n1 n2\nA n2 「stock」',
+  ],
+  ['白板：\nn1 Order service\n新的一句：Haha yeah, that meeting yesterday went on forever.', '-'],
+  [
+    '白板：\n（空）\n新的一句：The crawler needs three things: task monitoring, video search and comment collection. Monitoring is the priority.',
+    'T 「Crawler」\nL 「Crawler」 「Task monitoring」\nL 「Crawler」 「Video search」\nL 「Crawler」 「Comment collection」\nM 「Task monitoring」 星标',
+  ],
+  [
+    '白板：\nn1 [话题] Push options\n  n2 Firebase\n  n3 APNs direct\n新的一句：Drop Firebase, the contract was not renewed. And we have not decided whether to add a message queue.',
+    'M n2 划掉\nK n2 「Contract not renewed」\nQ n1 「Add a message queue?」',
+  ],
+  [
+    '白板：\nn1 [话题] Hotness\nn2 graphRAG\n新的一句：Hotness is just current time minus publish time, and the result feeds into graphRAG.',
+    'F n1 「T_now − T_publish」\nE n1 -> n2 : 「feeds」',
+  ],
+  [
+    '白板：\n（空）\n新的一句：For expenses you submit a request, and only after the manager approves does finance pay out.',
+    'E 「Submit request」 -> 「Manager approval」\nE 「Manager approval」 -> 「Finance payout」 : 「approved」',
+  ],
+  [
+    '白板：\nn1 [话题] Went well\n  n2 Shipped on time\n新的一句：To improve: integration started too late, and requirements kept changing. Should the weekly sync be twice a week?',
+    'T 「To improve」\nL 「To improve」 「Late integration」\nL 「To improve」 「Changing requirements」\nQ 「Weekly sync twice a week?」',
+  ],
+  [
+    '白板：\nn1 [话题] Sam\n  n2 Login page\nn3 [话题] Lee\n  n4 API\n  n5 Report export\n新的一句：Actually, give report export to Sam.',
+    'L n1 「Report export」',
+  ],
+  [
+    '白板：\nn1 [话题] Chen\n  n2 Payments\n前文（已经画过了）：\nA：Chen takes payments.\n新的一句：Zhou too, the two of them together.',
+    'R n1 「Chen, Zhou」',
+  ],
+  [
+    '白板：\nn1 [原文] Deep networks are hard to train. We present a residual framework that eases training.\n新的一句：Circle the word residual.',
+    'M n1 圈出 「residual」',
+  ],
+  [
+    '白板：\nn1 [原文] Deep networks are hard to train. We present a residual framework that eases training.\n新的一句：Underline the sentence deep networks are hard to train.',
+    'M n1 下划线 句 「Deep networks are hard」',
+  ],
+  [
+    '白板：\nn1 [原文] Abstract\nn2 [原文] This work presents a decoupled framework for automation.\nn3 [原文] §1 Introduction\n新的一句：Okay, let us look at the introduction first.',
+    'H n3',
+  ],
 ]
 
 export interface Utterance {
@@ -87,21 +170,37 @@ function line(u: Utterance): string {
   return u.speaker ? `${u.speaker}：${u.text}` : u.text
 }
 
-export function userMessage(g: Graph, recent: Utterance[], next: Utterance): string {
+/** Language the board should be written in, judged from the recent lines and the new one */
+export function boardLang(recent: Utterance[], next: Utterance): SpokenLang {
+  return spokenLang([...recent, next].map((u) => u.text))
+}
+
+/**
+ * English meetings: the system prompt and examples are Chinese (kept fixed so the server can reuse
+ * their KV cache), so say explicitly that the board stays in English. Chinese meetings get nothing
+ * extra, so their prompt is exactly what the eval measured.
+ */
+const ENGLISH_BOARD = '这场会说的是英文：板上的名字、条目、问题、备注都用英文写，照原话的叫法，不要翻译成中文。名字 1 到 4 个词，条目最多 8 个词。'
+
+export function userMessage(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = []): string {
   const parts = [`白板：\n${describe(g)}`]
+  if (boardLang(recent, next) === 'en') parts.unshift(ENGLISH_BOARD)
+  // 术语表放在最前面：一场会里不变，llama-server 的前缀缓存能复用
+  if (terms.length) parts.unshift(`术语（起名照这个写法）：${glossaryLine(terms)}`)
   if (recent.length) parts.push(`前文（已经画过了）：\n${recent.map(line).join('\n')}`)
   parts.push(`新的一句：${line(next)}`)
   return parts.join('\n')
 }
 
-export function messages(g: Graph, recent: Utterance[], next: Utterance): { role: string; content: string }[] {
+export function messages(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = []): { role: string; content: string }[] {
+  const examples = boardLang(recent, next) === 'en' ? EXAMPLES_EN : EXAMPLES
   return [
     { role: 'system', content: SYSTEM },
-    ...EXAMPLES.flatMap(([u, a]) => [
+    ...examples.flatMap(([u, a]) => [
       { role: 'user', content: u },
       { role: 'assistant', content: a },
     ]),
-    { role: 'user', content: userMessage(g, recent, next) },
+    { role: 'user', content: userMessage(g, recent, next, terms) },
   ]
 }
 
@@ -110,14 +209,16 @@ const alt = (xs: readonly string[]) => xs.map((x) => `"${x}"`).join(' | ')
 /**
  * 每次调用按当前白板生成 GBNF：编号只能从现有节点里选，模型就写不出不存在的 n99。
  */
-export function grammar(g: Graph, maxOps = 8): string {
+export function grammar(g: Graph, maxOps = 8, lang: SpokenLang = 'zh'): string {
+  // English names need more characters than Chinese ones for the same content
+  const nameMax = lang === 'en' ? 48 : 20
   const ids = g.nodes.map((n) => `"${n.id}"`)
   // 长的放前面，避免 n1 抢先匹配 n12 的前缀
   ids.sort((a, b) => b.length - a.length)
   const ref = ids.length ? `ref ::= name | ${ids.join(' | ')}` : 'ref ::= name'
   return [
     `root ::= "-" | op ("\\n" op){0,${maxOps - 1}}`,
-    'op ::= e | x | gr | t | l | q | f | k | m | i | r | a | d',
+    'op ::= e | x | gr | t | l | q | f | k | m | i | h | r | a | d',
     'e ::= "E " ref " -> " ref (" : " name)?',
     'x ::= "X " ref " -> " ref',
     'gr ::= "G " name (" " ref){1,6}',
@@ -126,12 +227,14 @@ export function grammar(g: Graph, maxOps = 8): string {
     'q ::= "Q " (ref " ")? name',
     'f ::= "F " (ref " ")? name',
     'k ::= "K " ref " " name',
-    `m ::= "M " ref " " (${alt(MARKS)})`,
+    `m ::= "M " ref " " (${alt(MARKS)}) (" " ("句 ")? quote)?`,
+    'quote ::= "「" [^「」\\n]{1,40} "」"',
     `i ::= "I " ref " " (${alt(ICONS)})`,
+    'h ::= "H " ref',
     'r ::= "R " ref " " name',
     'a ::= "A " ref " " name',
     'd ::= "D " ref',
     ref,
-    'name ::= "「" [^「」\\n]{1,20} "」"',
+    `name ::= "「" [^「」\\n]{1,${nameMax}} "」"`,
   ].join('\n')
 }

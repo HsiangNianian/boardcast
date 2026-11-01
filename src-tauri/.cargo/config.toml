@@ -1,0 +1,4 @@
+# sherpa-onnx 在 Windows 上的静态库是用静态 C 运行时（/MT）编译的，
+# Rust 默认用动态运行时（/MD），混在一起会链接失败，所以整个程序都改用静态运行时。
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

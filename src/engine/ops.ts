@@ -11,8 +11,10 @@
 //   Q [引用] 「问题」          记一个待定的问题，可以挂在某个东西旁边
 //   F [引用] 「公式」          记一个公式或短表达式
 //   K 引用 「备注」            在某个东西旁边写一句备注
-//   M 引用 划掉|圈出|下划线|星标   做标记；纠正时优先划掉而不是删掉
+//   M 引用 划掉|圈出|下划线|星标 [句] [「原文」]   做标记；纠正时优先划掉而不是删掉。
+//                              原文上可以只标一个词（「原文」）或者它所在的整句（句 「原文」）
 //   I 引用 图标名              给东西配一个小图标
+//   H 引用                     指给大家看：高亮一下，板书不变
 // 通用：
 //   R 引用 「新名字」          改名，旧名字留作别名
 //   A 引用 「别名」            记一个别名
@@ -34,6 +36,7 @@ import {
   norm,
   subtree,
 } from './graph.ts'
+import { addSpan, locate } from './spans.ts'
 
 export type Ref = { id: string } | { name: string }
 
@@ -49,8 +52,9 @@ export type Op =
   | { op: 'L'; parent: Ref; name: string }
   | { op: 'Q' | 'F'; parent?: Ref; text: string }
   | { op: 'K'; target: Ref; text: string }
-  | { op: 'M'; target: Ref; mark: Mark }
+  | { op: 'M'; target: Ref; mark: Mark; quote?: string; sentence?: boolean }
   | { op: 'I'; target: Ref; icon: Icon }
+  | { op: 'H'; target: Ref }
 
 type Tok = { quoted: boolean; text: string }
 
@@ -88,6 +92,9 @@ export function parseOps(text: string): Op[] {
       case 'N':
         if (rest[0]?.text) ops.push({ op: 'N', name: rest[0].text })
         break
+      case 'H':
+        if (a) ops.push({ op: 'H', target: a })
+        break
       case 'T':
         if (rest[0]?.text) ops.push({ op: 'T', name: rest[0].text })
         break
@@ -116,8 +123,11 @@ export function parseOps(text: string): Op[] {
         else if (rest[0]?.text) ops.push({ op: head.text, text: rest[0].text })
         break
       case 'M':
-        if (a && (MARKS as readonly string[]).includes(second ?? ''))
-          ops.push({ op: 'M', target: a, mark: second as Mark })
+        if (a && (MARKS as readonly string[]).includes(second ?? '')) {
+          const sentence = rest[2]?.text === '句' && !rest[2].quoted
+          const quote = rest[sentence ? 3 : 2]
+          ops.push({ op: 'M', target: a, mark: second as Mark, ...(quote?.quoted && quote.text ? { quote: quote.text, ...(sentence ? { sentence } : {}) } : {}) })
+        }
         break
       case 'I':
         if (a && (ICONS as readonly string[]).includes(second ?? ''))
@@ -159,9 +169,11 @@ export function formatOps(ops: Op[]): string {
         case 'K':
           return `K ${r(o.target)} 「${o.text}」`
         case 'M':
-          return `M ${r(o.target)} ${o.mark}`
+          return `M ${r(o.target)} ${o.mark}${o.quote ? `${o.sentence ? ' 句' : ''} 「${o.quote}」` : ''}`
         case 'I':
           return `I ${r(o.target)} ${o.icon}`
+        case 'H':
+          return `H ${r(o.target)}`
         case 'G':
           return `G 「${o.group}」 ${o.members.map(r).join(' ')}`
         case 'D':
@@ -183,6 +195,8 @@ function resolve(g: Graph, r: Ref, create: Kind | false, ink: Ink): string | und
   if ('id' in r) {
     const id = r.id
     if (g.nodes.some((n) => n.id === id)) return id
+    // 长得像编号却不存在（远程模型没有语法约束，会编出 n12 这种编号）：不能当名字建一个叫「n12」的节点
+    if (/^[ng]\d+$/.test(id)) return undefined
     // 模型偶尔会把名字写成裸词，当名字再找一次
     name = id
   } else {
@@ -197,6 +211,8 @@ function resolve(g: Graph, r: Ref, create: Kind | false, ink: Ink): string | und
 /** 把操作落到图上，返回新图（不改原图）。`ink` 决定新内容是铅笔稿还是墨线。 */
 export function applyOps(graph: Graph, ops: Op[], ink: Ink = 'ink'): Graph {
   const g = cloneGraph(graph)
+  // 导入文件上的原文区域是钉死的：模型只能标记、连线、加备注，不能改名、删掉、挪进话题或分组
+  const pinned = new Map(graph.nodes.filter((n) => n.kind === 'region').map((n) => [n.id, n]))
   const get = (id: string | undefined) => (id ? g.nodes.find((x) => x.id === id) : undefined)
   const touch = (id: string | undefined) => {
     const n = get(id)
@@ -247,9 +263,27 @@ export function applyOps(graph: Graph, ops: Op[], ink: Ink = 'ink'): Graph {
       }
       case 'M': {
         const n = get(resolve(g, o.target, false, ink))
+        if (n && o.quote && n.kind === 'region') {
+          // 模型挑错块也没关系：这张板上哪块真有这些字，就标在哪块
+          const unit = o.sentence ? 'sentence' : 'word'
+          const hosts = [n, ...g.nodes.filter((x) => x !== n && x.kind === 'region')]
+          let found = false
+          for (const h of hosts) {
+            const s = h.rows && locate(h.rows, o.quote, o.mark, unit)
+            if (!s) continue
+            addSpan(h, s)
+            touch(h.id)
+            found = true
+            break
+          }
+          if (found) break
+        }
         if (n && !n.marks.includes(o.mark)) n.marks.push(o.mark)
         break
       }
+      // 只是指一下，由 Session 负责高亮
+      case 'H':
+        break
       case 'I': {
         const n = get(resolve(g, o.target, false, ink))
         if (n) n.icon = o.icon
@@ -314,6 +348,17 @@ export function applyOps(graph: Graph, ops: Op[], ink: Ink = 'ink'): Graph {
         break
       }
     }
+  }
+  if (pinned.size) {
+    const now = new Map(g.nodes.map((n) => [n.id, n]))
+    for (const [id, was] of pinned) {
+      const n = now.get(id)
+      // 被删了就放回去（标记留着），改了的名字、位置、归属都还原
+      if (!n) g.nodes.push({ ...was, aliases: [...was.aliases], marks: [...was.marks], at: was.at && { ...was.at } })
+      else Object.assign(n, { label: was.label, aliases: [...was.aliases], kind: 'region', at: was.at && { ...was.at }, parent: undefined, group: undefined })
+    }
+    // 挂在原文上的只能是备注、问题之类，不能是条目
+    for (const n of g.nodes) if (n.parent && pinned.has(n.parent) && n.kind === 'item') n.kind = 'note'
   }
   // 空分组不留
   g.groups = g.groups.filter((x) => g.nodes.some((n) => n.group === x.id))

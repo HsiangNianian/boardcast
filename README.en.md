@@ -1,294 +1,262 @@
-English | [中文](README.md)
+<div align="center">
 
 # boardcast
 
-**Talk, and the whiteboard draws itself.** Just discuss your meeting as usual, and hand-drawn diagrams grow on the whiteboard as you speak. Everything runs locally by default: speech recognition happens on your machine, and a small local model creates the board. No audio uploads, no cloud model calls. You can connect a larger cloud model if you prefer. Before you enable it, the app explains what will be sent, and the interface always shows whether you are using a cloud or local model.
+**Talk, and the whiteboard draws itself.**
 
-> Talk, and the whiteboard draws itself. Local-first live meeting diagrams: speech → a small local LLM emitting graph edits → deterministic layout → hand-drawn Excalidraw board. Runs on Linux, Windows (x64 / ARM64) and macOS (Apple Silicon).
+Local speech recognition · Live hand-drawn boards · Meeting replay and export
 
-This is an early prototype. In the desktop app, you can speak into your microphone to build a board, type instead, or replay a sample meeting.
+[Website](https://hsiangnianian.github.io/boardcast/) · [Try it online](https://hsiangnianian.github.io/boardcast/demo/) · **[Download the desktop app](https://github.com/HsiangNianian/boardcast/releases/latest)** · [Changelog](CHANGELOG.md)
 
-**[Website](https://hsiangnianian.github.io/boardcast/)**: scroll to the bottom to use the interactive demo directly.
+[![Latest release](https://img.shields.io/github/v/release/HsiangNianian/boardcast?style=flat-square&color=c74432)](https://github.com/HsiangNianian/boardcast/releases/latest) [![CI](https://github.com/HsiangNianian/boardcast/actions/workflows/ci.yml/badge.svg)](https://github.com/HsiangNianian/boardcast/actions/workflows/ci.yml) [![MIT](https://img.shields.io/badge/license-MIT-24292f?style=flat-square)](LICENSE)
 
-**[Open the demo separately](https://hsiangnianian.github.io/boardcast/demo/)**: replay sample meetings stroke by stroke (recorded earlier with the built-in model, so no model is needed); connect an OpenAI-compatible API to type your own. For real use install the desktop app: local models, voice input, and meetings saved on your computer.
+[中文](README.md) · **English**
 
-Switch between two board styles in the bottom-left corner:
+</div>
 
-- **Handwriting**: looks like someone writing on a whiteboard with a marker, or with chalk on a blackboard in dark mode. Chinese characters appear stroke by stroke in their proper stroke order. The "Messiness" slider below ranges from neat to wildly scrawled, adjusting character tilt, size and baseline variation, overall slant, hand tremor, stroke offsets and rounding, and letter spacing. Above the halfway point, Chinese strokes start to connect. Lowercase English letters are cursive by default and switch to print below 25% messiness. Capitals and digits stay printed for readability.
-- **Pencil · Editable**: Excalidraw's hand-drawn style. Drag, edit, and add drawings directly on the board.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-chalk-en.png">
+  <img src="docs/screenshot-ink-en.png" alt="Current boardcast interface: a handwritten release checklist with a star, a rejected item and an open question beside the meeting transcript" width="1280">
+</picture>
+<p align="center"><sub>The current app replaying the built-in release checklist sample. Dark mode turns the whiteboard into a chalkboard.</sub></p>
 
-![Handwriting · Whiteboard](docs/screenshot-ink.png)
+boardcast turns a discussion into a growing whiteboard. Flows, notes, assignments, questions and rejected proposals are written, connected and crossed out as the conversation develops. Import a paper or screenshot to discuss and annotate the source itself.
 
-![Handwriting · Blackboard](docs/screenshot-chalk.png)
+Speech recognition and model inference run on your computer by default. Once the models are downloaded, you can work offline. You can also connect an OpenAI-compatible API for a larger model. The interface always shows whether the active model is local or in the cloud.
 
-![Messiness at 0 / 50 / 90](docs/screenshot-messy.png)
+[Get started](#get-started) · [What you can do](#what-you-can-do) · [Models and privacy](#models-and-privacy) · [FAQ](#faq) · [Development and evaluation](#development-and-evaluation)
 
-![Pencil · Editable](docs/screenshot-board.png)
+## Get started
 
-## How it works
+### Watch a sample meeting
 
-```
-Microphone / System audio ──► Streaming transcription ──► Completed utterance
-                                                                 │
-                         ┌───────────────────────────────────────┴─────────────┐
-                         ▼                                                     ▼
-             Fast path (rules, <10 ms)                          Slow path (small local model)
-     Highlight existing nodes when mentioned;                  Read the entity table, previous two
-     "Draw A to B" produces a pencil draft                     utterances, and new utterance;
-                         │                                     emit a few graph edits (grammar-constrained)
-                         │                                                     │
-                         └──────────────────► Graph state ◄────────────────────┘
-                              (Ink in drafts the model confirms; erase the rest)
-                                                    │
-                 Notes arranged in regions + ELK flowchart layout → Handwriting / Excalidraw rendering
-```
+Open the **[web demo](https://hsiangnianian.github.io/boardcast/demo/)**, choose a sample and click “Play sample meeting.” No installation or API key is needed: these are board steps recorded in advance using a real model. You can also scroll to the bottom of the [website](https://hsiangnianian.github.io/boardcast/) to enter the same interactive demo.
 
-Key design choices:
+To type your own content in the web app, connect a model endpoint that your browser can reach. Use the desktop app for microphone input, managed local models and system audio.
 
-- **The model emits operations, not drawings.** Layout and visual style are entirely deterministic code. There are two families of operations:
-  - Flowcharts: `E A -> B : 「label」` (connect), `X` (remove an edge), and `G` (group).
-  - Notes: `T` (topic), `L` (item, including nested items and moving items elsewhere), `Q` (open question), `F` (formula), `K` (note), `M` (strike through, circle, underline, or star), and `I` (choose a small icon from the library).
-  - Shared: `R` (rename), `A` (alias), and `D` (delete).
-  Both types can coexist and connect on the same board. Rejected proposals are crossed out by default instead of erased, just like on a real whiteboard.
-- **An entity table holds the memory.** References such as "it," "over there," and "that service" resolve against a node table and aliases maintained by the program. The model only needs to pick IDs from the list.
-- **Grammar-constrained decoding.** Each call generates a GBNF grammar from the current board. References can only use existing node IDs, so the small model cannot invent references to nonexistent entities.
-- **Prefix caching.** The system prompt and example conversations stay at the front. llama-server reuses their KV cache, leaving only about a hundred new tokens to process per utterance.
-- **Handwriting is actually drawn.** This is not a handwriting font: Chinese characters use stroke-ordered skeleton paths from [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data), while English letters and digits use Hershey single-line fonts: scripts for lowercase cursive by default, with futural for capitals, digits and neat print. [perfect-freehand](https://github.com/steveruizok/perfect-freehand) then simulates marker pressure and stroke endings. New content is revealed stroke by stroke using the skeleton paths as masks. Each batch takes at most 2.4 seconds to write; longer batches speed up together so the board keeps pace with the discussion.
-- **Batching when busy.** The model handles one request at a time. Queued utterances are combined in the next request, preventing an ever-growing backlog.
+### Start a meeting on your computer
 
-## Current evaluation
+1. Download the installer for your operating system and architecture from [Releases](https://github.com/HsiangNianian/boardcast/releases/latest).
+2. On first launch, download a model in the local model panel. Speech recognition models are bundled with the installer; the board model is a separate download.
+3. Click “Start listening,” or type in the bottom input bar. For online meetings, choose “Microphone + system audio” in Settings → Audio input.
 
-Two sets of meeting cases, including synthetic meetings and a real-meeting regression, have gold annotations for nodes, edges, topics and items, strike-throughs, emphasis, questions, formulas, and groups:
-
-- **Dev set**, `eval/cases.json`: 28 meetings, including 6 in English. Used for prompt tuning, so scores are optimistic. Four cases are regressions for known failures: useful remarks buried in small talk, emphasis that should apply to an item rather than its topic, grouping expressed as "both belong to," and stalled implementation being mistaken for cancellation.
-- **Holdout set**, `eval/holdout.json`: 27 meetings, including 5 in English. Excluded from tuning and checked only when changing models or preparing a release. Once scores are seen, prompts are not adjusted to fit them. Covers corrections, references, long greetings, pure small talk, sprint planning, owner swaps, rejected options, formulas, strings of questions, renaming, deletion, mixed Chinese and English, grouping, incident cause chains, retrospectives, flowcharts with action items, nested items, moving items between topics, loops, and references to something mentioned several turns earlier.
-
-`pnpm eval --set dev|holdout|all --repeat 3` runs each meeting three times, reporting averages and variation between runs. Cases with large differences are marked unstable.
-
-The results below are from the original 20 dev and 22 holdout meetings; they do not include the newly added English cases. Both default model tiers were tested on an RTX 3060 Laptop GPU (6 GB), using Q4_K_M and the same settings as the desktop app's built-in model (`-ngl auto --fit on -c 4096`, 2 CPU threads):
-
-| Model (Apache 2.0) | Set | Node F1 | Edge F1 | Topic recall | Item F1 | Mark accuracy | Group accuracy | Latency p50 / p95 |
-|---|---|---|---|---|---|---|---|---|
-| **Qwen3.5-4B** (lightweight) | Dev | 0.86 | 0.61 | 0.96 | 0.66 | 0.85 | 0.50 | 699 / 1199 ms |
-| | Holdout | 0.89 | 0.71 | 0.89 | 0.74 | 0.83 | 1.00 | 688 / 1369 ms |
-| **Qwen3.5-9B** (higher-end) | Dev | 0.90 | 0.79 | 1.00 | 0.73 | 0.90 | 1.00 | 1531 / 3418 ms |
-| | Holdout | 0.94 | 0.84 | 0.89 | 0.74 | 0.83 | 1.00 | 1512 / 3266 ms |
-
-Local inference at temperature 0 is deterministic: all three runs produced identical results, with zero variation. In actual use, utterances may be merged when the model is busy, so results can differ from evaluation one utterance at a time. A few layers of the 9B model do not fit in 6 GB of VRAM and stay on the CPU, making it more than twice as slow. GPUs with at least 8 GB of VRAM are much faster.
-
-Item F1 checks that items belong under the correct topic. Mark accuracy covers strike-throughs, emphasis (including checks that emphasis was not applied to the wrong place), questions, and formulas.
-
-An earlier model comparison used the first 17 dev meetings, the same GPU, and the prompts in use at the time. The lightweight tier uses 4B instead of Gemma 4 E4B because it is nearly half the size with similar latency:
-
-| Model (all Apache 2.0) | Size | Node F1 | Edge F1 | Topic recall | Item F1 | Mark accuracy | Latency p50 / p95 |
-|---|---|---|---|---|---|---|---|
-| Qwen3.5-2B | 1.3 GB | 0.68 | 0.33 | 1.00 | 0.44 | 0.50 | 269 / 737 ms |
-| Gemma 4 E2B | 3.1 GB | 0.83 | 0.45 | 0.64 | 0.37 | 0.26 | 295 / 739 ms |
-| Qwen3.5-4B | 2.7 GB | 0.88 | 0.58 | 0.90 | 0.54 | 0.64 | 382 / 653 ms |
-| Gemma 4 E4B | 5.0 GB | 0.87 | 0.69 | 0.88 | 0.69 | 0.69 | 347 / 657 ms |
-| Qwen3.5-9B | 5.7 GB | 0.88 | 0.77 | 1.00 | 0.73 | 0.88 | 551 / 999 ms |
-
-Typical failures observed on the holdout set, recorded without using them to tune prompts:
-
-- Missing the second half of an utterance, such as "save it to the database if it passes" or "put the final list in Redis; the app reads it directly when it opens," especially with 4B.
-- Failing to apply a correction: the old edge remains after "don't refund directly; review it first."
-- Failing to move items after an owner swap, such as "then Zhang takes recommendations and Liu takes search."
-- Failing to create an action-items topic after "note this as a to-do."
-- Failing to add a star after "we absolutely have to fix this."
-
-Next: record real discussions, transcribe and annotate them by hand, and add them to the holdout set. Then use synthetic data for LoRA fine-tuning of 2B–4B models (#6), aiming to bring small-model accuracy closer to 9B.
-
-## Desktop app and models
-
-Desktop installers bundle llama.cpp's llama-server, using Vulkan for NVIDIA and AMD GPUs, Intel integrated graphics, and Snapdragon Adreno. It falls back to the CPU when no usable GPU is available. The server starts automatically with the app; no terminal needed:
-
-- When a discrete GPU is available, only that GPU is used. The model is not split across integrated and discrete GPUs.
-- If the full model does not fit in VRAM, for example when running 9B on a 6 GB GPU or when other applications occupy some VRAM, as many layers as possible go on the GPU and the rest stay on the CPU, instead of falling back entirely to the CPU.
-- If the app crashes or is forcibly closed, llama-server exits with it rather than leaving a process holding VRAM.
-- After the first load, a warm-up request runs. Vulkan compiles shaders on the first launch on each machine, which can take tens of seconds; the driver caches them afterward.
-
-On first launch, the "Local model" panel recommends a tier based on your GPU:
-
-| Model | Size | Best suited for |
+| System | Installer | Local inference / system audio |
 |---|---|---|
-| Qwen3.5-4B (Q4_K_M) | 2.7 GB | Thin-and-light laptops, integrated graphics, CPU-only machines |
-| Qwen3.5-9B (Q4_K_M) | 5.7 GB | Discrete GPUs with at least 6 GB of VRAM |
+| Linux x64 | `.AppImage`, `.deb` or `.rpm` | Vulkan / CPU; PulseAudio / PipeWire loopback |
+| Windows x64 | `.exe` or `.msi` with `x64` in the name | Vulkan / CPU; WASAPI system audio |
+| Windows ARM64 | `.exe` or `.msi` with `arm64` in the name | Vulkan / CPU; WASAPI system audio |
+| macOS Apple Silicon | `aarch64.dmg` | Metal; microphone only, no system audio yet |
 
-Downloads try ModelScope first (directly, bypassing the system proxy), then hf-mirror, then Hugging Face. Downloads can be paused and resumed. Once complete, the file is verified against the SHA-256 checksum registered on Hugging Face, then the app switches to it automatically. Use "Manage models" at any time to switch or delete models.
+The macOS app is not yet Apple Developer signed or notarized. First launch may require allowing it in System Settings → Privacy & Security. In-app updates use a separate update signature check; a new stable release appears in the top bar with an option to download and restart.
 
-![Local model panel](docs/screenshot-models.png)
+## What you can do
 
-You can also put any `.gguf` file in the model directory manually, or select one with the environment variable `BOARDCAST_MODEL=/path/to/model.gguf`:
-
-| OS | Model directory |
+| During the discussion | After the discussion |
 |---|---|
-| Linux | `~/.local/share/games.mmstudio.boardcast/models/` |
-| Windows | `%APPDATA%\games.mmstudio.boardcast\models\` |
+| **Talk and draw**: flowcharts, groups, topics, nested notes, formulas, questions and action items share one board. | **Summarize and trace**: collect conclusions, decisions, owners and tasks; jump from an item to who raised it and the corresponding transcript line. |
+| **Circle and refer**: circle something before saying “star this” or “connect these two,” giving the model explicit targets. | **Replay and branch**: watch the board grow, seek, change speed or fork a new board from any recorded moment. |
+| **Edit together**: rename, move, mark and undo in handwriting mode, or edit freely in Excalidraw pencil mode. | **Continue a meeting**: search past meetings or start a new one from an old board; inherited content is faded while new changes use full ink. |
 
-llama-server writes its log to the app's log directory: `~/.local/share/games.mmstudio.boardcast/logs/llama-server.log` on Linux.
+Handwriting mode draws Chinese characters stroke by stroke. English lowercase uses cursive by default and switches to print below 25% messiness; capitals and digits stay in print. Light mode uses whiteboard markers, dark mode uses chalk. The interface supports Chinese and English, while board labels and summaries follow the meeting language.
 
-Before downloading, the app checks free space on the drive containing the model directory. If there is not enough, it tells you how much more is needed instead of failing halfway through.
+### Circle and refer
 
-### Voice input
+Click “Circle” in the top bar, draw around objects with a mouse or finger in **handwriting mode**, then speak or send a line of text:
 
-Speech models for recognition, utterance detection, and speaker identification (about 0.27 GB total) are bundled with the installer. Install, click "Start listening," and speak:
+> “Connect these two.” · “Star this paragraph.” · “Add rollback rehearsal under this topic.”
 
-- The desktop shell captures microphone audio through cpal, resamples it to 16 kHz, and passes it to Silero VAD for utterance detection. A pause of about 0.45 seconds ends an utterance.
-- SenseVoice transcribes each utterance, supporting Mandarin Chinese, English, Japanese, Korean, and Cantonese, with punctuation and number normalization. The result goes straight to the board. While you speak, gray provisional captions refresh every 0.6 seconds.
-- A 5.6-second utterance takes only 200–300 ms to recognize, measured in CI on all three platforms.
-- Choose your microphone in "Settings." On Linux, PulseAudio / PipeWire exposes the actual input devices. If the selected microphone is unplugged, the app falls back to the system default.
-- Speakers are identified automatically by voice. Each utterance also produces a CAM++ voiceprint (26 MB model, Chinese and English), compared with voices already heard in the meeting. A close match uses the same speaker; otherwise a new speaker is added as A, B, C, and so on. Click an avatar in the transcript to give someone a real name; using an existing name merges the two speakers. Future matches use that name. Voiceprints are saved with the meeting, so identification survives turning the microphone off and on or resuming another day. Very short utterances such as "mm-hmm" or "yes" are attributed to the previous speaker. Turn this off in "Settings" to use the name beside the input box instead.
-- For online meetings, capture system audio too: choose "Microphone + system audio" under "Settings → Audio input." Your voice comes from the microphone and other participants from speaker output. Linux captures the default output device's monitor source through PulseAudio / PipeWire; Windows uses WASAPI loopback for the default speakers. Both streams are resampled to 16 kHz, mixed, then segmented and transcribed. Capture does not stall when nothing is playing. Headphones work best, since speakers let the microphone pick up other participants a second time. You can also capture system audio alone, for example when listening in on an online meeting. macOS support is not implemented yet; it requires screen-recording permission.
+Draw multiple loops; overlapping loops merge. Undo removes the last loop, while `Esc` or Cancel clears them all. The next utterance carries up to eight circled targets, then clears the circles. Queued utterances keep their own targets even while the model is busy. Hovering and ordinary selection do not count as pointing.
 
-### Glossary
+### Discuss your source material
 
-Internal names such as project codenames, service names, and English acronyms are often misheard by speech recognition or misspelled by the model. Under "Settings → Glossary," enter one term per line, for example `MediaCrawler = media crawler, media crowler`. The left side is the correct spelling; the right side lists common misrecognitions or typos. The correct spelling alone also works.
+Use the import menu or drag a file onto the board:
 
-- Spoken and typed text is corrected with the glossary before reaching the model. English matching uses whole words and ignores case; spaces and hyphens between words are optional, so variants such as `media crawler` and `Graph RAG` are corrected without changing parts of unrelated words.
-- The glossary is also included in messages to the model so it uses the preferred names.
-- There are two scopes: "All meetings" is stored locally, and "This meeting only" is saved with the meeting. Select a name on the board and click "Add to glossary" to add it to the current meeting's glossary.
+| Source | What you can do |
+|---|---|
+| **PDF / papers** | Get one board per page with the original page underneath. Annotate words, sentences and paragraphs; connect regions and add margin notes. Layout analysis recognizes headings, columns, figures, tables and equations. |
+| **arXiv** | Paste a link or paper ID in the desktop import menu to download the PDF. In the web app, download the PDF first, then import it. |
+| **PNG / JPEG / WebP** | Use the local vision add-on to read text in a screenshot or photographed whiteboard. Download the add-on matching your active model in the model manager first. |
+| **Excalidraw** | Turn text, shapes, bound arrows and groups into board content, then continue the discussion. The board is laid out again rather than keeping the original coordinates. |
 
-### Remote models (OpenAI-compatible API)
+PDF imports are limited to 40 retained pages. Scans without a text layer appear as page images without automatic OCR. Arrows in imported images do not become editable connections. Use handwriting mode for imported pages; pencil mode does not show their background images yet.
 
-If you prefer a remote or larger model, enter a base URL, API key, and model name under "Settings → Remote model." Any service compatible with `/chat/completions` works, including OpenAI, DeepSeek, Qwen, vLLM, LM Studio, and Ollama:
+### Take the meeting with you
 
-- "Save and enable" sends a real request to verify connectivity before enabling the model. The connection is checked again whenever the app opens.
-- Once enabled, the remote model is preferred for board updates. If a request fails, that utterance automatically falls back to the local model, and the interface indicates this.
-- Requests use standard OpenAI fields, plus an attempt to disable thinking mode on reasoning models. If a service rejects that parameter, the app retries without it and remembers the choice.
-- In the desktop app, the shell sends requests. The key stays in `remote.json` in the app's configuration directory, with permissions 0600 on Linux, and is not passed to the web UI. Only its first and last few characters are shown. The web version must store it in the browser, and many providers block direct browser requests, so the desktop app is recommended.
-- Remote APIs do not have the local model's output grammar constraints, so results depend on the model itself.
+| Export | Use it for |
+|---|---|
+| **Markdown** | Conclusions, tasks, board content and the full transcript, with Mermaid flowcharts you can keep editing. |
+| **PNG / SVG** | Boards in documents or slides, including marks and imported page backgrounds. |
+| **Animated SVG** | The final board writes itself in meeting order in about 12 seconds. Pure CSS animation, embeddable in a README, with reduced-motion support. |
+| **Excalidraw** | Further editing in Excalidraw. |
+| **Meeting PDF** | One board per page, followed by the summary and transcript. Pages are rasterized; use Markdown for selectable text. |
+| **Replay page** | A standalone HTML file containing the player, boards, transcript and assets. Open it offline in a browser without installing boardcast. |
 
-Privacy:
+## Models and privacy
 
-- Before enabling a cloud endpoint for the first time, the app lists what will be sent: utterances and speaker names, the current board's text, and the full transcript when you request a summary. It also lists what will stay local: audio recordings and meeting files. The endpoint is enabled only after confirmation, once per address. Local endpoints such as LM Studio, local vLLM, and Ollama are not treated as cloud services and need no confirmation.
-- The model status in the top bar and the right side of the input bar always show "Cloud" or "Local." Click either to open settings.
-- "Use only local models for this meeting" under "Settings → Remote model" is remembered per meeting. Sensitive meetings stay local while other meetings can keep using the remote model.
-- Falling back temporarily from a failed remote request to the local model needs no extra privacy prompt.
+The desktop app bundles llama.cpp's `llama-server` and manages its lifecycle. Linux and Windows use Vulkan, offloading layers to the GPU when available and keeping the rest on the CPU. macOS Apple Silicon uses Metal.
 
-### Stable layout
+| Model available in the app | Download size | Where to start |
+|---|---|---|
+| **Qwen3.5-4B · Q4_K_M** | About 2.7 GB | Start here for laptops, integrated graphics or CPU-only machines. |
+| **Qwen3.5-9B · Q4_K_M** | About 5.7 GB | Try a larger model; at least 6 GB of VRAM is recommended. Speed depends on available memory and CPU offloading. |
 
-Things already on the board should stay in place while the meeting continues:
+Downloads support pausing, resuming, free-space checks and SHA-256 verification, trying ModelScope, hf-mirror and Hugging Face in order. Vision add-ons are optional; speech and text boards do not require them.
 
-- Regions such as topics and open questions keep their positions. New regions find empty space, favoring a landscape layout. If a region grows into another, only the later region is pushed downward.
-- Flowcharts get a full layout only at the start. Afterward, existing nodes stay put, and new nodes appear beside connected nodes: upstream to the left, downstream to the right. Occupied space is avoided by searching above and below, without intruding into other regions. Edges whose endpoints have not moved keep their routes.
-- The view stays still while new content remains visible, and zooms to fit only when it goes out of view.
-- If gaps or long detours accumulate, click "Tidy layout" in the top bar to rearrange the whole board.
+- **Local by default**: audio is transcribed locally and meetings stay on your device. The desktop app needs neither an account nor an API key.
+- **Cloud by choice**: configure a compatible endpoint in Settings. Before enabling a cloud address, the app asks you to confirm what is sent: utterances, speaker names, board text and records needed for summaries. Raw audio and original meeting files are not uploaded.
+- **A choice for each meeting**: enable “Use only local models for this meeting.” Failed remote requests try the local model as a fallback, provided one is available.
+- **Key storage**: desktop requests go through the Rust shell. The API key is stored in a local configuration file, not the OS keychain. The web app stores it in the browser and is subject to CORS and browser security restrictions.
 
-### Import
+<details>
+<summary><strong>Custom models, data directories and troubleshooting</strong></summary>
 
-Use the import button in the top bar, or drag files onto the board:
+Place a `.gguf` in the model directory or select one with `BOARDCAST_MODEL=/path/to/model.gguf`. Board quality still depends on the model and its chat template. For a compatible service, enter the base URL, API key and model name in Settings → Remote model; saving performs a real connectivity check.
 
-- **.excalidraw**: labeled rectangles, circles, and diamonds become flowchart nodes. Arrows bound at both ends become edges, with arrow text as labels. Frames become groups, and loose text goes into a "Text on the whiteboard" topic. If the current board already has content, the import creates a new board. Keep speaking to add to it. boardcast uses its own layout rather than preserving original positions.
-- **PDF**: each page becomes a board with the page image underneath. The text layer is assembled into fixed source regions, one per heading or paragraph. Say "circle the inventory paragraph," "connect these two paragraphs," or "add a comment here: the timeout should be configurable." The model circles, strikes through, underlines, stars, or connects source text. Comments appear in a sidebar to the right, linked back to the source by a thin line. You can also click source text and mark it manually. Source text cannot be edited or deleted. Cloud models receive only its text, not page images. Imports are limited to 40 pages. Scans without a text layer provide a background image but no addressable source text. PNG / SVG exports include the background; Markdown adds a "Source annotations" section. Pencil mode does not display the background yet.
-- **Papers**: PDF import analyzes page layout to segment papers and other structured documents more accurately. Two-column pages are read left column first, then right, without crossing columns. Section headings such as `3.`, `3.1.`, `IV.`, Chinese section numbering, Abstract, and References, together with first-line indentation, determine paragraphs. Figure and table captions such as `Figure 3.` and `Table 2:`, including Chinese equivalents, are grouped with the figures or tables themselves: axes, legends, and table cells. Regions are named "Figure 3: …" or "Table 2: …"; whether captions sit above or below is inferred from the document's conventions. Numbered equations are named "Equation (5)." Margin arXiv stamps and page numbers are removed, and pages containing only references do not create boards. When a paper is detected, its title becomes the meeting name, and a "Paper structure" topic beside the first board lists its sections. Say "the baseline in Figure 3 is unfair" or "Equation 5 is missing normalization" to refer to the right region. On desktop, paste an arXiv link or ID (`arxiv.org/abs/…`, `arXiv:2401.12345`, or `2401.12345`) into the import menu to download and import directly; downloads come only from arxiv.org. Browser cross-origin restrictions mean web users must download the PDF first. Optional GROBID parsing is still in progress (#32).
-- **Images**: screenshots, whiteboard photos, or architecture diagrams in PNG / JPEG / WebP become a board with the image underneath. Circle, connect, and comment on them just like PDFs. Image processing locates text by joining characters into lines and lines into paragraphs, removing table lines, box outlines, and arrows first. The built-in model's vision component then reads each region. In local tests, the 4B vision model read text accurately but placed bounding boxes tens of pixels off, so it is used only for reading text. A screenshot takes 5–25 seconds. First download the matching vision component under "Settings → Manage models": 640 MB for 4B or 880 MB for 9B. The built-in model restarts with it after installation. Images are processed locally and never sent to the cloud. The web version uses the configured local endpoint, whose llama-server must run with `--mmproj`. Lines and arrows in the original image do not become board edges; to revise them, cross out or annotate nearby text.
+| System | Default app data directory |
+|---|---|
+| Linux | `~/.local/share/games.mmstudio.boardcast/` |
+| Windows | `%APPDATA%\games.mmstudio.boardcast\` |
+| macOS | `~/Library/Application Support/games.mmstudio.boardcast/` |
 
-### Export
+Models live in `models/`; meeting JSON files and imported assets live in `meetings/`. Web meetings live in the current browser: clearing site data deletes them, so export first. Remote settings are stored in `remote.json` in the app configuration directory, which may differ from the data directory above.
 
-Use the export button in the top bar, available when the board has content:
+For a bug report, preview and export a diagnostics bundle in Settings → Diagnostics, then attach it to an [issue](https://github.com/HsiangNianian/boardcast/issues). It excludes meeting content, audio and API keys.
 
-- **Markdown**: the meeting name becomes the title, followed by the summary if present. Multiple boards each get a section, and transcript entries are separated by board too. Topics become headings with numbered items, preserving strike-throughs, circles, and stars. Flowcharts become Mermaid diagrams, followed by the meeting transcript.
-- **PNG**: exports what you see. Handwriting mode crops to the content at 2× resolution, using a whiteboard or blackboard according to the current theme. Pencil mode includes your manual edits.
-- **SVG**: scalable vector graphics that stay sharp when enlarged, ready to embed in documents or edit in vector software. Handwriting mode preserves the chalk or marker texture.
-- **Animated SVG**: a `.anim.svg` that writes the board's final state stroke by stroke, in the order it was drawn during the meeting. It finishes in about 12 seconds however long the meeting ran, then stays on the full board. It uses CSS animation only, no scripts, so it plays inside an `<img>` in a GitHub README, a doc, or a chat. With "reduce motion" turned on it shows the full board straight away. Whiteboard ink, with your messiness and stroke weight.
-- **Excalidraw**: a `.excalidraw` file you can drag into [excalidraw.com](https://excalidraw.com) to keep editing.
-- **Full meeting PDF**: one board per page, including imported backgrounds, followed by the summary and transcript, in landscape A4. Pages are images; Chinese text is rendered with system fonts instead of embedding fonts in the PDF. Text cannot be selected or copied, so use Markdown when you need copyable text.
-- **Replay webpage**: a single `.html` file to share with people who missed the meeting. Double-click to open it in a browser, switch between boards, replay each from an empty board, scrub the timeline, and change playback speed. The summary and transcript appear on the right, with the transcript following playback. The player, meeting data, imported page images, and all required Chinese stroke data are bundled in the file. No network connection or boardcast installation is needed; a typical meeting is a few hundred KB.
+</details>
 
-The desktop app opens the system's Save As dialog. The web version downloads the file directly.
+## FAQ
 
-### Automatic updates
+<details>
+<summary><strong>How do I use an existing meeting recording?</strong></summary>
 
-Shortly after opening, the desktop app checks GitHub for the latest stable release. When one is available, "New version x.y.z" appears in the top bar. Open it to read release notes. "Download and restart" shows download progress, verifies the package signature (only packages signed with this project's private key are accepted), stops audio capture and the built-in model, installs, and restarts into the same meeting. If downloading fails, nothing changes and the meeting continues. Disable automatic checks or check manually under "Settings → Updates." Prereleases with suffixes such as `-1` are not offered. Automatic updates are available from v0.7.0 onward; earlier versions need one manual download.
+There is no direct `.mp3` / `.wav` transcription import yet. On Linux or Windows, choose “System audio only” in Settings → Audio input, start listening, then play the recording in a media player. Stop listening when it ends. Capture uses the default output device and processes the recording in real time.
 
-### Interface
+For an online meeting, use “Microphone + system audio.” Headphones help prevent other participants being captured twice through your speakers and microphone. macOS system audio capture is not supported yet.
 
-- The whiteboard fills the window. Speech and typing share an input bar at the bottom: the listening button on the left shows a live waveform while recording, and text input is in the middle. The small label before the input shows the current speaker; click to cycle speakers, or start a line with `@name ` to switch directly, including to a new name. Transcript avatars use matching colors. Provisional captions float above the bar. Collapse the input bar when needed and press `/` to return to it. Sample meetings are in the empty-board guide.
-- The meeting transcript is on the right. Click an utterance to see the board operations it generated, or collapse the panel when it is not needed.
-- "Summary" at the top of the transcript uses the active model, preferring an enabled remote model and falling back locally on failure, to turn the transcript and board into conclusions, decisions, action items with owners, and open discussion points. All boards are included, and conclusions and tasks identify the board where they were discussed. Imported pages contribute only source regions that were marked or annotated. Long meetings are summarized in chunks before being combined. Edit the summary directly; it is saved with the meeting and placed first in Markdown exports. When using a remote model, the transcript is sent to that endpoint, as the button's tooltip explains.
-- "Replay" in the top bar replays the meeting from an empty board, drawing stroke by stroke at the original pace while the transcript follows each utterance. The bottom bar becomes playback controls: play / pause with Space, scrub or step with the arrow keys, select 1× / 2× / 4× speed, and press Esc to exit. Exports capture the board at the paused moment. Model edits, manual changes, and undo actions replay faithfully because each board change is recorded, rather than just the operations. Meetings saved by older versions have no step-by-step history, so their whole board appears at once.
-- A meeting can have several boards. Thumbnails in the upper-left corner switch between them, and "+" adds a new board while keeping old ones. Turn the page when the topic changes or the board gets too crowded to read; a one-time hint appears after a board exceeds 30 objects. Transcript entries show which board each utterance drew on; click to jump there. Each board keeps its own layout and replay history. The model sees only the current board, so references to an earlier board are drawn again on the current one.
-- Local and remote models, the microphone, and messiness are under "Settings" in the upper-right corner. The adjacent button cycles between system, light, and dark themes.
-- Meetings save automatically. On desktop, `meetings/` in the app data directory holds one JSON file per meeting. Imported PDF pages and images are stored separately in `meetings/<meeting-id>/`, deduplicated by content and written only once. The web version stores meetings in the browser. Reopening the app resumes the last meeting. The current meeting name appears beside the wordmark in the top bar; click it to open, rename, or delete earlier meetings. The top-bar "+" starts a new meeting.
-- Continue on an old board: click "Continue on it" in the meeting list (pick a board first if there are several) to start a new meeting on that board. Its layout, imported page and meeting glossary come along, and the new meeting is named "<old name> (cont.)". What stays as it was on the old board is drawn in faded ink; what the new meeting adds, renames (the box stays old, the new name is in fresh ink) or marks (say, a line through an old option) is in full ink, so the board, PNG / SVG / PDF exports and the replay all show at a glance what this meeting changed.
-- Edit directly in handwriting mode: click a box, item, topic title, or edge to select it and reveal "Edit text / Strike through / Circle / Star / Delete." `Delete` removes it; `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo both model and manual changes. Drag a selected box or topic elsewhere; its items move with it and edges reroute automatically. Dragging is undoable too. Manual changes appear in the transcript, and the model sees the edited board on the next utterance.
-- Circle while you talk: press "Circle" in the top bar and draw a loop on the handwriting board (drag the mouse or use a finger; the view stays put). The loop stays as a dashed pen line; you can draw two, and loops that overlap merge into one big loop. A bar above the board says what is circled; "Undo" (or `Ctrl+Z`) takes back the last loop, "Cancel" or `Esc` drops them all. The next line you say carries what the loops enclose (boxes, items, topics, blocks of an imported page; up to 8, first circled first) to the model as one extra line, "当前手指着：n4（库存服务）" ("pointing at: n4 (inventory service)"), so "make this async", "star this paragraph" or "connect these two" land on the right things; then the loops are wiped and the tool closes. Only drawn loops count, not hovering or selecting, so nothing gets picked up by accident. When no current or recent line uses circles, the prompt is exactly as before; the transcript marks the line with "circled …".
-- Imported source text can be marked at word, sentence, or paragraph level. Say "circle the word predicting," "underline this sentence," or "star this paragraph." To do it manually, click the source text and choose "Word / Sentence / Paragraph" from the popup.
-- While the model is busy, lines with circled targets are processed separately so each keeps its own references; ordinary speech can still be batched. Pressing `Esc` mid-stroke or cancelling a touch discards the unfinished loop, and merged loops retain targets near the original corners.
-- Shortcuts: hold Space to talk, `PageUp` / `PageDown` to switch boards, `Ctrl+Shift+N` for a new board, `Ctrl+O` to import, `Ctrl+Shift+R` for replay, `Ctrl+Shift+S` for a summary, and `?` for the full list. `Ctrl+Shift+Space` toggles listening while the app is in the background and can be changed in settings. Wayland prevents apps from listening for global keys; bind `boardcast --toggle-mic` to a system shortcut instead.
-- At startup, the same pen used on the board writes out "boardcast." Click or press any key to skip. If the system requests reduced motion, it simply fades out.
-- Phones use landscape mode. Browsers that support orientation locking lock to landscape; others, such as iOS Safari, rotate the entire interface 90 degrees when the phone is held vertically. Pencil editing has inaccurate pointer positions in the rotated interface, so physically turn the phone sideways to edit.
+</details>
 
-## Run locally
+<details>
+<summary><strong>How are speech, speakers and terminology handled?</strong></summary>
 
-Requires Node 24+, pnpm, and Rust for desktop builds.
+SenseVoice transcribes Chinese, English, Japanese, Korean and Cantonese. Silero detects pauses; long utterances can end at a breath so the board need not wait for the entire sentence. Provisional captions appear while you speak. CAM++ distinguishes speakers by voice; rename or merge them in the transcript, or turn the feature off in Settings. Short or overlapping speech can still be misattributed.
 
-```sh
-pnpm install
+For names that are often misrecognized, add a glossary entry such as `MediaCrawler = media crawler, media crowler` in Settings → Glossary. Entries can apply to all meetings or only the current one, and also correct typed input.
 
-# Desktop: automatically downloads the platform's llama-server to src-tauri/llama/
-pnpm tauri dev
+</details>
 
-# Web only: start your own llama.cpp server (any GGUF; add -ngl 99 if you have a GPU)
-llama-server -m path/to/model.gguf --port 8080 -c 4096 --jinja -np 1
-pnpm dev            # http://localhost:1420
-```
+<details>
+<summary><strong>Useful shortcuts</strong></summary>
 
-Run evaluation:
+These shortcuts mainly apply to handwriting mode and leave focused text fields and dialogs alone. Use `Cmd` instead of `Ctrl` for regular app actions on macOS.
 
-```sh
-pnpm eval -- --label my-model          # Write reports to eval/reports/
-node eval/run.ts --only login-flow -v  # Inspect operations for one meeting, utterance by utterance
-node eval/run.ts --file boardcast-corrections-*.cases.json  # Run correction samples exported from the app
-pnpm test                              # Engine unit tests; no model needed
-```
+| Key | Action |
+|---|---|
+| Hold `Space` | Push to talk in the desktop app |
+| `/` | Focus the input bar |
+| `PageUp` / `PageDown` | Previous / next board |
+| `Ctrl+Shift+N` | New board |
+| `Ctrl+O` | Import |
+| `Ctrl+Shift+R` / `Ctrl+Shift+S` | Replay / summary |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
+| `?` | Show all shortcuts |
 
-Correction samples: when the model has just drawn what someone said and you fix it on the board (delete a line, rename, strike out, undo), that turn is kept (the board, earlier lines and new line the model saw, its output, and what you changed the board to) and saved with the meeting on this device. Settings → Correction samples exports them as eval cases (the `eval/cases.json` format, starting from the board at the time) or as JSONL for DPO / SFT (`prompt` / `chosen` / `rejected`).
+The default global microphone shortcut is `Ctrl+Shift+Space`, configurable in Settings. On Wayland, bind `boardcast --toggle-mic` in your desktop environment instead.
 
-## Continuous integration (CI)
+</details>
 
-- `CI`: type checks, unit tests, and a web build, followed by desktop installers for Linux x64, Windows x64, Windows ARM64, and macOS (Apple Silicon).
-- `Board eval`: changes to `src/engine` or `eval` trigger evaluation with llama.cpp on a CPU machine. Scores appear in the job summary to help spot regressions.
-- `Release`: pushing a `v*` tag uses that version's section in CHANGELOG.md as the release body, builds and uploads installers for all three platforms, and publishes the release only when everything succeeds.
+## Development and evaluation
 
-## Releases
-
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/zh-hans/), such as `feat(scope): …`, `fix: …`, and `docs: …`. Release notes are generated from them:
+Use **Node.js 24+** and the repository's pinned **pnpm 11.12.0**. Desktop development also requires Rust and the [Tauri 2 system dependencies](https://v2.tauri.app/start/prerequisites/). Linux audio builds additionally need ALSA development libraries, such as `libasound2-dev`.
 
 ```sh
-pnpm release 0.2.0 --dry-run   # Preview the release notes without changing files
-pnpm release 0.2.0             # Bump versions, prepend CHANGELOG.md, commit, and tag v0.2.0
-pnpm release 0.2.0 --push      # Also push the commit and tag, triggering the Release workflow
+git clone https://github.com/HsiangNianian/boardcast.git
+cd boardcast
+pnpm install --frozen-lockfile
+pnpm dev                       # http://localhost:1420; recorded samples work without a model
 ```
 
-- Versions are updated together in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and `src-tauri/tauri.conf.json`.
-- The changelog groups entries by type: Features, Fixes, Documentation, Build and CI, and so on. Bullet points beginning with `- ` in commit bodies are preserved as subitems. Each entry links to its commit, with a comparison against the previous release at the end.
-- Without `--push`, you can edit the wording in CHANGELOG.md before pushing. The release body uses exactly the section that was pushed.
-- Manually pushed tags work too. If CHANGELOG.md has no section for that version, the release body is generated from commits since the previous tag.
-- Versions with a suffix such as `0.19.0-1` are marked as prereleases. All others, including 0.x, are stable releases. The suffix must be a number: the Windows MSI rejects `-rc.1`; prereleases skip the RPM (RPM versions can't contain `-`). If a platform build fails, the release stays a draft; fix the problem and rerun Actions manually for that tag.
-- Automatic updates: the Release workflow signs update packages using the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and its password, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. tauri-action collects update metadata in `latest.json` and uploads it to the release. The app's public key is in `plugins.updater` in `tauri.conf.json`. Update packages are built only for releases using `src-tauri/tauri.updater.conf.json`; ordinary CI does not need the private key. Losing that key prevents installed versions from updating automatically, so users would need to download a new version manually.
+```sh
+pnpm tauri dev                 # Desktop; first run downloads llama-server and speech models
+pnpm site:dev                  # Website at http://localhost:1430
+pnpm typecheck
+pnpm test                      # Engine unit tests; no model needed
+pnpm build                     # Type check, replay player and production web build
+```
 
-## Roadmap
+To use your own local model in the web app, start llama.cpp in another terminal and configure the local address in the app:
 
-- [x] Text → graph operations → hand-drawn board, with evaluation and latency reporting
-- [x] Notes: topics, nested items, questions, formulas, notes, strike-throughs / circles / stars, and small icons
-- [x] Handwriting mode: animation in stroke order, whiteboard marker / blackboard chalk, adjustable messiness
-- [x] Small icons in handwriting mode
-- [x] SVG export
-- [x] Animated SVG export: the board writes itself in meeting order (#53)
-- [x] Voice input: microphone → Silero utterance detection → SenseVoice transcription with punctuation, plus provisional captions while speaking
-- [x] Speaker identification by voice: CAM++ voiceprints, online clustering, editable names
-- [x] System audio for other participants in online meetings: Linux and Windows; macOS not implemented yet
-- [x] Tauri shell starts the bundled llama-server (#2)
-- [x] Model download on first launch (#3)
-- [x] Settings, light and dark themes, custom OpenAI-compatible endpoints with local fallback, and microphone selection
-- [ ] A test set excluded from tuning; synthetic data and LoRA fine-tuning for small models
-- [x] Incremental layout that keeps existing nodes still as new ones appear
-- [x] Markdown / PNG / `.excalidraw` export
-- [x] macOS builds for Apple Silicon with Metal llama-server; installers are not signed yet, so allow the app under "System Settings → Privacy & Security" on first launch
+```sh
+llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080 -c 4096 --jinja -np 1
+```
 
-## License
+<details>
+<summary><strong>How it works and where to look</strong></summary>
 
-The code is MIT licensed.
+```text
+Microphone / system audio → Silero → SenseVoice ┐
+                                               ├→ Entities, glossary, circled targets
+Typed text ────────────────────────────────────┘               ↓
+                                                   Rules + model graph operations
+                                                              ↓
+                                               Incremental layout → Ink / Excalidraw
+                                                              ↓
+                                                 Save, summarize, replay and export
+```
 
-Chinese stroke data used in handwriting mode comes from hanzi-writer-data, derived from Make Me a Hanzi and Arphic fonts, under the Arphic Public License. The license text is distributed with the data in `public/hanzi/ARPHICPL.TXT`. Hershey font data comes from hersheytext (MIT).
+The model emits graph operations, not images. Code maintains nodes, aliases and context; local inference uses GBNF to constrain operation syntax. Valid syntax does not guarantee correct meaning. Ordinary utterances can be batched, while circled references are processed separately. Layout tries to keep existing content still; “Rearrange” explicitly requests a full layout.
+
+| Entry point | Contents |
+|---|---|
+| [`src/engine/`](src/engine/) | Sessions, prompts, operations, grammar constraints and engine tests |
+| [`src/ink/`](src/ink/) / [`src/board/`](src/board/) | Strokes, circles, layout and document import |
+| [`src-tauri/src/`](src-tauri/src/) | Speech, model downloads, processes, storage and updates |
+| [`src/player/`](src/player/) | Standalone replay page |
+| [`landing/`](landing/README.md) | Website at the Pages root, with the `/demo/` app embedded at the bottom |
+
+</details>
+
+<details>
+<summary><strong>Evaluation, reproduction and known limits</strong></summary>
+
+| Set | Current size | Purpose |
+|---|---|---|
+| [`eval/cases.json`](eval/cases.json) | 28 meetings | Development and regression, including English and a real-meeting regression |
+| [`eval/holdout.json`](eval/holdout.json) | 27 meetings | Held out from prompt tuning |
+| [`eval/pointing.json`](eval/pointing.json) | 18 cases | Chinese and English pointing cases with fixed starting boards |
+
+Start a working llama-server, then run:
+
+```sh
+pnpm eval --set dev --label my-model
+pnpm eval --set holdout --label my-model
+pnpm eval --set pointing --repeat 3 --label my-model
+# For a different server, add --base-url http://127.0.0.1:PORT
+node eval/run.ts --only login-flow -v
+node eval/run.ts --file path/to/corrections.cases.json
+```
+
+Reports go to `eval/reports/`. For v0.20.0, Qwen3.5-4B scored 1.000 for item F1, strike F1 and mark accuracy on the pointing set, with 18 cases repeated three times. These are synthetic, targeted cases, not a measure of accuracy on arbitrary real meetings; the timing excludes speech recognition. The general holdout still has a known failure to apply a correction. See the [pointing evaluation record](eval/pointing.md) and [changelog](CHANGELOG.md) for model, hardware, prompt version and reproduction details.
+
+The model can omit content, connect the wrong items or misread emphasis. Recognition and segmentation also affect results; check important conclusions. After fixing something the model just drew, export correction cases or DPO / SFT JSONL in Settings → Correction samples. These samples are not uploaded automatically.
+
+</details>
+
+<details>
+<summary><strong>CI, deployment and releases</strong></summary>
+
+- [CI](.github/workflows/ci.yml): type checks, unit tests, web builds and desktop builds for Linux x64, Windows x64 / ARM64 and macOS ARM64.
+- [Board eval](.github/workflows/eval.yml): engine or evaluation changes run the dev and pointing sets with the default 2B CPU model. These results are separate from local 4B evaluations.
+- [Web demo](.github/workflows/pages.yml): builds the website and web app, then deploys them to GitHub Pages.
+- [Release](.github/workflows/release.yml): a `v*` tag creates a draft, builds all four platforms, then publishes it with signed update packages and `latest.json` only if all builds succeed.
+
+Use Conventional Commits. `pnpm release <next-version> --dry-run` previews release notes. `pnpm release <next-version>` updates the four version files, writes the changelog, commits and tags the release. Add `--push` to push the commit and tag. Replace the angle-bracket placeholder with the actual version. The release body comes from the corresponding [CHANGELOG.md](CHANGELOG.md) section.
+
+A numeric version suffix creates a prerelease, excluded from automatic updates. Windows MSI requires a numeric suffix rather than `-rc.1`; prereleases skip RPM builds. Signing uses the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, with the public key in `src-tauri/tauri.conf.json`. Keep the private key to preserve the update path for existing installations.
+
+</details>
+
+## Contributing and license
+
+Report problems or discuss ideas in [Issues](https://github.com/HsiangNianian/boardcast/issues), or send a PR. Issues and the [changelog](CHANGELOG.md) track ongoing work.
+
+Code is licensed under [MIT](LICENSE). Chinese stroke data comes from [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data), derived from Make Me a Hanzi and Arphic fonts under the Arphic Public License; its license is distributed with the generated data. Hershey glyphs come from [hersheytext](https://github.com/techninja/hersheytextjs) under MIT. The UI uses DM Sans and JetBrains Mono, and the website also includes a Noto Sans CJK subset. These fonts use SIL OFL; see the website font's [OFL.txt](landing/public/fonts/OFL.txt).

@@ -47,8 +47,6 @@ const SOFT_PAUSE: usize = 10;
 const SOFT_PAUSE_MIN: usize = 4;
 /// A window is quiet when its loudness is below this share of the sentence's median loudness
 const QUIET_RATIO: f32 = 0.3;
-/// …or below this absolute level (RMS of samples in [-1, 1]), for very quiet rooms
-const QUIET_FLOOR: f32 = 0.003;
 /// 说话过程中多久刷新一次临时字幕
 const PARTIAL_EVERY: Duration = Duration::from_millis(600);
 /// 检测到开口时往前多带一点，免得吃掉第一个字. The VAD only reports speech after
@@ -58,6 +56,40 @@ const PARTIAL_EVERY: Duration = Duration::from_millis(600);
 const PREROLL: usize = SAMPLE_RATE as usize;
 /// 短于这个长度（样本数）的句子不算声纹：太短的「嗯」「对」声纹不准，前端会归给上一个说话的人
 const MIN_VOICEPRINT: usize = SAMPLE_RATE as usize * 4 / 5;
+
+/// Level only the VAD's copy: quiet speech can be recognizable but below Silero's input range.
+struct VadLevel {
+    peak: f32,
+    gain: f32,
+}
+
+impl Default for VadLevel {
+    fn default() -> Self {
+        Self {
+            peak: 0.0,
+            gain: 1.0,
+        }
+    }
+}
+
+impl VadLevel {
+    fn apply(&mut self, samples: &mut [f32]) {
+        self.peak = samples
+            .iter()
+            .fold(self.peak * 0.95, |peak, x| peak.max(x.abs()));
+        let target = if self.peak >= 0.08 {
+            1.0
+        } else {
+            (0.2 / self.peak.max(0.025)).clamp(1.0, 8.0)
+        };
+        // Fast reduction, gradual increase: don't boost the quiet onset of normal speech by 8x.
+        let rise = if rms(samples) >= 0.0005 { 0.125 } else { 0.0 };
+        self.gain = target.min(self.gain + rise);
+        for sample in samples {
+            *sample *= self.gain;
+        }
+    }
+}
 
 #[derive(Clone, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -112,7 +144,9 @@ pub fn soft_break(rms: &[f32]) -> Option<usize> {
     }
     let mut sorted = rms.to_vec();
     sorted.sort_by(|a, b| a.total_cmp(b));
-    let quiet = (sorted[n / 2] * QUIET_RATIO).max(QUIET_FLOOR);
+    // Cap the quiet-room floor below speech itself; an absolute floor cuts quiet words in half.
+    let median = sorted[n / 2];
+    let quiet = (median * QUIET_RATIO).max(0.003_f32.min(median * 0.5));
     let run = rms.iter().rev().take_while(|&&r| r < quiet).count();
     // One window less per second past SOFT_MAX
     let over = (n * WINDOW) as f32 / SAMPLE_RATE as f32 - SOFT_MAX;
@@ -134,7 +168,7 @@ pub struct Engine {
     speech: Vec<f32>,
     /// Loudness of each window in `speech`
     loudness: Vec<f32>,
-    /// Everything before this sample (counted like `fed`) was already sent by a soft break
+    /// Everything before this sample (counted like `fed`) was already finalized
     sent_until: usize,
     recent: Vec<f32>,
     in_speech: bool,
@@ -142,6 +176,13 @@ pub struct Engine {
     partial_text: String,
     /// 已经喂进来的样本总数，用来算时间
     fed: usize,
+    level: VadLevel,
+    /// Original samples for VAD boundaries; recognition and voiceprints must not use VAD gain.
+    audio: std::collections::VecDeque<f32>,
+    #[cfg(test)]
+    vad_segments: usize,
+    #[cfg(test)]
+    vad_samples: usize,
 }
 
 pub enum Event {
@@ -208,6 +249,12 @@ impl Engine {
             last_partial: Instant::now(),
             partial_text: String::new(),
             fed: 0,
+            level: VadLevel::default(),
+            audio: Default::default(),
+            #[cfg(test)]
+            vad_segments: 0,
+            #[cfg(test)]
+            vad_samples: 0,
         })
     }
 
@@ -248,7 +295,10 @@ impl Engine {
         while self.pending.len() >= WINDOW {
             let chunk: Vec<f32> = self.pending.drain(..WINDOW).collect();
             self.fed += WINDOW;
-            self.vad.accept_waveform(&chunk);
+            self.audio.extend(&chunk);
+            let mut vad_chunk = chunk.clone();
+            self.level.apply(&mut vad_chunk);
+            self.vad.accept_waveform(&vad_chunk);
 
             if self.in_speech {
                 self.speech.extend_from_slice(&chunk);
@@ -270,6 +320,15 @@ impl Engine {
                 self.last_partial = Instant::now();
             }
             self.drain_segments(out);
+            let before = if self.in_speech {
+                self.sent_until
+            } else {
+                self.fed.saturating_sub(PREROLL)
+            };
+            let discard = before
+                .saturating_sub(self.fed - self.audio.len())
+                .min(self.audio.len());
+            self.audio.drain(..discard);
         }
         // 正在说：定时刷新临时字幕
         if self.in_speech
@@ -288,9 +347,7 @@ impl Engine {
     /// 停止收音时调用：没说完的那句也定稿
     pub fn finish(&mut self, out: &mut Vec<Event>) {
         if !self.pending.is_empty() {
-            let mut rest = std::mem::take(&mut self.pending);
-            rest.resize(WINDOW, 0.0);
-            self.vad.accept_waveform(&rest);
+            self.feed(&vec![0.0; WINDOW - self.pending.len()], out);
         }
         self.vad.flush();
         self.drain_segments(out);
@@ -308,6 +365,13 @@ impl Engine {
         self.last_partial = Instant::now();
         self.partial_text.clear();
         self.fed = 0;
+        self.level = VadLevel::default();
+        self.audio.clear();
+        #[cfg(test)]
+        {
+            self.vad_segments = 0;
+            self.vad_samples = 0;
+        }
     }
 
     /// Recognize one finished sentence starting at sample `start` (counted like `fed`) and send it
@@ -356,12 +420,29 @@ impl Engine {
 
     fn drain_segments(&mut self, out: &mut Vec<Event>) {
         while let Some(seg) = self.vad.front() {
+            #[cfg(test)]
+            {
+                self.vad_segments += 1;
+                self.vad_samples += seg.samples().len();
+            }
             let seg_start = seg.start().max(0) as usize;
             let skip = self
                 .sent_until
                 .saturating_sub(seg_start)
                 .min(seg.samples().len());
-            self.finalize(&seg.samples()[skip..], seg_start + skip, false, out);
+            let start = seg_start + skip;
+            debug_assert!(skip == seg.samples().len() || start >= self.fed - self.audio.len());
+            let offset = start.saturating_sub(self.fed - self.audio.len());
+            let samples: Vec<f32> = self
+                .audio
+                .iter()
+                .skip(offset)
+                .take(seg.samples().len() - skip)
+                .copied()
+                .collect();
+            debug_assert_eq!(samples.len(), seg.samples().len() - skip);
+            self.finalize(&samples, start, false, out);
+            self.sent_until = seg_start + seg.samples().len();
             self.vad.pop();
             self.in_speech = self.vad.detected();
             self.speech.clear();

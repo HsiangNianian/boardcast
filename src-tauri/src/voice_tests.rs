@@ -149,6 +149,39 @@ fn recognizes_a_chinese_sentence() {
 }
 
 #[test]
+fn quiet_speech_is_retained_without_turning_noise_into_words() {
+    let Some(dir) = dir() else { return };
+    let wave = Wave::read(&dir.join("zh.wav").to_string_lossy()).unwrap();
+    let quiet: Vec<f32> = wave.samples().iter().map(|x| x * 0.05).collect();
+    let mut engine = Engine::load(&dir).unwrap();
+    let (_, finals) = run(&mut engine, &quiet);
+    let text: String = finals.iter().map(|h| h.text.as_str()).collect();
+    assert!(
+        text.contains('9') && text.contains('5') && text.contains("时间"),
+        "{text}"
+    );
+    assert!(engine.audio.len() <= PREROLL + WINDOW);
+    // Repeatable broadband noise and electrical hum, including levels the VAD gain will boost.
+    for amplitude in [0.001, 0.01] {
+        let mut seed = 7_u32;
+        let noise: Vec<f32> = (0..SAMPLE_RATE as usize * 4)
+            .map(|i| {
+                seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                let white = seed as f64 / u32::MAX as f64 * 2.0 - 1.0;
+                let hum = (i as f64 * std::f64::consts::TAU * 50.0 / SAMPLE_RATE as f64).sin();
+                ((white + hum) * amplitude) as f32
+            })
+            .collect();
+        engine.reset();
+        let (partials, finals) = run(&mut engine, &noise);
+        assert!(
+            partials.is_empty() && finals.is_empty(),
+            "noise produced text"
+        );
+    }
+}
+
+#[test]
 fn two_sentences_with_a_pause_come_out_separately() {
     let Some(dir) = dir() else {
         eprintln!("跳过：没有设置 BOARDCAST_VOICE_DIR");
@@ -221,9 +254,41 @@ fn continuous_talk_is_cut_at_short_breaths() {
 }
 
 #[test]
+fn vad_gain_is_bounded_and_leaves_silence_and_normal_levels_alone() {
+    let mut level = VadLevel::default();
+    let mut silent = [0.0; WINDOW];
+    level.apply(&mut silent);
+    assert_eq!(silent, [0.0; WINDOW]);
+    let mut quiet = [0.002; WINDOW];
+    level.apply(&mut quiet);
+    assert!(
+        quiet[0] > 0.002 && quiet[0] < 0.003,
+        "gain must rise gradually"
+    );
+    for _ in 0..100 {
+        quiet.fill(0.002);
+        level.apply(&mut quiet);
+    }
+    assert!(quiet.iter().all(|&x| (x - 0.016).abs() < 1e-6));
+    let mut normal = [0.5, -0.8, 1.0, -1.0];
+    level.apply(&mut normal);
+    assert_eq!(normal, [0.5, -0.8, 1.0, -1.0]);
+    // A brief dip after a loud frame must not immediately amplify the noise floor.
+    let mut dip = [0.001; WINDOW];
+    level.apply(&mut dip);
+    assert_eq!(dip, [0.001; WINDOW]);
+}
+
+#[test]
 fn soft_break_needs_a_long_sentence_and_a_dip() {
     let loud = vec![0.1_f32; 200]; // 6.4 s of talking
     assert_eq!(soft_break(&loud), None);
+    let quiet_speech: Vec<f32> = loud.iter().map(|r| r * 0.01).collect();
+    assert_eq!(
+        soft_break(&quiet_speech),
+        None,
+        "quiet speech is not a pause"
+    );
     // A short sentence with a dip: not yet
     let mut short = vec![0.1_f32; 60];
     short.extend([0.001; SOFT_PAUSE]);
@@ -234,6 +299,8 @@ fn soft_break_needs_a_long_sentence_and_a_dip() {
     assert_eq!(soft_break(&just), None);
     just.extend([0.001; SOFT_PAUSE - 6]);
     assert_eq!(soft_break(&just), Some(SOFT_PAUSE / 2));
+    let quiet_pause: Vec<f32> = just.iter().map(|r| r * 0.01).collect();
+    assert_eq!(soft_break(&quiet_pause), soft_break(&just));
     // Near MAX_SPEECH a short dip is enough
     let mut late = vec![0.1_f32; 310];
     late.extend([0.001; SOFT_PAUSE_MIN]);

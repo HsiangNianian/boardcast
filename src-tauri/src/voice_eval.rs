@@ -18,6 +18,7 @@ struct Input {
     extra_models: PathBuf,
     model: String,
     denoise: String,
+    vad: String,
     samples: Vec<Sample>,
     output: PathBuf,
 }
@@ -34,6 +35,7 @@ fn corpus() {
         "sensevoice" | "whisper-base"
     ));
     assert!(matches!(input.denoise.as_str(), "none" | "gtcrn"));
+    assert!(matches!(input.vad.as_str(), "on" | "off"));
     let loading = Instant::now();
     let mut engine = Engine::load(&input.models).expect("Load the desktop voice engine");
     if input.model == "whisper-base" {
@@ -89,11 +91,20 @@ fn corpus() {
         };
         let enhancement_ms = started.elapsed().as_secs_f64() * 1000.0;
         let mut events = vec![];
-        // The same 100 ms input chunks as the existing voice tests; no microphone or GUI is opened.
-        for chunk in samples.chunks(SAMPLE_RATE as usize / 10) {
-            engine.feed(chunk, &mut events);
+        if input.vad == "on" {
+            // The same 100 ms input chunks as capture; no microphone or GUI is opened.
+            for chunk in samples.chunks(SAMPLE_RATE as usize / 10) {
+                engine.feed(chunk, &mut events);
+            }
+            engine.finish(&mut events);
+        } else {
+            // Bound long-meeting inference without detecting or dropping silence.
+            let window = (MAX_SPEECH * SAMPLE_RATE as f32) as usize;
+            for (i, chunk) in samples.chunks(window).enumerate() {
+                engine.fed = i * window + chunk.len();
+                engine.finalize(chunk, i * window, false, &mut events);
+            }
         }
-        engine.finish(&mut events);
         let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
         let mut partials = 0;
         let finals: Vec<Heard> = events
@@ -122,13 +133,18 @@ fn corpus() {
         );
         results.push(serde_json::json!({
             "id": sample.id, "duration": duration, "elapsedMs": elapsed_ms,
+            "inputRms": rms(wave.samples()),
+            "inputPeak": wave.samples().iter().fold(0.0_f32, |peak, x| peak.max(x.abs())),
+            "vadSegments": (input.vad == "on").then_some(engine.vad_segments),
+            "vadSeconds": (input.vad == "on").then_some(engine.vad_samples as f64 / SAMPLE_RATE as f64),
             "enhancementMs": enhancement_ms, "partials": partials, "segments": finals,
         }));
     }
     std::fs::write(
         input.output,
         serde_json::to_vec_pretty(&serde_json::json!({
-            "model": input.model, "denoise": input.denoise, "loadMs": load_ms, "samples": results,
+            "model": input.model, "denoise": input.denoise, "vad": input.vad,
+            "loadMs": load_ms, "samples": results,
         }))
         .unwrap(),
     )

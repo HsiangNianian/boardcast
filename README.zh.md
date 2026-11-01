@@ -205,7 +205,7 @@ PDF 最多导入 40 张有效页面；没有文字层的扫描件只显示底图
 
 ## 开发与评测
 
-需要 **Node.js 24+** 和仓库锁定的 **pnpm 11.12.0**。桌面开发还需要 Rust 与 [Tauri 2 系统依赖](https://v2.tauri.app/start/prerequisites/)；Linux 的音频构建还需要 ALSA 开发库（如 `libasound2-dev`）。
+需要 **Node.js 24+** 和仓库锁定的 **pnpm 11.13.1**。桌面开发还需要 Rust 与 [Tauri 2 系统依赖](https://v2.tauri.app/start/prerequisites/)；Linux 的音频构建还需要 ALSA 开发库（如 `libasound2-dev`）。
 
 ```sh
 git clone https://github.com/HsiangNianian/boardcast.git
@@ -248,6 +248,7 @@ pnpm eval:audio                # 下载固定版本 WAV、校验哈希，生成�
 pnpm eval:listen               # 按需下载后启动 http://127.0.0.1:4175
 pnpm eval:asr                  # 通过桌面版实际语音引擎跑快速回归；需要 Rust
 pnpm eval:asr --suite full     # 包含完整会议片段
+pnpm eval:asr --vad off        # 对照组：停用 VAD，按固定窗口识别
 ```
 
 模型对比、降噪实验、参考转写质量见[语音评测说明](eval/asr/README.md)，素材条款见[数据集许可](eval/asr/LICENSES.md)。日文使用真人朗读样本；重叠会议整段和待复核的中文转写不计入普通错误率汇总。
@@ -281,7 +282,7 @@ node eval/run.ts --file path/to/corrections.cases.json
 <details>
 <summary><strong>CI、部署与发版</strong></summary>
 
-- [Eval](.github/workflows/eval.yml)：统一执行类型检查、单元/Rust 测试、网页/桌面构建、文本到板书评测和中日英 ASR 回归。每周或手动完整评测比较 SenseVoice / Whisper base，以及原音 / GTCRN 降噪。见[语音评测说明](eval/asr/README.md)。
+- [Eval](.github/workflows/eval.yml)：统一执行类型检查、单元/Rust 测试、网页/桌面构建、文本到板书评测和中日英 ASR 回归。每周或手动完整评测比较 SenseVoice / Whisper base，以及原音 / GTCRN 降噪、VAD 开 / 关，共八组对照。见[语音评测说明](eval/asr/README.md)。
 - [Web demo](.github/workflows/pages.yml)：构建官网与网页演示，部署至 GitHub Pages。
 - [Release](.github/workflows/release.yml)：推送 `v*` tag 后生成草稿，四个平台都成功才正式发布，并提供签名更新包和 `latest.json`。
 

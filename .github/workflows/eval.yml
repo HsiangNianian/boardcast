@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       full_asr:
-        description: Full corpus, SenseVoice + Whisper base, raw + GTCRN
+        description: Full corpus, SenseVoice + Whisper base, raw + GTCRN, VAD on + off
         type: boolean
         default: false
       model_url:
@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -72,7 +72,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -95,7 +95,7 @@ jobs:
       # 语音模型（约 240 MB）：打包时要放进安装包，Rust 测试也要用真模型和一段测试音频，缓存起来
       - name: Cache voice models
         id: voice-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: voice-models
           key: voice-sensevoice-2024-07-17-silero-v4-campplus-zh-en
@@ -143,7 +143,7 @@ jobs:
       - name: Clippy
         if: runner.os == 'Linux'
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --lib --release -- -D warnings
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: boardcast-${{ matrix.name }}
           path: |
@@ -164,7 +164,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -173,7 +173,7 @@ jobs:
 
       - name: Cache llama.cpp and model
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/llama
@@ -203,7 +203,7 @@ jobs:
       - run: node eval/run.ts --label "$LABEL"
       - run: node eval/run.ts --label "$LABEL" --set pointing
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: eval-report
@@ -212,13 +212,13 @@ jobs:
             ~/llama-server.log
 
   asr:
-    name: ASR · ${{ matrix.model }} · ${{ matrix.denoise }}
+    name: ASR · ${{ matrix.model }} · ${{ matrix.denoise }} · VAD ${{ matrix.vad }}
     needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON((github.event_name == 'schedule' || inputs.full_asr == true) && '{"model":["sensevoice","whisper-base"],"denoise":["none","gtcrn"]}' || '{"model":["sensevoice"],"denoise":["none"]}') }}
+      matrix: ${{ fromJSON((github.event_name == 'schedule' || inputs.full_asr == true) && '{"model":["sensevoice","whisper-base"],"denoise":["none","gtcrn"],"vad":["on","off"]}' || '{"model":["sensevoice"],"denoise":["none"],"vad":["on","off"]}') }}
     env:
       ASR_SUITE: ${{ (github.event_name == 'schedule' || inputs.full_asr == true) && 'full' || 'quick' }}
     steps:
@@ -227,7 +227,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libasound2-dev
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -242,11 +242,11 @@ jobs:
           rm -rf src-tauri/target/sherpa-onnx-prebuilt
           cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys
       - run: pnpm install --frozen-lockfile
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: eval/asr/.data
           key: asr-audio-${{ hashFiles('eval/asr/corpus.json') }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             src-tauri/voice
@@ -254,11 +254,11 @@ jobs:
           key: asr-models-${{ matrix.model }}-${{ matrix.denoise }}-${{ hashFiles('eval/asr/models.json', 'scripts/fetch-voice.mjs') }}
       # Both commands verify cached files too. Missing/corrupt data must never silently skip inference.
       - name: Evaluate the desktop voice engine
-        run: pnpm eval:asr --suite "$ASR_SUITE" --model "${{ matrix.model }}" --denoise "${{ matrix.denoise }}"
-      - uses: actions/upload-artifact@v4
+        run: pnpm eval:asr --suite "$ASR_SUITE" --model "${{ matrix.model }}" --denoise "${{ matrix.denoise }}" --vad "${{ matrix.vad }}"
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: asr-${{ matrix.model }}-${{ matrix.denoise }}
+          name: asr-${{ matrix.model }}-${{ matrix.denoise }}-vad-${{ matrix.vad }}
           path: eval/reports/asr/
           if-no-files-found: warn
           retention-days: 30

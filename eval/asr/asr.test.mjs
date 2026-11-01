@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 import test from 'node:test'
 import { corpus, listeningPage, validateCorpus } from './download.mjs'
 import { download } from './files.mjs'
-import { errorRate, keywordRecall, tokens } from './score.mjs'
+import { errorRate, keywordRecall, tokens, recognitionFailures } from './score.mjs'
 
 test('CER/WER/MER preserve language units, edits and empty references', () => {
   assert.deepEqual(tokens('ＡＰＩ、更新。', 'ja'), ['a', 'p', 'i', '更', '新'])
@@ -25,6 +25,19 @@ test('technical terms match complete token sequences', () => {
   assert.deepEqual(keywordRecall(['python', 'computer languages'], 'Pythonic computer languages', 'zh-en'), {
     hits: ['computer languages'], total: 2, rate: 0.5,
   })
+})
+
+test('speech/silence checks catch one missing transcript even when other speech succeeds', () => {
+  const details = [
+    { id: 'heard', scoring: 'reference', hypothesis: 'words' },
+    { id: 'quiet', scoring: 'provisional', hypothesis: '  ' },
+    { id: 'silence', scoring: 'silence', hypothesis: '' },
+  ]
+  assert.deepEqual(recognitionFailures(details), ['quiet: no speech recognized'])
+  details[1].hypothesis = 'quiet words'
+  assert.deepEqual(recognitionFailures(details), [])
+  details[2].hypothesis = 'invented words'
+  assert.deepEqual(recognitionFailures(details), ['silence: speech hallucinated on silence'])
 })
 
 test('corpus rejects traversal, duplicate IDs and invalid reference bounds', () => {

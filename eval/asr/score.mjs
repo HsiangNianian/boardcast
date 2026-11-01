@@ -24,3 +24,10 @@ export function keywordRecall(keywords, hypothesis, language) {
   })
   return { hits, total: keywords.length, rate: keywords.length ? hits.length / keywords.length : null }
 }
+
+export function recognitionFailures(details) {
+  return details.flatMap(({ id, scoring, hypothesis }) => {
+    if (scoring === 'silence') return hypothesis.trim() ? [`${id}: speech hallucinated on silence`] : []
+    return hypothesis.trim() ? [] : [`${id}: no speech recognized`]
+  })
+}

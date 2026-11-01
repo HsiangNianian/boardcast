@@ -205,7 +205,7 @@ The default global microphone shortcut is `Ctrl+Shift+Space`, configurable in Se
 
 ## Development and evaluation
 
-Use **Node.js 24+** and the repository's pinned **pnpm 11.12.0**. Desktop development also requires Rust and the [Tauri 2 system dependencies](https://v2.tauri.app/start/prerequisites/). Linux audio builds additionally need ALSA development libraries, such as `libasound2-dev`.
+Use **Node.js 24+** and the repository's pinned **pnpm 11.13.1**. Desktop development also requires Rust and the [Tauri 2 system dependencies](https://v2.tauri.app/start/prerequisites/). Linux audio builds additionally need ALSA development libraries, such as `libasound2-dev`.
 
 ```sh
 git clone https://github.com/HsiangNianian/boardcast.git
@@ -235,6 +235,7 @@ pnpm eval:audio                # Download pinned WAVs, verify checksums and buil
 pnpm eval:listen               # Download if needed, then serve http://127.0.0.1:4175
 pnpm eval:asr                  # Quick regression through the desktop voice engine; requires Rust
 pnpm eval:asr --suite full     # Include the complete meeting excerpts
+pnpm eval:asr --vad off        # Compare fixed-window recognition without VAD
 ```
 
 See [speech evaluation](eval/asr/README.md) for model comparisons, denoising experiments, reference quality and [dataset licenses](eval/asr/LICENSES.md). Japanese fixtures are human read speech; meeting overlap and provisional Chinese references are excluded from the ordinary error-rate aggregates.
@@ -281,7 +282,7 @@ The model can omit content, connect the wrong items or misread emphasis. Recogni
 <details>
 <summary><strong>CI, deployment and releases</strong></summary>
 
-- [Eval](.github/workflows/eval.yml): the single testing workflow for type checks, unit/Rust tests, web/desktop builds, text-to-board evaluation and multilingual ASR regression. Weekly or manual full ASR runs compare SenseVoice / Whisper base with raw / GTCRN audio. See [speech evaluation](eval/asr/README.md).
+- [Eval](.github/workflows/eval.yml): the single testing workflow for type checks, unit/Rust tests, web/desktop builds, text-to-board evaluation and multilingual ASR regression. Weekly or manual full ASR runs compare SenseVoice / Whisper base with raw / GTCRN audio and VAD on / off (eight combinations). See [speech evaluation](eval/asr/README.md).
 - [Web demo](.github/workflows/pages.yml): builds the website and web app, then deploys them to GitHub Pages.
 - [Release](.github/workflows/release.yml): a `v*` tag creates a draft, builds all four platforms, then publishes it with signed update packages and `latest.json` only if all builds succeed.
 

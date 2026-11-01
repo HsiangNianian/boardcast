@@ -95,27 +95,32 @@ PDF imports are limited to 40 retained pages. Scans without a text layer appear 
 
 The core is still “rules respond first, the model confirms.” Speech, typing and circled references share one utterance entry point. Imported material and edits on the handwriting board feed the same graph state:
 
-```mermaid
-flowchart TB
-    accTitle: How boardcast turns a discussion into a board
-    accDescr: Final speech or typed text is corrected with the glossary and bound to circled targets, then sent to rule and model lanes. Graph updates feed incremental layout and rendering, while utterances and board changes are saved for replay.
-
-    voice["Microphone / system audio<br/>Silero segmentation → SenseVoice transcription<br/>CAM++ speaker embeddings"] -->|Final transcript| turn["Glossary correction<br/>Bind this utterance to circled targets"]
-    text["Typed text"] --> turn
-    circles["Drawn circles<br/>Up to 8 targets"] -.-> turn
-
-    turn --> slow["Model lane · one request at a time<br/>Local llama.cpp / optional compatible API"]
-    turn --> fast["Fast lane · local rules<br/>Highlight mentions / draft explicit connections"]
-    slow -->|Apply operations| boardState["Current board graph"]
-    fast -->|Temporary draft| boardState
-    boardState -.->|Next-turn context| slow
-    edits["Imported material<br/>Manual edits in handwriting mode"] --> boardState
-
-    boardState --> layout["Incremental layout<br/>Note regions / flowcharts"]
-    layout --> view["Handwritten strokes / Excalidraw"]
-    fast -.->|Temporary highlight| view
-    boardState ---> saved["Local storage<br/>Step-by-step replay / export"]
-    turn -.->|Transcript| saved
+```text
+Mic / system audio ──► Silero segmentation ──► SenseVoice transcription
+                                                  │ Final text / CAM++ speakers
+Typed text ───────────────────────────────────────┤
+Drawn circles (up to 8 targets) ──────────────────┤
+                                                  ▼
+                                   Glossary correction + bound targets
+                                                  │
+                       ┌──────────────────────────┴──────────────────────┐
+                       ▼                                                 ▼
+              Fast lane (local rules)                         Model lane (one request)
+          Highlight mentions / draft links                 Local llama.cpp / compatible API
+                       │                                   Entities, last 2 turns, targets
+                       │                                          Graph operations
+                       │                                                 │
+                       └────────────────► Graph state ◄──────────────────┘
+                                               ▲  │
+     Imported material / handwriting edits ────┘  ├──► Next-turn model context
+                                                  │
+                              ┌───────────────────┴───────────────────┐
+                              ▼                                       ▼
+                      Incremental layout                         Local storage
+                  Note regions / ELK flowcharts          Transcript + board changes + assets
+                              │                                       │
+                              ▼                                       ▼
+                    Handwriting / Excalidraw                 Step-by-step replay / export
 ```
 
 - **Only finalized speech updates the board.** Provisional captions are display-only. Finalized or typed utterances receive glossary corrections and their circled targets. Standalone page-navigation commands switch boards without a model call.

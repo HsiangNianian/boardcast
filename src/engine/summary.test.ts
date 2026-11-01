@@ -47,6 +47,41 @@ test('long meetings are summarized piece by piece, then merged with the board', 
   assert.match(r.text, /^### 结论\n- 好/)
 })
 
+test('a short English meeting keeps the original statements in one summary request', async () => {
+  const lines = Array.from({ length: 30 }, (_, i) => ({ speaker: 'A', text: `Item ${i}: the implementation already exists and we will update it next week.` }))
+  let calls = 0
+  const cfg: LlmConfig = {
+    baseUrl: 'x',
+    send: async (b) => {
+      calls++
+      const user = (b.messages as { content: string }[])[1].content
+      assert.ok(user.includes(lines[0].text) && user.includes(lines.at(-1)!.text))
+      return { choices: [{ message: { content: '### Conclusions\n- The implementation exists.\n### To-dos\n- Update it next week.' } }] }
+    },
+  }
+  const r = await summarize(cfg, emptyGraph(), lines)
+  assert.equal(calls, 1)
+  assert.equal(r.calls, 1)
+})
+
+test('dense English transcripts retain the conservative chunk limit', async () => {
+  const lines = Array.from({ length: 40 }, (_, i) => ({ speaker: 'A', text: `Item ${i}: inspect this expression ${'x+=y[i%7];'.repeat(10)}` }))
+  const seen: string[] = []
+  const cfg: LlmConfig = {
+    baseUrl: 'x',
+    send: async (b) => {
+      const user = (b.messages as { content: string }[])[1].content
+      assert.ok(user.length < 3500, 'dense transcript exceeds the fixture context budget')
+      seen.push(user)
+      return { choices: [{ message: { content: user.startsWith('Transcript (excerpt):') ? '- Inspect the expression.' : '### Conclusions\n- Inspect the expression.' } }] }
+    },
+  }
+  const r = await summarize(cfg, emptyGraph(), lines)
+  assert.ok(r.calls > 1)
+  for (const line of lines) assert.ok(seen.slice(0, -1).some((s) => s.includes(line.text)))
+  assert.match(seen.at(-1)!, /notes taken part by part/)
+})
+
 test('headings written other ways are recognized, and unrecognized text is kept as is', () => {
   const t = tidySummary('**结论**\n- 用 Go\n## 决定：\n- 上 Redis\n【待办事项】\n- [ ] 写爬虫（负责人：A）\n待讨论：\n- 热度公式')
   assert.equal(t, '### 结论\n- 用 Go\n### 决定\n- 上 Redis\n### 待办\n- [ ] 写爬虫（负责人：A）\n### 待讨论\n- 热度公式')

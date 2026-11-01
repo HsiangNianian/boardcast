@@ -56,6 +56,8 @@ async function inkSvg(b: Board, scale = 1): Promise<{ svg: string; width: number
   // 正在写的笔画用遮罩一点点露出来；导出时直接全写完
   for (const m of svg.querySelectorAll('[mask]')) m.removeAttribute('mask')
   for (const m of svg.querySelectorAll('mask')) m.remove()
+  // 圈着说画的虚线圈只是开会时用的
+  for (const m of svg.querySelectorAll('.ink-lasso')) m.remove()
   const bg = document.createElementNS(NS, 'rect')
   for (const [k, v] of Object.entries({ x, y, width: w, height: h, fill: b.paper })) bg.setAttribute(k, String(v))
   svg.insertBefore(bg, svg.firstChild)

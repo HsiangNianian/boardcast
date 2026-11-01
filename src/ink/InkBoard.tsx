@@ -9,7 +9,18 @@ import type { Selection } from '../engine/edit.ts'
 import type { Graph } from '../engine/graph.ts'
 import { type InkLook, type Piece, compose } from './compose.ts'
 import { localPoint } from '../ui/landscape.ts'
-import { hitTest, selectionBox, selectionLine } from './hit.ts'
+import { MAX_POINTED } from '../engine/pointing.ts'
+import { circled, hitTest, selectionBox, selectionLine } from './hit.ts'
+import { dashes, merge, overlaps } from './lasso.ts'
+import { ink, rng } from './pen.ts'
+
+type Pt = [number, number]
+/** 圈选的一圈：用和板书一样的笔，切成一段段虚线（不填充） */
+const penLoop = (pts: Pt[], closed: boolean, seed: string, messy: number, weight: number) => {
+  const r = rng(seed)
+  const size = 2.6 * weight
+  return dashes(pts, 15, 10, closed).map((d) => ink(d, size, r, { messy, wobble: size * 0.35, taper: 0 }).d)
+}
 
 export const WHITEBOARD: InkLook = {
   paper: '#fbfbf8',
@@ -59,6 +70,9 @@ export default function InkBoard({
   onMoveSel,
   layoutRev = 0,
   underlay,
+  lasso = false,
+  onCircle,
+  circles,
 }: {
   graph: Graph
   hot: Set<string>
@@ -80,6 +94,14 @@ export default function InkBoard({
   layoutRev?: number
   /** 垫在底下的导入页（PDF 的一页、一张图片），左上角对齐板书原点，大小是 graph.underlay */
   underlay?: string
+  /**
+   * 圈着说（#48）：圈选开着时，在板上拖动是画一圈（不平移、不点选），画完交给 `onCircle`：
+   * 这一圈、圈住的东西，和它合并掉的已有的圈（和它叠在一起的，合成一个大圈）
+   */
+  lasso?: boolean
+  onCircle?: (loop: Pt[], ids: string[], merged: number[]) => void
+  /** 画好了、还没随话用掉的圈（板书坐标），画成虚线 */
+  circles?: Pt[][]
 }) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
@@ -194,14 +216,27 @@ export default function InkBoard({
     const k = Math.min(4, Math.max(0.2, v.k * Math.exp(-e.deltaY * 0.0015)))
     setView({ k, x: mx - px / k, y: my - py / k })
   }
+  /** 画好的圈：笔迹只在圈变了的时候重算 */
+  const drawnCircles = useMemo(
+    () => (circles ?? []).map((c, i) => penLoop(c, true, `lasso${i}|${c.length}`, messy, weight)),
+    [circles, messy, weight],
+  )
+  /** 正在画的那一圈 */
+  const drawing = useRef<Pt[] | null>(null)
+  const [stroke, setStroke] = useState<Pt[] | null>(null)
   const onDown = (e: PointerEvent) => {
     // 浮动按钮上的点击不算点白板
     if ((e.target as Element).closest('.ink-toolbar')) return
     const [x, y] = at(e)
     ;(e.target as Element).setPointerCapture(e.pointerId)
-    // 在已经选中的框或话题上按下去：拖它，而不是平移画面
     const wx = v.x + x / v.k
     const wy = v.y + y / v.k
+    if (lasso) {
+      drawing.current = [[wx, wy]]
+      setStroke(drawing.current)
+      return
+    }
+    // 在已经选中的框或话题上按下去：拖它，而不是平移画面
     if (selection?.kind === 'node' && onMoveSel && lay && board.movable(selection.id)) {
       const hit = hitTest(lay, graph, wx, wy, 8 / v.k)
       if (hit?.kind === 'node' && hit.id === selection.id) {
@@ -214,6 +249,21 @@ export default function InkBoard({
     press.current = { x, y, moved: false }
   }
   const onUp = (e: PointerEvent) => {
+    if (drawing.current) {
+      const loop = drawing.current
+      drawing.current = null
+      setStroke(null)
+      const xs = loop.map((p) => p[0])
+      const ys = loop.map((p) => p[1])
+      // 点了一下、划了一小道：不算圈
+      const big = (Math.max(...xs) - Math.min(...xs)) * v.k > 16 && (Math.max(...ys) - Math.min(...ys)) * v.k > 16
+      if (!lay || loop.length < 6 || !big) return
+      // 和已有的圈叠在一起：合成一个大圈
+      const merged = (circles ?? []).flatMap((c, i) => (overlaps(c, loop) ? [i] : []))
+      const final = merged.length ? merge([...merged.map((i) => circles![i]), loop]) : loop
+      onCircle?.(final, circled(lay, graph, final, MAX_POINTED), merged)
+      return
+    }
     if (moveFrom.current) {
       const m = moving
       moveFrom.current = null
@@ -230,6 +280,15 @@ export default function InkBoard({
     onSelect(hitTest(lay, graph, v.x + x / v.k, v.y + y / v.k, 8 / v.k), { x: v.x + x / v.k, y: v.y + y / v.k })
   }
   const onMove = (e: PointerEvent) => {
+    if (drawing.current) {
+      const [x, y] = at(e)
+      const p: Pt = [v.x + x / v.k, v.y + y / v.k]
+      const last = drawing.current[drawing.current.length - 1]
+      if (Math.hypot(p[0] - last[0], p[1] - last[1]) * v.k < 3) return
+      drawing.current = [...drawing.current, p]
+      setStroke(drawing.current)
+      return
+    }
     if (moveFrom.current) {
       const [x, y] = at(e)
       setMoving({ dx: v.x + x / v.k - moveFrom.current.x, dy: v.y + y / v.k - moveFrom.current.y })
@@ -298,12 +357,16 @@ export default function InkBoard({
   return (
     <div
       ref={wrap}
-      className="ink"
+      className={`ink${lasso ? ' lasso' : ''}`}
       style={{ background: look.paper }}
       onWheel={onWheel}
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
+      onPointerCancel={() => {
+        drawing.current = null
+        setStroke(null)
+      }}
       onDoubleClick={() => setView(null)}
     >
       <svg width="100%" height="100%" viewBox={`${v.x} ${v.y} ${W / v.k} ${H / v.k}`} data-messy={drawn}>
@@ -329,6 +392,24 @@ export default function InkBoard({
         )}
         <g>{pieces.filter((p) => p.under).map(render)}</g>
         <g filter={`url(#${look.chalk ? 'chalk' : 'marker'})`}>{pieces.filter((p) => !p.under).map(render)}</g>
+        {circles?.length || stroke ? (
+          <g className="ink-lasso" fill={look.blue} filter={`url(#${look.chalk ? 'chalk' : 'marker'})`} aria-hidden>
+            {drawnCircles.map((ds, i) => (
+              <g key={i} data-loop={i}>
+                {ds.map((d, j) => (
+                  <path key={j} d={d} />
+                ))}
+              </g>
+            ))}
+            {stroke && (
+              <g data-loop="live">
+                {penLoop(stroke, false, 'lasso-live', messy, weight).map((d, j) => (
+                  <path key={j} d={d} />
+                ))}
+              </g>
+            )}
+          </g>
+        ) : null}
         {selBox && (
           <g className="ink-selection">
             {selLine ? (

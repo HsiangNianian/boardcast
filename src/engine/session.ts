@@ -8,6 +8,7 @@ import { type LlmConfig, type LlmResult, proposeOps } from './llm.ts'
 import { type Op, applyOps, eraseDrafts, markDrafts, parseOps } from './ops.ts'
 import type { Utterance } from './prompt.ts'
 import type { Term } from './glossary.ts'
+import { latest } from './pointing.ts'
 import { mentions, quickOps } from './rules.ts'
 
 export interface SessionEvents {
@@ -64,10 +65,15 @@ export class Session {
     const batch = this.pending.splice(0)
     const started = performance.now()
     const queuedMs = this.pendingAt.splice(0).map((t) => Math.round(started - t))
+    // 几句攒成一批时，指着的东西也合在一起（留最近两个）
+    const pointed = latest(batch.flatMap((u) => u.pointing ?? []))
     const next: Utterance =
       batch.length === 1
         ? batch[0]
-        : { text: batch.map((u) => (u.speaker ? `${u.speaker}：${u.text}` : u.text)).join(' ') }
+        : {
+            text: batch.map((u) => (u.speaker ? `${u.speaker}：${u.text}` : u.text)).join(' '),
+            ...(pointed.length ? { pointing: pointed } : {}),
+          }
     try {
       const drafts = markDrafts(this.graph)
       const r = await proposeOps(this.llm, this.graph, this.history.slice(-this.context), next, undefined, this.terms)

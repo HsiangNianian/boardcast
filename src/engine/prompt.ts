@@ -164,6 +164,8 @@ const EXAMPLES_EN: [string, string][] = [
 export interface Utterance {
   speaker?: string
   text: string
+  /** 说这句话时手指着的东西（节点编号，最多两个，先指的在前）：「这里」「这个」「这俩」靠它对上 */
+  pointing?: string[]
 }
 
 function line(u: Utterance): string {
@@ -182,12 +184,26 @@ export function boardLang(recent: Utterance[], next: Utterance): SpokenLang {
  */
 const ENGLISH_BOARD = '这场会说的是英文：板上的名字、条目、问题、备注都用英文写，照原话的叫法，不要翻译成中文。名字 1 到 4 个词，条目最多 8 个词。'
 
+/** 「当前手指着：n4（库存服务）、n5（Redis）」。指着的东西已经不在板上了就不提；原文块只给开头几个字 */
+export function pointingLine(g: Graph, ids: string[] | undefined): string | undefined {
+  const shown = (ids ?? []).flatMap((id) => {
+    const n = g.nodes.find((x) => x.id === id)
+    if (!n) return []
+    const name = n.label.length > 16 ? `${n.label.slice(0, 16)}…` : n.label
+    return [`${n.id}（${name}）`]
+  })
+  return shown.length ? `当前手指着：${shown.join('、')}` : undefined
+}
+
 export function userMessage(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = []): string {
   const parts = [`白板：\n${describe(g)}`]
   if (boardLang(recent, next) === 'en') parts.unshift(ENGLISH_BOARD)
   // 术语表放在最前面：一场会里不变，llama-server 的前缀缓存能复用
   if (terms.length) parts.unshift(`术语（起名照这个写法）：${glossaryLine(terms)}`)
   if (recent.length) parts.push(`前文（已经画过了）：\n${recent.map(line).join('\n')}`)
+  // 只在真指着东西时才有这一行：没指的时候提示词和评测时一模一样
+  const pointed = pointingLine(g, next.pointing)
+  if (pointed) parts.push(pointed)
   parts.push(`新的一句：${line(next)}`)
   return parts.join('\n')
 }

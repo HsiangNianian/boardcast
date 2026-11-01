@@ -57,6 +57,8 @@ export interface Node {
   rows?: RegionRow[]
   /** region 上圈画的词、句；marks 是整块的 */
   spans?: Span[]
+  /** 谁提的：第一次写成墨线时那句话的说话人（见 attribute.ts） */
+  by?: string
 }
 
 export interface Edge {
@@ -64,6 +66,8 @@ export interface Edge {
   to: string
   label?: string
   ink: Ink
+  /** 谁提的，同 Node.by */
+  by?: string
 }
 
 export interface Group {

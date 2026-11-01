@@ -20,6 +20,15 @@ export interface InkLook {
   chalk: boolean
 }
 
+/** 溯源：标出某个说话人提的东西（同色荧光笔垫底），别的淡下去 */
+export interface Trace {
+  who: string
+  color: string
+}
+
+/** 溯源时没标出来的东西淡到多少 */
+const FADE = 0.3
+
 export interface Piece {
   /** 同一个 key 写过一次就不再重写：文字变了才重写，只是位置变了就直接挪过去 */
   key: string
@@ -107,6 +116,7 @@ export async function compose(
   messy = 0.3,
   weight = 1,
   base?: Graph,
+  trace?: Trace | null,
 ): Promise<Piece[]> {
   const pieces: Piece[] = []
   const colorOf = (n: Node | undefined, fallback = look.ink) =>
@@ -114,7 +124,10 @@ export async function compose(
   // 底板上原样留下来的用淡墨。改了名字的旧节点：框还是旧的，名字用新墨写
   const old = inherited(base)
   const fade = (yes: boolean) => (yes ? OLD_INK : 1)
-  const alpha = (n: Node | undefined) => (n?.ink === 'draft' ? 0.55 : n?.marks.includes('划掉') ? 0.55 : 1)
+  /** 溯源时：是这个人提的吗；不是的淡下去（分组、原文这些没人提的也淡下去） */
+  const traced = (x?: { by?: string }) => !!trace && x?.by === trace.who
+  const dim = (x?: { by?: string }) => (trace && !traced(x) ? FADE : 1)
+  const alpha = (n: Node | undefined) => (n?.ink === 'draft' ? 0.55 : n?.marks.includes('划掉') ? 0.55 : 1) * dim(n)
 
   const add = (key: string, color: string, opacity: number, strokes: (Stroke | Mark)[], size: number, extra: Partial<Piece> = {}) => {
     const r = rng(key)
@@ -126,22 +139,28 @@ export async function compose(
     pieces.push({ key, color, opacity, strokes: inked, ...extra })
   }
 
-  /** 一段文字连同它的标记。不属于节点的字（分组名、连线标签）用 `old` 说它是不是底板上原样留下的 */
-  const text = async (n: Node | undefined, id: string, str: string, x: number, y: number, size: number, color: string, w: number, faded = false) => {
+  /**
+   * 一段文字连同它的标记。`opacity`：没有节点的字（连线标签）跟着谁淡（溯源）；
+   * `faded`：没有节点的字（分组名、连线标签）是不是底板上原样留下的
+   */
+  const text = async (n: Node | undefined, id: string, str: string, x: number, y: number, size: number, color: string, w: number, opacity = alpha(n), faded = false) => {
     const key = `${id}|${str}`
-    if (n && hot.has(n.id)) {
+    // 荧光笔垫底：被提到时黄色，溯源时用说话人的颜色
+    const hl = n && traced(n) ? { tag: 'by', color: trace!.color, opacity: 0.5 } : n && hot.has(n.id) ? { tag: 'hot', color: look.highlight, opacity: 0.55 } : undefined
+    if (hl) {
       const r = rng(`${key}hl`)
-      pieces.push({ key: `${key}|hot`, color: look.highlight, opacity: 0.55, under: true, strokes: [ink(line([x - 4, y + size * 0.62], [x + w + 4, y + size * 0.58], r, 0.01), size * 0.9, r, { wobble: 1, taper: 0 })] })
+      pieces.push({ key: `${key}|${hl.tag}`, color: hl.color, opacity: hl.opacity, under: true, strokes: [ink(line([x - 4, y + size * 0.62], [x + w + 4, y + size * 0.58], r, 0.01), size * 0.9, r, { wobble: 1, taper: 0 })] })
     }
-    add(key, color, alpha(n) * fade(n ? old.label(n) : faded), await write(str, x, y, size, key, messy), penFor(size))
+    add(key, color, opacity * fade(n ? old.label(n) : faded), await write(str, x, y, size, key, messy), penFor(size))
     if (!n) return
     const r = rng(`${key}m`)
     const markColor = n.ink === 'draft' ? look.pencil : look.red
-    // 标记是这场会做的就用新墨，哪怕标在淡墨的旧字上
-    if (n.marks.includes('划掉')) add(`${key}|x`, n.ink === 'draft' ? look.pencil : look.ink, fade(old.mark(n, '划掉')), strike(x, y + size * 0.6, w, r), penFor(size) * 1.1)
-    if (n.marks.includes('下划线')) add(`${key}|u`, markColor, fade(old.mark(n, '下划线')), [line([x - 2, y + size + 7], [x + w + 6, y + size + 5], r, 0.02)], penFor(size))
-    if (n.marks.includes('圈出')) add(`${key}|o`, markColor, fade(old.mark(n, '圈出')), [loop(x + w / 2, y + size / 2, w / 2 + 18, size / 2 + 14, r)], penFor(size))
-    if (n.marks.includes('星标')) add(`${key}|s`, markColor, fade(old.mark(n, '星标')), await write('★', x + w + 10, y - 2, size, `${key}s`, messy), penFor(size))
+    // 标记是这场会做的就用新墨，哪怕标在淡墨的旧字上；溯源时跟着这个节点淡
+    const mo = dim(n)
+    if (n.marks.includes('划掉')) add(`${key}|x`, n.ink === 'draft' ? look.pencil : look.ink, mo * fade(old.mark(n, '划掉')), strike(x, y + size * 0.6, w, r), penFor(size) * 1.1)
+    if (n.marks.includes('下划线')) add(`${key}|u`, markColor, mo * fade(old.mark(n, '下划线')), [line([x - 2, y + size + 7], [x + w + 6, y + size + 5], r, 0.02)], penFor(size))
+    if (n.marks.includes('圈出')) add(`${key}|o`, markColor, mo * fade(old.mark(n, '圈出')), [loop(x + w / 2, y + size / 2, w / 2 + 18, size / 2 + 14, r)], penFor(size))
+    if (n.marks.includes('星标')) add(`${key}|s`, markColor, mo * fade(old.mark(n, '星标')), await write('★', x + w + 10, y - 2, size, `${key}s`, messy), penFor(size))
   }
 
   // —— 导入页上的原文：本身不画（底图上就有），只画勾画——圈、划、下划线、星标，被提到时整块淡淡地涂一下 ——
@@ -150,18 +169,19 @@ export async function compose(
     const { x, y, w, h } = n.at
     const r = rng(`${n.id}|pin`)
     const c = n.ink === 'draft' ? look.pencil : look.red
+    const o = dim(n)
     if (hot.has(n.id))
       pieces.push({ key: `${n.id}|hot`, color: look.highlight, opacity: 0.45, under: true, strokes: [ink(line([x - 4, y + h / 2], [x + w + 4, y + h / 2], r, 0.005), h + 6, r, { wobble: 1, taper: 0 })] })
-    if (n.marks.includes('圈出')) add(`${n.id}|o`, c, fade(old.mark(n, '圈出')), [loop(x + w / 2, y + h / 2, w / 2 + 14, h / 2 + 12, r)], penFor(FONT))
-    if (n.marks.includes('下划线')) add(`${n.id}|u`, c, fade(old.mark(n, '下划线')), [line([x - 2, y + h + 6], [x + w + 4, y + h + 4], r, 0.01)], penFor(FONT))
-    if (n.marks.includes('划掉')) add(`${n.id}|x`, c, fade(old.mark(n, '划掉')), h > 40 ? [line([x, y], [x + w, y + h], r, 0.02), line([x + w, y], [x, y + h], r, 0.02)] : strike(x, y + h / 2, w, r), penFor(FONT) * 1.1)
-    if (n.marks.includes('星标')) add(`${n.id}|s`, c, fade(old.mark(n, '星标')), await write('★', x - FONT - 10, y + (h - FONT) / 2, FONT, `${n.id}s`, messy), penFor(FONT))
+    if (n.marks.includes('圈出')) add(`${n.id}|o`, c, o * fade(old.mark(n, '圈出')), [loop(x + w / 2, y + h / 2, w / 2 + 14, h / 2 + 12, r)], penFor(FONT))
+    if (n.marks.includes('下划线')) add(`${n.id}|u`, c, o * fade(old.mark(n, '下划线')), [line([x - 2, y + h + 6], [x + w + 4, y + h + 4], r, 0.01)], penFor(FONT))
+    if (n.marks.includes('划掉')) add(`${n.id}|x`, c, o * fade(old.mark(n, '划掉')), h > 40 ? [line([x, y], [x + w, y + h], r, 0.02), line([x + w, y], [x, y + h], r, 0.02)] : strike(x, y + h / 2, w, r), penFor(FONT) * 1.1)
+    if (n.marks.includes('星标')) add(`${n.id}|s`, c, o * fade(old.mark(n, '星标')), await write('★', x - FONT - 10, y + (h - FONT) / 2, FONT, `${n.id}s`, messy), penFor(FONT))
     // 圈画在一个词、一句话上的
     for (const s of n.spans ?? []) {
       const key = `${n.id}|${s.mark}|${s.boxes.map((b) => `${b.x},${b.y}`).join(';')}`
       const sr = rng(key)
       const thin = penFor(FONT) * 0.8
-      const o = fade(old.span(n, s))
+      const o = dim(n) * fade(old.span(n, s))
       if (s.mark === '圈出') {
         const b = s.boxes[0]
         add(key, c, o, [s.boxes.length === 1 ? loop(b.x + b.w / 2, b.y + b.h / 2, b.w / 2 + 6, b.h / 2 + 4, sr) : outline(s.boxes, 4, sr)], thin)
@@ -176,7 +196,7 @@ export async function compose(
     const host = g.nodes.find((p) => p.id === row.node.parent)?.at
     if (!host) continue
     const r = rng(`${row.id}|tether`)
-    add(`${row.id}|tether`, look.blue, 0.6 * fade(old.node(row.node)), [line([host.x + host.w + 6, host.y + Math.min(host.h, 30) / 2], [row.x - 8, row.y + row.size / 2], r, 0.02)], penFor(FONT) * 0.5)
+    add(`${row.id}|tether`, look.blue, 0.6 * fade(old.node(row.node)) * dim(row.node), [line([host.x + host.w + 6, host.y + Math.min(host.h, 30) / 2], [row.x - 8, row.y + row.size / 2], r, 0.02)], penFor(FONT) * 0.5)
   }
 
   // —— 话题区域 ——
@@ -188,7 +208,7 @@ export async function compose(
       // 没有话题的那块（「待定」之类）：里面全是旧的，标题也是旧的
       const was = head ? old.node(head) : !!base && reg.rows.length > 0 && reg.rows.every((x) => old.node(x.node))
       if (head?.icon) add(`${head.id}|icon|${head.icon}`, c, alpha(head) * fade(old.icon(head)), inkIcon(head.icon, reg.x, reg.y - 2, 36, rng(`${head.id}i`)), penFor(FONT) * 0.85)
-      await text(head, head?.id ?? reg.id, reg.title.text, tx, reg.y, TITLE, c, reg.title.w, was)
+      await text(head, head?.id ?? reg.id, reg.title.text, tx, reg.y, TITLE, c, reg.title.w, undefined, was)
       const r = rng(`${reg.id}ul`)
       add(`${reg.id}|${reg.title.text}|ul`, c, alpha(head) * fade(was), [line([tx - 6, reg.y + TITLE + 10], [tx + reg.title.w + 14, reg.y + TITLE + 13], r, 0.03)], penFor(TITLE))
     }
@@ -213,7 +233,7 @@ export async function compose(
 
   // 所有连线的走线和标签：标签留到最后统一放
   const lines: Pt[][] = []
-  const labels: { key: string; text: string; route: Pt[]; color: string; prefer?: Pt[]; old: boolean }[] = []
+  const labels: { key: string; text: string; route: Pt[]; color: string; opacity: number; prefer?: Pt[]; old: boolean }[] = []
 
   // —— 流程图区域 ——
   const d = l.diagram
@@ -221,8 +241,8 @@ export async function compose(
     for (const grp of d.groups) {
       const r = rng(grp.id)
       const was = old.group(grp)
-      add(`${grp.id}|${grp.label}`, look.blue, 0.8 * fade(was), box(grp.x, grp.y, grp.w, grp.h, r), penFor(FONT) * 0.8)
-      await text(undefined, `${grp.id}t`, grp.label, grp.x + 14, grp.y + 10, FONT - 2, look.blue, 0, was)
+      add(`${grp.id}|${grp.label}`, look.blue, 0.8 * fade(was) * dim(), box(grp.x, grp.y, grp.w, grp.h, r), penFor(FONT) * 0.8)
+      await text(undefined, `${grp.id}t`, grp.label, grp.x + 14, grp.y + 10, FONT - 2, look.blue, 0, undefined, was)
     }
     for (const b of d.nodes) {
       const n = g.nodes.find((x) => x.id === b.id)
@@ -240,9 +260,9 @@ export async function compose(
       if (!e) continue
       const r = rng(`${e.from}>${e.to}`)
       const c = e.ink === 'draft' ? look.pencil : look.ink
-      add(`${e.from}>${e.to}`, c, (e.ink === 'draft' ? 0.55 : 1) * fade(old.edge(e)), arrow(rt.points as Pt[], r), penFor(FONT) * 0.9)
+      add(`${e.from}>${e.to}`, c, (e.ink === 'draft' ? 0.55 : 1) * fade(old.edge(e)) * dim(e), arrow(rt.points as Pt[], r), penFor(FONT) * 0.9)
       lines.push(rt.points as Pt[])
-      if (e.label) labels.push({ key: `${e.from}>${e.to}l`, text: e.label, route: rt.points as Pt[], color: c, old: old.edge(e, true) })
+      if (e.label) labels.push({ key: `${e.from}>${e.to}l`, text: e.label, route: rt.points as Pt[], color: c, opacity: dim(e), old: old.edge(e, true) })
     }
   }
 
@@ -270,13 +290,13 @@ export async function compose(
     }
     const c = e.ink === 'draft' ? look.pencil : look.ink
     const r = rng(`${e.from}~${e.to}`)
-    add(`${e.from}~${e.to}`, c, (e.ink === 'draft' ? 0.55 : 1) * fade(old.edge(e)), arrow(curve, r), penFor(FONT) * 0.9)
+    add(`${e.from}~${e.to}`, c, (e.ink === 'draft' ? 0.55 : 1) * fade(old.edge(e)) * dim(e), arrow(curve, r), penFor(FONT) * 0.9)
     lines.push(curve)
     // 标签优先放在曲线中点（t = 0.5，不是控制点）沿法线往弯的外侧挪一点
     const on: Pt = [(p0[0] + 2 * mid[0] + p1[0]) / 4, (p0[1] + 2 * mid[1] + p1[1]) / 4]
     const nx = -(p1[1] - p0[1]) / len
     const ny = (p1[0] - p0[0]) / len
-    if (e.label) labels.push({ key: `${e.from}~${e.to}l`, text: e.label, route: curve, color: c, prefer: [[on[0] + nx * 22 - 12, on[1] + ny * 22 - 10]], old: old.edge(e, true) })
+    if (e.label) labels.push({ key: `${e.from}~${e.to}l`, text: e.label, route: curve, color: c, opacity: dim(e), prefer: [[on[0] + nx * 22 - 12, on[1] + ny * 22 - 10]], old: old.edge(e, true) })
   }
 
   // —— 连线标签：所有线都画完了再放，这样能避开每一条线；后画的也会盖在线上面 ——
@@ -294,7 +314,7 @@ export async function compose(
       const cy = spot.y + spot.h / 2 + 1
       add(`${lb.key}|bg`, look.paper, 0.92, [line([spot.x - 4, cy], [spot.x + spot.w + 4, cy], r, 0)], spot.h + 8)
     }
-    await text(undefined, lb.key, lb.text, spot.x, spot.y, size, lb.color, 0, lb.old)
+    await text(undefined, lb.key, lb.text, spot.x, spot.y, size, lb.color, 0, lb.opacity, lb.old)
   }
   return pieces
 }

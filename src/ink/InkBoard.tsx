@@ -7,7 +7,7 @@ import { type PointerEvent, type ReactNode, type WheelEvent, useEffect, useMemo,
 import { type Layout, board } from '../board/layout.ts'
 import type { Selection } from '../engine/edit.ts'
 import type { Graph } from '../engine/graph.ts'
-import { type InkLook, type Piece, compose } from './compose.ts'
+import { type InkLook, type Piece, type Trace, compose } from './compose.ts'
 import { localPoint } from '../ui/landscape.ts'
 import { hitTest, selectionBox, selectionLine } from './hit.ts'
 
@@ -60,6 +60,7 @@ export default function InkBoard({
   layoutRev = 0,
   underlay,
   base,
+  trace = null,
 }: {
   graph: Graph
   hot: Set<string>
@@ -83,6 +84,8 @@ export default function InkBoard({
   underlay?: string
   /** 带着旧板开会时的底板：上面原样留下的东西用淡墨 */
   base?: Graph
+  /** 溯源：标出这个说话人提的东西，别的淡下去 */
+  trace?: Trace | null
 }) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
@@ -108,13 +111,18 @@ export default function InkBoard({
   const tidied = useRef(tidy)
   /** 上一次板上有没有东西：从空白板开始画第一笔时总是适配一次 */
   const had = useRef(false)
+  /** 上一次是照着什么画的：只是溯源换了人，板书没变，就不动视角 */
+  const drewFor = useRef<unknown[]>([])
 
   useEffect(() => {
     let stale = false
     void (async () => {
       const l = await board.layout(graph)
-      const ps = await compose(graph, l, hot, look, messy, weight, base)
+      const ps = await compose(graph, l, hot, look, messy, weight, base, trace)
       if (stale) return
+      const from = [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev]
+      const restyled = from.every((x, i) => x === drewFor.current[i])
+      drewFor.current = from
       setLay(l)
       // 给第一次出现的笔画排上写字的时间：接在正在写的东西后面。
       // 板书不能落后于讨论：一轮新内容最多写 BUDGET 毫秒，写不完就整体加速；
@@ -143,20 +151,22 @@ export default function InkBoard({
       }
       setPieces(ps)
       setDrawn(messy)
-      setBounds(l.bounds)
-      // 新内容还在画面里就不动视角，免得每说一句整块板缩放一次；跑出画面或者刚整理过才重新适配
-      const cur = shown.current
-      const b = l.bounds
-      const [w, h] = size.current
-      const inside =
-        cur &&
-        b.x0 >= cur.x &&
-        b.y0 >= cur.y &&
-        b.x1 <= cur.x + w / cur.k &&
-        b.y1 <= cur.y + Math.max(120, h - bottomInset) / cur.k
-      setView(inside && had.current && tidied.current === tidy ? cur : null)
-      tidied.current = tidy
-      had.current = graph.nodes.length > 0
+      if (!restyled) {
+        setBounds(l.bounds)
+        // 新内容还在画面里就不动视角，免得每说一句整块板缩放一次；跑出画面或者刚整理过才重新适配
+        const cur = shown.current
+        const b = l.bounds
+        const [w, h] = size.current
+        const inside =
+          cur &&
+          b.x0 >= cur.x &&
+          b.y0 >= cur.y &&
+          b.x1 <= cur.x + w / cur.k &&
+          b.y1 <= cur.y + Math.max(120, h - bottomInset) / cur.k
+        setView(inside && had.current && tidied.current === tidy ? cur : null)
+        tidied.current = tidy
+        had.current = graph.nodes.length > 0
+      }
       // 写完以后去掉遮罩，换成静态路径
       const wait = cursor.current - now + 100
       setTimeout(() => !stale && setTick((t) => t + 1), wait)
@@ -164,7 +174,8 @@ export default function InkBoard({
     return () => {
       stale = true
     }
-  }, [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev, base])
+    // trace 按内容比：每次渲染传进来的都是新对象也不会重画
+  }, [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev, base, trace?.who, trace?.color])
 
   // 画布尺寸放进 state：第一次渲染时 ref 还没挂上，窗口缩放时也要重新适配
   const [[W, H], setSize] = useState<[number, number]>([1000, 700])
@@ -278,7 +289,8 @@ export default function InkBoard({
         const id = `w${i}-${j}-${p.key.length}`
         return (
           <g key={j}>
-            <mask id={id} maskUnits="userSpaceOnUse">
+            {/* 遮罩范围要写明：不写时默认按画布大小从原点算，原点左边、上边（坐标是负数）的新内容写的时候看不见，写完才突然冒出来 */}
+            <mask id={id} maskUnits="userSpaceOnUse" x={bounds.x0 - 200} y={bounds.y0 - 200} width={bounds.x1 - bounds.x0 + 400} height={bounds.y1 - bounds.y0 + 400}>
               <path
                 d={s.center}
                 fill="none"

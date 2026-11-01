@@ -4,6 +4,7 @@
 // - 主箭头：从话题出发横着刺进左栏，红马克笔把巨字里的「自己」重重圈住。
 // 颜色只有两种：浓墨黑，和只出现在三处的朱砂红（「自己」的圈、划掉旧词的两道线、圈住新方案的那一圈）。
 // 推杆只改变字迹的性格（歪斜、错落、连笔，主箭头和红圈更张扬），板上的东西一样不多、一样不少。
+// 粗细推杆只改笔头宽度，字形不动。
 
 import { type Box, type Piece, type Pt, type Stroke, makePiece, rng } from '../ink/core'
 import { measure, penFor, write } from '../ink/hand'
@@ -47,6 +48,8 @@ class Builder {
     readonly m: number,
     readonly k: number,
     readonly center: Pt,
+    /** 粗细推杆：所有笔画的笔宽倍数 */
+    readonly w = 1,
   ) {}
 
   /** 一段手写字；越潦草，整段也跟着歪一点、挪一点，笔也走得更快、更细 */
@@ -62,13 +65,13 @@ class Builder {
     const s = Math.sin(tilt)
     for (const mk of w.marks) mk.pts = mk.pts.map(([px, py]): Pt => [cx + (px - cx) * c - (py - cy) * s + dx, cy + (px - cx) * s + (py - cy) * c + dy])
     const pen = (o.pen ?? penFor(size)) * (1 - 0.16 * this.m)
-    const p = makePiece(id, color, w.marks, pen, this.m, { alpha: o.alpha })
+    const p = makePiece(id, color, w.marks, pen, this.m, { alpha: o.alpha, weight: this.w })
     this.add(p, group, o.block)
     return { w: w.w, p }
   }
 
   marks(id: string, strokes: Stroke[], pen: number, color: string, group: Group, o: { alpha?: number; wob?: number; block?: string } = {}) {
-    const p = makePiece(id, color, strokes, pen, this.m, o)
+    const p = makePiece(id, color, strokes, pen, this.m, { ...o, weight: this.w })
     this.add(p, group, o.block)
     return p
   }
@@ -82,7 +85,7 @@ class Builder {
   }
 }
 
-export function compose(g: HeroGeo, m: number): Board {
+export function compose(g: HeroGeo, m: number, weight = 1): Board {
   const W = g.W
   const bw = W - (g.stacked ? 0 : g.divX)
   const bh = g.baseY - g.boardTop
@@ -101,7 +104,7 @@ export function compose(g: HeroGeo, m: number): Board {
   const topicSize = S(76)
   const topicX = X(300)
   const center: Pt = [topicX + topicSize * 2, ty]
-  const b = new Builder(m, k, center)
+  const b = new Builder(m, k, center, weight)
   const r = rng('board')
   const pen = (s: number) => penFor(S(s))
 

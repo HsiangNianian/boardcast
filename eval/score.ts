@@ -26,6 +26,8 @@ export interface Gold {
   topics?: { title: Names; items: Names[] }[]
   /** 应该被划掉的 */
   struck?: Names[]
+  /** 不该被划掉的（用户把模型的划掉去掉了）：划掉了算一次标记没命中 */
+  not_struck?: Names[]
   /** 应该被强调的（星标、圈出、下划线都算） */
   emphasized?: Names[]
   /** 不该被强调的（比如强调落到了话题上，而不是被强调的那一条）：强调了算一次标记没命中 */
@@ -167,6 +169,11 @@ export function score(g: Graph, gold: Gold): Score {
   for (const s of gold.struck ?? []) has(s, (n) => n.marks.includes('划掉'), '没划掉')
   for (const s of gold.emphasized ?? [])
     has(s, (n) => n.marks.some((m) => m === '星标' || m === '圈出' || m === '下划线'), '没强调')
+  for (const s of gold.not_struck ?? []) {
+    markAll++
+    if (g.nodes.some((n) => n.marks.includes('划掉') && best(names(n), s) >= 1)) markMiss.push(`不该划掉：${s[0]}`)
+    else markHit++
+  }
   for (const s of gold.not_emphasized ?? []) {
     markAll++
     const wrong = g.nodes.some((n) => n.marks.some((m) => m === '星标' || m === '圈出' || m === '下划线') && best(names(n), s) >= 1)

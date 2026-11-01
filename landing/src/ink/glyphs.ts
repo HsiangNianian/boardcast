@@ -1,0 +1,88 @@
+// 字形 → 笔画（单位：字号 = 1，按书写顺序）。
+// 汉字：hanzi-writer-data 的骨架线；ASCII：Hershey futural 单线字体；中文标点和几个符号：手画几笔。
+
+import hanzi from '../gen/hanzi.json'
+import hershey from '../gen/hershey.json'
+import type { Pt, Stroke } from './core'
+
+export interface Glyph {
+  strokes: Stroke[]
+  advance: number
+  han: boolean
+}
+
+const HZ = hanzi as unknown as Record<string, number[][][]>
+const HS = hershey as unknown as [string, number][]
+
+// hanzi-writer：1024 见方，y 轴朝上，基线在 900
+const hz = (p: number[]): Pt => [p[0] / 1024, (900 - p[1]) / 1024]
+
+const P = (strokes: number[][][], advance: number): Glyph => ({
+  strokes: strokes.map((s) => s.map((p) => [p[0], p[1]] as Pt)),
+  advance,
+  han: false,
+})
+
+const PUNCT: Record<string, Glyph> = {
+  '，': P([[[0.22, 0.78], [0.26, 0.84], [0.2, 0.95]]], 0.5),
+  '。': P([[[0.22, 0.76], [0.3, 0.74], [0.34, 0.82], [0.27, 0.88], [0.2, 0.83], [0.22, 0.76]]], 0.5),
+  '、': P([[[0.18, 0.74], [0.3, 0.86]]], 0.5),
+  '：': P([[[0.25, 0.38], [0.26, 0.42]], [[0.25, 0.74], [0.26, 0.78]]], 0.5),
+  '？': P([[[0.28, 0.3], [0.4, 0.18], [0.58, 0.2], [0.62, 0.34], [0.45, 0.5], [0.44, 0.64]], [[0.44, 0.8], [0.45, 0.84]]], 0.8),
+  '！': P([[[0.4, 0.18], [0.38, 0.64]], [[0.38, 0.8], [0.39, 0.84]]], 0.6),
+  '（': P([[[0.5, 0.1], [0.32, 0.4], [0.32, 0.7], [0.5, 0.98]]], 0.6),
+  '）': P([[[0.2, 0.1], [0.38, 0.4], [0.38, 0.7], [0.2, 0.98]]], 0.6),
+  '「': P([[[0.5, 0.12], [0.3, 0.12], [0.3, 0.6]]], 0.6),
+  '」': P([[[0.3, 0.5], [0.3, 0.95], [0.1, 0.95]]], 0.6),
+  '—': P([[[0.05, 0.55], [0.95, 0.53]]], 1),
+  '·': P([[[0.3, 0.52], [0.33, 0.55]]], 0.6),
+  '…': P([[[0.12, 0.8], [0.14, 0.82]], [[0.42, 0.8], [0.44, 0.82]], [[0.72, 0.8], [0.74, 0.82]]], 1),
+  '→': P([[[0.05, 0.55], [0.9, 0.55]], [[0.68, 0.4], [0.92, 0.55], [0.68, 0.7]]], 1),
+  '←': P([[[0.95, 0.55], [0.1, 0.55]], [[0.32, 0.4], [0.08, 0.55], [0.32, 0.7]]], 1),
+  '↓': P([[[0.45, 0.12], [0.45, 0.9]], [[0.28, 0.68], [0.45, 0.92], [0.62, 0.68]]], 0.9),
+  '↗': P([[[0.15, 0.85], [0.8, 0.2]], [[0.45, 0.18], [0.82, 0.18], [0.82, 0.55]]], 1),
+  '↖': P([[[0.85, 0.85], [0.2, 0.2]], [[0.18, 0.55], [0.18, 0.18], [0.55, 0.18]]], 1),
+  '↳': P([[[0.2, 0.2], [0.2, 0.7], [0.8, 0.7]], [[0.62, 0.55], [0.82, 0.7], [0.62, 0.85]]], 0.9),
+  '×': P([[[0.2, 0.35], [0.65, 0.78]], [[0.65, 0.35], [0.2, 0.78]]], 0.85),
+  '≈': P([[[0.12, 0.45], [0.3, 0.38], [0.5, 0.46], [0.72, 0.38]], [[0.12, 0.66], [0.3, 0.59], [0.5, 0.67], [0.72, 0.59]]], 0.85),
+  '✓': P([[[0.12, 0.55], [0.36, 0.8], [0.86, 0.2]]], 0.95),
+  '★': P([[[0.5, 0.1], [0.62, 0.42], [0.95, 0.42], [0.68, 0.62], [0.78, 0.95], [0.5, 0.74], [0.22, 0.95], [0.32, 0.62], [0.05, 0.42], [0.38, 0.42], [0.5, 0.1]]], 1),
+  '↔': P([[[0.06, 0.55], [0.94, 0.55]], [[0.26, 0.4], [0.04, 0.55], [0.26, 0.7]], [[0.74, 0.4], [0.96, 0.55], [0.74, 0.7]]], 1),
+}
+
+// Hershey：y 轴朝下，大写字母大约占 1..22，前进宽度 = o × 1.68
+const HSCALE = 1 / 30
+function latin(ch: string): Glyph | null {
+  if (ch === ' ') return { strokes: [], advance: 0.35, han: false }
+  const data = HS[ch.charCodeAt(0) - 33]
+  if (!data) return null
+  const [d, o] = data
+  const strokes: Stroke[] = []
+  for (const part of d.split('M').slice(1)) {
+    const pts = part
+      .replace('L', ' ')
+      .trim()
+      .split(/\s+/)
+      .map((xy) => xy.split(',').map(Number) as Pt)
+      .filter((p) => p.length === 2 && !Number.isNaN(p[0]))
+      .map(([x, y]): Pt => [x * HSCALE, (y + 4) * HSCALE])
+    if (pts.length) strokes.push(pts)
+  }
+  return { strokes, advance: o * 1.68 * HSCALE, han: false }
+}
+
+const cache = new Map<string, Glyph | null>()
+
+export function glyph(ch: string): Glyph | null {
+  const hit = cache.get(ch)
+  if (hit !== undefined) return hit
+  let g: Glyph | null = PUNCT[ch] ?? null
+  if (!g) {
+    const code = ch.charCodeAt(0)
+    if (code < 128) g = latin(ch)
+    else if (code >= 0xff01 && code <= 0xff5e) g = latin(String.fromCharCode(code - 0xfee0))
+    else if (HZ[ch]) g = { strokes: HZ[ch].map((s) => s.map(hz)), advance: 1, han: true }
+  }
+  cache.set(ch, g)
+  return g
+}

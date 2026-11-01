@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>boardcast — 说话，板书自己长出来</title>
+    <meta
+      name="description"
+      content="说话，板书自己长出来。会议里大家只管讨论，白板上的手绘示意图跟着对话实时生长。语音在本机识别，板书由本机小模型写出，不上传音频。"
+    />
+    <meta property="og:title" content="boardcast — 说话，板书自己长出来" />
+    <meta property="og:description" content="本地优先的实时会议示意图：语音 → 本机小模型 → 确定性排版 → 一笔一笔写出来的手绘板书。" />
+    <meta name="theme-color" content="#f2f0e9" />
+    <link rel="icon" type="image/png" href="./favicon.png" />
+    <link rel="preload" href="./fonts/display.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      /* 巨字：思源黑体 Black 的子集（见 scripts/font.mjs）。写在这里，路径相对页面，部署到子路径也能找到 */
+      @font-face {
+        font-family: 'BC Display';
+        src: url('./fonts/display.woff2') format('woff2');
+        font-weight: 900;
+        font-display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- 1. 首屏：画廊细线锁边的海报 -->
+      <section class="hero" id="top" aria-label="boardcast">
+        <div class="frame">
+          <div class="col-left">
+            <header class="plate">
+              <a class="mark" href="#top">boardcast</a>
+              <dl class="plate-meta">
+                <div><dt>No.</dt><dd>019 — 实时会议示意图</dd></div>
+                <div><dt>Medium</dt><dd>语音 · 本机小模型 · 马克笔</dd></div>
+                <div><dt>Runs on</dt><dd>Linux / Windows / macOS · <a href="https://github.com/HsiangNianian/boardcast">GitHub ↗</a></dd></div>
+              </dl>
+            </header>
+            <div class="giant-wrap">
+              <h1 class="giant">
+                <span class="gl">说话，</span>
+                <span class="gl">板书<span class="self">自己</span></span>
+                <span class="gl">长出来。</span>
+              </h1>
+            </div>
+            <div class="talk" aria-hidden="true"></div>
+          </div>
+          <div class="col-board" aria-hidden="true"></div>
+          <canvas class="hero-ink" aria-hidden="true"></canvas>
+          <p class="sr-only">示意：一场关于登录改版的讨论，旁边的白板随着对话自己写出话题、条目、划掉的旧方案和圈出的新方案。</p>
+          <div class="base">
+            <div class="base-meta">
+              <span class="rec"><i></i>LIVE</span>
+              <span class="base-label">潦草度<em>MESSINESS</em></span>
+              <output class="base-val">0.12</output>
+            </div>
+            <div class="fader" role="slider" tabindex="0" aria-label="板书的潦草度：从工整到狂草" aria-valuemin="0" aria-valuemax="100" aria-valuenow="12">
+              <span class="fader-end">工整</span>
+              <div class="fader-track">
+                <canvas class="fader-ticks" aria-hidden="true"></canvas>
+                <div class="fader-groove"></div>
+                <div class="fader-cap"><i></i></div>
+              </div>
+              <span class="fader-end fader-end-wild">狂草</span>
+            </div>
+            <a class="base-hint" href="#act-connect">往下滑<span aria-hidden="true">↓</span></a>
+          </div>
+        </div>
+        <div class="gutter gutter-top" aria-hidden="true">
+          <span>BOARDCAST — TALK, AND THE BOARD DRAWS ITSELF</span><span>LOCAL-FIRST · MIT · 2026</span>
+        </div>
+      </section>
+
+      <!-- 2. 三幕：顺着一根墨线往下走 -->
+      <section class="acts">
+        <article class="act act-connect" id="act-connect">
+          <header class="cap">
+            <span class="cap-no">01</span>
+            <h2 class="cap-title">连线成图</h2>
+            <p class="cap-text">模型不画图，只发几行图操作。连线、分组、排版交给确定性代码——乱放的词，自己归位。</p>
+          </header>
+        </article>
+        <article class="act act-revise" id="act-revise">
+          <header class="cap">
+            <span class="cap-no">02</span>
+            <h2 class="cap-title">当场涂改</h2>
+            <p class="cap-text">被否掉的方案默认划掉，不是擦掉。推翻与重来的痕迹留在板上，像真的板书。</p>
+          </header>
+        </article>
+        <article class="act act-drag" id="act-drag">
+          <header class="cap">
+            <span class="cap-no">03</span>
+            <h2 class="cap-title">拖拽回弹</h2>
+            <p class="cap-text">拽住任何一块，连线跟着走。铅笔模式下，板上每一块都能直接拖动、修改、补画。</p>
+          </header>
+        </article>
+      </section>
+
+      <!-- 3. 白板 ↔ 黑板：一擦切换 -->
+      <section class="swap" id="swap">
+        <div class="swap-pin">
+          <div class="swap-board">
+            <canvas class="swap-view" aria-hidden="true"></canvas>
+            <canvas class="swap-dust" aria-hidden="true"></canvas>
+            <button class="swap-handle" type="button" aria-label="拖动白板和黑板的分界"><span aria-hidden="true">⇆</span></button>
+            <div class="eraser" aria-hidden="true"><b>boardcast</b></div>
+            <div class="swap-cap">
+              <span class="cap-no">04</span>
+              <h2 class="cap-title">白板 <span>↔</span> 黑板</h2>
+              <p>按住，横着擦过去。浅色是马克笔，深色是粉笔。</p>
+            </div>
+            <p class="swap-tip" aria-hidden="true">按住拖动 · 擦 &nbsp;/&nbsp; 双击复原</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. 收尾：两个入口 -->
+      <section class="finale" id="get">
+        <div class="finale-frame" aria-hidden="true"></div>
+        <canvas class="cta-ink" aria-hidden="true"></canvas>
+        <nav class="cta" aria-label="开始使用">
+          <a class="cta-item" href="https://hsiangnianian.github.io/boardcast/">
+            <span class="cta-label">在线试一下</span>
+            <span class="cta-sub">浏览器里看示例会议一笔一笔长出来</span>
+          </a>
+          <a class="cta-item" href="https://github.com/HsiangNianian/boardcast/releases/latest">
+            <span class="cta-label">下载桌面版</span>
+            <span class="cta-sub">本地模型 · 语音输入 · Linux / Windows / macOS</span>
+          </a>
+        </nav>
+        <footer class="colophon">
+          <span>boardcast</span>
+          <span>MIT License</span>
+          <a href="https://github.com/HsiangNianian/boardcast">GitHub</a>
+          <a href="https://github.com/HsiangNianian/boardcast/blob/main/README.en.md">English</a>
+        </footer>
+      </section>
+    </main>
+    <canvas class="stage" aria-hidden="true"></canvas>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

@@ -16,7 +16,10 @@
     "eval": "node eval/run.ts",
     "tauri": "node scripts/fetch-llama.mjs && node scripts/fetch-voice.mjs && tauri",
     "release": "node scripts/release.mjs",
-    "build:player": "vite build -c vite.player.config.ts"
+    "build:player": "vite build -c vite.player.config.ts",
+    "site:dev": "node landing/scripts/glyphs.mjs && vite -c landing/vite.config.ts",
+    "site:build": "node landing/scripts/glyphs.mjs && vite build -c landing/vite.config.ts",
+    "site:preview": "vite preview -c landing/vite.config.ts"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.1",

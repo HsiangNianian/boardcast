@@ -46,7 +46,7 @@ async function boardPage(page: ReplayPage, title: string, label: string): Promis
   const layout = new StableLayout()
   layout.restore(page.layout)
   const l = await layout.layout(page.graph)
-  const pieces = await compose(page.graph, l, new Set(), WHITEBOARD, 0.3, 1)
+  const pieces = await compose(page.graph, l, new Set(), WHITEBOARD, 0.3, 1, page.base)
   const P = 40
   const x0 = l.bounds.x0 - P
   const y0 = l.bounds.y0 - P

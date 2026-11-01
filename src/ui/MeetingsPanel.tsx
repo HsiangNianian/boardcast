@@ -1,10 +1,12 @@
 // 历史会议：最近改过的在前，可以打开、重命名、删除，也可以从这里开一场新会。
 
 import { useEffect, useState } from 'react'
+import type { Thumb } from '../board/thumb.ts'
 import type { Hit } from '../engine/search.ts'
 import { msg, useT } from '../i18n/index.ts'
 import { type MeetingInfo, meetings } from '../meetings.ts'
 import { Close, Plus } from './icons.tsx'
+import { Mini } from './PageStrip.tsx'
 
 interface Props {
   currentId: string
@@ -15,6 +17,10 @@ interface Props {
   onNew: (keepCurrent: boolean) => void
   /** 改了名字：当前这场要同步到界面上 */
   onRenamed: (id: string, title: string) => void
+  /** 一场会有哪几张板（缩略图），选底板用 */
+  boardsOf: (id: string) => Promise<(Thumb | undefined)[]>
+  /** 拿这场会的第 `page` 张板当底板开新会 */
+  onContinue: (id: string, page: number) => void
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -87,6 +93,18 @@ export default function MeetingsPanel(p: Props) {
     await meetings.save({ ...m, title, titled: true })
     p.onRenamed(id, title)
     refresh()
+  }
+
+  /** 接着开会：只有一张板就直接开，有几张先选一张 */
+  const [picking, setPicking] = useState<{ id: string; boards: (Thumb | undefined)[] } | null>(null)
+  async function continueOn(id: string) {
+    const boards = await p.boardsOf(id).catch(() => [undefined])
+    if (boards.length > 1) {
+      setPicking({ id, boards })
+      return
+    }
+    p.onContinue(id, 0)
+    p.onClose()
   }
 
   async function remove(id: string) {
@@ -194,6 +212,9 @@ export default function MeetingsPanel(p: Props) {
                   </>
                 ) : (
                   <>
+                    <button type="button" className="ghost" onClick={() => void continueOn(m.id)} title={s.continueTitle}>
+                      {s.continue}
+                    </button>
                     <button
                       type="button"
                       className="ghost"
@@ -210,6 +231,31 @@ export default function MeetingsPanel(p: Props) {
                   </>
                 )}
               </div>
+              {picking?.id === m.id && (
+                <div className="pick-board">
+                  <span>{s.pickBoard}</span>
+                  <div className="boards">
+                    {picking.boards.map((b, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        title={s.pageN(i + 1)}
+                        aria-label={s.pageN(i + 1)}
+                        onClick={() => {
+                          p.onContinue(m.id, i)
+                          p.onClose()
+                        }}
+                      >
+                        <Mini t={b} />
+                        <small>{i + 1}</small>
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" className="ghost" onClick={() => setPicking(null)}>
+                    {s.cancel}
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>

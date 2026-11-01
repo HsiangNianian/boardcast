@@ -6,7 +6,7 @@ import type { Thumb } from '../board/thumb.ts'
 import { useT } from '../i18n/index.ts'
 import { Plus } from './icons.tsx'
 
-function Mini({ t }: { t?: Thumb }) {
+export function Mini({ t }: { t?: Thumb }) {
   if (!t) return <svg viewBox="0 0 160 100" aria-hidden />
   // 留一点边，免得贴着缩略图的边框
   const pad = 8

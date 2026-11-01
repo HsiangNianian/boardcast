@@ -186,6 +186,9 @@ export const en = {
     delete: 'Delete',
     cancel: 'Cancel',
     rename: 'Rename',
+    continue: 'Continue on it',
+    continueTitle: "Start a new meeting on this meeting's board: what was there stays in faded ink, what the new meeting adds, renames or strikes out is in full ink",
+    pickBoard: 'Which board?',
   },
 
   models: {
@@ -486,6 +489,8 @@ export const en = {
     undoNote: 'Undid the last step',
     redoNote: 'Redid a step',
     movedNote: (what: string) => `Moved ${what}`,
+    continuedTitle: (title: string) => `${title} (cont.)`,
+    continuedNote: (title: string, page: number) => `Continued on board ${page} of "${title}": what was there is in faded ink, this meeting's changes in full ink`,
     forkNote: (from: number, at: string, to: number) => `Board ${to} forked from board ${from} as it was at ${at}`,
     deletedNote: (what: string) => `Deleted ${what}`,
     markSpanNote: (removed: boolean, text: string, mark: string) => `${removed ? 'Removed' : 'Added'} ${mark} on "${text}"`,

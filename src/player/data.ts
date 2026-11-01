@@ -13,6 +13,8 @@ export interface ReplayPage {
   underlay?: string
   /** 这张板最终的排版：回放从它开始，东西出现在最终的位置上，也用不上 ELK */
   layout?: LayoutMemory
+  /** 带着旧板开会时的底板：上面原样留下的东西用淡墨 */
+  base?: Graph
 }
 
 export interface ReplayData {

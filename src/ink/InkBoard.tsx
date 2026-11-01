@@ -59,6 +59,7 @@ export default function InkBoard({
   onMoveSel,
   layoutRev = 0,
   underlay,
+  base,
   trace = null,
 }: {
   graph: Graph
@@ -81,6 +82,8 @@ export default function InkBoard({
   layoutRev?: number
   /** 垫在底下的导入页（PDF 的一页、一张图片），左上角对齐板书原点，大小是 graph.underlay */
   underlay?: string
+  /** 带着旧板开会时的底板：上面原样留下的东西用淡墨 */
+  base?: Graph
   /** 溯源：标出这个说话人提的东西，别的淡下去 */
   trace?: Trace | null
 }) {
@@ -115,7 +118,7 @@ export default function InkBoard({
     let stale = false
     void (async () => {
       const l = await board.layout(graph)
-      const ps = await compose(graph, l, hot, look, messy, weight, trace)
+      const ps = await compose(graph, l, hot, look, messy, weight, base, trace)
       if (stale) return
       const from = [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev]
       const restyled = from.every((x, i) => x === drewFor.current[i])
@@ -172,7 +175,7 @@ export default function InkBoard({
       stale = true
     }
     // trace 按内容比：每次渲染传进来的都是新对象也不会重画
-  }, [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev, trace?.who, trace?.color])
+  }, [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev, base, trace?.who, trace?.color])
 
   // 画布尺寸放进 state：第一次渲染时 ref 还没挂上，窗口缩放时也要重新适配
   const [[W, H], setSize] = useState<[number, number]>([1000, 700])

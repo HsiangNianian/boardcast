@@ -40,7 +40,12 @@ export default function PageStrip(p: {
   // 板多了这一排要横着滚：切到哪张，就把哪张滚进来
   const nav = useRef<HTMLElement>(null)
   useEffect(() => {
-    nav.current?.querySelector('.page.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const strip = nav.current
+    const page = strip?.querySelector<HTMLElement>('.page.on')
+    if (!strip || !page) return
+    if (page.offsetLeft < strip.scrollLeft) strip.scrollLeft = page.offsetLeft
+    else if (page.offsetLeft + page.offsetWidth > strip.scrollLeft + strip.clientWidth)
+      strip.scrollLeft = page.offsetLeft + page.offsetWidth - strip.clientWidth
   }, [p.current, p.thumbs.length])
   return (
     <nav className="pages" aria-label={s.aria} ref={nav}>

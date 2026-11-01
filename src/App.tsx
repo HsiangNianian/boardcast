@@ -371,7 +371,7 @@ export default function App() {
   const voicesRef = useRef<Voice[]>([])
   /** 正在给哪个说话人改名 */
   const [renamingWho, setRenamingWho] = useState<string | null>(null)
-  const listEnd = useRef<HTMLDivElement>(null)
+  const lineList = useRef<HTMLDivElement>(null)
 
   // —— 手动修改：撤销历史、选中 ——
   /** 撤销的一步：板书 + 排版记住的位置（拖动只改位置；撤销删除时东西也回到原处） */
@@ -660,15 +660,19 @@ export default function App() {
     save('boardcast.log', showLog ? 'open' : 'closed')
   }, [mode, messy, weight, micChoice, voiceSource, diarize, autoUpdate, glossary, showLog])
 
-  // 新版浏览器的 scrollIntoView 会返回 Promise，不能直接当 effect 的返回值
+  // 只滚动字幕面板，避免嵌入官网时 scrollIntoView 连带滚动外层页面。
   // 从搜索结果跳过来的那一句：滚到它，亮一下
   const [jumpLine, setJumpLine] = useState<number | null>(null)
   useEffect(() => {
-    if (jumpLine === null) listEnd.current?.scrollIntoView({ block: 'end' })
+    if (jumpLine === null && lineList.current) lineList.current.scrollTop = lineList.current.scrollHeight
   }, [lines, replay?.at, jumpLine])
   useEffect(() => {
     if (jumpLine === null) return
-    const t = setTimeout(() => document.querySelector('.line.jump')?.scrollIntoView({ block: 'center' }), 60)
+    const t = setTimeout(() => {
+      const list = lineList.current
+      const line = list?.querySelector<HTMLElement>('.line.jump')
+      if (list && line) list.scrollTop = line.offsetTop - (list.clientHeight - line.offsetHeight) / 2
+    }, 60)
     const off = setTimeout(() => setJumpLine(null), 2500)
     return () => {
       clearTimeout(t)
@@ -2092,7 +2096,7 @@ export default function App() {
           </form>
         )}
         {/* 悬停的那句可能在鼠标底下消失（回放往回跳），移出整个列表时总归取消溯源 */}
-        <div className="lines" onMouseLeave={() => setTraceWho(null)}>
+        <div className="lines" ref={lineList} onMouseLeave={() => setTraceWho(null)}>
           {lines.length === 0 && !partial && <p className="empty">{t.app.logEmpty}</p>}
           {shown.map((l, i) => (
             <Fragment key={i}>
@@ -2172,7 +2176,6 @@ export default function App() {
               </div>
             </article>
           )}
-          <div ref={listEnd} />
         </div>
       </aside>
 

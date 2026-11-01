@@ -8,6 +8,10 @@ pnpm site:build     # → landing/dist/，相对路径，丢到任何子路径�
 pnpm site:preview
 ```
 
+GitHub Pages 的首页是官网，滚动到底部会接上可操作的演示；「在线试一下」跳到这一段。演示也可以从 `/boardcast/demo/` 单独打开。
+
+`pages.yml` 先按 `/boardcast/demo/` 构建演示，再构建官网，把演示产物放进 `landing/dist/demo/`，一起发布 `landing/dist/`。底部用延迟加载的 iframe 展示演示。
+
 ## 页面上有什么
 
 全页只用两种颜色：浓墨黑和朱砂红。首屏的红只出现在三处——圈住「自己」的大红圈、划掉「短信验证码」的两道线、圈住「扫码登录」的那一圈。

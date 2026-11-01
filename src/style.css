@@ -1116,6 +1116,7 @@ label.check input {
   color: var(--accent);
 }
 .log .lines {
+  position: relative;
   flex: 1;
   overflow-y: auto;
   padding: 8px 0 24px;

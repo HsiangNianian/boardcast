@@ -30,7 +30,7 @@ const WORDS = {
     facts: `保留原话的主体、否定和进展，区分已有成果与后续工作。
 只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。
 只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。
-只总结会议记录（或分段笔记）中的事实，不从板书标记推测决定。`,
+只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。`,
     rules: `只根据给出的内容写，不要编造；没有的部分写「无」。
 用简体中文，每条一行，以「- 」开头，简短。
 待办写成「- [ ] 事情（负责人：某某）」，没提到负责人就不写括号。
@@ -55,7 +55,7 @@ const WORDS = {
     facts: `Preserve subjects, negations and progress; distinguish existing work from future work.
 Put only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.
 List only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them.
-Summarize facts from the transcript (or its notes) only; do not infer decisions from whiteboard marks.`,
+Use explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.`,
     rules: `Write only from what is given, never make things up; write "None" for an empty section.
 Write in English, one short point per line, starting with "- ".
 Write to-dos as "- [ ] task (owner: name)"; leave out the parentheses if no owner was mentioned.
@@ -209,9 +209,7 @@ export async function summarize(
   const remote = cfg.flavor === 'openai'
   const lang = spokenLang(lines.map((l) => l.text))
   const w = WORDS[lang]
-  // English needs fewer tokens per character; keep short meetings intact to avoid a lossy merge.
-  // shortcut: character budgets approximate tokens; use tokenizer counts for dense code or variable context sizes.
-  const parts = chunks(lines, lang === 'en' ? 7000 : CHUNK)
+  const parts = chunks(lines)
   let said = `${w.transcript}\n${transcript(lines, lang) || w.noLines}`
   let last: LlmResult | undefined
   let calls = 0

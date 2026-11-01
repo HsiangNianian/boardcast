@@ -586,15 +586,41 @@ export default function App() {
       return
     }
     let alive = true
+    // 连得上就每 5 秒看一眼；网页版连不上就越等越久（最多一分钟），免得没开本地模型时满屏报错。
+    // 桌面版不退避：内置服务刚启动、模型还在加载时，要尽快看到它好了。
+    // 页面切到后台时先不看，切回来立刻看一次
+    const backoff = (w: number) => (isDesktop ? 5000 : Math.min(60000, w * 2))
+    let wait = 5000
+    let t = 0
+    const next = () => {
+      clearTimeout(t)
+      if (alive && document.visibilityState === 'visible') t = window.setTimeout(ping, wait)
+    }
     const ping = () =>
       fetch(`${baseUrl}/health`)
-        .then((r) => alive && setOnline(r.ok))
-        .catch(() => alive && setOnline(false))
+        .then((r) => {
+          if (!alive) return
+          setOnline(r.ok)
+          wait = r.ok ? 5000 : backoff(wait)
+        })
+        .catch(() => {
+          if (!alive) return
+          setOnline(false)
+          wait = backoff(wait)
+        })
+        .finally(next)
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return clearTimeout(t)
+      wait = 5000
+      clearTimeout(t)
+      void ping()
+    }
     void ping()
-    const t = setInterval(ping, 5000)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       alive = false
-      clearInterval(t)
+      clearTimeout(t)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [baseUrl])
 

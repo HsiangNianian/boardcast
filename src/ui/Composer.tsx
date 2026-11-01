@@ -162,6 +162,7 @@ export default function Composer(p: Props) {
               <span className={`av ${color(p.speaker)}`}>{initial(p.speaker)}</span>
               {initial(p.speaker) !== p.speaker && <span className="name">{p.speaker}</span>}
             </button>
+            {/* 嵌入官网时不抢焦点，否则浏览器会把外层页面滚到演示区。 */}
             <textarea
               ref={area}
               rows={1}
@@ -176,7 +177,7 @@ export default function Composer(p: Props) {
               }}
               placeholder={p.listening ? c.placeholderListening : c.placeholder}
               aria-label={c.textAria}
-              autoFocus
+              autoFocus={window.self === window.top}
             />
           </form>
         ) : (

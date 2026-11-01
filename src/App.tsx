@@ -1635,7 +1635,6 @@ export default function App() {
           title={t.app.statusTitle}
         >
           <i className="dot" />
-          <b className={`where${cloud ? ' cloud' : ''}`}>{cloud ? t.app.cloud : t.app.local}</b>
           <span>{status}</span>
           {remoteBroken && !localOnly && <em>{t.app.remoteDown}</em>}
           {useRemote && localOnly && <em>{t.app.localOnlyMeeting}</em>}
@@ -2044,8 +2043,6 @@ export default function App() {
           micName={mic}
           voiceErr={voiceErr}
           toggleMic={() => void toggleMic()}
-          where={cloud && remoteView ? { cloud: true, host: hostOf(remoteView.baseUrl) } : { cloud: false }}
-          onWhere={() => setShowSettings(true)}
         />
         {(pagesRef.current.length > 1 || graph.nodes.length > 0) && (
           <PageStrip

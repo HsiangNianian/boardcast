@@ -22,7 +22,7 @@ Local speech recognition · Live hand-drawn boards · Meeting replay and export
 
 boardcast turns a discussion into a growing whiteboard. Flows, notes, assignments, questions and rejected proposals are written, connected and crossed out as the conversation develops. Import a paper or screenshot to discuss and annotate the source itself.
 
-Speech recognition and model inference run on your computer by default. Once the models are downloaded, you can work offline. You can also connect an OpenAI-compatible API for a larger model. The interface always shows whether the active model is local or in the cloud.
+Speech recognition and model inference run on your computer by default. Once the models are downloaded, you can work offline. You can also connect an OpenAI-compatible API for a larger model. View and adjust the model configuration in Settings.
 
 [Get started](#get-started) · [What you can do](#what-you-can-do) · [How it works](#how-it-works) · [Models and privacy](#models-and-privacy) · [FAQ](#faq) · [Development and evaluation](#development-and-evaluation)
 

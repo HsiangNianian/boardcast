@@ -949,3 +949,7 @@ fn emit_events(app: &AppHandle, events: &mut Vec<Event>) {
 #[cfg(test)]
 #[path = "voice_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "voice_eval.rs"]
+mod eval;

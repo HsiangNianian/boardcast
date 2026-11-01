@@ -8,7 +8,7 @@ Local speech recognition · Live hand-drawn boards · Meeting replay and export
 
 [Website](https://hsiangnianian.github.io/boardcast/) · [Try it online](https://hsiangnianian.github.io/boardcast/demo/) · **[Download the desktop app](https://github.com/HsiangNianian/boardcast/releases/latest)** · [Changelog](CHANGELOG.md)
 
-[![Latest release](https://img.shields.io/github/v/release/HsiangNianian/boardcast?style=flat-square&color=c74432)](https://github.com/HsiangNianian/boardcast/releases/latest) [![CI](https://github.com/HsiangNianian/boardcast/actions/workflows/ci.yml/badge.svg)](https://github.com/HsiangNianian/boardcast/actions/workflows/ci.yml) [![MIT](https://img.shields.io/badge/license-MIT-24292f?style=flat-square)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/HsiangNianian/boardcast?style=flat-square&color=c74432)](https://github.com/HsiangNianian/boardcast/releases/latest) [![Eval](https://github.com/HsiangNianian/boardcast/actions/workflows/eval.yml/badge.svg)](https://github.com/HsiangNianian/boardcast/actions/workflows/eval.yml) [![MIT](https://img.shields.io/badge/license-MIT-24292f?style=flat-square)](LICENSE)
 
 **English** · [中文](README.zh.md)
 
@@ -218,7 +218,7 @@ pnpm dev                       # http://localhost:1420; recorded samples work wi
 pnpm tauri dev                 # Desktop; first run downloads llama-server and speech models
 pnpm site:dev                  # Website at http://localhost:1430
 pnpm typecheck
-pnpm test                      # Engine unit tests; no model needed
+pnpm test                      # Engine and ASR tooling unit tests; no model needed
 pnpm build                     # Type check, replay player and production web build
 ```
 
@@ -227,6 +227,17 @@ To use your own local model in the web app, start llama.cpp in another terminal 
 ```sh
 llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080 -c 4096 --jinja -np 1
 ```
+
+Download the shared Chinese/Japanese/English speech fixtures and listen locally:
+
+```sh
+pnpm eval:audio                # Download pinned WAVs, verify checksums and build an offline HTML page
+pnpm eval:listen               # Download if needed, then serve http://127.0.0.1:4175
+pnpm eval:asr                  # Quick regression through the desktop voice engine; requires Rust
+pnpm eval:asr --suite full     # Include the complete meeting excerpts
+```
+
+See [speech evaluation](eval/asr/README.md) for model comparisons, denoising experiments, reference quality and [dataset licenses](eval/asr/LICENSES.md). Japanese fixtures are human read speech; meeting overlap and provisional Chinese references are excluded from the ordinary error-rate aggregates.
 
 <details>
 <summary><strong>Code map</strong></summary>
@@ -270,8 +281,7 @@ The model can omit content, connect the wrong items or misread emphasis. Recogni
 <details>
 <summary><strong>CI, deployment and releases</strong></summary>
 
-- [CI](.github/workflows/ci.yml): type checks, unit tests, web builds and desktop builds for Linux x64, Windows x64 / ARM64 and macOS ARM64.
-- [Board eval](.github/workflows/eval.yml): engine or evaluation changes run the dev and pointing sets with the default 2B CPU model. These results are separate from local 4B evaluations.
+- [Eval](.github/workflows/eval.yml): the single testing workflow for type checks, unit/Rust tests, web/desktop builds, text-to-board evaluation and multilingual ASR regression. Weekly or manual full ASR runs compare SenseVoice / Whisper base with raw / GTCRN audio. See [speech evaluation](eval/asr/README.md).
 - [Web demo](.github/workflows/pages.yml): builds the website and web app, then deploys them to GitHub Pages.
 - [Release](.github/workflows/release.yml): a `v*` tag creates a draft, builds all four platforms, then publishes it with signed update packages and `latest.json` only if all builds succeed.
 

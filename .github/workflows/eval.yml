@@ -1,21 +1,30 @@
-name: Board eval
+name: Eval
 
-# 用 llama.cpp 跑一遍合成会议评测，结果写进 job summary。
-# CI 机器只有 CPU，默认用小模型做回归对比；分数看趋势，不看绝对值。
 on:
   push:
     branches: [main]
-    paths: ['src/engine/**', 'eval/**', '.github/workflows/eval.yml']
   pull_request:
-    paths: ['src/engine/**', 'eval/**', '.github/workflows/eval.yml']
+  schedule:
+    - cron: '30 2 * * 1'
   workflow_dispatch:
     inputs:
+      full_asr:
+        description: Full corpus, SenseVoice + Whisper base, raw + GTCRN
+        type: boolean
+        default: false
       model_url:
-        description: GGUF 下载地址
+        description: Board evaluation GGUF URL
         default: https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-UD-Q4_K_XL.gguf
       label:
-        description: 报告里的模型名
+        description: Board evaluation model label
         default: qwen3.5-2b-q4-cpu
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   LLAMA_BUILD: b11954
@@ -23,7 +32,134 @@ env:
   LABEL: ${{ inputs.label || 'qwen3.5-2b-q4-cpu' }}
 
 jobs:
-  eval:
+  check:
+    name: typecheck · unit tests · web build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  desktop:
+    if: github.event_name != 'schedule'
+    name: desktop · ${{ matrix.name }}
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            os: ubuntu-24.04
+          - name: windows-x64
+            os: windows-latest
+          - name: windows-arm64
+            os: windows-11-arm
+          # Apple Silicon；llama-server 用官方的 Metal 版
+          - name: macos-arm64
+            os: macos-15
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.name }}
+      # sherpa-onnx-sys 把下载的预编译库解压在 target/sherpa-onnx-prebuilt/<版本>/lib，只要这个目录在就不再下载。
+      # rust-cache 保存前会清理 target/，目录留下了、里面的 .a / .lib 却没了，于是链接时找不到库。
+      # 所以每次都删掉这个目录、清掉这个包，让构建脚本重新下载解压（在 Actions 里只要几秒）。
+      - name: Fetch the sherpa-onnx prebuilt libs fresh
+        shell: bash
+        run: |
+          rm -rf src-tauri/target/sherpa-onnx-prebuilt
+          cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys
+          cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys --release
+      - run: pnpm install --frozen-lockfile
+      # 语音模型（约 240 MB）：打包时要放进安装包，Rust 测试也要用真模型和一段测试音频，缓存起来
+      - name: Cache voice models
+        id: voice-cache
+        uses: actions/cache@v4
+        with:
+          path: voice-models
+          key: voice-sensevoice-2024-07-17-silero-v4-campplus-zh-en
+      - name: Download voice models
+        if: steps.voice-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          hf=https://huggingface.co
+          sv=$hf/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main
+          mkdir -p voice-models/voice/sense-voice
+          curl -fL --retry 3 -o voice-models/voice/sense-voice/model.int8.onnx $sv/model.int8.onnx
+          curl -fL --retry 3 -o voice-models/voice/sense-voice/tokens.txt $sv/tokens.txt
+          curl -fL --retry 3 -o voice-models/voice/silero_vad.onnx $hf/csukuangfj/vad/resolve/main/silero_vad.onnx
+          curl -fL --retry 3 -o voice-models/zh.wav $sv/test_wavs/zh.wav
+          # 声纹模型（区分说话人），和测声纹用的 3D-Speaker 测试音频
+          mkdir -p voice-models/voice/speaker
+          curl -fL --retry 3 -o voice-models/voice/speaker/campplus_zh_en.onnx $hf/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx
+          for f in speaker1_a_cn_16k speaker1_b_cn_16k speaker2_a_cn_16k; do
+            curl -fL --retry 3 -o voice-models/$f.wav https://github.com/csukuangfj/sr-data/raw/main/test/3d-speaker/$f.wav
+          done
+      # GitHub 的 macOS runner 上，XProtect 偶尔占着刚建好的磁盘镜像，打 .dmg 时 hdiutil 报 Resource busy；先把它停掉
+      - name: Stop XProtect so hdiutil can build the .dmg
+        if: runner.os == 'macOS'
+        run: sudo pkill -9 XProtect >/dev/null 2>&1 || true
+      # fetch-voice 发现 BOARDCAST_VOICE_DIR 里的文件校验通过，就直接复制进安装包，不再下载
+      # 不要指定 shell: bash：Windows 上会换成 Git Bash 里的 GNU tar，它把 D:\ 当成远程主机
+      - run: pnpm tauri build
+        env:
+          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/voice-models
+      # 冒烟测试：打进安装包的 llama-server 在这个平台上能跑起来、能列出设备
+      - name: Smoke-test bundled llama-server
+        shell: bash
+        run: |
+          exe=src-tauri/llama/llama-server
+          [ -f "$exe.exe" ] && exe="$exe.exe"
+          "$exe" --version
+          "$exe" --list-devices
+          du -sh src-tauri/llama
+      # Rust 测试：模型下载器（假的 HTTP 服务：换源、断线续传、校验失败、取消、磁盘空间），
+      # 语音识别（真模型认一段中文、两句话按停顿切开、静音不出字）
+      - name: Rust tests
+        shell: bash
+        run: BOARDCAST_VOICE_DIR="$PWD/voice-models" cargo test --manifest-path src-tauri/Cargo.toml --lib -- --nocapture
+      # 只在 Linux 上跑一次就够：clippy 的告警和平台无关
+      - name: Clippy
+        if: runner.os == 'Linux'
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --lib --release -- -D warnings
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boardcast-${{ matrix.name }}
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  board:
+    name: text to board
+    needs: check
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -74,3 +210,55 @@ jobs:
           path: |
             eval/reports/
             ~/llama-server.log
+
+  asr:
+    name: ASR · ${{ matrix.model }} · ${{ matrix.denoise }}
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON((github.event_name == 'schedule' || inputs.full_asr == true) && '{"model":["sensevoice","whisper-base"],"denoise":["none","gtcrn"]}' || '{"model":["sensevoice"],"denoise":["none"]}') }}
+    env:
+      ASR_SUITE: ${{ (github.event_name == 'schedule' || inputs.full_asr == true) && 'full' || 'quick' }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libasound2-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: asr-linux
+      - name: Refresh sherpa native libraries
+        run: |
+          rm -rf src-tauri/target/sherpa-onnx-prebuilt
+          cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: eval/asr/.data
+          key: asr-audio-${{ hashFiles('eval/asr/corpus.json') }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/voice
+            eval/asr/.models
+          key: asr-models-${{ matrix.model }}-${{ matrix.denoise }}-${{ hashFiles('eval/asr/models.json', 'scripts/fetch-voice.mjs') }}
+      # Both commands verify cached files too. Missing/corrupt data must never silently skip inference.
+      - name: Evaluate the desktop voice engine
+        run: pnpm eval:asr --suite "$ASR_SUITE" --model "${{ matrix.model }}" --denoise "${{ matrix.denoise }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: asr-${{ matrix.model }}-${{ matrix.denoise }}
+          path: eval/reports/asr/
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,30 @@
+{
+  "whisper-base": [
+    {
+      "file": "base-decoder.int8.onnx",
+      "bytes": 130672026,
+      "sha256": "9759d217388a01b3a4c7c15533201067b48ae819c4daafc8624e64b9409dc02d",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/bb53ee204431c90d314c1cc08d28d23e5b7927cc/base-decoder.int8.onnx"
+    },
+    {
+      "file": "base-encoder.int8.onnx",
+      "bytes": 29120534,
+      "sha256": "0b8fb1304b6109976038efff5ace81720e00386f3ff6b54ee8c75291ca0a1e11",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/bb53ee204431c90d314c1cc08d28d23e5b7927cc/base-encoder.int8.onnx"
+    },
+    {
+      "file": "base-tokens.txt",
+      "bytes": 816730,
+      "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/bb53ee204431c90d314c1cc08d28d23e5b7927cc/base-tokens.txt"
+    }
+  ],
+  "gtcrn": [
+    {
+      "file": "gtcrn_simple.onnx",
+      "bytes": 535638,
+      "sha256": "e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx"
+    }
+  ]
+}

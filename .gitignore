@@ -11,3 +11,5 @@ public/hanzi/
 src-tauri/llama/
 src-tauri/voice/
 public/player/
+eval/asr/.data/
+eval/asr/.models/

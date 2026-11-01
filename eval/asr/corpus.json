@@ -1,0 +1,1495 @@
+{
+  "version": "asr-fixtures-v1",
+  "baseUrl": "https://github.com/HsiangNianian/boardcast/releases/download/asr-fixtures-v1",
+  "sources": {
+    "alimeeting": {
+      "name": "AliMeeting · Alibaba Group",
+      "url": "https://www.openslr.org/119/",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+    },
+    "ami": {
+      "name": "AMI Meeting Corpus · AMI Consortium",
+      "url": "https://groups.inf.ed.ac.uk/ami/download/",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+    },
+    "fleurs": {
+      "name": "FLEURS · Google / Conneau et al.",
+      "url": "https://huggingface.co/datasets/google/fleurs",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "revision": "168de341b3db6859a9bac1c50a2ef5e3b47647e0",
+      "file": "ja_jp/test/0000.parquet",
+      "fileSha256": "e954b67e934b9a31d7a74a070a75225379660d50c8d1aacdb755852c57f23e6b"
+    },
+    "ascend": {
+      "name": "ASCEND · HKUST CAiRE",
+      "url": "https://huggingface.co/datasets/CAiRE/ASCEND",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+    },
+    "generated": {
+      "name": "boardcast silence control",
+      "url": "https://github.com/HsiangNianian/boardcast",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/HsiangNianian/boardcast/blob/main/LICENSE"
+    }
+  },
+  "samples": [
+    {
+      "id": "zh-alimeeting",
+      "title": "中文 · 4 人手机产品会议",
+      "file": "zh-alimeeting.wav",
+      "language": "zh",
+      "source": "alimeeting",
+      "duration": 312.24,
+      "bytes": 9991758,
+      "sha256": "64c1bcfcf071c681ad499520e8eded8ac2f7f0f65a465753022d91b2f50f1d52",
+      "quick": false,
+      "scoring": "unscored",
+      "reference": [
+        {
+          "start": 1.9,
+          "end": 13.29,
+          "speaker": "N_SPK8013",
+          "text": "好嗯，咱们今天针对咱们公司新出产的新出的一款这个手机啊产品啊，进行一下这个研讨会首先咱们确认一下咱们这个产品的目标，这个人群客户群这一块儿。"
+        },
+        {
+          "start": 13.73,
+          "end": 17.43,
+          "speaker": "N_SPK8013",
+          "text": "嗯，首先谈一下大家伙的一个看法啊嗯，那。"
+        },
+        {
+          "start": 19.96,
+          "end": 30.74,
+          "speaker": "N_SPK8014",
+          "text": "我觉得咱们这个这个目标人群可以不不用定的那么确定，然后基本上就是，嗯，让他什么什么类的人群，然后都可以这样呢咱们的面儿比较广。"
+        },
+        {
+          "start": 31.35,
+          "end": 45.7,
+          "speaker": "N_SPK8013",
+          "text": "这个跨度大一点是吧？嗯。"
+        },
+        {
+          "start": 31.35,
+          "end": 45.7,
+          "speaker": "N_SPK8014",
+          "text": "嗯，因为咱们这个手机现在基本上外观设计得比较时尚，所以我觉得其实，嗯，不用界定于这个老年人或者年轻人之间。嗯，对这样我觉得范围更广一些，就是什么样的人群都可以选择嘛。"
+        },
+        {
+          "start": 46.47,
+          "end": 61.72,
+          "speaker": "N_SPK8013",
+          "text": "好，然后你觉得。嗯。就针对性，嗯。"
+        },
+        {
+          "start": 46.47,
+          "end": 61.72,
+          "speaker": "N_SPK8015",
+          "text": "啊，我觉得是有要要有针对性的啊，我觉得咱们的设计外观还是很时尚，还是需要去呃，设定一下呃比较适合的年龄段儿啊，比方说因为它是有彩色的呀。"
+        },
+        {
+          "start": 61.72,
+          "end": 76.83,
+          "speaker": "N_SPK8013",
+          "text": "也可也可以说是有一种反差。"
+        },
+        {
+          "start": 61.72,
+          "end": 76.83,
+          "speaker": "N_SPK8015",
+          "text": "有蓝色的黄色你要老年人，他不可能用这种颜色，对吧，对而且你现在设计的产品主要推出的是它有照相的功能，功能的话是很很很好，所以是还是适适合年轻的人。"
+        },
+        {
+          "start": 78.78,
+          "end": 92.28,
+          "speaker": "N_SPK8016",
+          "text": "我感觉可以根据年龄，呃和这这种就是不同的人士做一下区分，呃我感觉我们可以主要针对就是嗯十八到四十五之岁的中青年人人群嘛。"
+        },
+        {
+          "start": 92.59,
+          "end": 128.72,
+          "speaker": "N_SPK8013",
+          "text": "首先，咱们就确定出这个手机从这个特点来说，就可能就是说嗯，年龄段儿要跨度大一点对吧，大家都同意是吧？就一年轻年轻感会，就年轻呗是吧，嗯。对，嗯。操作不了是吧，容易操作不了，对对对对，不是特别大，跨度特别大。"
+        },
+        {
+          "start": 92.59,
+          "end": 128.72,
+          "speaker": "N_SPK8014",
+          "text": "但是我觉得吧，就是现在那个老年人也都很时尚，你看现在老年人出去，然后他基本上那个把自己装束的然后都是大粉大红。然后他很喜欢那种那种特别亮丽的颜色。嗯。嗯。"
+        },
+        {
+          "start": 92.59,
+          "end": 128.72,
+          "speaker": "N_SPK8015",
+          "text": "但是现在的呃这个版本的话，它是不适合老年人的。你有一些功能，你像老年人的话，他需要很多的大字体或者是呃一些呃网络上的东西，老年人根本就看不懂。他操作不了对他呃那个，规格还是不一样的。"
+        },
+        {
+          "start": 128.94,
+          "end": 142.49,
+          "speaker": "N_SPK8013",
+          "text": "对，咱们对咱。"
+        },
+        {
+          "start": 128.94,
+          "end": 142.49,
+          "speaker": "N_SPK8014",
+          "text": "但是我觉得那个这个手机里边儿的，呃，很多这个字的东西都是可以可以再去设的。然后，嗯，而且我觉得现在老年人，也不是所有的老年人都是那种就是眼眼花或者什么什么什么的情况。"
+        },
+        {
+          "start": 128.94,
+          "end": 142.49,
+          "speaker": "N_SPK8015",
+          "text": "嗯。"
+        },
+        {
+          "start": 128.94,
+          "end": 142.49,
+          "speaker": "N_SPK8016",
+          "text": "对有有些，尤其。"
+        },
+        {
+          "start": 142.49,
+          "end": 151.54,
+          "speaker": "N_SPK8013",
+          "text": "可以可以。"
+        },
+        {
+          "start": 142.49,
+          "end": 151.54,
+          "speaker": "N_SPK8014",
+          "text": "所以我觉得吧，呃就是不用把那个界限弄得那么分明，然后基本上能适应它，然后能去嗯，使用它的老年人都还可以选择。"
+        },
+        {
+          "start": 151.76,
+          "end": 180.88,
+          "speaker": "N_SPK8013",
+          "text": "对，嗯。对主要。对还得看我们那个价钱和，嗯。对。嗯。低频。啊。"
+        },
+        {
+          "start": 151.76,
+          "end": 180.88,
+          "speaker": "N_SPK8015",
+          "text": "但是我觉得还是有针对性的好啊，你现在买买手机的话，他不一定都是说老年人自己去买，老年人根本就不会看，一般都是子女给家长去买，他会观察里面的一些功能什么的，会会会去选择。"
+        },
+        {
+          "start": 151.76,
+          "end": 180.88,
+          "speaker": "N_SPK8016",
+          "text": "哦。我感觉我们可以根据就是不同的人群稍微做一下差别设计，你像如果老年人用的话可就是配置稍微低点，就是字体或者声音稍微大一点，年轻人用的话就可能颜色选择性多点配置高点这种。"
+        },
+        {
+          "start": 181.34,
+          "end": 193.32,
+          "speaker": "N_SPK8013",
+          "text": "啊好可以可以反正这个，就是跨度反正不就，不用特别大，从年轻人来说，咱们主单主持年轻年轻化这一块儿吧，年轻人这一块儿，好吧，什么十八到三。"
+        },
+        {
+          "start": 193.8,
+          "end": 202.69,
+          "speaker": "N_SPK8013",
+          "text": "到三十五岁之间，大家伙儿觉得可以，啊四十五岁之间可以对吧？啊。那好。"
+        },
+        {
+          "start": 193.8,
+          "end": 202.69,
+          "speaker": "N_SPK8015",
+          "text": "对。对，那咱们机型儿，我觉得还是适应比较年轻年轻化一点的。"
+        },
+        {
+          "start": 193.8,
+          "end": 202.69,
+          "speaker": "N_SPK8016",
+          "text": "对对对。"
+        },
+        {
+          "start": 204.44,
+          "end": 212.59,
+          "speaker": "N_SPK8013",
+          "text": "那咱们这个，后续再定一下这个就是十八到五十岁之间的色彩颜色啊，咱们到时候确认一下这个颜色好吧。"
+        },
+        {
+          "start": 213.62,
+          "end": 220.65,
+          "speaker": "N_SPK8013",
+          "text": "首先咱们说这个，促销方式这一块儿，大家觉得这个，以什么样的这个促销方式进行促销会觉得好一些。"
+        },
+        {
+          "start": 221.56,
+          "end": 248.62,
+          "speaker": "N_SPK8013",
+          "text": "像目前这主流的促销方式。嗯。咱们这。你们。你觉得会不会有压力，双十一的时候会不会有压力，对吧。嗯。"
+        },
+        {
+          "start": 221.56,
+          "end": 248.62,
+          "speaker": "N_SPK8014",
+          "text": "嗯。"
+        },
+        {
+          "start": 221.56,
+          "end": 248.62,
+          "speaker": "N_SPK8015",
+          "text": "对。"
+        },
+        {
+          "start": 221.56,
+          "end": 248.62,
+          "speaker": "N_SPK8016",
+          "text": "我感觉可以先来通过比较热门的直播带货，还有不是马上就电商双十一嘛，这种活动我们都可以多参与一下，就各大电商平台什么的天猫苏宁淘宝拼多多。嗯我们前期主要是就是呃价钱可以稍就让利一些多占领一些市场份额，等市场份额呃慢慢做大之后就可以就价钱稍微高点。"
+        },
+        {
+          "start": 249.14,
+          "end": 258.19,
+          "speaker": "N_SPK8013",
+          "text": "你们有什么方不同的看法。嗯。咱们应促。"
+        },
+        {
+          "start": 249.14,
+          "end": 258.19,
+          "speaker": "N_SPK8015",
+          "text": "我觉得还是先要看一下推出一下手机的亮点，和它，它有什么和其它的手机有什么不同的地方。"
+        },
+        {
+          "start": 258.19,
+          "end": 273.82,
+          "speaker": "N_SPK8013",
+          "text": "收。就咱这也是看有什么样的方式去进行这个，促促促销是吧你包括说他们现在搞得有地推呀，是吧？"
+        },
+        {
+          "start": 258.19,
+          "end": 273.82,
+          "speaker": "N_SPK8015",
+          "text": "啊完后再就是在一些电商是，呃，是给一些力度，比方说京东啊什么的给给一个折扣啊。嗯。"
+        },
+        {
+          "start": 273.82,
+          "end": 290.17,
+          "speaker": "N_SPK8013",
+          "text": "地推咱们比如说扫扫码什么的，我觉得是一个方向啊，就是你们可以谈一下自己不同的一个方法啊。嗯。"
+        },
+        {
+          "start": 273.82,
+          "end": 290.17,
+          "speaker": "N_SPK8014",
+          "text": "嗯。"
+        },
+        {
+          "start": 273.82,
+          "end": 290.17,
+          "speaker": "N_SPK8015",
+          "text": "地推地推太太老套了，我觉得还是还是，电商现在比较好一点。"
+        },
+        {
+          "start": 273.82,
+          "end": 290.17,
+          "speaker": "N_SPK8016",
+          "text": "我感我感觉地推这个不太适合手机吧好像，手机好像一般就是有门店那种或者就是。"
+        },
+        {
+          "start": 290.31,
+          "end": 312.24,
+          "speaker": "N_SPK8013",
+          "text": "走。对，找一找一些明星，找一个明星代言这是肯定少不了的吧，对吧？嗯。价钱。啊。做。"
+        },
+        {
+          "start": 290.31,
+          "end": 312.24,
+          "speaker": "N_SPK8014",
+          "text": "对电商好一点儿，然后我觉得可以就是那个然后捆绑一些，比如说然后它还带带着一些什么其他的东西啊。呃，明星代言这是另外一方面儿，然后我觉得啊，就比如说它捆绑着一些什么移动啊这些运营商，然后它的一些产品，然后其他的，这样还能带动更多的东西。"
+        },
+        {
+          "start": 290.31,
+          "end": 312.24,
+          "speaker": "N_SPK8015",
+          "text": "嗯。"
+        },
+        {
+          "start": 290.31,
+          "end": 312.24,
+          "speaker": "N_SPK8016",
+          "text": "对手机附件之类的什么手机壳儿。"
+        }
+      ],
+      "note": "远场原音；社区派生参考待复核，同一块共用时间。包含重叠说话，不计普通 CER。",
+      "sourceFile": "R8001_M8004_MS801.wav [5,317.24]"
+    },
+    {
+      "id": "zh-alimeeting-00",
+      "title": "中文 · 单人话轮 1",
+      "file": "zh-alimeeting-00.wav",
+      "language": "zh",
+      "source": "alimeeting",
+      "duration": 11.39,
+      "bytes": 364558,
+      "sha256": "a2b1fc398956c3aac2985134df4fc2ae8a08d6468810b5fde4f30fa3ddb36de9",
+      "quick": true,
+      "scoring": "provisional",
+      "reference": [
+        {
+          "start": 0,
+          "end": 11.39,
+          "speaker": "speaker",
+          "text": "好嗯，咱们今天针对咱们公司新出产的新出的一款这个手机啊产品啊，进行一下这个研讨会首先咱们确认一下咱们这个产品的目标，这个人群客户群这一块儿。"
+        }
+      ],
+      "note": "社区派生参考尚未核对官方 TextGrid；只报告暂定 CER，不计入可靠参考汇总。",
+      "sourceInterval": [
+        6.9,
+        18.29
+      ],
+      "sourceFile": "R8001_M8004_MS801.wav"
+    },
+    {
+      "id": "zh-alimeeting-01",
+      "title": "中文 · 单人话轮 2",
+      "file": "zh-alimeeting-01.wav",
+      "language": "zh",
+      "source": "alimeeting",
+      "duration": 10.78,
+      "bytes": 345038,
+      "sha256": "10fe94bb6b8b5dd07b6313edf1f0ca80003002647839e8a7e37b745b45b85e76",
+      "quick": true,
+      "scoring": "provisional",
+      "reference": [
+        {
+          "start": 0,
+          "end": 10.78,
+          "speaker": "speaker",
+          "text": "我觉得咱们这个这个目标人群可以不不用定的那么确定，然后基本上就是，嗯，让他什么什么类的人群，然后都可以这样呢咱们的面儿比较广。"
+        }
+      ],
+      "note": "社区派生参考尚未核对官方 TextGrid；只报告暂定 CER，不计入可靠参考汇总。",
+      "sourceInterval": [
+        24.96,
+        35.74
+      ],
+      "sourceFile": "R8001_M8004_MS801.wav"
+    },
+    {
+      "id": "en-ami",
+      "title": "English · four-person office planning meeting",
+      "file": "en-ami.wav",
+      "language": "en",
+      "source": "ami",
+      "duration": 311.4,
+      "bytes": 9964878,
+      "sha256": "520d6ae993298bac694127c894e1fe29859487103805169c0a22f8e8083f39db",
+      "quick": false,
+      "scoring": "unscored",
+      "reference": [
+        {
+          "start": 0.152,
+          "end": 33.672,
+          "speaker": "B",
+          "text": "I don't know, put all the P_H_D_ students together, all the professors together, that sort of thing. So the idea is that we come up with a plan. there's another group who's gonna be working on the same plan later this week. And then Andre and I have to do presentations for the university administrators on the second. So we have to come up with a plan, possibly, if we have time, a presentation, a quick presentation with arguments for why we think our plan works best. Okay?"
+        },
+        {
+          "start": 33.858,
+          "end": 34.36,
+          "speaker": "A",
+          "text": "Mm-hmm."
+        },
+        {
+          "start": 33.896,
+          "end": 34.577,
+          "speaker": "C",
+          "text": "Alright."
+        },
+        {
+          "start": 35.592,
+          "end": 41.016,
+          "speaker": "B",
+          "text": "So, anyone have any ideas or"
+        },
+        {
+          "start": 42.552,
+          "end": 43.208,
+          "speaker": "B",
+          "text": "I guess"
+        },
+        {
+          "start": 43.896,
+          "end": 56.52,
+          "speaker": "A",
+          "text": "Uh do we know if there will be a lot of people coming across the hall in terms of security stuff if we can I mean my idea is to put the photocopier and the fax in the hall."
+        },
+        {
+          "start": 56.584,
+          "end": 68.6,
+          "speaker": "B",
+          "text": "Yeah. Um I think it's the security is sort of the same as it is in the current building. So as long as the things are physically attached to the wall, so they can't be removed, then it should be okay to leave them in the hall."
+        },
+        {
+          "start": 57.385,
+          "end": 58.152,
+          "speaker": "A",
+          "text": "Um."
+        },
+        {
+          "start": 62.436,
+          "end": 63.042,
+          "speaker": "A",
+          "text": "Okay."
+        },
+        {
+          "start": 64.766,
+          "end": 65.508,
+          "speaker": "A",
+          "text": "Mm."
+        },
+        {
+          "start": 65.506,
+          "end": 67.172,
+          "speaker": "C",
+          "text": "We can put it. Mm-hmm."
+        },
+        {
+          "start": 66.616,
+          "end": 67.419,
+          "speaker": "A",
+          "text": "Okay."
+        },
+        {
+          "start": 68.059,
+          "end": 68.68,
+          "speaker": "A",
+          "text": "Okay."
+        },
+        {
+          "start": 73.064,
+          "end": 77.064,
+          "speaker": "B",
+          "text": "It's just a question of whether you are printing sensitive documents or n whatever."
+        },
+        {
+          "start": 74.072,
+          "end": 74.36,
+          "speaker": "A",
+          "text": "Mm."
+        },
+        {
+          "start": 76.024,
+          "end": 76.296,
+          "speaker": "C",
+          "text": "Mm."
+        },
+        {
+          "start": 76.216,
+          "end": 77.304,
+          "speaker": "A",
+          "text": "Mm yeah."
+        },
+        {
+          "start": 79.16,
+          "end": 81.512,
+          "speaker": "D",
+          "text": "So we only get one printer for fifteen people?"
+        },
+        {
+          "start": 82.264,
+          "end": 94.584,
+          "speaker": "B",
+          "text": "Um well we get one sort of networked printer and then I think some of us have personal printers. I think Susan has a personal printer, Gisella has one maybe."
+        },
+        {
+          "start": 91.241,
+          "end": 91.78,
+          "speaker": "A",
+          "text": "Yeah."
+        },
+        {
+          "start": 95.016,
+          "end": 96.528,
+          "speaker": "A",
+          "text": "Yeah, and that's it."
+        },
+        {
+          "start": 95.672,
+          "end": 103.032,
+          "speaker": "B",
+          "text": "I can't remember who else. Yeah. But no-one else gets their own printer. In terms of equipment it's sort of the same thing as we have now."
+        },
+        {
+          "start": 98.584,
+          "end": 99.053,
+          "speaker": "A",
+          "text": "Mm."
+        },
+        {
+          "start": 102.151,
+          "end": 102.616,
+          "speaker": "A",
+          "text": "Mm-hmm."
+        },
+        {
+          "start": 107.448,
+          "end": 108.056,
+          "speaker": "B",
+          "text": "Um."
+        },
+        {
+          "start": 112.248,
+          "end": 127.384,
+          "speaker": "B",
+          "text": "So what I'd propose is that we sort of discuss various concepts without getting into specifics, and then go off and think about it over lunch and then come back later in the day with sort of more specific proposals, as to exactly where to put people."
+        },
+        {
+          "start": 118.024,
+          "end": 118.456,
+          "speaker": "A",
+          "text": "Mm."
+        },
+        {
+          "start": 120.821,
+          "end": 121.659,
+          "speaker": "A",
+          "text": "Yeah."
+        },
+        {
+          "start": 124.104,
+          "end": 125.481,
+          "speaker": "A",
+          "text": "Mm yeah."
+        },
+        {
+          "start": 124.577,
+          "end": 125.582,
+          "speaker": "C",
+          "text": "Okay."
+        },
+        {
+          "start": 128.872,
+          "end": 146.424,
+          "speaker": "B",
+          "text": "Does that work? Oh, and on the map the little half-circular, well, quater circles are doors, which I'm assuming you've figured out, but just in case. And there's just the one room that actually has two doors going into it, the the three person room on the right. Yeah."
+        },
+        {
+          "start": 136.2,
+          "end": 137.861,
+          "speaker": "A",
+          "text": "Mm-hmm okay."
+        },
+        {
+          "start": 136.808,
+          "end": 138.973,
+          "speaker": "C",
+          "text": "'Kay sure. Yeah"
+        },
+        {
+          "start": 143.624,
+          "end": 144.89,
+          "speaker": "D",
+          "text": "The three person room?"
+        },
+        {
+          "start": 144.377,
+          "end": 150.121,
+          "speaker": "A",
+          "text": "rooms, yeah. And do we need a room like a reading room or Yeah."
+        },
+        {
+          "start": 149.512,
+          "end": 153.96,
+          "speaker": "B",
+          "text": "Yes, yeah. A lot of people were saying that they wanted to have a reading room."
+        },
+        {
+          "start": 154.632,
+          "end": 155.448,
+          "speaker": "C",
+          "text": "That's a good idea."
+        },
+        {
+          "start": 155.241,
+          "end": 176.424,
+          "speaker": "B",
+          "text": "So we should leave a space for that. And we can, because like I said maximum eighteen people in those rooms and there is only fifteen of us. And I don't know if you've noticed, but two of us are only here half the time. So Martin and David um are half the time at the E_P_F_L_ and half the time in Geneva. So"
+        },
+        {
+          "start": 155.832,
+          "end": 156.232,
+          "speaker": "A",
+          "text": "Mm."
+        },
+        {
+          "start": 158.968,
+          "end": 159.57,
+          "speaker": "A",
+          "text": "Okay."
+        },
+        {
+          "start": 163.464,
+          "end": 163.736,
+          "speaker": "A",
+          "text": "Yeah."
+        },
+        {
+          "start": 169.672,
+          "end": 171.102,
+          "speaker": "A",
+          "text": "Mm. Yeah."
+        },
+        {
+          "start": 178.488,
+          "end": 181.416,
+          "speaker": "B",
+          "text": "sort of keep that in mind, I guess, when"
+        },
+        {
+          "start": 180.216,
+          "end": 180.648,
+          "speaker": "A",
+          "text": "Mm."
+        },
+        {
+          "start": 182.68,
+          "end": 184.104,
+          "speaker": "B",
+          "text": "you are doing the actual planning."
+        },
+        {
+          "start": 191.224,
+          "end": 191.944,
+          "speaker": "D",
+          "text": "Mm."
+        },
+        {
+          "start": 192.76,
+          "end": 206.04,
+          "speaker": "A",
+          "text": "The first split we can do is between administration and reasearch uh. I mean, it's completely different work so we can deal with administration and decide something for administration and then"
+        },
+        {
+          "start": 198.008,
+          "end": 198.296,
+          "speaker": "B",
+          "text": "Yeah."
+        },
+        {
+          "start": 206.842,
+          "end": 207.544,
+          "speaker": "A",
+          "text": "for the other."
+        },
+        {
+          "start": 206.936,
+          "end": 208.52,
+          "speaker": "B",
+          "text": "Mm-hmm. Yeah."
+        },
+        {
+          "start": 209.608,
+          "end": 214.856,
+          "speaker": "B",
+          "text": "But Gisella's really the only administrator. Yeah."
+        },
+        {
+          "start": 212.312,
+          "end": 237.496,
+          "speaker": "A",
+          "text": "Yeah. But at least deal with that particular situation and then see with the other, because I was thinking uh Gisella is quite, I mean, Gile Gisella's work is quite noisy, because it's secretary so, yeah, lot of phone call and stuff like that so Yeah, so you won't share an office with Gisella unless you are fifty per cent and not the fifty per cent Gisella is working, which is another condition."
+        },
+        {
+          "start": 212.315,
+          "end": 213.628,
+          "speaker": "C",
+          "text": "Ad administrator."
+        },
+        {
+          "start": 216.392,
+          "end": 216.68,
+          "speaker": "B",
+          "text": "Yeah."
+        },
+        {
+          "start": 225.688,
+          "end": 226.04,
+          "speaker": "B",
+          "text": "Yeah."
+        },
+        {
+          "start": 227.464,
+          "end": 229.144,
+          "speaker": "B",
+          "text": "And she's always moving around."
+        },
+        {
+          "start": 231.336,
+          "end": 231.56,
+          "speaker": "B",
+          "text": "No."
+        },
+        {
+          "start": 235.864,
+          "end": 236.312,
+          "speaker": "B",
+          "text": "Yeah."
+        },
+        {
+          "start": 237.688,
+          "end": 242.072,
+          "speaker": "B",
+          "text": "Which I don't know if we can assume that there isn't going to be any overlap between them."
+        },
+        {
+          "start": 240.84,
+          "end": 242.056,
+          "speaker": "A",
+          "text": "Yeah mm."
+        },
+        {
+          "start": 251.288,
+          "end": 257.032,
+          "speaker": "A",
+          "text": "So I don't know, maybe we can decide that Gisella is having one of the one person room."
+        },
+        {
+          "start": 256.984,
+          "end": 259.656,
+          "speaker": "D",
+          "text": "Yeah, I w I would suggest that too. Yeah."
+        },
+        {
+          "start": 257.896,
+          "end": 258.856,
+          "speaker": "C",
+          "text": "Yeah, that would be"
+        },
+        {
+          "start": 259.848,
+          "end": 260.968,
+          "speaker": "C",
+          "text": "maybe convenient."
+        },
+        {
+          "start": 261.538,
+          "end": 262.382,
+          "speaker": "A",
+          "text": "Mm."
+        },
+        {
+          "start": 261.544,
+          "end": 268.024,
+          "speaker": "B",
+          "text": "Yeah. Either that or maybe put her in a two person room with the equipment or"
+        },
+        {
+          "start": 265.772,
+          "end": 266.891,
+          "speaker": "C",
+          "text": "With someone"
+        },
+        {
+          "start": 268.2,
+          "end": 271.665,
+          "speaker": "C",
+          "text": "Yeah, and with someone who is who is fifty pro percent."
+        },
+        {
+          "start": 269.032,
+          "end": 272.872,
+          "speaker": "B",
+          "text": "Like with the the photocopier, or Maybe not the photocopier, but the printer."
+        },
+        {
+          "start": 269.336,
+          "end": 269.71,
+          "speaker": "A",
+          "text": "Yeah."
+        },
+        {
+          "start": 275.96,
+          "end": 279.016,
+          "speaker": "A",
+          "text": "Yeah. But at least the thing we know that Gisella is gonna be alone."
+        },
+        {
+          "start": 279.176,
+          "end": 279.976,
+          "speaker": "B",
+          "text": "Yeah, yeah."
+        },
+        {
+          "start": 279.896,
+          "end": 281.126,
+          "speaker": "C",
+          "text": "Yeah, okay, mm-hmm."
+        },
+        {
+          "start": 280.296,
+          "end": 281.832,
+          "speaker": "A",
+          "text": "Or with equipment, but"
+        },
+        {
+          "start": 282.296,
+          "end": 285.624,
+          "speaker": "B",
+          "text": "And not with a hundred percent staff yeah a staff worker."
+        },
+        {
+          "start": 283.016,
+          "end": 285.128,
+          "speaker": "A",
+          "text": "humanly alone. Yeah."
+        },
+        {
+          "start": 285.944,
+          "end": 299.704,
+          "speaker": "D",
+          "text": "Okay, so th that's a one person room, but we don't know how how big they are. Or it's hard to tell. I mean, Gisella has this funny uh typing uh thing. Yeah."
+        },
+        {
+          "start": 297.24,
+          "end": 301.983,
+          "speaker": "B",
+          "text": "Yeah. I mean the rooms aren't tiny if you look at the this"
+        },
+        {
+          "start": 298.296,
+          "end": 300.126,
+          "speaker": "C",
+          "text": "Typing machine."
+        },
+        {
+          "start": 301.058,
+          "end": 302.742,
+          "speaker": "D",
+          "text": "Computer, fax."
+        },
+        {
+          "start": 302.216,
+          "end": 302.76,
+          "speaker": "A",
+          "text": "Yeah."
+        },
+        {
+          "start": 303.352,
+          "end": 306.296,
+          "speaker": "D",
+          "text": "So probably sh she should get the fax, right?"
+        },
+        {
+          "start": 307.615,
+          "end": 308.561,
+          "speaker": "A",
+          "text": "Yeah."
+        },
+        {
+          "start": 307.704,
+          "end": 311.288,
+          "speaker": "B",
+          "text": "Yeah, yeah, that makes sense to put the fax in there."
+        },
+        {
+          "start": 308.216,
+          "end": 309.16,
+          "speaker": "C",
+          "text": "Yes, yeah."
+        }
+      ],
+      "note": "Official manual speaker transcripts. Overlap retained; excluded from ordinary WER aggregates.",
+      "sourceFile": "IB4001.Mix-Headset.wav [170.2,481.6]"
+    },
+    {
+      "id": "en-ami-00",
+      "title": "English · isolated turn 1",
+      "file": "en-ami-00.wav",
+      "language": "en",
+      "source": "ami",
+      "duration": 33.72,
+      "bytes": 1079118,
+      "sha256": "1ba52982e2448f4687880d04a2947d16fd2e9fc112254bf9fff9480af028478f",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0.1,
+          "end": 33.62,
+          "speaker": "B",
+          "text": "I don't know, put all the P_H_D_ students together, all the professors together, that sort of thing. So the idea is that we come up with a plan. there's another group who's gonna be working on the same plan later this week. And then Andre and I have to do presentations for the university administrators on the second. So we have to come up with a plan, possibly, if we have time, a presentation, a quick presentation with arguments for why we think our plan works best. Okay?"
+        }
+      ],
+      "note": "Official AMI manual annotation; no other annotated speech overlaps this crop.",
+      "sourceInterval": [
+        170.252,
+        203.972
+      ],
+      "sourceFile": "IB4001.Mix-Headset.wav"
+    },
+    {
+      "id": "en-ami-01",
+      "title": "English · isolated turn 2",
+      "file": "en-ami-01.wav",
+      "language": "en",
+      "source": "ami",
+      "duration": 5.624,
+      "bytes": 180046,
+      "sha256": "e24cee9ca078496e8d13fb56203d9d62357b40f534a52c1a50a31f52f82eedbc",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0.1,
+          "end": 5.524,
+          "speaker": "B",
+          "text": "So, anyone have any ideas or"
+        }
+      ],
+      "note": "Official AMI manual annotation; no other annotated speech overlaps this crop.",
+      "sourceInterval": [
+        205.692,
+        211.316
+      ],
+      "sourceFile": "IB4001.Mix-Headset.wav"
+    },
+    {
+      "id": "en-ami-02",
+      "title": "English · isolated turn 3",
+      "file": "en-ami-02.wav",
+      "language": "en",
+      "source": "ami",
+      "duration": 2.552,
+      "bytes": 81742,
+      "sha256": "c7bc7cb9588eef12763a5df990254466744c64f06e3ff2c5e3e0515851090f64",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0.1,
+          "end": 2.452,
+          "speaker": "D",
+          "text": "So we only get one printer for fifteen people?"
+        }
+      ],
+      "note": "Official AMI manual annotation; no other annotated speech overlaps this crop.",
+      "sourceInterval": [
+        249.26,
+        251.812
+      ],
+      "sourceFile": "IB4001.Mix-Headset.wav"
+    },
+    {
+      "id": "en-ami-03",
+      "title": "English · isolated turn 4",
+      "file": "en-ami-03.wav",
+      "language": "en",
+      "source": "ami",
+      "duration": 3.256,
+      "bytes": 104270,
+      "sha256": "73a05001e66f30f12becc22146ea13761727aef119822a0aa21b045bdca8bc20",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0.1,
+          "end": 3.156,
+          "speaker": "A",
+          "text": "Yeah. But at least the thing we know that Gisella is gonna be alone."
+        }
+      ],
+      "note": "Official AMI manual annotation; no other annotated speech overlaps this crop.",
+      "sourceInterval": [
+        446.06,
+        449.316
+      ],
+      "sourceFile": "IB4001.Mix-Headset.wav"
+    },
+    {
+      "id": "en-ami-04",
+      "title": "English · isolated turn 5",
+      "file": "en-ami-04.wav",
+      "language": "en",
+      "source": "ami",
+      "duration": 3.144,
+      "bytes": 100686,
+      "sha256": "fa804defbc8724f627819541267a3bfeecb065e92fea1ba0d80bb297e9a93d71",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0.1,
+          "end": 3.044,
+          "speaker": "D",
+          "text": "So probably sh she should get the fax, right?"
+        }
+      ],
+      "note": "Official AMI manual annotation; no other annotated speech overlaps this crop.",
+      "sourceInterval": [
+        473.452,
+        476.596
+      ],
+      "sourceFile": "IB4001.Mix-Headset.wav"
+    },
+    {
+      "id": "ja-fleurs-00",
+      "title": "日本語 · FLEURS 読み上げ 1",
+      "file": "ja-fleurs-00.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 10.44,
+      "bytes": 334158,
+      "sha256": "9f391ecfc8924923a0ccccfcee4917613898e3573feb7ce3e442afdde3eaa503",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 10.44,
+          "speaker": "speaker",
+          "text": "インターネットで「敵対的環境コース」について検索すると、おそらく現地企業の住所が出てくるでしょう。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 0, sentence ID 1828.",
+      "sourceFile": "10020345318418093976.wav"
+    },
+    {
+      "id": "ja-fleurs-01",
+      "title": "日本語 · FLEURS 読み上げ 2",
+      "file": "ja-fleurs-01.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 14.22,
+      "bytes": 455118,
+      "sha256": "3954e339683eb5824d342f647b9107272b980ce40a291cc5eddee494508ff5f2",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 14.22,
+          "speaker": "speaker",
+          "text": "また、北側に行くなら世界的に有名なマリア像の聖地であるファティマの聖母の聖域（神社）を訪れましょう。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 1, sentence ID 1834.",
+      "sourceFile": "10086073819084529371.wav"
+    },
+    {
+      "id": "ja-fleurs-02",
+      "title": "日本語 · FLEURS 読み上げ 3",
+      "file": "ja-fleurs-02.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 12.84,
+      "bytes": 410958,
+      "sha256": "5bd542714bc7ec64255545df675a7f834c0dd2d627b5380c4307a92e8075c81b",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 12.84,
+          "speaker": "speaker",
+          "text": "バルセロナの公用語はカタルーニャ語とスペイン語です。約半数がカタルーニャ語を好み、大多数がカタルーニャ語を理解し、ほぼ全員がスペイン語を知っています。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 2, sentence ID 1813.",
+      "sourceFile": "10112379500600537933.wav"
+    },
+    {
+      "id": "ja-fleurs-03",
+      "title": "日本語 · FLEURS 読み上げ 4",
+      "file": "ja-fleurs-03.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 12.54,
+      "bytes": 401358,
+      "sha256": "68615987cdfd760bc5a10583bb93bbf255d64b356cb09bc5ee973f0195079928",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 12.54,
+          "speaker": "speaker",
+          "text": "その長い顎には70本以上の鋭い歯が並び、口蓋には別の歯列があり、つまりここを通ったら逃げ道はないということになります。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 3, sentence ID 1869.",
+      "sourceFile": "10174984673310355687.wav"
+    },
+    {
+      "id": "ja-fleurs-04",
+      "title": "日本語 · FLEURS 読み上げ 5",
+      "file": "ja-fleurs-04.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 12.06,
+      "bytes": 385998,
+      "sha256": "2b16308230b4c5ecda9a66ed10d72f63e7a93928718fc917b61228f73d5abf8f",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 12.06,
+          "speaker": "speaker",
+          "text": "ロスビー数が小さいほど磁気反転に関して星の活性が低下するわけです。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 4, sentence ID 1744.",
+      "sourceFile": "10193386983118883224.wav"
+    },
+    {
+      "id": "ja-fleurs-05",
+      "title": "日本語 · FLEURS 読み上げ 6",
+      "file": "ja-fleurs-05.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 6.96,
+      "bytes": 222798,
+      "sha256": "42a14424b6e30cf7200b4b508410dcf99e3f502be97b09f742354da796719ae7",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 6.96,
+          "speaker": "speaker",
+          "text": "群島や湖では、必ずしもヨットは必要ありません。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 5, sentence ID 1731.",
+      "sourceFile": "10203675650837159328.wav"
+    },
+    {
+      "id": "ja-fleurs-06",
+      "title": "日本語 · FLEURS 読み上げ 7",
+      "file": "ja-fleurs-06.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 8.88,
+      "bytes": 284238,
+      "sha256": "141b423f0a36ae51669c979e72d45ce546ee2ce049c4823de0b246d86de2765b",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 8.88,
+          "speaker": "speaker",
+          "text": "パリジャンは、自己中心的で横柄で失礼な人が多いと言われています。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 6, sentence ID 1910.",
+      "sourceFile": "10214476888438240131.wav"
+    },
+    {
+      "id": "ja-fleurs-07",
+      "title": "日本語 · FLEURS 読み上げ 8",
+      "file": "ja-fleurs-07.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 12.96,
+      "bytes": 414798,
+      "sha256": "91af9dc406df79ea35cb5ecf93244ce258f965ecf135a052a1be60225d06f0c7",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 12.96,
+          "speaker": "speaker",
+          "text": "メインステージの音楽が終わっても、フェスティバルには夜遅くまで演奏を流し続けるセクションがあるかもしれないことを覚えておいてください。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 7, sentence ID 1771.",
+      "sourceFile": "10228875750894489453.wav"
+    },
+    {
+      "id": "ja-fleurs-08",
+      "title": "日本語 · FLEURS 読み上げ 9",
+      "file": "ja-fleurs-08.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 9.48,
+      "bytes": 303438,
+      "sha256": "58cbea98ccc8b24c17ebfc221a5157a094edc789b2798f1527b22011451af40b",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 9.48,
+          "speaker": "speaker",
+          "text": "参列者の数が多すぎて、全員がサンピエトロ広場での葬儀に参加することは不可能でした。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 8, sentence ID 1764.",
+      "sourceFile": "10256418415643044307.wav"
+    },
+    {
+      "id": "ja-fleurs-09",
+      "title": "日本語 · FLEURS 読み上げ 10",
+      "file": "ja-fleurs-09.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 9.66,
+      "bytes": 309198,
+      "sha256": "546a670f48a7940da66896d83f0afa014940e57cc4070797004aa93a8a600e23",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 9.66,
+          "speaker": "speaker",
+          "text": "香港の最高の景色を見るには、島から出て九龍のウォーターフロントに向かいましょう。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 9, sentence ID 2003.",
+      "sourceFile": "10281646305484957883.wav"
+    },
+    {
+      "id": "ja-fleurs-10",
+      "title": "日本語 · FLEURS 読み上げ 11",
+      "file": "ja-fleurs-10.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 11.94,
+      "bytes": 382158,
+      "sha256": "639abeb056399f175b3b4f6a298dcd817922a023906302105ce25ae8e09e1c23",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 11.94,
+          "speaker": "speaker",
+          "text": "残念ながら、運転手の行動を100%の確率で予測することはできないので、交通の流れを研究することは困難です。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 10, sentence ID 1980.",
+      "sourceFile": "10300959819649327821.wav"
+    },
+    {
+      "id": "ja-fleurs-11",
+      "title": "日本語 · FLEURS 読み上げ 12",
+      "file": "ja-fleurs-11.wav",
+      "language": "ja",
+      "source": "fleurs",
+      "duration": 14.04,
+      "bytes": 449358,
+      "sha256": "e7233c19b0bcbadf559d45c0eade3b0369347492f9213bb66bc6a971e9b6dbe6",
+      "quick": false,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 14.04,
+          "speaker": "speaker",
+          "text": "都市はモロッコのスルタンによってダルル・バディアとして再建され、貿易拠点を設立したスペイン人貿易商によってカサブランカと名付けられました。"
+        }
+      ],
+      "note": "Human read speech, not a meeting. ja_jp/test row 11, sentence ID 1822.",
+      "sourceFile": "1030930262884292674.wav"
+    },
+    {
+      "id": "zh-en-ascend-00004",
+      "title": "中英混说 · ASCEND 00004",
+      "file": "zh-en-ascend-00004.wav",
+      "language": "zh-en",
+      "source": "ascend",
+      "duration": 1.36,
+      "bytes": 43564,
+      "sha256": "b1d784c7c355c79febc73733f61a9faa2564c9f07cdf12caa3dd470f381c0149",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 1.36,
+          "speaker": "speaker",
+          "text": "呃what's the呃"
+        }
+      ],
+      "note": "Spontaneous conversation, test split / session 1. Short probe; no concatenation.",
+      "sourceFile": "ses1_spk17_L3834_25.3200_1.3600.wav"
+    },
+    {
+      "id": "zh-en-ascend-00009",
+      "title": "中英混说 · ASCEND 00009",
+      "file": "zh-en-ascend-00009.wav",
+      "language": "zh-en",
+      "source": "ascend",
+      "duration": 4.03,
+      "bytes": 129004,
+      "sha256": "7317a4752e95039e6f6c345ef5b15fdd18fc7f48353cc893e6f99218a682c9a3",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 4.03,
+          "speaker": "speaker",
+          "text": "no我专业是那个i s m information systems management"
+        }
+      ],
+      "note": "Spontaneous conversation, test split / session 1. Short probe; no concatenation.",
+      "sourceFile": "ses1_spk17_L3856_48.7500_4.0300.wav",
+      "keywords": [
+        "information systems management"
+      ]
+    },
+    {
+      "id": "zh-en-ascend-00028",
+      "title": "中英混说 · ASCEND 00028",
+      "file": "zh-en-ascend-00028.wav",
+      "language": "zh-en",
+      "source": "ascend",
+      "duration": 1.02,
+      "bytes": 32684,
+      "sha256": "f790b945050ccc625702f214dc7182c0c0e781a6fd5a82c7d1863c4683414842",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 1.02,
+          "speaker": "speaker",
+          "text": "ok福建"
+        }
+      ],
+      "note": "Spontaneous conversation, test split / session 1. Short probe; no concatenation.",
+      "sourceFile": "ses1_spk17_L3934_126.4300_1.0200.wav"
+    },
+    {
+      "id": "zh-en-ascend-00055",
+      "title": "中英混说 · ASCEND 00055",
+      "file": "zh-en-ascend-00055.wav",
+      "language": "zh-en",
+      "source": "ascend",
+      "duration": 3.0,
+      "bytes": 96044,
+      "sha256": "866d07fc22025c9450e6e8811cb6b374ab863370182922c054dfa1c1ea46a535",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 3.0,
+          "speaker": "speaker",
+          "text": "um运动啊男生一般不都喜欢运动"
+        }
+      ],
+      "note": "Spontaneous conversation, test split / session 1. Short probe; no concatenation.",
+      "sourceFile": "ses1_spk17_L4048_269.6200_3.0000.wav"
+    },
+    {
+      "id": "zh-en-ascend-00066",
+      "title": "中英混说 · ASCEND 00066",
+      "file": "zh-en-ascend-00066.wav",
+      "language": "zh-en",
+      "source": "ascend",
+      "duration": 1.5899375,
+      "bytes": 50922,
+      "sha256": "a554fbe3692c170b6aed5a34f34095312fe4b822c1c205eaddf894ee90f21faf",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 1.5899375,
+          "speaker": "speaker",
+          "text": "哦这么technical"
+        }
+      ],
+      "note": "Spontaneous conversation, test split / session 1. Short probe; no concatenation.",
+      "sourceFile": "ses1_spk17_L4095_324.5700_1.5900.wav",
+      "keywords": [
+        "technical"
+      ]
+    },
+    {
+      "id": "zh-en-ascend-00068",
+      "title": "中英混说 · ASCEND 00068",
+      "file": "zh-en-ascend-00068.wav",
+      "language": "zh-en",
+      "source": "ascend",
+      "duration": 1.45,
+      "bytes": 46444,
+      "sha256": "ddf1d1241915e223a8f46e6e00e9f5c0b6574add6d6c984fab26ee5508897958",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 1.45,
+          "speaker": "speaker",
+          "text": "computer languages是"
+        }
+      ],
+      "note": "Spontaneous conversation, test split / session 1. Short probe; no concatenation.",
+      "sourceFile": "ses1_spk17_L4099_330.4200_1.4500.wav",
+      "keywords": [
+        "computer languages"
+      ]
+    },
+    {
+      "id": "zh-en-ascend-00080",
+      "title": "中英混说 · ASCEND 00080",
+      "file": "zh-en-ascend-00080.wav",
+      "language": "zh-en",
+      "source": "ascend",
+      "duration": 1.03,
+      "bytes": 33004,
+      "sha256": "8d3d7def5dfde742f885a9992a68ae50aab172ec7306a5f969aae8e2a86c7fa7",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 1.03,
+          "speaker": "speaker",
+          "text": "嗯yeah"
+        }
+      ],
+      "note": "Spontaneous conversation, test split / session 1. Short probe; no concatenation.",
+      "sourceFile": "ses1_spk17_L4138_388.4200_1.0300.wav"
+    },
+    {
+      "id": "zh-en-ascend-00081",
+      "title": "中英混说 · ASCEND 00081",
+      "file": "zh-en-ascend-00081.wav",
+      "language": "zh-en",
+      "source": "ascend",
+      "duration": 1.84,
+      "bytes": 58924,
+      "sha256": "7c4005cffd2701f5b8926d7248dcfe46249efd4429d3321d619b467845718bd4",
+      "quick": true,
+      "scoring": "reference",
+      "reference": [
+        {
+          "start": 0,
+          "end": 1.84,
+          "speaker": "speaker",
+          "text": "所以我上学期也学了python"
+        }
+      ],
+      "note": "Spontaneous conversation, test split / session 1. Short probe; no concatenation.",
+      "sourceFile": "ses1_spk17_L4140_389.5400_1.8400.wav",
+      "keywords": [
+        "python"
+      ]
+    },
+    {
+      "id": "silence",
+      "title": "Silence · hallucination control",
+      "file": "silence.wav",
+      "language": "silence",
+      "source": "generated",
+      "duration": 2.0,
+      "bytes": 64044,
+      "sha256": "20eaebffe1816e0ffa6f7f854f5ef4ea80d5349faaf0ce1fec1b713e7fde58fa",
+      "quick": true,
+      "scoring": "silence",
+      "reference": [],
+      "note": "Two seconds of generated zero PCM; expect no final transcript."
+    }
+  ]
+}

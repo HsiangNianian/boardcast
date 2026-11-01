@@ -10,6 +10,71 @@ fn dir() -> Option<PathBuf> {
     std::env::var_os("BOARDCAST_VOICE_DIR").map(PathBuf::from)
 }
 
+/// Local hardware smoke test: use an explicitly named virtual input, never the default microphone.
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "needs a desktop session, installed models and BOARDCAST_TEST_MIC"]
+fn preload_capture_and_shutdown() {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    let device = std::env::var("BOARDCAST_TEST_MIC").expect("Set a virtual input device name");
+    assert!(audio_host()
+        .input_devices()
+        .unwrap()
+        .any(|d| d.description().is_ok_and(|n| n.name() == device)));
+    let mut context = tauri::generate_context!();
+    context.config_mut().app.windows.clear();
+    let app = tauri::Builder::default()
+        .any_thread()
+        .manage(Voice::default())
+        .build(context)
+        .unwrap();
+    let handle = app.handle().clone();
+    let worker = thread::spawn(move || {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let voice = handle.state::<Voice>();
+            let t = Instant::now();
+            preload(&handle);
+            assert!(t.elapsed() < Duration::from_millis(100));
+            assert!(!voice_status(handle.clone()).listening);
+            assert!(voice.running.lock().unwrap().is_none());
+            while !voice.warmup.lock().unwrap().as_ref().unwrap().is_finished() {
+                thread::sleep(Duration::from_millis(10));
+            }
+            assert!(voice.engine.lock().unwrap().is_some());
+            for _ in 0..3 {
+                let t = Instant::now();
+                voice_start(handle.clone(), Some(device.clone()), None).unwrap();
+                eprintln!("Cached capture start: {} ms", t.elapsed().as_millis());
+                assert!(
+                    t.elapsed() < Duration::from_secs(1),
+                    "virtual input start is delayed"
+                );
+                assert!(voice_status(handle.clone()).listening);
+                voice_stop(handle.clone());
+                assert!(!voice_status(handle.clone()).listening);
+                assert!(voice.engine.lock().unwrap().is_some());
+            }
+            voice_start(handle.clone(), Some(device), None).unwrap();
+            unload(&handle);
+            assert!(voice.running.lock().unwrap().is_none());
+            assert!(voice.engine.lock().unwrap().is_none());
+            assert!(voice.warmup.lock().unwrap().is_none());
+            // Exit while a fresh preload is in flight, then reject any queued start.
+            preload(&handle);
+            shutdown(&handle);
+            assert!(voice.engine.lock().unwrap().is_none());
+            assert!(voice.warmup.lock().unwrap().is_none());
+            assert!(voice_start(handle.clone(), None, None).is_err());
+        }));
+        handle.exit(0);
+        result
+    });
+    app.run_return(|_, _| {});
+    if let Err(e) = worker.join().unwrap() {
+        std::panic::resume_unwind(e);
+    }
+}
+
 /// 按 100 ms 一块喂，模拟麦克风
 fn run(engine: &mut Engine, samples: &[f32]) -> (Vec<String>, Vec<Heard>) {
     let mut events = vec![];
@@ -26,6 +91,30 @@ fn run(engine: &mut Engine, samples: &[f32]) -> (Vec<String>, Vec<Heard>) {
         }
     }
     (partials, finals)
+}
+
+#[test]
+fn reused_engine_starts_a_fresh_recording() {
+    let Some(dir) = dir() else { return };
+    let wave = Wave::read(&dir.join("zh.wav").to_string_lossy()).expect("读不到 zh.wav");
+    let mut engine = Engine::load(&dir).expect("模型加载失败");
+    let (_, first) = run(&mut engine, wave.samples());
+    assert!(!first.is_empty());
+    engine.reset();
+    let (_, second) = run(&mut engine, wave.samples());
+    assert_eq!(first.len(), second.len());
+    for (a, b) in first.iter().zip(&second) {
+        assert_eq!(a.text, b.text);
+        assert_eq!(a.start, b.start);
+        assert_eq!(a.end, b.end);
+    }
+    // 半句话取消后，也不能把旧音频、VAD 状态或时间偏移带到下一次。
+    engine.feed(&wave.samples()[..wave.samples().len() / 2], &mut vec![]);
+    engine.reset();
+    let (_, third) = run(&mut engine, wave.samples());
+    assert_eq!(third.len(), first.len());
+    assert_eq!(third[0].text, first[0].text);
+    assert_eq!(third[0].start, first[0].start);
 }
 
 #[test]

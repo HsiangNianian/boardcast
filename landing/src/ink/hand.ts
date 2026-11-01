@@ -3,6 +3,7 @@
 // 每一笔的错位和转动、折角磨圆、笔画出头，以及汉字的连笔。
 // 随机数按「第几个字、第几笔」固定抽好，推杆拖动时只是幅度在变，所以字是连续变形的。
 
+import { DEFAULT_MESSY } from '../../../src/ink/defaults'
 import { type Pt, type RawMark, type Stroke, clamp, densify, dist, rng, smooth } from './core'
 import { glyph } from './glyphs'
 
@@ -39,7 +40,7 @@ export interface Written {
   w: number
 }
 
-export function write(text: string, x: number, y: number, size: number, seed: string, messy: number): Written {
+export function write(text: string, x: number, y: number, size: number, seed: string, messy = DEFAULT_MESSY): Written {
   const m = clamp(messy)
   const marks: RawMark[] = []
   let cx = x

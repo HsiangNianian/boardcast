@@ -3,6 +3,7 @@
 // 一支看不见的笔飞快地用朱砂红绕它画两圈（下沿压得重、上沿提得轻，像一条斜着的带子）；
 // 移到另一个，这边的红圈被擦掉，去圈那一个。
 
+import { DEFAULT_MESSY } from '../../src/ink/defaults'
 import { type Piece, type Pt, clamp, drawPiece, easeInOut, fitCanvas, makePiece, reduceMotion, rng } from './ink/core'
 import { arrow, cubic, dashes, loop } from './ink/shapes'
 import { INK, RED } from './hero/board'
@@ -57,12 +58,12 @@ export function initFinale() {
     const toB: Pt = [b.cx - (stacked ? 0 : 18), b.top - 16]
     const branch = (to: Pt) => cubic(split, [split[0], split[1] + 30], [to[0], to[1] - 46], to, 24)
     lead = [
-      makePiece('lead', INK, [main], 2.8, 0.25, { wob: 0.6 }),
-      makePiece('leadA', INK, arrow(branch(toA), 10, r), 2.2, 0.25, { wob: 0.6 }),
-      makePiece('leadB', INK, stacked ? [] : arrow(branch(toB), 10, r), 2.2, 0.25, { wob: 0.6 }),
+      makePiece('lead', INK, [main], 2.8, DEFAULT_MESSY, { wob: 0.6 }),
+      makePiece('leadA', INK, arrow(branch(toA), 10, r), 2.2, DEFAULT_MESSY, { wob: 0.6 }),
+      makePiece('leadB', INK, stacked ? [] : arrow(branch(toB), 10, r), 2.2, DEFAULT_MESSY, { wob: 0.6 }),
     ]
     // 主入口外面一道极淡的铅笔虚线圈
-    pencil = makePiece('pencil', '#7d8086', dashes(ringPts(items[0], 'pencil', 1.06), 7, 6), 1.5, 0.2, { alpha: 0.7, gap: 0 })
+    pencil = makePiece('pencil', '#7d8086', dashes(ringPts(items[0], 'pencil', 1.06), 7, 6), 1.5, DEFAULT_MESSY, { alpha: 0.7, gap: 0 })
     const on = rings.find((x) => x.state === 'in')
     rings = []
     if (on) circle(on.el, true)
@@ -76,7 +77,7 @@ export function initFinale() {
     const ry = r.h / 2 + 18
     // 压感：下沿重、上沿轻
     const press = (_t: number, p: Pt) => 0.3 + 0.7 * clamp(((p[1] - r.cy) / ry + 1) / 2) ** 1.3
-    return makePiece(id, RED, [pts], 5, 0.3, { press, wob: 0.5 })
+    return makePiece(id, RED, [pts], 5, DEFAULT_MESSY, { press, wob: 0.5 })
   }
 
   function circle(el: HTMLElement, instant = false) {

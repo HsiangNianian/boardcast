@@ -7,10 +7,13 @@ import playerCss from './player.css?inline'
 import Player from './Player.tsx'
 import type { ReplayData } from './data.ts'
 import { msg } from '../i18n/index.ts'
+import handwritingLicense from '../../public/licenses/handwritten-OFL.txt?raw'
 
 const style = document.createElement('style')
 style.textContent = appCss + playerCss
 document.head.append(style)
+// 导出的单文件也带着字形数据的许可，不依赖旁边另放文件。
+document.head.append(document.createComment(handwritingLicense))
 
 const data = (window as { __boardcastData?: ReplayData }).__boardcastData
 const root = document.getElementById('root')!

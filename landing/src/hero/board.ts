@@ -6,6 +6,7 @@
 // 推杆只改变字迹的性格（歪斜、错落、连笔，主箭头和红圈更张扬），板上的东西一样不多、一样不少。
 // 粗细推杆只改笔头宽度，字形不动。
 
+import { DEFAULT_MESSY, DEFAULT_WEIGHT } from '../../../src/ink/defaults'
 import { type Box, type Piece, type Pt, type Stroke, makePiece, rng } from '../ink/core'
 import { measure, penFor, write } from '../ink/hand'
 import { arrow, bow, cubic, dashes, head, icon, line, loop, quad, roundRect, strike } from '../ink/shapes'
@@ -85,7 +86,7 @@ class Builder {
   }
 }
 
-export function compose(g: HeroGeo, m: number, weight = 1): Board {
+export function compose(g: HeroGeo, m = DEFAULT_MESSY, weight = DEFAULT_WEIGHT): Board {
   const W = g.W
   const bw = W - (g.stacked ? 0 : g.divX)
   const bh = g.baseY - g.boardTop

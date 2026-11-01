@@ -143,6 +143,9 @@ export const en = {
   composer: {
     stopListening: 'Stop listening',
     startListening: 'Start listening',
+    starting: 'Starting audio…',
+    stopping: 'Stopping…',
+    cancelStarting: 'Cancel starting audio',
     listeningOn: (mic: string) => `Listening: ${mic}`,
     speakerTitle: 'Current speaker: click for the next one, or start a line with @name',
     speakerAria: (name: string) => `Speaker ${name}, click for the next one`,

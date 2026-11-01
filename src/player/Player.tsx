@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { board } from '../board/layout.ts'
 import { replayTo } from '../engine/steps.ts'
 import InkBoard from '../ink/InkBoard.tsx'
+import { DEFAULT_MESSY } from '../ink/defaults.ts'
 import ReplayBar, { SPEEDS } from '../ui/ReplayBar.tsx'
 import { useT } from '../i18n/index.ts'
 import type { ReplayData } from './data.ts'
@@ -128,7 +129,7 @@ export default function Player({ data }: { data: ReplayData }) {
         )}
       </header>
       <main className="board replaying">
-        <InkBoard graph={graph} hot={new Set()} dark={false} messy={0.3} bottomInset={84} tidy={tidy} underlay={data.pages[page].underlay} base={data.pages[page].base} />
+        <InkBoard graph={graph} hot={new Set()} dark={false} messy={DEFAULT_MESSY} bottomInset={84} tidy={tidy} underlay={data.pages[page].underlay} base={data.pages[page].base} />
         {total > 0 ? (
           <ReplayBar
             at={at}

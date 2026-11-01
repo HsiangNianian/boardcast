@@ -2,6 +2,7 @@
 // 鼠标移进来变成一把宽大的板擦；按住横着抹过去，擦痕经过的地方材质整个反转。
 // 从白板这边下手就擦出黑板，从黑板那边下手就擦回白板；中间的把手可以整片拉过去。
 
+import { DEFAULT_MESSY } from '../../src/ink/defaults'
 import { type Piece, type Pt, type Stroke, clamp, drawPiece, easeOut, fitCanvas, makePiece, rng } from './ink/core'
 import { measure, penFor, write } from './ink/hand'
 import { arrow, bow, box, line, loop, strike } from './ink/shapes'
@@ -22,7 +23,7 @@ interface Part {
 export const PORTRAIT = { w: 620, h: 1560 }
 
 function content(k: number, ox: number, oy: number, portrait = false): Part[] {
-  const m = 0.26
+  const m = DEFAULT_MESSY
   // 当前这一块的摆法：设计坐标 (u, v) 先以 (u0, v0) 为原点缩放 bs，再挪到 (x0, y0)
   let tf = { u0: 0, v0: 0, x0: 0, y0: 0, bs: 1 }
   const blockAt = (u0: number, v0: number, x0: number, y0: number, bs = 1) => {
@@ -168,7 +169,7 @@ export function initSwap() {
     for (let i = 0; i < 14; i++) {
       const x = gr() * W
       const y = gr() * H
-      const p = makePiece(`g${i}`, '#8a8d92', [bow([x, y], [x + 80 + gr() * 200, y + (gr() - 0.5) * 40], (gr() - 0.5) * 30)], 3 + gr() * 4, 0.4, { alpha: 0.06 })
+      const p = makePiece(`g${i}`, '#8a8d92', [bow([x, y], [x + 80 + gr() * 200, y + (gr() - 0.5) * 40], (gr() - 0.5) * 30)], 3 + gr() * 4, DEFAULT_MESSY, { alpha: 0.06 })
       drawPiece(wc, p)
     }
     wc.shadowBlur = 0.8

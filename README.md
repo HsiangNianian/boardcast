@@ -57,7 +57,7 @@ macOS 安装包目前未做 Apple 开发者签名与公证，首次打开可能�
 | **圈着说**：先圈住对象，再说「这个标星」「把这两个连起来」，让指代有明确目标。 | **回放与分支**：按会议中的步骤重放、拖动进度、倍速观看，也能从某一刻另起一张板。 |
 | **一起改板书**：手写模式下改字、移动、圈画、撤销；铅笔模式用 Excalidraw 自由编辑。 | **接着上次开会**：搜索旧会议，或拿旧板开启新会；继承的内容用淡墨，新改动用正常墨迹。 |
 
-手写模式逐笔写出汉字，英文小写默认用连写体；「潦草度」低于 25% 时切回印刷体，大写和数字始终保持易读。浅色是马克笔白板，深色是粉笔黑板。界面支持中文和英文，板书与摘要会跟随会议语言。
+手写模式逐笔写出中英文，英文笔迹源自 Excalidraw 的 Excalifont。默认潦草度为 0、笔画粗细为 65%；潦草度达到 60 时，英文小写切换为连写体。浅色是马克笔白板，深色是粉笔黑板。界面支持中文和英文，板书与摘要会跟随会议语言。
 
 ### 圈着说
 
@@ -177,7 +177,7 @@ PDF 最多导入 40 张有效页面；没有文字层的扫描件只显示底图
 <details>
 <summary><strong>语音识别、说话人和术语怎么处理？</strong></summary>
 
-SenseVoice 负责中文、英文、日文、韩文、粤语转写；Silero 检测停顿，长句会尝试在换气处提前切开，避免一直等到说完。说话过程中有临时字幕。CAM++ 按声音区分说话人，可以在记录里改名、合并，也能在设置里关闭；短句和重叠发言仍可能分错。
+启动软件后会在后台预加载语音模型，开麦时复用；预加载不会打开麦克风，退出软件时会结束语音线程并释放模型。SenseVoice 负责中文、英文、日文、韩文、粤语转写；Silero 检测停顿，长句会尝试在换气处提前切开，避免一直等到说完。说话过程中有临时字幕。CAM++ 按声音区分说话人，可以在记录里改名、合并，也能在设置里关闭；短句和重叠发言仍可能分错。
 
 项目代号或专有名词经常识别错时，在「设置 → 术语表」里写 `MediaCrawler = 媒体爬虫, 美的爬虫`。术语可全局使用，也可只跟着这一场会保存，打字输入同样适用。
 
@@ -285,4 +285,4 @@ node eval/run.ts --file path/to/corrections.cases.json
 
 发现问题或想讨论下一步，欢迎提 [Issue](https://github.com/HsiangNianian/boardcast/issues) 或 PR；功能进展以 Issues 和 [CHANGELOG](CHANGELOG.md) 为准。
 
-代码采用 [MIT](LICENSE)。中文笔画数据来自 [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data)（源自 Make Me a Hanzi 与 Arphic 字体，Arphic Public License，随生成的数据分发许可文本）；Hershey 字形来自 [hersheytext](https://github.com/techninja/hersheytextjs)（MIT）。界面使用 DM Sans、JetBrains Mono，官网另有思源黑体子集；这些字体使用 SIL OFL，官网字体许可见 [OFL.txt](landing/public/fonts/OFL.txt)。
+代码采用 [MIT](LICENSE)。中文笔画数据来自 [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data)（源自 Make Me a Hanzi 与 Arphic 字体，Arphic Public License，随生成的数据分发许可文本）；英文默认笔迹由 Excalifont 提取，沿用 [SIL OFL 许可](public/licenses/handwritten-OFL.txt)；连写体 Hershey 字形来自 [hersheytext](https://github.com/techninja/hersheytextjs)（MIT）。界面使用 DM Sans、JetBrains Mono，官网另有思源黑体子集；这些字体使用 SIL OFL，官网字体许可见 [OFL.txt](landing/public/fonts/OFL.txt)。

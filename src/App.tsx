@@ -62,6 +62,7 @@ import { type SpokenLang, spokenLang } from './engine/lang.ts'
 import { type DemoInfo, demoIndex, demoMeeting, loadDemo } from './demo.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
+import { DEFAULT_MESSY, DEFAULT_WEIGHT } from './ink/defaults.ts'
 
 type Mode = 'pencil' | 'ink'
 type Theme = 'system' | 'light' | 'dark'
@@ -341,13 +342,13 @@ export default function App() {
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
   const [mode, setMode] = useState<Mode>(() => (load('boardcast.mode', 'ink') === 'pencil' ? 'pencil' : 'ink'))
   const [messy, setMessy] = useState(() => {
-    const v = Number(load('boardcast.messy', '30'))
-    return Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 30
+    const v = Number(load('boardcast.messy', String(DEFAULT_MESSY * 100)))
+    return Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : DEFAULT_MESSY * 100
   })
-  // 笔画粗细：百分比，100 是默认
+  // 笔画粗细：相对基准笔宽的百分比，默认 65
   const [weight, setWeight] = useState(() => {
-    const v = Number(load('boardcast.weight', '100'))
-    return Number.isFinite(v) ? Math.min(200, Math.max(50, v)) : 100
+    const v = Number(load('boardcast.weight', String(DEFAULT_WEIGHT * 100)))
+    return Number.isFinite(v) ? Math.min(200, Math.max(50, v)) : DEFAULT_WEIGHT * 100
   })
   // 拖滑杆时每一格都要重算全部笔画，让它慢半拍，拖动本身不卡
   const messyLater = useDeferredValue(messy)
@@ -792,6 +793,8 @@ export default function App() {
 
   // —— 语音输入（桌面版）：外壳负责收音、断句、识别，这里只接结果 ——
   const [listening, setListening] = useState(false)
+  const [micPending, setMicPending] = useState<'starting' | 'stopping' | null>(null)
+  const micRequest = useRef<{ stop: boolean } | null>(null)
   const [level, setLevel] = useState(0)
   const [partial, setPartial] = useState('')
   const [mic, setMic] = useState<string | undefined>()
@@ -834,19 +837,47 @@ export default function App() {
     return () => offs.forEach((p) => void p.then((off) => off()))
   }, [])
 
+  async function stopMic() {
+    if (micRequest.current) {
+      micRequest.current.stop = true
+      setMicPending('stopping')
+      return
+    }
+    micRequest.current = { stop: true }
+    setMicPending('stopping')
+    try {
+      await voice.stop()
+    } catch (e) {
+      setVoiceErr(errText(e))
+    } finally {
+      micRequest.current = null
+      setMicPending(null)
+    }
+  }
+
   async function toggleMic() {
     setVoiceErr(null)
-    if (listening) {
-      await voice.stop()
-      return
+    if (listening || micRequest.current) return stopMic()
+    const request = { stop: false }
+    micRequest.current = request
+    setMicPending('starting')
+    try {
+      const s = await voice.status()
+      if (request.stop) return
+      if (!s.installed) {
+        setVoiceErr(t.app.needVoiceModel)
+        setShowModels(true)
+        return
+      }
+      await voice.start(micChoice || undefined, voiceSource)
+      // 松开空格或再次点击可能发生在模型预加载完成之前。
+      if (request.stop) await voice.stop()
+    } catch (e) {
+      setVoiceErr(errText(e))
+    } finally {
+      micRequest.current = null
+      setMicPending(null)
     }
-    const s = await voice.status()
-    if (!s.installed) {
-      setVoiceErr(t.app.needVoiceModel)
-      setShowModels(true)
-      return
-    }
-    await voice.start(micChoice || undefined, voiceSource).catch((e) => setVoiceErr(errText(e)))
   }
 
   /** 生成摘要：会议记录（不含手动改动）加板书结构，交给当前在用的模型 */
@@ -1100,11 +1131,12 @@ export default function App() {
     else if (a === 'newPage') newPage()
     else goPage(pageRef.current + (a === 'nextPage' ? 1 : -1))
   }
-  const keys = useRef({ undo, redo, deleteSelection, toggleReplay, seekReplay, exitReplay, run, toggleMic, listening })
-  keys.current = { undo, redo, deleteSelection, toggleReplay, seekReplay, exitReplay, run, toggleMic, listening }
+  const keys = useRef({ undo, redo, deleteSelection, toggleReplay, seekReplay, exitReplay, run, toggleMic, stopMic, listening })
+  keys.current = { undo, redo, deleteSelection, toggleReplay, seekReplay, exitReplay, run, toggleMic, stopMic, listening }
   // 按住空格说话：只有这次是按住才开的，松开才停
   const held = useRef(false)
   useEffect(() => {
+    let stopTimer: ReturnType<typeof setTimeout> | undefined
     const blocked = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       // 键盘移到按钮上时，空格还是点按钮；鼠标点过的按钮留着焦点，不算
@@ -1113,7 +1145,14 @@ export default function App() {
     const down = (e: KeyboardEvent) => {
       if (e.code !== 'Space' || !isDesktop || mode !== 'ink' || replayRef.current || blocked(e)) return
       e.preventDefault()
-      if (e.repeat || held.current || keys.current.listening) return
+      if (e.repeat || held.current) return
+      if (stopTimer) {
+        clearTimeout(stopTimer)
+        stopTimer = undefined
+        held.current = true
+        return
+      }
+      if (keys.current.listening || micRequest.current) return
       held.current = true
       void keys.current.toggleMic()
     }
@@ -1122,13 +1161,19 @@ export default function App() {
       e.preventDefault()
       held.current = false
       // 多收一小会儿，免得切掉最后一个字；停下时引擎会把没说完的这句收尾
-      setTimeout(() => void voice.stop(), 300)
+      stopTimer = setTimeout(() => {
+        stopTimer = undefined
+        void keys.current.stopMic()
+      }, 300)
     }
     addEventListener('keydown', down)
     addEventListener('keyup', up)
     return () => {
       removeEventListener('keydown', down)
       removeEventListener('keyup', up)
+      if (stopTimer) clearTimeout(stopTimer)
+      if (held.current || stopTimer) void keys.current.stopMic()
+      held.current = false
     }
   }, [mode])
   // 全局快捷键、托盘、boardcast --toggle-mic
@@ -1675,10 +1720,10 @@ export default function App() {
             type="button"
             className={`icon${replay ? ' on' : ''}`}
             onClick={() => (replay ? exitReplay() : startReplay())}
-            disabled={!replay && (!stepsRef.current.length || listening || waiting)}
+            disabled={!replay && (!stepsRef.current.length || listening || !!micPending || waiting)}
             aria-pressed={!!replay}
             aria-label={t.app.replay}
-            title={replay ? t.app.exitReplay : waiting || listening ? t.app.replayBlocked : t.app.replayHint}
+            title={replay ? t.app.exitReplay : waiting || listening || micPending ? t.app.replayBlocked : t.app.replayHint}
           >
             <ReplayIcon />
           </button>
@@ -1994,8 +2039,8 @@ export default function App() {
             </p>
             <div className="cta">
               {isDesktop && (
-                <button type="button" className="primary" onClick={() => void toggleMic()}>
-                  {t.app.startMic}
+                <button type="button" className="primary" onClick={() => void toggleMic()} aria-busy={!!micPending} disabled={micPending === 'stopping'}>
+                  {micPending ? t.composer[micPending] : listening ? t.composer.stopListening : t.app.startMic}
                 </button>
               )}
               <button type="button" className={isDesktop ? 'secondary' : 'primary'} onClick={() => void play()} disabled={(!ready && !recordedOnly) || playing}>
@@ -2038,6 +2083,7 @@ export default function App() {
           speakers={speakers}
           canListen={isDesktop}
           listening={listening}
+          pending={micPending}
           level={level}
           partial={partial}
           micName={mic}

@@ -6,6 +6,7 @@ import { FONT, TITLE } from '../board/layout.ts'
 import { inherited } from '../engine/base.ts'
 import type { Graph, Node } from '../engine/graph.ts'
 import { type Pt, type Stroke, glyph } from './glyphs.ts'
+import { DEFAULT_MESSY, DEFAULT_WEIGHT } from './defaults.ts'
 import { inkIcon } from './icons.ts'
 import { type Inked, arrow, box, ink, line, loop, outline, placeGlyph, rng, strike } from './pen.ts'
 
@@ -47,8 +48,8 @@ export const OLD_INK = 0.38
 /** 一笔；`thin` 是连笔时带出来的细丝，用更细的笔画 */
 type Mark = { pts: Stroke; thin?: boolean }
 
-/** 默认潦草度也用英文连写体；调低时仍可写成印刷体 */
-export const SCRIPT_AT = 0.25
+/** 高度潦草时才用连写体，日常保留 Excalidraw 的手写字形 */
+export const SCRIPT_AT = 0.6
 
 const isLower = (ch: string) => /[a-z]/.test(ch)
 const isHan = (ch: string) => /[㐀-鿿]/.test(ch)
@@ -69,7 +70,8 @@ async function write(text: string, x: number, y: number, size: number, seed: str
       prev = undefined
       continue
     }
-    const placed = placeGlyph(g.strokes, cx, y, size, r, messy)
+    // Excalifont 本身已有手写起伏，少叠一层变形，避免骨架接点被拉断。
+    const placed = placeGlyph(g.strokes, cx, y, size, r, latin === 'print' && /[!-~！-～]/.test(ch) ? messy * 0.2 : messy)
     // 英文连写：同一个单词里，上一个小写字母的收笔接到这个小写字母的起笔
     if (latin === 'script' && prev && isLower(prev.ch) && placed[0]?.length) {
       const start = placed[0][0]
@@ -104,7 +106,7 @@ function edgePoint(b: { x: number; y: number; w: number; h: number }, c: Pt, p: 
 }
 
 /**
- * `weight`：笔画粗细的倍数，1 是默认粗细。
+ * `weight`：笔画粗细的倍数，1 是基准笔宽。
  * `base`：带着旧板开会时的底板。它上面原样留下来的东西（节点、连线、名字、标记）用淡墨，
  * 本场新加的、改了名字的、新做的标记用正常墨迹，一眼看出这场会改了哪儿。
  */
@@ -113,8 +115,8 @@ export async function compose(
   l: Layout,
   hot: Set<string>,
   look: InkLook,
-  messy = 0.3,
-  weight = 1,
+  messy = DEFAULT_MESSY,
+  weight = DEFAULT_WEIGHT,
   base?: Graph,
   trace?: Trace | null,
 ): Promise<Piece[]> {

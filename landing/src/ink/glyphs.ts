@@ -1,8 +1,8 @@
 // 字形 → 笔画（单位：字号 = 1，按书写顺序）。
-// 汉字：hanzi-writer-data 的骨架线；ASCII：Hershey futural 单线字体；中文标点和几个符号：手画几笔。
+// 汉字：hanzi-writer-data 的骨架线；ASCII：与应用共用 Excalifont 骨架；中文标点和几个符号：手画几笔。
 
 import hanzi from '../gen/hanzi.json'
-import hershey from '../gen/hershey.json'
+import handwritten from '../../../src/ink/handwritten.json' with { type: 'json' }
 import type { Pt, Stroke } from './core'
 
 export interface Glyph {
@@ -12,7 +12,7 @@ export interface Glyph {
 }
 
 const HZ = hanzi as unknown as Record<string, number[][][]>
-const HS = hershey as unknown as [string, number][]
+const LATIN = handwritten as unknown as Record<string, Omit<Glyph, 'han'>>
 
 // hanzi-writer：1024 见方，y 轴朝上，基线在 900
 const hz = (p: number[]): Pt => [p[0] / 1024, (900 - p[1]) / 1024]
@@ -50,25 +50,9 @@ const PUNCT: Record<string, Glyph> = {
   '↔': P([[[0.06, 0.55], [0.94, 0.55]], [[0.26, 0.4], [0.04, 0.55], [0.26, 0.7]], [[0.74, 0.4], [0.96, 0.55], [0.74, 0.7]]], 1),
 }
 
-// Hershey：y 轴朝下，大写字母大约占 1..22，前进宽度 = o × 1.68
-const HSCALE = 1 / 30
 function latin(ch: string): Glyph | null {
-  if (ch === ' ') return { strokes: [], advance: 0.35, han: false }
-  const data = HS[ch.charCodeAt(0) - 33]
-  if (!data) return null
-  const [d, o] = data
-  const strokes: Stroke[] = []
-  for (const part of d.split('M').slice(1)) {
-    const pts = part
-      .replace('L', ' ')
-      .trim()
-      .split(/\s+/)
-      .map((xy) => xy.split(',').map(Number) as Pt)
-      .filter((p) => p.length === 2 && !Number.isNaN(p[0]))
-      .map(([x, y]): Pt => [x * HSCALE, (y + 4) * HSCALE])
-    if (pts.length) strokes.push(pts)
-  }
-  return { strokes, advance: o * 1.68 * HSCALE, han: false }
+  const g = LATIN[ch]
+  return g ? { ...g, han: false } : null
 }
 
 const cache = new Map<string, Glyph | null>()

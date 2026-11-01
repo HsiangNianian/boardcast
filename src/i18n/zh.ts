@@ -132,6 +132,9 @@ export const zh: Messages = {
   composer: {
     stopListening: '停止收音',
     startListening: '开始收音',
+    starting: '正在启动收音…',
+    stopping: '正在停止…',
+    cancelStarting: '取消启动收音',
     listeningOn: (mic: string) => `正在收音：${mic}`,
     speakerTitle: '当前说话人：点一下换下一个，也可以在句首写 @名字',
     speakerAria: (name: string) => `说话人 ${name}，点一下换下一个`,

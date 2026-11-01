@@ -43,6 +43,7 @@ pub fn run() {
             if let Err(e) = shell::init_tray(app.handle()) {
                 eprintln!("托盘启动失败：{e}");
             }
+            voice::preload(app.handle());
             // 启用了远程模型就先不拉起内置模型（不占显存、不预热），远程不可用时前端再叫它起来
             if remote::enabled(app.handle()) {
                 llm::stand_by(app.handle().clone());
@@ -87,7 +88,7 @@ pub fn run() {
         .expect("error while building boardcast")
         .run(|app, event| {
             if let RunEvent::Exit = event {
-                voice::voice_stop(app.clone());
+                voice::shutdown(app);
                 app.state::<llm::Llm>().shutdown();
             }
         });

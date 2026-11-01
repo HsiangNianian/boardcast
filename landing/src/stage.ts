@@ -6,6 +6,7 @@
 // - 第三幕「拖拽回弹」：「一场会」和四个分支，其中一块一直轻轻呼吸，角上一个小双向箭头，拽它，连线跟着弯、跟着晃，松手弹回去。
 // 整条墨线和三幕都画在一张固定在视口上的画布里，按文档坐标摆。
 
+import { DEFAULT_MESSY } from '../../src/ink/defaults'
 import {
   type Piece,
   type Pt,
@@ -135,20 +136,20 @@ function makeNode(id: string, text: string, size: number, home: Pt, o: { icon?: 
   const x0 = -w / 2
   const y0 = -h / 2
   const pieces: Piece[] = []
-  const m = 0.28
+  const m = DEFAULT_MESSY
   const tx = x0 + padX + (inner - ic - icGap - tw) / 2
   pieces.push(makePiece(`${id}b`, INK, box(x0, y0, w, h, r, 0.3), penFor(size) * 0.82, m))
   if (o.icon) pieces.push(makePiece(`${id}i`, INK, icon(o.icon, tx, y0 + padY - size * 0.02, ic, r), penFor(size) * 0.8, m))
   pieces.push(makePiece(`${id}t`, INK, write(text, tx + ic + icGap, y0 + padY, size, id, m).marks, penFor(size), m))
   if (o.sub) pieces.push(makePiece(`${id}s`, FAINT, write(o.sub, -subW / 2, y0 + padY + size * 1.12, subSize, `${id}s`, m).marks, penFor(subSize), m))
-  if (o.star) pieces.push(makePiece(`${id}*`, INK, write('★', x0 + w - size * 0.3, y0 - size * 0.62, size * 0.8, `${id}*`, 0.3).marks, penFor(size), 0.3))
+  if (o.star) pieces.push(makePiece(`${id}*`, INK, write('★', x0 + w - size * 0.3, y0 - size * 0.62, size * 0.8, `${id}*`, DEFAULT_MESSY).marks, penFor(size), DEFAULT_MESSY))
   if (o.grip) {
     // 框角一个小小的双向箭头：不用字，也知道能拽
     const a: Pt = [x0 + w + 4, y0 + 16]
     const b: Pt = [x0 + w + 22, y0 - 2]
     const shaft = bow(a, b, 1, 8)
     const L = 6
-    pieces.push(makePiece(`${id}g`, INK, [shaft, ...head(shaft, L, r, 0.6), ...head([...shaft].reverse(), L, r, 0.6)], 1.6, 0.2))
+    pieces.push(makePiece(`${id}g`, INK, [shaft, ...head(shaft, L, r, 0.6), ...head([...shaft].reverse(), L, r, 0.6)], 1.6, DEFAULT_MESSY))
   }
   const sx = r() < 0.5 ? -1 : 1
   return {
@@ -322,7 +323,7 @@ export function initStage(hero: HeroApi) {
         const my = (from.home[1] + from.h / 2 + to.home[1] - to.h / 2) / 2
         const lw = measure(label, ls)
         const lx = Math.abs(mx - cx) < 4 ? mx + 18 : mx < cx ? mx - lw - 30 : mx + 30
-        lp = makePiece(`lbl${seed}`, FAINT, write(label, lx, my - ls / 2, ls, `lbl${seed}`, 0.3).marks, penFor(ls), 0.3)
+        lp = makePiece(`lbl${seed}`, FAINT, write(label, lx, my - ls / 2, ls, `lbl${seed}`, DEFAULT_MESSY).marks, penFor(ls), DEFAULT_MESSY)
       }
       act1Edges.push({ seg, label: lp })
       segs.push(seg)
@@ -341,7 +342,7 @@ export function initStage(hero: HeroApi) {
       ;['E 短信 → 扫码', 'M 划掉 · 短信', 'T 登录改版'].forEach((o, i) => {
         const x = n5.home[0] + n5.w / 2 + 30
         const y = n5.home[1] - opSize * 1.6 + i * opSize * 1.35
-        const p = makePiece(`op${i}`, FAINT, write(o, x, y, opSize, `op${i}`, 0.25).marks, penFor(opSize), 0.25, { alpha: 0.85 })
+        const p = makePiece(`op${i}`, FAINT, write(o, x, y, opSize, `op${i}`, DEFAULT_MESSY).marks, penFor(opSize), DEFAULT_MESSY, { alpha: 0.85 })
         ops.push({ p, a: n5.home[1] - n5.h / 2 + i * 14, b: n5.home[1] + n5.h / 2 + 30 + i * 14 })
       })
     }
@@ -363,7 +364,7 @@ export function initStage(hero: HeroApi) {
     const ox2 = cx - ow / 2
     const nx2 = cx - nw / 2
     const rr = rng('revise')
-    const m2 = 0.3
+    const m2 = DEFAULT_MESSY
     const ringRx = nw / 2 + 30 * s
     const ringRy = newSize / 2 + 24 * s
     const ringCy = newY + newSize * 0.5

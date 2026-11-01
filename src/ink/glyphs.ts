@@ -1,13 +1,14 @@
 // 字形 → 笔画。每一笔是一串点（单位：字号 = 1），按书写顺序排好。
 // - 汉字用 hanzi-writer-data 的骨架线，本身就是按笔顺排的；
-// - ASCII 用 Hershey futural 单线字体；
+// - ASCII 默认用 Excalifont 提取的骨架线，潦草时用 Hershey 连写体；
 // - 中文标点没有现成数据，用几笔手画近似。
 
-import hershey from './hershey.json'
+import hershey from './hershey.json' with { type: 'json' }
+import handwritten from './handwritten.json' with { type: 'json' }
 
 export type Pt = [number, number]
 export type Stroke = Pt[]
-/** 拉丁字母的写法：工整时是手写印刷体（futural），潦草时换成连写体（scripts） */
+/** 拉丁字母的写法：Excalidraw 手写体，或高度潦草时的连写体 */
 export type Latin = 'print' | 'script'
 
 export interface Glyph {
@@ -45,7 +46,8 @@ async function loadHanzi(ch: string): Promise<Glyph | null> {
 
 // Hershey：y 轴朝下，大写字母大约占 1..22，宽度 = o × 1.68
 const H_SCALE = 1 / 30
-function hersheyGlyph(ch: string, latin: Latin): Glyph | null {
+function latinGlyph(ch: string, latin: Latin): Glyph | null {
+  if (latin === 'print') return (handwritten as unknown as Record<string, Glyph>)[ch] ?? null
   if (ch === ' ') return { strokes: [], advance: 0.35 }
   const data = (hershey as Record<Latin, [string, number][]>)[latin][ch.charCodeAt(0) - 33]
   if (!data) return null
@@ -100,9 +102,9 @@ export function glyph(ch: string, latin: Latin = 'print'): Promise<Glyph | null>
   let p = cache.get(key)
   if (!p) {
     if (PUNCT[ch]) p = Promise.resolve(PUNCT[ch])
-    else if (ascii) p = Promise.resolve(hersheyGlyph(ch, latin))
-    // 全角字母数字转半角，用 Hershey 写
-    else if (full) p = Promise.resolve(hersheyGlyph(String.fromCharCode(ch.charCodeAt(0) - 0xfee0), latin))
+    else if (ascii) p = Promise.resolve(latinGlyph(ch, latin))
+    // 全角字母数字转半角，沿用同一套英文笔迹
+    else if (full) p = Promise.resolve(latinGlyph(String.fromCharCode(ch.charCodeAt(0) - 0xfee0), latin))
     else p = loadHanzi(ch)
     cache.set(key, p)
   }

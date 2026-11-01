@@ -699,6 +699,10 @@ button.link {
   height: 24px;
   overflow: visible;
 }
+.dock .mic-pending {
+  font-size: 11px;
+  color: var(--muted);
+}
 .dock .waveform rect {
   fill: var(--ink);
   transition:

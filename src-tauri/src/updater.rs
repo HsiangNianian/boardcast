@@ -95,7 +95,7 @@ pub async fn update_install(app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Update download failed: {e}"))?;
     // 下好了、签名也对，再把收音和内置模型停掉（Windows 上 llama-server 占着安装目录里的文件，安装器覆盖不了）；
     // 下载失败的话这场会照常开
-    crate::voice::voice_stop(app.clone());
+    crate::voice::unload(&app);
     app.state::<crate::llm::Llm>().shutdown();
     update
         .install(bytes)

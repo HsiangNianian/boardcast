@@ -1,7 +1,8 @@
-// 品牌字：用板书同一支笔、同一套连写体写出「boardcast」，启动时一笔一笔写出来。
+// 品牌字：用板书同一套字形和默认笔迹写出「boardcast」，启动时一笔一笔写出来。
 
 import { useEffect, useState } from 'react'
 import { glyph } from '../ink/glyphs.ts'
+import { DEFAULT_MESSY, DEFAULT_WEIGHT } from '../ink/defaults.ts'
 import { type Inked, ink, placeGlyph, rng } from '../ink/pen.ts'
 
 interface Written {
@@ -18,13 +19,13 @@ function write(text: string, size: number): Promise<Written> {
   if (!p) {
     p = (async () => {
       const r = rng(`wordmark:${text}`)
-      const pen = Math.max(1.6, size * 0.075)
+      const pen = Math.max(1.8, size * 0.1) * DEFAULT_WEIGHT
       const strokes: Inked[] = []
       let x = pen
       for (const ch of text) {
-        const g = await glyph(ch, 'script')
+        const g = await glyph(ch)
         if (!g) continue
-        for (const s of placeGlyph(g.strokes, x, pen, size, r, 0.18)) strokes.push(ink(s, pen, r, { messy: 0.1 }))
+        for (const s of placeGlyph(g.strokes, x, pen, size, r, DEFAULT_MESSY)) strokes.push(ink(s, pen, r, { messy: DEFAULT_MESSY }))
         x += g.advance * size
       }
       return { strokes, width: x + pen * 2, height: size * 1.3 + pen * 2 }

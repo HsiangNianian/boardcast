@@ -8,6 +8,7 @@ import { type Layout, board } from '../board/layout.ts'
 import type { Selection } from '../engine/edit.ts'
 import type { Graph } from '../engine/graph.ts'
 import { type InkLook, type Piece, type Trace, compose } from './compose.ts'
+import { DEFAULT_WEIGHT } from './defaults.ts'
 import { localPoint } from '../ui/landscape.ts'
 import { MAX_POINTED } from '../engine/pointing.ts'
 import { circled, hitTest, selectionBox, selectionLine } from './hit.ts'
@@ -63,7 +64,7 @@ export default function InkBoard({
   messy,
   bottomInset = 0,
   tidy = 0,
-  weight = 1,
+  weight = DEFAULT_WEIGHT,
   selection = null,
   onSelect,
   toolbar,

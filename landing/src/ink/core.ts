@@ -2,6 +2,7 @@
 // 和桌面版 src/ink/pen.ts 是同一支笔，只是换成 canvas，并且所有随机数都在一开始抽好：
 // 潦草度推杆拖动时，同一个字只是「变形」，不会每一帧重新抽签乱跳。
 
+import { DEFAULT_MESSY, DEFAULT_WEIGHT } from '../../../src/ink/defaults'
 import { getStroke } from 'perfect-freehand'
 
 export type Pt = [number, number]
@@ -193,7 +194,7 @@ export interface PieceOpts {
   weight?: number
 }
 
-export function makePiece(id: string, color: string, raws: (Stroke | RawMark)[], pen: number, messy: number, o: PieceOpts = {}): Piece {
+export function makePiece(id: string, color: string, raws: (Stroke | RawMark)[], pen: number, messy = DEFAULT_MESSY, o: PieceOpts = {}): Piece {
   const r = rng(id)
   // 手抖到 0.8 以后基本封顶：再狂也不能把笔画抖成一团
   const me = messy < 0.8 ? messy : 0.8 + (messy - 0.8) * 0.25
@@ -210,7 +211,7 @@ export function makePiece(id: string, color: string, raws: (Stroke | RawMark)[],
     const f1 = isStroke ? 0.5 + r() * 2 : raw.f1
     const ph = isStroke ? r() * Math.PI * 2 : raw.ph
     const thin = isStroke ? undefined : raw.thin
-    const size = (thin !== undefined ? pen * 0.42 : pen) * (o.weight ?? 1)
+    const size = (thin !== undefined ? pen * 0.42 : pen) * (o.weight ?? DEFAULT_WEIGHT)
     const pts = wobble(densify(src, step), thin !== undefined ? amp * 0.5 : amp, f1, ph)
     const L = polyLength(pts)
     let press: number[] | undefined
@@ -231,7 +232,7 @@ export function makePiece(id: string, color: string, raws: (Stroke | RawMark)[],
       if (y > box.y1) box.y1 = y
     }
   }
-  const pad = pen * Math.max(1, o.weight ?? 1)
+  const pad = pen * Math.max(1, o.weight ?? DEFAULT_WEIGHT)
   box.x0 -= pad
   box.y0 -= pad
   box.x1 += pad

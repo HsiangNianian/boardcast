@@ -5,6 +5,7 @@
 import { type Pt, clamp, drawPiece, fitCanvas, reduceMotion } from '../ink/core'
 import { type Board, type Item, compose } from './board'
 import { Fader } from './fader'
+import { DEFAULT_MESSY, DEFAULT_WEIGHT } from '../../../src/ink/defaults'
 import { type HeroGeo, measureHero } from './geo'
 import { Talk } from './talk'
 
@@ -57,12 +58,12 @@ export function initHero(): HeroApi {
   let cctx = fitCanvas(cache, geo.W, geo.H).ctx
   let cacheOk = false
 
-  let target = 0.12
+  let target = DEFAULT_MESSY
   let messy = target
   let built = -1
   // 粗细推杆：推子位置 0..1 → 笔宽倍数 0.5×..2×（指数刻度，1× 正好在中间；再粗汉字就糊成一团了）
   const toWeight = (v: number) => 0.5 * 4 ** v
-  let wTarget = toWeight(0.5)
+  let wTarget = DEFAULT_WEIGHT
   let weight = wTarget
   let wBuilt = weight
   let board: Board = compose(geo, messy, weight)
@@ -84,7 +85,7 @@ export function initHero(): HeroApi {
   const fader = new Fader(frame.querySelector('.fader-messy')!, target, (v) => {
     target = v
   })
-  const wFader = new Fader(frame.querySelector('.fader-weight')!, 0.5, (v) => {
+  const wFader = new Fader(frame.querySelector('.fader-weight')!, Math.log(DEFAULT_WEIGHT / 0.5) / Math.log(4), (v) => {
     wTarget = toWeight(v)
   })
   const talk = new Talk(frame.querySelector('.talk')!, frame, {
@@ -161,8 +162,8 @@ export function initHero(): HeroApi {
       rebuild()
       idleSince = now
     }
-    valEl.value = messy.toFixed(2)
-    wValEl.value = `${weight.toFixed(1)}×`
+    valEl.value = String(Math.round(messy * 100))
+    wValEl.value = `${Math.round(weight * 100)}%`
 
     // 词块：对话提到 / 划过对话 → 浮起、笔触加深；鼠标碰到 → 弹一下、轻轻呼吸
     for (const s of states.values()) {

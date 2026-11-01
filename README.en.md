@@ -57,7 +57,7 @@ The macOS app is not yet Apple Developer signed or notarized. First launch may r
 | **Circle and refer**: circle something before saying “star this” or “connect these two,” giving the model explicit targets. | **Replay and branch**: watch the board grow, seek, change speed or fork a new board from any recorded moment. |
 | **Edit together**: rename, move, mark and undo in handwriting mode, or edit freely in Excalidraw pencil mode. | **Continue a meeting**: search past meetings or start a new one from an old board; inherited content is faded while new changes use full ink. |
 
-Handwriting mode draws Chinese characters stroke by stroke. English lowercase uses cursive by default and switches to print below 25% messiness; capitals and digits stay in print. Light mode uses whiteboard markers, dark mode uses chalk. The interface supports Chinese and English, while board labels and summaries follow the meeting language.
+Handwriting mode draws Chinese and English stroke by stroke, with English strokes derived from Excalidraw’s Excalifont. The defaults are 0 messiness and 65% stroke weight; English lowercase switches to cursive at 60 messiness. Light mode uses whiteboard markers, dark mode uses chalk. The interface supports Chinese and English, while board labels and summaries follow the meeting language.
 
 ### Circle and refer
 
@@ -177,7 +177,7 @@ For an online meeting, use “Microphone + system audio.” Headphones help prev
 <details>
 <summary><strong>How are speech, speakers and terminology handled?</strong></summary>
 
-SenseVoice transcribes Chinese, English, Japanese, Korean and Cantonese. Silero detects pauses; long utterances can end at a breath so the board need not wait for the entire sentence. Provisional captions appear while you speak. CAM++ distinguishes speakers by voice; rename or merge them in the transcript, or turn the feature off in Settings. Short or overlapping speech can still be misattributed.
+Speech models preload silently at startup and are reused when recording starts. Preloading does not open the microphone; exiting stops the speech threads and releases the models. SenseVoice transcribes Chinese, English, Japanese, Korean and Cantonese. Silero detects pauses; long utterances can end at a breath so the board need not wait for the entire sentence. Provisional captions appear while you speak. CAM++ distinguishes speakers by voice; rename or merge them in the transcript, or turn the feature off in Settings. Short or overlapping speech can still be misattributed.
 
 For names that are often misrecognized, add a glossary entry such as `MediaCrawler = media crawler, media crowler` in Settings → Glossary. Entries can apply to all meetings or only the current one, and also correct typed input.
 
@@ -285,4 +285,4 @@ A numeric version suffix creates a prerelease, excluded from automatic updates. 
 
 Report problems or discuss ideas in [Issues](https://github.com/HsiangNianian/boardcast/issues), or send a PR. Issues and the [changelog](CHANGELOG.md) track ongoing work.
 
-Code is licensed under [MIT](LICENSE). Chinese stroke data comes from [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data), derived from Make Me a Hanzi and Arphic fonts under the Arphic Public License; its license is distributed with the generated data. Hershey glyphs come from [hersheytext](https://github.com/techninja/hersheytextjs) under MIT. The UI uses DM Sans and JetBrains Mono, and the website also includes a Noto Sans CJK subset. These fonts use SIL OFL; see the website font's [OFL.txt](landing/public/fonts/OFL.txt).
+Code is licensed under [MIT](LICENSE). Chinese stroke data comes from [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data), derived from Make Me a Hanzi and Arphic fonts under the Arphic Public License; its license is distributed with the generated data. Default English strokes are derived from Excalifont under the [SIL OFL](public/licenses/handwritten-OFL.txt). Cursive Hershey glyphs come from [hersheytext](https://github.com/techninja/hersheytextjs) under MIT. The UI uses DM Sans and JetBrains Mono, and the website also includes a Noto Sans CJK subset. These fonts use SIL OFL; see the website font's [OFL.txt](landing/public/fonts/OFL.txt).

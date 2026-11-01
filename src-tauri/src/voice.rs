@@ -296,6 +296,20 @@ impl Engine {
         self.drain_segments(out);
     }
 
+    /// 只清掉上次收音的状态，模型留着给下一次用。
+    fn reset(&mut self) {
+        self.vad.reset();
+        self.pending.clear();
+        self.speech.clear();
+        self.loudness.clear();
+        self.sent_until = 0;
+        self.recent.clear();
+        self.in_speech = false;
+        self.last_partial = Instant::now();
+        self.partial_text.clear();
+        self.fed = 0;
+    }
+
     /// Recognize one finished sentence starting at sample `start` (counted like `fed`) and send it
     fn finalize(&self, samples: &[f32], start: usize, soft: bool, out: &mut Vec<Event>) {
         if samples.len() < WINDOW {
@@ -423,6 +437,37 @@ struct Running {
 pub struct Voice {
     running: Mutex<Option<Running>>,
     status: Mutex<VoiceStatus>,
+    engine: Mutex<Option<Engine>>,
+    warmup: Mutex<Option<JoinHandle<()>>>,
+    shutting_down: AtomicBool,
+}
+
+/// 启动后静默加载模型；这里只碰模型文件，不打开音频设备。
+pub fn preload(app: &AppHandle) {
+    let voice = app.state::<Voice>();
+    let mut warmup = voice.warmup.lock().unwrap();
+    if warmup.is_some() {
+        return;
+    }
+    let app = app.clone();
+    *warmup = Some(thread::spawn(move || {
+        let voice = app.state::<Voice>();
+        let mut cached = voice.engine.lock().unwrap();
+        if cached.is_some() {
+            return;
+        }
+        let Some(models) = base(&app) else {
+            return;
+        };
+        let t = Instant::now();
+        match Engine::load(&models) {
+            Ok(engine) => {
+                *cached = Some(engine);
+                eprintln!("语音模型已预加载（{} ms）", t.elapsed().as_millis());
+            }
+            Err(msg) => eprintln!("语音模型预加载失败：{msg}"),
+        }
+    }));
 }
 
 /// 语音模型所在的目录：优先用安装包自带的（资源目录下的 voice/），没有再用下载的
@@ -446,9 +491,14 @@ fn installed(app: &AppHandle) -> bool {
 }
 
 fn set_status(app: &AppHandle, s: VoiceStatus) {
-    crate::shell::set_listening(app, s.listening);
     *app.state::<Voice>().status.lock().unwrap() = s.clone();
     let _ = app.emit("voice-status", s);
+    // 停机时主线程会等语音线程，语音线程不能同步等主线程更新托盘。
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let listening = handle.state::<Voice>().status.lock().unwrap().listening;
+        crate::shell::set_listening(&handle, listening);
+    });
 }
 
 #[tauri::command]
@@ -498,7 +548,7 @@ pub fn voice_devices() -> Vec<String> {
     names
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn voice_start(
     app: AppHandle,
     device: Option<String>,
@@ -510,6 +560,15 @@ pub fn voice_start(
     }
     let voice = app.state::<Voice>();
     let mut running = voice.running.lock().unwrap();
+    if voice.shutting_down.load(Ordering::SeqCst) {
+        return Err("Audio input is shutting down".into());
+    }
+    if running
+        .as_ref()
+        .is_some_and(|r| r.stop.load(Ordering::SeqCst))
+    {
+        stop(&app, &mut running);
+    }
     if running.is_some() {
         return Ok(());
     }
@@ -517,7 +576,7 @@ pub fn voice_start(
     let stop = Arc::new(AtomicBool::new(false));
     let flag = stop.clone();
     let handle = app.clone();
-    // 模型加载和 cpal 的流都放在这个线程里：有些平台上 cpal 的 Stream 不能跨线程
+    // cpal 的流一直留在这个线程里：有些平台上 Stream 不能跨线程。
     let (ready_tx, ready_rx) = mpsc::channel::<Result<String, String>>();
     let thread = thread::spawn(move || run(handle, models, device, source, flag, ready_tx));
     match ready_rx.recv_timeout(Duration::from_secs(30)) {
@@ -548,22 +607,38 @@ pub fn voice_start(
         }
         Err(_) => {
             stop.store(true, Ordering::SeqCst);
-            Err("Timed out starting audio input".into())
+            // 保留句柄，退出或重试时仍能等它结束，不能遗留后台加载线程。
+            *running = Some(Running { stop, thread });
+            let msg = "Timed out starting audio input".to_string();
+            set_status(
+                &app,
+                VoiceStatus {
+                    installed: true,
+                    message: Some(msg.clone()),
+                    ..Default::default()
+                },
+            );
+            Err(msg)
         }
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn voice_stop(app: AppHandle) {
-    let taken = app.state::<Voice>().running.lock().unwrap().take();
-    if let Some(r) = taken {
+    let voice = app.state::<Voice>();
+    let mut running = voice.running.lock().unwrap();
+    stop(&app, &mut running);
+}
+
+fn stop(app: &AppHandle, running: &mut Option<Running>) {
+    if let Some(r) = running.take() {
         r.stop.store(true, Ordering::SeqCst);
         let _ = r.thread.join();
     }
     set_status(
-        &app,
+        app,
         VoiceStatus {
-            installed: installed(&app),
+            installed: installed(app),
             ..Default::default()
         },
     );
@@ -571,11 +646,25 @@ pub fn voice_stop(app: AppHandle) {
 
 /// 模型文件变了（下完或删了）：停掉正在进行的收音，让界面重新读状态
 pub fn reload(app: &AppHandle) {
-    voice_stop(app.clone());
+    unload(app);
+    preload(app);
 }
 
 pub fn unload(app: &AppHandle) {
-    voice_stop(app.clone());
+    let voice = app.state::<Voice>();
+    let mut running = voice.running.lock().unwrap();
+    stop(app, &mut running);
+    if let Some(thread) = voice.warmup.lock().unwrap().take() {
+        let _ = thread.join();
+    }
+    *voice.engine.lock().unwrap() = None;
+}
+
+pub fn shutdown(app: &AppHandle) {
+    app.state::<Voice>()
+        .shutting_down
+        .store(true, Ordering::SeqCst);
+    unload(app);
 }
 
 /// 收哪些声音
@@ -673,7 +762,11 @@ fn open_stream(
     .map_err(|e| format!("{what} could not be opened: {e}"))?;
     let channels = supported.channels() as usize;
     let rate = supported.sample_rate() as i32;
-    let config = supported.config();
+    let mut config = supported.config();
+    // PulseAudio 的默认缓冲可能长达两秒；设备允许时按 20 ms 收一块。
+    if let cpal::SupportedBufferSize::Range { min, max } = *supported.buffer_size() {
+        config.buffer_size = cpal::BufferSize::Fixed((rate as u32 / 50).clamp(min, max));
+    }
     macro_rules! stream_of {
         ($t:ty, $to_f32:expr) => {{
             let tx = tx.clone();
@@ -715,13 +808,21 @@ fn run(
 ) {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-    let mut engine = match Engine::load(&models) {
-        Ok(e) => e,
-        Err(msg) => {
-            let _ = ready.send(Err(msg));
-            return;
+    let voice = app.state::<Voice>();
+    let mut cached = voice.engine.lock().unwrap();
+    if cached.is_none() {
+        match Engine::load(&models) {
+            Ok(engine) => *cached = Some(engine),
+            Err(msg) => {
+                let _ = ready.send(Err(msg));
+                return;
+            }
         }
-    };
+    }
+    if stop.load(Ordering::SeqCst) {
+        return;
+    }
+    let engine = cached.as_mut().unwrap();
 
     let host = audio_host();
     let (tx, rx) = mpsc::channel::<(usize, Vec<f32>)>();
@@ -829,6 +930,7 @@ fn run(
     drop(streams);
     engine.finish(&mut events);
     emit_events(&app, &mut events);
+    engine.reset();
 }
 
 fn emit_events(app: &AppHandle, events: &mut Vec<Event>) {

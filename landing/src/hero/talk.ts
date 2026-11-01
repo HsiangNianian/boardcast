@@ -2,6 +2,7 @@
 // 说完以后，句子里的关键词被手绘虚线框圈住，拉一根细线斜跨过分界线，连到右边板上对应的那个词块，
 // 那个词块轻轻浮起一下。鼠标划过任何一句，对应的词块也会浮起来。板上不会因此多出任何东西。
 
+import { DEFAULT_MESSY } from '../../../src/ink/defaults'
 import { type Box, type Piece, type Pt, clamp, drawPiece, easeInOut, makePiece, rng } from '../ink/core'
 import { bow, cubic, dashes, roundRect } from '../ink/shapes'
 import { INK } from './board'
@@ -149,7 +150,7 @@ export class Talk {
   private link(now: number, say: Say, k: Rect) {
     const r = rng(`talk${this.idx}`)
     const pad = 4
-    const box = makePiece(`tb${this.idx}`, INK, dashes(roundRect(k.x0 - pad - 1, k.y0 - pad + 2, k.x1 - k.x0 + pad * 2 + 2, k.y1 - k.y0 + pad * 2 - 3, 5, r), 5, 3.5), 1.4, 0.2, { gap: 0 })
+    const box = makePiece(`tb${this.idx}`, INK, dashes(roundRect(k.x0 - pad - 1, k.y0 - pad + 2, k.x1 - k.x0 + pad * 2 + 2, k.y1 - k.y0 + pad * 2 - 3, 5, r), 5, 3.5), 1.4, DEFAULT_MESSY, { gap: 0 })
     let thread: Piece | null = null
     const target = this.host.block(say.block)
     if (target) {
@@ -167,7 +168,7 @@ export class Talk {
       ]
       // 细线要从别的词块旁边过：会压到别的字，就只圈词、不拉线
       const hits = this.host.blocks().some(([id, bx]) => id !== say.block && pts.some(([x, y]) => x > bx.x0 - 6 && x < bx.x1 + 6 && y > bx.y0 - 6 && y < bx.y1 + 6))
-      if (!hits) thread = makePiece(`tt${this.idx}`, INK, [pts], 1.25, 0.2, { alpha: 0.62 })
+      if (!hits) thread = makePiece(`tt${this.idx}`, INK, [pts], 1.25, DEFAULT_MESSY, { alpha: 0.62 })
     }
     this.links.push({ box, thread, t0: now, out: Infinity })
     this.host.lift(say.block, true, 2400)

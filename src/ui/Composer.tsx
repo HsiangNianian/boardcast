@@ -17,6 +17,7 @@ interface Props {
   // 收音（只有桌面版有）
   canListen: boolean
   listening: boolean
+  pending: 'starting' | 'stopping' | null
   level: number
   partial: string
   micName?: string
@@ -136,18 +137,20 @@ export default function Composer(p: Props) {
 
       <div className="bar">
         {p.canListen && (
-          <div className={`listen${p.listening ? ' on' : ''}`}>
+          <div className={`listen${p.listening || p.pending ? ' on' : ''}`}>
             <button
               type="button"
               className="mic"
               onClick={p.toggleMic}
+              disabled={p.pending === 'stopping'}
+              aria-busy={!!p.pending}
               aria-pressed={p.listening}
-              aria-label={p.listening ? c.stopListening : c.startListening}
-              title={p.listening ? c.listeningOn(p.micName ?? '') : c.startListening}
+              aria-label={p.pending === 'stopping' ? c.stopping : p.pending === 'starting' ? c.cancelStarting : p.listening ? c.stopListening : c.startListening}
+              title={p.pending ? c[p.pending] : p.listening ? c.listeningOn(p.micName ?? '') : c.startListening}
             >
-              {p.listening ? <Stop size={14} /> : <Mic size={17} />}
+              {p.listening || p.pending ? <Stop size={14} /> : <Mic size={17} />}
             </button>
-            {p.listening && <Waveform level={p.level} />}
+            {p.pending ? <span className="mic-pending" role="status">{c[p.pending]}</span> : p.listening && <Waveform level={p.level} />}
           </div>
         )}
 

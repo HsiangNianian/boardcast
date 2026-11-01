@@ -246,6 +246,9 @@ export const zh: Messages = {
     speed: '倍速',
     exit: '退出回放',
     exitTitle: '退出回放（Esc）',
+    fork: '另起一板',
+    forkTitle: '从这一刻新开一张板：带着此刻的板书和位置接着画，原来的板不动',
+    forkEmpty: '先放到有板书的地方，再从那一刻另起一板',
   },
 
   shortcuts: [
@@ -444,6 +447,7 @@ export const zh: Messages = {
     undoNote: '撤销了上一步',
     redoNote: '重做了一步',
     movedNote: (what: string) => `挪了${what}的位置`,
+    forkNote: (from: number, at: string, to: number) => `从第 ${from} 张板回放到 ${at} 的那一刻，另起了第 ${to} 张板`,
     deletedNote: (what: string) => `删掉了${what}`,
     markSpanNote: (removed: boolean, text: string, mark: string) => `${removed ? '去掉了' : '加上了'}「${text}」的${mark}`,
     markNote: (removed: boolean, what: string, mark: string) => `${removed ? '去掉了' : '加上了'}${what}的${mark}`,

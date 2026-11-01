@@ -42,7 +42,7 @@ import Composer from './ui/Composer.tsx'
 import type { ExportKind } from './exporter.ts'
 import { Auto, Close, Download, Gear, History, Moon, Pen, Pencil, Plus, Redo, Replay as ReplayIcon, Sun, Tidy, Upload, Transcript as TranscriptIcon, Undo } from './ui/icons.tsx'
 import MeetingsPanel from './ui/MeetingsPanel.tsx'
-import ReplayBar, { SPEEDS } from './ui/ReplayBar.tsx'
+import ReplayBar, { SPEEDS, clock } from './ui/ReplayBar.tsx'
 import PageStrip from './ui/PageStrip.tsx'
 import type { PdfImport } from './board/importPdf.ts'
 import { type Thumb, pageThumb, thumbOf } from './board/thumb.ts'
@@ -1137,6 +1137,37 @@ export default function App() {
     setSuggest(false)
   }
 
+  /**
+   * 回放到哪一刻，就从哪一刻另起一张板接在最后：带着那一刻的板书、排版位置和走到那一刻的回放记录，
+   * 原来这张不动。会议记录里记一笔是从哪张板的哪一刻分出来的。
+   */
+  function forkPage() {
+    const r = replayRef.current
+    if (!r?.at) return
+    const s = stepsRef.current
+    const from = pageRef.current
+    const fork: Page = {
+      graph: replayTo(s, r.at),
+      // 回放时排出来的位置就是现在画面上的样子；退出回放会换回原来的排版，所以先记下
+      layout: board.snapshot(),
+      steps: s.slice(0, r.at),
+      underlay: pagesRef.current[from]?.underlay,
+    }
+    const when = clock(s[r.at - 1].t - s[0].t)
+    exitReplay()
+    const all = [...pagesRef.current]
+    all[from] = capture()
+    all.push(fork)
+    const to = all.length - 1
+    pagesRef.current = all
+    pageRef.current = to
+    showPage(fork)
+    setPage(to)
+    setThumbs(all.map((p) => p.thumb))
+    setSuggest(false)
+    setLines((ls) => [...ls, { text: t.app.forkNote(from + 1, when, to + 1), manual: true, ms: 0, page: to }])
+  }
+
   /** 导入的几页接在后面（当前这张是空板就从它开始），切到第一张，会议记录里记一笔 */
   function addPages(add: Page[], note: string) {
     exitReplay()
@@ -1761,6 +1792,7 @@ export default function App() {
             onToggle={toggleReplay}
             onSeek={seekReplay}
             onSpeed={() => setReplay({ ...replay, speed: SPEEDS[(SPEEDS.indexOf(replay.speed as 1) + 1) % SPEEDS.length] })}
+            onFork={waiting ? undefined : forkPage}
             onExit={exitReplay}
           />
         )}

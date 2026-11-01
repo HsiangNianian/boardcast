@@ -668,6 +668,30 @@ button.where:hover {
   color: var(--ink);
   border-color: var(--line);
 }
+.replay-dock .fork {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px 0 8px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+.replay-dock .fork:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+/* 窄屏只留图标 */
+@media (max-width: 560px) {
+  .replay-dock .fork {
+    padding: 0 7px;
+  }
+  .replay-dock .fork span {
+    display: none;
+  }
+}
 .line.now {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }

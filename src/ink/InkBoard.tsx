@@ -224,6 +224,7 @@ export default function InkBoard({
   // 手机上强制横屏时整个应用是转过的，指针位置都先换回画布自己的坐标
   const at = (e: { clientX: number; clientY: number }) => localPoint(wrap.current!, e.clientX, e.clientY)
   const onWheel = (e: WheelEvent) => {
+    if (drawing.current) return
     const [px, py] = at(e)
     const mx = v.x + px / v.k
     const my = v.y + py / v.k
@@ -238,11 +239,27 @@ export default function InkBoard({
   /** 正在画的那一圈 */
   const drawing = useRef<Pt[] | null>(null)
   const [stroke, setStroke] = useState<Pt[] | null>(null)
+  const pointer = useRef<number | null>(null)
+  const cancelPointer = () => {
+    const id = pointer.current
+    pointer.current = null
+    if (id !== null && wrap.current?.hasPointerCapture(id)) wrap.current.releasePointerCapture(id)
+    drawing.current = null
+    setStroke(null)
+    drag.current = null
+    press.current = null
+    moveFrom.current = null
+    setMoving(null)
+  }
+  // Esc 或切换工具也要丢掉还没松手的笔画。
+  useEffect(cancelPointer, [lasso])
   const onDown = (e: PointerEvent) => {
+    if (e.button !== 0 || pointer.current !== null) return
     // 浮动按钮上的点击不算点白板
     if ((e.target as Element).closest('.ink-toolbar')) return
     const [x, y] = at(e)
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    pointer.current = e.pointerId
+    wrap.current!.setPointerCapture(e.pointerId)
     const wx = v.x + x / v.k
     const wy = v.y + y / v.k
     if (lasso) {
@@ -263,6 +280,8 @@ export default function InkBoard({
     press.current = { x, y, moved: false }
   }
   const onUp = (e: PointerEvent) => {
+    if (pointer.current !== e.pointerId) return
+    pointer.current = null
     if (drawing.current) {
       const loop = drawing.current
       drawing.current = null
@@ -271,7 +290,7 @@ export default function InkBoard({
       const ys = loop.map((p) => p[1])
       // 点了一下、划了一小道：不算圈
       const big = (Math.max(...xs) - Math.min(...xs)) * v.k > 16 && (Math.max(...ys) - Math.min(...ys)) * v.k > 16
-      if (!lay || loop.length < 6 || !big) return
+      if (!lasso || !lay || loop.length < 6 || !big) return
       // 和已有的圈叠在一起：合成一个大圈
       const merged = (circles ?? []).flatMap((c, i) => (overlaps(c, loop) ? [i] : []))
       const final = merged.length ? merge([...merged.map((i) => circles![i]), loop]) : loop
@@ -294,6 +313,7 @@ export default function InkBoard({
     onSelect(hitTest(lay, graph, v.x + x / v.k, v.y + y / v.k, 8 / v.k), { x: v.x + x / v.k, y: v.y + y / v.k })
   }
   const onMove = (e: PointerEvent) => {
+    if (pointer.current !== e.pointerId) return
     if (drawing.current) {
       const [x, y] = at(e)
       const p: Pt = [v.x + x / v.k, v.y + y / v.k]
@@ -378,11 +398,15 @@ export default function InkBoard({
       onPointerDown={onDown}
       onPointerMove={onMove}
       onPointerUp={onUp}
-      onPointerCancel={() => {
-        drawing.current = null
-        setStroke(null)
+      onPointerCancel={(e) => {
+        if (pointer.current === e.pointerId) cancelPointer()
       }}
-      onDoubleClick={() => setView(null)}
+      onLostPointerCapture={(e) => {
+        if (pointer.current === e.pointerId) cancelPointer()
+      }}
+      onDoubleClick={() => {
+        if (!lasso) setView(null)
+      }}
     >
       <svg width="100%" height="100%" viewBox={`${v.x} ${v.y} ${W / v.k} ${H / v.k}`} data-messy={drawn}>
         <defs>

@@ -697,7 +697,7 @@ export default function App() {
       return
     }
     // 板上圈着的东西（还在的）：随这句话告诉模型；圈用掉了就擦掉，圈选也收起来
-    const pointing = latest(circlesRef.current.flatMap((c) => c.ids)).filter((id) => session.graph.nodes.some((n) => n.id === id))
+    const pointing = latest(circlesRef.current.flatMap((c) => c.ids).filter((id) => session.graph.nodes.some((n) => n.id === id)))
     const v = pointing.length ? { ...u, pointing } : u
     setLines((ls) => [...ls, { ...v, page: pageRef.current, heard }])
     session.say(v)
@@ -726,14 +726,19 @@ export default function App() {
     const cs = circlesRef.current
     circlePast.current.push(cs)
     // 最多留三圈：「从这个连到那个」用两圈就够了
-    setCircles([...cs.filter((_, i) => !merged.includes(i)), { loop, ids }].slice(-3))
+    circlesRef.current = [...cs.filter((_, i) => !merged.includes(i)), { loop, ids }].slice(-3)
+    setCircles(circlesRef.current)
   }
   function undoCircle() {
     const prev = circlePast.current.pop()
-    if (prev) setCircles(prev)
+    if (prev) {
+      circlesRef.current = prev
+      setCircles(prev)
+    }
   }
   function clearCircles() {
     circlePast.current = []
+    circlesRef.current = []
     setCircles([])
     setLasso(false)
   }

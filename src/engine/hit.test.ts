@@ -4,6 +4,7 @@ import { layout } from '../board/layout.ts'
 import { circled, hitTest, insideLoop, selectionBox } from '../ink/hit.ts'
 import { emptyGraph } from './graph.ts'
 import { applyOps, parseOps } from './ops.ts'
+import { pageGraph } from './regions.ts'
 
 test('clicks pick flowchart nodes, items, topic titles and edges; empty space picks nothing', async () => {
   const g = applyOps(emptyGraph(), parseOps('E 「用户」 「网关」 : 「请求」\nT 「爬虫」\nL n3 「监控任务」'))
@@ -66,4 +67,12 @@ test('inside a loop, even one not closed by hand', () => {
   assert.equal(insideLoop(loop, 50, 50), true)
   assert.equal(insideLoop(loop, 150, 50), false)
   assert.equal(insideLoop(loop, -1, 50), false)
+})
+
+test('lasso identifies the source paragraph on an imported page', async () => {
+  const g = pageGraph({ w: 800, h: 1000 }, [
+    { text: '系统设计', x: 60, y: 40, w: 400, h: 40 },
+    { text: '库存扣减在下单时同步完成。', x: 60, y: 120, w: 680, h: 80 },
+  ])
+  assert.deepEqual(circled(await layout(g), g, [[40, 100], [760, 100], [760, 220], [40, 220]]), ['n2'])
 })

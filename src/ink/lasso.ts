@@ -37,27 +37,13 @@ function hull(pts: Pt[]): Pt[] {
   return [...half(s), ...half([...s].reverse())]
 }
 
-/** 把一圈的角磨圆（Chaikin 切角），看着像手画的一圈而不是多边形 */
-function round(loop: Pt[], times = 3): Pt[] {
-  let pts = loop
-  for (let t = 0; t < times; t++) {
-    const next: Pt[] = []
-    for (let i = 0; i < pts.length; i++) {
-      const [a, b] = [pts[i], pts[(i + 1) % pts.length]]
-      next.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75])
-    }
-    pts = next
-  }
-  return pts
-}
-
-/** 几圈合成一个大圈：把它们都包进去，往外放一点，再磨圆 */
+/** 几圈合成一个大圈：保留凸包的角，避免切角平滑丢掉原圈边缘的目标。 */
 export function merge(loops: Pt[][]): Pt[] {
   const h = hull(loops.flat())
   if (h.length < 3) return loops.flat()
   const cx = h.reduce((s, p) => s + p[0], 0) / h.length
   const cy = h.reduce((s, p) => s + p[1], 0) / h.length
-  return round(h.map(([x, y]) => [cx + (x - cx) * 1.06, cy + (y - cy) * 1.06]))
+  return h.map(([x, y]) => [cx + (x - cx) * 1.06, cy + (y - cy) * 1.06])
 }
 
 /**

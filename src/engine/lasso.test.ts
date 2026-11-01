@@ -17,15 +17,20 @@ test('loops that touch, cross or nest overlap; loops apart do not', () => {
   assert.equal(overlaps(wide, tall), true)
 })
 
-test('merged loops become one round loop around both', () => {
+test('merged loops enclose both originals', () => {
   const a = ring(0, 0, 50)
   const b = ring(90, 10, 40)
   const m = merge([a, b])
   // 两圈里的东西都还在大圈里
   for (const [x, y] of [[0, 0], [-40, 0], [90, 10], [125, 10], [0, 45], [90, 45]] as Pt[]) assert.ok(insideLoop(m, x, y), `${x},${y}`)
   assert.equal(insideLoop(m, 300, 0), false)
-  // 磨圆过：点比凸包多得多
-  assert.ok(m.length > 40)
+})
+
+test('merging angular loops retains targets near their corners', () => {
+  const a: Pt[] = [[0, 0], [100, 0], [100, 100], [0, 100]]
+  const b: Pt[] = [[80, 80], [180, 80], [180, 180], [80, 180]]
+  const m = merge([a, b])
+  for (const [x, y] of [...a, ...b]) assert.ok(insideLoop(m, x, y), `${x},${y} was lost when merging`)
 })
 
 test('a loop is cut into pen dashes along its length', () => {

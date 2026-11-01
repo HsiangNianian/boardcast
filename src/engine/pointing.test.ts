@@ -35,7 +35,7 @@ test('a long block of imported text is named by its first few characters', () =>
   assert.equal(pointingLine(g, ['n1']), '当前手指着：n1（库存扣减在下单时同步完成，超时后…）')
 })
 
-test('lines batched while the model is busy carry what was pointed at', async () => {
+test('queued pointing stays attached to its own line and remains available in context', async () => {
   const sent: string[] = []
   const recorded: Utterance[] = []
   let release: () => void = () => {}
@@ -55,8 +55,19 @@ test('lines batched while the model is busy carry what was pointed at', async ()
   s.say({ text: '连到这个', pointing: ['n3'] })
   release()
   await s.drain()
-  assert.deepEqual(recorded, [{ text: '先说一句' }, { text: '从这个 连到这个', pointing: ['n1', 'n3'] }])
-  assert.equal(sent.length, 2)
+  assert.deepEqual(recorded, [{ text: '先说一句' }, { text: '从这个', pointing: ['n1'] }, { text: '连到这个', pointing: ['n3'] }])
+  assert.equal(sent.length, 3)
   assert.ok(!sent[0].includes('手指着'))
-  assert.ok(sent[1].endsWith('当前手指着：n1（订单服务）、n3（数据库）\n新的一句：从这个 连到这个'), sent[1])
+  assert.ok(sent[1].endsWith('当前手指着：n1（订单服务）\n新的一句：从这个'), sent[1])
+  assert.ok(sent[2].includes('当前手指着：n1（订单服务）\n从这个'), sent[2])
+  assert.ok(sent[2].endsWith('当前手指着：n3（数据库）\n新的一句：连到这个'), sent[2])
+})
+
+test('pointing prompts are capped after removing deleted targets', () => {
+  const g = applyOps(emptyGraph(), parseOps(Array.from({ length: 10 }, (_, i) => `N 「目标${i + 1}」`).join('\n')))
+  const ids = [...g.nodes.map((n) => n.id), ...Array(12).fill('deleted')]
+  const line = pointingLine(g, ids)!
+  assert.ok(!line.includes('n1（') && !line.includes('n2（'), line)
+  assert.equal(line.match(/n\d+（/g)?.length, 8)
+  assert.ok(line.includes('n10（目标10）'), line)
 })

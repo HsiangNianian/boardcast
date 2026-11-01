@@ -9,7 +9,6 @@ import { type LlmConfig, type LlmResult, proposeOps } from './llm.ts'
 import { type Op, applyOps, eraseDrafts, markDrafts, parseOps } from './ops.ts'
 import type { Utterance } from './prompt.ts'
 import type { Term } from './glossary.ts'
-import { latest } from './pointing.ts'
 import { mentions, quickOps } from './rules.ts'
 
 export interface SessionEvents {
@@ -67,18 +66,16 @@ export class Session {
   private async pump(): Promise<void> {
     if (this.busy || !this.pending.length) return
     this.busy = true
-    const batch = this.pending.splice(0)
+    // 指代随各自那句话发送，不能把两句「这个」的目标合成一份。
+    const pointed = this.pending.findIndex((u) => u.pointing?.length)
+    const count = pointed < 0 ? this.pending.length : Math.max(1, pointed)
+    const batch = this.pending.splice(0, count)
     const started = performance.now()
-    const queuedMs = this.pendingAt.splice(0).map((t) => Math.round(started - t))
-    // 几句攒成一批时，指着的东西也合在一起（留最近两个）
-    const pointed = latest(batch.flatMap((u) => u.pointing ?? []))
+    const queuedMs = this.pendingAt.splice(0, count).map((t) => Math.round(started - t))
     const next: Utterance =
       batch.length === 1
         ? batch[0]
-        : {
-            text: batch.map((u) => (u.speaker ? `${u.speaker}：${u.text}` : u.text)).join(' '),
-            ...(pointed.length ? { pointing: pointed } : {}),
-          }
+        : { text: batch.map((u) => (u.speaker ? `${u.speaker}：${u.text}` : u.text)).join(' ') }
     try {
       const seen = this.graph
       const context = this.history.slice(-this.context)

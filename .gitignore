@@ -10,6 +10,7 @@ eval/reports/
 public/hanzi/
 src-tauri/llama/
 src-tauri/voice/
+src-tauri/apple-speech/boardcast-speech-*
 public/player/
 eval/asr/.data/
 eval/asr/.models/

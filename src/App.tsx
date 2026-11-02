@@ -899,7 +899,7 @@ export default function App() {
           setSpeaker(r.name)
         }
         sayRef.current({ id: h.id, revision: h.revision, speaker: who, text: h.text },
-          { ...h.timing, reviewMs: h.review?.asrMs },
+          h.timing ? { ...h.timing, reviewMs: h.review?.asrMs } : undefined,
           { start: h.start, end: h.end, sources: h.sources, quality: h.quality, review: h.review })
       }),
       on<string>('voice-partial', setPartial),

@@ -1,0 +1,37 @@
+# Development priorities — 2026-11-02
+
+The current priority is the product: UI, UX, features and the complete interaction flows in PAD whiteboard mode and PC meeting mode. Broad model selection and optimization resume after those flows are reasonably complete. Existing Eval regression coverage stays in place.
+
+The explicitly requested exception is an experimental Apple SpeechAnalyzer option in desktop speech model management. SenseVoice with dynamic review and VAD on remains the default; this exception does not select a new cross-platform default.
+
+## Apple transcription experiment
+
+In **Settings → Local models → Speech recognition**, check availability, choose a language actually reported by the device, download its Apple language assets if needed, then select **Use this**. Use the normal microphone button or shortcut to record. Stop recording before switching providers or languages. The preference persists between launches; selecting Apple preheats the native analyzer without opening the microphone.
+
+This integration targets **macOS 26+ desktop**. It queries `SpeechTranscriber.isAvailable`, `supportedLocales` and `installedLocales`, and checks `AssetInventory.status` again when starting a new analyzer. An Apple device alone does not guarantee support. The web app, including Safari on an iPad, cannot call this native API. There is no cloud or legacy-recognizer fallback.
+
+Rust retains microphone/device selection and 16 kHz PCM capture. A bundled Swift helper converts to the system's supported audio format and supplies a continuous sequence to `SpeechAnalyzer` + `SpeechTranscriber`. Volatile text updates the live caption; only final text enters the transcript and board. Apple does its own segmentation. This route does not apply SenseVoice's VAD/retry policy and currently uses the selected speaker instead of CAM++ automatic speaker attribution. It does not report invented ASR timings or signal-quality metrics.
+
+Audio is piped locally and is not saved by the helper. Normal stop closes input, allows up to five seconds for final results, then reaps the helper. Failure to finalize is reported. Exit cancels native work, including downloads and warmup, and the helper watches for an abruptly terminated parent. Language assets remain system-managed; switching back to SenseVoice does not delete shared Apple assets.
+
+Build on macOS with **Xcode 26+**. `scripts/build-apple-speech.sh` is used by Cargo and Eval; Tauri packages the executable beside the app binary. Eval compiles it, checks PCM conversion including split reads, and queries real system availability without opening a microphone or downloading Apple models. This check is not an accuracy benchmark or evidence of successful live recording on the user's Mac.
+
+Official API references: [SpeechTranscriber](https://developer.apple.com/documentation/speech/speechtranscriber), [SpeechAnalyzer](https://developer.apple.com/documentation/speech/speechanalyzer), [AssetInventory](https://developer.apple.com/documentation/speech/assetinventory).
+
+## Evidence to retain before resuming model work
+
+- [19-configuration short sweep](../eval/asr/sweep-2026-11-02.md): Qwen 1.7B's community ONNX output is anomalous; it does not establish the upstream model's accuracy ceiling. All major Whisper sizes, including large-v3 and turbo, already have short-test results.
+- [Long meeting report](../eval/asr/long-meetings-2026-11-02.md): English business-call reference WER favors Parakeet Unified EN and Qwen 0.6B over the current SenseVoice run. Chinese overlapping speech uses an ordered diagnostic score; Japanese edited minutes are provisional, not a verified verbatim reference. These numbers cannot establish one winner across all three languages.
+- Dynamic review made 46 retries and accepted none in the long paired run. It did not improve the measured recognition error. Its conservative continuation rule is not yet a general correction policy for a second model.
+- ReazonSpeech's long-run crash followed a 992-sample tail (about 62 ms). Preserve useful short responses while checking merge/padding/minimum-input behavior; a runtime failure is not a valid accuracy result.
+
+## Deferred experiments
+
+1. Audit Qwen3-ASR 1.7B export/runtime correctness with identical PCM across an official implementation, an independent Apple implementation and current ONNX. Record raw output, prompts/tokenizer, feature lengths, padding/masks, EOS and generation limits before changing quantization.
+2. Compare WhisperKit/Core ML large-v3-turbo with the current runtime on the same audio, separating explicit-language inputs from automatic-language inputs. Then compare each runtime's appropriate segmentation. Offline chunking is not native streaming.
+3. Verify Fun-ASR-Nano's current official assets and add it as a Chinese/English/Japanese candidate if its deployment route fits. Do not conflate it with the separate multilingual checkpoint.
+4. Repair ReazonSpeech's short-tail adapter and obtain human-checked Japanese verbatim references. Expand mixed-language and industry coverage before considering language routing.
+5. Evaluate cross-model correction separately from signal-level retries: measure corrections, harmful changes and downstream board changes. Keep original audio ranges and transcript identities.
+6. Measure Apple implementations on the actual target devices under concurrent whiteboard LLM load: first-text delay, final-text P95, memory, temperature and sustained slowdown. Linux CPU RTF is not microphone-to-screen latency.
+
+The supplied external analysis proposes MLX Qwen, speech-swift, WhisperKit, Fun-ASR and Argmax Pro routes. These are research leads, not project-validated implementations or licensing promises. Recheck their official support, device requirements and offline/license behavior when the experiments resume. The target Mac's exact hardware and memory still need confirmation.

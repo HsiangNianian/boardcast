@@ -9,6 +9,7 @@
 // - 按 arXiv 编号下载论文（arxiv.rs）
 
 mod diagnostics;
+mod apple_speech;
 mod arxiv;
 mod export;
 mod llm;
@@ -39,11 +40,12 @@ pub fn run() {
         .manage(llm::Llm::default())
         .manage(models::Downloads::default())
         .manage(voice::Voice::default())
+        .manage(apple_speech::Jobs::default())
         .setup(|app| {
             if let Err(e) = shell::init_tray(app.handle()) {
                 eprintln!("托盘启动失败：{e}");
             }
-            voice::preload(app.handle());
+            voice::init(app.handle());
             // 启用了远程模型就先不拉起内置模型（不占显存、不预热），远程不可用时前端再叫它起来
             if remote::enabled(app.handle()) {
                 llm::stand_by(app.handle().clone());
@@ -69,6 +71,9 @@ pub fn run() {
             voice::voice_devices,
             voice::voice_start,
             voice::voice_stop,
+            voice::voice_models,
+            voice::voice_select,
+            voice::voice_prepare,
             remote::remote_get,
             remote::remote_save,
             remote::remote_test,

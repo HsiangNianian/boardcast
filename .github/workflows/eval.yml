@@ -72,10 +72,13 @@ jobs:
             os: windows-11-arm
           # Apple Silicon；llama-server 用官方的 Metal 版
           - name: macos-arm64
-            os: macos-15
+            os: macos-26
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+      - name: Compile Apple speech helper
+        if: runner.os == 'macOS'
+        run: sh scripts/build-apple-speech.sh aarch64-apple-darwin
       - name: Linux system deps
         if: runner.os == 'Linux'
         run: |
@@ -148,6 +151,22 @@ jobs:
       - name: Rust tests
         shell: bash
         run: BOARDCAST_VOICE_DIR="$PWD/voice-models" cargo test --manifest-path src-tauri/Cargo.toml --lib -- --nocapture
+      - name: Check Apple speech helper (no microphone or model download)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          src-tauri/target/release/boardcast-speech self-test
+          src-tauri/target/release/boardcast-speech status > apple-speech-status.json
+          python3 - <<'PY'
+          import json
+          with open('apple-speech-status.json') as f:
+              status = json.load(f)
+          assert status['type'] == 'status', status
+          assert status['isApple'] is True, status
+          assert isinstance(status['available'], bool), status
+          assert isinstance(status['locales'], list), status
+          print(json.dumps(status, ensure_ascii=False, indent=2))
+          PY
       # 只在 Linux 上跑一次就够：clippy 的告警和平台无关
       - name: Clippy
         if: runner.os == 'Linux'

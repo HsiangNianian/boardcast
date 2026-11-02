@@ -52,18 +52,34 @@ export interface VoiceStatus {
 
 export type VoiceSource = 'mic' | 'both' | 'system'
 
+export type SpeechProvider = 'sensevoice' | 'apple'
+export interface SpeechModels {
+  selection: { provider: SpeechProvider; locale: string }
+  senseVoiceInstalled: boolean
+  listening: boolean
+  preparing: boolean
+  apple: {
+    isApple: boolean
+    available: boolean
+    reason: 'platform' | 'os' | 'hardware' | null
+    defaultLocale: string
+    locales: { id: string; name: string; installed: boolean }[]
+  } | null
+  appleError: string | null
+}
+
 export interface Heard {
   id: string
   revision: number
   sources: string[]
-  quality: { rms: number; peak: number; clipped: number; sourceRms: number[] }
+  quality?: { rms: number; peak: number; clipped: number; sourceRms: number[] }
   review?: { reason: string; action: string; original: string; candidate: string; decision: string; asrMs: number }
   text: string
   start: number
   end: number
   /** 这句话的声纹（单位长度）；没有声纹模型或者句子太短时没有 */
   voiceprint?: number[]
-  timing: HeardTiming
+  timing?: HeardTiming
 }
 
 /** Where the time went in the shell before a sentence reached the app (see voice.rs `Timing`) */
@@ -123,6 +139,9 @@ export const models = {
 }
 
 export const voice = {
+  models: () => call<SpeechModels>('voice_models'),
+  select: (provider: SpeechProvider, locale = '') => call<void>('voice_select', { provider, locale }),
+  prepare: (locale: string) => call<void>('voice_prepare', { locale }),
   status: () => call<VoiceStatus>('voice_status'),
   devices: () => call<string[]>('voice_devices'),
   /** `source`：只收麦克风、麦克风加系统声音（线上会议），或者只收系统声音 */

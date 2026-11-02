@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { type Catalog, type LlmStatus, type ModelInfo, type Progress, models, onProgress } from './desktop.ts'
 import { msg, useT } from './i18n/index.ts'
+import SpeechModels from './ui/SpeechModels.tsx'
 
 const gb = (n: number) => `${(n / 1e9).toFixed(1)} GB`
 const mbps = (n: number) => `${(n / 1e6).toFixed(1)} MB/s`
@@ -65,6 +66,8 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
           {s.hint}
           {gpu ? s.gpu(gpu.name, gpu.totalMib ? Math.round(gpu.totalMib / 1024) : undefined) : s.noGpu}
         </p>
+
+        <SpeechModels />
 
         {catalog?.models.map((m) => {
           const p = progress[m.id]

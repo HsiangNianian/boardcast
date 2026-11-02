@@ -160,6 +160,8 @@ PDF 最多导入 40 张有效页面；没有文字层的扫描件只显示底图
 
 ## 模型与隐私
 
+**Apple 转录（实验性）：** macOS 26+ 桌面版可在「本地模型 → 语音识别」检测系统支持情况，选择语言、下载 Apple 语言模型并切换到 SpeechAnalyzer。使用原来的麦克风按钮或快捷键，声音留在本机；目前这条线路使用选中的说话人，暂不自动分人。实际能否使用以设备和语言检测结果为准。详见[使用说明、限制与当前开发优先级](docs/development-priorities.md)。
+
 桌面版自带 llama.cpp 的 `llama-server`，自动启动和退出，不用手动开终端。Linux / Windows 使用 Vulkan，可用时把模型层放到 GPU，其余留在 CPU；macOS Apple Silicon 使用 Metal。
 
 | 内置可下载模型 | 下载大小 | 选择建议 |

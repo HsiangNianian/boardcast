@@ -26,6 +26,7 @@ fn preload_capture_and_shutdown() {
     let app = tauri::Builder::default()
         .any_thread()
         .manage(Voice::default())
+        .manage(apple_speech::Jobs::default())
         .build(context)
         .unwrap();
     let handle = app.handle().clone();

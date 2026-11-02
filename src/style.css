@@ -1563,6 +1563,10 @@ a.chip.web-demo {
   border: 1px solid var(--line);
   border-radius: 14px;
 }
+.speech-heading { justify-content: space-between; }
+.speech-heading h3 { margin: 12px 0; font-size: 14px; }
+.speech-language { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: 13px; }
+.speech-language select { max-width: 100%; min-width: 0; }
 .model.current {
   border-color: color-mix(in srgb, var(--ok) 60%, var(--line));
 }

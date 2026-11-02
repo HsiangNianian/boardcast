@@ -13,6 +13,7 @@
 //!
 //! 识别部分（`Engine`）不依赖 Tauri 和声卡，可以直接喂 wav 测试。
 
+use crate::apple_speech::{self, Provider, Selection};
 use crate::llm;
 use crate::models::voice_files;
 use serde::Serialize;
@@ -647,8 +648,99 @@ pub struct Voice {
     running: Mutex<Option<Running>>,
     status: Mutex<VoiceStatus>,
     engine: Mutex<Option<Engine>>,
+    apple: Mutex<Option<apple_speech::Session>>,
     warmup: Mutex<Option<JoinHandle<()>>>,
     shutting_down: AtomicBool,
+    selection: Mutex<Selection>,
+}
+
+pub fn init(app: &AppHandle) {
+    *app.state::<Voice>().selection.lock().unwrap() = Selection::load(app);
+    preload(app);
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeechModels {
+    selection: Selection,
+    sense_voice_installed: bool,
+    listening: bool,
+    preparing: bool,
+    apple: Option<apple_speech::Availability>,
+    apple_error: Option<String>,
+}
+
+#[tauri::command(async)]
+pub fn voice_models(app: AppHandle) -> SpeechModels {
+    let apple = apple_speech::status(&app);
+    let voice = app.state::<Voice>();
+    let selection = voice.selection.lock().unwrap().clone();
+    let listening = voice
+        .running
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|r| !r.stop.load(Ordering::SeqCst));
+    SpeechModels {
+        selection,
+        sense_voice_installed: base(&app).is_some(),
+        listening,
+        preparing: app
+            .state::<apple_speech::Jobs>()
+            .preparing
+            .load(Ordering::SeqCst),
+        apple: apple.as_ref().ok().cloned(),
+        apple_error: apple.err(),
+    }
+}
+
+#[tauri::command(async)]
+pub fn voice_prepare(app: AppHandle, locale: String) -> Result<(), String> {
+    let result = apple_speech::prepare(&app, &locale);
+    let _ = app.emit("voice-models-changed", ());
+    result
+}
+
+#[tauri::command(async)]
+pub fn voice_select(app: AppHandle, provider: Provider, locale: String) -> Result<(), String> {
+    let voice = app.state::<Voice>();
+    let mut running = voice.running.lock().unwrap();
+    if voice.shutting_down.load(Ordering::SeqCst) {
+        return Err("Audio input is shutting down".into());
+    }
+    if running
+        .as_ref()
+        .is_some_and(|r| !r.stop.load(Ordering::SeqCst))
+    {
+        return Err("Stop recording before changing the speech model".into());
+    }
+    if provider == Provider::Apple {
+        if !apple_speech::status(&app)?.ready(&locale) {
+            return Err("Choose a supported Apple language and download its model first".into());
+        }
+    } else if base(&app).is_none() {
+        return Err("Download the SenseVoice speech model first".into());
+    }
+    let selection = Selection {
+        provider,
+        locale: if provider == Provider::Apple {
+            locale
+        } else {
+            String::new()
+        },
+    };
+    selection.save(&app)?;
+    stop(&app, &mut running);
+    if let Some(thread) = voice.warmup.lock().unwrap().take() {
+        let _ = thread.join();
+    }
+    *voice.engine.lock().unwrap() = None;
+    *voice.apple.lock().unwrap() = None;
+    *voice.selection.lock().unwrap() = selection;
+    drop(running);
+    preload(&app);
+    let _ = app.emit("voice-models-changed", ());
+    Ok(())
 }
 
 /// 启动后静默加载模型；这里只碰模型文件，不打开音频设备。
@@ -661,6 +753,17 @@ pub fn preload(app: &AppHandle) {
     let app = app.clone();
     *warmup = Some(thread::spawn(move || {
         let voice = app.state::<Voice>();
+        let selection = voice.selection.lock().unwrap().clone();
+        if selection.provider == Provider::Apple {
+            let mut cached = voice.apple.lock().unwrap();
+            if cached.is_none() {
+                match apple_speech::Session::start(&app, &selection.locale, capture_id()) {
+                    Ok(session) => *cached = Some(session),
+                    Err(error) => eprintln!("Apple speech preload failed: {error}"),
+                }
+            }
+            return;
+        }
         let mut cached = voice.engine.lock().unwrap();
         if cached.is_some() {
             return;
@@ -696,7 +799,11 @@ pub fn bundled(app: &AppHandle) -> Option<std::path::PathBuf> {
 }
 
 fn installed(app: &AppHandle) -> bool {
-    base(app).is_some()
+    match app.state::<Voice>().selection.lock().unwrap().provider {
+        Provider::Sensevoice => base(app).is_some(),
+        // The saved selection was validated; the native helper rechecks system assets at start.
+        Provider::Apple => cfg!(target_os = "macos"),
+    }
 }
 
 fn set_status(app: &AppHandle, s: VoiceStatus) {
@@ -781,25 +888,19 @@ pub fn voice_start(
     if running.is_some() {
         return Ok(());
     }
-    let models = base(&app).ok_or("Speech recognition model not found")?;
+    let selection = voice.selection.lock().unwrap().clone();
+    if selection.provider == Provider::Apple && source != Source::Mic {
+        return Err("Apple transcription currently supports microphone input only; select Microphone in audio settings".into());
+    }
     let stop = Arc::new(AtomicBool::new(false));
     let flag = stop.clone();
     let handle = app.clone();
     // cpal 的流一直留在这个线程里：有些平台上 Stream 不能跨线程。
     let (ready_tx, ready_rx) = mpsc::channel::<Result<String, String>>();
-    let thread = thread::spawn(move || run(handle, models, device, source, flag, ready_tx));
+    let thread = thread::spawn(move || run(handle, selection, device, source, flag, ready_tx));
     match ready_rx.recv_timeout(Duration::from_secs(30)) {
-        Ok(Ok(name)) => {
+        Ok(Ok(_)) => {
             *running = Some(Running { stop, thread });
-            set_status(
-                &app,
-                VoiceStatus {
-                    installed: true,
-                    listening: true,
-                    device: Some(name),
-                    message: None,
-                },
-            );
             Ok(())
         }
         Ok(Err(msg)) => {
@@ -857,6 +958,7 @@ fn stop(app: &AppHandle, running: &mut Option<Running>) {
 pub fn reload(app: &AppHandle) {
     unload(app);
     preload(app);
+    let _ = app.emit("voice-models-changed", ());
 }
 
 pub fn unload(app: &AppHandle) {
@@ -867,12 +969,14 @@ pub fn unload(app: &AppHandle) {
         let _ = thread.join();
     }
     *voice.engine.lock().unwrap() = None;
+    *voice.apple.lock().unwrap() = None;
 }
 
 pub fn shutdown(app: &AppHandle) {
     app.state::<Voice>()
         .shutting_down
         .store(true, Ordering::SeqCst);
+    app.state::<apple_speech::Jobs>().shutdown();
     unload(app);
 }
 
@@ -1009,7 +1113,7 @@ fn open_stream(
 
 fn run(
     app: AppHandle,
-    models: std::path::PathBuf,
+    selection: Selection,
     device: Option<String>,
     source: Source,
     stop: Arc<AtomicBool>,
@@ -1019,8 +1123,11 @@ fn run(
 
     let voice = app.state::<Voice>();
     let mut cached = voice.engine.lock().unwrap();
-    if cached.is_none() {
-        match Engine::load(&models) {
+    if selection.provider == Provider::Sensevoice && cached.is_none() {
+        match base(&app)
+            .ok_or_else(|| "Speech recognition model not found".to_string())
+            .and_then(|models| Engine::load(&models))
+        {
             Ok(engine) => *cached = Some(engine),
             Err(msg) => {
                 let _ = ready.send(Err(msg));
@@ -1031,7 +1138,29 @@ fn run(
     if stop.load(Ordering::SeqCst) {
         return;
     }
-    let engine = cached.as_mut().unwrap();
+    let mut apple = if selection.provider == Provider::Apple {
+        let cached = voice.apple.lock().unwrap().take();
+        match cached
+            .map(Ok)
+            .unwrap_or_else(|| apple_speech::Session::start(&app, &selection.locale, capture_id()))
+        {
+            Ok(session) => Some(session),
+            Err(msg) => {
+                let _ = ready.send(Err(msg));
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    if stop.load(Ordering::SeqCst) {
+        return;
+    }
+    let mut engine = if apple.is_none() {
+        cached.as_mut()
+    } else {
+        None
+    };
 
     let host = audio_host();
     let (tx, rx) = mpsc::channel::<(usize, Vec<f32>)>();
@@ -1100,23 +1229,44 @@ fn run(
             return;
         }
     }
-    let _ = ready.send(Ok(names.join(" + ")));
+    let name = names.join(" + ");
+    set_status(
+        &app,
+        VoiceStatus {
+            installed: true,
+            listening: true,
+            device: Some(name.clone()),
+            message: None,
+        },
+    );
+    let _ = ready.send(Ok(name));
 
     // 只开了系统声音时，它是第 1 路；混音器按实际开了几路来
     let mut mixer = Mixer::new(streams.len());
-    engine.sources.names = match source {
-        Source::Mic => vec!["mic".into()],
-        Source::System => vec!["system".into()],
-        Source::Both => vec!["mic".into(), "system".into()],
-    };
+    if let Some(engine) = engine.as_mut() {
+        engine.sources.names = match source {
+            Source::Mic => vec!["mic".into()],
+            Source::System => vec!["system".into()],
+            Source::Both => vec!["mic".into(), "system".into()],
+        };
+    }
     let slot = |src: usize| if source == Source::System { 0 } else { src };
     let mut events = vec![];
     let mut level_sum = 0.0f32;
     let mut level_n = 0usize;
     let mut last_level = Instant::now();
+    let mut failure = None;
     while !stop.load(Ordering::SeqCst) {
+        if let Some(apple) = apple.as_mut() {
+            if let Err(error) = apple.poll(&app) {
+                failure = Some(error);
+                break;
+            }
+        }
         let Ok((src, chunk)) = rx.recv_timeout(Duration::from_millis(100)) else {
-            engine.review_one(&mut events);
+            if let Some(engine) = engine.as_mut() {
+                engine.review_one(&mut events);
+            }
             emit_events(&app, &mut events);
             continue;
         };
@@ -1126,7 +1276,16 @@ fn run(
         };
         mixer.push(slot(src), &samples);
         let tracks = mixer.pop_tracks();
-        let mixed = engine.feed_tracks(&tracks, &mut events);
+        let mixed = if let Some(engine) = engine.as_mut() {
+            engine.feed_tracks(&tracks, &mut events)
+        } else {
+            let mixed = mix(&tracks);
+            if let Err(error) = apple.as_mut().unwrap().feed(&mixed) {
+                failure = Some(error);
+                break;
+            }
+            mixed
+        };
         if mixed.is_empty() {
             continue;
         }
@@ -1142,22 +1301,42 @@ fn run(
             last_level = Instant::now();
         }
         emit_events(&app, &mut events);
-        if !engine.in_speech && !stop.load(Ordering::SeqCst) {
-            engine.review_one(&mut events);
-            emit_events(&app, &mut events);
+        if let Some(engine) = engine.as_mut() {
+            if !engine.in_speech && !stop.load(Ordering::SeqCst) {
+                engine.review_one(&mut events);
+                emit_events(&app, &mut events);
+            }
         }
     }
     drop(streams);
-    engine.finish(&mut events);
-    for mut retry in engine.retries.drain(..) {
-        let review = retry.heard.review.as_mut().unwrap();
-        review.decision = "cancelled".into();
-        retry.heard.revision = u32::from(!review.original.is_empty());
-        events.push(Event::Final(retry.heard));
+    if let Some(engine) = engine.as_mut() {
+        engine.finish(&mut events);
+        for mut retry in engine.retries.drain(..) {
+            let review = retry.heard.review.as_mut().unwrap();
+            review.decision = "cancelled".into();
+            retry.heard.revision = u32::from(!review.original.is_empty());
+            events.push(Event::Final(retry.heard));
+        }
+        emit_events(&app, &mut events);
+        engine.reset();
     }
-    emit_events(&app, &mut events);
-    // Stop/exit cancels queued optional work; already emitted primary text is kept.
-    engine.reset();
+    if let Some(apple) = apple.as_mut() {
+        if failure.is_none() && !voice.shutting_down.load(Ordering::SeqCst) {
+            failure = apple.finish(&app).err();
+        }
+    }
+    stop.store(true, Ordering::SeqCst);
+    if let Some(error) = &failure {
+        let _ = app.emit("voice-error", error);
+    }
+    set_status(
+        &app,
+        VoiceStatus {
+            installed: installed(&app),
+            message: failure,
+            ..Default::default()
+        },
+    );
 }
 
 fn emit_events(app: &AppHandle, events: &mut Vec<Event>) {

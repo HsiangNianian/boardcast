@@ -10,6 +10,18 @@ In **Settings → Local models → Speech recognition**, check availability, cho
 
 This integration targets **macOS 26+ desktop**. It queries `SpeechTranscriber.isAvailable`, `supportedLocales` and `installedLocales`, and checks `AssetInventory.status` again when starting a new analyzer. An Apple device alone does not guarantee support. The web app, including Safari on an iPad, cannot call this native API. There is no cloud or legacy-recognizer fallback.
 
+The system API and boardcast's integration have different support boundaries:
+
+| Environment | Apple SpeechAnalyzer | boardcast integration |
+| --- | --- | --- |
+| macOS 26+ | Available on compatible hardware and languages | Included in the desktop app; detected at runtime |
+| Earlier macOS | This API does not exist | Use SenseVoice on supported desktop installations |
+| iPadOS 26+ | Available to native apps on compatible devices | An iPad native bridge and app integration are still needed |
+| Earlier iPadOS | This API does not exist | No Apple speech integration in boardcast |
+| Browser, including iPad Safari | Cannot directly call the native Speech framework | No SpeechAnalyzer integration |
+
+Apple's older [`SFSpeechRecognizer`](https://developer.apple.com/documentation/speech/sfspeechrecognizer) could be integrated separately for earlier systems. Its on-device support varies by device and language; a local-only implementation must first check [`supportsOnDeviceRecognition`](https://developer.apple.com/documentation/speech/sfspeechrecognizer/supportsondevicerecognition) and explicitly require on-device recognition. It is not the same API/model as this experiment and is not currently wired into boardcast.
+
 Rust retains microphone/device selection and 16 kHz PCM capture. A bundled Swift helper converts to the system's supported audio format and supplies a continuous sequence to `SpeechAnalyzer` + `SpeechTranscriber`. Volatile text updates the live caption; only final text enters the transcript and board. Apple does its own segmentation. This route does not apply SenseVoice's VAD/retry policy and currently uses the selected speaker instead of CAM++ automatic speaker attribution. It does not report invented ASR timings or signal-quality metrics.
 
 Audio is piped locally and is not saved by the helper. Normal stop closes input, allows up to five seconds for final results, then reaps the helper. Failure to finalize is reported. Exit cancels native work, including downloads and warmup, and the helper watches for an abruptly terminated parent. Language assets remain system-managed; switching back to SenseVoice does not delete shared Apple assets.

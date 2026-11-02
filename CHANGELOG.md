@@ -2,6 +2,38 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.21.0 - 2026-11-02
+
+### Features
+
+- **Apple transcription (experimental):** Local models now detects macOS SpeechAnalyzer availability, lists the system's supported languages, installs Apple language assets on request, and lets you switch between Apple transcription and SenseVoice. The selected provider and language persist; startup preheats the selected backend without opening the microphone, and exit cleans up native work.
+- **Speech input:** Preload SenseVoice at launch, show recording startup immediately, retain quiet speech, and keep VAD enabled by default. Bounded dynamic review can retry eligible audio without creating duplicate transcript lines; conflicting alternatives keep the original text.
+- **Handwriting:** Use Excalifont-derived English strokes, with messiness at 0, Chinese/Japanese weight at 65%, and a separate English weight control defaulting to 100%. Apply the defaults across the desktop app, website, intro and exports. Rename the modes to PAD whiteboard and PC meeting.
+- **Evaluation:** Add one-command audio downloads and an offline listening page, a 19-configuration multilingual ASR sweep, and nine continuous roughly 10-minute meeting clips. Report edited minutes and overlapping speech separately from ordinary verbatim-reference scores.
+
+### Fixes and documentation
+
+- Keep the embedded demo from skipping the landing page's final screen, retain explicit composer focus, and avoid probing local model servers before an address is configured.
+- Fail ASR evaluation on native decoder exceptions and make converted WAV metadata reproducible across ffmpeg versions.
+- Show unavailable Apple devices and languages accurately, preserve the ability to switch back to SenseVoice, and bound helper startup, finalization and CI checks.
+- Make the English README the default, restore the ASCII implementation diagrams, and record the current product-first development priorities.
+
+### Apple compatibility
+
+- **This release integrates Apple transcription on macOS 26+ desktop only**, subject to the actual device and language capability checks. It currently accepts microphone audio and uses the selected speaker instead of automatic speaker recognition.
+- Apple also provides SpeechAnalyzer on compatible **iPadOS 26+** devices, but boardcast does not yet have an iPad native integration. Opening the web app in Safari does not expose this native API.
+- Earlier operating systems do not provide SpeechAnalyzer. SenseVoice remains the default desktop backend; the older Apple `SFSpeechRecognizer` is a separate integration and is not included here. The 26+ requirement belongs to the new Apple backend, not every speech-recognition option.
+- Apple assets are system-managed and transcription stays on-device. No legacy or cloud fallback is enabled automatically. See the [Apple API documentation](https://developer.apple.com/documentation/speech/speechtranscriber) and [integration notes](https://github.com/HsiangNianian/boardcast/blob/v0.21.0/docs/development-priorities.md).
+
+### Validation and known limits
+
+- 181 JavaScript tests and 32 local Rust tests passed, including real-audio SenseVoice regression. [Pre-release Eval](https://github.com/HsiangNianian/boardcast/actions/runs/41401038026) built all four desktop targets and passed the three quick ASR controls.
+- macOS native compilation, PCM conversion self-test and capability probing passed. The virtual Mac reported SpeechTranscriber unavailable, so Apple model installation, live recognition accuracy and latency still need testing on a supported physical Mac.
+- The Qwen3.5-2B-Q4 board revision evaluation still reports three correction violations, also present before the Apple integration. The overall Eval workflow is not entirely green.
+- The long-meeting dynamic run accepted none of its 46 retries; it did not demonstrate an accuracy improvement. Model selection and broader audio enhancement work remain deferred while product interactions are developed.
+
+**Full diff:** [v0.20.0...v0.21.0](https://github.com/HsiangNianian/boardcast/compare/v0.20.0...v0.21.0)
+
 ## 0.20.0 - 2026-11-01
 
 ### Features

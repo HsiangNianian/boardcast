@@ -2,6 +2,14 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.21.1-1 - 2026-11-02
+
+### Fixes
+
+- **voice:** Guide Apple model downloads with consistent readiness checks ([`4abb6f2`](https://github.com/HsiangNianian/boardcast/commit/4abb6f2dee4a99c470a3c73b338c145c7b3267b6))
+
+**Full diff:** [v0.21.0...v0.21.1-1](https://github.com/HsiangNianian/boardcast/compare/v0.21.0...v0.21.1-1)
+
 ## 0.21.0 - 2026-11-02
 
 ### Features

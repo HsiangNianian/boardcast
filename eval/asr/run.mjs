@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
@@ -8,6 +8,7 @@ import { download, sha256 } from './files.mjs'
 import { errorRate, keywordRecall, recognitionFailures } from './score.mjs'
 import { comparison } from './dynamic.mjs'
 import { models, supportedSamples } from './catalog.mjs'
+import { nativeErrors } from './runtime.mjs'
 
 const { values: args } = parseArgs({ options: {
   policy: { type: 'string', default: 'static' },
@@ -58,9 +59,16 @@ writeFileSync(input, JSON.stringify({
   external_model: candidate.backend ? join(extraModels, candidate.config.model) : undefined,
   samples: selected.map((s) => ({ id: s.id, path: join(directory, s.file), variant: s.variant })), output,
 }))
-execFileSync('cargo', ['test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '--lib', 'voice::eval::corpus', '--', '--ignored', '--exact', '--nocapture'], {
-  stdio: 'inherit', env: { ...process.env, BOARDCAST_ASR_INPUT: input },
-})
+const stderrPath = join(reportDir, 'inference.stderr.log'), stderrFd = openSync(stderrPath, 'w')
+try {
+  execFileSync('cargo', ['test', '--locked', '--manifest-path', 'src-tauri/Cargo.toml', '--lib', 'voice::eval::corpus', '--', '--ignored', '--exact', '--nocapture'], {
+    stdio: ['inherit', 'inherit', stderrFd], env: { ...process.env, BOARDCAST_ASR_INPUT: input },
+  })
+} finally {
+  closeSync(stderrFd)
+  process.stderr.write(readFileSync(stderrPath))
+}
+const runtimeFailures = nativeErrors(readFileSync(stderrPath, 'utf8'))
 if (candidate.backend) execFileSync('uv', ['run', '--locked', '--script', 'eval/asr/ctc.py', input], { stdio: 'inherit' })
 const result = JSON.parse(readFileSync(output, 'utf8'))
 if (manifestSha256 !== await sha256(manifestPath)) throw new Error('Corpus changed during inference')
@@ -90,7 +98,7 @@ const aggregates = ['zh', 'ja', 'en', 'zh-en'].map((language) => {
   return { language, samples: rows.length, errors, units, rate: units ? errors / units : null }
 })
 const voiceHashes = {}
-const failures = recognitionFailures(details.filter((d) => d.variant === 'original'))
+const failures = [...runtimeFailures, ...recognitionFailures(details.filter((d) => d.variant === 'original'))]
 if (args.policy === 'dynamic') {
   for (const d of details) {
     if (d.scoring === 'reference' && d.comparison.errorDelta > 0) failures.push(`${d.id}: dynamic recognition regressed by ${d.comparison.errorDelta} edits`)
@@ -110,7 +118,7 @@ const report = { corpus: corpus.version, manifestSha256,
     : ['voice/sense-voice/model.int8.onnx', 'voice/sense-voice/tokens.txt'].reduce((sum, f) => sum + statSync(join(root, 'src-tauri', f)).size, 0),
   models: { ...voiceHashes, ...Object.fromEntries(modelFiles.map((f) => [f.file, f.sha256])) },
   engineSha256: sourceHashes[0], policySha256: sourceHashes[1], harnessSha256: sourceHashes[2], scorerSha256, adapterSha256, loadMs: result.loadMs,
-  checks: { enforced: production, passed: !failures.length, failures }, aggregates, details }
+  checks: { enforced: production, passed: !failures.length, failures }, runtime: { passed: !runtimeFailures.length, failures: runtimeFailures }, aggregates, details }
 writeFileSync(join(reportDir, 'report.json'), JSON.stringify(report, null, 2) + '\n')
 const pct = (rate) => rate === null ? '—' : `${(rate * 100).toFixed(2)}%`
 const metric = (language) => language === 'en' ? 'WER' : language === 'zh-en' ? 'MER' : 'CER'
@@ -121,7 +129,7 @@ markdown += args.vad === 'on'
   ? 'Desktop VAD with bounded level compensation, soft breaks and voiceprints; VAD gain is not applied to recognition or voiceprints.\n\n'
   : 'VAD bypassed: fixed 10-second windows (including silence), same recognizer and voiceprints. Window boundaries may split words. This is an evaluation control, not an app setting.\n\n'
 markdown += 'Audio is fed faster than real time. RTF is processing time / audio duration, not microphone-to-screen latency. GTCRN is an offline experiment before segmentation.\n\n'
-markdown += `Speech/silence checks: **${failures.length ? 'FAIL' : 'PASS'}** (${production ? 'enforced for the production pipeline' : 'diagnostic only for this experimental control'}).\n\n`
+markdown += `Recognition/runtime checks: **${failures.length ? 'FAIL' : 'PASS'}** (${production ? 'speech checks enforced for the production pipeline' : 'speech checks diagnostic for this experimental control'}; native decoder exceptions always fail).\n\n`
 for (const failure of failures) markdown += `- ${failure}\n`
 if (failures.length) markdown += '\n'
 markdown += '| Language | Metric | Reference samples | Errors / units | Rate |\n|---|---|---:|---:|---:|\n'
@@ -145,5 +153,5 @@ for (const d of details) {
 writeFileSync(join(reportDir, 'report.md'), markdown)
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown)
 console.log(`Report: ${join(reportDir, 'report.md')}`)
-if (production && failures.length) throw new Error(failures.join('; '))
+if (runtimeFailures.length || (production && failures.length)) throw new Error(failures.join('; '))
 if (failures.length) console.warn(`${process.env.GITHUB_ACTIONS ? '::warning::' : ''}Experimental control: ${failures.join('; ')}`)

@@ -8,6 +8,7 @@ import test from 'node:test'
 import { corpus, corpusFor, listeningPage, validateCorpus } from './download.mjs'
 import { download } from './files.mjs'
 import { errorRate, keywordRecall, tokens, recognitionFailures } from './score.mjs'
+import { nativeErrors } from './runtime.mjs'
 
 test('CER/WER/MER preserve language units, edits and empty references', () => {
   assert.deepEqual(tokens('ＡＰＩ、更新。', 'ja'), ['a', 'p', 'i', '更', '新'])
@@ -38,6 +39,13 @@ test('speech/silence checks catch one missing transcript even when other speech 
   assert.deepEqual(recognitionFailures(details), [])
   details[2].hypothesis = 'invented words'
   assert.deepEqual(recognitionFailures(details), ['silence: speech hallucinated on silence'])
+})
+
+test('native exceptions cannot become a passing eval just because other segments recognized speech', () => {
+  assert.deepEqual(nativeErrors('Finished test profile\n[W:onnxruntime:, graph] optional provider warning'), [])
+  const failures = nativeErrors('\u001b[1;31m[E:onnxruntime:, sequential_executor] tensor shape failed\nCaught exception:\nReturn an empty result')
+  assert.equal(failures.length, 1)
+  assert.match(failures[0], /2 error markers/)
 })
 
 test('corpus rejects traversal, duplicate IDs and invalid reference bounds', () => {

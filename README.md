@@ -160,7 +160,7 @@ The audio review policy currently uses fixed rules; the board agent handles acce
 
 ## Models and privacy
 
-**Apple transcription (experimental):** on macOS 26+, open **Local models → Speech recognition** to detect system support, choose a language, download its Apple assets and switch to SpeechAnalyzer. It uses the normal recording controls with microphone, system audio, or both, and stays on-device; this route currently uses the selected speaker rather than automatic speaker recognition. Availability depends on the actual device and language. See [setup, limits and current development priorities](docs/development-priorities.md).
+**Apple transcription (experimental):** on macOS 26+, open **Local models → Speech recognition** to detect support and switch to SpeechAnalyzer. The language list defaults to **Auto**, which identifies Chinese, Japanese or English from the opening speech, retains that audio for transcription, and keeps the chosen language for the recording. The download button prepares any missing Apple assets for these three languages; saved manual language choices are preserved. It uses the normal recording controls with microphone, system audio, or both, and stays on-device; this route currently uses the selected speaker rather than automatic speaker recognition. Availability depends on the actual device and language. See [setup, limits and current development priorities](docs/development-priorities.md).
 
 The desktop app bundles llama.cpp's `llama-server` and manages its lifecycle. Linux and Windows use Vulkan, offloading layers to the GPU when available and keeping the rest on the CPU. macOS Apple Silicon uses Metal.
 

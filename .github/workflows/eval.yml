@@ -152,6 +152,14 @@ jobs:
       - name: Rust tests
         shell: bash
         run: BOARDCAST_VOICE_DIR="$PWD/voice-models" cargo test --manifest-path src-tauri/Cargo.toml --lib -- --nocapture
+      - name: Check Apple Auto language routing on macOS
+        if: runner.os == 'macOS'
+        env:
+          BOARDCAST_AUTO_MODELS: ${{ github.workspace }}/src-tauri
+          BOARDCAST_AUTO_AUDIO: ${{ github.workspace }}/eval/asr/.data
+        run: |
+          node --input-type=module -e "import { corpus, prepareAudio } from './eval/asr/download.mjs'; await prepareAudio({ ...corpus, samples: corpus.samples.filter(s => ['zh-alimeeting-00', 'ja-fleurs-00', 'en-ami-00'].includes(s.id)) });"
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib voice::auto::tests::auto_language_real_audio -- --ignored --exact --nocapture
       - name: Check Apple speech helper (no microphone or model download)
         if: runner.os == 'macOS'
         shell: bash
@@ -300,6 +308,12 @@ jobs:
       - name: Evaluate the desktop voice engine
         if: ${{ !startsWith(matrix.model, 'wav2vec2-') }}
         run: pnpm eval:asr --suite "$ASR_SUITE" --model "${{ matrix.model }}" --denoise "${{ matrix.denoise }}" --vad "${{ matrix.vad }}" --policy "${{ matrix.policy }}"
+      - name: Check Apple Auto language routing with real audio
+        if: matrix.model == 'sensevoice' && matrix.denoise == 'none' && matrix.vad == 'on' && matrix.policy == 'static' && env.ASR_SUITE != 'meetings'
+        env:
+          BOARDCAST_AUTO_MODELS: ${{ github.workspace }}/src-tauri
+          BOARDCAST_AUTO_AUDIO: ${{ github.workspace }}/eval/asr/.data
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib voice::auto::tests::auto_language_real_audio -- --ignored --exact --nocapture
       - uses: astral-sh/setup-uv@v6
         if: startsWith(matrix.model, 'wav2vec2-')
         with:

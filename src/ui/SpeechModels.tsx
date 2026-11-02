@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { on, voice, type SpeechModels as View, type VoiceStatus } from '../desktop.ts'
 import { recordError } from '../engine/diagnostics.ts'
-import { appleAssetIssue } from '../engine/speech.ts'
+import { appleAssetIssue, appleLanguageChoice, appleLanguageState } from '../engine/speech.ts'
 import { useT } from '../i18n/index.ts'
 
 export default function SpeechModels() {
@@ -13,8 +13,7 @@ export default function SpeechModels() {
   const refresh = useCallback(async () => {
     const next = await voice.models()
     setView(next)
-    setLocale((previous) => [previous, next.selection.locale, next.apple?.defaultLocale]
-      .find((id) => id && next.apple?.locales.some((l) => l.id === id)) ?? next.apple?.locales[0]?.id ?? '')
+    setLocale((previous) => appleLanguageChoice(next, previous))
   }, [])
 
   useEffect(() => {
@@ -22,14 +21,14 @@ export default function SpeechModels() {
     let disposed = false
     const cleanups: (() => void)[] = []
     for (const task of [
-      on<VoiceStatus>('voice-status', (s) => setView((v) => v && { ...v, listening: s.listening })),
+      on<VoiceStatus>('voice-status', (s) => setView((v) => v && { ...v, listening: s.listening, activeLocale: s.language ?? null })),
       on('voice-models-changed', () => { void refresh().catch((e) => setError(String(e))) }),
     ]) void task.then((off) => disposed ? off() : cleanups.push(off))
     return () => { disposed = true; cleanups.forEach((off) => off()) }
   }, [refresh])
 
-  const language = view?.apple?.locales.find((l) => l.id === locale)
-  const waiting = !!view?.preparing || language?.status === 'downloading'
+  const state = view ? appleLanguageState(view, locale) : 'unknown'
+  const waiting = !!view?.preparing || state === 'downloading'
   useEffect(() => {
     if (!waiting) return
     let disposed = false
@@ -62,7 +61,7 @@ export default function SpeechModels() {
   }
 
   const selected = view?.selection.provider === 'apple' && view.selection.locale === locale
-  const appleReady = view?.apple?.available && view.apple.locales.some((l) => l.id === view.selection.locale && l.status === 'installed')
+  const appleReady = !!view && appleLanguageState(view, view.selection.locale) === 'installed'
   const disabled = busy || !!view?.listening || !!view?.preparing
   return <section className="speech-models" aria-labelledby="speech-models-title" aria-busy={busy}>
     <div className="row speech-heading">
@@ -83,7 +82,7 @@ export default function SpeechModels() {
       </div>
       <div className={`model ${view.selection.provider === 'apple' ? 'current' : ''}`}>
         <div className="row1"><b>Apple SpeechAnalyzer</b><span className="tag">{s.experimental}</span>
-          {view.selection.provider === 'apple' && <span className="tag on">{appleReady ? s.inUse : s.chosen} · {view.selection.locale}</span>}
+          {view.selection.provider === 'apple' && <span className="tag on">{appleReady ? s.inUse : s.chosen} · {view.selection.locale === 'auto' ? s.appleAuto : view.selection.locale}</span>}
         </div>
         <p className="note">{s.appleNote}</p>
         <p className="meta">{s.appleStorage}</p>
@@ -93,22 +92,26 @@ export default function SpeechModels() {
           : <>
             <label className="speech-language">{s.speechLanguage}
               <select value={locale} disabled={disabled} onChange={(e) => setLocale(e.target.value)}>
+                <option value="auto">{s.appleAuto}</option>
                 {view.apple.locales.map((l) => <option value={l.id} key={l.id}>{l.name} ({l.id})</option>)}
               </select>
             </label>
+            {locale === 'auto' && <p className="note">{s.appleAutoNote}</p>}
+            {selected && view.activeLocale && <p className="meta">{s.appleDetected(view.apple.locales.find((l) => l.id === view.activeLocale)?.name ?? view.activeLocale)}</p>}
             <p className="meta" role="status">{view.preparing || busy ? s.speechWorking
-              : !language ? s.appleNoLanguages : language.status === 'installed' ? s.appleInstalled
-              : language.status === 'downloading' ? s.appleDownloading
-              : language.status === 'unsupported' ? s.appleLanguageUnsupported
-              : language.status === 'unknown' ? s.appleStatusUnknown : s.appleNeedsDownload}</p>
+              : locale === 'auto' && !view.senseVoiceInstalled ? s.speechDownloadBelow
+              : state === 'installed' ? s.appleInstalled
+              : state === 'downloading' ? s.appleDownloading
+              : state === 'unsupported' ? s.appleLanguageUnsupported
+              : state === 'unknown' ? s.appleStatusUnknown : locale === 'auto' ? s.appleAutoDownloadHint : s.appleNeedsDownload}</p>
             <div className="actions">
-              {language?.status === 'installed' ? <button disabled={disabled || selected} onClick={() => void act(() => voice.select('apple', locale))}>
+              {state === 'installed' ? <button disabled={disabled || selected} onClick={() => void act(() => voice.select('apple', locale))}>
                 {selected ? s.inUse : s.use}
-              </button> : <button disabled={disabled || !language || language.status === 'unsupported' || language.status === 'unknown'} onClick={() => void act(prepare)}>
-                {view.preparing || busy ? s.applePreparing : language?.status === 'downloading' ? s.appleResume : s.appleDownload}
+              </button> : <button disabled={disabled || state === 'unsupported' || state === 'unknown'} onClick={() => void act(prepare)}>
+                {view.preparing || busy ? s.applePreparing : state === 'downloading' ? s.appleResume : s.appleDownload}
               </button>}
             </div>
-            {selected && language?.status === 'installed' && !busy && <p className="hint">{s.speechReadyHint}</p>}
+            {selected && state === 'installed' && !busy && <p className="hint">{s.speechReadyHint}</p>}
           </>}
       </div>
       {view.listening && <p className="hint">{s.stopToSwitch}</p>}

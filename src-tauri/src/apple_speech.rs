@@ -18,11 +18,24 @@ pub enum Provider {
     Apple,
 }
 
-#[derive(Clone, Default, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Selection {
     pub provider: Provider,
-    #[serde(default)]
+    #[serde(default = "auto_locale")]
     pub locale: String,
+}
+
+fn auto_locale() -> String {
+    "auto".into()
+}
+
+impl Default for Selection {
+    fn default() -> Self {
+        Self {
+            provider: Provider::default(),
+            locale: auto_locale(),
+        }
+    }
 }
 
 impl Selection {
@@ -77,13 +90,44 @@ pub struct Availability {
 }
 
 impl Availability {
+    pub fn auto_locales(&self) -> Vec<String> {
+        ["zh_CN", "ja_JP", "en_US"]
+            .iter()
+            .filter_map(|preferred| {
+                self.locales
+                    .iter()
+                    .filter(|l| {
+                        language_code(&l.id) == language_code(preferred)
+                            && !matches!(l.status, AssetStatus::Unsupported | AssetStatus::Unknown)
+                    })
+                    .min_by_key(|l| {
+                        (
+                            !matches!(l.status, AssetStatus::Installed),
+                            l.id != self.default_locale,
+                            l.id.replace('-', "_") != *preferred,
+                            &l.id,
+                        )
+                    })
+                    .map(|l| l.id.clone())
+            })
+            .collect()
+    }
+
     pub fn ready(&self, locale: &str) -> bool {
+        if locale == "auto" {
+            let locales = self.auto_locales();
+            return locales.len() == 3 && locales.iter().all(|l| self.ready(l));
+        }
         self.available
             && self
                 .locales
                 .iter()
                 .any(|l| l.id == locale && matches!(l.status, AssetStatus::Installed))
     }
+}
+
+pub fn language_code(locale: &str) -> &str {
+    locale.split(['_', '-']).next().unwrap_or("")
 }
 
 #[derive(Default)]
@@ -290,14 +334,29 @@ pub fn prepare(app: &AppHandle, locale: &str) -> Result<(), String> {
     }
     let result = (|| {
         let supported = status(app)?;
-        if !supported.available || !supported.locales.iter().any(|l| l.id == locale) {
+        let locales = if locale == "auto" {
+            supported.auto_locales()
+        } else {
+            vec![locale.to_owned()]
+        };
+        if !supported.available
+            || (locale == "auto" && locales.len() != 3)
+            || locales
+                .iter()
+                .any(|id| !supported.locales.iter().any(|l| &l.id == id))
+        {
             return Err("This Apple transcription language is not supported on this device".into());
         }
-        let helper = Helper::spawn(command("prepare", locale)?, &jobs, None)?;
-        match helper.receive(Duration::from_secs(1200))? {
-            Message::Done => Ok(()),
-            _ => Err("Apple did not finish installing the language model".into()),
+        for locale in locales {
+            if supported.ready(&locale) {
+                continue;
+            }
+            let helper = Helper::spawn(command("prepare", &locale)?, &jobs, None)?;
+            if !matches!(helper.receive(Duration::from_secs(1200))?, Message::Done) {
+                return Err("Apple did not finish installing the language model".into());
+            }
         }
+        Ok(())
     })();
     jobs.preparing.store(false, Ordering::SeqCst);
     result
@@ -335,30 +394,76 @@ impl SystemAudio {
 }
 
 pub struct Session {
-    helper: Helper,
+    helper: Option<Helper>,
+    auto: Option<(crate::voice::auto::Detector, Vec<String>)>,
     capture: String,
     sequence: u64,
     until: f64,
     fed: usize,
+    offset: f64,
 }
 
 impl Session {
     pub fn start(app: &AppHandle, locale: &str, capture: String) -> Result<Self, String> {
-        let helper = Helper::spawn(command("transcribe", locale)?, &app.state::<Jobs>(), None)?;
-        match helper.receive(Duration::from_secs(25))? {
-            Message::Ready => Ok(Self {
-                helper,
+        if locale == "auto" {
+            let supported = status(app)?;
+            if !supported.ready("auto") {
+                return Err("APPLE_SPEECH_ASSETS_NOT_READY:auto:supported".into());
+            }
+            let models =
+                crate::voice::base(app).ok_or("Auto requires the bundled SenseVoice model")?;
+            return Ok(Self {
+                helper: None,
+                auto: Some((
+                    crate::voice::auto::Detector::load(&models)?,
+                    supported.auto_locales(),
+                )),
                 capture,
                 sequence: 0,
                 until: 0.0,
                 fed: 0,
+                offset: 0.0,
+            });
+        }
+        let helper = Helper::spawn(command("transcribe", locale)?, &app.state::<Jobs>(), None)?;
+        match helper.receive(Duration::from_secs(25))? {
+            Message::Ready => Ok(Self {
+                helper: Some(helper),
+                auto: None,
+                capture,
+                sequence: 0,
+                until: 0.0,
+                fed: 0,
+                offset: 0.0,
             }),
             _ => Err("Apple transcription did not become ready".into()),
         }
     }
 
-    pub fn feed(&mut self, samples: &[f32]) -> Result<(), String> {
-        self.helper.feed(samples)?;
+    fn detect(&mut self, app: &AppHandle, samples: &[f32], finish: bool) -> Result<(), String> {
+        let (detector, locales) = self.auto.as_mut().unwrap();
+        if let Some(route) = detector.feed(samples, finish)? {
+            let locale = locales
+                .iter()
+                .find(|l| language_code(l) == route.language)
+                .ok_or(crate::voice::auto::UNCERTAIN)?
+                .clone();
+            // Free SenseVoice before loading Apple's analyzer; it is only an opening-language probe.
+            self.auto.take();
+            let mut session = Self::start(app, &locale, self.capture.clone())?;
+            session.offset = route.offset;
+            session.feed(app, &route.samples)?;
+            *self = session;
+            crate::voice::detected_language(app, &locale);
+        }
+        Ok(())
+    }
+
+    pub fn feed(&mut self, app: &AppHandle, samples: &[f32]) -> Result<(), String> {
+        if self.auto.is_some() {
+            return self.detect(app, samples, false);
+        }
+        self.helper.as_ref().unwrap().feed(samples)?;
         self.fed += samples.len();
         Ok(())
     }
@@ -379,7 +484,7 @@ impl Session {
                         "voice-final",
                         serde_json::json!({
                             "id": format!("{}:{}", self.capture, self.sequence), "revision": 0,
-                            "text": text, "start": start, "end": end, "sources": sources,
+                            "text": text, "start": start + self.offset, "end": end + self.offset, "sources": sources,
                         }),
                     );
                 }
@@ -393,7 +498,10 @@ impl Session {
     }
 
     pub fn poll(&mut self, app: &AppHandle, sources: &[&str]) -> Result<(), String> {
-        while let Ok(event) = self.helper.output.try_recv() {
+        if self.helper.is_none() {
+            return Ok(());
+        }
+        while let Ok(event) = self.helper.as_ref().unwrap().output.try_recv() {
             if self.event(app, event?, sources)? {
                 return Err("Apple transcription ended while recording".into());
             }
@@ -402,11 +510,19 @@ impl Session {
     }
 
     pub fn finish(&mut self, app: &AppHandle, sources: &[&str]) -> Result<(), String> {
-        self.helper.input.take();
+        if self.auto.is_some() {
+            self.detect(app, &[], true)?;
+        }
+        let Some(helper) = self.helper.as_mut() else {
+            return Ok(());
+        };
+        helper.input.take();
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             let event = self
                 .helper
+                .as_ref()
+                .unwrap()
                 .receive(deadline.saturating_duration_since(Instant::now()))?;
             if self.event(app, event, sources)? {
                 return Ok(());
@@ -480,6 +596,40 @@ mod tests {
             .unwrap();
             assert!(!s.ready("zh-CN"), "{state} must not be advertised as ready");
         }
+    }
+
+    #[test]
+    fn auto_prefers_installed_locales_and_requires_all_three_languages() {
+        let mut s: Availability = serde_json::from_value(serde_json::json!({
+            "isApple": true, "available": true, "defaultLocale": "en-GB",
+            "locales": [
+                {"id": "en-US", "name": "English", "status": "installed"},
+                {"id": "en-GB", "name": "English", "status": "supported"},
+                {"id": "ja_JP", "name": "Japanese", "status": "installed"},
+                {"id": "zh_CN", "name": "Chinese", "status": "installed"}
+            ]
+        }))
+        .unwrap();
+        assert_eq!(s.auto_locales(), ["zh_CN", "ja_JP", "en-US"]);
+        assert!(s.ready("auto"));
+        s.locales[1].status = AssetStatus::Installed;
+        assert_eq!(s.auto_locales()[2], "en-GB");
+        s.locales[2].status = AssetStatus::Downloading;
+        assert!(!s.ready("auto"));
+        assert!(s.ready("zh_CN"));
+        s.locales[2].status = AssetStatus::Unsupported;
+        assert_eq!(s.auto_locales().len(), 2);
+        assert!(!s.ready("auto"));
+    }
+
+    #[test]
+    fn auto_is_the_default_without_overwriting_a_saved_manual_language() {
+        assert_eq!(Selection::default().locale, "auto");
+        let missing: Selection = serde_json::from_str(r#"{"provider":"apple"}"#).unwrap();
+        assert_eq!(missing.locale, "auto");
+        let saved: Selection =
+            serde_json::from_str(r#"{"provider":"apple","locale":"ja_JP"}"#).unwrap();
+        assert_eq!(saved.locale, "ja_JP");
     }
 
     #[test]

@@ -373,6 +373,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "sherpa-onnx",
+ "sherpa-onnx-sys",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

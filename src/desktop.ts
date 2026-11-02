@@ -49,6 +49,7 @@ export interface VoiceStatus {
   listening: boolean
   device?: string
   message?: string
+  language?: string | null
 }
 
 export type VoiceSource = 'mic' | 'both' | 'system'
@@ -59,6 +60,8 @@ export interface SpeechModels {
   senseVoiceInstalled: boolean
   listening: boolean
   preparing: boolean
+  autoLocales: string[]
+  activeLocale: string | null
   apple: {
     isApple: boolean
     available: boolean
@@ -143,7 +146,7 @@ export const models = {
 
 export const voice = {
   models: () => call<SpeechModels>('voice_models'),
-  select: (provider: SpeechProvider, locale = '') => call<void>('voice_select', { provider, locale }),
+  select: (provider: SpeechProvider, locale = 'auto') => call<void>('voice_select', { provider, locale }),
   prepare: (locale: string) => call<void>('voice_prepare', { locale }),
   status: () => call<VoiceStatus>('voice_status'),
   devices: () => call<string[]>('voice_devices'),

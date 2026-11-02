@@ -30,6 +30,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
+#[path = "voice_auto.rs"]
+pub(crate) mod auto;
 #[path = "voice_policy.rs"]
 mod policy;
 use policy::{Quality, Retry, Review, SourceAudio};
@@ -115,6 +117,7 @@ pub struct VoiceStatus {
     pub listening: bool,
     pub device: Option<String>,
     pub message: Option<String>,
+    pub language: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -668,6 +671,8 @@ pub struct SpeechModels {
     preparing: bool,
     apple: Option<apple_speech::Availability>,
     apple_error: Option<String>,
+    auto_locales: Vec<String>,
+    active_locale: Option<String>,
 }
 
 #[tauri::command(async)]
@@ -681,7 +686,10 @@ pub fn voice_models(app: AppHandle) -> SpeechModels {
         .unwrap()
         .as_ref()
         .is_some_and(|r| !r.stop.load(Ordering::SeqCst));
+    let active_locale = voice.status.lock().unwrap().language.clone();
     SpeechModels {
+        auto_locales: apple.as_ref().map(|a| a.auto_locales()).unwrap_or_default(),
+        active_locale,
         selection,
         sense_voice_installed: base(&app).is_some(),
         listening,
@@ -715,6 +723,9 @@ pub fn voice_select(app: AppHandle, provider: Provider, locale: String) -> Resul
         return Err("Stop recording before changing the speech model".into());
     }
     if provider == Provider::Apple {
+        if locale == "auto" && base(&app).is_none() {
+            return Err("Auto requires the bundled SenseVoice model".into());
+        }
         if !apple_speech::status(&app)?.ready(&locale) {
             return Err("Choose a supported Apple language and download its model first".into());
         }
@@ -815,6 +826,12 @@ fn set_status(app: &AppHandle, s: VoiceStatus) {
         let listening = handle.state::<Voice>().status.lock().unwrap().listening;
         crate::shell::set_listening(&handle, listening);
     });
+}
+
+pub fn detected_language(app: &AppHandle, locale: &str) {
+    let mut status = app.state::<Voice>().status.lock().unwrap().clone();
+    status.language = Some(locale.to_owned());
+    set_status(app, status);
 }
 
 #[tauri::command]
@@ -1259,6 +1276,8 @@ fn run(
             listening: true,
             device: Some(name.clone()),
             message: None,
+            language: (selection.provider == Provider::Apple && selection.locale != "auto")
+                .then_some(selection.locale.clone()),
         },
     );
     let _ = ready.send(Ok(name));
@@ -1275,7 +1294,17 @@ fn run(
     let mut level_n = 0usize;
     let mut last_level = Instant::now();
     let mut failure = None;
-    while !stop.load(Ordering::SeqCst) {
+    loop {
+        let stopping = stop.load(Ordering::SeqCst);
+        if stopping {
+            if apple.is_none() || voice.shutting_down.load(Ordering::SeqCst) {
+                break;
+            }
+            // Auto may start Apple's analyzer while capture queues audio; retain that tail on stop.
+            streams.clear();
+            #[cfg(target_os = "macos")]
+            drop(system_audio.take());
+        }
         #[cfg(target_os = "macos")]
         if let Some(capture) = &system_audio {
             if let Err(error) = capture.poll() {
@@ -1289,7 +1318,15 @@ fn run(
                 break;
             }
         }
-        let Ok((src, chunk)) = rx.recv_timeout(Duration::from_millis(100)) else {
+        let received = if stopping {
+            rx.try_recv().ok()
+        } else {
+            rx.recv_timeout(Duration::from_millis(100)).ok()
+        };
+        let Some((src, chunk)) = received else {
+            if stopping {
+                break;
+            }
             if let Some(engine) = engine.as_mut() {
                 engine.review_one(&mut events);
             }
@@ -1306,7 +1343,7 @@ fn run(
             engine.feed_tracks(&tracks, &mut events)
         } else {
             let mixed = mix(&tracks);
-            if let Err(error) = apple.as_mut().unwrap().feed(&mixed) {
+            if let Err(error) = apple.as_mut().unwrap().feed(&app, &mixed) {
                 failure = Some(error);
                 break;
             }

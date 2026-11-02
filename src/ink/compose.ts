@@ -6,6 +6,7 @@ import { FONT, TITLE } from '../board/layout.ts'
 import { inherited } from '../engine/base.ts'
 import type { Graph, Node } from '../engine/graph.ts'
 import { type Pt, type Stroke, glyph } from './glyphs.ts'
+import { normalizeKana } from './kana.ts'
 import { DEFAULT_ENGLISH_WEIGHT, DEFAULT_MESSY, DEFAULT_WEIGHT } from './defaults.ts'
 import { inkIcon } from './icons.ts'
 import { type Inked, arrow, box, ink, line, loop, outline, placeGlyph, rng, strike } from './pen.ts'
@@ -61,7 +62,7 @@ async function write(text: string, x: number, y: number, size: number, seed: str
   const out: Mark[] = []
   let cx = x
   let prev: { ch: string; end: Pt } | undefined
-  for (const ch of text) {
+  for (const ch of normalizeKana(text)) {
     // 连写体的大写字母是花体，在板上认不出来；真人手写也多是大写印刷、小写连写
     const latin = cursive && isLower(ch) ? 'script' : 'print'
     const g = await glyph(ch, latin)

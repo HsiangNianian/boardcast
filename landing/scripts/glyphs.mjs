@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gunzipSync } from 'node:zlib'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(import.meta.url)
@@ -30,12 +31,14 @@ for (const file of walk(join(root, 'src'))) {
 }
 
 const hanziDir = dirname(require.resolve('hanzi-writer-data/package.json'))
+const kanji = JSON.parse(gunzipSync(readFileSync(join(root, '../src/ink/kanji.json.gz'))))
 const hanzi = {}
 const missing = []
 for (const ch of [...chars].sort()) {
   const p = join(hanziDir, `${ch}.json`)
   if (!existsSync(p)) {
-    missing.push(ch)
+    if (kanji[ch]) hanzi[ch] = kanji[ch]
+    else missing.push(ch)
     continue
   }
   hanzi[ch] = JSON.parse(readFileSync(p, 'utf8')).medians
@@ -55,3 +58,4 @@ if (missing.length) console.warn(`glyphs: hanzi-writer-data 里没有这些字�
 const licenseOut = join(root, 'public/licenses')
 mkdirSync(licenseOut, { recursive: true })
 copyFileSync(join(root, '../public/licenses/handwritten-OFL.txt'), join(licenseOut, 'handwritten-OFL.txt'))
+copyFileSync(join(root, '../public/licenses/kanjivg-CC-BY-SA-3.0.txt'), join(licenseOut, 'kanjivg-CC-BY-SA-3.0.txt'))

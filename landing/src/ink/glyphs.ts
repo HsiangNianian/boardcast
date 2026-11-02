@@ -3,6 +3,7 @@
 
 import hanzi from '../gen/hanzi.json'
 import handwritten from '../../../src/ink/handwritten.json' with { type: 'json' }
+import { kana } from '../../../src/ink/kana'
 import type { Pt, Stroke } from './core'
 
 export interface Glyph {
@@ -66,6 +67,7 @@ export function glyph(ch: string): Glyph | null {
     const code = ch.charCodeAt(0)
     if (code < 128) g = latin(ch)
     else if (code >= 0xff01 && code <= 0xff5e) g = latin(String.fromCharCode(code - 0xfee0))
+    else if (kana[ch]) g = { ...kana[ch], han: false }
     else if (HZ[ch]) g = { strokes: HZ[ch].map((s) => s.map(hz)), advance: 1, han: true }
   }
   cache.set(ch, g)

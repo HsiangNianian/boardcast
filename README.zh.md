@@ -57,7 +57,7 @@ macOS 安装包目前未做 Apple 开发者签名与公证，首次打开可能�
 | **圈着说**：先圈住对象，再说「这个标星」「把这两个连起来」，让指代有明确目标。 | **回放与分支**：按会议中的步骤重放、拖动进度、倍速观看，也能从某一刻另起一张板。 |
 | **一起改板书**：PAD 板书模式下改字、移动、圈画、撤销；PC 会议模式用 Excalidraw 自由编辑。 | **接着上次开会**：搜索旧会议，或拿旧板开启新会；继承的内容用淡墨，新改动用正常墨迹。 |
 
-PAD 板书模式逐笔写出中英文，英文笔迹源自 Excalidraw 的 Excalifont。默认潦草度为 0，中日文与线条粗细为 65%，英文粗细独立调节、默认为 100%；潦草度达到 60 时，英文小写切换为连写体。浅色是马克笔白板，深色是粉笔黑板。界面支持中文和英文，板书与摘要会跟随会议语言。
+PAD 板书模式逐笔写出中日英文，英文笔迹源自 Excalidraw 的 Excalifont；日文假名和补充汉字笔画随应用打包，离线也能写。默认潦草度为 0，中日文与线条粗细为 65%，英文粗细独立调节、默认为 100%；潦草度达到 60 时，英文小写切换为连写体。浅色是马克笔白板，深色是粉笔黑板。界面支持中文和英文，板书与摘要会跟随会议语言。
 
 ### 圈着说
 
@@ -336,4 +336,4 @@ CI 使用 **Qwen3.5-4B · Q4_K_M**，与桌面版推荐模型一致。其他模�
 
 发现问题或想讨论下一步，欢迎提 [Issue](https://github.com/HsiangNianian/boardcast/issues) 或 PR；功能进展以 Issues 和 [CHANGELOG](CHANGELOG.md) 为准。
 
-代码采用 [MIT](LICENSE)。中文笔画数据来自 [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data)（源自 Make Me a Hanzi 与 Arphic 字体，Arphic Public License，随生成的数据分发许可文本）；英文默认笔迹由 Excalifont 提取，沿用 [SIL OFL 许可](public/licenses/handwritten-OFL.txt)；连写体 Hershey 字形来自 [hersheytext](https://github.com/techninja/hersheytextjs)（MIT）。界面使用 DM Sans、JetBrains Mono，官网另有思源黑体子集；这些字体使用 SIL OFL，官网字体许可见 [OFL.txt](landing/public/fonts/OFL.txt)。
+代码采用 [MIT](LICENSE)。中文笔画数据来自 [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data)（源自 Make Me a Hanzi 与 Arphic 字体，Arphic Public License，随生成的数据分发许可文本）；日文假名和补充汉字采用 Ulrich Apel 的 [KanjiVG](https://kanjivg.tagaini.net/) 笔顺数据，转换为骨架线后沿用 [CC BY-SA 3.0](public/licenses/kanjivg-CC-BY-SA-3.0.txt)；英文默认笔迹由 Excalifont 提取，沿用 [SIL OFL 许可](public/licenses/handwritten-OFL.txt)；连写体 Hershey 字形来自 [hersheytext](https://github.com/techninja/hersheytextjs)（MIT）。界面使用 DM Sans、JetBrains Mono，官网另有思源黑体子集；这些字体使用 SIL OFL，官网字体许可见 [OFL.txt](landing/public/fonts/OFL.txt)。

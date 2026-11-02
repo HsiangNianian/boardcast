@@ -14,6 +14,7 @@
 
 import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk.bundled.js'
 import { type Graph, type Node, children } from '../engine/graph.ts'
+import { normalizeKana } from '../ink/kana.ts'
 import { spokenLang } from '../engine/lang.ts'
 
 // ELK 打包后有一百多万字节，只有出现流程图时才用得到：第一次要排流程图时再加载
@@ -71,7 +72,7 @@ export interface Layout {
 /** 粗估文字宽度：中日韩字符按一个字宽，其余按大半个。 */
 export function textWidth(s: string, size: number): number {
   let w = 0
-  for (const ch of s) w += /[⺀-鿿＀-￯]/.test(ch) ? size : size * 0.62
+  for (const ch of normalizeKana(s)) w += /[⺀-鿿＀-￯]/.test(ch) ? size : size * 0.62
   return w
 }
 

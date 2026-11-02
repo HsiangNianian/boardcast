@@ -8,7 +8,7 @@ import type { Layout } from '../board/layout.ts'
 test('English weight changes only Latin strokes inside mixed Chinese/Japanese text', async (t) => {
   const host = globalThis as typeof globalThis & { __boardcastHanzi?: Record<string, number[][][]> }
   const previous = host.__boardcastHanzi
-  host.__boardcastHanzi = { 中: [[[100, 800], [800, 100]]], ア: [[[100, 700], [900, 700], [300, 200]]] }
+  host.__boardcastHanzi = { 中: [[[100, 800], [800, 100]]] }
   t.after(() => { host.__boardcastHanzi = previous })
   const node: Node = { id: 'n1', kind: 'item', label: 'A中ア，', aliases: [], marks: [], ink: 'ink' }
   const graph = { ...emptyGraph(), nodes: [node] }

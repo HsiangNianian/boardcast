@@ -4,6 +4,7 @@
 // 随机数按「第几个字、第几笔」固定抽好，推杆拖动时只是幅度在变，所以字是连续变形的。
 
 import { DEFAULT_MESSY } from '../../../src/ink/defaults'
+import { normalizeKana } from '../../../src/ink/kana'
 import { type Pt, type RawMark, type Stroke, clamp, densify, dist, rng, smooth } from './core'
 import { glyph } from './glyphs'
 
@@ -46,7 +47,7 @@ export function write(text: string, x: number, y: number, size: number, seed: st
   let cx = x
   let i = 0
   let prev: Pt | null = null
-  for (const ch of text) {
+  for (const ch of normalizeKana(text)) {
     const g = glyph(ch)
     const r = rng(`${seed}#${i++}`)
     const rot0 = r()
@@ -124,7 +125,7 @@ export function write(text: string, x: number, y: number, size: number, seed: st
 /** 名义宽度（工整时），排版用 */
 export function measure(text: string, size: number): number {
   let w = 0
-  for (const ch of text) {
+  for (const ch of normalizeKana(text)) {
     const g = glyph(ch)
     w += g ? g.advance * size * 0.99 + size * 0.04 : size * 0.6
   }

@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, copyFi
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { gunzipSync } from 'node:zlib'
 
 const require = createRequire(import.meta.url)
 const root = fileURLToPath(new URL('..', import.meta.url))
@@ -28,6 +29,16 @@ if (!existsSync(marker)) {
   writeFileSync(marker, String(n))
   console.log(`glyphs: ${n} 个汉字 → public/hanzi/`)
 }
+
+// KanjiVG fills Japanese kanji missing from hanzi-writer-data; keep existing Chinese shapes.
+const kanji = JSON.parse(gunzipSync(readFileSync(join(root, 'src/ink/kanji.json.gz'))))
+for (const [ch, medians] of Object.entries(kanji)) {
+  if (existsSync(join(hanziSrc, `${ch}.json`))) continue
+  const file = join(hanziOut, `${ch}.json`)
+  const data = JSON.stringify(medians)
+  if (!existsSync(file) || readFileSync(file, 'utf8') !== data) writeFileSync(file, data)
+}
+copyFileSync(join(root, 'public/licenses/kanjivg-CC-BY-SA-3.0.txt'), join(hanziOut, 'KANJIVG-LICENSE.txt'))
 
 // futural：手写印刷体；scripts：单线连写体，潦草度高的时候用
 const hersheyOut = join(root, 'src/ink/hershey.json')

@@ -62,6 +62,8 @@ export function replayHtml(data: ReplayData, player: string, hanzi: Record<strin
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="boardcast">
+<!-- Japanese stroke data: KanjiVG, Copyright (C) 2009/2010/2011 Ulrich Apel.
+     https://kanjivg.tagaini.net/ — adapted centerlines, CC BY-SA 3.0 https://creativecommons.org/licenses/by-sa/3.0/ -->
 <title>${escapeHtml(data.title)} · ${escapeHtml(msg().doc.replay)}</title>
 </head>
 <body>

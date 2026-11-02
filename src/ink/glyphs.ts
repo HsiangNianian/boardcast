@@ -1,10 +1,12 @@
 // 字形 → 笔画。每一笔是一串点（单位：字号 = 1），按书写顺序排好。
 // - 汉字用 hanzi-writer-data 的骨架线，本身就是按笔顺排的；
 // - ASCII 默认用 Excalifont 提取的骨架线，潦草时用 Hershey 连写体；
+// - 日文假名用内置的 KanjiVG 笔顺数据，离线可用；
 // - 中文标点没有现成数据，用几笔手画近似。
 
 import hershey from './hershey.json' with { type: 'json' }
 import handwritten from './handwritten.json' with { type: 'json' }
+import { kana } from './kana.ts'
 
 export type Pt = [number, number]
 export type Stroke = Pt[]
@@ -106,6 +108,7 @@ export function glyph(ch: string, latin: Latin = 'print'): Promise<Glyph | null>
   let p = cache.get(key)
   if (!p) {
     if (PUNCT[ch]) p = Promise.resolve(PUNCT[ch])
+    else if (kana[ch]) p = Promise.resolve(kana[ch])
     else if (ascii) p = Promise.resolve(latinGlyph(ch, latin))
     // 全角字母数字转半角，沿用同一套英文笔迹
     else if (full) p = Promise.resolve(latinGlyph(String.fromCharCode(ch.charCodeAt(0) - 0xfee0), latin))

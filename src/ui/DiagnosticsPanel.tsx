@@ -1,7 +1,7 @@
 // 导出诊断信息：先把会带上的每个文件摆出来，看过了再存。
 
 import { useEffect, useState } from 'react'
-import { diagnosticsInfo, isDesktop, llmStatus, updates } from '../desktop.ts'
+import { diagnosticsInfo, isDesktop, llmStatus, updates, voice as speech } from '../desktop.ts'
 import { type DiagFile, cleanLog, makeZip, recentErrors, scrub } from '../engine/diagnostics.ts'
 import { msg, useT } from '../i18n/index.ts'
 import { Close } from './icons.tsx'
@@ -16,8 +16,11 @@ interface Props {
 }
 
 async function collect(voice: Record<string, unknown>, timing: unknown): Promise<DiagFile[]> {
-  const shell = isDesktop ? await diagnosticsInfo().catch(() => null) : null
-  const status = await llmStatus()?.catch(() => null)
+  const [shell, status, speechModels] = await Promise.all([
+    isDesktop ? diagnosticsInfo().catch(() => null) : null,
+    llmStatus()?.catch(() => null),
+    isDesktop ? speech.models().catch((e) => ({ error: String(e) })) : null,
+  ])
   const info = {
     version: isDesktop ? await updates.version().catch(() => 'unknown') : 'web',
     platform: shell ? { os: shell.os, arch: shell.arch } : navigator.platform,
@@ -25,6 +28,7 @@ async function collect(voice: Record<string, unknown>, timing: unknown): Promise
     screen: `${innerWidth}x${innerHeight}@${devicePixelRatio}`,
     model: status ?? null,
     voice,
+    speechModels,
   }
   const files: DiagFile[] = [
     { name: 'info.json', text: scrub(JSON.stringify(info, null, 2)) },

@@ -1,6 +1,6 @@
 // 模型管理（桌面版）：下载、切换、删除。没有模型时自动弹出。
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { type Catalog, type LlmStatus, type ModelInfo, type Progress, models, onProgress } from './desktop.ts'
 import { msg, useT } from './i18n/index.ts'
 import SpeechModels from './ui/SpeechModels.tsx'
@@ -14,11 +14,38 @@ function eta(p: Progress): string {
   return msg().models.eta(s)
 }
 
-export default function ModelPanel({ status, onClose }: { status: LlmStatus | null; onClose: () => void }) {
+export default function ModelPanel({ status, onClose, speechOnly = false }: { status: LlmStatus | null; onClose: () => void; speechOnly?: boolean }) {
   const s = useT().models
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [progress, setProgress] = useState<Record<string, Progress>>({})
   const [error, setError] = useState<string | null>(null)
+  const dialog = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const previous = document.activeElement
+    dialog.current?.querySelector('button')?.focus()
+    return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus() }
+  }, [])
+
+  useEffect(() => {
+    const keydown = (e: KeyboardEvent) => {
+      const panel = dialog.current
+      if (!panel) return
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
+      if (e.key === 'Tab') {
+        const controls = [...panel.querySelectorAll<HTMLElement>('button:not([disabled]), select:not([disabled]), a[href]')]
+        const target = e.shiftKey ? controls.at(-1) : controls[0]
+        if (target && (!panel.contains(document.activeElement) || document.activeElement === (e.shiftKey ? controls[0] : controls.at(-1)))) {
+          e.preventDefault()
+          target.focus()
+        }
+      }
+      // Disabling the download button can leave focus on the document body.
+      if (!panel.contains(e.target as Node)) e.stopPropagation()
+    }
+    document.addEventListener('keydown', keydown, true)
+    return () => document.removeEventListener('keydown', keydown, true)
+  }, [onClose])
 
   const refresh = useCallback(() => {
     void models
@@ -54,22 +81,22 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
     catalog?.freeBytes === undefined ? 0 : Math.max(0, m.size - m.partial + 300_000_000 - catalog.freeBytes)
 
   return (
-    <div className="modal" role="dialog" aria-label={s.title}>
+    <div ref={dialog} className="modal" role="dialog" aria-modal="true" aria-label={speechOnly ? s.speechSetupTitle : s.title}>
       <div className="panel">
         <header>
-          <h2>{s.title}</h2>
+          <h2>{speechOnly ? s.speechSetupTitle : s.title}</h2>
           <button className="ghost" onClick={onClose}>
             {s.close}
           </button>
         </header>
-        <p className="hint">
+        {speechOnly ? <p className="hint" role="status">{s.speechSetupHint}</p> : <p className="hint">
           {s.hint}
           {gpu ? s.gpu(gpu.name, gpu.totalMib ? Math.round(gpu.totalMib / 1024) : undefined) : s.noGpu}
-        </p>
+        </p>}
 
         <SpeechModels />
 
-        {catalog?.models.map((m) => {
+        {catalog?.models.filter((m) => !speechOnly || m.kind === 'voice').map((m) => {
           const p = progress[m.id]
           const active = busy === m.id
           const pct = p && active ? p.downloaded / p.total : m.partial / m.size
@@ -128,12 +155,12 @@ export default function ModelPanel({ status, onClose }: { status: LlmStatus | nu
         })}
 
         {error && <p className="meta err">{error}</p>}
-        <p className="fine">
+        {!speechOnly && <p className="fine">
           {s.sources}
           {catalog?.freeBytes !== undefined && s.free(gb(catalog.freeBytes))}
           {s.dir}
           <code>{catalog?.dir}</code>
-        </p>
+        </p>}
       </div>
     </div>
   )

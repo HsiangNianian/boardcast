@@ -75,20 +75,49 @@ final class PCMInput {
 }
 
 @available(macOS 26.0, *)
+func assetState(_ status: AssetInventory.Status) -> String {
+    switch status {
+    case .installed: return "installed"
+    case .downloading: return "downloading"
+    case .supported: return "supported"
+    case .unsupported: return "unsupported"
+    @unknown default: return "unknown"
+    }
+}
+
+@available(macOS 26.0, *)
+func transcriber(_ locale: Locale) -> SpeechTranscriber {
+    SpeechTranscriber(locale: locale, transcriptionOptions: [],
+                      reportingOptions: [.volatileResults], attributeOptions: [.audioTimeRange])
+}
+
+@available(macOS 26.0, *)
+func requireAssets(_ module: SpeechTranscriber, locale: String) async throws {
+    let status = await AssetInventory.status(forModules: [module])
+    guard status == .installed else {
+        throw Failure(message: "APPLE_SPEECH_ASSETS_NOT_READY:\(locale):\(assetState(status))")
+    }
+}
+
+@available(macOS 26.0, *)
 func availability() async -> [String: Any] {
     guard SpeechTranscriber.isAvailable else {
         return ["type": "status", "isApple": true, "available": false, "reason": "hardware", "locales": []]
     }
-    let installed = Set(await SpeechTranscriber.installedLocales.map(\.identifier))
+    let installed = await SpeechTranscriber.installedLocales.map(\.identifier)
     let supported = await SpeechTranscriber.supportedLocales
-    let locales: [[String: Any]] = supported.sorted { $0.identifier < $1.identifier }.map { locale in
-        ["id": locale.identifier,
-         "name": locale.localizedString(forIdentifier: locale.identifier) ?? locale.identifier,
-         "installed": installed.contains(locale.identifier)]
+    var locales: [[String: Any]] = []
+    for locale in supported.sorted(by: { $0.identifier < $1.identifier }) {
+        // Check the same module configuration as recording, not only the system's locale list.
+        let module = transcriber(locale)
+        let status = assetState(await AssetInventory.status(forModules: [module]))
+        locales.append(["id": locale.identifier,
+                        "name": locale.localizedString(forIdentifier: locale.identifier) ?? locale.identifier,
+                        "status": status])
     }
     let preferred = await SpeechTranscriber.supportedLocale(equivalentTo: Locale.current)
     return ["type": "status", "isApple": true, "available": true, "locales": locales,
-            "defaultLocale": preferred?.identifier ?? ""]
+            "defaultLocale": preferred?.identifier ?? "", "installedLocales": installed]
 }
 
 @available(macOS 26.0, *)
@@ -97,16 +126,13 @@ func transcriber(_ identifier: String) async throws -> SpeechTranscriber {
     guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: identifier)) else {
         throw Failure(message: "Apple transcription does not support this language")
     }
-    return SpeechTranscriber(locale: locale, transcriptionOptions: [],
-                             reportingOptions: [.volatileResults], attributeOptions: [.audioTimeRange])
+    return transcriber(locale)
 }
 
 @available(macOS 26.0, *)
 func transcribe(_ identifier: String) async throws {
     let module = try await transcriber(identifier)
-    guard await AssetInventory.status(forModules: [module]) == .installed else {
-        throw Failure(message: "Download this Apple language model in Local models first")
-    }
+    try await requireAssets(module, locale: identifier)
     guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [module]) else {
         throw Failure(message: "Apple could not provide a compatible audio format")
     }
@@ -183,12 +209,18 @@ struct Main {
             if args == ["self-test"] { try selfTest(); return }
             guard #available(macOS 26.0, *) else {
                 if args == ["status"] {
-                    emit(["type": "status", "isApple": true, "available": false, "reason": "os", "locales": []])
+                    emit(["type": "status", "isApple": true, "available": false, "reason": "os", "locales": [],
+                          "osVersion": ProcessInfo.processInfo.operatingSystemVersionString])
                     return
                 }
                 throw Failure(message: "Apple SpeechAnalyzer requires macOS 26 or later")
             }
-            if args == ["status"] { emit(await availability()); return }
+            if args == ["status"] {
+                var status = await availability()
+                status["osVersion"] = ProcessInfo.processInfo.operatingSystemVersionString
+                emit(status)
+                return
+            }
             guard args.count == 2 && !args[1].isEmpty else { throw Failure(message: "Expected prepare or transcribe and a locale") }
             switch args[0] {
             case "prepare":
@@ -196,9 +228,7 @@ struct Main {
                 if let request = try await AssetInventory.assetInstallationRequest(supporting: [module]) {
                     try await request.downloadAndInstall()
                 }
-                guard await AssetInventory.status(forModules: [module]) == .installed else {
-                    throw Failure(message: "Apple language model is not installed")
-                }
+                try await requireAssets(module, locale: args[1])
             case "transcribe": try await transcribe(args[1])
             default: throw Failure(message: "Unknown command")
             }

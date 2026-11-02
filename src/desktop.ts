@@ -1,6 +1,7 @@
 // 桌面版（Tauri）才有的能力。网页版里这些函数都返回 null 或什么都不做，界面照旧用手填的模型地址。
 
 import { msg } from './i18n/index.ts'
+import type { SpeechAssetState } from './engine/speech.ts'
 
 export const isDesktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -63,7 +64,9 @@ export interface SpeechModels {
     available: boolean
     reason: 'platform' | 'os' | 'hardware' | null
     defaultLocale: string
-    locales: { id: string; name: string; installed: boolean }[]
+    installedLocales: string[]
+    osVersion: string
+    locales: { id: string; name: string; status: SpeechAssetState }[]
   } | null
   appleError: string | null
 }

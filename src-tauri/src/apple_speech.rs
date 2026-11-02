@@ -44,10 +44,21 @@ impl Selection {
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum AssetStatus {
+    Installed,
+    Downloading,
+    Supported,
+    Unsupported,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct Language {
     pub id: String,
     pub name: String,
-    pub installed: bool,
+    pub status: AssetStatus,
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
@@ -58,12 +69,20 @@ pub struct Availability {
     pub reason: Option<String>,
     #[serde(default)]
     pub default_locale: String,
+    #[serde(default)]
+    pub installed_locales: Vec<String>,
+    #[serde(default)]
+    pub os_version: String,
     pub locales: Vec<Language>,
 }
 
 impl Availability {
     pub fn ready(&self, locale: &str) -> bool {
-        self.available && self.locales.iter().any(|l| l.id == locale && l.installed)
+        self.available
+            && self
+                .locales
+                .iter()
+                .any(|l| l.id == locale && matches!(l.status, AssetStatus::Installed))
     }
 }
 
@@ -233,6 +252,8 @@ pub fn status(app: &AppHandle) -> Result<Availability, String> {
             available: false,
             reason: Some("platform".into()),
             default_locale: String::new(),
+            installed_locales: vec![],
+            os_version: String::new(),
             locales: vec![],
         });
     }
@@ -369,16 +390,18 @@ mod tests {
             available: true,
             reason: None,
             default_locale: "ja-JP".into(),
+            installed_locales: vec!["ja-JP".into(), "en-US".into()],
+            os_version: "Version 26".into(),
             locales: vec![
                 Language {
                     id: "ja-JP".into(),
                     name: "日本語".into(),
-                    installed: true,
+                    status: AssetStatus::Installed,
                 },
                 Language {
                     id: "en-US".into(),
                     name: "English".into(),
-                    installed: false,
+                    status: AssetStatus::Downloading,
                 },
             ],
         };
@@ -394,6 +417,19 @@ mod tests {
         assert!(
             serde_json::from_str::<Selection>(r#"{"provider":"cloud","locale":"en-US"}"#).is_err()
         );
+    }
+
+    #[test]
+    fn locale_inventory_does_not_override_module_asset_status() {
+        for state in ["supported", "downloading", "unsupported", "future-state"] {
+            let s: Availability = serde_json::from_value(serde_json::json!({
+                "isApple": true, "available": true, "defaultLocale": "zh-CN",
+                "installedLocales": ["zh-CN"],
+                "locales": [{"id": "zh-CN", "name": "中文", "status": state}]
+            }))
+            .unwrap();
+            assert!(!s.ready("zh-CN"), "{state} must not be advertised as ready");
+        }
     }
 
     #[test]

@@ -55,7 +55,8 @@ import { navTarget, parseNav } from './engine/nav.ts'
 import type { Hit } from './engine/search.ts'
 import { hasSpan, spanAt, toggleSpan } from './engine/spans.ts'
 import DiagnosticsPanel from './ui/DiagnosticsPanel.tsx'
-import { lineTiming, recentErrors, timingReport } from './engine/diagnostics.ts'
+import { lineTiming, recentErrors, recordError, timingReport } from './engine/diagnostics.ts'
+import { appleAssetIssue } from './engine/speech.ts'
 import { type Action, actionFor } from './engine/shortcuts.ts'
 import { currentLang, msg, useT } from './i18n/index.ts'
 import { type SpokenLang, spokenLang } from './engine/lang.ts'
@@ -145,7 +146,7 @@ export default function App() {
   const [builtin, setBuiltin] = useState<LlmStatus | null>(null)
   // 第一次请求很慢（Vulkan 现场编译着色器，提示词前缀也还没进缓存），就绪后先空跑一次
   const [warming, setWarming] = useState(false)
-  const [showModels, setShowModels] = useState(false)
+  const [showModels, setShowModels] = useState<boolean | 'speech'>(false)
   const [showSettings, setShowSettings] = useState(false)
   // 模型管理面板：第一次发现没有模型时自动打开（已经启用了能用的远程模型就不打扰）
   const askedForModel = useRef(false)
@@ -875,6 +876,14 @@ export default function App() {
   const [partial, setPartial] = useState('')
   const [mic, setMic] = useState<string | undefined>()
   const [voiceErr, setVoiceErr] = useState<string | null>(null)
+  const showVoiceError = useCallback((error: unknown) => {
+    const text = errText(error)
+    recordError('voice', text)
+    if (appleAssetIssue(text)) {
+      setVoiceErr(msg().models.speechSetupHint)
+      setShowModels('speech')
+    } else setVoiceErr(text)
+  }, [])
   // 监听器只注册一次，用 ref 拿最新的 say 和说话人
   const sayRef = useRef(say)
   sayRef.current = say
@@ -911,12 +920,13 @@ export default function App() {
           setLevel(0)
           setPartial('')
         }
-        if (s.message) setVoiceErr(s.message)
+        if (s.message) showVoiceError(s.message)
       }),
-      on<string>('voice-error', setVoiceErr),
+      on<string>('voice-error', showVoiceError),
+      on('voice-models-changed', () => setVoiceErr(null)),
     ]
     return () => offs.forEach((p) => void p.then((off) => off()))
-  }, [])
+  }, [showVoiceError])
 
   async function stopMic() {
     if (micRequest.current) {
@@ -929,7 +939,7 @@ export default function App() {
     try {
       await voice.stop()
     } catch (e) {
-      setVoiceErr(errText(e))
+      showVoiceError(e)
     } finally {
       micRequest.current = null
       setMicPending(null)
@@ -947,14 +957,14 @@ export default function App() {
       if (request.stop) return
       if (!s.installed) {
         setVoiceErr(t.app.needVoiceModel)
-        setShowModels(true)
+        setShowModels('speech')
         return
       }
       await voice.start(micChoice || undefined, voiceSource)
       // 松开空格或再次点击可能发生在模型预加载完成之前。
       if (request.stop) await voice.stop()
     } catch (e) {
-      setVoiceErr(errText(e))
+      showVoiceError(e)
     } finally {
       micRequest.current = null
       setMicPending(null)
@@ -2405,7 +2415,7 @@ export default function App() {
           exportSamples={exportFixes}
         />
       )}
-      {showModels && <ModelPanel status={builtin} onClose={() => setShowModels(false)} />}
+      {showModels && <ModelPanel status={builtin} speechOnly={showModels === 'speech'} onClose={() => setShowModels(false)} />}
       {showMeetings && (
         <MeetingsPanel
           currentId={meeting.id}

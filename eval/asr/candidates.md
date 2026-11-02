@@ -2,6 +2,8 @@
 
 Surveyed the [Hugging Face ASR download ranking](https://huggingface.co/models?pipeline_tag=automatic-speech-recognition&sort=downloads), first 60 entries, on 2026-11-02. Downloads identify candidates, not accuracy. Format conversions of the same weights are not independent model families. The first runnable sweep covers **19 configurations**, with the same corpus and scoring rules. These are evaluation candidates; production remains SenseVoice with dynamic review and VAD on.
 
+The [first measured sweep](sweep-2026-11-02.md) completed all 19 candidates and seven controls in Eval, with language-specific scores and raw transcript artifacts.
+
 | Candidates | Corpus languages | Evaluation form | Source |
 |---|---|---|---|
 | SenseVoice | zh / ja / en / zh-en | Existing INT8 ONNX baseline, auto language | [FunAudioLLM](https://huggingface.co/FunAudioLLM/SenseVoiceSmall) |

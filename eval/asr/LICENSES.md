@@ -1,6 +1,6 @@
 # ASR fixture attribution and licenses
 
-The application code is MIT. These third-party recordings and transcripts retain their own licenses; they are **not relicensed as MIT**. The `asr-fixtures-v1` Release contains the files listed in `corpus.json`. The `asr-meetings-v1` Release contains only the three AISHELL-4 crops and AMI crop from `meetings.json`, plus that manifest and this notice. Earnings-22 and Japanese ministry audio are downloaded from their upstream hosts, never mirrored in our Release.
+The application code is MIT. These third-party recordings and transcripts retain their own licenses; they are **not relicensed as MIT**. The `asr-fixtures-v1` Release contains the files listed in `corpus.json`. The `asr-meetings-v1` Release contains only the three AISHELL-4 crops and AMI crop from `meetings.json`, plus that manifest and this notice. The `asr-meetings-v2` manifest reuses those unchanged v1 WAV assets and canonicalizes the locally converted MP3 WAV headers; no v1 assets are replaced. Earnings-22 and Japanese ministry audio are downloaded from their upstream hosts, never mirrored in our Release.
 
 ## AISHELL-4 — CC BY-SA 4.0
 

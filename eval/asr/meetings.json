@@ -1,5 +1,5 @@
 {
-  "version": "asr-meetings-v1",
+  "version": "asr-meetings-v2",
   "baseUrl": "https://github.com/HsiangNianian/boardcast/releases/download/asr-meetings-v1",
   "sources": {
     "aishell4": {
@@ -2078,8 +2078,8 @@
       "quick": false,
       "file": "en-semiconductor-call.wav",
       "duration": 607.06,
-      "bytes": 19425998,
-      "sha256": "43bd8ab61b7d3b46de57fb4ec239a7fd5026b82036a168a1276644c75d23260c",
+      "bytes": 19425964,
+      "sha256": "eaebf459c578850463ef45b2137ef95a1c38c5c2d07c347cc2c34c4f482676a4",
       "sourceInterval": [
         1199.5,
         1806.56
@@ -2305,8 +2305,8 @@
       "quick": false,
       "file": "en-retail-call.wav",
       "duration": 599.92,
-      "bytes": 19197518,
-      "sha256": "ceae767037a96018c1affca8592a16cbff13684a9d7c8f25dc18ddd19a6f6fde",
+      "bytes": 19197484,
+      "sha256": "8dc1d9e1f6c1ac72c25ea1041f7ddc4a301d6ad7f0881ebf1edcb3d19713d705",
       "sourceInterval": [
         902.135,
         1502.055
@@ -2406,8 +2406,8 @@
       "quick": false,
       "file": "en-finance-call.wav",
       "duration": 602.015,
-      "bytes": 19264558,
-      "sha256": "26f5ce381554611f89df0e8ec3c53c95e8eaf1c6566474d4141c1b0b86dc1e6e",
+      "bytes": 19264524,
+      "sha256": "5ebbe8a6acdcf76b15b062a58969fa732825404e810577fdad002fef0d5f103b",
       "sourceInterval": [
         903.29,
         1505.305
@@ -2495,8 +2495,8 @@
       "quick": false,
       "file": "en-energy-call.wav",
       "duration": 601.55,
-      "bytes": 19249678,
-      "sha256": "e94559db2442ee83eb2545abb89e3a637fc4b62ae6fbc51e9614700efec5eb18",
+      "bytes": 19249644,
+      "sha256": "d0521a7c4301ae95a1c8aeb459e1d58169d81be8150b50b048b1a7d81eac67a1",
       "sourceInterval": [
         900.64,
         1502.19
@@ -3833,8 +3833,8 @@
       "quick": false,
       "file": "ja-health-committee.wav",
       "duration": 609.0,
-      "bytes": 19488078,
-      "sha256": "1c4b26c9b5d6ee1608a48fe0092b02e346006ab2c4a2e93d982a9ebab8a2ff9c",
+      "bytes": 19488044,
+      "sha256": "1ecd1f39ae0267db8aa098f11012ab220f706a451c8eaa150e6b6b9cc1a523c4",
       "sourceInterval": [
         0,
         609

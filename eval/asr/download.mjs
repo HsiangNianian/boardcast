@@ -57,7 +57,7 @@ export async function prepareAudio(value = corpus) {
     const partial = `${path}.${process.pid}.part.wav`
     try {
       execFileSync('ffmpeg', ['-nostdin', '-v', 'error', '-y', '-fflags', '+bitexact', '-ss', String(sample.original.offset), '-i', original,
-        '-t', String(sample.duration), '-map_metadata', '-1', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', '-flags:a', '+bitexact', partial], { stdio: 'inherit' })
+        '-t', String(sample.duration), '-map_metadata', '-1', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', '-flags:a', '+bitexact', '-fflags', '+bitexact', partial], { stdio: 'inherit' })
       if (statSync(partial).size !== sample.bytes || await sha256(partial) !== sample.sha256) throw new Error(`Converted audio SHA-256 mismatch: ${sample.id}; check the documented ffmpeg version`)
       renameSync(partial, path)
     } finally {

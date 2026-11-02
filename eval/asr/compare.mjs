@@ -16,7 +16,7 @@ export function compare(reports) {
     if (scoring === 'provisional') text += 'Edited official minutes or unverified references. Excluded from formal aggregates; inspect the sample notes before interpreting these scores.\n\n'
     if (scoring === 'ordered') text += 'Manual overlapping turns are concatenated by start time. Another valid order can add errors; this is not overlap-aware meeting WER/CER or a separation benchmark. Excluded from formal aggregates.\n\n'
     let sampleIds
-    text += '| Model | Language mode | VAD / policy / denoise | Samples | Errors / units | Rate | RTF (scope) | ASR files MiB |\n|---|---|---|---:|---:|---:|---|---:|\n'
+    text += '| Model | Runtime | Language mode | VAD / policy / denoise | Samples | Errors / units | Rate | RTF (scope) | ASR files MiB |\n|---|---|---|---|---:|---:|---:|---|---:|\n'
     for (const r of reports) {
       const rows = r.details.filter((d) => d.variant === 'original' && d.language === language && d.scoring === scoring)
       if (!rows.length) continue
@@ -28,7 +28,7 @@ export function compare(reports) {
       seen.add(key)
       const errors = rows.reduce((n, d) => n + d.score.errors, 0), units = rows.reduce((n, d) => n + d.score.units, 0)
       const elapsed = rows.reduce((n, d) => n + d.elapsedMs, 0), duration = rows.reduce((n, d) => n + d.duration, 0)
-      text += `| ${r.model} | ${r.languageMode || 'unrecorded'} | ${r.vad} / ${r.policy} / ${r.denoise} | ${rows.length} | ${errors} / ${units} | ${units ? (errors / units * 100).toFixed(2) + '%' : '—'} | ${(elapsed / 1000 / duration).toFixed(3)} (${r.timingScope || 'desktop-pipeline'}) | ${r.modelBytes ? (r.modelBytes / 2 ** 20).toFixed(0) : '—'} |\n`
+      text += `| ${r.model} | ${r.runtime ? r.runtime.passed ? 'PASS' : '**FAIL**' : 'not recorded'} | ${r.languageMode || 'unrecorded'} | ${r.vad} / ${r.policy} / ${r.denoise} | ${rows.length} | ${errors} / ${units} | ${units ? (errors / units * 100).toFixed(2) + '%' : '—'} | ${(elapsed / 1000 / duration).toFixed(3)} (${r.timingScope || 'desktop-pipeline'}) | ${r.modelBytes ? (r.modelBytes / 2 ** 20).toFixed(0) : '—'} |\n`
     }
     if (sampleIds === undefined) text += '\nNo scored samples for this language.\n'
     text += '\n'

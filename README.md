@@ -263,12 +263,14 @@ pnpm eval:audio                # Download pinned WAVs, verify checksums and buil
 pnpm eval:listen               # Download if needed, then serve http://127.0.0.1:4175
 pnpm eval:asr                  # Fixed baseline through the desktop voice engine; requires Rust
 pnpm eval:asr --policy dynamic # Paired dynamic/static runs, quality traces and stress controls
-pnpm eval:asr --suite full     # Include the complete meeting excerpts
+pnpm eval:asr --suite full     # Original 30 regression fixtures
+pnpm eval:listen --suite meetings # Nine ~10-minute clips + transcripts; requires ffmpeg
+pnpm eval:asr --suite meetings # Separate cross-industry long-meeting evaluation
 pnpm eval:asr --vad off        # Compare fixed-window recognition without VAD
 pnpm eval:asr:sweep            # Compare 19 ASR configurations by language; CTC controls need uv
 ```
 
-See [speech evaluation](eval/asr/README.md) for model comparisons, denoising experiments, reference quality and [dataset licenses](eval/asr/LICENSES.md). Japanese fixtures are human read speech; meeting overlap and provisional Chinese references are excluded from the ordinary error-rate aggregates.
+See [speech evaluation](eval/asr/README.md) for model comparisons, denoising experiments, reference quality and [dataset licenses](eval/asr/LICENSES.md). The long suite adds Chinese scenario meetings, English business/research meetings and a real Japanese public-health committee. Overlap receives a separate ordered diagnostic score; edited Japanese minutes remain provisional. Neither enters the ordinary reference aggregates.
 
 <details>
 <summary><strong>Code map</strong></summary>
@@ -314,7 +316,7 @@ The model can omit content, connect the wrong items or misread emphasis. Recogni
 <details>
 <summary><strong>CI, deployment and releases</strong></summary>
 
-- [Eval](.github/workflows/eval.yml): the single testing workflow for type checks, unit/Rust tests, web/desktop builds, text-to-board evaluation and multilingual ASR regression. Pushes keep three quick speech controls. Weekly runs or manual `asr_sweep` cover 19 candidate configurations, with the existing VAD/denoising/dynamic controls making 26 ASR jobs, and publish a language comparison. Selecting only `full_asr` retains the original nine full-corpus controls. See [speech evaluation](eval/asr/README.md) and [candidate scope](eval/asr/candidates.md).
+- [Eval](.github/workflows/eval.yml): the single testing workflow for type checks, unit/Rust tests, web/desktop builds, text-to-board evaluation and multilingual ASR regression. Pushes keep three quick speech controls. Weekly runs or manual `asr_sweep` cover 19 candidate configurations, with the existing VAD/denoising/dynamic controls making 26 ASR jobs, and publish a language comparison. Selecting only `full_asr` retains the original nine full-corpus controls. `meeting_asr` (also Thursday weekly) evaluates nine continuous ~10-minute clips across industries with six candidate models plus paired dynamic SenseVoice. See [speech evaluation](eval/asr/README.md) and [candidate scope](eval/asr/candidates.md).
 - [Web demo](.github/workflows/pages.yml): builds the website and web app, then deploys them to GitHub Pages.
 - [Release](.github/workflows/release.yml): a `v*` tag creates a draft, builds all four platforms, then publishes it with signed update packages and `latest.json` only if all builds succeed.
 

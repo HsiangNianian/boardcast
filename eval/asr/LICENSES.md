@@ -1,6 +1,36 @@
 # ASR fixture attribution and licenses
 
-The application code is MIT. These third-party recordings and transcripts retain their own licenses; they are **not relicensed as MIT**. The `asr-fixtures-v1` Release contains only the selected files listed in `corpus.json`, plus this notice and that manifest.
+The application code is MIT. These third-party recordings and transcripts retain their own licenses; they are **not relicensed as MIT**. The `asr-fixtures-v1` Release contains the files listed in `corpus.json`. The `asr-meetings-v1` Release contains only the three AISHELL-4 crops and AMI crop from `meetings.json`, plus that manifest and this notice. Earnings-22 and Japanese ministry audio are downloaded from their upstream hosts, never mirrored in our Release.
+
+## AISHELL-4 — CC BY-SA 4.0
+
+Credit: Yihui Fu, Luyao Cheng, Shubo Lv, Yukai Jv, Yuxiang Kong, Zhuo Chen, Yanxin Hu, Lei Xie, Jian Wu, Hui Bu, Xin Xu, Jun Du, Jingdong Chen; Beijing Shell Shell Technology, *AISHELL-4* (2021).
+
+- Publisher and original data license: <https://www.openslr.org/111/>
+- Mirror: <https://huggingface.co/datasets/AISHELL/AISHELL-4/tree/aada72727856313b19d4a030383c426364931dbf/test>. The mirror card's Apache-2.0 label does **not** replace the original data's CC BY-SA 4.0 terms.
+- Recordings: `L_R003S01C02`, `M_R003S01C01`, `S_R003S03C01`; recorded scenario meetings on property management, kindergarten education and factory safety.
+- Changes by boardcast contributors: continuous crops at the manifest's exact intervals, microphone channel 0, 16 kHz PCM16, no enhancement. Parse official TextGrid speaker intervals, remove nonlexical angle-bracket tags and ampersand markup, retain spoken fillers. Adapted audio and references remain CC BY-SA 4.0.
+
+## Earnings-22 — text CC BY-SA 4.0; upstream audio only
+
+Credit: Rev; Del Rio et al., *Earnings-22: A Practical Benchmark for Accents in the Wild* (2022).
+
+- Publisher: <https://github.com/revdotcom/speech-datasets/tree/c05ab6fd8b4b627d123c922a22a39e993dd37635/earnings22>
+- License: <https://github.com/revdotcom/speech-datasets/blob/c05ab6fd8b4b627d123c922a22a39e993dd37635/earnings22/LICENSE.md>. Its grant names transcripts and associated text files; we do not extend that grant to the audio.
+- Recordings: `4462231` (Texas Instruments), `4474506` (Costco), `4485244` (KKR), `4483296` (Imperial Oil).
+- Text changes: select continuous intervals from the publisher's forced-aligned manual references, retain unaligned lexical words, omit nonlexical annotation tokens, group adjacent words by speaker and shift times to clip-relative seconds. These adapted references remain CC BY-SA 4.0. The spoken-form normalizations are publisher supplied; no tested recognizer generates the reference.
+- Audio is fetched directly from the pinned upstream MP3 URL and cropped/resampled locally. Neither original MP3s nor derived WAVs are uploaded to our Release. Local availability does not establish a separate redistribution grant.
+
+## Japanese public-health committee — official public data terms
+
+Credit/source: Japan Ministry of the Environment, FY2022 fifth asbestos health damage relief subcommittee, held online on 2023-03-31.
+
+- Recording page: <https://www.env.go.jp/council/05hoken/page_00047.html>
+- Official minutes: <https://www.env.go.jp/council/05hoken/page_00049.html>
+- Website reuse terms: <https://www.env.go.jp/mail.html> (Public Data License 1.0, with the stated exceptions).
+- Adaptation by boardcast contributors: the first 609 seconds of audio; corresponding opening paragraphs of the official minutes through the paragraph on the Supreme Court judgment's treatment of outdoor construction workers. Remove speaker labels and the nonspeech marker `（なし）`; do not rewrite the text into recognizer output. These are **edited minutes**, not a verbatim gold transcript.
+- Audio is fetched from the ministry and converted locally; no ministry audio is mirrored in our Release. The publication page describes temporary audio availability pending minutes publication, so continued hosting is not guaranteed. An unavailable or changed source fails verification.
+- These excerpts and conversions are adaptations by boardcast contributors, not official ministry-produced evaluation data. No endorsement is implied.
 
 ## AliMeeting — CC BY-SA 4.0
 

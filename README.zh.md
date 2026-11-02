@@ -276,12 +276,14 @@ pnpm eval:audio                # 下载固定版本 WAV、校验哈希，生成�
 pnpm eval:listen               # 按需下载后启动 http://127.0.0.1:4175
 pnpm eval:asr                  # 通过桌面版实际语音引擎跑固定基线；需要 Rust
 pnpm eval:asr --policy dynamic # 固定/动态成对对照，附质量轨迹与派生压力样本
-pnpm eval:asr --suite full     # 包含完整会议片段
+pnpm eval:asr --suite full     # 原有 30 条回归样本
+pnpm eval:listen --suite meetings # 九段约 10 分钟录音及转写；需要 ffmpeg
+pnpm eval:asr --suite meetings # 独立的跨行业长会议评测
 pnpm eval:asr --vad off        # 对照组：停用 VAD，按固定窗口识别
 pnpm eval:asr:sweep            # 按语言比较 19 个 ASR 配置；CTC 对照另外需要 uv
 ```
 
-模型对比、降噪实验、参考转写质量见[语音评测说明](eval/asr/README.md)，素材条款见[数据集许可](eval/asr/LICENSES.md)。日文使用真人朗读样本；重叠会议整段和待复核的中文转写不计入普通错误率汇总。
+模型对比、降噪实验、参考转写质量见[语音评测说明](eval/asr/README.md)，素材条款见[数据集许可](eval/asr/LICENSES.md)。长会议集包含中文场景会议、英文实际业务/研究会议和日文公共健康委员会，逐段约 10 分钟。重叠发言单列按起始时间排序的诊断分数，日文官方整理记录仍标为 provisional，均不混入正式参考转写汇总。
 
 <details>
 <summary><strong>评测数据、复现与已知边界</strong></summary>
@@ -312,7 +314,7 @@ node eval/run.ts --file path/to/corrections.cases.json
 <details>
 <summary><strong>CI、部署与发版</strong></summary>
 
-- [Eval](.github/workflows/eval.yml)：统一执行类型检查、单元/Rust 测试、网页/桌面构建、文本到板书评测和中日英 ASR 回归。日常保留三组快速 ASR 对照；每周或手动 `asr_sweep` 扩展到 19 个候选配置，连同原有 VAD、降噪和动态对照共 26 个 ASR 任务，并生成按语言汇总的比较报告。单独勾选 `full_asr` 保留九组原有全量对照。见[语音评测说明](eval/asr/README.md)及[候选范围](eval/asr/candidates.md)。
+- [Eval](.github/workflows/eval.yml)：统一执行类型检查、单元/Rust 测试、网页/桌面构建、文本到板书评测和中日英 ASR 回归。日常保留三组快速 ASR 对照；每周或手动 `asr_sweep` 扩展到 19 个候选配置，连同原有 VAD、降噪和动态对照共 26 个 ASR 任务，并生成按语言汇总的比较报告。单独勾选 `full_asr` 保留九组原有全量对照。`meeting_asr` 及每周四任务会用九段跨行业长录音比较六个候选模型，并加上 dynamic SenseVoice，合计七组。见[语音评测说明](eval/asr/README.md)及[候选范围](eval/asr/candidates.md)。
 - [Web demo](.github/workflows/pages.yml)：构建官网与网页演示，部署至 GitHub Pages。
 - [Release](.github/workflows/release.yml)：推送 `v*` tag 后生成草稿，四个平台都成功才正式发布，并提供签名更新包和 `latest.json`。
 

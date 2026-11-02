@@ -41,6 +41,24 @@ test('CI keeps cheap push controls and includes every candidate once in the expa
   const sweep = matrix('sweep').include
   assert.equal(sweep.length, Object.keys(models).length + 7)
   for (const name of Object.keys(models)) assert.equal(sweep.filter((m) => m.model === name && m.denoise === 'none' && m.vad === 'on' && m.policy === 'static').length, 1)
+  const meetings = matrix('meetings').include
+  assert.equal(meetings.length, 7)
+  assert.equal(new Set(meetings.map((m) => `${m.model}/${m.policy}`)).size, meetings.length)
+  for (const m of meetings) assert(models[m.model] && m.vad === 'on' && m.denoise === 'none')
+  assert(meetings.some((m) => m.model === 'sensevoice' && m.policy === 'dynamic'))
+})
+
+test('comparison separates official references, overlapping turns and edited minutes', () => {
+  const row = { id: 'a', variant: 'original', language: 'zh', scoring: 'reference', score: { errors: 2, units: 100 }, elapsedMs: 100, duration: 600, rtf: .001, industry: 'education', kind: 'scenario-meeting' }
+  const report = { model: 'sensevoice', manifestSha256: 'a', suite: 'meetings', vad: 'on', policy: 'static', denoise: 'none', checks: { passed: true, failures: [] }, details: [row, { ...row, id: 'b', scoring: 'ordered', score: { errors: 10, units: 100 } }, { ...row, id: 'c', scoring: 'provisional', score: { errors: 20, units: 100 } }] }
+  const result = compare([report])
+  assert.match(result, /2\.00%/)
+  assert.match(result, /10\.00%/)
+  assert.match(result, /20\.00%/)
+  assert.match(result, /ORDERED — DIAGNOSTIC ONLY/)
+  assert.match(result, /PROVISIONAL — DIAGNOSTIC ONLY/)
+  assert.match(result, /education \/ scenario-meeting/)
+  assert.doesNotMatch(result, /10\.67%/)
 })
 
 test('comparison refuses changed corpora, mismatched subsets and duplicate runs', () => {

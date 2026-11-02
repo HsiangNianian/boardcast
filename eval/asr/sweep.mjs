@@ -10,7 +10,7 @@ const { values: args } = parseArgs({ options: {
   suite: { type: 'string', default: 'quick' }, models: { type: 'string', default: Object.keys(models).join(',') },
 } })
 const selected = args.models.split(',')
-if (!['quick', 'full'].includes(args.suite) || new Set(selected).size !== selected.length || selected.some((m) => !Object.hasOwn(models, m))) throw new Error('Use --suite quick|full --models comma-separated-candidate-names')
+if (!['quick', 'full', 'meetings'].includes(args.suite) || new Set(selected).size !== selected.length || selected.some((m) => !Object.hasOwn(models, m))) throw new Error('Use --suite quick|full|meetings --models comma-separated-candidate-names')
 const root = fileURLToPath(new URL('../../', import.meta.url))
 process.chdir(root)
 const dir = resolve('eval/reports/asr-sweep', new Date().toISOString().replace(/[:.]/g, '-'))

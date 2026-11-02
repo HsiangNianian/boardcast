@@ -1,9 +1,12 @@
 import { createReadStream, statSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
-import { corpus, directory, prepareAudio } from './download.mjs'
+import { parseArgs } from 'node:util'
+import { corpusFor, directory, prepareAudio } from './download.mjs'
 
-await prepareAudio()
+const { values } = parseArgs({ options: { suite: { type: 'string', default: 'full' } } })
+const corpus = corpusFor(values.suite)
+await prepareAudio(corpus)
 const allowed = new Set(['index.html', 'LICENSES.md', ...corpus.samples.map((s) => s.file)])
 const server = createServer((request, response) => {
   const file = new URL(request.url, 'http://localhost').pathname.slice(1) || 'index.html'

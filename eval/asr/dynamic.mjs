@@ -21,7 +21,7 @@ export function comparison(sample, actual) {
   }
   const text = (segments) => segments.map((s) => s.text).join(' ').trim()
   const reference = sample.reference.map((s) => s.text).join(' ')
-  const scored = ['reference', 'provisional'].includes(sample.scoring)
+  const scored = ['reference', 'ordered', 'provisional'].includes(sample.scoring)
   const before = scored ? errorRate(reference, text(baseline.segments), sample.language) : null
   const after = scored ? errorRate(reference, text(actual.segments), sample.language) : null
   return { hypothesis: text(baseline.segments), score: before, errorDelta: before ? after.errors - before.errors : null,

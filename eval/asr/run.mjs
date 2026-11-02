@@ -3,7 +3,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFil
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
-import { corpus, directory, prepareAudio } from './download.mjs'
+import { corpusFor, directory, prepareAudio } from './download.mjs'
 import { download, sha256 } from './files.mjs'
 import { errorRate, keywordRecall, recognitionFailures } from './score.mjs'
 import { comparison } from './dynamic.mjs'
@@ -15,10 +15,11 @@ const { values: args } = parseArgs({ options: {
   denoise: { type: 'string', default: 'none' }, vad: { type: 'string', default: 'on' }, only: { type: 'string' },
   output: { type: 'string' },
 } })
-if (!['quick', 'full'].includes(args.suite) || !Object.hasOwn(models, args.model) || !['none', 'gtcrn'].includes(args.denoise) || !['on', 'off'].includes(args.vad)) throw new Error(`Use --suite quick|full --model ${Object.keys(models).join('|')} --denoise none|gtcrn --vad on|off`)
+const corpus = corpusFor(args.suite)
+if (!Object.hasOwn(models, args.model) || !['none', 'gtcrn'].includes(args.denoise) || !['on', 'off'].includes(args.vad)) throw new Error(`Use --suite quick|full|meetings --model ${Object.keys(models).join('|')} --denoise none|gtcrn --vad on|off`)
 if (!['static', 'dynamic'].includes(args.policy) || (args.policy === 'dynamic' && (args.vad !== 'on' || args.denoise !== 'none'))) throw new Error('Dynamic policy needs --vad on --denoise none')
 if (models[args.model].backend && (args.policy !== 'static' || args.vad !== 'on' || args.denoise !== 'none')) throw new Error('CTC candidates currently require --policy static --vad on --denoise none')
-let selected = corpus.samples.filter((s) => (args.suite === 'full' || s.quick) && (!args.only || args.only.split(',').includes(s.id)))
+let selected = corpus.samples.filter((s) => (args.suite !== 'quick' || s.quick) && (!args.only || args.only.split(',').includes(s.id)))
 const excluded = selected.filter((s) => !supportedSamples([s], args.model).length).map((s) => s.id)
 selected = supportedSamples(selected, args.model)
 if (!selected.length) throw new Error('No matching audio samples')
@@ -33,7 +34,9 @@ if (args.policy === 'dynamic') {
 }
 const root = fileURLToPath(new URL('../../', import.meta.url))
 process.chdir(root)
-await prepareAudio()
+await prepareAudio({ ...corpus, samples: selected.filter((s) => s.variant === 'original') })
+const manifestPath = new URL(args.suite === 'meetings' ? './meetings.json' : './corpus.json', import.meta.url)
+const manifestSha256 = await sha256(manifestPath)
 execFileSync(process.execPath, ['scripts/fetch-voice.mjs'], { stdio: 'inherit' })
 const extraModels = fileURLToPath(new URL('./.models/', import.meta.url))
 const catalog = JSON.parse(readFileSync(new URL('./models.json', import.meta.url), 'utf8'))
@@ -60,6 +63,7 @@ execFileSync('cargo', ['test', '--locked', '--manifest-path', 'src-tauri/Cargo.t
 })
 if (candidate.backend) execFileSync('uv', ['run', '--locked', '--script', 'eval/asr/ctc.py', input], { stdio: 'inherit' })
 const result = JSON.parse(readFileSync(output, 'utf8'))
+if (manifestSha256 !== await sha256(manifestPath)) throw new Error('Corpus changed during inference')
 if (scorerSha256 !== await sha256(new URL('./score.mjs', import.meta.url))) throw new Error('Scorer changed during inference')
 if (candidate.backend && adapterSha256 !== await sha256(new URL('./ctc.py', import.meta.url))) throw new Error('CTC adapter changed during inference')
 for (const [i, source] of sources.entries()) {
@@ -72,8 +76,9 @@ const details = selected.map((sample) => {
   if (!actual || Math.abs(actual.duration - sample.duration) > 0.001) throw new Error(`Incorrect result: ${sample.id}`)
   const hypothesis = actual.segments.map((s) => s.text).join(' ')
   const reference = sample.reference.map((s) => s.text).join(' ')
-  const score = ['reference', 'provisional'].includes(sample.scoring) ? errorRate(reference, hypothesis, sample.language) : null
+  const score = ['reference', 'ordered', 'provisional'].includes(sample.scoring) ? errorRate(reference, hypothesis, sample.language) : null
   return { id: sample.id, variant: sample.variant, comparison: args.policy === 'dynamic' ? comparison(sample, actual) : undefined, language: sample.language, scoring: sample.scoring, reference, hypothesis, score,
+    industry: sample.industry, kind: sample.kind, note: sample.note, audioSha256: sample.sha256,
     keywords: keywordRecall(sample.keywords || [], hypothesis, sample.language),
     inputRms: actual.inputRms, inputPeak: actual.inputPeak, vadSegments: actual.vadSegments,
     vadSeconds: actual.vadSeconds, finalSegments: actual.segments.length,
@@ -91,11 +96,11 @@ if (args.policy === 'dynamic') {
     if (d.scoring === 'reference' && d.comparison.errorDelta > 0) failures.push(`${d.id}: dynamic recognition regressed by ${d.comparison.errorDelta} edits`)
     if (d.scoring === 'silence' && d.hypothesis.trim()) failures.push(`${d.id}: speech hallucinated on silence/noise`)
   }
-  if (!args.only && !details.some((d) => d.comparison.attempts)) failures.push('Dynamic policy never ran a second pass')
+  if (args.suite !== 'meetings' && !args.only && !details.some((d) => d.comparison.attempts)) failures.push('Dynamic policy never ran a second pass')
 }
 const production = args.model === 'sensevoice' && args.denoise === 'none' && args.vad === 'on'
 for (const file of ['voice/sense-voice/model.int8.onnx', 'voice/sense-voice/tokens.txt', 'voice/silero_vad.onnx', 'voice/speaker/campplus_zh_en.onnx']) voiceHashes[file] = await sha256(join(root, 'src-tauri', file))
-const report = { corpus: corpus.version, manifestSha256: await sha256(new URL('./corpus.json', import.meta.url)),
+const report = { corpus: corpus.version, manifestSha256,
   commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   dirty: Boolean(execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' }).trim()),
   model: args.model, denoise: args.denoise, vad: args.vad, policy: args.policy, suite: args.suite, only: args.only || null,
@@ -121,8 +126,8 @@ for (const failure of failures) markdown += `- ${failure}\n`
 if (failures.length) markdown += '\n'
 markdown += '| Language | Metric | Reference samples | Errors / units | Rate |\n|---|---|---:|---:|---:|\n'
 for (const a of aggregates) markdown += `| ${a.language} | ${metric(a.language)} | ${a.samples} | ${a.errors} / ${a.units} | ${pct(a.rate)} |\n`
-markdown += '\nProvisional Chinese references and overlapping long meetings are excluded from these aggregates. Missing scores are not zero errors. Japanese is read speech, not a meeting. No absolute CER/WER threshold is enforced. Dynamic runs also enforce no added edits on reference-scored paired cases. Input level is measured before enhancement; VAD seconds include segment padding.\n\n| Sample | Reference policy | Error rate | Keyword recall | Input dBFS | VAD seconds | Finals | RTF |\n|---|---|---:|---:|---:|---:|---:|---:|\n'
-for (const d of details) markdown += `| ${d.id} | ${d.scoring} | ${pct(d.score?.rate ?? null)} | ${pct(d.keywords.rate)} | ${d.inputRms ? (20 * Math.log10(d.inputRms)).toFixed(1) : '−∞'} | ${d.vadSeconds?.toFixed(2) ?? '—'} | ${d.finalSegments} | ${d.rtf.toFixed(3)} |\n`
+markdown += '\nOnly reference-scored samples enter the language aggregates. Ordered scores concatenate overlapping manual turns by start time and can penalize a different valid ordering; provisional scores use edited minutes or unverified text. Both are diagnostic only. Missing scores are not zero errors. No absolute CER/WER threshold is enforced. Dynamic runs also enforce no added edits on reference-scored paired cases. Input level is measured before enhancement; VAD seconds include segment padding.\n\n| Sample / industry | Reference policy | Error rate | Keyword recall | Input dBFS | VAD seconds | Finals | RTF |\n|---|---|---:|---:|---:|---:|---:|---:|\n'
+for (const d of details) markdown += `| ${d.id}${d.industry ? ` / ${d.industry}` : ''} | ${d.scoring} | ${pct(d.score?.rate ?? null)} | ${pct(d.keywords.rate)} | ${d.inputRms ? (20 * Math.log10(d.inputRms)).toFixed(1) : '−∞'} | ${d.vadSeconds?.toFixed(2) ?? '—'} | ${d.finalSegments} | ${d.rtf.toFixed(3)} |\n`
 if (args.policy === 'dynamic') {
   markdown += '\n## Paired dynamic policy\n\nStatic and dynamic share the same audio, model, VAD and first pass. Original samples alone enter the language aggregates above. Derived quiet (0.15×), deterministic additive noise and dual-channel same-speech echo stress the policy; they are not separate real meetings or separation accuracy tests. References are never available to the policy. Extra wall time is noisy; retry ms measures the actual second-pass inference.\n\n| Sample | Static errors | Dynamic errors | Delta | Attempts / accepted | Retry ms | Extra ms |\n|---|---:|---:|---:|---:|---:|---:|\n'
   for (const d of details) {
@@ -131,7 +136,7 @@ if (args.policy === 'dynamic') {
   }
 }
 for (const d of details) {
-  markdown += `\n## ${d.id}\n\nReference (${d.scoring}):\n\n${d.reference || '(silence)'}\n\nRecognized:\n\n${d.hypothesis || '(empty)'}\n`
+  markdown += `\n## ${d.id}\n\n${d.note || ''}\n\nReference (${d.scoring}):\n\n${d.reference || '(silence)'}\n\nRecognized:\n\n${d.hypothesis || '(empty)'}\n`
   if (d.comparison) {
     markdown += `\nStatic control: ${d.comparison.hypothesis || '(empty)'}\n`
     for (const r of d.comparison.reviews) markdown += `\n- ${r.start.toFixed(2)}–${r.end.toFixed(2)} s: ${r.reason} → ${r.action} → ${r.decision} (${r.asrMs} ms). Original: ${r.original || '(empty)'}. Candidate: ${r.candidate || '(empty)'}.\n`

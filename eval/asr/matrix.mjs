@@ -3,7 +3,12 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export function matrix(mode) {
-  if (!['quick', 'full', 'sweep'].includes(mode)) throw new Error(`Unknown ASR matrix: ${mode}`)
+  if (!['quick', 'full', 'sweep', 'meetings'].includes(mode)) throw new Error(`Unknown ASR matrix: ${mode}`)
+  if (mode === 'meetings') return { include: [
+    ...['sensevoice', 'paraformer-zh-en', 'reazonspeech', 'parakeet-unified-en', 'qwen3-asr-0.6b', 'whisper-small']
+      .map((model) => ({ model, denoise: 'none', vad: 'on', policy: 'static' })),
+    { model: 'sensevoice', denoise: 'none', vad: 'on', policy: 'dynamic' },
+  ] }
   const include = []
   for (const model of mode === 'quick' ? ['sensevoice'] : ['sensevoice', 'whisper-base']) {
     for (const denoise of mode === 'quick' ? ['none'] : ['none', 'gtcrn']) {

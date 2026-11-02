@@ -13,6 +13,33 @@ Node.js 24+ and `curl` are sufficient for downloading/listening; the page also w
 
 `corpus.json` is the shared manifest for downloads, playback and scoring. WAV files live in ignored `.data/`; optional model files live in ignored `.models/`. Source IDs, original intervals, license links and reference quality travel with each sample. See [LICENSES.md](LICENSES.md) before redistributing audio or transcripts. Neither the excluded MagicData recordings nor personal recordings are uploaded.
 
+## Long meetings across industries
+
+```sh
+pnpm eval:audio --suite meetings    # download, verify, crop; requires ffmpeg
+pnpm eval:listen --suite meetings   # same offline HTML player, audio + corresponding reference
+pnpm eval:asr --suite meetings
+pnpm eval:asr --suite meetings --policy dynamic
+pnpm eval:asr:sweep --suite meetings --models sensevoice,paraformer-zh-en,reazonspeech,parakeet-unified-en,qwen3-asr-0.6b,whisper-small
+```
+
+`meetings.json` adds **nine continuous excerpts of about ten minutes each**, plus silence. These are independent clips, never concatenated short utterances or synthetic speech. The suite is separate from `quick` / `full`, so push regression stays small.
+
+| Language | Recordings | Domains | Reference treatment |
+| --- | --- | --- | --- |
+| Chinese | 3 AISHELL-4 recordings | Property management, kindergarten education, factory safety | Human-recorded **scenario meetings**, not verified everyday business meetings. Official manual TextGrids; overlapping turns receive diagnostic ordered CER. |
+| English | 4 Earnings-22 conference calls | Texas Instruments / semiconductors, Costco / retail, KKR / finance, Imperial Oil / energy | Actual public business calls. Publisher manual references with forced alignment; ordinary WER. |
+| English | 1 AMI IB4001 excerpt | Research-space planning | Actual non-scenario meeting. Different interval of the existing session, not an independent new session. Diagnostic ordered WER for overlap. |
+| Japanese | 1 Ministry of the Environment web committee | Public health / asbestos relief policy | Actual meeting on 2023-03-31. Official **edited minutes**, not a verbatim gold transcript; provisional CER only. |
+
+Every entry records the original interval, recording ID, industry, meeting kind, source URLs/hashes, reference timing policy and transformations. Chinese uses microphone channel 0; AMI uses the official mixed headset; MP3 sources become mono 16 kHz PCM16. No denoising, gain or silence removal is baked into these clips. The Japanese clip boundary was located using a preliminary ASR pass; its text comes entirely from the official minutes. There has been no fresh human transcript audit.
+
+Chinese and AMI overlap is preserved. `ordered` concatenates manual turns by start time for a diagnostic score; another valid ordering can add errors. It is **not** overlap-aware meeting WER/CER, diarization accuracy or a speaker-separation benchmark, and does not enter formal reference aggregates. `provisional` minutes are likewise separate. English Earnings-22 keeps unaligned lexical words, removes explicitly marked nonlexical tags, and uses the publisher's spoken-form normalization; literal WER here is not their `fstalign` equivalence score. Unintelligible words and spoken-number/digit differences can affect results.
+
+The [asr-meetings-v1 data Release](https://github.com/HsiangNianian/boardcast/releases/tag/asr-meetings-v1) distributes only the three AISHELL-4 WAVs and AMI WAV, the manifest and license notice. Earnings-22's license explicitly covers text, so its audio is downloaded directly from the pinned upstream Git revision. Japanese audio is also fetched directly from the ministry, whose temporary publication may be withdrawn. A missing/changed source fails the download; it is never silently omitted. Neither source's audio is uploaded in our Release. Original and converted files are SHA-256 checked; local conversion uses ffmpeg's bitexact flags (prepared with ffmpeg 9.0.1). A decoder/version mismatch fails explicitly instead of comparing different audio unnoticed.
+
+Only this long suite needs ffmpeg for listening. The original short fixture commands retain their Node + curl requirements. Cached audio works offline; the generated `index.html` shows the last suite prepared. This is broader coverage, not a balanced industry benchmark: most sectors currently have one recording, and Chinese real business meetings and verbatim Japanese meeting references remain gaps.
+
 ## Run recognition
 
 ASR evaluation additionally needs Rust and the same [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/) as desktop development (including `libasound2-dev` on Ubuntu). It downloads the required models automatically, without starting a GUI or opening a microphone:
@@ -20,7 +47,7 @@ ASR evaluation additionally needs Rust and the same [Tauri system dependencies](
 ```sh
 pnpm eval:asr                                      # 17 quick cases, fixed SenseVoice baseline
 pnpm eval:asr --policy dynamic                     # paired static/dynamic runs + derived stress controls
-pnpm eval:asr --suite full                         # all 30 samples, including long meetings
+pnpm eval:asr --suite full                         # original 30 regression samples
 pnpm eval:asr --model whisper-base                 # multilingual Whisper base int8 CPU baseline
 pnpm eval:asr --denoise gtcrn                       # same inputs, with offline GTCRN denoising
 pnpm eval:asr --suite full --model whisper-base --denoise gtcrn
@@ -60,11 +87,11 @@ The full pack contains 30 WAVs, about 26 MiB / 14 minutes (including overlapping
 | Chinese-English ASCEND | 8 short clips | Publisher references from one session. MER uses individual Han characters plus Latin word/number tokens. Technical-term recall is reported where annotated. |
 | Silence | 1 generated control | Any final recognized text is flagged; it fails the production-pipeline run. Ablations retain the failure as a reported measurement. |
 
-The quick suite contains 2 Chinese turns, 3 English turns, 3 Japanese utterances, all 8 mixed-language probes and silence. Full evaluation includes everything. Selecting `--only` is recorded in the report and should not be compared with a full-suite aggregate.
+The quick suite contains 2 Chinese turns, 3 English turns, 3 Japanese utterances, all 8 mixed-language probes and silence. Full evaluation includes all original 30 fixtures; `--suite meetings` selects the separate long-meeting manifest. Selecting `--only` is recorded in the report and should not be compared with a full-suite aggregate.
 
 Normalization is fixed in `score.mjs`: Unicode NFKC, lowercase, ignore punctuation/whitespace; English apostrophes and AMI acronym underscores are removed. Chinese/Japanese use Unicode characters, English uses words, mixed speech uses Han characters and Latin words. Numbers are not converted between spoken forms and digits; kanji/kana and simplified/traditional variants are not equated. These differences can affect scores. Error rates may exceed 100% when there are many insertions.
 
-Rates are micro-averaged by reference units within a language, **not** averaged across languages. `provisional` and `unscored` samples are excluded from those totals; an absent score is shown as `—`, not zero errors. The overlapping meeting transcripts are not flattened into a falsely authoritative word order. Static controls have no absolute CER/WER merge threshold. Dynamic runs additionally enforce no added edits on the reference-scored paired cases.
+Rates are micro-averaged by reference units within a language, **not** averaged across languages. `ordered`, `provisional` and `unscored` samples are excluded from those totals; an absent score is shown as `—`, not zero errors. The original `unscored` meeting transcripts are not scored; long-suite `ordered` scores are explicitly diagnostic, never formal reference totals. Static controls have no absolute CER/WER merge threshold. Dynamic runs additionally enforce no added edits on the reference-scored paired cases.
 
 Each run writes `input.json`, `hypotheses.json`, `report.json` and `report.md` under `eval/reports/asr/`, including corpus/version/hash, model hashes, engine hash, Git commit, working-tree status, VAD mode, input RMS/peak level, detected VAD segments/seconds, final segment count, hypotheses, reference text, CER/WER/MER, keyword recall and RTF. On GitHub, the Markdown also appears in the job summary. Input level is measured before denoising; VAD duration includes segment padding. These help distinguish low-level input, missed detection and empty recognition.
 
@@ -83,7 +110,7 @@ The desktop enables this first policy by default. `--policy static` (the eval de
 - An empty transcript can recover; a nonempty result is replaced only by a bounded continuation of its original text (at least four characters, with complete Latin-word boundaries). Conflicting alternatives remain in the trace without replacing speech. This conservative heuristic is not proof that an extension is correct: paired reference samples fail evaluation on any added edit, and silence/noise controls must remain empty.
 - The frontend updates the existing transcript by ID, keeps its speaker/page, discards superseded in-flight board results, and sends already-drawn revisions to the board agent as corrections. It does not replay the whole board. Agent corrections can still be wrong; the separate `revisions` text-to-board set checks node identity, unrelated content and one history entry per segment.
 
-Dynamic quick evaluation adds 13 derived cases to the 17 originals: quiet (0.15×), deterministic additive noise, and dual-source same-speech echo for one short sample per language, plus noise-only silence. Full evaluation uses 30 originals plus the same controls. These are reproducible stress tests, **not new real recordings or overlapping-speaker separation ground truth**. Their scores are separate from the original language aggregates. Trace/report fields include trigger, action, original/candidate, accepted/retained/skipped decision, retry count/time, paired error delta and extra wall time. Disagreement can correctly result in zero accepted revisions; triggering alone is not an accuracy improvement.
+Dynamic quick evaluation adds 13 derived cases to the 17 originals: quiet (0.15×), deterministic additive noise, and dual-source same-speech echo for one short sample per language, plus noise-only silence. Full evaluation uses 30 originals plus the same controls. The long suite uses its nine unchanged recordings plus silence and a noise-only silence control; it does not multiply ten-minute recordings into synthetic variants or require a retry when no real segment qualifies. These are reproducible stress tests, **not new real recordings or overlapping-speaker separation ground truth**. Their scores are separate from the original language aggregates. Trace/report fields include trigger, action, original/candidate, accepted/retained/skipped decision, retry count/time, paired error delta and extra wall time. Disagreement can correctly result in zero accepted revisions; triggering alone is not an accuracy improvement.
 
 ```sh
 pnpm eval:asr --policy dynamic --suite full
@@ -98,8 +125,9 @@ See the [first dynamic run](dynamic.md) for measured results and explicit limits
 
 - Pushes to `main` and pull requests run type checks, unit tests, web build, four desktop builds with Rust tests, text-to-board/segment-revision evaluation, and quick SenseVoice ASR evaluation with **static VAD on/off plus paired dynamic** (three ASR jobs).
 - Manual **Run workflow → full_asr** runs the full corpus with SenseVoice / Whisper base × raw / GTCRN × VAD on / off, plus paired dynamic SenseVoice (**nine jobs**).
-- **asr_sweep** adds every candidate's static / VAD on / raw control (**26 jobs including the original ablations and dynamic control**). It uses the quick corpus unless `full_asr` is also selected. Every Monday at 02:30 UTC runs this expanded matrix on the full corpus. Scheduled runs omit desktop packaging and the board model evaluation.
+- **asr_sweep** adds every candidate's static / VAD on / raw control (**26 jobs including the original ablations and dynamic control**). It uses the quick corpus unless `full_asr` is also selected. Every Monday at 02:30 UTC runs this expanded matrix on the original full corpus. Scheduled runs omit desktop packaging and the board model evaluation.
+- **meeting_asr** selects only the long meeting suite and overrides the other ASR switches: SenseVoice, Paraformer, ReazonSpeech, Parakeet unified, Qwen3-ASR 0.6B and Whisper small, plus paired dynamic SenseVoice (**seven jobs**, VAD on). It also runs Thursdays at 02:30 UTC. Desktop packaging and board evaluation are omitted for this explicit ASR-only run. Long jobs have a 180-minute budget; ordinary push/short jobs keep 60 minutes.
 - A final job collects matching reports into an **ASR language comparison** summary and artifact, even if another candidate failed. Failed candidate jobs remain failures; a partial comparison is not an all-model pass.
 - Audio and models use separate caches keyed by their manifests. Restored files are always verified. Reports are uploaded as per-model artifacts for 30 days; audio/model caches are only accelerators, not the permanent source of the fixtures.
 
-The data Release uses an `asr-fixtures-*` tag and is **not Latest**, so it does not trigger the `v*` software release workflow or replace the application's update manifest. Pages deployment and software releases remain separate workflows.
+Data Releases use `asr-fixtures-*` / `asr-meetings-*` tags and is **not Latest**, so it does not trigger the `v*` software release workflow or replace the application's update manifest. Pages deployment and software releases remain separate workflows.

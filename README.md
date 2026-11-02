@@ -55,13 +55,13 @@ The macOS app is not yet Apple Developer signed or notarized. First launch may r
 |---|---|
 | **Talk and draw**: flowcharts, groups, topics, nested notes, formulas, questions and action items share one board. | **Summarize and trace**: collect conclusions, decisions, owners and tasks; jump from an item to who raised it and the corresponding transcript line. |
 | **Circle and refer**: circle something before saying “star this” or “connect these two,” giving the model explicit targets. | **Replay and branch**: watch the board grow, seek, change speed or fork a new board from any recorded moment. |
-| **Edit together**: rename, move, mark and undo in handwriting mode, or edit freely in Excalidraw pencil mode. | **Continue a meeting**: search past meetings or start a new one from an old board; inherited content is faded while new changes use full ink. |
+| **Edit together**: rename, move, mark and undo in PAD Whiteboard mode, or edit freely in PC Meeting mode with Excalidraw. | **Continue a meeting**: search past meetings or start a new one from an old board; inherited content is faded while new changes use full ink. |
 
-Handwriting mode draws Chinese and English stroke by stroke, with English strokes derived from Excalidraw’s Excalifont. The defaults are 0 messiness and 65% stroke weight; English lowercase switches to cursive at 60 messiness. Light mode uses whiteboard markers, dark mode uses chalk. The interface supports Chinese and English, while board labels and summaries follow the meeting language.
+PAD Whiteboard mode draws Chinese and English stroke by stroke, with English strokes derived from Excalidraw’s Excalifont. The defaults are 0 messiness, 65% Chinese/Japanese and line weight, and independently adjustable English weight at 100%; English lowercase switches to cursive at 60 messiness. Light mode uses whiteboard markers, dark mode uses chalk. The interface supports Chinese and English, while board labels and summaries follow the meeting language.
 
 ### Circle and refer
 
-Click “Circle” in the top bar, draw around objects with a mouse or finger in **handwriting mode**, then speak or send a line of text:
+Click “Circle” in the top bar, draw around objects with a mouse or finger in **PAD Whiteboard mode**, then speak or send a line of text:
 
 > “Connect these two.” · “Star this paragraph.” · “Add rollback rehearsal under this topic.”
 
@@ -78,7 +78,7 @@ Use the import menu or drag a file onto the board:
 | **PNG / JPEG / WebP** | Use the local vision add-on to read text in a screenshot or photographed whiteboard. Download the add-on matching your active model in the model manager first. |
 | **Excalidraw** | Turn text, shapes, bound arrows and groups into board content, then continue the discussion. The board is laid out again rather than keeping the original coordinates. |
 
-PDF imports are limited to 40 retained pages. Scans without a text layer appear as page images without automatic OCR. Arrows in imported images do not become editable connections. Use handwriting mode for imported pages; pencil mode does not show their background images yet.
+PDF imports are limited to 40 retained pages. Scans without a text layer appear as page images without automatic OCR. Arrows in imported images do not become editable connections. Use PAD Whiteboard mode for imported pages; PC Meeting mode does not show their background images yet.
 
 ### Take the meeting with you
 
@@ -148,13 +148,13 @@ Imports / handwriting edits ------------> Graph state --> Next-turn context
                     Regions / ELK flowcharts       Transcript / board / assets
                              |                                 |
                              v                                 v
-                 Handwriting / Excalidraw                 Replay / export
+                 PAD board / PC meeting                  Replay / export
 ```
 
 - **Only final text reaches the board.** Provisional captions are display-only. New utterances receive glossary corrections and their circled targets. Standalone page-navigation commands switch boards without a model call.
 - **Revisions preserve identity.** The transcript keeps the segment's speaker and page. Queued text is replaced; superseded in-flight board results are discarded. If the original text has already been drawn, the board agent receives an explicit correction against that board. The history retains one utterance per segment.
 - **The board agent reads context.** Its inputs include entities, aliases, imported source text, the last two utterances, the glossary and bound targets. Each session queues model requests. Ordinary utterances may be batched; circled utterances and corrections are processed separately. Code applies the returned operations, confirms drafts as ink and removes unconfirmed drafts.
-- **Model and rendering have separate jobs.** Local llama.cpp uses GBNF and prompt-prefix caching; compatible APIs omit those grammar constraints and may fall back to a local model. Code controls incremental layout and handwriting strokes; pencil mode uses Excalidraw. Saved transcript and graph changes drive replay/export without rerunning the model. Summaries use a separate request over the transcript and boards.
+- **Model and rendering have separate jobs.** Local llama.cpp uses GBNF and prompt-prefix caching; compatible APIs omit those grammar constraints and may fall back to a local model. Code controls incremental layout and handwriting strokes; PC Meeting mode uses Excalidraw. Saved transcript and graph changes drive replay/export without rerunning the model. Summaries use a separate request over the transcript and boards.
 
 The audio review policy currently uses fixed rules; the board agent handles accepted text corrections. Learned denoising, overlapping-speaker separation and automatic alternate-ASR selection remain future work. GTCRN and Whisper comparisons are evaluation controls. See [dynamic policy and evaluation](eval/asr/README.md#dynamic-policy-and-revisions) and the [measured baseline](eval/asr/dynamic.md); the initial run showed unchanged recognition error, not an accuracy gain.
 
@@ -214,7 +214,7 @@ For names that are often misrecognized, add a glossary entry such as `MediaCrawl
 <details>
 <summary><strong>Useful shortcuts</strong></summary>
 
-These shortcuts mainly apply to handwriting mode and leave focused text fields and dialogs alone. Use `Cmd` instead of `Ctrl` for regular app actions on macOS.
+These shortcuts mainly apply to PAD Whiteboard mode and leave focused text fields and dialogs alone. Use `Cmd` instead of `Ctrl` for regular app actions on macOS.
 
 | Key | Action |
 |---|---|

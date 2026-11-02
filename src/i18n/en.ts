@@ -372,9 +372,9 @@ export const en = {
     localOnlyMeeting: 'Local only for this meeting',
     newVersionTitle: 'A new version is available — click for release notes',
     newVersion: (v: string) => `New version ${v}`,
-    styleAria: 'Board style',
-    ink: 'Handwriting',
-    pencil: 'Pencil · editable',
+    styleAria: 'Board mode',
+    ink: 'PAD Whiteboard',
+    pencil: 'PC Meeting',
     log: 'Transcript',
     replay: 'Replay',
     exitReplay: 'Exit replay',
@@ -396,8 +396,8 @@ export const en = {
     export: 'Export',
     exportMd: 'Key points, Mermaid flowchart and transcript',
     exportPng: 'PNG image',
-    exportPngInk: 'Handwritten board, as on screen',
-    exportPngPencil: 'Pencil board, including your edits',
+    exportPngInk: 'PAD whiteboard, as on screen',
+    exportPngPencil: 'PC meeting board, including your edits',
     exportSvg: 'SVG vector',
     exportSvgHint: 'Stays sharp when zoomed; paste into docs or keep editing',
     exportAnim: 'Animated SVG',
@@ -558,7 +558,7 @@ export const en = {
     // —— Keyboard shortcuts ——
     keys: 'Keyboard shortcuts',
     close: 'Close',
-    keysHint: 'Only in handwriting mode, and not while typing in a text field. During replay: Space plays or pauses, arrow keys step, Esc exits.',
+    keysHint: 'Only in PAD Whiteboard mode, and not while typing in a text field. During replay: Space plays or pauses, arrow keys step, Esc exits.',
   },
 }
 

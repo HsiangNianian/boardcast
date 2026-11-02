@@ -76,14 +76,14 @@ function content(k: number, ox: number, oy: number, portrait = false): Part[] {
   T('ops', '只发图操作', (boxes[2][1] + boxes[3][0]) / 2 - 60, fy - 54, 20, 'blue')
   if (!portrait) M('l3-arc', arrow(bow([X(170) + l3 + S(26), Y(380)], [X((boxes[2][0] + boxes[2][1]) / 2), Y(fy - 24)], -S(40), 24), S(13), r), 2.6, 'blue')
 
-  // 右边：三支笔
+  // 右边：模式与板书风格
   blockAt(1090, 90, 20, 520)
-  const pw = T('pens', '三支笔', 1110, 104, 40)
+  const pw = T('pens', '板书与会议', 1110, 104, 40)
   M('pens-u', [line([X(1104), Y(154)], [X(1110) + pw + S(10), Y(157)], r, 0.01)], 3)
-  T('p1', '手写 · 马克笔', 1132, 182, 28)
+  T('p1', 'PAD 板书模式', 1132, 182, 28)
   const p2 = T('p2', '黑板 · 粉笔', 1132, 228, 28)
   M('p2-o', [loop(X(1132) + p2 / 2, Y(242), p2 / 2 + S(22), S(26), r, { turns: 1.18, start: 3.2 })], 2.8, 'red')
-  T('p3', '铅笔 · 可编辑', 1132, 274, 28)
+  T('p3', 'PC 会议模式', 1132, 274, 28)
   const f = T('p50', 'p50 ≈ 0.7 s', 1140, 376, 34)
   M('p50-o', [loop(X(1140) + f / 2, Y(394), f / 2 + S(28), S(40), r, { turns: 1.08, start: 3.6 })], 2.6, 'blue')
   T('p50s', '4B 模型 · 6 GB 显卡', 1150, 446, 18, 'blue')

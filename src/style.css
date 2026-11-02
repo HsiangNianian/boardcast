@@ -1240,6 +1240,10 @@ label.check input {
 }
 
 @media (max-width: 900px) {
+  .topbar .brand,
+  .topbar .web-demo {
+    display: none;
+  }
   .app,
   .app.no-log {
     grid-template-columns: 1fr;

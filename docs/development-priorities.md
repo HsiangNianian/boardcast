@@ -18,6 +18,8 @@ Build on macOS with **Xcode 26+**. `scripts/build-apple-speech.sh` is used by Ca
 
 Official API references: [SpeechTranscriber](https://developer.apple.com/documentation/speech/speechtranscriber), [SpeechAnalyzer](https://developer.apple.com/documentation/speech/speechanalyzer), [AssetInventory](https://developer.apple.com/documentation/speech/assetinventory).
 
+Validation on 2026-11-02: [Eval run 41401038026](https://github.com/HsiangNianian/boardcast/actions/runs/41401038026) built the macOS app and passed its Rust tests, native PCM self-test and capability query. The virtual Mac returned `isApple: true`, `available: false`, `reason: hardware`; no Apple transcription accuracy or live microphone behavior was measured there. Locally, 181 JavaScript tests and 32 Rust tests passed, including the real-audio SenseVoice regressions. UI checks used simulated availability/download states in an isolated Linux browser. An actual supported Mac is still needed to validate Apple model installation, live transcription and latency.
+
 ## Evidence to retain before resuming model work
 
 - [19-configuration short sweep](../eval/asr/sweep-2026-11-02.md): Qwen 1.7B's community ONNX output is anomalous; it does not establish the upstream model's accuracy ceiling. All major Whisper sizes, including large-v3 and turbo, already have short-test results.

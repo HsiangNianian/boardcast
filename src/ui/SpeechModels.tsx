@@ -11,8 +11,8 @@ export default function SpeechModels() {
   const refresh = useCallback(async () => {
     const next = await voice.models()
     setView(next)
-    setLocale((previous) => next.apple?.locales.some((l) => l.id === previous) ? previous
-      : next.selection.locale || next.apple?.defaultLocale || next.apple?.locales[0]?.id || '')
+    setLocale((previous) => [previous, next.selection.locale, next.apple?.defaultLocale]
+      .find((id) => id && next.apple?.locales.some((l) => l.id === id)) ?? next.apple?.locales[0]?.id ?? '')
   }, [])
 
   useEffect(() => {
@@ -36,6 +36,7 @@ export default function SpeechModels() {
 
   const language = view?.apple?.locales.find((l) => l.id === locale)
   const selected = view?.selection.provider === 'apple' && view.selection.locale === locale
+  const appleReady = view?.apple?.available && view.apple.locales.some((l) => l.id === view.selection.locale && l.installed)
   const disabled = busy || !!view?.listening || !!view?.preparing
   return <section className="speech-models" aria-labelledby="speech-models-title" aria-busy={busy}>
     <div className="row speech-heading">
@@ -46,7 +47,7 @@ export default function SpeechModels() {
     {view && <>
       <div className={`model ${view.selection.provider === 'sensevoice' ? 'current' : ''}`}>
         <div className="row1"><b>SenseVoice</b>
-          {view.selection.provider === 'sensevoice' && <span className="tag on">{s.inUse}</span>}
+          {view.selection.provider === 'sensevoice' && <span className="tag on">{view.senseVoiceInstalled ? s.inUse : s.chosen}</span>}
         </div>
         <p className="note">{s.senseVoiceNote}</p>
         {!view.senseVoiceInstalled && <p className="meta">{s.speechDownloadBelow}</p>}
@@ -56,7 +57,7 @@ export default function SpeechModels() {
       </div>
       <div className={`model ${view.selection.provider === 'apple' ? 'current' : ''}`}>
         <div className="row1"><b>Apple SpeechAnalyzer</b><span className="tag">{s.experimental}</span>
-          {view.selection.provider === 'apple' && <span className="tag on">{s.inUse} · {view.selection.locale}</span>}
+          {view.selection.provider === 'apple' && <span className="tag on">{appleReady ? s.inUse : s.chosen} · {view.selection.locale}</span>}
         </div>
         <p className="note">{s.appleNote}</p>
         {view.appleError ? <p className="meta err" role="alert">{view.appleError}</p>

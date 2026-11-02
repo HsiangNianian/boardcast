@@ -302,7 +302,8 @@ impl Session {
                 self.until = end;
                 if !text.trim().is_empty() {
                     self.sequence += 1;
-                    // Apple doesn't expose isolated ASR time or CAM++ embeddings; don't fabricate them.
+                    // shortcut: use the selected speaker; add CAM++ after native transcription is validated.
+                    // Apple doesn't expose isolated ASR time; leave unmeasured metrics absent.
                     let _ = app.emit(
                         "voice-final",
                         serde_json::json!({

@@ -155,12 +155,11 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          src-tauri/target/release/boardcast-speech self-test
-          src-tauri/target/release/boardcast-speech status > apple-speech-status.json
           python3 - <<'PY'
-          import json
-          with open('apple-speech-status.json') as f:
-              status = json.load(f)
+          import json, subprocess
+          helper = 'src-tauri/target/release/boardcast-speech'
+          subprocess.run([helper, 'self-test'], check=True, timeout=30)
+          status = json.loads(subprocess.check_output([helper, 'status'], timeout=30))
           assert status['type'] == 'status', status
           assert status['isApple'] is True, status
           assert isinstance(status['available'], bool), status

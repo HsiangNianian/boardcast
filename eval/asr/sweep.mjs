@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
@@ -19,13 +19,15 @@ const reports = [], failures = []
 for (const model of selected) {
   const output = resolve(dir, model)
   const log = spawnSync(process.execPath, ['eval/asr/run.mjs', '--model', model, '--suite', args.suite, '--output', output], { stdio: 'inherit' })
-  if (log.error || log.status !== 0) {
-    failures.push({ model, status: log.status, signal: log.signal, error: log.error?.message })
-    continue
+  const report = resolve(output, 'report.json')
+  const hasReport = existsSync(report)
+  if (log.error || log.status !== 0 || !hasReport) {
+    failures.push({ model, status: log.status, signal: log.signal, error: log.error?.message || (!hasReport ? 'Missing report.json' : undefined) })
   }
-  reports.push(JSON.parse(readFileSync(resolve(output, 'report.json'), 'utf8')))
+  if (hasReport) reports.push(JSON.parse(readFileSync(report, 'utf8')))
 }
 writeFileSync(resolve(dir, 'failures.json'), JSON.stringify(failures, null, 2) + '\n')
-if (reports.length) writeFileSync(resolve(dir, 'comparison.md'), compare(reports))
+if (reports.length) writeFileSync(resolve(dir, 'comparison.md'), compare(reports)
+  + (failures.length ? `\nFailed candidates (see their logs; missing scores are not passes): ${failures.map((f) => f.model).join(', ')}.\n` : ''))
 console.log(`Sweep results: ${dir}`)
 if (failures.length) throw new Error(`Failed candidates: ${failures.map((f) => f.model).join(', ')}; see failures.json`)

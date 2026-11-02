@@ -272,6 +272,8 @@ pnpm eval:asr:sweep            # Compare 19 ASR configurations by language; CTC 
 
 See [speech evaluation](eval/asr/README.md) for model comparisons, denoising experiments, reference quality and [dataset licenses](eval/asr/LICENSES.md). The long suite adds Chinese scenario meetings, English business/research meetings and a real Japanese public-health committee. Overlap receives a separate ordered diagnostic score; edited Japanese minutes remain provisional. Neither enters the ordinary reference aggregates.
 
+The [long-meeting evaluation results](eval/asr/long-meetings-2026-11-02.md) record the six-model comparison, results by industry and the paired dynamic check.
+
 <details>
 <summary><strong>Code map</strong></summary>
 

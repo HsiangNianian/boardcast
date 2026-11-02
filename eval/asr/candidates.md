@@ -4,6 +4,8 @@ Surveyed the [Hugging Face ASR download ranking](https://huggingface.co/models?p
 
 The [first measured sweep](sweep-2026-11-02.md) completed all 19 candidates and seven controls in Eval, with language-specific scores and raw transcript artifacts.
 
+The [long-meeting follow-up](long-meetings-2026-11-02.md) tests six of those candidates on nine continuous excerpts of about ten minutes, across Chinese, Japanese and English. It includes runtime failures that the short fixtures did not expose; use it alongside the short sweep when considering a production candidate.
+
 | Candidates | Corpus languages | Evaluation form | Source |
 |---|---|---|---|
 | SenseVoice | zh / ja / en / zh-en | Existing INT8 ONNX baseline, auto language | [FunAudioLLM](https://huggingface.co/FunAudioLLM/SenseVoiceSmall) |

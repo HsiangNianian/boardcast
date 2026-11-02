@@ -59,6 +59,7 @@ test('comparison separates official references, overlapping turns and edited min
   assert.match(result, /PROVISIONAL — DIAGNOSTIC ONLY/)
   assert.match(result, /education \/ scenario-meeting/)
   assert.doesNotMatch(result, /10\.67%/)
+  assert.match(compare([{ ...report, runtime: { passed: false } }]), /sensevoice \| \*\*FAIL\*\*/)
 })
 
 test('comparison refuses changed corpora, mismatched subsets and duplicate runs', () => {

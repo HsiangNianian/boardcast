@@ -285,6 +285,8 @@ pnpm eval:asr:sweep            # 按语言比较 19 个 ASR 配置；CTC 对照�
 
 模型对比、降噪实验、参考转写质量见[语音评测说明](eval/asr/README.md)，素材条款见[数据集许可](eval/asr/LICENSES.md)。长会议集包含中文场景会议、英文实际业务/研究会议和日文公共健康委员会，逐段约 10 分钟。重叠发言单列按起始时间排序的诊断分数，日文官方整理记录仍标为 provisional，均不混入正式参考转写汇总。
 
+[长会议实测结果](eval/asr/long-meetings-2026-11-02.md)记录了六个模型的比较、逐行业结果和动态策略的成对对照。
+
 <details>
 <summary><strong>评测数据、复现与已知边界</strong></summary>
 

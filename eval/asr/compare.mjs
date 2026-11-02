@@ -1,5 +1,5 @@
-import { appendFileSync, globSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { appendFileSync, existsSync, globSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export function compare(reports) {
@@ -49,7 +49,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const root = process.argv[2]
   if (!root) throw new Error('Usage: node eval/asr/compare.mjs REPORT_DIRECTORY')
   const reports = globSync('**/report.json', { cwd: root }).sort().map((p) => JSON.parse(readFileSync(resolve(root, p), 'utf8')))
-  const markdown = compare(reports)
+  const incomplete = globSync('**/input.json', { cwd: root }).map(dirname).filter((p) => !existsSync(resolve(root, p, 'report.json'))).sort()
+  const markdown = compare(reports) + (incomplete.length ? '\n## Failed or incomplete runs — no score\n\nThese runs have inputs but no scored report. Inspect their logs and CI job status; missing results are not passes.\n\n' + incomplete.map((p) => `- ${p}`).join('\n') + '\n' : '')
   console.log(markdown)
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown)
 }

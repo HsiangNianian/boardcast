@@ -25,6 +25,8 @@ pnpm eval:asr:sweep --suite meetings --models sensevoice,paraformer-zh-en,reazon
 
 `meetings.json` adds **nine continuous excerpts of about ten minutes each**, plus silence. These are independent clips, never concatenated short utterances or synthetic speech. The suite is separate from `quick` / `full`, so push regression stays small.
 
+The [2026-11-02 long-meeting results](long-meetings-2026-11-02.md) compare six candidate models and paired dynamic SenseVoice, including runtime failures and results by industry.
+
 | Language | Recordings | Domains | Reference treatment |
 | --- | --- | --- | --- |
 | Chinese | 3 AISHELL-4 recordings | Property management, kindergarten education, factory safety | Human-recorded **scenario meetings**, not verified everyday business meetings. Official manual TextGrids; overlapping turns receive diagnostic ordered CER. |
@@ -130,4 +132,4 @@ See the [first dynamic run](dynamic.md) for measured results and explicit limits
 - A final job collects matching reports into an **ASR language comparison** summary and artifact, even if another candidate failed. Failed candidate jobs remain failures; a partial comparison is not an all-model pass.
 - Audio and models use separate caches keyed by their manifests. Restored files are always verified. Reports are uploaded as per-model artifacts for 30 days; audio/model caches are only accelerators, not the permanent source of the fixtures.
 
-Data Releases use `asr-fixtures-*` / `asr-meetings-*` tags and is **not Latest**, so it does not trigger the `v*` software release workflow or replace the application's update manifest. Pages deployment and software releases remain separate workflows.
+Data Releases use `asr-fixtures-*` / `asr-meetings-*` tags and are **not Latest**, so they do not trigger the `v*` software release workflow or replace the application's update manifest. Pages deployment and software releases remain separate workflows.

@@ -6,7 +6,7 @@ import { FONT, TITLE } from '../board/layout.ts'
 import { inherited } from '../engine/base.ts'
 import type { Graph, Node } from '../engine/graph.ts'
 import { type Pt, type Stroke, glyph } from './glyphs.ts'
-import { DEFAULT_MESSY, DEFAULT_WEIGHT } from './defaults.ts'
+import { DEFAULT_ENGLISH_WEIGHT, DEFAULT_MESSY, DEFAULT_WEIGHT } from './defaults.ts'
 import { inkIcon } from './icons.ts'
 import { type Inked, arrow, box, ink, line, loop, outline, placeGlyph, rng, strike } from './pen.ts'
 
@@ -46,7 +46,7 @@ const penFor = (size: number) => Math.max(1.8, size * 0.1)
 export const OLD_INK = 0.38
 
 /** 一笔；`thin` 是连笔时带出来的细丝，用更细的笔画 */
-type Mark = { pts: Stroke; thin?: boolean }
+type Mark = { pts: Stroke; thin?: boolean; latin?: boolean }
 
 /** 高度潦草时才用连写体，日常保留 Excalidraw 的手写字形 */
 export const SCRIPT_AT = 0.6
@@ -75,10 +75,10 @@ async function write(text: string, x: number, y: number, size: number, seed: str
     // 英文连写：同一个单词里，上一个小写字母的收笔接到这个小写字母的起笔
     if (latin === 'script' && prev && isLower(prev.ch) && placed[0]?.length) {
       const start = placed[0][0]
-      if (dist(prev.end, start) < size * 0.7) out.push({ pts: [prev.end, start] })
+      if (dist(prev.end, start) < size * 0.7) out.push({ pts: [prev.end, start], latin: true })
     }
     for (let i = 0; i < placed.length; i++) {
-      out.push({ pts: placed[i] })
+      out.push({ pts: placed[i], latin: g.latin })
       // 汉字连笔：越潦草，上一笔的收笔越容易带出一根细丝连到下一笔的起笔
       const next = placed[i + 1]
       if (isHan(ch) && next && messy > 0.5 && r() < (messy - 0.5) * 1.4) {
@@ -119,6 +119,7 @@ export async function compose(
   weight = DEFAULT_WEIGHT,
   base?: Graph,
   trace?: Trace | null,
+  englishWeight = DEFAULT_ENGLISH_WEIGHT,
 ): Promise<Piece[]> {
   const pieces: Piece[] = []
   const colorOf = (n: Node | undefined, fallback = look.ink) =>
@@ -135,9 +136,11 @@ export async function compose(
     const r = rng(key)
     const wobble = size * (0.12 + 0.5 * messy)
     const pen = size * weight
-    const inked = strokes.map((s) =>
-      Array.isArray(s) ? ink(s, pen, r, { messy, wobble }) : ink(s.pts, s.thin ? pen * 0.45 : pen, r, { messy, wobble }),
-    )
+    const inked = strokes.map((s) => {
+      if (Array.isArray(s)) return ink(s, pen, r, { messy, wobble })
+      const width = size * (s.latin ? englishWeight : weight)
+      return ink(s.pts, s.thin ? width * 0.45 : width, r, { messy, wobble })
+    })
     pieces.push({ key, color, opacity, strokes: inked, ...extra })
   }
 

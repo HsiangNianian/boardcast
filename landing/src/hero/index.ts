@@ -5,7 +5,7 @@
 import { type Pt, clamp, drawPiece, fitCanvas, reduceMotion } from '../ink/core'
 import { type Board, type Item, compose } from './board'
 import { Fader } from './fader'
-import { DEFAULT_MESSY, DEFAULT_WEIGHT } from '../../../src/ink/defaults'
+import { DEFAULT_ENGLISH_WEIGHT, DEFAULT_MESSY, DEFAULT_WEIGHT } from '../../../src/ink/defaults'
 import { type HeroGeo, measureHero } from './geo'
 import { Talk } from './talk'
 
@@ -61,12 +61,12 @@ export function initHero(): HeroApi {
   let target = DEFAULT_MESSY
   let messy = target
   let built = -1
-  // 粗细推杆：推子位置 0..1 → 笔宽倍数 0.5×..2×（指数刻度，1× 正好在中间；再粗汉字就糊成一团了）
+  // 英文粗细推杆：0..1 → 0.5×..2×；中日文和线条保持原来的笔宽。
   const toWeight = (v: number) => 0.5 * 4 ** v
-  let wTarget = DEFAULT_WEIGHT
+  let wTarget = DEFAULT_ENGLISH_WEIGHT
   let weight = wTarget
   let wBuilt = weight
-  let board: Board = compose(geo, messy, weight)
+  let board: Board = compose(geo, messy, DEFAULT_WEIGHT, weight)
   const introAt = still ? -1e9 : performance.now() + 120
   let introDone = still
   let idleSince = 0
@@ -85,7 +85,7 @@ export function initHero(): HeroApi {
   const fader = new Fader(frame.querySelector('.fader-messy')!, target, (v) => {
     target = v
   })
-  const wFader = new Fader(frame.querySelector('.fader-weight')!, Math.log(DEFAULT_WEIGHT / 0.5) / Math.log(4), (v) => {
+  const wFader = new Fader(frame.querySelector('.fader-weight')!, Math.log(DEFAULT_ENGLISH_WEIGHT / 0.5) / Math.log(4), (v) => {
     wTarget = toWeight(v)
   })
   const talk = new Talk(frame.querySelector('.talk')!, frame, {
@@ -100,7 +100,7 @@ export function initHero(): HeroApi {
   talk.start(performance.now() + 900, still)
 
   const rebuild = () => {
-    board = compose(geo, messy, weight)
+    board = compose(geo, messy, DEFAULT_WEIGHT, weight)
     built = messy
     wBuilt = weight
     cacheOk = false

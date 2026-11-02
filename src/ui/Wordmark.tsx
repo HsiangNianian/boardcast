@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { glyph } from '../ink/glyphs.ts'
-import { DEFAULT_MESSY, DEFAULT_WEIGHT } from '../ink/defaults.ts'
+import { DEFAULT_ENGLISH_WEIGHT, DEFAULT_MESSY } from '../ink/defaults.ts'
 import { type Inked, ink, placeGlyph, rng } from '../ink/pen.ts'
 
 interface Written {
@@ -19,7 +19,7 @@ function write(text: string, size: number): Promise<Written> {
   if (!p) {
     p = (async () => {
       const r = rng(`wordmark:${text}`)
-      const pen = Math.max(1.8, size * 0.1) * DEFAULT_WEIGHT
+      const pen = Math.max(1.8, size * 0.1) * DEFAULT_ENGLISH_WEIGHT
       const strokes: Inked[] = []
       let x = pen
       for (const ch of text) {

@@ -137,7 +137,8 @@ export const en = {
     // —— Handwriting ——
     messyLabel: 'Handwriting messiness',
     messyAria: 'Messiness',
-    weightLabel: 'Stroke weight',
+    weightLabel: 'Chinese, Japanese & line weight',
+    englishWeightLabel: 'English stroke weight',
   },
 
   composer: {

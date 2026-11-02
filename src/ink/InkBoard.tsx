@@ -8,7 +8,7 @@ import { type Layout, board } from '../board/layout.ts'
 import type { Selection } from '../engine/edit.ts'
 import type { Graph } from '../engine/graph.ts'
 import { type InkLook, type Piece, type Trace, compose } from './compose.ts'
-import { DEFAULT_WEIGHT } from './defaults.ts'
+import { DEFAULT_ENGLISH_WEIGHT, DEFAULT_WEIGHT } from './defaults.ts'
 import { localPoint } from '../ui/landscape.ts'
 import { MAX_POINTED } from '../engine/pointing.ts'
 import { circled, hitTest, selectionBox, selectionLine } from './hit.ts'
@@ -65,6 +65,7 @@ export default function InkBoard({
   bottomInset = 0,
   tidy = 0,
   weight = DEFAULT_WEIGHT,
+  englishWeight = DEFAULT_ENGLISH_WEIGHT,
   selection = null,
   onSelect,
   toolbar,
@@ -87,6 +88,7 @@ export default function InkBoard({
   tidy?: number
   /** 笔画粗细的倍数 */
   weight?: number
+  englishWeight?: number
   /** 手动修改：选中的东西、点选回调、浮在选中物上方的按钮 */
   selection?: Selection | null
   onSelect?: (sel: Selection | null, at?: { x: number; y: number }) => void
@@ -141,9 +143,9 @@ export default function InkBoard({
     let stale = false
     void (async () => {
       const l = await board.layout(graph)
-      const ps = await compose(graph, l, hot, look, messy, weight, base, trace)
+      const ps = await compose(graph, l, hot, look, messy, weight, base, trace, englishWeight)
       if (stale) return
-      const from = [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev]
+      const from = [graph, hot, look, messy, weight, englishWeight, tidy, bottomInset, layoutRev]
       const restyled = from.every((x, i) => x === drewFor.current[i])
       drewFor.current = from
       setLay(l)
@@ -198,7 +200,7 @@ export default function InkBoard({
       stale = true
     }
     // trace 按内容比：每次渲染传进来的都是新对象也不会重画
-  }, [graph, hot, look, messy, weight, tidy, bottomInset, layoutRev, base, trace?.who, trace?.color])
+  }, [graph, hot, look, messy, weight, englishWeight, tidy, bottomInset, layoutRev, base, trace?.who, trace?.color])
 
   // 画布尺寸放进 state：第一次渲染时 ref 还没挂上，窗口缩放时也要重新适配
   const [[W, H], setSize] = useState<[number, number]>([1000, 700])

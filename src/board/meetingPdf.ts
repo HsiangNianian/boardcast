@@ -42,11 +42,11 @@ function header(x: CanvasRenderingContext2D, title: string, right: string) {
 }
 
 /** 一张板：用同一套排版和手写笔画画成 SVG，再画到画布上 */
-async function boardPage(page: ReplayPage, title: string, label: string): Promise<PdfPage> {
+async function boardPage(page: ReplayPage, data: ReplayData, label: string): Promise<PdfPage> {
   const layout = new StableLayout()
   layout.restore(page.layout)
   const l = await layout.layout(page.graph)
-  const pieces = await compose(page.graph, l, new Set(), WHITEBOARD, 0.3, 1, page.base)
+  const pieces = await compose(page.graph, l, new Set(), WHITEBOARD, data.messy, data.weight, page.base, undefined, data.englishWeight)
   const P = 40
   const x0 = l.bounds.x0 - P
   const y0 = l.bounds.y0 - P
@@ -67,7 +67,7 @@ async function boardPage(page: ReplayPage, title: string, label: string): Promis
     const img = new Image()
     img.src = url
     await img.decode()
-    header(x, title, label)
+    header(x, data.title, label)
     // 板书按比例放进页眉以下的区域，居中
     const top = 110
     const k = Math.min((CW - M) / w, (CH - top - 50) / h)
@@ -177,7 +177,7 @@ export async function meetingPdf(data: ReplayData, onPage?: (done: number, total
   const boards = data.pages.filter((p) => p.graph.nodes.length || p.underlay)
   for (const [i, p] of boards.entries()) {
     onPage?.(i, boards.length)
-    pages.push(await boardPage(p, data.title, boards.length > 1 ? msg().doc.board(i + 1) : msg().doc.boardSingle))
+    pages.push(await boardPage(p, data, boards.length > 1 ? msg().doc.board(i + 1) : msg().doc.boardSingle))
   }
   if (data.summary?.trim() || data.lines.length) pages.push(...(await textPages(data)))
   return makePdf(pages, A4_LANDSCAPE, data.title)

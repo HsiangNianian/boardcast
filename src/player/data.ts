@@ -23,6 +23,9 @@ export interface ReplayData {
   summary?: string
   lines: MeetingLine[]
   pages: ReplayPage[]
+  messy?: number
+  weight?: number
+  englishWeight?: number
 }
 
 /** 板书里会写到的汉字：每张板最终的样子和回放过程中出现过的，都算上 */

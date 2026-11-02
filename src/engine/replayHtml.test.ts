@@ -13,6 +13,9 @@ const g = applyOps(emptyGraph(), parseOps('E 「用户」 -> 「网关」 : 「�
 const data: ReplayData = {
   title: '周会 <b>',
   createdAt: 0,
+  messy: 0,
+  weight: 0.65,
+  englishWeight: 1.25,
   summary: '### 结论\n- 好',
   lines: [{ text: `危险的 </script><script>alert(1)</script> 和${String.fromCharCode(0x2028)}换行` }],
   pages: [{ graph: g, steps: [{ t: 0, line: 1, d: diffGraph(emptyGraph(), g)! }] }],

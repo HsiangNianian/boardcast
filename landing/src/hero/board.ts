@@ -6,7 +6,7 @@
 // 推杆只改变字迹的性格（歪斜、错落、连笔，主箭头和红圈更张扬），板上的东西一样不多、一样不少。
 // 粗细推杆只改笔头宽度，字形不动。
 
-import { DEFAULT_MESSY, DEFAULT_WEIGHT } from '../../../src/ink/defaults'
+import { DEFAULT_ENGLISH_WEIGHT, DEFAULT_MESSY, DEFAULT_WEIGHT } from '../../../src/ink/defaults'
 import { type Box, type Piece, type Pt, type Stroke, makePiece, rng } from '../ink/core'
 import { measure, penFor, write } from '../ink/hand'
 import { arrow, bow, cubic, dashes, head, icon, line, loop, quad, roundRect, strike } from '../ink/shapes'
@@ -49,8 +49,9 @@ class Builder {
     readonly m: number,
     readonly k: number,
     readonly center: Pt,
-    /** 粗细推杆：所有笔画的笔宽倍数 */
+    /** 中日文和线条的笔宽倍数 */
     readonly w = 1,
+    readonly englishWeight = DEFAULT_ENGLISH_WEIGHT,
   ) {}
 
   /** 一段手写字；越潦草，整段也跟着歪一点、挪一点，笔也走得更快、更细 */
@@ -66,7 +67,7 @@ class Builder {
     const s = Math.sin(tilt)
     for (const mk of w.marks) mk.pts = mk.pts.map(([px, py]): Pt => [cx + (px - cx) * c - (py - cy) * s + dx, cy + (px - cx) * s + (py - cy) * c + dy])
     const pen = (o.pen ?? penFor(size)) * (1 - 0.16 * this.m)
-    const p = makePiece(id, color, w.marks, pen, this.m, { alpha: o.alpha, weight: this.w })
+    const p = makePiece(id, color, w.marks, pen, this.m, { alpha: o.alpha, weight: this.w, englishWeight: this.englishWeight })
     this.add(p, group, o.block)
     return { w: w.w, p }
   }
@@ -86,7 +87,7 @@ class Builder {
   }
 }
 
-export function compose(g: HeroGeo, m = DEFAULT_MESSY, weight = DEFAULT_WEIGHT): Board {
+export function compose(g: HeroGeo, m = DEFAULT_MESSY, weight = DEFAULT_WEIGHT, englishWeight = DEFAULT_ENGLISH_WEIGHT): Board {
   const W = g.W
   const bw = W - (g.stacked ? 0 : g.divX)
   const bh = g.baseY - g.boardTop
@@ -105,7 +106,7 @@ export function compose(g: HeroGeo, m = DEFAULT_MESSY, weight = DEFAULT_WEIGHT):
   const topicSize = S(76)
   const topicX = X(300)
   const center: Pt = [topicX + topicSize * 2, ty]
-  const b = new Builder(m, k, center, weight)
+  const b = new Builder(m, k, center, weight, englishWeight)
   const r = rng('board')
   const pen = (s: number) => penFor(S(s))
 

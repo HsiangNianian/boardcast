@@ -104,7 +104,7 @@ export function write(text: string, x: number, y: number, size: number, seed: st
     }
     for (let j = 0; j < placed.length; j++) {
       const R = rs[j]
-      marks.push({ pts: placed[j], f1: R.f1, ph: R.ph })
+      marks.push({ pts: placed[j], f1: R.f1, ph: R.ph, latin: g.latin })
       // 汉字连笔：越潦草，上一笔的收笔越容易带出一根细丝连到下一笔的起笔
       const next = placed[j + 1]
       if (g.han && next && m > 0.42) {

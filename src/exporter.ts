@@ -35,6 +35,7 @@ interface Board {
   underlay?: string
   messy?: number
   weight?: number
+  englishWeight?: number
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -104,7 +105,7 @@ async function animSvg(b: Board): Promise<string> {
   const layout = new StableLayout()
   layout.restore(board.snapshot())
   const l = await layout.layout(g)
-  const pieces = await compose(g, l, new Set(), WHITEBOARD, b.messy, b.weight)
+  const pieces = await compose(g, l, new Set(), WHITEBOARD, b.messy, b.weight, undefined, undefined, b.englishWeight)
   const { timed } = timeline(pieces, ranks(g, l, b.steps ?? [], pieces.map((p) => p.key)))
   const P = 48
   const box = { x: l.bounds.x0 - P, y: l.bounds.y0 - P, w: l.bounds.x1 - l.bounds.x0 + 2 * P, h: l.bounds.y1 - l.bounds.y0 + 2 * P }

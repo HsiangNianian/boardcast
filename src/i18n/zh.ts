@@ -126,7 +126,8 @@ export const zh: Messages = {
     // —— Handwriting ——
     messyLabel: '手写潦草度',
     messyAria: '潦草度',
-    weightLabel: '笔画粗细',
+    weightLabel: '中日文与线条粗细',
+    englishWeightLabel: '英文笔画粗细',
   },
 
   composer: {

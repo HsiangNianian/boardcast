@@ -9,6 +9,7 @@ export interface Glyph {
   strokes: Stroke[]
   advance: number
   han: boolean
+  latin?: boolean
 }
 
 const HZ = hanzi as unknown as Record<string, number[][][]>
@@ -52,7 +53,7 @@ const PUNCT: Record<string, Glyph> = {
 
 function latin(ch: string): Glyph | null {
   const g = LATIN[ch]
-  return g ? { ...g, han: false } : null
+  return g ? { ...g, han: false, latin: true } : null
 }
 
 const cache = new Map<string, Glyph | null>()

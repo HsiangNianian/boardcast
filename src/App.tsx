@@ -62,7 +62,7 @@ import { type SpokenLang, spokenLang } from './engine/lang.ts'
 import { type DemoInfo, demoIndex, demoMeeting, loadDemo } from './demo.ts'
 import Splash from './ui/Splash.tsx'
 import Wordmark from './ui/Wordmark.tsx'
-import { DEFAULT_MESSY, DEFAULT_WEIGHT } from './ink/defaults.ts'
+import { DEFAULT_ENGLISH_WEIGHT, DEFAULT_MESSY, DEFAULT_WEIGHT } from './ink/defaults.ts'
 
 type Mode = 'pencil' | 'ink'
 type Theme = 'system' | 'light' | 'dark'
@@ -350,9 +350,14 @@ export default function App() {
     const v = Number(load('boardcast.weight', String(DEFAULT_WEIGHT * 100)))
     return Number.isFinite(v) ? Math.min(200, Math.max(50, v)) : DEFAULT_WEIGHT * 100
   })
+  const [englishWeight, setEnglishWeight] = useState(() => {
+    const v = Number(load('boardcast.englishWeight', String(DEFAULT_ENGLISH_WEIGHT * 100)))
+    return Number.isFinite(v) ? Math.min(200, Math.max(50, v)) : DEFAULT_ENGLISH_WEIGHT * 100
+  })
   // 拖滑杆时每一格都要重算全部笔画，让它慢半拍，拖动本身不卡
   const messyLater = useDeferredValue(messy)
   const weightLater = useDeferredValue(weight)
+  const englishWeightLater = useDeferredValue(englishWeight)
   const [micChoice, setMicChoice] = useState(() => load('boardcast.mic', ''))
   // 收哪些声音：线上会议要加上系统声音（别人的声音从扬声器出来）
   const [voiceSource, setVoiceSource] = useState<VoiceSource>(() => {
@@ -687,13 +692,14 @@ export default function App() {
     save('boardcast.mode', mode)
     save('boardcast.messy', String(messy))
     save('boardcast.weight', String(weight))
+    save('boardcast.englishWeight', String(englishWeight))
     save('boardcast.mic', micChoice)
     save('boardcast.source', voiceSource)
     save('boardcast.diarize', diarize ? 'on' : 'off')
     save('boardcast.glossary', glossary)
     save('boardcast.autoupdate', autoUpdate ? 'on' : 'off')
     save('boardcast.log', showLog ? 'open' : 'closed')
-  }, [mode, messy, weight, micChoice, voiceSource, diarize, autoUpdate, glossary, showLog])
+  }, [mode, messy, weight, englishWeight, micChoice, voiceSource, diarize, autoUpdate, glossary, showLog])
 
   // 只滚动字幕面板，避免嵌入官网时 scrollIntoView 连带滚动外层页面。
   // 从搜索结果跳过来的那一句：滚到它，亮一下
@@ -1001,6 +1007,9 @@ export default function App() {
                 title: meeting.title,
                 createdAt: meeting.createdAt,
                 summary: summary || undefined,
+                messy: messyLater / 100,
+                weight: weightLater / 100,
+                englishWeight: englishWeightLater / 100,
                 lines,
                 pages: pagesRef.current.map((p, i) => {
                   const cur = i === page ? capture() : p
@@ -1009,7 +1018,7 @@ export default function App() {
               }
             : undefined,
         ...(kind === 'anim'
-          ? { steps: stepsRef.current, underlay: pagesRef.current[page]?.underlay, messy: messyLater / 100, weight: weightLater / 100 }
+          ? { steps: stepsRef.current, underlay: pagesRef.current[page]?.underlay, messy: messyLater / 100, weight: weightLater / 100, englishWeight: englishWeightLater / 100 }
           : {}),
         mode, api: mode === 'pencil' ? api : null, look: LIGHT, paper })
       const where = await saveFile(name, blob)
@@ -2000,6 +2009,7 @@ export default function App() {
             bottomInset={inset}
             tidy={tidy}
             weight={weightLater / 100}
+            englishWeight={englishWeightLater / 100}
             selection={replay ? null : selection}
             layoutRev={layoutRev}
             underlay={pagesRef.current[page]?.underlay}
@@ -2389,6 +2399,8 @@ export default function App() {
           setMessy={setMessy}
           weight={weight}
           setWeight={setWeight}
+          englishWeight={englishWeight}
+          setEnglishWeight={setEnglishWeight}
           countSamples={async () => gather(await allFixes()).length}
           exportSamples={exportFixes}
         />

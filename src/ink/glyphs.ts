@@ -13,6 +13,7 @@ export type Latin = 'print' | 'script'
 
 export interface Glyph {
   strokes: Stroke[]
+  latin?: boolean
   /** 前进宽度（字号 = 1） */
   advance: number
 }
@@ -47,7 +48,10 @@ async function loadHanzi(ch: string): Promise<Glyph | null> {
 // Hershey：y 轴朝下，大写字母大约占 1..22，宽度 = o × 1.68
 const H_SCALE = 1 / 30
 function latinGlyph(ch: string, latin: Latin): Glyph | null {
-  if (latin === 'print') return (handwritten as unknown as Record<string, Glyph>)[ch] ?? null
+  if (latin === 'print') {
+    const g = (handwritten as unknown as Record<string, Glyph>)[ch]
+    return g ? { ...g, latin: true } : null
+  }
   if (ch === ' ') return { strokes: [], advance: 0.35 }
   const data = (hershey as Record<Latin, [string, number][]>)[latin][ch.charCodeAt(0) - 33]
   if (!data) return null
@@ -63,7 +67,7 @@ function latinGlyph(ch: string, latin: Latin): Glyph | null {
       .map(([x, y]): Pt => [x * H_SCALE, (y + 4) * H_SCALE])
     if (pts.length) strokes.push(pts)
   }
-  return { strokes, advance: o * 1.68 * H_SCALE }
+  return { strokes, advance: o * 1.68 * H_SCALE, latin: true }
 }
 
 // 中文标点：几笔就够

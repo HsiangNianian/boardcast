@@ -2,7 +2,7 @@
 // 和桌面版 src/ink/pen.ts 是同一支笔，只是换成 canvas，并且所有随机数都在一开始抽好：
 // 潦草度推杆拖动时，同一个字只是「变形」，不会每一帧重新抽签乱跳。
 
-import { DEFAULT_MESSY, DEFAULT_WEIGHT } from '../../../src/ink/defaults'
+import { DEFAULT_ENGLISH_WEIGHT, DEFAULT_MESSY, DEFAULT_WEIGHT } from '../../../src/ink/defaults'
 import { getStroke } from 'perfect-freehand'
 
 export type Pt = [number, number]
@@ -162,6 +162,7 @@ export interface RawMark {
   thin?: number
   f1: number
   ph: number
+  latin?: boolean
 }
 
 export interface Box {
@@ -192,6 +193,7 @@ export interface PieceOpts {
   press?: (t: number, p: Pt) => number
   /** 笔画粗细的倍数：只改笔头宽度，不改字形（手抖、补点仍按原笔宽算，推粗细时字不会跟着变形） */
   weight?: number
+  englishWeight?: number
 }
 
 export function makePiece(id: string, color: string, raws: (Stroke | RawMark)[], pen: number, messy = DEFAULT_MESSY, o: PieceOpts = {}): Piece {
@@ -211,7 +213,8 @@ export function makePiece(id: string, color: string, raws: (Stroke | RawMark)[],
     const f1 = isStroke ? 0.5 + r() * 2 : raw.f1
     const ph = isStroke ? r() * Math.PI * 2 : raw.ph
     const thin = isStroke ? undefined : raw.thin
-    const size = (thin !== undefined ? pen * 0.42 : pen) * (o.weight ?? DEFAULT_WEIGHT)
+    const weight = !isStroke && raw.latin ? o.englishWeight ?? DEFAULT_ENGLISH_WEIGHT : o.weight ?? DEFAULT_WEIGHT
+    const size = (thin !== undefined ? pen * 0.42 : pen) * weight
     const pts = wobble(densify(src, step), thin !== undefined ? amp * 0.5 : amp, f1, ph)
     const L = polyLength(pts)
     let press: number[] | undefined
@@ -232,7 +235,7 @@ export function makePiece(id: string, color: string, raws: (Stroke | RawMark)[],
       if (y > box.y1) box.y1 = y
     }
   }
-  const pad = pen * Math.max(1, o.weight ?? DEFAULT_WEIGHT)
+  const pad = pen * Math.max(1, o.weight ?? DEFAULT_WEIGHT, o.englishWeight ?? DEFAULT_ENGLISH_WEIGHT)
   box.x0 -= pad
   box.y0 -= pad
   box.x1 += pad

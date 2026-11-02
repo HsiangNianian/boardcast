@@ -54,6 +54,8 @@ interface Props {
   /** 笔画粗细，百分比 */
   weight: number
   setWeight: (n: number) => void
+  englishWeight: number
+  setEnglishWeight: (n: number) => void
   /** 纠错样本：一共攒了几条能导出的；导出成评测用例或偏好数据，返回存到哪儿（取消时 null） */
   countSamples: () => Promise<number>
   exportSamples: (kind: 'cases' | 'pairs') => Promise<string | null>
@@ -493,6 +495,21 @@ export default function SettingsPanel(p: Props) {
                 value={p.weight}
                 onChange={(e) => p.setWeight(Number(e.target.value))}
                 aria-label={s.weightLabel}
+              />
+            </label>
+            <label className="messy">
+              <span>
+                {s.englishWeightLabel} <b>{p.englishWeight}%</b>
+                <i>{s.weightName(p.englishWeight)}</i>
+              </span>
+              <input
+                type="range"
+                min={50}
+                max={200}
+                step={5}
+                value={p.englishWeight}
+                onChange={(e) => p.setEnglishWeight(Number(e.target.value))}
+                aria-label={s.englishWeightLabel}
               />
             </label>
           </section>

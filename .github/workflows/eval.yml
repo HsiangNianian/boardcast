@@ -12,6 +12,10 @@ on:
         description: Full corpus, SenseVoice + Whisper base, raw + GTCRN, VAD on + off
         type: boolean
         default: false
+      asr_sweep:
+        description: Compare all ASR candidates by language (quick unless full_asr is also selected)
+        type: boolean
+        default: false
       model_url:
         description: Board evaluation GGUF URL
         default: https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-UD-Q4_K_XL.gguf
@@ -212,14 +216,28 @@ jobs:
             eval/reports/
             ~/llama-server.log
 
+  asr-plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - id: matrix
+        env:
+          MODE: ${{ (github.event_name == 'schedule' || inputs.asr_sweep == true) && 'sweep' || inputs.full_asr == true && 'full' || 'quick' }}
+        run: echo "value=$(node eval/asr/matrix.mjs "$MODE")" >> "$GITHUB_OUTPUT"
+
   asr:
     name: ASR · ${{ matrix.model }} · ${{ matrix.denoise }} · VAD ${{ matrix.vad }} · ${{ matrix.policy }}
-    needs: check
+    needs: [check, asr-plan]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON((github.event_name == 'schedule' || inputs.full_asr == true) && '{"model":["sensevoice","whisper-base"],"denoise":["none","gtcrn"],"vad":["on","off"],"policy":["static"],"include":[{"model":"sensevoice","denoise":"none","vad":"on","policy":"dynamic"}]}' || '{"model":["sensevoice"],"denoise":["none"],"vad":["on","off"],"policy":["static"],"include":[{"model":"sensevoice","denoise":"none","vad":"on","policy":"dynamic"}]}') }}
+      matrix: ${{ fromJSON(needs.asr-plan.outputs.matrix) }}
     env:
       ASR_SUITE: ${{ (github.event_name == 'schedule' || inputs.full_asr == true) && 'full' || 'quick' }}
     steps:
@@ -255,11 +273,44 @@ jobs:
           key: asr-models-${{ matrix.model }}-${{ matrix.denoise }}-${{ hashFiles('eval/asr/models.json', 'scripts/fetch-voice.mjs') }}
       # Both commands verify cached files too. Missing/corrupt data must never silently skip inference.
       - name: Evaluate the desktop voice engine
+        if: ${{ !startsWith(matrix.model, 'wav2vec2-') }}
         run: pnpm eval:asr --suite "$ASR_SUITE" --model "${{ matrix.model }}" --denoise "${{ matrix.denoise }}" --vad "${{ matrix.vad }}" --policy "${{ matrix.policy }}"
+      - uses: astral-sh/setup-uv@v6
+        if: startsWith(matrix.model, 'wav2vec2-')
+        with:
+          enable-cache: false
+      - name: Evaluate CTC on desktop VAD intervals
+        if: startsWith(matrix.model, 'wav2vec2-')
+        run: |
+          uv run --locked --script eval/asr/ctc.py --self-test
+          pnpm eval:asr --suite "$ASR_SUITE" --model "${{ matrix.model }}"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: asr-${{ matrix.model }}-${{ matrix.denoise }}-vad-${{ matrix.vad }}-${{ matrix.policy }}
           path: eval/reports/asr/
           if-no-files-found: warn
+          retention-days: 30
+
+  asr-comparison:
+    name: ASR language comparison
+    needs: asr
+    if: always() && !cancelled()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: asr-*
+          path: eval/reports/asr-ci
+          merge-multiple: true
+      - name: Compare matching corpus results
+        run: node eval/asr/compare.mjs eval/reports/asr-ci > eval/reports/asr-ci/comparison.md
+      - uses: actions/upload-artifact@v6
+        with:
+          name: asr-comparison
+          path: eval/reports/asr-ci/comparison.md
           retention-days: 30

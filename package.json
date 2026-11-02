@@ -22,7 +22,8 @@
     "site:preview": "vite preview -c landing/vite.config.ts",
     "eval:audio": "node eval/asr/download.mjs",
     "eval:listen": "node eval/asr/listen.mjs",
-    "eval:asr": "node eval/asr/run.mjs"
+    "eval:asr": "node eval/asr/run.mjs",
+    "eval:asr:sweep": "node eval/asr/sweep.mjs"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.1",

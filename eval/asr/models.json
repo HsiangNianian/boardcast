@@ -26,5 +26,401 @@
       "sha256": "e77603ac0c23dac3227dd2d7135b3a585cbee2679048aecfa886657d3ae1b534",
       "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx"
     }
+  ],
+  "whisper-tiny": [
+    {
+      "file": "tiny-encoder.int8.onnx",
+      "bytes": 12937772,
+      "sha256": "d24fb083ae3b1041fc24e97971d60e280c9342201fbb67b0ab428a8b4a51a434",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/65176e2deb88badc814a94058666cadccc29b61c/tiny-encoder.int8.onnx"
+    },
+    {
+      "file": "tiny-decoder.int8.onnx",
+      "bytes": 89855401,
+      "sha256": "d2fece8dd42771f1df975c6c0445770d0c292bf7547c2cae04a6c0cc57540925",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/65176e2deb88badc814a94058666cadccc29b61c/tiny-decoder.int8.onnx"
+    },
+    {
+      "file": "tiny-tokens.txt",
+      "bytes": 816730,
+      "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/65176e2deb88badc814a94058666cadccc29b61c/tiny-tokens.txt"
+    }
+  ],
+  "whisper-small": [
+    {
+      "file": "small-encoder.int8.onnx",
+      "bytes": 112442483,
+      "sha256": "4cbe7b22fa9026b843b60a68640c747de05bafb1a11b57edc0e66c232d9f33a9",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/8f3c18b358db4d1f2fc1eae49d75cd20989e4309/small-encoder.int8.onnx"
+    },
+    {
+      "file": "small-decoder.int8.onnx",
+      "bytes": 262226114,
+      "sha256": "acad50b5c782696e91b55914cc5ab4f756f1532f76e22aa6fc615f39fb69a8ee",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/8f3c18b358db4d1f2fc1eae49d75cd20989e4309/small-decoder.int8.onnx"
+    },
+    {
+      "file": "small-tokens.txt",
+      "bytes": 816730,
+      "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/8f3c18b358db4d1f2fc1eae49d75cd20989e4309/small-tokens.txt"
+    }
+  ],
+  "whisper-medium": [
+    {
+      "file": "medium-encoder.int8.onnx",
+      "bytes": 374196283,
+      "sha256": "1c54582b4d829de0089f6cb63bbbdb3bf7555398bacaf855fbecf1a84dfd193e",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-medium/resolve/8c31d28503847560985df21f90e14f0c736e075e/medium-encoder.int8.onnx"
+    },
+    {
+      "file": "medium-decoder.int8.onnx",
+      "bytes": 571059257,
+      "sha256": "595d00a338a365a7bfa0ca7f296cabc639583bef770ab6130df90f49a6412747",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-medium/resolve/8c31d28503847560985df21f90e14f0c736e075e/medium-decoder.int8.onnx"
+    },
+    {
+      "file": "medium-tokens.txt",
+      "bytes": 816730,
+      "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-medium/resolve/8c31d28503847560985df21f90e14f0c736e075e/medium-tokens.txt"
+    }
+  ],
+  "whisper-large-v3": [
+    {
+      "file": "large-v3-encoder.int8.onnx",
+      "bytes": 766671985,
+      "sha256": "d531cf17248acc43e8c09b472a0877055e770877857a5332fc1304b36534ec85",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-large-v3/resolve/2a6507094dd6020d939d78e3f1834a1d06267fca/large-v3-encoder.int8.onnx"
+    },
+    {
+      "file": "large-v3-decoder.int8.onnx",
+      "bytes": 1008265203,
+      "sha256": "ebc6bfd88e162a46cb3edee8a7e727e1dcbc65cabecb19e2573695e4d495e1af",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-large-v3/resolve/2a6507094dd6020d939d78e3f1834a1d06267fca/large-v3-decoder.int8.onnx"
+    },
+    {
+      "file": "large-v3-tokens.txt",
+      "bytes": 816730,
+      "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-large-v3/resolve/2a6507094dd6020d939d78e3f1834a1d06267fca/large-v3-tokens.txt"
+    }
+  ],
+  "whisper-turbo": [
+    {
+      "file": "turbo-encoder.int8.onnx",
+      "bytes": 674716297,
+      "sha256": "b02dcdf54f348741e93fe732b67d933c8dcb6735655f710640143081db38878b",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/turbo-encoder.int8.onnx"
+    },
+    {
+      "file": "turbo-decoder.int8.onnx",
+      "bytes": 361080764,
+      "sha256": "20accd02388482eb3a46bd615631adfdc85e1eb2c7db9ea3f02a40ffe6b81547",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/turbo-decoder.int8.onnx"
+    },
+    {
+      "file": "turbo-tokens.txt",
+      "bytes": 816730,
+      "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/2ca6ff69fc878651b770880507669577ac41c2ff/turbo-tokens.txt"
+    }
+  ],
+  "qwen3-asr-0.6b": [
+    {
+      "file": "qwen3-asr-0.6b/conv_frontend.onnx",
+      "bytes": 44148281,
+      "sha256": "d22dc4423e0940e49884e903d2ea2f7e5567c14fc1aed97e4e26d6b8f208ef9e",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/68818b2313fe77bd06f6a7c5068ff3ef59d02b8a/conv_frontend.onnx"
+    },
+    {
+      "file": "qwen3-asr-0.6b/encoder.int8.onnx",
+      "bytes": 182491662,
+      "sha256": "60748d3e6744a57c9c91e1b17424a6c2990567e8adceb0783940c03ed98fa9d9",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/68818b2313fe77bd06f6a7c5068ff3ef59d02b8a/encoder.int8.onnx"
+    },
+    {
+      "file": "qwen3-asr-0.6b/decoder.int8.onnx",
+      "bytes": 755914231,
+      "sha256": "4f6885be5959ae26af3089d38ee7972c5fafbeeb1cf8d5e76eab6d8b61ca5771",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/68818b2313fe77bd06f6a7c5068ff3ef59d02b8a/decoder.int8.onnx"
+    },
+    {
+      "file": "qwen3-asr-0.6b/tokenizer/merges.txt",
+      "bytes": 1671853,
+      "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/68818b2313fe77bd06f6a7c5068ff3ef59d02b8a/tokenizer/merges.txt"
+    },
+    {
+      "file": "qwen3-asr-0.6b/tokenizer/tokenizer_config.json",
+      "bytes": 12487,
+      "sha256": "4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/68818b2313fe77bd06f6a7c5068ff3ef59d02b8a/tokenizer/tokenizer_config.json"
+    },
+    {
+      "file": "qwen3-asr-0.6b/tokenizer/vocab.json",
+      "bytes": 2776833,
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/68818b2313fe77bd06f6a7c5068ff3ef59d02b8a/tokenizer/vocab.json"
+    }
+  ],
+  "qwen3-asr-1.7b": [
+    {
+      "file": "qwen3-asr-1.7b/conv_frontend.onnx",
+      "bytes": 48080441,
+      "sha256": "fa894a4ba53da6a4238f2a6ca0b09362e505d39cecbd646051b033e2e8d7e2fb",
+      "url": "https://huggingface.co/ilmina/qwen3-asr-1.7b-sherpa-onnx/resolve/66fb5ea2d4d1682ff8a663bf7e788913604996a0/conv_frontend.onnx"
+    },
+    {
+      "file": "qwen3-asr-1.7b/encoder.int8.onnx",
+      "bytes": 314222162,
+      "sha256": "436fbd910a0c8914851e5ac1354e807be9f283d08a5da728adaa609731c41469",
+      "url": "https://huggingface.co/ilmina/qwen3-asr-1.7b-sherpa-onnx/resolve/66fb5ea2d4d1682ff8a663bf7e788913604996a0/encoder.int8.onnx"
+    },
+    {
+      "file": "qwen3-asr-1.7b/decoder.int8.onnx",
+      "bytes": 2037458645,
+      "sha256": "c43c853fa6e97d08365cb8a5502b360b595cd43c00dc60e4d8ca7cc18cad460b",
+      "url": "https://huggingface.co/ilmina/qwen3-asr-1.7b-sherpa-onnx/resolve/66fb5ea2d4d1682ff8a663bf7e788913604996a0/decoder.int8.onnx"
+    },
+    {
+      "file": "qwen3-asr-1.7b/tokenizer/merges.txt",
+      "bytes": 1671853,
+      "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+      "url": "https://huggingface.co/ilmina/qwen3-asr-1.7b-sherpa-onnx/resolve/66fb5ea2d4d1682ff8a663bf7e788913604996a0/tokenizer/merges.txt"
+    },
+    {
+      "file": "qwen3-asr-1.7b/tokenizer/tokenizer_config.json",
+      "bytes": 12487,
+      "sha256": "4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c",
+      "url": "https://huggingface.co/ilmina/qwen3-asr-1.7b-sherpa-onnx/resolve/66fb5ea2d4d1682ff8a663bf7e788913604996a0/tokenizer/tokenizer_config.json"
+    },
+    {
+      "file": "qwen3-asr-1.7b/tokenizer/vocab.json",
+      "bytes": 2776833,
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+      "url": "https://huggingface.co/ilmina/qwen3-asr-1.7b-sherpa-onnx/resolve/66fb5ea2d4d1682ff8a663bf7e788913604996a0/tokenizer/vocab.json"
+    }
+  ],
+  "parakeet-v3": [
+    {
+      "file": "parakeet-v3/encoder.int8.onnx",
+      "bytes": 652184281,
+      "sha256": "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/2bda32ec70b097a55adaa07d9a7173915b43cc78/encoder.int8.onnx"
+    },
+    {
+      "file": "parakeet-v3/decoder.int8.onnx",
+      "bytes": 11845275,
+      "sha256": "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/2bda32ec70b097a55adaa07d9a7173915b43cc78/decoder.int8.onnx"
+    },
+    {
+      "file": "parakeet-v3/joiner.int8.onnx",
+      "bytes": 6355277,
+      "sha256": "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/2bda32ec70b097a55adaa07d9a7173915b43cc78/joiner.int8.onnx"
+    },
+    {
+      "file": "parakeet-v3/tokens.txt",
+      "bytes": 93939,
+      "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/2bda32ec70b097a55adaa07d9a7173915b43cc78/tokens.txt"
+    }
+  ],
+  "parakeet-unified-en": [
+    {
+      "file": "parakeet-unified-en/encoder.int8.onnx",
+      "bytes": 654040552,
+      "sha256": "6716910b7a0833997fec7a410494c995d70124001a0e9b66d6370d6aced577e0",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/encoder.int8.onnx"
+    },
+    {
+      "file": "parakeet-unified-en/decoder.int8.onnx",
+      "bytes": 7257753,
+      "sha256": "a5e223392c90e75f8144cdb5eb95af7625db389e39edef2bd1a9c872b3298fe6",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/decoder.int8.onnx"
+    },
+    {
+      "file": "parakeet-unified-en/joiner.int8.onnx",
+      "bytes": 1735860,
+      "sha256": "869f43f7d24595c55581ad3bf249a935fb8a71389fbdaa7504b9f46f93140f8a",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/joiner.int8.onnx"
+    },
+    {
+      "file": "parakeet-unified-en/tokens.txt",
+      "bytes": 8952,
+      "sha256": "dc0b4584ab2e4ddbf888425c076c61b736e7356a015250db7d307e6f1a8188ff",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/tokens.txt"
+    }
+  ],
+  "paraformer-zh-en": [
+    {
+      "file": "paraformer-zh-en/model.int8.onnx",
+      "bytes": 223385835,
+      "sha256": "9ada9127ca5b82320385ac12340eb8b05dee64fd45cf8cf593ec693826ec2fd7",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-paraformer-bilingual-zh-en/resolve/4b891f7b5c73d874e607797a4b0578fd4c35dd4b/model.int8.onnx"
+    },
+    {
+      "file": "paraformer-zh-en/tokens.txt",
+      "bytes": 75756,
+      "sha256": "59aba8873a2ed1e122c25fee421e25f283b63290efbde85c1f01a853d83cb6e6",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-paraformer-bilingual-zh-en/resolve/4b891f7b5c73d874e607797a4b0578fd4c35dd4b/tokens.txt"
+    }
+  ],
+  "reazonspeech": [
+    {
+      "file": "reazonspeech/encoder-epoch-99-avg-1.int8.onnx",
+      "bytes": 154670139,
+      "sha256": "2c7bd08a8a99f9ddd0d9e458456577b1f6279214e51426f114f9eced44c54e1d",
+      "url": "https://huggingface.co/reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407/encoder-epoch-99-avg-1.int8.onnx"
+    },
+    {
+      "file": "reazonspeech/decoder-epoch-99-avg-1.int8.onnx",
+      "bytes": 2959337,
+      "sha256": "8f0bff94d38797b03b762634ed03211a8e303d06cc4603cdd0cf4199d6eb1485",
+      "url": "https://huggingface.co/reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407/decoder-epoch-99-avg-1.int8.onnx"
+    },
+    {
+      "file": "reazonspeech/joiner-epoch-99-avg-1.int8.onnx",
+      "bytes": 2696970,
+      "sha256": "49cc7ea1d3d35a40a27442db5e89996da64bf0e683a903dce76e99e57a12e4de",
+      "url": "https://huggingface.co/reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407/joiner-epoch-99-avg-1.int8.onnx"
+    },
+    {
+      "file": "reazonspeech/tokens.txt",
+      "bytes": 45754,
+      "sha256": "2c3ac659818a48a0c04010e0593bbc4d7c8a24a054340b01131499c05fd52def",
+      "url": "https://huggingface.co/reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407/tokens.txt"
+    }
+  ],
+  "cohere-transcribe": [
+    {
+      "file": "cohere-transcribe/encoder.int8.onnx",
+      "bytes": 3090822,
+      "sha256": "cf704f8cfa90e3f0a76f9ffc05998bdf00ba9ae983192c14a85a3a5eb008b367",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01/resolve/156a470cf08eefe706a0004f3c52d9ee567ca7a0/encoder.int8.onnx"
+    },
+    {
+      "file": "cohere-transcribe/encoder.int8.onnx.data",
+      "bytes": 2731503072,
+      "sha256": "bcf1b7148c8518ae52df1ad2d2fc2b4e89261ea23e6c874eef1d9f55bcbaa4a3",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01/resolve/156a470cf08eefe706a0004f3c52d9ee567ca7a0/encoder.int8.onnx.data"
+    },
+    {
+      "file": "cohere-transcribe/decoder.int8.onnx",
+      "bytes": 153250705,
+      "sha256": "8372ca6c8ff4db8b916ca3592f5c757a715e691b9edec751ba19b29fc854baf9",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01/resolve/156a470cf08eefe706a0004f3c52d9ee567ca7a0/decoder.int8.onnx"
+    },
+    {
+      "file": "cohere-transcribe/tokens.txt",
+      "bytes": 207437,
+      "sha256": "013ede043ae2480e3a9205cc34550d9686100cc682bacc90f702facdfbb93035",
+      "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01/resolve/156a470cf08eefe706a0004f3c52d9ee567ca7a0/tokens.txt"
+    }
+  ],
+  "wav2vec2-ja": [
+    {
+      "file": "wav2vec2-ja/config.json",
+      "url": "https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-japanese/resolve/cf031e020336460d15a417eba710bbc5bb43be9a/config.json",
+      "bytes": 1567,
+      "sha256": "552b8c8c85c54a761899eb94b5eb3d58166e769df8e26cf515ab9da695772cd7"
+    },
+    {
+      "file": "wav2vec2-ja/preprocessor_config.json",
+      "url": "https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-japanese/resolve/cf031e020336460d15a417eba710bbc5bb43be9a/preprocessor_config.json",
+      "bytes": 158,
+      "sha256": "c403ce09975b90dff0dd8302c42d422e9de1f166cd7772df23490069893cb0cf"
+    },
+    {
+      "file": "wav2vec2-ja/special_tokens_map.json",
+      "url": "https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-japanese/resolve/cf031e020336460d15a417eba710bbc5bb43be9a/special_tokens_map.json",
+      "bytes": 85,
+      "sha256": "bb7068de1150661a10b55f9e4b12a0e77af8bf91f5e45e1b58afaf1d0e17f675"
+    },
+    {
+      "file": "wav2vec2-ja/vocab.json",
+      "url": "https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-japanese/resolve/cf031e020336460d15a417eba710bbc5bb43be9a/vocab.json",
+      "bytes": 29298,
+      "sha256": "9ffedf9c2da2617b01c4227a4db875d2dfd4e8c31fb9a13182d03c3280679ffe"
+    },
+    {
+      "file": "wav2vec2-ja/pytorch_model.bin",
+      "url": "https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-japanese/resolve/cf031e020336460d15a417eba710bbc5bb43be9a/pytorch_model.bin",
+      "bytes": 1271531927,
+      "sha256": "4f6821dcd79770fcd4c11487c4ee5c040b3a7e1863425224014ba5ea8fbc1b67"
+    }
+  ],
+  "wav2vec2-zh": [
+    {
+      "file": "wav2vec2-zh/config.json",
+      "url": "https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn/resolve/99ccb2737be22b8bb50dcfcc39ad4d567fb90cfd/config.json",
+      "bytes": 1567,
+      "sha256": "9af98614e322a5300c75605227d93c98af0c8f78754aba1dfc279166688afddd"
+    },
+    {
+      "file": "wav2vec2-zh/preprocessor_config.json",
+      "url": "https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn/resolve/99ccb2737be22b8bb50dcfcc39ad4d567fb90cfd/preprocessor_config.json",
+      "bytes": 158,
+      "sha256": "c403ce09975b90dff0dd8302c42d422e9de1f166cd7772df23490069893cb0cf"
+    },
+    {
+      "file": "wav2vec2-zh/special_tokens_map.json",
+      "url": "https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn/resolve/99ccb2737be22b8bb50dcfcc39ad4d567fb90cfd/special_tokens_map.json",
+      "bytes": 85,
+      "sha256": "bb7068de1150661a10b55f9e4b12a0e77af8bf91f5e45e1b58afaf1d0e17f675"
+    },
+    {
+      "file": "wav2vec2-zh/vocab.json",
+      "url": "https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn/resolve/99ccb2737be22b8bb50dcfcc39ad4d567fb90cfd/vocab.json",
+      "bytes": 44357,
+      "sha256": "33fea3444869c2cd2433f59da079b04ce91515f946d21fe1b0ff3825398bcec7"
+    },
+    {
+      "file": "wav2vec2-zh/pytorch_model.bin",
+      "url": "https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn/resolve/99ccb2737be22b8bb50dcfcc39ad4d567fb90cfd/pytorch_model.bin",
+      "bytes": 1276296151,
+      "sha256": "de031fd4b29e0c0667e5346450fadfe1326c89936b888b59c4ede608db763ee4"
+    }
+  ],
+  "wav2vec2-en": [
+    {
+      "file": "wav2vec2-en/config.json",
+      "url": "https://huggingface.co/facebook/wav2vec2-base-960h/resolve/22aad52d435eb6dbaf354bdad9b0da84ce7d6156/config.json",
+      "bytes": 1596,
+      "sha256": "d3ec255c063d9f95057b553b19c20135b259875834a4fe9deb218a6be25b4cf3"
+    },
+    {
+      "file": "wav2vec2-en/preprocessor_config.json",
+      "url": "https://huggingface.co/facebook/wav2vec2-base-960h/resolve/22aad52d435eb6dbaf354bdad9b0da84ce7d6156/preprocessor_config.json",
+      "bytes": 159,
+      "sha256": "b225d617c025463b9e157e06afea8b90dc7078fc70b013c533328423e0486b4a"
+    },
+    {
+      "file": "wav2vec2-en/special_tokens_map.json",
+      "url": "https://huggingface.co/facebook/wav2vec2-base-960h/resolve/22aad52d435eb6dbaf354bdad9b0da84ce7d6156/special_tokens_map.json",
+      "bytes": 85,
+      "sha256": "bb7068de1150661a10b55f9e4b12a0e77af8bf91f5e45e1b58afaf1d0e17f675"
+    },
+    {
+      "file": "wav2vec2-en/vocab.json",
+      "url": "https://huggingface.co/facebook/wav2vec2-base-960h/resolve/22aad52d435eb6dbaf354bdad9b0da84ce7d6156/vocab.json",
+      "bytes": 291,
+      "sha256": "19727f8944fe6459fc3f240ae2c198395b740f6a029bd23e06656266b83bcf64"
+    },
+    {
+      "file": "wav2vec2-en/model.safetensors",
+      "url": "https://huggingface.co/facebook/wav2vec2-base-960h/resolve/22aad52d435eb6dbaf354bdad9b0da84ce7d6156/model.safetensors",
+      "bytes": 377607901,
+      "sha256": "8aa76ab2243c81747a1f832954586bc566090c83a0ac167df6f31f0fa917d74a"
+    },
+    {
+      "file": "wav2vec2-en/tokenizer_config.json",
+      "url": "https://huggingface.co/facebook/wav2vec2-base-960h/resolve/22aad52d435eb6dbaf354bdad9b0da84ce7d6156/tokenizer_config.json",
+      "bytes": 163,
+      "sha256": "dc790594f5bc351a4311c6624f40acd95850d4aaf2a5cb3c656c9b610720b608"
+    }
   ]
 }

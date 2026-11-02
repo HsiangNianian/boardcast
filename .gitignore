@@ -13,3 +13,4 @@ src-tauri/voice/
 public/player/
 eval/asr/.data/
 eval/asr/.models/
+eval/asr/__pycache__/

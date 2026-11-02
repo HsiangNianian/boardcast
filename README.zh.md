@@ -278,6 +278,7 @@ pnpm eval:asr                  # 通过桌面版实际语音引擎跑固定基�
 pnpm eval:asr --policy dynamic # 固定/动态成对对照，附质量轨迹与派生压力样本
 pnpm eval:asr --suite full     # 包含完整会议片段
 pnpm eval:asr --vad off        # 对照组：停用 VAD，按固定窗口识别
+pnpm eval:asr:sweep            # 按语言比较 19 个 ASR 配置；CTC 对照另外需要 uv
 ```
 
 模型对比、降噪实验、参考转写质量见[语音评测说明](eval/asr/README.md)，素材条款见[数据集许可](eval/asr/LICENSES.md)。日文使用真人朗读样本；重叠会议整段和待复核的中文转写不计入普通错误率汇总。
@@ -311,7 +312,7 @@ node eval/run.ts --file path/to/corrections.cases.json
 <details>
 <summary><strong>CI、部署与发版</strong></summary>
 
-- [Eval](.github/workflows/eval.yml)：统一执行类型检查、单元/Rust 测试、网页/桌面构建、文本到板书评测和中日英 ASR 回归。每周或手动完整评测比较 SenseVoice / Whisper base，以及原音 / GTCRN 降噪、VAD 开 / 关，八组固定对照加一组动态 SenseVoice，共九个 ASR 任务；板书评测也加入中日英转写修订用例。见[语音评测说明](eval/asr/README.md)。
+- [Eval](.github/workflows/eval.yml)：统一执行类型检查、单元/Rust 测试、网页/桌面构建、文本到板书评测和中日英 ASR 回归。日常保留三组快速 ASR 对照；每周或手动 `asr_sweep` 扩展到 19 个候选配置，连同原有 VAD、降噪和动态对照共 26 个 ASR 任务，并生成按语言汇总的比较报告。单独勾选 `full_asr` 保留九组原有全量对照。见[语音评测说明](eval/asr/README.md)及[候选范围](eval/asr/candidates.md)。
 - [Web demo](.github/workflows/pages.yml)：构建官网与网页演示，部署至 GitHub Pages。
 - [Release](.github/workflows/release.yml)：推送 `v*` tag 后生成草稿，四个平台都成功才正式发布，并提供签名更新包和 `latest.json`。
 

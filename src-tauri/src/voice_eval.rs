@@ -2,7 +2,9 @@
 use super::*;
 use serde::Deserialize;
 use sherpa_onnx::{
-    OfflineSpeechDenoiser, OfflineSpeechDenoiserConfig, OfflineWhisperModelConfig, Wave,
+    OfflineCohereTranscribeModelConfig, OfflineParaformerModelConfig, OfflineQwen3ASRModelConfig,
+    OfflineSpeechDenoiser, OfflineSpeechDenoiserConfig, OfflineTransducerModelConfig,
+    OfflineWhisperModelConfig, Wave,
 };
 use std::path::PathBuf;
 
@@ -18,11 +20,121 @@ struct Input {
     models: PathBuf,
     extra_models: PathBuf,
     model: String,
+    recognizer: Recognizer,
     denoise: String,
     vad: String,
     policy: String,
     samples: Vec<Sample>,
     output: PathBuf,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "family", rename_all = "lowercase", deny_unknown_fields)]
+enum Recognizer {
+    Sensevoice,
+    Whisper {
+        encoder: String,
+        decoder: String,
+        tokens: String,
+    },
+    Paraformer {
+        model: String,
+        tokens: String,
+    },
+    Transducer {
+        encoder: String,
+        decoder: String,
+        joiner: String,
+        tokens: String,
+    },
+    Qwen {
+        conv_frontend: String,
+        encoder: String,
+        decoder: String,
+        tokenizer: String,
+    },
+    Cohere {
+        encoder: String,
+        decoder: String,
+        tokens: String,
+        language: String,
+    },
+}
+
+impl Recognizer {
+    fn config(&self, root: &Path) -> Option<OfflineRecognizerConfig> {
+        let p = |name: &str| Some(root.join(name).to_string_lossy().into_owned());
+        let mut config = OfflineRecognizerConfig::default();
+        let m = &mut config.model_config;
+        m.num_threads = 2;
+        m.provider = Some("cpu".into());
+        match self {
+            Self::Sensevoice => return None,
+            Self::Whisper {
+                encoder,
+                decoder,
+                tokens,
+            } => {
+                m.whisper = OfflineWhisperModelConfig {
+                    encoder: p(encoder),
+                    decoder: p(decoder),
+                    language: None,
+                    task: Some("transcribe".into()),
+                    tail_paddings: -1,
+                    ..Default::default()
+                };
+                m.tokens = p(tokens);
+            }
+            Self::Paraformer { model, tokens } => {
+                m.paraformer = OfflineParaformerModelConfig { model: p(model) };
+                m.tokens = p(tokens);
+            }
+            Self::Transducer {
+                encoder,
+                decoder,
+                joiner,
+                tokens,
+            } => {
+                m.transducer = OfflineTransducerModelConfig {
+                    encoder: p(encoder),
+                    decoder: p(decoder),
+                    joiner: p(joiner),
+                };
+                m.tokens = p(tokens);
+            }
+            Self::Qwen {
+                conv_frontend,
+                encoder,
+                decoder,
+                tokenizer,
+            } => {
+                m.qwen3_asr = OfflineQwen3ASRModelConfig {
+                    conv_frontend: p(conv_frontend),
+                    encoder: p(encoder),
+                    decoder: p(decoder),
+                    tokenizer: p(tokenizer),
+                    ..Default::default()
+                };
+            }
+            Self::Cohere {
+                encoder,
+                decoder,
+                tokens,
+                language,
+            } => {
+                assert!(matches!(language.as_str(), "zh" | "ja" | "en"));
+                m.cohere_transcribe = OfflineCohereTranscribeModelConfig {
+                    encoder: p(encoder),
+                    decoder: p(decoder),
+                    language: Some(language.clone()),
+                    use_punct: true,
+                    use_itn: true,
+                };
+                m.tokens = p(tokens);
+            }
+        }
+        Some(config)
+    }
 }
 
 #[test]
@@ -32,30 +144,14 @@ fn corpus() {
     let input: Input = serde_json::from_slice(&std::fs::read(input).expect("Read eval input"))
         .expect("Invalid eval input");
     assert!(!input.samples.is_empty(), "Empty evaluation is not a pass");
-    assert!(matches!(
-        input.model.as_str(),
-        "sensevoice" | "whisper-base"
-    ));
     assert!(matches!(input.denoise.as_str(), "none" | "gtcrn"));
     assert!(matches!(input.vad.as_str(), "on" | "off"));
     assert!(matches!(input.policy.as_str(), "static" | "dynamic"));
     assert!(input.policy != "dynamic" || input.vad == "on");
     let loading = Instant::now();
     let mut engine = Engine::load(&input.models).expect("Load the desktop voice engine");
-    if input.model == "whisper-base" {
-        let path = |name: &str| input.extra_models.join(name).to_string_lossy().into_owned();
-        let mut config = OfflineRecognizerConfig::default();
-        config.model_config.whisper = OfflineWhisperModelConfig {
-            encoder: Some(path("base-encoder.int8.onnx")),
-            decoder: Some(path("base-decoder.int8.onnx")),
-            language: None,
-            task: Some("transcribe".into()),
-            tail_paddings: -1,
-            ..Default::default()
-        };
-        config.model_config.tokens = Some(path("base-tokens.txt"));
-        config.model_config.num_threads = 2;
-        engine.asr = OfflineRecognizer::create(&config).expect("Load Whisper base int8");
+    if let Some(config) = input.recognizer.config(&input.extra_models) {
+        engine.asr = OfflineRecognizer::create(&config).expect("Load candidate recognizer");
     }
     let denoiser = if input.denoise == "gtcrn" {
         let mut config = OfflineSpeechDenoiserConfig::default();

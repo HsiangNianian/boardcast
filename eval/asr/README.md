@@ -27,9 +27,20 @@ pnpm eval:asr --suite full --model whisper-base --denoise gtcrn
 pnpm eval:asr --vad on                            # production segmentation (default)
 pnpm eval:asr --vad off                           # no VAD; fixed 10-second windows, including silence
 pnpm eval:asr --only ja-fleurs-00,en-ami-00          # debug individual quick cases
+pnpm eval:asr --model whisper-turbo                 # larger multilingual control
+pnpm eval:asr --model reazonspeech                  # Japanese specialist + silence
+pnpm eval:asr:sweep                                # all 19 candidate configurations, quick corpus
+pnpm eval:asr:sweep --suite full                   # all candidates, full corpus
+pnpm eval:asr:sweep --models sensevoice,qwen3-asr-0.6b,whisper-turbo
 ```
 
-With `--vad on`, the runner calls the ignored Rust corpus test explicitly and uses the **same `voice::Engine`** as the desktop: Silero VAD, soft breaks, pre-roll, final recognition and voiceprint computation. Quiet input gets gradual, bounded gain (up to 8×) in the VAD's copy only; the recognizer and voiceprints receive the audio before that gain. Soft pauses are relative to the speaker's level. The Whisper comparison changes only the recognizer inside the test; it does not add a new production setting. Both recognizers use automatic language detection. Model files have pinned SHA-256 checksums; Whisper URLs also pin the upstream revision.
+With `--vad on`, the runner calls the ignored Rust corpus test explicitly and uses the **same `voice::Engine`** as the desktop: Silero VAD, soft breaks, pre-roll, final recognition and voiceprint computation. Quiet input gets gradual, bounded gain (up to 8×) in the VAD's copy only; the recognizer and voiceprints receive the audio before that gain. Soft pauses are relative to the speaker's level. Native candidates change only the recognizer inside the test, with CPU inference and two ASR threads; they do not add a production setting. Model files have pinned SHA-256 checksums and candidate Hugging Face URLs pin upstream revisions.
+
+The [candidate survey](candidates.md) records model families, language scope, exports and exclusions. Unsupported languages are omitted and listed in each report, never scored as successful empty transcripts. Silence remains in every configuration. SenseVoice, Whisper and Qwen use automatic language detection. Cohere requires an explicitly selected language, so `cohere-zh`, `cohere-ja` and `cohere-en` are labelled **fixed-language controls**, not a tested automatic router. References are never used as recognition prompts.
+
+The three `wav2vec2-*` controls additionally need [uv](https://docs.astral.sh/uv/). Their isolated CPU Python environment is pinned in `ctc.py.lock`; it is not an application dependency. They reuse the desktop baseline's VAD intervals and replace every segment's recognition using the original audio. Their RTF is **recognizer-only**, excluding the separate segmentation pass, so it must not be compared directly with native pipeline RTF. Only static / VAD on / no GTCRN is currently supported for these controls.
+
+`eval:asr:sweep` downloads candidates on demand, runs them sequentially, and writes individual reports plus `comparison.md` and `failures.json` under `eval/reports/asr-sweep/`. A broken download/model/inference is recorded and fails the sweep after the other candidates finish. The initial cold download is about 15 GB; models stay in ignored `.models/`. To compare reports from one compatible run independently, use `node eval/asr/compare.mjs REPORT_DIRECTORY`. It rejects changed corpus/engine/scorer versions, mismatched sample subsets and duplicate configurations. Accuracy is grouped by language; no global score mixes CER, WER and MER. Provisional Chinese numbers are explicitly separate.
 
 `--vad off` bypasses VAD, its gain, soft breaks and pre-roll. It sends **every** sample, including silence, through the same recognizer and voiceprint extractor in fixed windows of at most 10 seconds. This bounds memory on long meetings and keeps the Whisper comparison within its input window, but may split words. It is a segmentation ablation, not a new application setting or a promise that whole-recording recognition is better. Reports and artifact names always include the VAD mode.
 
@@ -86,7 +97,9 @@ See the [first dynamic run](dynamic.md) for measured results and explicit limits
 [`.github/workflows/eval.yml`](../../.github/workflows/eval.yml) is the single testing workflow:
 
 - Pushes to `main` and pull requests run type checks, unit tests, web build, four desktop builds with Rust tests, text-to-board/segment-revision evaluation, and quick SenseVoice ASR evaluation with **static VAD on/off plus paired dynamic** (three ASR jobs).
-- Every Monday at 02:30 UTC, or manual **Run workflow → full_asr**, the ASR matrix runs the full corpus with SenseVoice / Whisper base × raw / GTCRN × VAD on / off, plus paired dynamic SenseVoice (**nine jobs**). Scheduled runs omit desktop packaging and the board model evaluation.
+- Manual **Run workflow → full_asr** runs the full corpus with SenseVoice / Whisper base × raw / GTCRN × VAD on / off, plus paired dynamic SenseVoice (**nine jobs**).
+- **asr_sweep** adds every candidate's static / VAD on / raw control (**26 jobs including the original ablations and dynamic control**). It uses the quick corpus unless `full_asr` is also selected. Every Monday at 02:30 UTC runs this expanded matrix on the full corpus. Scheduled runs omit desktop packaging and the board model evaluation.
+- A final job collects matching reports into an **ASR language comparison** summary and artifact, even if another candidate failed. Failed candidate jobs remain failures; a partial comparison is not an all-model pass.
 - Audio and models use separate caches keyed by their manifests. Restored files are always verified. Reports are uploaded as per-model artifacts for 30 days; audio/model caches are only accelerators, not the permanent source of the fixtures.
 
 The data Release uses an `asr-fixtures-*` tag and is **not Latest**, so it does not trigger the `v*` software release workflow or replace the application's update manifest. Pages deployment and software releases remain separate workflows.

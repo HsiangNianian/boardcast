@@ -311,6 +311,8 @@ node eval/run.ts --only login-flow -v
 node eval/run.ts --file path/to/corrections.cases.json
 ```
 
+CI uses **Qwen3.5-4B · Q4_K_M**, matching the recommended desktop model. Other models can be tested through the Eval workflow's `model_url` and `label` inputs. Request failures and exact revision mismatches fail the job; a high fuzzy node F1 does not override a stale value, changed node ID or duplicate transcript entry. Failures show the expected and actual values in the log and report.
+
 Reports go to `eval/reports/`. For v0.20.0, Qwen3.5-4B scored 1.000 for item F1, strike F1 and mark accuracy on the pointing set, with 18 cases repeated three times. These are synthetic, targeted cases, not a measure of accuracy on arbitrary real meetings; the timing excludes speech recognition. The general holdout still has a known failure to apply a correction. See the [pointing evaluation record](eval/pointing.md) and [changelog](CHANGELOG.md) for model, hardware, prompt version and reproduction details.
 
 The model can omit content, connect the wrong items or misread emphasis. Recognition and segmentation also affect results; check important conclusions. After fixing something the model just drew, export correction cases or DPO / SFT JSONL in Settings → Correction samples. These samples are not uploaded automatically.

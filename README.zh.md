@@ -297,6 +297,7 @@ pnpm eval:asr:sweep            # 按语言比较 19 个 ASR 配置；CTC 对照�
 | [`eval/cases.json`](eval/cases.json) | 28 段 | 开发与回归，含英文和真实会议回归样本 |
 | [`eval/holdout.json`](eval/holdout.json) | 27 段 | 不参与提示词调参的留出评测 |
 | [`eval/pointing.json`](eval/pointing.json) | 18 段 | 中英文圈选指代专项，使用固定初始板书 |
+| [`eval/revisions.json`](eval/revisions.json) | 3 段 | 中日英转写修订，保留节点身份和无关内容 |
 
 先启动可用的 llama-server，再运行：
 
@@ -304,10 +305,13 @@ pnpm eval:asr:sweep            # 按语言比较 19 个 ASR 配置；CTC 对照�
 pnpm eval --set dev --label my-model
 pnpm eval --set holdout --label my-model
 pnpm eval --set pointing --repeat 3 --label my-model
+pnpm eval --set revisions --repeat 3 --label my-model
 # 服务不在默认的 8080 时，加 --base-url http://127.0.0.1:端口
 node eval/run.ts --only login-flow -v
 node eval/run.ts --file path/to/corrections.cases.json
 ```
+
+CI 使用 **Qwen3.5-4B · Q4_K_M**，与桌面版推荐模型一致。其他模型可通过 Eval 工作流的 `model_url`、`label` 输入测试。请求失败或修订精确检查不通过，任务仍会失败；模糊匹配的节点 F1 再高，也不能抵消旧值未更新、节点身份变化或转写记录重复。日志和报告会列出期望值与实际值。
 
 报告写入 `eval/reports/`。v0.20.0 的 Qwen3.5-4B 圈选专项（18 段 × 3 遍）要点 F1、划掉 F1、标记命中均为 1.000；这是合成用例的局部结果，不是任意真实会议的准确率，也不含语音识别耗时。通用留出集仍有纠正没生效的已知失败。模型与硬件、提示词版本和复现说明见[圈选评测记录](eval/pointing.md)及[版本记录](CHANGELOG.md)。
 

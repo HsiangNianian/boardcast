@@ -1,6 +1,6 @@
 // 离线评测：把合成会议逐句喂给引擎，比较最终板书和标注，统计每句的延迟。
 //
-//   node eval/run.ts [--base-url http://127.0.0.1:8080] [--label qwen3.5-4b] [--set dev|holdout|pointing|all] [--repeat 3] [--only login-flow]
+//   node eval/run.ts [--base-url http://127.0.0.1:8080] [--label qwen3.5-4b] [--set dev|holdout|pointing|revisions|all] [--repeat 3] [--only login-flow]
 //   node eval/run.ts --file ~/Downloads/boardcast-corrections.cases.json
 //
 // 用例集：
@@ -20,7 +20,7 @@ import { type Graph, describe } from '../src/engine/graph.ts'
 import { formatOps } from '../src/engine/ops.ts'
 import type { Utterance } from '../src/engine/prompt.ts'
 import { Session } from '../src/engine/session.ts'
-import { type Gold, f1, score } from './score.ts'
+import { type Gold, type RevisionExpectation, f1, revisionFailures, score } from './score.ts'
 
 const { values: args } = parseArgs({
   options: {
@@ -44,7 +44,7 @@ interface Case {
   turns: Utterance[]
   gold: Gold
   /** Revision checks use stable IDs so aliases/partial label matching cannot hide a stale board. */
-  expect?: { nodes: Record<string, string>; history: Record<string, string> }
+  expect?: RevisionExpectation
 }
 
 const load = (file: string | URL) => JSON.parse(readFileSync(file, 'utf8')) as Case[]
@@ -136,10 +136,13 @@ for (let r = 0; r < repeat; r++) {
       await s.drain()
     }
     const sc = score(s.graph, c.gold)
-    if (c.expect) {
-      const stale = Object.entries(c.expect.nodes).some(([id, label]) => s.graph.nodes.find((n) => n.id === id)?.label !== label)
-        || Object.entries(c.expect.history).some(([id, text]) => s.history.filter((u) => u.id === id).length !== 1 || s.history.find((u) => u.id === id)?.text !== text)
-      if (stale) { revisionErrors++; log.push('! Revision did not update the original node/history, or changed unrelated content') }
+    const revisions = c.expect ? revisionFailures(s.graph, s.history, c.expect) : []
+    if (revisions.length) {
+      revisionErrors++
+      for (const failure of revisions) {
+        log.push(`! ${failure}`)
+        console.error(`${c.id}: ${failure}`)
+      }
     }
     const m: Metrics = {
       node: c.gold.nodes?.length ? f1(sc.nodeP, sc.nodeR) : null,
@@ -154,7 +157,7 @@ for (let r = 0; r < repeat; r++) {
     run.violations += sc.violations.length
     // 详细记录只留第一遍的
     if (r === 0) {
-      const miss = [sc.missing.length && `缺：${sc.missing.join('、')}`, sc.extra.length && `多：${sc.extra.join('、')}`, ...sc.violations].filter(Boolean)
+      const miss = [sc.missing.length && `缺：${sc.missing.join('、')}`, sc.extra.length && `多：${sc.extra.join('、')}`, ...sc.violations, ...revisions].filter(Boolean)
       details.set(
         c.id,
         `### ${c.id} · ${c.name}\n\n${miss.length ? miss.map((x) => `- ${x}`).join('\n') : '- 全对'}\n\n` +

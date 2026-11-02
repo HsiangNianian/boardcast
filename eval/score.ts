@@ -2,6 +2,27 @@
 // 名字比较宽松（别名、互相包含都算），因为「登录接口」和「登录服务」画在白板上没区别。
 
 import { type Graph, type Node, norm } from '../src/engine/graph.ts'
+import type { Utterance } from '../src/engine/prompt.ts'
+
+export interface RevisionExpectation {
+  nodes: Record<string, string>
+  history: Record<string, string>
+}
+
+/** Revision identity and values must match exactly, even when fuzzy label scores pass. */
+export function revisionFailures(g: Graph, history: Utterance[], expected: RevisionExpectation): string[] {
+  const failures: string[] = []
+  for (const [id, label] of Object.entries(expected.nodes)) {
+    const actual = g.nodes.find((n) => n.id === id)?.label
+    if (actual !== label) failures.push(`node ${id}: expected ${JSON.stringify(label)}, got ${JSON.stringify(actual ?? null)}`)
+  }
+  for (const [id, text] of Object.entries(expected.history)) {
+    const entries = history.filter((u) => u.id === id)
+    if (entries.length !== 1) failures.push(`history ${id}: expected one entry, got ${entries.length}`)
+    else if (entries[0].text !== text) failures.push(`history ${id}: expected ${JSON.stringify(text)}, got ${JSON.stringify(entries[0].text)}`)
+  }
+  return failures
+}
 
 type Names = string[]
 type Pair = [string, string]

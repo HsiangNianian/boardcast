@@ -38,6 +38,7 @@ export class Session {
   /** When each pending line arrived (performance.now()) */
   private pendingAt: number[] = []
   private busy = false
+  private active: Utterance[] = []
 
   constructor(llm: LlmConfig, on: SessionEvents = {}, context = 2) {
     this.llm = llm
@@ -47,8 +48,24 @@ export class Session {
 
   /** 一句话说完（转写定稿）时调用。 */
   say(u: Utterance): void {
+    if (u.id) {
+      const queued = this.pending.findIndex((p) => p.id === u.id)
+      const previous = (queued >= 0 ? this.pending[queued] : this.active.find((p) => p.id === u.id))
+        ?? this.history.find((p) => p.id === u.id)
+      if (previous && (u.revision ?? 0) <= (previous.revision ?? 0)) return
+      if (previous?.text === u.text) {
+        previous.revision = u.revision
+        return
+      }
+      const drawn = this.history.find((p) => p.id === u.id)
+      if (drawn) u = { ...u, replaces: drawn.text }
+      if (queued >= 0) {
+        this.pending[queued] = u
+        return
+      }
+    }
     this.on.mention?.(mentions(this.graph, u.text))
-    const quick = quickOps(u.text)
+    const quick = u.replaces === undefined ? quickOps(u.text) : []
     if (quick.length) {
       this.graph = applyOps(this.graph, quick, 'draft')
       this.on.graph?.(this.graph, 'draft')
@@ -67,9 +84,10 @@ export class Session {
     if (this.busy || !this.pending.length) return
     this.busy = true
     // 指代随各自那句话发送，不能把两句「这个」的目标合成一份。
-    const pointed = this.pending.findIndex((u) => u.pointing?.length)
+    const pointed = this.pending.findIndex((u) => u.pointing?.length || u.replaces !== undefined)
     const count = pointed < 0 ? this.pending.length : Math.max(1, pointed)
     const batch = this.pending.splice(0, count)
+    this.active = batch
     const started = performance.now()
     const queuedMs = this.pendingAt.splice(0, count).map((t) => Math.round(started - t))
     const next: Utterance =
@@ -81,6 +99,12 @@ export class Session {
       const context = this.history.slice(-this.context)
       const drafts = markDrafts(seen)
       const r = await proposeOps(this.llm, seen, context, next, undefined, this.terms)
+      if (batch.some((u) => u.id && this.pending.some((p) => p.id === u.id))) {
+        // The request may be a native IPC call which cannot be aborted; discard stale output.
+        this.graph = eraseDrafts(this.graph, drafts)
+        this.on.graph?.(this.graph, 'draft')
+        return
+      }
       const ops = parseOps(r.text)
       // 这一轮新写成墨线的，记下是这批话里谁说的
       this.graph = attribute(this.graph, eraseDrafts(applyOps(this.graph, ops, 'ink'), drafts), batch)
@@ -95,9 +119,27 @@ export class Session {
       if (shown.length) this.on.mention?.(shown)
       this.on.llm?.({ ...r, ops, batch, queuedMs, seen, context, said: next })
     } catch (e) {
-      this.on.error?.(e, batch)
+      if (!batch.some((u) => u.id && this.pending.some((p) => p.id === u.id))) this.on.error?.(e, batch)
     } finally {
-      this.history.push(...batch)
+      const superseded = batch.some((u) => u.id && this.pending.some((p) => p.id === u.id))
+      if (superseded) {
+        const newer = batch.map((u) => {
+          const i = u.id ? this.pending.findIndex((p) => p.id === u.id) : -1
+          if (i < 0) return u
+          this.pendingAt.splice(i, 1)
+          return this.pending.splice(i, 1)[0]
+        })
+        this.pending.unshift(...newer)
+        this.pendingAt.unshift(...newer.map(() => started))
+      } else {
+        for (const u of batch) {
+          const i = u.id ? this.history.findIndex((p) => p.id === u.id) : -1
+          const { replaces: _previous, ...current } = u
+          if (i < 0) this.history.push(current)
+          else this.history[i] = current
+        }
+      }
+      this.active = []
       this.busy = false
       void this.pump()
     }

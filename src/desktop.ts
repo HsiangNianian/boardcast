@@ -53,6 +53,11 @@ export interface VoiceStatus {
 export type VoiceSource = 'mic' | 'both' | 'system'
 
 export interface Heard {
+  id: string
+  revision: number
+  sources: string[]
+  quality: { rms: number; peak: number; clipped: number; sourceRms: number[] }
+  review?: { reason: string; action: string; original: string; candidate: string; decision: string; asrMs: number }
   text: string
   start: number
   end: number
@@ -69,6 +74,7 @@ export interface HeardTiming {
   voiceprintMs: number
   /** Ended at a short breath in a long sentence rather than a real pause */
   soft: boolean
+  reviewMs?: number
 }
 
 export interface Progress {

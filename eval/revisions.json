@@ -1,0 +1,200 @@
+[
+  {
+    "id": "revision-zh",
+    "name": "zh: revise one existing segment, keep unrelated content",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "九点",
+          "aliases": [],
+          "kind": "node",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "手动备忘",
+          "aliases": [],
+          "kind": "node",
+          "marks": [],
+          "ink": "ink"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 3,
+      "nextGroup": 1
+    },
+    "history": [
+      {
+        "id": "capture:1",
+        "revision": 0,
+        "speaker": "A",
+        "text": "会议时间是九点"
+      }
+    ],
+    "turns": [
+      {
+        "id": "capture:1",
+        "revision": 1,
+        "speaker": "A",
+        "text": "会议时间是九点五十"
+      }
+    ],
+    "gold": {
+      "nodes": [
+        [
+          "九点五十"
+        ],
+        [
+          "手动备忘"
+        ]
+      ],
+      "forbidden_nodes": [
+        "九点"
+      ]
+    },
+    "expect": {
+      "nodes": {
+        "n1": "九点五十",
+        "n2": "手动备忘"
+      },
+      "history": {
+        "capture:1": "会议时间是九点五十"
+      }
+    }
+  },
+  {
+    "id": "revision-en",
+    "name": "en: revise one existing segment, keep unrelated content",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Friday",
+          "aliases": [],
+          "kind": "node",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "Manual note",
+          "aliases": [],
+          "kind": "node",
+          "marks": [],
+          "ink": "ink"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 3,
+      "nextGroup": 1
+    },
+    "history": [
+      {
+        "id": "capture:1",
+        "revision": 0,
+        "speaker": "A",
+        "text": "The deadline is Friday"
+      }
+    ],
+    "turns": [
+      {
+        "id": "capture:1",
+        "revision": 1,
+        "speaker": "A",
+        "text": "The deadline is Friday afternoon"
+      }
+    ],
+    "gold": {
+      "nodes": [
+        [
+          "Friday afternoon"
+        ],
+        [
+          "Manual note"
+        ]
+      ],
+      "forbidden_nodes": [
+        "Friday"
+      ]
+    },
+    "expect": {
+      "nodes": {
+        "n1": "Friday afternoon",
+        "n2": "Manual note"
+      },
+      "history": {
+        "capture:1": "The deadline is Friday afternoon"
+      }
+    }
+  },
+  {
+    "id": "revision-ja",
+    "name": "ja: revise one existing segment, keep unrelated content",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "九時",
+          "aliases": [],
+          "kind": "node",
+          "marks": [],
+          "ink": "ink"
+        },
+        {
+          "id": "n2",
+          "label": "手動メモ",
+          "aliases": [],
+          "kind": "node",
+          "marks": [],
+          "ink": "ink"
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 3,
+      "nextGroup": 1
+    },
+    "history": [
+      {
+        "id": "capture:1",
+        "revision": 0,
+        "speaker": "A",
+        "text": "会議は九時です"
+      }
+    ],
+    "turns": [
+      {
+        "id": "capture:1",
+        "revision": 1,
+        "speaker": "A",
+        "text": "会議は九時五十分です"
+      }
+    ],
+    "gold": {
+      "nodes": [
+        [
+          "九時五十分"
+        ],
+        [
+          "手動メモ"
+        ]
+      ],
+      "forbidden_nodes": [
+        "九時"
+      ]
+    },
+    "expect": {
+      "nodes": {
+        "n1": "九時五十分",
+        "n2": "手動メモ"
+      },
+      "history": {
+        "capture:1": "会議は九時五十分です"
+      }
+    }
+  }
+]

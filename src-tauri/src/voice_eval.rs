@@ -10,6 +10,7 @@ use std::path::PathBuf;
 struct Sample {
     id: String,
     path: PathBuf,
+    variant: String,
 }
 
 #[derive(Deserialize)]
@@ -19,6 +20,7 @@ struct Input {
     model: String,
     denoise: String,
     vad: String,
+    policy: String,
     samples: Vec<Sample>,
     output: PathBuf,
 }
@@ -36,6 +38,8 @@ fn corpus() {
     ));
     assert!(matches!(input.denoise.as_str(), "none" | "gtcrn"));
     assert!(matches!(input.vad.as_str(), "on" | "off"));
+    assert!(matches!(input.policy.as_str(), "static" | "dynamic"));
+    assert!(input.policy != "dynamic" || input.vad == "on");
     let loading = Instant::now();
     let mut engine = Engine::load(&input.models).expect("Load the desktop voice engine");
     if input.model == "whisper-base" {
@@ -77,76 +81,152 @@ fn corpus() {
             "{}",
             sample.id
         );
-        engine.reset();
-        let started = Instant::now();
-        let samples = if let Some(denoiser) = &denoiser {
-            let mut enhanced = denoiser.run(wave.samples(), SAMPLE_RATE);
-            assert_eq!(enhanced.sample_rate, SAMPLE_RATE);
-            assert!(enhanced.samples.len().abs_diff(wave.samples().len()) <= 512);
-            enhanced.samples.resize(wave.samples().len(), 0.0);
-            assert!(enhanced.samples.iter().all(|v| v.is_finite()));
-            enhanced.samples
-        } else {
-            wave.samples().to_vec()
+        let original = wave.samples();
+        let mut seed = 7_u32;
+        let mut noise = || {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            (seed as f64 / u32::MAX as f64 * 2.0 - 1.0) as f32
         };
-        let enhancement_ms = started.elapsed().as_secs_f64() * 1000.0;
-        let mut events = vec![];
-        if input.vad == "on" {
-            // The same 100 ms input chunks as capture; no microphone or GUI is opened.
-            for chunk in samples.chunks(SAMPLE_RATE as usize / 10) {
-                engine.feed(chunk, &mut events);
+        let tracks = match sample.variant.as_str() {
+            "original" => vec![original.to_vec()],
+            "quiet" => vec![original.iter().map(|s| s * 0.15).collect()],
+            "noise" => {
+                let level = (rms(original) * 0.25).max(0.002);
+                vec![original
+                    .iter()
+                    .map(|s| (s + noise() * level).clamp(-1.0, 1.0))
+                    .collect()]
             }
-            engine.finish(&mut events);
+            "dual_echo" => {
+                // Same utterance in both channels: no new words or invented overlap gold.
+                let gain = 0.35 / rms(original).max(0.0001);
+                let a: Vec<f32> = original
+                    .iter()
+                    .map(|s| (s * gain).clamp(-0.98, 0.98))
+                    .collect();
+                let b = a.iter().map(|s| s * 0.2).collect();
+                vec![a, b]
+            }
+            _ => panic!("Unknown variant {}", sample.variant),
+        };
+        let baseline = if input.policy == "dynamic" {
+            Some(evaluate(
+                &mut engine,
+                &tracks,
+                &input.vad,
+                false,
+                denoiser.as_ref(),
+            ))
         } else {
-            // Bound long-meeting inference without detecting or dropping silence.
-            let window = (MAX_SPEECH * SAMPLE_RATE as f32) as usize;
-            for (i, chunk) in samples.chunks(window).enumerate() {
-                engine.fed = i * window + chunk.len();
-                engine.finalize(chunk, i * window, false, &mut events);
-            }
-        }
-        let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
-        let mut partials = 0;
-        let finals: Vec<Heard> = events
-            .into_iter()
-            .filter_map(|event| match event {
-                Event::Partial(_) => {
-                    partials += 1;
-                    None
-                }
-                Event::Final(mut heard) => {
-                    heard.voiceprint = None;
-                    Some(heard)
-                }
-            })
-            .collect();
-        let duration = wave.samples().len() as f64 / SAMPLE_RATE as f64;
-        assert!(finals
-            .iter()
-            .all(|h| h.start >= 0.0 && h.end as f64 <= duration + 0.1 && h.start < h.end));
-        eprintln!(
-            "{}: {} finals, {:.2}s processing / {:.2}s audio",
-            sample.id,
-            finals.len(),
-            elapsed_ms / 1000.0,
-            duration
+            None
+        };
+        let mut result = evaluate(
+            &mut engine,
+            &tracks,
+            &input.vad,
+            input.policy == "dynamic",
+            denoiser.as_ref(),
         );
-        results.push(serde_json::json!({
-            "id": sample.id, "duration": duration, "elapsedMs": elapsed_ms,
-            "inputRms": rms(wave.samples()),
-            "inputPeak": wave.samples().iter().fold(0.0_f32, |peak, x| peak.max(x.abs())),
-            "vadSegments": (input.vad == "on").then_some(engine.vad_segments),
-            "vadSeconds": (input.vad == "on").then_some(engine.vad_samples as f64 / SAMPLE_RATE as f64),
-            "enhancementMs": enhancement_ms, "partials": partials, "segments": finals,
-        }));
+        result["id"] = sample.id.clone().into();
+        result["variant"] = sample.variant.into();
+        result["baseline"] = serde_json::json!(baseline);
+        eprintln!(
+            "{}: {} finals, {} ms",
+            sample.id,
+            result["segments"].as_array().unwrap().len(),
+            result["elapsedMs"]
+        );
+        results.push(result);
     }
     std::fs::write(
         input.output,
         serde_json::to_vec_pretty(&serde_json::json!({
-            "model": input.model, "denoise": input.denoise, "vad": input.vad,
+            "model": input.model, "denoise": input.denoise, "vad": input.vad, "policy": input.policy,
             "loadMs": load_ms, "samples": results,
         }))
         .unwrap(),
     )
     .expect("Write evaluation results");
+}
+
+fn evaluate(
+    engine: &mut Engine,
+    tracks: &[Vec<f32>],
+    vad: &str,
+    dynamic: bool,
+    denoiser: Option<&OfflineSpeechDenoiser>,
+) -> serde_json::Value {
+    engine.reset();
+    engine.dynamic = dynamic;
+    engine.sources.names = if tracks.len() == 2 {
+        vec!["mic".into(), "system".into()]
+    } else {
+        vec!["fixture".into()]
+    };
+    let started = Instant::now();
+    let raw = mix(tracks);
+    let processed = if let Some(denoiser) = denoiser {
+        let mut enhanced = denoiser.run(&raw, SAMPLE_RATE);
+        assert_eq!(enhanced.sample_rate, SAMPLE_RATE);
+        assert!(enhanced.samples.len().abs_diff(raw.len()) <= 512);
+        enhanced.samples.resize(raw.len(), 0.0);
+        assert!(enhanced.samples.iter().all(|v| v.is_finite()));
+        vec![enhanced.samples]
+    } else {
+        tracks.to_vec()
+    };
+    let enhancement_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let mut events = vec![];
+    if vad == "on" {
+        let chunk = SAMPLE_RATE as usize / 10;
+        for start in (0..raw.len()).step_by(chunk) {
+            let end = (start + chunk).min(raw.len());
+            let parts: Vec<Vec<f32>> = processed.iter().map(|t| t[start..end].to_vec()).collect();
+            engine.feed_tracks(&parts, &mut events);
+            if !engine.in_speech {
+                engine.review_one(&mut events);
+            }
+        }
+        engine.finish(&mut events);
+        // Offline eval waits for optional work; live Stop cancels queued retries.
+        while !engine.retries.is_empty() {
+            engine.review_one(&mut events);
+        }
+    } else {
+        let samples = mix(&processed);
+        let window = (MAX_SPEECH * SAMPLE_RATE as f32) as usize;
+        for (i, chunk) in samples.chunks(window).enumerate() {
+            engine.fed = i * window + chunk.len();
+            engine.finalize(chunk, i * window, false, &mut events);
+        }
+    }
+    let elapsed_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let mut partials = 0;
+    let mut finals: Vec<Heard> = vec![];
+    let mut trace = vec![];
+    for event in events {
+        match event {
+            Event::Partial(_) => partials += 1,
+            Event::Final(mut h) => {
+                h.voiceprint = None;
+                trace.push(h.clone());
+                if let Some(old) = finals.iter_mut().find(|f| f.id == h.id) {
+                    *old = h;
+                } else {
+                    finals.push(h);
+                }
+            }
+        }
+    }
+    let duration = raw.len() as f64 / SAMPLE_RATE as f64;
+    assert!(finals
+        .iter()
+        .all(|h| h.start >= 0.0 && h.end as f64 <= duration + 0.1 && h.start < h.end));
+    serde_json::json!({
+        "duration": duration, "elapsedMs": elapsed_ms, "inputRms": rms(&raw),
+        "inputPeak": raw.iter().fold(0.0_f32, |peak, x| peak.max(x.abs())),
+        "vadSegments": (vad == "on").then_some(engine.vad_segments),
+        "vadSeconds": (vad == "on").then_some(engine.vad_samples as f64 / SAMPLE_RATE as f64),
+        "enhancementMs": enhancement_ms, "partials": partials, "segments": finals, "trace": trace,
+    })
 }

@@ -3,18 +3,22 @@
 // 不能从最后一句往前数，模型忙的时候后面又来了几句，结果会记到那几句还没轮到的句子上。
 
 interface Pending {
+  id?: string
+  revision?: number
   text: string
   /** undefined：还在等模型 */
   ms?: number
 }
 
 /** `batch` 的第 k 句对应的那句会议记录改成 `patch(k)`；对不上的（不该有）跳过，不乱记 */
-export function settle<L extends Pending>(lines: L[], batch: { text: string }[], patch: (k: number) => Partial<L>): L[] {
+export function settle<L extends Pending>(lines: L[], batch: Pending[], patch: (k: number) => Partial<L>): L[] {
   const out = [...lines]
   let from = 0
   batch.forEach((u, k) => {
     for (let i = from; i < out.length; i++) {
-      if (out[i].ms !== undefined || out[i].text !== u.text) continue
+      if (out[i].ms !== undefined || (u.id
+        ? out[i].id !== u.id || (out[i].revision ?? 0) !== (u.revision ?? 0)
+        : out[i].text !== u.text)) continue
       out[i] = { ...out[i], ...patch(k) }
       from = i + 1
       return

@@ -96,7 +96,7 @@ PDF 最多导入 40 张有效页面；没有文字层的扫描件只显示底图
 核心仍是「规则先给反馈，模型再确认」。现在语音、打字和圈选共用一条发言入口，导入资料与手写板上的修改也会进入同一份图状态：
 
 ```text
-麦克风 / 系统声音 ──► Silero 断句 ──► SenseVoice 转写
+麦克风 / 系统声音 ──► 分路缓存 + Silero ──► SenseVoice 转写
                                              │ 语音定稿 / CAM++ 声纹
 文字输入 ────────────────────────────────────┤
 手绘圈选（最多 8 个目标）────────────────────┤
@@ -123,6 +123,7 @@ PDF 最多导入 40 张有效页面；没有文字层的扫描件只显示底图
                手写笔迹 / Excalidraw                   逐步回放 / 导出
 ```
 
+- **语音片段可以复核。** 桌面版在内存中限量保留混音前的分路音频，记录质量信号，对符合条件的低音量或削波片段最多复核一次。采纳的修订更新原记录和板书，有分歧的候选只保留为依据。具体边界见[动态策略与评测](eval/asr/README.md#dynamic-policy-and-revisions)。
 - **语音定稿才画板书。** 临时字幕只用于显示；一句话定稿或发送文字后，先做术语纠正，再把这次圈住的目标附上。纯翻页口令直接切板，不走模型。
 - **模型读上下文，输出图操作。** 输入包括当前实体表、别名与导入原文、最近两句、术语表和本句圈选；连线、条目、标记等操作由代码解析应用。快车道先出的草稿被确认后转成墨线，未确认的草稿会清掉。
 - **排队不会混掉指代。** 同时只执行一个板书模型请求。普通发言可以合批，带圈选的发言逐句处理，近期上下文也保留各句原来的圈选目标。
@@ -246,7 +247,8 @@ llama-server -m /path/to/model.gguf --host 127.0.0.1 --port 8080 -c 4096 --jinja
 ```sh
 pnpm eval:audio                # 下载固定版本 WAV、校验哈希，生成可离线打开的 HTML
 pnpm eval:listen               # 按需下载后启动 http://127.0.0.1:4175
-pnpm eval:asr                  # 通过桌面版实际语音引擎跑快速回归；需要 Rust
+pnpm eval:asr                  # 通过桌面版实际语音引擎跑固定基线；需要 Rust
+pnpm eval:asr --policy dynamic # 固定/动态成对对照，附质量轨迹与派生压力样本
 pnpm eval:asr --suite full     # 包含完整会议片段
 pnpm eval:asr --vad off        # 对照组：停用 VAD，按固定窗口识别
 ```
@@ -282,7 +284,7 @@ node eval/run.ts --file path/to/corrections.cases.json
 <details>
 <summary><strong>CI、部署与发版</strong></summary>
 
-- [Eval](.github/workflows/eval.yml)：统一执行类型检查、单元/Rust 测试、网页/桌面构建、文本到板书评测和中日英 ASR 回归。每周或手动完整评测比较 SenseVoice / Whisper base，以及原音 / GTCRN 降噪、VAD 开 / 关，共八组对照。见[语音评测说明](eval/asr/README.md)。
+- [Eval](.github/workflows/eval.yml)：统一执行类型检查、单元/Rust 测试、网页/桌面构建、文本到板书评测和中日英 ASR 回归。每周或手动完整评测比较 SenseVoice / Whisper base，以及原音 / GTCRN 降噪、VAD 开 / 关，八组固定对照加一组动态 SenseVoice，共九个 ASR 任务；板书评测也加入中日英转写修订用例。见[语音评测说明](eval/asr/README.md)。
 - [Web demo](.github/workflows/pages.yml)：构建官网与网页演示，部署至 GitHub Pages。
 - [Release](.github/workflows/release.yml)：推送 `v*` tag 后生成草稿，四个平台都成功才正式发布，并提供签名更新包和 `latest.json`。
 

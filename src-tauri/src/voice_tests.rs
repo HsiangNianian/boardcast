@@ -94,6 +94,55 @@ fn run(engine: &mut Engine, samples: &[f32]) -> (Vec<String>, Vec<Heard>) {
 }
 
 #[test]
+fn dynamic_retries_are_bounded_and_reset_discards_audio() {
+    let Some(dir) = dir() else { return };
+    let wave = Wave::read(&dir.join("zh.wav").to_string_lossy()).unwrap();
+    let gain = 0.003 / rms(wave.samples());
+    let quiet: Vec<f32> = wave.samples().iter().map(|s| s * gain).collect();
+    let mut engine = Engine::load(&dir).unwrap();
+    let mut events = vec![];
+    for _ in 0..3 {
+        engine.finalize(&quiet, 0, false, &mut events);
+    }
+    assert_eq!(engine.retries.len(), policy::RETRY_QUEUE);
+    let Event::Final(last) = events.last().unwrap() else {
+        panic!()
+    };
+    assert_eq!(last.review.as_ref().unwrap().decision, "queue_full");
+    let capture = engine.capture.clone();
+    engine.sources.push(&[quiet]);
+    engine.reset();
+    assert_ne!(engine.capture, capture);
+    assert!(engine.retries.is_empty());
+    assert!(engine.sources.clip(0, 1).is_empty());
+}
+
+#[test]
+fn empty_primary_fault_injection_recovers_with_real_asr_and_same_id() {
+    let Some(dir) = dir() else { return };
+    let wave = Wave::read(&dir.join("zh.wav").to_string_lossy()).unwrap();
+    let gain = 0.003 / rms(wave.samples());
+    let quiet: Vec<f32> = wave.samples().iter().map(|s| s * gain).collect();
+    let mut engine = Engine::load(&dir).unwrap();
+    let mut events = vec![];
+    engine.finalize(&quiet, 0, false, &mut events);
+    // A protocol/failure-path test, not an accuracy claim or a change to benchmark hypotheses.
+    let retry = engine.retries.front_mut().unwrap();
+    let id = retry.heard.id.clone();
+    retry.heard.text.clear();
+    retry.heard.review.as_mut().unwrap().original.clear();
+    engine.review_one(&mut events);
+    let Event::Final(recovered) = events.last().unwrap() else {
+        panic!()
+    };
+    assert_eq!(recovered.id, id);
+    assert_eq!(recovered.revision, 0);
+    assert_eq!(recovered.review.as_ref().unwrap().decision, "accepted");
+    assert!(recovered.text.contains("时间"), "{}", recovered.text);
+    assert!(engine.retries.is_empty());
+}
+
+#[test]
 fn reused_engine_starts_a_fresh_recording() {
     let Some(dir) = dir() else { return };
     let wave = Wave::read(&dir.join("zh.wav").to_string_lossy()).expect("读不到 zh.wav");

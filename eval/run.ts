@@ -43,10 +43,12 @@ interface Case {
   terms?: Term[]
   turns: Utterance[]
   gold: Gold
+  /** Revision checks use stable IDs so aliases/partial label matching cannot hide a stale board. */
+  expect?: { nodes: Record<string, string>; history: Record<string, string> }
 }
 
 const load = (file: string | URL) => JSON.parse(readFileSync(file, 'utf8')) as Case[]
-const sets: Record<string, string[]> = { dev: ['./cases.json'], holdout: ['./holdout.json'], pointing: ['./pointing.json'], all: ['./cases.json', './holdout.json', './pointing.json'] }
+const sets: Record<string, string[]> = { dev: ['./cases.json'], holdout: ['./holdout.json'], pointing: ['./pointing.json'], revisions: ['./revisions.json'], all: ['./cases.json', './holdout.json', './pointing.json', './revisions.json'] }
 if (!sets[args.set!]) throw new Error(`--set 只能是 ${Object.keys(sets).join(' / ')}`)
 const files = args.file ? [args.file] : sets[args.set!].map((f) => new URL(f, import.meta.url))
 /** 报告里写的用例集名字 */
@@ -82,6 +84,7 @@ type Key = (typeof KEYS)[number]
 type Metrics = Record<Key, number | null>
 
 let errors = 0
+let revisionErrors = 0
 const latencies: number[] = []
 const prefill: number[] = []
 const outTokens: number[] = []
@@ -133,6 +136,11 @@ for (let r = 0; r < repeat; r++) {
       await s.drain()
     }
     const sc = score(s.graph, c.gold)
+    if (c.expect) {
+      const stale = Object.entries(c.expect.nodes).some(([id, label]) => s.graph.nodes.find((n) => n.id === id)?.label !== label)
+        || Object.entries(c.expect.history).some(([id, text]) => s.history.filter((u) => u.id === id).length !== 1 || s.history.find((u) => u.id === id)?.text !== text)
+      if (stale) { revisionErrors++; log.push('! Revision did not update the original node/history, or changed unrelated content') }
+    }
     const m: Metrics = {
       node: c.gold.nodes?.length ? f1(sc.nodeP, sc.nodeR) : null,
       edge: c.gold.edges?.length ? f1(sc.edgeP, sc.edgeR) : null,
@@ -197,6 +205,7 @@ const summary = [
   `| 划掉 F1（逐段宏平均，含误划） | ${overall('strike')} |`,
   `| 标记命中（划掉、强调、问题、公式） | ${overall('mark')} |`,
   `| 请求错误（非零时分数不代表有效评测） | ${errors} |`,
+  ...(cases.some((c) => c.expect) ? [`| 修订一致性错误（节点身份、原记录、无关内容） | ${revisionErrors} |`] : []),
   `| 分组正确率 | ${overall('group')} |`,
   `| 违规（该删没删、纠正没生效），每遍平均 | ${mean(runs.map((r) => r.violations)).toFixed(1)} |`,
   `| 单句延迟 p50 / p95 | ${pct(latencies, 50).toFixed(0)} / ${pct(latencies, 95).toFixed(0)} ms |`,
@@ -217,4 +226,4 @@ writeFileSync(new URL(`./reports/${args.label}-${setName}-${stamp}.md`, import.m
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary + '\n')
 console.log(summary.split('\n').slice(0, 23 + cases.length).join('\n'))
 
-if (errors) process.exitCode = 1
+if (errors || revisionErrors) process.exitCode = 1

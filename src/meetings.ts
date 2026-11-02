@@ -8,7 +8,7 @@ import type { Correction } from './engine/corrections.ts'
 import type { Step } from './engine/steps.ts'
 import type { Voice } from './engine/voices.ts'
 import type { LayoutMemory } from './board/layout.ts'
-import { type HeardTiming, isDesktop } from './desktop.ts'
+import { type Heard, type HeardTiming, isDesktop } from './desktop.ts'
 import type { Graph } from './engine/graph.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { type Hit, type Searchable, searchMeeting } from './engine/search.ts'
@@ -31,6 +31,7 @@ export interface MeetingLine extends Utterance {
   page?: number
   /** Spoken lines: time spent in the shell (pause, recognition, voiceprint) */
   heard?: HeardTiming
+  audio?: Pick<Heard, 'start' | 'end' | 'sources' | 'quality' | 'review'>
   /** Time from reaching the app until the model started on it (it was busy with earlier lines) */
   queueMs?: number
   /** 模型这一轮出错了，这句没画上 */

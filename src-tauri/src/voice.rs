@@ -22,19 +22,34 @@ use sherpa_onnx::{
     VadModelConfig, VoiceActivityDetector,
 };
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
+#[path = "voice_policy.rs"]
+mod policy;
+use policy::{Quality, Retry, Review, SourceAudio};
+static CAPTURE: AtomicU64 = AtomicU64::new(0);
+fn capture_id() -> String {
+    format!(
+        "{}-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos(),
+        CAPTURE.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
 pub const SAMPLE_RATE: i32 = 16_000;
 /// Silero VAD 在 16 kHz 下一次吃 512 个样本
 const WINDOW: usize = 512;
 /// 停顿多久算一句话说完。越短出字越快，但一句话中间换气也可能被切开
 const MIN_SILENCE: f32 = 0.45;
-/// 一句话最长多少秒，超过就强制切开，免得一直说不停时字幕迟迟不定稿
+/// Silero 超过这个长度会更积极地找停顿；真正的内存上限由下面的 flush 保证。
 const MAX_SPEECH: f32 = 10.0;
 /// Soft sentence break: once a sentence is this long (seconds), a short dip in loudness is enough
 /// to end it. People who talk continuously rarely pause for `MIN_SILENCE`, and waiting for
@@ -104,6 +119,12 @@ pub struct VoiceStatus {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Heard {
+    pub id: String,
+    pub revision: u32,
+    pub sources: Vec<String>,
+    pub quality: Quality,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review: Option<Box<Review>>,
     pub text: String,
     /// 这句话在本次收音里的起止时间（秒）
     pub start: f32,
@@ -172,6 +193,7 @@ pub struct Engine {
     sent_until: usize,
     recent: Vec<f32>,
     in_speech: bool,
+    vad_start: usize,
     last_partial: Instant,
     partial_text: String,
     /// 已经喂进来的样本总数，用来算时间
@@ -179,6 +201,11 @@ pub struct Engine {
     level: VadLevel,
     /// Original samples for VAD boundaries; recognition and voiceprints must not use VAD gain.
     audio: std::collections::VecDeque<f32>,
+    dynamic: bool,
+    capture: String,
+    sequence: u64,
+    sources: SourceAudio,
+    retries: std::collections::VecDeque<Retry>,
     #[cfg(test)]
     vad_segments: usize,
     #[cfg(test)]
@@ -246,11 +273,17 @@ impl Engine {
             sent_until: 0,
             recent: vec![],
             in_speech: false,
+            vad_start: 0,
             last_partial: Instant::now(),
             partial_text: String::new(),
             fed: 0,
             level: VadLevel::default(),
             audio: Default::default(),
+            dynamic: true,
+            capture: capture_id(),
+            sequence: 0,
+            sources: SourceAudio::default(),
+            retries: Default::default(),
             #[cfg(test)]
             vad_segments: 0,
             #[cfg(test)]
@@ -289,6 +322,14 @@ impl Engine {
         Some(v)
     }
 
+    /// Keep each aligned source before mixing; the ordinary VAD/ASR path stays identical.
+    fn feed_tracks(&mut self, tracks: &[Vec<f32>], out: &mut Vec<Event>) -> Vec<f32> {
+        self.sources.push(tracks);
+        let mixed = mix(tracks);
+        self.feed(&mixed, out);
+        mixed
+    }
+
     /// 喂一段 16 kHz 单声道样本
     pub fn feed(&mut self, samples: &[f32], out: &mut Vec<Event>) {
         self.pending.extend_from_slice(samples);
@@ -316,8 +357,13 @@ impl Engine {
             if self.vad.detected() && !self.in_speech {
                 self.in_speech = true;
                 self.speech = std::mem::take(&mut self.recent);
+                self.vad_start = self.fed - self.speech.len();
                 self.loudness = self.speech.chunks(WINDOW).map(rms).collect();
                 self.last_partial = Instant::now();
+            }
+            // Soft cuts do not release Silero's own continuous-speech buffer; flush without resetting its clock.
+            if self.in_speech && self.fed - self.vad_start >= policy::RETAIN - PREROLL {
+                self.vad.flush();
             }
             self.drain_segments(out);
             let before = if self.in_speech {
@@ -362,11 +408,16 @@ impl Engine {
         self.sent_until = 0;
         self.recent.clear();
         self.in_speech = false;
+        self.vad_start = 0;
         self.last_partial = Instant::now();
         self.partial_text.clear();
         self.fed = 0;
         self.level = VadLevel::default();
         self.audio.clear();
+        self.capture = capture_id();
+        self.sequence = 0;
+        self.sources = SourceAudio::default();
+        self.retries.clear();
         #[cfg(test)]
         {
             self.vad_segments = 0;
@@ -375,21 +426,26 @@ impl Engine {
     }
 
     /// Recognize one finished sentence starting at sample `start` (counted like `fed`) and send it
-    fn finalize(&self, samples: &[f32], start: usize, soft: bool, out: &mut Vec<Event>) {
+    fn finalize(&mut self, samples: &[f32], start: usize, soft: bool, out: &mut Vec<Event>) {
         if samples.len() < WINDOW {
             return;
         }
         let t = Instant::now();
         let text = self.recognize(samples);
         let asr_ms = t.elapsed().as_millis() as u32;
-        if text.is_empty() {
-            return;
-        }
         let t = Instant::now();
         let voiceprint = self.voiceprint(samples);
         let voiceprint_ms = t.elapsed().as_millis() as u32;
         let end = start + samples.len();
-        out.push(Event::Final(Heard {
+        let tracks = self.sources.clip(start, samples.len());
+        let quality = Quality::measure(samples, &tracks);
+        self.sequence += 1;
+        let mut heard = Heard {
+            id: format!("{}:{}", self.capture, self.sequence),
+            revision: 0,
+            sources: self.sources.names.clone(),
+            quality,
+            review: None,
             text,
             start: start as f32 / SAMPLE_RATE as f32,
             end: end as f32 / SAMPLE_RATE as f32,
@@ -400,7 +456,66 @@ impl Engine {
                 voiceprint_ms,
                 soft,
             },
-        }));
+        };
+        if self.dynamic {
+            if let Some((reason, action, retry)) =
+                policy::plan(samples, &tracks, &heard.quality, &heard.text)
+            {
+                let decision = if samples.len() > policy::RETRY_MAX {
+                    "too_long"
+                } else if self.retries.len() >= policy::RETRY_QUEUE {
+                    "queue_full"
+                } else {
+                    "pending"
+                };
+                heard.review = Some(Box::new(Review {
+                    reason,
+                    action,
+                    original: heard.text.clone(),
+                    candidate: String::new(),
+                    decision: decision.into(),
+                    asr_ms: 0,
+                }));
+                if decision == "pending" {
+                    self.retries.push_back(Retry {
+                        heard: heard.clone(),
+                        samples: retry,
+                        queued_at: self.fed,
+                    });
+                }
+            }
+        }
+        // Empty initial results remain in the eval trace, but never become blank transcript rows.
+        out.push(Event::Final(heard));
+    }
+
+    /// Run only after publishing primary results. Capture/stop reuse this worker, no extra model.
+    fn review_one(&mut self, out: &mut Vec<Event>) {
+        let Some(mut retry) = self.retries.pop_front() else {
+            return;
+        };
+        let review = retry.heard.review.as_mut().unwrap();
+        if self.fed.saturating_sub(retry.queued_at) > policy::RETAIN {
+            review.decision = "expired".into();
+        } else {
+            let t = Instant::now();
+            review.candidate = self.recognize(&retry.samples);
+            review.asr_ms = t.elapsed().as_millis() as u32;
+            if policy::accept(&review.original, &review.candidate) {
+                retry.heard.text = review.candidate.clone();
+                review.decision = "accepted".into();
+            } else {
+                review.decision = if review.original == review.candidate {
+                    "unchanged"
+                } else {
+                    "retained"
+                }
+                .into();
+            }
+        }
+        // An empty primary was never shown: its recovery is the first visible version.
+        retry.heard.revision = u32::from(!review.original.is_empty());
+        out.push(Event::Final(retry.heard));
     }
 
     /// End the sentence `back` windows before now, in the middle of a short dip, and keep the rest
@@ -485,7 +600,12 @@ impl Mixer {
     }
 
     /// 取出已经能混的部分
+    #[cfg(test)]
     pub fn pop(&mut self) -> Vec<f32> {
+        mix(&self.pop_tracks())
+    }
+
+    fn pop_tracks(&mut self) -> Vec<Vec<f32>> {
         let longest = self.queues.iter().map(|q| q.len()).max().unwrap_or(0);
         let shortest = self.queues.iter().map(|q| q.len()).min().unwrap_or(0);
         let n = if longest >= MAX_LAG {
@@ -493,18 +613,26 @@ impl Mixer {
         } else {
             shortest
         };
-        let mut out = vec![0.0f32; n];
-        for q in &mut self.queues {
-            let take = n.min(q.len());
-            for (o, s) in out.iter_mut().zip(q.drain(..take)) {
-                *o += s;
-            }
-        }
-        for o in &mut out {
-            *o = o.clamp(-1.0, 1.0);
-        }
-        out
+        self.queues
+            .iter_mut()
+            .map(|q| {
+                let mut samples: Vec<f32> = q.drain(..n.min(q.len())).collect();
+                samples.resize(n, 0.0);
+                samples
+            })
+            .collect()
     }
+}
+
+fn mix(tracks: &[Vec<f32>]) -> Vec<f32> {
+    let mut out = vec![0.0_f32; tracks.first().map_or(0, Vec::len)];
+    for track in tracks {
+        for (o, s) in out.iter_mut().zip(track) {
+            *o += s;
+        }
+    }
+    out.iter_mut().for_each(|s| *s = s.clamp(-1.0, 1.0));
+    out
 }
 
 // —— 采集和生命周期 ——
@@ -976,6 +1104,11 @@ fn run(
 
     // 只开了系统声音时，它是第 1 路；混音器按实际开了几路来
     let mut mixer = Mixer::new(streams.len());
+    engine.sources.names = match source {
+        Source::Mic => vec!["mic".into()],
+        Source::System => vec!["system".into()],
+        Source::Both => vec!["mic".into(), "system".into()],
+    };
     let slot = |src: usize| if source == Source::System { 0 } else { src };
     let mut events = vec![];
     let mut level_sum = 0.0f32;
@@ -983,6 +1116,8 @@ fn run(
     let mut last_level = Instant::now();
     while !stop.load(Ordering::SeqCst) {
         let Ok((src, chunk)) = rx.recv_timeout(Duration::from_millis(100)) else {
+            engine.review_one(&mut events);
+            emit_events(&app, &mut events);
             continue;
         };
         let samples = match &resamplers[src] {
@@ -990,7 +1125,8 @@ fn run(
             None => chunk,
         };
         mixer.push(slot(src), &samples);
-        let mixed = mixer.pop();
+        let tracks = mixer.pop_tracks();
+        let mixed = engine.feed_tracks(&tracks, &mut events);
         if mixed.is_empty() {
             continue;
         }
@@ -998,7 +1134,6 @@ fn run(
             level_sum += s * s;
         }
         level_n += mixed.len();
-        engine.feed(&mixed, &mut events);
         if last_level.elapsed() >= Duration::from_millis(100) && level_n > 0 {
             let rms = (level_sum / level_n as f32).sqrt();
             let _ = app.emit("voice-level", rms);
@@ -1007,10 +1142,21 @@ fn run(
             last_level = Instant::now();
         }
         emit_events(&app, &mut events);
+        if !engine.in_speech && !stop.load(Ordering::SeqCst) {
+            engine.review_one(&mut events);
+            emit_events(&app, &mut events);
+        }
     }
     drop(streams);
     engine.finish(&mut events);
+    for mut retry in engine.retries.drain(..) {
+        let review = retry.heard.review.as_mut().unwrap();
+        review.decision = "cancelled".into();
+        retry.heard.revision = u32::from(!review.original.is_empty());
+        events.push(Event::Final(retry.heard));
+    }
     emit_events(&app, &mut events);
+    // Stop/exit cancels queued optional work; already emitted primary text is kept.
     engine.reset();
 }
 

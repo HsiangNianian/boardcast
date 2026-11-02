@@ -171,6 +171,11 @@ const EXAMPLES_EN: [string, string][] = [
 ]
 
 export interface Utterance {
+  /** Stable audio segment identity; absent on typed lines and older meetings. */
+  id?: string
+  revision?: number
+  /** Previous transcription already applied to the board; not another spoken sentence. */
+  replaces?: string
   speaker?: string
   text: string
   /** 说这句话时圈着的节点编号（最多 MAX_POINTED 个，先圈的在前） */
@@ -214,7 +219,9 @@ export function userMessage(g: Graph, recent: Utterance[], next: Utterance, term
   // 只在真指着东西时才有这一行：没指的时候提示词和评测时一模一样
   const pointed = pointingLine(g, next.pointing)
   if (pointed) parts.push(pointed)
-  parts.push(`新的一句：${line(next)}`)
+  parts.push(next.replaces !== undefined
+    ? `转写修订（同一句话，不是新发言）：\n原转写：${next.replaces}\n正确转写：${line(next)}\n只修正原转写造成的板书错误，复用已有节点，保留其他发言和手动编辑。已有节点的时间、名称或数值不完整或错误时，必须用 R 改成正确值，不要用 K 添加备注后还保留旧值。确有新增事实才补充节点。`
+    : `新的一句：${line(next)}`)
   return parts.join('\n')
 }
 

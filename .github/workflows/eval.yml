@@ -202,6 +202,7 @@ jobs:
 
       - run: node eval/run.ts --label "$LABEL"
       - run: node eval/run.ts --label "$LABEL" --set pointing
+      - run: node eval/run.ts --label "$LABEL" --set revisions
 
       - uses: actions/upload-artifact@v6
         if: always()
@@ -212,13 +213,13 @@ jobs:
             ~/llama-server.log
 
   asr:
-    name: ASR · ${{ matrix.model }} · ${{ matrix.denoise }} · VAD ${{ matrix.vad }}
+    name: ASR · ${{ matrix.model }} · ${{ matrix.denoise }} · VAD ${{ matrix.vad }} · ${{ matrix.policy }}
     needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON((github.event_name == 'schedule' || inputs.full_asr == true) && '{"model":["sensevoice","whisper-base"],"denoise":["none","gtcrn"],"vad":["on","off"]}' || '{"model":["sensevoice"],"denoise":["none"],"vad":["on","off"]}') }}
+      matrix: ${{ fromJSON((github.event_name == 'schedule' || inputs.full_asr == true) && '{"model":["sensevoice","whisper-base"],"denoise":["none","gtcrn"],"vad":["on","off"],"policy":["static"],"include":[{"model":"sensevoice","denoise":"none","vad":"on","policy":"dynamic"}]}' || '{"model":["sensevoice"],"denoise":["none"],"vad":["on","off"],"policy":["static"],"include":[{"model":"sensevoice","denoise":"none","vad":"on","policy":"dynamic"}]}') }}
     env:
       ASR_SUITE: ${{ (github.event_name == 'schedule' || inputs.full_asr == true) && 'full' || 'quick' }}
     steps:
@@ -254,11 +255,11 @@ jobs:
           key: asr-models-${{ matrix.model }}-${{ matrix.denoise }}-${{ hashFiles('eval/asr/models.json', 'scripts/fetch-voice.mjs') }}
       # Both commands verify cached files too. Missing/corrupt data must never silently skip inference.
       - name: Evaluate the desktop voice engine
-        run: pnpm eval:asr --suite "$ASR_SUITE" --model "${{ matrix.model }}" --denoise "${{ matrix.denoise }}" --vad "${{ matrix.vad }}"
+        run: pnpm eval:asr --suite "$ASR_SUITE" --model "${{ matrix.model }}" --denoise "${{ matrix.denoise }}" --vad "${{ matrix.vad }}" --policy "${{ matrix.policy }}"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: asr-${{ matrix.model }}-${{ matrix.denoise }}-vad-${{ matrix.vad }}
+          name: asr-${{ matrix.model }}-${{ matrix.denoise }}-vad-${{ matrix.vad }}-${{ matrix.policy }}
           path: eval/reports/asr/
           if-no-files-found: warn
           retention-days: 30

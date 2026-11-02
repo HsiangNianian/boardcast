@@ -23,14 +23,14 @@ import {
 } from './desktop.ts'
 import { type Graph, emptyGraph } from './engine/graph.ts'
 import { type LlmConfig, proposeOps } from './engine/llm.ts'
-import { eraseDrafts, formatOps } from './engine/ops.ts'
+import { applyOps, eraseDrafts, formatOps } from './engine/ops.ts'
 import type { Utterance } from './engine/prompt.ts'
 import { History as EditHistory, type Selection, describe, exists, pinned, remove as removeSel, rename as renameSel, toggleMark } from './engine/edit.ts'
 import { MARKS, type Mark } from './engine/graph.ts'
 import { Session } from './engine/session.ts'
 import { type Step, diffGraph, inkOnly, replayTo } from './engine/steps.ts'
 import { latest } from './engine/pointing.ts'
-import { firstSeen, renameBy, renameByInSteps, saidAt } from './engine/attribute.ts'
+import { attribute, firstSeen, renameBy, renameByInSteps, saidAt } from './engine/attribute.ts'
 import { settle } from './engine/pending.ts'
 import { summarize } from './engine/summary.ts'
 import { correct, parseGlossary } from './engine/glossary.ts'
@@ -481,6 +481,9 @@ export default function App() {
   const [showMeetings, setShowMeetings] = useState(false)
   const linesRef = useRef<Line[]>([])
   linesRef.current = lines
+  const pageRevisions = useRef(new Map<string, Session>())
+  const meetingIdRef = useRef(meeting.id)
+  meetingIdRef.current = meeting.id
 
   /** 把一场存过的会议放回界面上：板书、上下文、会议记录、排版位置 */
   const openMeeting = useCallback(
@@ -712,17 +715,82 @@ export default function App() {
     }
   }, [jumpLine])
 
-  function say(said: Utterance, heard?: HeardTiming) {
+  function say(said: Utterance, heard?: HeardTiming, audio?: Line['audio']) {
     // Saying something in a recorded demo makes it your own meeting, saved from now on
     demoMeetingId.current = null
     // 先按术语表纠正（说的和打的都纠）：内部叫法常被听成、打成别的字
     const u = { ...said, text: correct(said.text, termsRef.current) }
+    const previous = u.id ? linesRef.current.find((l) => l.id === u.id) : undefined
+    if (previous) {
+      if ((u.revision ?? 0) <= (previous.revision ?? 0)) return
+      const changed = previous.text !== u.text
+      const patch = { text: u.text, heard, audio,
+        ...(changed ? { revision: u.revision, ms: undefined, ops: undefined, failed: undefined } : {}) }
+      const updated = { ...previous, ...patch }
+      const revise = (ls: Line[]) => ls.map((l) => l.id === u.id ? { ...l, ...patch } : l)
+      linesRef.current = revise(linesRef.current)
+      setLines(revise)
+      if (!changed) return
+      const at = previous.page ?? 0
+      if (at === pageRef.current) session.say(updated)
+      else {
+        // A late revision belongs to its original board, even after the user has turned a page.
+        const scope = meetingIdRef.current
+        const target = pagesRef.current[at]
+        if (!target) return
+        const key = `${scope}:${at}`
+        let correction = pageRevisions.current.get(key)
+        if (!correction) {
+          correction = new Session(llm, {
+            llm: (r) => {
+              if (meetingIdRef.current !== scope) return
+              const current = pagesRef.current[at]
+              const before = at === pageRef.current ? session.graph : current.graph
+              const g = attribute(before, applyOps(before, r.ops, 'ink'), r.batch)
+              correction!.graph = g
+              const d = diffGraph(before, inkOnly(g))
+              pagesRef.current[at] = { ...current, graph: g, thumb: undefined,
+                steps: [...(current.steps ?? []), ...(d ? [{ t: Date.now(), line: linesRef.current.length, d }] : [])] }
+              setThumbs((ts) => ts.map((t, i) => i === at ? undefined : t))
+              if (pageRef.current === at) {
+                editHistory.current.record({ graph: before, layout: board.snapshot() })
+                session.graph = g
+                lastInk.current = g
+                setGraph(g)
+                setUndoTick((n) => n + 1)
+              }
+              session.history = session.history.map((l) => {
+                const revised = r.batch.find((u) => u.id === l.id)
+                return revised ? { ...l, text: revised.text, revision: revised.revision } : l
+              })
+              setLines((ls) => settle(ls, r.batch, (k) => ({ ms: r.ms, queueMs: r.queuedMs[k],
+                ops: k === r.batch.length - 1 ? formatOps(r.ops) || '-' : '', via: r.via })))
+            },
+            error: (_e, batch) => {
+              if (meetingIdRef.current === scope) setLines((ls) => settle(ls, batch, () => ({ ms: 0, failed: true })))
+            },
+          })
+          correction.graph = target.graph
+          correction.history = linesRef.current.filter((l) => (l.page ?? 0) === at).map((l) => l.id === previous.id ? previous : l)
+          correction.terms = termsRef.current
+          pageRevisions.current.set(key, correction)
+        }
+        correction.say(updated)
+        void correction.drain().then(() => {
+          if (pageRevisions.current.get(key) === correction) pageRevisions.current.delete(key)
+        })
+      }
+      return
+    }
+    if ((u.revision ?? 0) > 0) return // Late results from a different meeting must not become new speech.
     // 整句就是翻页：不用问模型，也不写板书
     const nav = parseNav(u.text)
     if (nav) {
       const boards = pagesRef.current.map((p, i) => (i === pageRef.current ? session.graph : p.graph).underlay ?? {})
       const to = navTarget(nav, boards, pageRef.current)
-      setLines((ls) => [...ls, { ...u, page: pageRef.current, ms: 0 }])
+      const line = { ...u, page: pageRef.current, ms: 0, heard, audio }
+      linesRef.current = [...linesRef.current, line]
+      setLines((ls) => [...ls, line])
       if (to < 0) setToast({ ok: false, text: t.app.noSuchPage })
       else if (waiting) setToast({ ok: false, text: t.app.busyPage })
       else goPage(to)
@@ -731,7 +799,9 @@ export default function App() {
     // 板上圈着的东西（还在的）：随这句话告诉模型；圈用掉了就擦掉，圈选也收起来
     const pointing = latest(circlesRef.current.flatMap((c) => c.ids).filter((id) => session.graph.nodes.some((n) => n.id === id)))
     const v = pointing.length ? { ...u, pointing } : u
-    setLines((ls) => [...ls, { ...v, page: pageRef.current, heard }])
+    const line = { ...v, page: pageRef.current, heard, audio }
+    linesRef.current = [...linesRef.current, line]
+    setLines((ls) => [...ls, line])
     session.say(v)
     if (circlesRef.current.length) clearCircles()
   }
@@ -808,10 +878,13 @@ export default function App() {
     if (!isDesktop) return
     const offs: Promise<() => void>[] = [
       on<Heard>('voice-final', (h) => {
+        if (!h.text.trim()) return
         setPartial('')
+        const previous = linesRef.current.find((l) => l.id === h.id)
+        if (h.revision > 0 && !previous) return
         // 有声纹就认人；没有（句子太短、没带声纹模型、关掉了）就用当前的说话人，也就是上一个说话的人
-        let who = speakerRef.current.trim() || undefined
-        if (diarizeRef.current && h.voiceprint?.length) {
+        let who = previous?.speaker ?? (speakerRef.current.trim() || undefined)
+        if (!previous && diarizeRef.current && h.voiceprint?.length) {
           const taken = linesRef.current.flatMap((l) => (l.speaker ? [l.speaker] : []))
           const r = identify(voicesRef.current, h.voiceprint, taken)
           voicesRef.current = r.voices
@@ -819,7 +892,9 @@ export default function App() {
           speakerRef.current = r.name
           setSpeaker(r.name)
         }
-        sayRef.current({ speaker: who, text: h.text }, h.timing)
+        sayRef.current({ id: h.id, revision: h.revision, speaker: who, text: h.text },
+          { ...h.timing, reviewMs: h.review?.asrMs },
+          { start: h.start, end: h.end, sources: h.sources, quality: h.quality, review: h.review })
       }),
       on<string>('voice-partial', setPartial),
       on<number>('voice-level', setLevel),

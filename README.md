@@ -96,8 +96,8 @@ PDF imports are limited to 40 retained pages. Scans without a text layer appear 
 The core is still “rules respond first, the model confirms.” Speech, typing and circled references share one utterance entry point. Imported material and edits on the handwriting board feed the same graph state:
 
 ```text
-Mic / system audio ──► Silero segmentation ──► SenseVoice transcription
-                                                  │ Final text / CAM++ speakers
+Mic / system audio ──► Source buffers + Silero ──► SenseVoice transcription
+                                                  │ Segment ID + revisions / CAM++ speakers
 Typed text ───────────────────────────────────────┤
 Drawn circles (up to 8 targets) ──────────────────┤
                                                   ▼
@@ -123,6 +123,7 @@ Drawn circles (up to 8 targets) ────────────────
                     Handwriting / Excalidraw                 Step-by-step replay / export
 ```
 
+- **Audio segments can be reviewed.** The desktop keeps bounded source buffers in memory, measures signal quality and allows one second pass on eligible quiet/clipped segments. Accepted revisions update the original transcript and board; conflicting candidates are retained as provenance. See [dynamic policy and evaluation](eval/asr/README.md#dynamic-policy-and-revisions).
 - **Only finalized speech updates the board.** Provisional captions are display-only. Finalized or typed utterances receive glossary corrections and their circled targets. Standalone page-navigation commands switch boards without a model call.
 - **The model reads context and emits operations.** It receives current entities, aliases and imported source text, the last two utterances, the glossary and current circled targets. Code parses and applies connections, items and marks. Confirmed fast-lane drafts become ink; unconfirmed drafts are cleared.
 - **Queueing preserves references.** Only one board-generation request runs at a time. Ordinary utterances can be batched; utterances with circled targets are processed separately, and recent context retains each utterance's original targets.
@@ -233,7 +234,8 @@ Download the shared Chinese/Japanese/English speech fixtures and listen locally:
 ```sh
 pnpm eval:audio                # Download pinned WAVs, verify checksums and build an offline HTML page
 pnpm eval:listen               # Download if needed, then serve http://127.0.0.1:4175
-pnpm eval:asr                  # Quick regression through the desktop voice engine; requires Rust
+pnpm eval:asr                  # Fixed baseline through the desktop voice engine; requires Rust
+pnpm eval:asr --policy dynamic # Paired dynamic/static runs, quality traces and stress controls
 pnpm eval:asr --suite full     # Include the complete meeting excerpts
 pnpm eval:asr --vad off        # Compare fixed-window recognition without VAD
 ```
@@ -261,6 +263,7 @@ See [speech evaluation](eval/asr/README.md) for model comparisons, denoising exp
 | [`eval/cases.json`](eval/cases.json) | 28 meetings | Development and regression, including English and a real-meeting regression |
 | [`eval/holdout.json`](eval/holdout.json) | 27 meetings | Held out from prompt tuning |
 | [`eval/pointing.json`](eval/pointing.json) | 18 cases | Chinese and English pointing cases with fixed starting boards |
+| [`eval/revisions.json`](eval/revisions.json) | 3 cases | Chinese, Japanese and English transcription revisions; preserve node identity and unrelated content |
 
 Start a working llama-server, then run:
 
@@ -268,6 +271,7 @@ Start a working llama-server, then run:
 pnpm eval --set dev --label my-model
 pnpm eval --set holdout --label my-model
 pnpm eval --set pointing --repeat 3 --label my-model
+pnpm eval --set revisions --repeat 3 --label my-model
 # For a different server, add --base-url http://127.0.0.1:PORT
 node eval/run.ts --only login-flow -v
 node eval/run.ts --file path/to/corrections.cases.json
@@ -282,7 +286,7 @@ The model can omit content, connect the wrong items or misread emphasis. Recogni
 <details>
 <summary><strong>CI, deployment and releases</strong></summary>
 
-- [Eval](.github/workflows/eval.yml): the single testing workflow for type checks, unit/Rust tests, web/desktop builds, text-to-board evaluation and multilingual ASR regression. Weekly or manual full ASR runs compare SenseVoice / Whisper base with raw / GTCRN audio and VAD on / off (eight combinations). See [speech evaluation](eval/asr/README.md).
+- [Eval](.github/workflows/eval.yml): the single testing workflow for type checks, unit/Rust tests, web/desktop builds, text-to-board evaluation and multilingual ASR regression. Weekly or manual full ASR runs compare SenseVoice / Whisper base with raw / GTCRN audio and VAD on / off (eight controls), plus paired dynamic SenseVoice (nine ASR jobs). See [speech evaluation](eval/asr/README.md).
 - [Web demo](.github/workflows/pages.yml): builds the website and web app, then deploys them to GitHub Pages.
 - [Release](.github/workflows/release.yml): a `v*` tag creates a draft, builds all four platforms, then publishes it with signed update packages and `latest.json` only if all builds succeed.
 

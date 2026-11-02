@@ -6,7 +6,7 @@
 //! - 音量每 100 ms 推一次（`voice-level`），界面上画一个电平条，让人知道麦克风在收音。
 //! - 采集在 Rust 里用 cpal 做，不走浏览器的 getUserMedia：各平台 WebView 的麦克风权限处理不一致。
 //! - 线上会议可以同时收系统声音（别人的声音从扬声器出来）：Linux 用默认输出的 monitor 源，
-//!   Windows 用 WASAPI loopback；两路各自转成 16 kHz 后混成一路（`Mixer`）再断句识别。
+//!   Windows 用 WASAPI loopback，macOS 用 ScreenCaptureKit；两路转成 16 kHz 后混音再识别。
 //!
 //! - 每句定稿时顺带算一个声纹向量（CAM++，`voiceprint`），前端拿它和这场会已经出现过的声音比，判断是谁在说。
 //!   比对和起名放在前端：声纹跟着会议存，中途关麦再开、过几天接着开都认得人。
@@ -889,9 +889,6 @@ pub fn voice_start(
         return Ok(());
     }
     let selection = voice.selection.lock().unwrap().clone();
-    if selection.provider == Provider::Apple && source != Source::Mic {
-        return Err("Apple transcription currently supports microphone input only; select Microphone in audio settings".into());
-    }
     let stop = Arc::new(AtomicBool::new(false));
     let flag = stop.clone();
     let handle = app.clone();
@@ -998,6 +995,14 @@ impl Source {
             _ => Self::Mic,
         }
     }
+
+    fn names(self) -> &'static [&'static str] {
+        match self {
+            Self::Mic => &["mic"],
+            Self::System => &["system"],
+            Self::Both => &["mic", "system"],
+        }
+    }
 }
 
 /// 系统声音从哪来：Linux 上是默认输出设备的回采（PulseAudio / PipeWire 的 monitor 源，本身就是输入设备）；
@@ -1047,9 +1052,9 @@ fn system_source(host: &cpal::Host) -> Result<(cpal::Device, bool), String> {
         .ok_or_else(|| "No speakers found; can't capture system audio".into())
 }
 
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
 fn system_source(_host: &cpal::Host) -> Result<(cpal::Device, bool), String> {
-    Err("System audio capture is not supported here yet (macOS requires screen recording permission)".into())
+    Err("System audio capture is not supported on this platform".into())
 }
 
 /// 打开一路声音：声卡回调里只把这一段转成单声道 f32，连同来源编号丢进通道，重活在外面的循环里做。
@@ -1172,6 +1177,8 @@ fn run(
     let mut streams = vec![];
     let mut resamplers: Vec<Option<LinearResampler>> = vec![None, None];
     let mut names = vec![];
+    #[cfg(target_os = "macos")]
+    let mut system_audio = None;
 
     if source != Source::System {
         // 设置里选的麦克风拔掉了就退回系统默认的，不让收音直接失败
@@ -1206,19 +1213,34 @@ fn run(
         }
     }
     if source != Source::Mic {
-        let opened = system_source(&host)
-            .and_then(|(dev, loopback)| open_stream(&dev, loopback, 1, tx.clone(), on_err.clone()));
-        match opened {
-            Ok((stream, rate)) => {
-                streams.push(stream);
-                resamplers[1] = (rate != SAMPLE_RATE)
-                    .then(|| LinearResampler::create(rate, SAMPLE_RATE))
-                    .flatten();
+        #[cfg(target_os = "macos")]
+        match apple_speech::SystemAudio::start(&app, tx.clone()) {
+            Ok(capture) => {
+                system_audio = Some(capture);
                 names.push("System audio".into());
             }
             Err(msg) => {
                 let _ = ready.send(Err(msg));
                 return;
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let opened = system_source(&host).and_then(|(dev, loopback)| {
+                open_stream(&dev, loopback, 1, tx.clone(), on_err.clone())
+            });
+            match opened {
+                Ok((stream, rate)) => {
+                    streams.push(stream);
+                    resamplers[1] = (rate != SAMPLE_RATE)
+                        .then(|| LinearResampler::create(rate, SAMPLE_RATE))
+                        .flatten();
+                    names.push("System audio".into());
+                }
+                Err(msg) => {
+                    let _ = ready.send(Err(msg));
+                    return;
+                }
             }
         }
     }
@@ -1242,13 +1264,10 @@ fn run(
     let _ = ready.send(Ok(name));
 
     // 只开了系统声音时，它是第 1 路；混音器按实际开了几路来
-    let mut mixer = Mixer::new(streams.len());
+    let sources = source.names();
+    let mut mixer = Mixer::new(sources.len());
     if let Some(engine) = engine.as_mut() {
-        engine.sources.names = match source {
-            Source::Mic => vec!["mic".into()],
-            Source::System => vec!["system".into()],
-            Source::Both => vec!["mic".into(), "system".into()],
-        };
+        engine.sources.names = sources.iter().map(|s| (*s).into()).collect();
     }
     let slot = |src: usize| if source == Source::System { 0 } else { src };
     let mut events = vec![];
@@ -1257,8 +1276,15 @@ fn run(
     let mut last_level = Instant::now();
     let mut failure = None;
     while !stop.load(Ordering::SeqCst) {
+        #[cfg(target_os = "macos")]
+        if let Some(capture) = &system_audio {
+            if let Err(error) = capture.poll() {
+                failure = Some(error);
+                break;
+            }
+        }
         if let Some(apple) = apple.as_mut() {
-            if let Err(error) = apple.poll(&app) {
+            if let Err(error) = apple.poll(&app, sources) {
                 failure = Some(error);
                 break;
             }
@@ -1309,6 +1335,8 @@ fn run(
         }
     }
     drop(streams);
+    #[cfg(target_os = "macos")]
+    drop(system_audio);
     if let Some(engine) = engine.as_mut() {
         engine.finish(&mut events);
         for mut retry in engine.retries.drain(..) {
@@ -1322,7 +1350,7 @@ fn run(
     }
     if let Some(apple) = apple.as_mut() {
         if failure.is_none() && !voice.shutting_down.load(Ordering::SeqCst) {
-            failure = apple.finish(&app).err();
+            failure = apple.finish(&app, sources).err();
         }
     }
     stop.store(true, Ordering::SeqCst);

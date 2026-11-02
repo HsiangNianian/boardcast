@@ -108,7 +108,8 @@ export const zh: Messages = {
     sourceAria: '收哪些声音',
     sources: { mic: '麦克风', both: '麦克风 + 系统声音', system: '只收系统声音' },
     sourceHint:
-      '线上会议选「麦克风 + 系统声音」：自己说的从麦克风收，别人说的从扬声器里收（Linux 收默认输出设备，Windows 收默认扬声器；macOS 暂时不支持）。外放时麦克风会把别人的声音再收一遍，戴耳机效果最好。',
+      '线上会议选「麦克风 + 系统声音」：自己说的从麦克风收，别人说的从系统声音收。macOS 13+ 首次使用需允许「屏幕与系统音频录制」。外放时麦克风会把别人的声音再收一遍，戴耳机效果最好。',
+    systemAudioPermission: '请在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」中允许 boardcast，然后重启 boardcast 再开始收音。较旧的 macOS 中此权限叫「屏幕录制」。这里只处理声音，不保存屏幕画面。',
     micAria: '麦克风',
     systemDefault: '系统默认',
     micMissing: (name: string) => `${name}（没找到，会改用系统默认）`,

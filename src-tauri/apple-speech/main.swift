@@ -2,10 +2,13 @@ import AVFoundation
 import Foundation
 import Speech
 
-// Only JSON events go to stdout; audio arrives as 16 kHz mono float32 little endian.
+// Only JSON events go to stdout; transcription input is 16 kHz mono float32 little endian.
+private let outputLock = NSLock()
 func emit(_ event: [String: Any]) {
     guard var data = try? JSONSerialization.data(withJSONObject: event, options: [.sortedKeys]) else { return }
     data.append(10)
+    outputLock.lock()
+    defer { outputLock.unlock() }
     FileHandle.standardOutput.write(data)
 }
 
@@ -206,7 +209,15 @@ struct Main {
         defer { watchdog.cancel() }
         do {
             let args = Array(CommandLine.arguments.dropFirst())
-            if args == ["self-test"] { try selfTest(); return }
+            if args == ["self-test"] { try systemAudioSelfTest(); try selfTest(); return }
+            if args == ["capture-system"] {
+                guard #available(macOS 13.0, *) else {
+                    throw Failure(message: "System audio capture requires macOS 13 or later")
+                }
+                try await captureSystemAudio()
+                emit(["type": "done"])
+                return
+            }
             guard #available(macOS 26.0, *) else {
                 if args == ["status"] {
                     emit(["type": "status", "isApple": true, "available": false, "reason": "os", "locales": [],

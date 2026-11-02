@@ -882,6 +882,8 @@ export default function App() {
     if (appleAssetIssue(text)) {
       setVoiceErr(msg().models.speechSetupHint)
       setShowModels('speech')
+    } else if (text === 'SYSTEM_AUDIO_PERMISSION') {
+      setVoiceErr(msg().settings.systemAudioPermission)
     } else setVoiceErr(text)
   }, [])
   // 监听器只注册一次，用 ref 拿最新的 say 和说话人

@@ -426,6 +426,7 @@ fn mixer_adds_sources_and_does_not_wait_for_a_silent_one() {
 ///   cargo test --manifest-path src-tauri/Cargo.toml --lib system_audio -- --ignored --nocapture
 #[test]
 #[ignore]
+#[cfg(any(target_os = "linux", windows))]
 fn system_audio_delivers_samples() {
     use cpal::traits::{DeviceTrait, StreamTrait};
     let host = audio_host();

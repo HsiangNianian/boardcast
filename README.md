@@ -45,7 +45,7 @@ To type your own content in the web app, connect a model endpoint that your brow
 | Linux x64 | `.AppImage`, `.deb` or `.rpm` | Vulkan / CPU; PulseAudio / PipeWire loopback |
 | Windows x64 | `.exe` or `.msi` with `x64` in the name | Vulkan / CPU; WASAPI system audio |
 | Windows ARM64 | `.exe` or `.msi` with `arm64` in the name | Vulkan / CPU; WASAPI system audio |
-| macOS Apple Silicon | `aarch64.dmg` | Metal; microphone only, no system audio yet |
+| macOS Apple Silicon | `aarch64.dmg` | Metal; microphone + system audio (macOS 13+) |
 
 The macOS app is not yet Apple Developer signed or notarized. First launch may require allowing it in System Settings → Privacy & Security. In-app updates use a separate update signature check; a new stable release appears in the top bar with an option to download and restart.
 
@@ -160,7 +160,7 @@ The audio review policy currently uses fixed rules; the board agent handles acce
 
 ## Models and privacy
 
-**Apple transcription (experimental):** on macOS 26+, open **Local models → Speech recognition** to detect system support, choose a language, download its Apple assets and switch to SpeechAnalyzer. It uses the normal microphone controls and stays on-device; this route currently uses the selected speaker rather than automatic speaker recognition. Availability depends on the actual device and language. See [setup, limits and current development priorities](docs/development-priorities.md).
+**Apple transcription (experimental):** on macOS 26+, open **Local models → Speech recognition** to detect system support, choose a language, download its Apple assets and switch to SpeechAnalyzer. It uses the normal recording controls with microphone, system audio, or both, and stays on-device; this route currently uses the selected speaker rather than automatic speaker recognition. Availability depends on the actual device and language. See [setup, limits and current development priorities](docs/development-priorities.md).
 
 The desktop app bundles llama.cpp's `llama-server` and manages its lifecycle. Linux and Windows use Vulkan, offloading layers to the GPU when available and keeping the rest on the CPU. macOS Apple Silicon uses Metal.
 
@@ -200,7 +200,7 @@ For a bug report, preview and export a diagnostics bundle in Settings → Diagno
 
 There is no direct `.mp3` / `.wav` transcription import yet. On Linux or Windows, choose “System audio only” in Settings → Audio input, start listening, then play the recording in a media player. Stop listening when it ends. Capture uses the default output device and processes the recording in real time.
 
-For an online meeting, use “Microphone + system audio.” Headphones help prevent other participants being captured twice through your speakers and microphone. macOS system audio capture is not supported yet.
+For an online meeting, use “Microphone + system audio.” Headphones help prevent other participants being captured twice through your speakers and microphone. On macOS 13+, allow boardcast in System Settings → Privacy & Security → Screen & System Audio Recording (Screen Recording on older macOS), then restart the app. Only audio is processed; screen images are not saved.
 
 </details>
 

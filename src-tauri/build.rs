@@ -6,6 +6,7 @@ fn main() {
     let _ = std::fs::create_dir_all("voice");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         println!("cargo:rerun-if-changed=apple-speech/main.swift");
+        println!("cargo:rerun-if-changed=apple-speech/system-audio.swift");
         println!("cargo:rerun-if-changed=apple-speech/Info.plist");
         println!("cargo:rerun-if-changed=../scripts/build-apple-speech.sh");
         println!("cargo:rerun-if-env-changed=DEVELOPER_DIR");

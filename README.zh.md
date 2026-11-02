@@ -45,7 +45,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 | Linux x64 | `.AppImage`、`.deb` 或 `.rpm` | Vulkan / CPU；支持 PulseAudio / PipeWire 回采 |
 | Windows x64 | 文件名含 `x64` 的 `.exe` 或 `.msi` | Vulkan / CPU；支持 WASAPI 系统声音 |
 | Windows ARM64 | 文件名含 `arm64` 的 `.exe` 或 `.msi` | Vulkan / CPU；支持 WASAPI 系统声音 |
-| macOS Apple Silicon | `aarch64.dmg` | Metal；目前只支持麦克风，不支持系统声音 |
+| macOS Apple Silicon | `aarch64.dmg` | Metal；麦克风 + 系统声音（macOS 13+） |
 
 macOS 安装包目前未做 Apple 开发者签名与公证，首次打开可能需要在「系统设置 → 隐私与安全性」里允许。应用内更新使用独立的更新签名校验；有正式新版时，顶栏会提示下载并重启。
 
@@ -160,7 +160,7 @@ PDF 最多导入 40 张有效页面；没有文字层的扫描件只显示底图
 
 ## 模型与隐私
 
-**Apple 转录（实验性）：** macOS 26+ 桌面版可在「本地模型 → 语音识别」检测系统支持情况，选择语言、下载 Apple 语言模型并切换到 SpeechAnalyzer。使用原来的麦克风按钮或快捷键，声音留在本机；目前这条线路使用选中的说话人，暂不自动分人。实际能否使用以设备和语言检测结果为准。详见[使用说明、限制与当前开发优先级](docs/development-priorities.md)。
+**Apple 转录（实验性）：** macOS 26+ 桌面版可在「本地模型 → 语音识别」检测系统支持情况，选择语言、下载 Apple 语言模型并切换到 SpeechAnalyzer。使用原来的录音按钮或快捷键，可选择麦克风、系统声音或两者一起，声音留在本机；目前这条线路使用选中的说话人，暂不自动分人。实际能否使用以设备和语言检测结果为准。详见[使用说明、限制与当前开发优先级](docs/development-priorities.md)。
 
 桌面版自带 llama.cpp 的 `llama-server`，自动启动和退出，不用手动开终端。Linux / Windows 使用 Vulkan，可用时把模型层放到 GPU，其余留在 CPU；macOS Apple Silicon 使用 Metal。
 
@@ -200,7 +200,7 @@ PDF 最多导入 40 张有效页面；没有文字层的扫描件只显示底图
 
 目前没有直接导入 `.mp3` / `.wav` 转写的入口。在 Linux 或 Windows 桌面版中，将「设置 → 收音」切为「只收系统声音」，点开始收音，再用播放器播放录音，结束后停止收音。采集的是系统默认输出设备，需要正常播放，按音频实际时长处理。
 
-在线会议选「麦克风 + 系统声音」，戴耳机能避免扬声器的声音被麦克风再次录入。macOS 尚不支持系统声音采集。
+在线会议选「麦克风 + 系统声音」，戴耳机能避免扬声器的声音被麦克风再次录入。macOS 13+ 首次使用时，需在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」（旧版系统叫「屏幕录制」）允许 boardcast，再重启应用。这里只处理声音，不保存屏幕画面。
 
 </details>
 

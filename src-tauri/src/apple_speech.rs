@@ -1,4 +1,4 @@
-//! Apple owns the assets; this process bridge never opens a microphone or falls back to cloud ASR.
+//! Native speech and system-audio bridge; never opens a microphone or falls back to cloud ASR.
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
@@ -117,6 +117,7 @@ enum Message {
     Ready,
     Partial { text: String },
     Final { text: String, start: f64, end: f64 },
+    Audio { samples: Vec<f32> },
     Done,
     Error { message: String },
 }
@@ -143,7 +144,11 @@ struct Helper {
 }
 
 impl Helper {
-    fn spawn(mut command: Command, jobs: &Jobs) -> Result<Self, String> {
+    fn spawn(
+        mut command: Command,
+        jobs: &Jobs,
+        audio: Option<mpsc::Sender<(usize, Vec<f32>)>>,
+    ) -> Result<Self, String> {
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -188,6 +193,20 @@ impl Helper {
                     Ok(_) if bytes.last() == Some(&b'\n') => {
                         let result = serde_json::from_slice::<Message>(&bytes)
                             .map_err(|e| format!("Invalid Apple speech response: {e}"));
+                        if let Ok(Message::Audio { samples }) = result {
+                            if samples.is_empty()
+                                || samples.len() > 1600
+                                || samples.iter().any(|s| !s.is_finite())
+                                || audio.is_none()
+                            {
+                                let _ = send.send(Err("Invalid system audio samples".into()));
+                                break;
+                            }
+                            if audio.as_ref().unwrap().send((1, samples)).is_err() {
+                                break;
+                            }
+                            continue;
+                        }
                         let done = matches!(
                             &result,
                             Ok(Message::Done | Message::Status(_) | Message::Error { .. })
@@ -257,7 +276,7 @@ pub fn status(app: &AppHandle) -> Result<Availability, String> {
             locales: vec![],
         });
     }
-    let helper = Helper::spawn(command("status", "")?, &app.state::<Jobs>())?;
+    let helper = Helper::spawn(command("status", "")?, &app.state::<Jobs>(), None)?;
     match helper.receive(Duration::from_secs(15))? {
         Message::Status(s) => Ok(s),
         _ => Err("Apple returned no capability information".into()),
@@ -274,7 +293,7 @@ pub fn prepare(app: &AppHandle, locale: &str) -> Result<(), String> {
         if !supported.available || !supported.locales.iter().any(|l| l.id == locale) {
             return Err("This Apple transcription language is not supported on this device".into());
         }
-        let helper = Helper::spawn(command("prepare", locale)?, &jobs)?;
+        let helper = Helper::spawn(command("prepare", locale)?, &jobs, None)?;
         match helper.receive(Duration::from_secs(1200))? {
             Message::Done => Ok(()),
             _ => Err("Apple did not finish installing the language model".into()),
@@ -282,6 +301,37 @@ pub fn prepare(app: &AppHandle, locale: &str) -> Result<(), String> {
     })();
     jobs.preparing.store(false, Ordering::SeqCst);
     result
+}
+
+#[cfg(any(target_os = "macos", test))]
+pub struct SystemAudio {
+    helper: Helper,
+}
+
+#[cfg(any(target_os = "macos", test))]
+impl SystemAudio {
+    #[cfg(target_os = "macos")]
+    pub fn start(app: &AppHandle, audio: mpsc::Sender<(usize, Vec<f32>)>) -> Result<Self, String> {
+        let helper = Helper::spawn(
+            command("capture-system", "")?,
+            &app.state::<Jobs>(),
+            Some(audio),
+        )?;
+        match helper.receive(Duration::from_secs(25))? {
+            Message::Ready => Ok(Self { helper }),
+            _ => Err("System audio capture did not become ready".into()),
+        }
+    }
+
+    pub fn poll(&self) -> Result<(), String> {
+        if let Ok(event) = self.helper.output.try_recv() {
+            return Err(match event? {
+                Message::Error { message } => message,
+                _ => "System audio capture stopped unexpectedly".into(),
+            });
+        }
+        Ok(())
+    }
 }
 
 pub struct Session {
@@ -294,7 +344,7 @@ pub struct Session {
 
 impl Session {
     pub fn start(app: &AppHandle, locale: &str, capture: String) -> Result<Self, String> {
-        let helper = Helper::spawn(command("transcribe", locale)?, &app.state::<Jobs>())?;
+        let helper = Helper::spawn(command("transcribe", locale)?, &app.state::<Jobs>(), None)?;
         match helper.receive(Duration::from_secs(25))? {
             Message::Ready => Ok(Self {
                 helper,
@@ -313,7 +363,7 @@ impl Session {
         Ok(())
     }
 
-    fn event(&mut self, app: &AppHandle, event: Message) -> Result<bool, String> {
+    fn event(&mut self, app: &AppHandle, event: Message, sources: &[&str]) -> Result<bool, String> {
         match event {
             Message::Partial { text } => {
                 let _ = app.emit("voice-partial", text);
@@ -329,7 +379,7 @@ impl Session {
                         "voice-final",
                         serde_json::json!({
                             "id": format!("{}:{}", self.capture, self.sequence), "revision": 0,
-                            "text": text, "start": start, "end": end, "sources": ["mic"],
+                            "text": text, "start": start, "end": end, "sources": sources,
                         }),
                     );
                 }
@@ -342,23 +392,23 @@ impl Session {
         Ok(false)
     }
 
-    pub fn poll(&mut self, app: &AppHandle) -> Result<(), String> {
+    pub fn poll(&mut self, app: &AppHandle, sources: &[&str]) -> Result<(), String> {
         while let Ok(event) = self.helper.output.try_recv() {
-            if self.event(app, event?)? {
+            if self.event(app, event?, sources)? {
                 return Err("Apple transcription ended while recording".into());
             }
         }
         Ok(())
     }
 
-    pub fn finish(&mut self, app: &AppHandle) -> Result<(), String> {
+    pub fn finish(&mut self, app: &AppHandle, sources: &[&str]) -> Result<(), String> {
         self.helper.input.take();
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             let event = self
                 .helper
                 .receive(deadline.saturating_duration_since(Instant::now()))?;
-            if self.event(app, event)? {
+            if self.event(app, event, sources)? {
                 return Ok(());
             }
         }
@@ -448,7 +498,7 @@ mod tests {
         let jobs = Jobs::default();
         let mut command = Command::new("sh");
         command.args(["-c", "printf '%s\\n' '{\"type\":\"ready\"}'; read line; printf '%s\\n' '{\"type\":\"done\"}'"]);
-        let mut helper = Helper::spawn(command, &jobs).unwrap();
+        let mut helper = Helper::spawn(command, &jobs, None).unwrap();
         assert!(matches!(
             helper.receive(Duration::from_secs(2)).unwrap(),
             Message::Ready
@@ -462,9 +512,67 @@ mod tests {
         drop(helper);
         let mut command = Command::new("sh");
         command.args(["-c", "read line"]);
-        let helper = Helper::spawn(command, &jobs).unwrap();
+        let helper = Helper::spawn(command, &jobs, None).unwrap();
         jobs.shutdown();
         assert!(helper.receive(Duration::from_secs(2)).is_err());
         assert!(helper.child.lock().unwrap().try_wait().unwrap().is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn system_audio_routes_samples_and_reaps_the_capture_process() {
+        let jobs = Jobs::default();
+        let (tx, rx) = mpsc::channel();
+        let mut command = Command::new("sh");
+        command.args(["-c", "printf '%s\\n' '{\"type\":\"ready\"}' '{\"type\":\"audio\",\"samples\":[0.25,-0.5,0]}'; read line"]);
+        let helper = Helper::spawn(command, &jobs, Some(tx)).unwrap();
+        assert!(matches!(
+            helper.receive(Duration::from_secs(2)).unwrap(),
+            Message::Ready
+        ));
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(2)).unwrap(),
+            (1, vec![0.25, -0.5, 0.0])
+        );
+        let child = helper.child.clone();
+        let capture = SystemAudio { helper };
+        assert!(capture.poll().is_ok());
+        drop(capture);
+        assert!(child.lock().unwrap().try_wait().unwrap().is_some());
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(2)),
+            Err(mpsc::RecvTimeoutError::Disconnected)
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn system_audio_rejects_invalid_samples_and_surfaces_permission_errors() {
+        let jobs = Jobs::default();
+        let oversized = vec!["0"; 1601].join(",");
+        for samples in ["".to_string(), "1e100".into(), oversized] {
+            let (tx, rx) = mpsc::channel();
+            let mut command = Command::new("sh");
+            command.args([
+                "-c",
+                &format!("printf '%s\\n' '{{\"type\":\"audio\",\"samples\":[{samples}]}}'"),
+            ]);
+            let helper = Helper::spawn(command, &jobs, Some(tx)).unwrap();
+            assert!(helper
+                .receive(Duration::from_secs(2))
+                .unwrap_err()
+                .contains("Invalid"));
+            assert!(rx.try_recv().is_err());
+        }
+        let mut command = Command::new("sh");
+        command.args([
+            "-c",
+            "printf '%s\\n' '{\"type\":\"error\",\"message\":\"SYSTEM_AUDIO_PERMISSION\"}'",
+        ]);
+        let helper = Helper::spawn(command, &jobs, None).unwrap();
+        assert_eq!(
+            helper.receive(Duration::from_secs(2)).unwrap_err(),
+            "SYSTEM_AUDIO_PERMISSION"
+        );
     }
 }

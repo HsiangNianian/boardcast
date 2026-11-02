@@ -8,6 +8,6 @@ case "$target" in
   *) echo "Unsupported Apple speech target: $target" >&2; exit 1 ;;
 esac
 xcrun swiftc -O -parse-as-library -swift-version 5 -target "$arch-apple-macos11.0" \
-  apple-speech/main.swift \
+  apple-speech/main.swift apple-speech/system-audio.swift \
   -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker apple-speech/Info.plist \
   -o "apple-speech/boardcast-speech-$target"

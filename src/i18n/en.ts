@@ -118,7 +118,8 @@ export const en = {
     sourceAria: 'What to listen to',
     sources: { mic: 'Microphone', both: 'Microphone + system audio', system: 'System audio only' },
     sourceHint:
-      'For online meetings pick "Microphone + system audio": you are heard through the mic, others through the speakers (Linux records the default output device, Windows the default speakers; not supported on macOS yet). With speakers on, the mic picks up others again — headphones work best.',
+      'For online meetings pick "Microphone + system audio": you are heard through the mic, others through system audio. On macOS 13+, allow Screen & System Audio Recording when prompted. With speakers on, the mic picks up others again — headphones work best.',
+    systemAudioPermission: 'Allow boardcast in System Settings → Privacy & Security → Screen & System Audio Recording, then restart boardcast and start recording again. On older macOS versions this permission is called Screen Recording. Only audio is processed; no screen images are saved.',
     micAria: 'Microphone',
     systemDefault: 'System default',
     micMissing: (name: string) => `${name} (not found, the system default will be used)`,

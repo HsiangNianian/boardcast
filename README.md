@@ -93,43 +93,70 @@ PDF imports are limited to 40 retained pages. Scans without a text layer appear 
 
 ## How it works
 
-The core is still “rules respond first, the model confirms.” Speech, typing and circled references share one utterance entry point. Imported material and edits on the handwriting board feed the same graph state:
+The desktop defaults to **dynamic + VAD on + SenseVoice**. It publishes the first finalized transcript, then selectively reviews eligible segments. Accepted revisions update the same utterance and its board content.
 
 ```text
-Mic / system audio ──► Source buffers + Silero ──► SenseVoice transcription
-                                                  │ Segment ID + revisions / CAM++ speakers
-Typed text ───────────────────────────────────────┤
-Drawn circles (up to 8 targets) ──────────────────┤
-                                                  ▼
-                                   Glossary correction + bound targets
-                                                  │
-                       ┌──────────────────────────┴──────────────────────┐
-                       ▼                                                 ▼
-              Fast lane (local rules)                         Model lane (one request)
-          Highlight mentions / draft links                 Local llama.cpp / compatible API
-                       │                                   Entities, last 2 turns, targets
-                       │                                          Graph operations
-                       │                                                 │
-                       └────────────────► Graph state ◄──────────────────┘
-                                               ▲  │
-     Imported material / handwriting edits ────┘  ├──► Next-turn model context
-                                                  │
-                              ┌───────────────────┴───────────────────┐
-                              ▼                                       ▼
-                      Incremental layout                         Local storage
-                  Note regions / ELK flowcharts          Transcript + board changes + assets
-                              │                                       │
-                              ▼                                       ▼
-                    Handwriting / Excalidraw                 Step-by-step replay / export
+Mic / system audio
+        |
+        v
+16 kHz mono per source --> Original source buffers (30 s / source)
+        |
+        v
+Mix + Silero VAD (gain on the VAD copy only)
+        |
+        v
+SenseVoice + optional CAM++ on original segments
+        |
+        v
+Segment ID + times + first final text
+        |
+        +------------------------------+
+        |                              |
+        v                              v
+Transcript / board             RMS / peak / clipping
+        ^                              |
+        |                      Eligible + within budget
+        |                              |
+        |                      Level / dominant source
+        |                              |
+        |                         SenseVoice retry
+        |                              |
+        +-- Accept: revise same ID ----+
 ```
 
-- **Audio segments can be reviewed.** The desktop keeps bounded source buffers in memory, measures signal quality and allows one second pass on eligible quiet/clipped segments. Accepted revisions update the original transcript and board; conflicting candidates are retained as provenance. See [dynamic policy and evaluation](eval/asr/README.md#dynamic-policy-and-revisions).
-- **Only finalized speech updates the board.** Provisional captions are display-only. Finalized or typed utterances receive glossary corrections and their circled targets. Standalone page-navigation commands switch boards without a model call.
-- **The model reads context and emits operations.** It receives current entities, aliases and imported source text, the last two utterances, the glossary and current circled targets. Code parses and applies connections, items and marks. Confirmed fast-lane drafts become ink; unconfirmed drafts are cleared.
-- **Queueing preserves references.** Only one board-generation request runs at a time. Ordinary utterances can be batched; utterances with circled targets are processed separately, and recent context retains each utterance's original targets.
-- **Local and remote constraints differ.** llama.cpp uses GBNF to constrain syntax and reuses the prompt prefix cache. Compatible APIs do not receive those grammar constraints; a failed request tries a local fallback when available. Valid syntax does not guarantee correct meaning.
-- **Code controls layout and strokes.** Notes occupy regions; flowcharts start with ELK, then keep existing nodes in place where possible and add new ones incrementally. Imported source regions stay fixed. Handwriting draws strokes; pencil mode uses Excalidraw.
-- **Replay does not rerun the model.** Meetings save utterances and board changes for replay and export. Summaries are a separate request to the active model, using the transcript and all boards.
+- **Original audio stays available.** Mic and system audio are retained separately before mixing. Only the VAD copy gets input-level compensation; the first ASR pass and CAM++ receive original samples at VAD or soft-break boundaries. CAM++ provides voiceprints for speaker attribution. Models preload without opening the microphone; stopping clears audio buffers and queued retries, and exiting releases the models.
+- **Review is bounded and rule-based.** Signal quality selects quiet speech or eligible clipped mixtures for one retry: level the segment or use its dominant unclipped source. Each retry covers at most 12 seconds, with at most two queued and a 30-second audio-age limit. The same worker/model performs it after publishing the primary result. A candidate can recover empty text or add a bounded continuation; conflicting candidates keep the original text and an audit trace. RMS is a quality signal, not recognition confidence.
+
+Finalized speech, accepted revisions and typed text feed the board session; drawn circles attach references to a new utterance. Rules provide immediate feedback, and the board agent emits graph operations:
+
+```text
+Final speech / revisions --+
+Typed text ----------------+--> Glossary + circled targets (up to 8)
+Drawn circles -------------+                  |
+                                  +-----------+-----------+
+                                  v                       v
+                             Local rules              Board agent
+                         Mentions / new drafts      llama.cpp / API
+                                  |                 Graph operations
+                                  +-----------+-----------+
+                                              v
+Imports / handwriting edits ------------> Graph state --> Next-turn context
+                                              |
+                             +----------------+----------------+
+                             v                                 v
+                     Incremental layout                   Local storage
+                    Regions / ELK flowcharts       Transcript / board / assets
+                             |                                 |
+                             v                                 v
+                 Handwriting / Excalidraw                 Replay / export
+```
+
+- **Only final text reaches the board.** Provisional captions are display-only. New utterances receive glossary corrections and their circled targets. Standalone page-navigation commands switch boards without a model call.
+- **Revisions preserve identity.** The transcript keeps the segment's speaker and page. Queued text is replaced; superseded in-flight board results are discarded. If the original text has already been drawn, the board agent receives an explicit correction against that board. The history retains one utterance per segment.
+- **The board agent reads context.** Its inputs include entities, aliases, imported source text, the last two utterances, the glossary and bound targets. Each session queues model requests. Ordinary utterances may be batched; circled utterances and corrections are processed separately. Code applies the returned operations, confirms drafts as ink and removes unconfirmed drafts.
+- **Model and rendering have separate jobs.** Local llama.cpp uses GBNF and prompt-prefix caching; compatible APIs omit those grammar constraints and may fall back to a local model. Code controls incremental layout and handwriting strokes; pencil mode uses Excalidraw. Saved transcript and graph changes drive replay/export without rerunning the model. Summaries use a separate request over the transcript and boards.
+
+The audio review policy currently uses fixed rules; the board agent handles accepted text corrections. Learned denoising, overlapping-speaker separation and automatic alternate-ASR selection remain future work. GTCRN and Whisper comparisons are evaluation controls. See [dynamic policy and evaluation](eval/asr/README.md#dynamic-policy-and-revisions) and the [measured baseline](eval/asr/dynamic.md); the initial run showed unchanged recognition error, not an accuracy gain.
 
 ## Models and privacy
 

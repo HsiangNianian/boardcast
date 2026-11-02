@@ -225,6 +225,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          package-manager-cache: false
       - id: matrix
         env:
           MODE: ${{ (github.event_name == 'schedule' || inputs.asr_sweep == true) && 'sweep' || inputs.full_asr == true && 'full' || 'quick' }}
@@ -302,6 +303,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          package-manager-cache: false
       - uses: actions/download-artifact@v7
         with:
           pattern: asr-*

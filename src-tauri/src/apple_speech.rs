@@ -393,6 +393,22 @@ impl SystemAudio {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
+impl Drop for SystemAudio {
+    fn drop(&mut self) {
+        // Let ScreenCaptureKit stop before a replacement capture starts; Helper still reaps it.
+        self.helper.input.take();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let exited = self.helper.child.lock().unwrap().try_wait();
+            match exited {
+                Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
+                _ => break,
+            }
+        }
+    }
+}
+
 pub struct Session {
     helper: Option<Helper>,
     auto: Option<(crate::voice::auto::Detector, Vec<String>)>,
@@ -674,7 +690,7 @@ mod tests {
         let jobs = Jobs::default();
         let (tx, rx) = mpsc::channel();
         let mut command = Command::new("sh");
-        command.args(["-c", "printf '%s\\n' '{\"type\":\"ready\"}' '{\"type\":\"audio\",\"samples\":[0.25,-0.5,0]}'; read line"]);
+        command.args(["-c", "printf '%s\\n' '{\"type\":\"ready\"}' '{\"type\":\"audio\",\"samples\":[0.25,-0.5,0]}'; while read line; do :; done; exit 17"]);
         let helper = Helper::spawn(command, &jobs, Some(tx)).unwrap();
         assert!(matches!(
             helper.receive(Duration::from_secs(2)).unwrap(),
@@ -688,7 +704,11 @@ mod tests {
         let capture = SystemAudio { helper };
         assert!(capture.poll().is_ok());
         drop(capture);
-        assert!(child.lock().unwrap().try_wait().unwrap().is_some());
+        // The helper must see EOF and release its capture, rather than being killed mid-stream.
+        assert_eq!(
+            child.lock().unwrap().try_wait().unwrap().unwrap().code(),
+            Some(17)
+        );
         assert!(matches!(
             rx.recv_timeout(Duration::from_secs(2)),
             Err(mpsc::RecvTimeoutError::Disconnected)
@@ -724,5 +744,26 @@ mod tests {
             helper.receive(Duration::from_secs(2)).unwrap_err(),
             "SYSTEM_AUDIO_PERMISSION"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unresponsive_system_capture_is_still_killed_and_reaped() {
+        let jobs = Jobs::default();
+        let mut command = Command::new("sh");
+        command.args([
+            "-c",
+            "printf '%s\\n' '{\"type\":\"ready\"}'; read line; exec sleep 30",
+        ]);
+        let helper = Helper::spawn(command, &jobs, None).unwrap();
+        assert!(matches!(
+            helper.receive(Duration::from_secs(2)).unwrap(),
+            Message::Ready
+        ));
+        let child = helper.child.clone();
+        let started = Instant::now();
+        drop(SystemAudio { helper });
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(child.lock().unwrap().try_wait().unwrap().is_some());
     }
 }

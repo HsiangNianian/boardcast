@@ -1,4 +1,18 @@
-import type { SpeechModels } from '../desktop.ts'
+import type { SpeechModels, VoiceSource, voice } from '../desktop.ts'
+
+/** Finish the old capture before opening new inputs; a stop during either await cancels the start. */
+export async function startVoice(
+  input: Pick<typeof voice, 'start' | 'stop'>,
+  request: { stop: boolean },
+  device: string | undefined,
+  source: VoiceSource,
+  restart = false,
+): Promise<void> {
+  if (restart) await input.stop()
+  if (request.stop) return
+  await input.start(device, source)
+  if (request.stop) await input.stop()
+}
 
 export type SpeechAssetState = 'installed' | 'downloading' | 'supported' | 'unsupported' | 'unknown'
 

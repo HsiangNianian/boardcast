@@ -113,7 +113,7 @@ export const zh: Messages = {
     micAria: '麦克风',
     systemDefault: '系统默认',
     micMissing: (name: string) => `${name}（没找到，会改用系统默认）`,
-    micHint: '换了麦克风或者收音来源，下次点「开始收音」生效。',
+    micHint: '录音中更换麦克风或收音来源会短暂停顿，并自动恢复收音；首次使用请允许系统请求的权限。',
     diarize: '按声音自动区分说话人',
     diarizeHint: '新出现的声音依次记成 A、B、C；在会议记录里点头像可以改成真名，同一个声音以后都用这个名字。很短的句子（「嗯」「对」）算给上一个说话的人。',
 

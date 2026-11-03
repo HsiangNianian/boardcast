@@ -123,7 +123,7 @@ export const en = {
     micAria: 'Microphone',
     systemDefault: 'System default',
     micMissing: (name: string) => `${name} (not found, the system default will be used)`,
-    micHint: 'A new microphone or audio source takes effect the next time you click "Start listening".',
+    micHint: 'Changing the microphone or audio source briefly pauses and resumes recording. Allow any permission requests on first use.',
     diarize: 'Tell speakers apart by voice',
     diarizeHint:
       'New voices are named A, B, C in order; click a speaker badge in the transcript to give them a real name, and the same voice keeps it. Very short sentences ("yeah", "right") go to whoever spoke last.',

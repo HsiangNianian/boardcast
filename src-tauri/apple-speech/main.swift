@@ -178,6 +178,9 @@ func transcribe(_ identifier: String) async throws {
 }
 
 func selfTest() throws {
+    guard Bundle.main.object(forInfoDictionaryKey: "LSUIElement") as? Bool == true else {
+        throw Failure(message: "Speech helper must run as a background agent")
+    }
     let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
     let values: [Float] = [0.25, -0.5, 0.75, 0]
     let data = values.withUnsafeBytes { Data($0) }

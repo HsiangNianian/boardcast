@@ -1,7 +1,73 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { appleAssetIssue, appleLanguageChoice, appleLanguageState } from './speech.ts'
-import type { SpeechModels } from '../desktop.ts'
+import { appleAssetIssue, appleLanguageChoice, appleLanguageState, startVoice } from './speech.ts'
+import type { SpeechModels, VoiceSource } from '../desktop.ts'
+
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
+test('starting from idle preserves each selected source and honors cancellation before opening it', async () => {
+  for (const source of ['mic', 'system', 'both'] as const) {
+    const calls: (VoiceSource | 'stop')[] = []
+    const input = {
+      start: async (_device: string | undefined, selected?: VoiceSource) => { calls.push(selected!) },
+      stop: async () => { calls.push('stop') },
+    }
+    await startVoice(input, { stop: true }, undefined, source)
+    assert.deepEqual(calls, [])
+    await startVoice(input, { stop: false }, undefined, source)
+    assert.deepEqual(calls, [source])
+  }
+})
+
+test('changing a live input waits for the previous capture to stop before opening both sources', async () => {
+  const calls: string[] = []
+  const stopped = deferred()
+  const input = {
+    stop: async () => { calls.push('stop'); await stopped.promise },
+    start: async (device: string | undefined, source?: VoiceSource) => { calls.push(`start:${device}:${source}`) },
+  }
+  const switching = startVoice(input, { stop: false }, 'USB microphone', 'both', true)
+  assert.deepEqual(calls, ['stop'])
+  stopped.resolve()
+  await switching
+  assert.deepEqual(calls, ['stop', 'start:USB microphone:both'])
+})
+
+test('a stop during a source switch or a permission prompt does not leave recording running', async () => {
+  for (const during of ['stop', 'start'] as const) {
+    const calls: string[] = []
+    const pending = deferred()
+    const entered = deferred()
+    const request = { stop: false }
+    const input = {
+      stop: async () => { calls.push('stop'); if (during === 'stop') { entered.resolve(); await pending.promise } },
+      start: async () => { calls.push('start'); if (during === 'start') { entered.resolve(); await pending.promise } },
+    }
+    const switching = startVoice(input, request, undefined, 'both', true)
+    await entered.promise
+    request.stop = true
+    pending.resolve()
+    await switching
+    assert.deepEqual(calls, during === 'stop' ? ['stop'] : ['stop', 'start', 'stop'])
+  }
+})
+
+test('source switching surfaces failures without silently falling back to one input', async () => {
+  for (const failure of ['stop', 'start'] as const) {
+    const calls: string[] = []
+    const input = {
+      stop: async () => { calls.push('stop'); if (failure === 'stop') throw new Error('stop failed') },
+      start: async () => { calls.push('start:both'); if (failure === 'start') throw new Error('permission denied') },
+    }
+    await assert.rejects(startVoice(input, { stop: false }, undefined, 'both', true),
+      { message: failure === 'stop' ? 'stop failed' : 'permission denied' })
+    assert.deepEqual(calls, failure === 'stop' ? ['stop'] : ['stop', 'start:both'])
+  }
+})
 
 test('Apple asset failures lead to setup and preserve the selected language and actual state', () => {
   for (const state of ['supported', 'downloading', 'unsupported', 'unknown']) {

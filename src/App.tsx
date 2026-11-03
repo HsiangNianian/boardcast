@@ -56,7 +56,7 @@ import type { Hit } from './engine/search.ts'
 import { hasSpan, spanAt, toggleSpan } from './engine/spans.ts'
 import DiagnosticsPanel from './ui/DiagnosticsPanel.tsx'
 import { lineTiming, recentErrors, recordError, timingReport } from './engine/diagnostics.ts'
-import { appleAssetIssue } from './engine/speech.ts'
+import { appleAssetIssue, startVoice } from './engine/speech.ts'
 import { type Action, actionFor } from './engine/shortcuts.ts'
 import { currentLang, msg, useT } from './i18n/index.ts'
 import { type SpokenLang, spokenLang } from './engine/lang.ts'
@@ -951,29 +951,42 @@ export default function App() {
     }
   }
 
-  async function toggleMic() {
+  async function startMic(device = micChoice, source = voiceSource, restart = false) {
+    if (micRequest.current) return
     setVoiceErr(null)
-    if (listening || micRequest.current) return stopMic()
     const request = { stop: false }
     micRequest.current = request
     setMicPending('starting')
     try {
-      const s = await voice.status()
-      if (request.stop) return
-      if (!s.installed) {
-        setVoiceErr(t.app.needVoiceModel)
-        setShowModels('speech')
-        return
+      if (!restart) {
+        const s = await voice.status()
+        if (request.stop) return
+        if (!s.installed) {
+          setVoiceErr(t.app.needVoiceModel)
+          setShowModels('speech')
+          return
+        }
       }
-      await voice.start(micChoice || undefined, voiceSource)
-      // 松开空格或再次点击可能发生在模型预加载完成之前。
-      if (request.stop) await voice.stop()
+      await startVoice(voice, request, device || undefined, source, restart)
     } catch (e) {
       showVoiceError(e)
     } finally {
       micRequest.current = null
       setMicPending(null)
     }
+  }
+
+  async function toggleMic() {
+    setVoiceErr(null)
+    if (listening || micRequest.current) return stopMic()
+    await startMic()
+  }
+
+  function changeAudio(device: string, source: VoiceSource) {
+    if (micRequest.current || (device === micChoice && source === voiceSource)) return
+    setMicChoice(device)
+    setVoiceSource(source)
+    if (listening) void startMic(device, source, true)
   }
 
   /** 生成摘要：会议记录（不含手动改动）加板书结构，交给当前在用的模型 */
@@ -2397,9 +2410,10 @@ export default function App() {
           setMeetingGlossary={setMeetingGlossary}
           setLocalOnly={setLocalOnly}
           mic={micChoice}
-          setMic={setMicChoice}
+          setMic={(device) => changeAudio(device, voiceSource)}
           source={voiceSource}
-          setSource={setVoiceSource}
+          setSource={(source) => changeAudio(micChoice, source)}
+          audioBusy={!!micPending}
           diarize={diarize}
           setDiarize={setDiarize}
           autoUpdate={autoUpdate}

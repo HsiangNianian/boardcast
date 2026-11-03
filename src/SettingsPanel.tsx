@@ -40,6 +40,7 @@ interface Props {
   setMic: (m: string) => void
   source: VoiceSource
   setSource: (s: VoiceSource) => void
+  audioBusy: boolean
   diarize: boolean
   setDiarize: (on: boolean) => void
   // 更新
@@ -423,15 +424,15 @@ export default function SettingsPanel(p: Props) {
         {isDesktop && (
           <section>
             <h3>{s.audio}</h3>
-            <div className="seg sources" role="radiogroup" aria-label={s.sourceAria}>
+            <div className="seg sources" role="radiogroup" aria-label={s.sourceAria} aria-busy={p.audioBusy}>
               {(['mic', 'both', 'system'] as const).map((v) => (
-                <button key={v} type="button" role="radio" aria-checked={p.source === v} className={p.source === v ? 'on' : ''} onClick={() => p.setSource(v)}>
+                <button key={v} type="button" role="radio" aria-checked={p.source === v} disabled={p.audioBusy} className={p.source === v ? 'on' : ''} onClick={() => p.setSource(v)}>
                   {s.sources[v]}
                 </button>
               ))}
             </div>
             <p className="hint">{s.sourceHint}</p>
-            <select value={p.mic} onChange={(e) => p.setMic(e.target.value)} aria-label={s.micAria}>
+            <select value={p.mic} disabled={p.audioBusy} onChange={(e) => p.setMic(e.target.value)} aria-label={s.micAria}>
               <option value="">{s.systemDefault}</option>
               {devices.map((d) => (
                 <option key={d} value={d}>

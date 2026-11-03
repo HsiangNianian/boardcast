@@ -1229,6 +1229,13 @@ fn run(
             }
         }
     }
+    // Activate the microphone before ScreenCaptureKit so device setup precedes system capture.
+    for s in &streams {
+        if let Err(err) = s.play() {
+            let _ = ready.send(Err(format!("Couldn't start microphone: {err}")));
+            return;
+        }
+    }
     if source != Source::Mic {
         #[cfg(target_os = "macos")]
         match apple_speech::SystemAudio::start(&app, tx.clone()) {
@@ -1248,6 +1255,10 @@ fn run(
             });
             match opened {
                 Ok((stream, rate)) => {
+                    if let Err(err) = stream.play() {
+                        let _ = ready.send(Err(format!("Couldn't start system audio: {err}")));
+                        return;
+                    }
                     streams.push(stream);
                     resamplers[1] = (rate != SAMPLE_RATE)
                         .then(|| LinearResampler::create(rate, SAMPLE_RATE))
@@ -1262,12 +1273,6 @@ fn run(
         }
     }
     drop(tx);
-    for s in &streams {
-        if let Err(err) = s.play() {
-            let _ = ready.send(Err(format!("Couldn't start audio input: {err}")));
-            return;
-        }
-    }
     let name = names.join(" + ");
     set_status(
         &app,

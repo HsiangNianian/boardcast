@@ -2,6 +2,31 @@
 
 All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
 
+## 0.21.1-4 - 2026-11-03
+
+### Features
+
+- **audio:** Capture macOS system sound for local transcription ([`b3c9f45`](https://github.com/HsiangNianian/boardcast/commit/b3c9f45c6cef38d7ae763283db4ffcb16bcee366))
+- **speech:** Detect the opening language for Apple transcription ([`26f4c54`](https://github.com/HsiangNianian/boardcast/commit/26f4c54bd19e3f05bcb877f74329119954fa7267))
+
+### Fixes
+
+- **voice:** Guide Apple model downloads with consistent readiness checks ([`4abb6f2`](https://github.com/HsiangNianian/boardcast/commit/4abb6f2dee4a99c470a3c73b338c145c7b3267b6))
+- **eval:** Align board CI with the desktop model and explain revision failures ([`27e8811`](https://github.com/HsiangNianian/boardcast/commit/27e88114db7e582c77d0b7514fd6e2f6b2726483))
+- **release:** Pin updater downloads to the release tag ([`c3774bb`](https://github.com/HsiangNianian/boardcast/commit/c3774bb85ce581177308f20728f5c9284d7d9e5e))
+- **ink:** Render Japanese handwriting without missing characters ([`f35baef`](https://github.com/HsiangNianian/boardcast/commit/f35baef00be4c29d3be5f802de4fb95ed6345dc2))
+  - Bundle 184 kana and 1,531 supplementary kanji with ordered strokes and their KanjiVG license.
+  - Normalize half-width and voiced kana consistently for drawing and layout across the desktop app, web demo, landing page and offline replay.
+  - Preserve existing Chinese glyphs and English stroke weight; verify the native client, offline replay, PDF exports and 188 unit tests.
+- **audio:** Switch active inputs and release macOS capture cleanly ([`9c8a2a7`](https://github.com/HsiangNianian/boardcast/commit/9c8a2a7a4a6cf0d8146b786cdc63a6b35332e15e))
+  - Restart recording when the microphone or audio source changes, with cancellation and startup error handling.
+  - Mark the speech helper as a background agent and allow ScreenCaptureKit to stop before reaping it, with bounded cleanup for an unresponsive helper.
+  - Activate the microphone before starting system audio capture.
+  - Validation: typecheck and web build, input-switching and helper lifecycle tests, and the settings flow with a simulated native bridge passed.
+  - Mac device validation is still needed for Dock visibility, first-time permissions and Finder Quick Look WAV playback with mixed capture. The reported loss of system audio is still under investigation in #69.
+
+**Full diff:** [v0.21.0...v0.21.1-4](https://github.com/HsiangNianian/boardcast/compare/v0.21.0...v0.21.1-4)
+
 ## 0.21.0 - 2026-11-02
 
 ### Features

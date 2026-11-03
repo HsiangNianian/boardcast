@@ -178,6 +178,8 @@ export interface Utterance {
   replaces?: string
   speaker?: string
   text: string
+  /** Original ASR/input text before explicit glossary replacements. */
+  rawText?: string
   /** 说这句话时圈着的节点编号（最多 MAX_POINTED 个，先圈的在前） */
   pointing?: string[]
 }
@@ -210,7 +212,7 @@ export function pointingLine(g: Graph, ids: string[] | undefined): string | unde
   return shown.length ? `当前手指着：${shown.join('、')}` : undefined
 }
 
-export function userMessage(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = []): string {
+export function userMessage(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = [], speechHints = ''): string {
   const parts = [`白板：\n${describe(g)}`]
   if (boardLang(recent, next) === 'en') parts.unshift(ENGLISH_BOARD)
   // 术语表放在最前面：一场会里不变，llama-server 的前缀缓存能复用
@@ -219,13 +221,14 @@ export function userMessage(g: Graph, recent: Utterance[], next: Utterance, term
   // 只在真指着东西时才有这一行：没指的时候提示词和评测时一模一样
   const pointed = pointingLine(g, next.pointing)
   if (pointed) parts.push(pointed)
+  if (speechHints) parts.push(speechHints)
   parts.push(next.replaces !== undefined
     ? `转写修订（同一句话，不是新发言）：\n原转写：${next.replaces}\n正确转写：${line(next)}\n只修正原转写造成的板书错误，复用已有节点，保留其他发言和手动编辑。已有节点的时间、名称或数值不完整或错误时，必须用 R 改成正确值，不要用 K 添加备注后还保留旧值。确有新增事实才补充节点。`
     : `新的一句：${line(next)}`)
   return parts.join('\n')
 }
 
-export function messages(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = []): { role: string; content: string }[] {
+export function messages(g: Graph, recent: Utterance[], next: Utterance, terms: Term[] = [], speechHints = ''): { role: string; content: string }[] {
   const examples = boardLang(recent, next) === 'en' ? EXAMPLES_EN : EXAMPLES
   return [
     { role: 'system', content: SYSTEM },
@@ -233,7 +236,7 @@ export function messages(g: Graph, recent: Utterance[], next: Utterance, terms: 
       { role: 'user', content: u },
       { role: 'assistant', content: a },
     ]),
-    { role: 'user', content: userMessage(g, recent, next, terms) },
+    { role: 'user', content: userMessage(g, recent, next, terms, speechHints) },
   ]
 }
 

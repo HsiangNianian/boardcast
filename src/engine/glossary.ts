@@ -3,6 +3,13 @@
 // - 识别出来的话先按术语表纠正（整词替换，宁可少改不可改错），再交给模型；
 // - 术语表也放进给模型的消息里，起名照标准写法。
 
+import type { Utterance } from './prompt.ts'
+
+export function correctUtterance(u: Utterance, terms: Term[]): Utterance {
+  const text = correct(u.text, terms)
+  return { ...u, text, rawText: u.rawText ?? (text !== u.text ? u.text : undefined) }
+}
+
 export interface Term {
   term: string
   /** 常见的错写、读音 */

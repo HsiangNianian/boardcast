@@ -55,6 +55,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Multilingual phonetic labels and commands
+        run: pnpm eval:phonetic
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phonetic-eval
+          path: eval/reports/phonetic.*
+          if-no-files-found: ignore
       - run: pnpm build
 
   desktop:

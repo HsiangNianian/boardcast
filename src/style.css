@@ -917,6 +917,10 @@ kbd {
   }
 }
 
+.icon[aria-busy='true'] svg {
+  animation: bc-breathe 1s ease-in-out infinite;
+}
+
 /* —— 会议记录 —— */
 .log {
   display: flex;

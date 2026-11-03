@@ -5,6 +5,7 @@
 
 import { type Graph, norm } from './graph.ts'
 import type { Op } from './ops.ts'
+import { negated } from './phonetic.ts'
 
 /** 这句话提到了哪些已有节点。 */
 export function mentions(g: Graph, text: string): string[] {
@@ -23,6 +24,7 @@ function clean(s: string): string {
 
 /** 口令解析。只认带口令或箭头的句子，宁可漏，不可乱画。 */
 export function quickOps(text: string): Op[] {
+  if (negated(text)) return []
   const arrow = /->|→/.test(text)
   const cue = CUE.exec(text)
   if (!cue && !arrow) return []

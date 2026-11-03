@@ -55,6 +55,7 @@ export class Session {
       if (previous && (u.revision ?? 0) <= (previous.revision ?? 0)) return
       if (previous?.text === u.text) {
         previous.revision = u.revision
+        previous.rawText = u.rawText
         return
       }
       const drawn = this.history.find((p) => p.id === u.id)

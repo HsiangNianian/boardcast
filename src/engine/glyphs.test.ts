@@ -29,6 +29,11 @@ test('full-width Latin uses the same handwriting; cursive remains available', as
   assert.notDeepEqual((await glyph('a'))?.strokes, (await glyph('a', 'script'))?.strokes)
 })
 
+test('board headings and timestamp ranges have offline punctuation strokes', async (t) => {
+  t.mock.method(globalThis, 'fetch', () => { throw new Error('Punctuation must work offline') })
+  for (const ch of ['·', '–']) assert.ok((await glyph(ch))?.strokes.length)
+})
+
 test('Japanese kana have ordered, drawable strokes without a network or embedded font', async (t) => {
   t.mock.method(globalThis, 'fetch', () => { throw new Error('Kana must work offline') })
   const chars = [...'ー・゛゜ゝゞヽヾ']

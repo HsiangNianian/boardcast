@@ -125,7 +125,7 @@ function topicRegion(g: Graph, head: Node): Region {
       const x = 8 + (d - 1) * 30
       rows.push({ id: c.id, node: c, prefix, text: c.label, x, y, w: textWidth(c.label, size), size })
       y += c.kind === 'formula' ? size + 30 : size + 16
-      if (!isAttach(c)) walk(c, depth + 1)
+      walk(c, depth + 1)
     }
   }
   walk(head, 1)
@@ -143,19 +143,26 @@ function topicRegion(g: Graph, head: Node): Region {
   }
 }
 
-/** 没有挂靠、或者挂在流程图节点上的问题和公式，统一收进「待定」。 */
+/** 流程图旁的补充与问题，连同它们的子条目一起保留。 */
 function looseRegion(g: Graph, loose: Node[]): Region {
   // Board text, so it follows the language written on the board rather than the interface
   const en = spokenLang(g.nodes.map((n) => n.label)) === 'en'
-  const heading = en ? 'Open' : '待定'
+  const questions = loose.some((n) => n.kind === 'question')
+  const notes = loose.some((n) => n.kind !== 'question')
+  const heading = questions ? (notes ? (en ? 'Notes & questions' : '补充与问题') : (en ? 'Open' : '待定')) : (en ? 'Notes' : '补充')
   const rows: Row[] = []
+  const seen = new Set<string>()
   let y = TITLE + 26
-  for (const n of loose) {
-    const host = n.parent ? g.nodes.find((p) => p.id === n.parent) : undefined
+  const walk = (n: Node, depth: number) => {
+    if (seen.has(n.id)) return
+    seen.add(n.id)
+    const host = !depth && n.parent ? g.nodes.find((p) => p.id === n.parent) : undefined
     const text = host ? `${host.label}${en ? ': ' : '：'}${n.label}` : n.label
-    rows.push({ id: n.id, node: n, prefix: prefixFor(n, 1, 0), text, x: 8, y, w: textWidth(text, FONT), size: FONT })
+    rows.push({ id: n.id, node: n, prefix: prefixFor(n, depth + 1, 0), text, x: 8 + depth * 30, y, w: textWidth(text, FONT), size: FONT })
     y += n.kind === 'formula' ? FONT + 30 : FONT + 16
+    for (const c of children(g, n.id)) walk(c, depth + 1)
   }
+  for (const n of loose) walk(n, 0)
   const w = Math.max(textWidth(heading, TITLE), ...rows.map((r) => r.x + 30 + r.w + 24)) + 16
   return { id: '__loose', x: 0, y: 0, w, h: y + 8, title: { text: heading, x: 0, y: 0, w: textWidth(heading, TITLE) }, rows }
 }
@@ -320,6 +327,12 @@ export interface LayoutMemory {
   boxAt: [string, Box][]
 }
 
+export function routeSignature(e: { from: string; to: string }, at: Map<string, Box>): string {
+  const a = at.get(e.from)!
+  const b = at.get(e.to)!
+  return [a.x, a.y, a.w, b.x, b.y, b.w].map((v) => v.toFixed(1)).join(',')
+}
+
 /** 一次排版：区域位置和流程图节点都记在实例里，下次排同一块板时尽量不动 */
 export class StableLayout {
   /** 区域原点的绝对位置（流程图区域记的是它内部坐标 (0,0) 的位置） */
@@ -396,18 +409,13 @@ export class StableLayout {
   private async diagram(g: Graph, ids: Set<string>): Promise<Diagram> {
     for (const id of [...this.nodeAt.keys()]) if (!ids.has(id)) this.nodeAt.delete(id)
     const inner = g.edges.filter((e) => ids.has(e.from) && ids.has(e.to))
-    const sig = (e: { from: string; to: string }, at: Map<string, Box>) => {
-      const a = at.get(e.from)!
-      const b = at.get(e.to)!
-      return [a.x, a.y, a.w, b.x, b.y, b.w].map((v) => v.toFixed(1)).join(',')
-    }
 
     // 第一次：交给 ELK 整块排，记下来
     if (!this.nodeAt.size) {
       const d = await diagramLayout(g, ids)
       for (const b of d.nodes) this.nodeAt.set(b.id, b)
       this.routeAt.clear()
-      for (const e of d.edges) this.routeAt.set(`${e.from}>${e.to}`, { sig: sig(e, this.nodeAt), points: e.points })
+      for (const e of d.edges) this.routeAt.set(`${e.from}>${e.to}`, { sig: routeSignature(e, this.nodeAt), points: e.points })
       return d
     }
 
@@ -481,7 +489,7 @@ export class StableLayout {
 
     const edges: Route[] = inner.map((e) => {
       const key = `${e.from}>${e.to}`
-      const s = sig(e, placed)
+      const s = routeSignature(e, placed)
       const old = this.routeAt.get(key)
       const others = [...placed.values()].filter((b) => b.id !== e.from && b.id !== e.to)
       // 沿用旧走线的前提：两端没动，而且没有新节点压在线上
@@ -511,11 +519,8 @@ export class StableLayout {
     const loose = g.nodes.filter(
       (n) =>
         isAttach(n) &&
-        (!n.parent || !g.nodes.some((p) => p.id === n.parent) || diagramIds.has(n.parent)) &&
-        n.kind !== 'note',
+        (!n.parent || !g.nodes.some((p) => p.id === n.parent) || diagramIds.has(n.parent)),
     )
-    // 挂在流程图节点上的备注也收进待定，写成「节点：备注」
-    for (const n of g.nodes) if (n.kind === 'note' && n.parent && diagramIds.has(n.parent)) loose.push(n)
 
     // 每块区域：key、大小，以及内部坐标的左上角（流程图增量排时可能是负的）
     type Slot = { key: string; at: number; region?: Region; x0: number; y0: number; w: number; h: number }

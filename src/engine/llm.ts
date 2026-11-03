@@ -8,6 +8,8 @@ import type { Graph } from './graph.ts'
 import type { Term } from './glossary.ts'
 import { type Utterance, boardLang, grammar, messages } from './prompt.ts'
 import { msg } from '../i18n/index.ts'
+import { bindSpeechOps, speechPlan } from './phonetic.ts'
+import { formatOps, parseOps } from './ops.ts'
 
 export interface LlmConfig {
   baseUrl: string
@@ -71,10 +73,10 @@ export function chatUrl(base: string): string {
  */
 const strictServers = new Set<string>()
 
-function body(cfg: LlmConfig, g: Graph, recent: Utterance[], next: Utterance, extras = true, terms: Term[] = []): Record<string, unknown> {
+function body(cfg: LlmConfig, g: Graph, recent: Utterance[], next: Utterance, extras = true, terms: Term[] = [], speechHints = ''): Record<string, unknown> {
   const b: Record<string, unknown> = {
     model: cfg.model ?? 'local',
-    messages: messages(g, recent, next, terms),
+    messages: messages(g, recent, next, terms, speechHints),
     temperature: 0,
     // 远程模型可能是推理模型，先想再答，给够余量；本地有语法约束，160 足够
     max_tokens: cfg.maxTokens ?? (cfg.flavor === 'openai' ? 1024 : 160),
@@ -116,14 +118,16 @@ export async function proposeOps(
   terms: Term[] = [],
 ): Promise<LlmResult> {
   const t0 = performance.now()
+  const speech = await speechPlan(g, recent, next, terms)
+  if (speech.direct) return { text: formatOps(speech.direct) || '-', ms: performance.now() - t0, via: 'Local commands' }
   let data: ChatResponse
   try {
     try {
-      data = await post(cfg, body(cfg, g, recent, next, true, terms), signal)
+      data = await post(cfg, body(cfg, g, recent, next, true, terms, speech.hints), signal)
     } catch (e) {
       if (cfg.flavor !== 'openai' || strictServers.has(cfg.baseUrl) || !rejectsExtras(e)) throw e
       strictServers.add(cfg.baseUrl)
-      data = await post(cfg, body(cfg, g, recent, next, false, terms), signal)
+      data = await post(cfg, body(cfg, g, recent, next, false, terms, speech.hints), signal)
     }
   } catch (e) {
     if (!cfg.fallback || signal?.aborted) throw e
@@ -133,7 +137,9 @@ export async function proposeOps(
   const ms = performance.now() - t0
   const raw = data.choices?.[0]?.message?.content ?? ''
   return {
-    text: cfg.flavor === 'openai' ? stripThinking(raw) : raw,
+    text: speech.matches.some((m) => m.ids.length)
+      ? formatOps(bindSpeechOps(parseOps(cfg.flavor === 'openai' ? stripThinking(raw) : raw), speech, next, g)) || '-'
+      : cfg.flavor === 'openai' ? stripThinking(raw) : raw,
     ms,
     promptTokens: data.usage?.prompt_tokens,
     promptEvaluated: data.timings?.prompt_n,

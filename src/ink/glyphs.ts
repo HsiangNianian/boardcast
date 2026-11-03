@@ -74,6 +74,8 @@ function latinGlyph(ch: string, latin: Latin): Glyph | null {
 
 // 中文标点：几笔就够
 const PUNCT: Record<string, Glyph> = {
+  '·': { strokes: [[[0.24, 0.47], [0.26, 0.5]]], advance: 0.5 },
+  '–': { strokes: [[[0.08, 0.55], [0.65, 0.54]]], advance: 0.75 },
   '，': { strokes: [[[0.22, 0.78], [0.26, 0.84], [0.2, 0.95]]], advance: 0.5 },
   '。': { strokes: [[[0.22, 0.76], [0.3, 0.74], [0.34, 0.82], [0.27, 0.88], [0.2, 0.83], [0.22, 0.76]]], advance: 0.5 },
   '、': { strokes: [[[0.18, 0.74], [0.3, 0.86]]], advance: 0.5 },

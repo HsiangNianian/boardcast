@@ -133,6 +133,7 @@ PDF 最多导入 40 张有效页面；没有文字层的扫描件只显示底图
 语音定稿 / 已采纳修订 -----+
 文字输入 ------------------+--> 术语纠正 + 绑定圈选（最多 8 个目标）
 手绘圈选 ------------------+                  |
+                                     中日英读音候选
                                   +-----------+-----------+
                                   v                       v
                                本地规则               板书 Agent
@@ -152,9 +153,12 @@ PDF 最多导入 40 张有效页面；没有文字层的扫描件只显示底图
 ```
 
 - **定稿才进入板书。** 临时字幕只用于显示。新发言先做术语纠正，再绑定圈住的目标；纯翻页口令直接切板，不走模型。
+- **听错的标签可以定位回已有节点。** 桌面、网页共用后台线程里的中文拼音、日文读音和英文 CMU 发音词典。先匹配准确名称与术语别名，再找当前板上同音的候选；明确的圈选、下划线、星标、高亮、连线口令可直接执行，否定口令不执行，删除要求目标精确匹配。同音歧义要结合圈选或上下文，新概念仍可新建。保留原始转写，不把猜测写成永久别名。见[范围与回归评测](eval/phonetic.md)。
 - **修订保留同一句的身份。** 会议记录保留片段的说话人和所在页；排队中的旧文本直接替换，正在执行但已被新版覆盖的板书请求结果会丢弃。原文已经画上板时，板书 Agent 收到针对原页的明确纠正指令。历史中每个片段只保留一条发言。
 - **板书 Agent 读取上下文。** 输入包括实体表、别名、导入原文、最近两句、术语表和绑定目标。每个会话排队执行模型请求；普通发言可以合批，带圈选的发言与修订逐句处理。代码应用返回的操作，把确认的草稿描成墨线，清除未确认的草稿。
 - **模型与绘制各司其职。** 本地 llama.cpp 使用 GBNF 和提示词前缀缓存；兼容 API 不带这些语法约束，失败时可回退到本地模型。增量排版和手写笔迹由代码控制，PC 会议模式使用 Excalidraw。保存的发言和图状态变化用于回放、导出，无需重新调用模型；摘要单独读取记录与各页板书生成。
+
+- **自动美化保留会议原意。** 工具栏的「自动美化」使用本地 D2/TALA 整理流程走线，并对齐主题、统一留白；文字、节点编号、圈画和转写关联保持不变，可撤销回到原布局。实时记录仍用增量排版。PAD 板书与 HTML 回放里，移动或改写的旧笔迹先擦除，再写到新位置，不显示板擦；开启系统「减少动态效果」时直接更新。排版编译器按需加载，不打入导出的回放 HTML。
 
 当前音频复核由固定规则决定，板书 Agent 负责处理已采纳的文字修订。学习式降噪、重叠人声分离和自动切换 ASR 模型仍待接入；GTCRN 与 Whisper 对比目前属于评测对照。具体条件见[动态策略与评测](eval/asr/README.md#dynamic-policy-and-revisions)，实测结果见[动态基线](eval/asr/dynamic.md)：首轮评测的识别误差持平，尚未证明准确率提升。
 
@@ -249,6 +253,7 @@ pnpm tauri dev                 # 桌面版；首次会下载 llama-server 与语
 pnpm site:dev                  # 官网，http://localhost:1430
 pnpm typecheck
 pnpm test                      # 引擎单元测试，无需模型
+pnpm eval:phonetic             # 中日英标签/动作离线回归，无需 ASR 或 LLM 模型
 pnpm build                     # 类型检查、回放播放器和网页生产构建
 ```
 
@@ -337,3 +342,5 @@ CI 使用 **Qwen3.5-4B · Q4_K_M**，与桌面版推荐模型一致。其他模�
 发现问题或想讨论下一步，欢迎提 [Issue](https://github.com/HsiangNianian/boardcast/issues) 或 PR；功能进展以 Issues 和 [CHANGELOG](CHANGELOG.md) 为准。
 
 代码采用 [MIT](LICENSE)。中文笔画数据来自 [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data)（源自 Make Me a Hanzi 与 Arphic 字体，Arphic Public License，随生成的数据分发许可文本）；日文假名和补充汉字采用 Ulrich Apel 的 [KanjiVG](https://kanjivg.tagaini.net/) 笔顺数据，转换为骨架线后沿用 [CC BY-SA 3.0](public/licenses/kanjivg-CC-BY-SA-3.0.txt)；英文默认笔迹由 Excalifont 提取，沿用 [SIL OFL 许可](public/licenses/handwritten-OFL.txt)；连写体 Hershey 字形来自 [hersheytext](https://github.com/techninja/hersheytextjs)（MIT）。界面使用 DM Sans、JetBrains Mono，官网另有思源黑体子集；这些字体使用 SIL OFL，官网字体许可见 [OFL.txt](landing/public/fonts/OFL.txt)。
+
+D2/TALA 排版使用未修改的 [D2 JavaScript 包](https://github.com/d2lang/d2/tree/master/d2js)，随应用分发 [MPL 2.0 许可](public/licenses/d2-MPL-2.0.txt)及[第三方声明](public/licenses/d2-THIRD-PARTY-NOTICES.txt)。

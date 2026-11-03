@@ -31,11 +31,32 @@ function pdfjsAssets(): Plugin {
   }
 }
 
+/** Local, lazy Japanese dictionary assets; no CDN or Python runtime. */
+function pronunciationAssets(): Plugin {
+  const root = join(import.meta.dirname, 'node_modules/kuromoji/dict')
+  const files = readdirSync(root).filter((f) => f.endsWith('.dat.gz'))
+  return {
+    name: 'pronunciation-assets',
+    configureServer(server) {
+      server.middlewares.use('/pronunciation/ja', (req, res, next) => {
+        const name = (req.url ?? '').split('?')[0].replace(/^\//, '')
+        if (!files.includes(name)) return next()
+        res.setHeader('content-type', 'application/octet-stream')
+        res.end(readFileSync(join(root, name)))
+      })
+    },
+    generateBundle() {
+      for (const name of files) this.emitFile({ type: 'asset', fileName: `pronunciation/ja/${name}`, source: readFileSync(join(root, name)) })
+    },
+  }
+}
+
 // Tauri 开发时固定端口；TAURI_ENV_* 由 tauri cli 注入
 export default defineConfig({
   // The web demo on GitHub Pages lives under /boardcast/ (BOARDCAST_BASE=/boardcast/); the desktop app uses /
   base: process.env.BOARDCAST_BASE || '/',
-  plugins: [react(), pdfjsAssets()],
+  plugins: [react(), pdfjsAssets(), pronunciationAssets()],
+  worker: { format: 'es' },
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   envPrefix: ['VITE_', 'TAURI_ENV_'],

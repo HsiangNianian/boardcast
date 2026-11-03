@@ -1,9 +1,9 @@
 // 手写模式：自己画 SVG，不走 Excalidraw。
 // 新出现的东西按笔顺一笔一笔写出来（骨架线做遮罩，stroke-dashoffset 从头描到尾），
-// 写过的东西位置变了就直接挪过去，不重写。
+// 已有笔迹移动或改写时先擦除旧位置，再写新位置；手动拖动仍跟着指针走。
 // 浅色是白板马克笔，深色是黑板粉笔。
 
-import { type PointerEvent, type ReactNode, type WheelEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type PointerEvent, type ReactNode, type WheelEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { type Layout, board } from '../board/layout.ts'
 import type { Selection } from '../engine/edit.ts'
 import type { Graph } from '../engine/graph.ts'
@@ -14,6 +14,7 @@ import { MAX_POINTED } from '../engine/pointing.ts'
 import { circled, hitTest, selectionBox, selectionLine } from './hit.ts'
 import { dashes, merge, overlaps } from './lasso.ts'
 import { ink, rng } from './pen.ts'
+import { ERASE_MS, changedInk, eraseSweep } from './transition.ts'
 
 type Pt = [number, number]
 /** 圈选的一圈：用和板书一样的笔，切成一段段虚线（不填充） */
@@ -52,8 +53,17 @@ const BUDGET = 2400
 const MAX_BACKLOG = 600
 
 interface Timing {
+  start: number
   delays: number[]
   durs: number[]
+  end: number
+}
+
+interface Erasing {
+  piece: Piece
+  sweep: NonNullable<ReturnType<typeof eraseSweep>>
+  visible: number[]
+  start: number
   end: number
 }
 
@@ -114,6 +124,18 @@ export default function InkBoard({
 }) {
   const look = dark ? BLACKBOARD : WHITEBOARD
   const [pieces, setPieces] = useState<Piece[]>([])
+  const previous = useRef<Piece[]>([])
+  const [erasing, setErasing] = useState<Erasing[]>([])
+  const ghosts = useRef<Erasing[]>([])
+  const skipMotion = useRef(false)
+  const maskPrefix = useId().replaceAll(':', '')
+  const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const change = () => setReduced(media.matches)
+    media.addEventListener('change', change)
+    return () => media.removeEventListener('change', change)
+  }, [])
   /** 当前画面是按哪个潦草度算出来的（测试和调试用） */
   const [drawn, setDrawn] = useState(messy)
   const [bounds, setBounds] = useState({ x0: 0, y0: 0, x1: 800, y1: 600 })
@@ -132,6 +154,7 @@ export default function InkBoard({
   const [lay, setLay] = useState<Layout | null>(null)
   /** 现在画面上的视角和画布尺寸，排完新内容时判断要不要重新适配 */
   const shown = useRef<{ x: number; y: number; k: number } | null>(null)
+  const afterEraseView = useRef<typeof shown.current>(null)
   const size = useRef<[number, number]>([1000, 700])
   const tidied = useRef(tidy)
   /** 上一次板上有没有东西：从空白板开始画第一笔时总是适配一次 */
@@ -141,27 +164,49 @@ export default function InkBoard({
 
   useEffect(() => {
     let stale = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let eraseTimer: ReturnType<typeof setTimeout> | undefined
     void (async () => {
       const l = await board.layout(graph)
       const ps = await compose(graph, l, hot, look, messy, weight, base, trace, englishWeight)
       if (stale) return
       const from = [graph, hot, look, messy, weight, englishWeight, tidy, bottomInset, layoutRev]
       const restyled = from.every((x, i) => x === drewFor.current[i])
+      const changed = graph !== drewFor.current[0] || tidy !== drewFor.current[6] || layoutRev !== drewFor.current[8]
       drewFor.current = from
       setLay(l)
       // 给第一次出现的笔画排上写字的时间：接在正在写的东西后面。
       // 板书不能落后于讨论：一轮新内容最多写 BUDGET 毫秒，写不完就整体加速；
       // 上一轮还没写完时，最多再等 MAX_BACKLOG 就开始写这一轮。
       const now = performance.now()
+      const removed = changed && !reduced && !skipMotion.current ? changedInk(previous.current, ps) : []
+      skipMotion.current = false
+      const wasErasing = ghosts.current.length > 0
+      ghosts.current = reduced ? [] : ghosts.current.filter((g) => g.end > now)
+      if (wasErasing && !ghosts.current.length) setView(afterEraseView.current)
+      for (const piece of removed) {
+        const old = timing.current.get(piece.key)
+        const visible = piece.strokes.map((_, i) => !old || !old.durs[i] ? 1 : Math.max(0, Math.min(1, (now - old.start - old.delays[i]) / old.durs[i])))
+        const sweep = eraseSweep(piece)
+        if (sweep && visible.some((n) => n > 0)) ghosts.current.push({ piece, sweep, visible, start: now, end: now + ERASE_MS })
+        timing.current.delete(piece.key)
+      }
+      const keys = new Set(ps.map((p) => p.key))
+      for (const key of timing.current.keys()) if (!keys.has(key)) timing.current.delete(key)
+      if (reduced) timing.current.clear()
+      previous.current = ps
+      setErasing([...ghosts.current])
+      const eraseEnd = Math.max(now, ...ghosts.current.map((g) => g.end))
       cursor.current = Math.min(Math.max(cursor.current, now), now + MAX_BACKLOG)
+      cursor.current = Math.max(cursor.current, eraseEnd)
       const fresh = ps.filter((p) => !timing.current.has(p.key))
       const natural = fresh
         .filter((p) => !p.under)
         .reduce((t, p) => t + p.strokes.reduce((u, s) => u + Math.max(MIN_STROKE, s.length / SPEED) + GAP, 0), 0)
       const k = natural > BUDGET ? BUDGET / natural : 1
       for (const p of fresh) {
-        if (p.under) {
-          timing.current.set(p.key, { delays: p.strokes.map(() => 0), durs: p.strokes.map(() => 0), end: now })
+        if (p.under || reduced) {
+          timing.current.set(p.key, { start: now, delays: p.strokes.map(() => 0), durs: p.strokes.map(() => 0), end: now })
           continue
         }
         const delays: number[] = []
@@ -172,7 +217,7 @@ export default function InkBoard({
           durs.push(dur)
           cursor.current += dur + GAP * k
         }
-        timing.current.set(p.key, { delays, durs, end: cursor.current })
+        timing.current.set(p.key, { start: now, delays, durs, end: cursor.current })
       }
       setPieces(ps)
       setDrawn(messy)
@@ -188,19 +233,29 @@ export default function InkBoard({
           b.y0 >= cur.y &&
           b.x1 <= cur.x + w / cur.k &&
           b.y1 <= cur.y + Math.max(120, h - bottomInset) / cur.k
-        setView(inside && had.current && tidied.current === tidy ? cur : null)
+        // Keep the old ink in the same screen position until the wiping has finished.
+        const nextView = inside && had.current && tidied.current === tidy ? cur : null
+        afterEraseView.current = nextView
+        setView(ghosts.current.length ? cur : nextView)
         tidied.current = tidy
         had.current = graph.nodes.length > 0
       }
+      if (ghosts.current.length) eraseTimer = setTimeout(() => {
+        if (!stale) { ghosts.current = []; setErasing([]); setView(afterEraseView.current) }
+      }, eraseEnd - now)
       // 写完以后去掉遮罩，换成静态路径
       const wait = cursor.current - now + 100
-      setTimeout(() => !stale && setTick((t) => t + 1), wait)
+      timer = setTimeout(() => {
+        if (!stale) { ghosts.current = []; setErasing([]); setTick((t) => t + 1) }
+      }, wait)
     })()
     return () => {
       stale = true
+      clearTimeout(timer)
+      clearTimeout(eraseTimer)
     }
     // trace 按内容比：每次渲染传进来的都是新对象也不会重画
-  }, [graph, hot, look, messy, weight, englishWeight, tidy, bottomInset, layoutRev, base, trace?.who, trace?.color])
+  }, [graph, hot, look, messy, weight, englishWeight, tidy, bottomInset, layoutRev, base, trace?.who, trace?.color, reduced])
 
   // 画布尺寸放进 state：第一次渲染时 ref 还没挂上，窗口缩放时也要重新适配
   const [[W, H], setSize] = useState<[number, number]>([1000, 700])
@@ -304,7 +359,10 @@ export default function InkBoard({
       const m = moving
       moveFrom.current = null
       setMoving(null)
-      if (m && selection && Math.hypot(m.dx, m.dy) * v.k > 3) onMoveSel?.(selection, m.dx, m.dy)
+      if (m && selection && Math.hypot(m.dx, m.dy) * v.k > 3 && onMoveSel) {
+        skipMotion.current = true
+        onMoveSel(selection, m.dx, m.dy)
+      }
       return
     }
     drag.current = null
@@ -363,12 +421,12 @@ export default function InkBoard({
 
   const now = performance.now()
   const render = (p: Piece, i: number) => (
-    <g key={p.key} data-key={p.key} transform={follows(p.key) ? offset : undefined} opacity={p.opacity} fill={p.color} style={p.under ? { mixBlendMode: dark ? 'screen' : 'multiply' } : undefined}>
+    <g key={`${p.key}:${timing.current.get(p.key)?.start}`} data-key={p.key} transform={follows(p.key) ? offset : undefined} opacity={p.opacity} fill={p.color} style={p.under ? { mixBlendMode: dark ? 'screen' : 'multiply' } : undefined}>
       {p.strokes.map((s, j) => {
         const t = timing.current.get(p.key)
         const live = t && t.end > now && t.durs[j] > 0
         if (!live) return <path key={j} d={s.d} />
-        const id = `w${i}-${j}-${p.key.length}`
+        const id = `${maskPrefix}-w${i}-${j}-${p.key.length}`
         return (
           <g key={j}>
             {/* 遮罩范围要写明：不写时默认按画布大小从原点算，原点左边、上边（坐标是负数）的新内容写的时候看不见，写完才突然冒出来 */}
@@ -433,7 +491,31 @@ export default function InkBoard({
           <image className="underlay" href={underlay} x={0} y={0} width={graph.underlay.w} height={graph.underlay.h} preserveAspectRatio="none" />
         )}
         <g>{pieces.filter((p) => p.under).map(render)}</g>
-        <g filter={`url(#${look.chalk ? 'chalk' : 'marker'})`}>{pieces.filter((p) => !p.under).map(render)}</g>
+        <g filter={`url(#${look.chalk ? 'chalk' : 'marker'})`}>
+          {erasing.map(({ piece: p, sweep: b, visible, start }, i) => {
+            const id = `${maskPrefix}-erase${i}`
+            return <g key={`${p.key}:${start}`} data-erasing={p.key} opacity={p.opacity} fill={p.color} pointerEvents="none" aria-hidden>
+              <mask id={id} maskUnits="userSpaceOnUse" x={b.x} y={b.y} width={b.w} height={b.h} style={{ maskType: 'luminance' }}>
+                <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="white" />
+                <path d={b.d} fill="none" stroke="black" strokeWidth={38} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={b.length + 1} strokeDashoffset={b.length + 1} style={{ animation: `bc-write ${ERASE_MS}ms ease-in-out forwards` }} />
+              </mask>
+              <g mask={`url(#${id})`}>
+                {p.strokes.map((s, j) => {
+                  if (!visible[j]) return null
+                  if (visible[j] >= 1) return <path key={j} d={s.d} />
+                  const partial = `${id}-partial${j}`
+                  return <g key={j}>
+                    <mask id={partial} maskUnits="userSpaceOnUse" x={b.x} y={b.y} width={b.w} height={b.h}>
+                      <path d={s.center} fill="none" stroke="white" strokeWidth={26} strokeLinecap="round" strokeDasharray={s.length + 1} strokeDashoffset={(s.length + 1) * (1 - visible[j])} />
+                    </mask>
+                    <path d={s.d} mask={`url(#${partial})`} />
+                  </g>
+                })}
+              </g>
+            </g>
+          })}
+          {pieces.filter((p) => !p.under).map(render)}
+        </g>
         {circles?.length || stroke ? (
           <g className="ink-lasso" fill={look.blue} filter={`url(#${look.chalk ? 'chalk' : 'marker'})`} aria-hidden>
             {drawnCircles.map((ds, i) => (

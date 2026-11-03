@@ -33,7 +33,7 @@ import { latest } from './engine/pointing.ts'
 import { attribute, firstSeen, renameBy, renameByInSteps, saidAt } from './engine/attribute.ts'
 import { settle } from './engine/pending.ts'
 import { summarize } from './engine/summary.ts'
-import { correct, parseGlossary } from './engine/glossary.ts'
+import { correctUtterance, parseGlossary } from './engine/glossary.ts'
 import { Corrections, casesFile, gather, pairsFile } from './engine/corrections.ts'
 import { type Voice, identify, renameVoice } from './engine/voices.ts'
 import { type Meeting, type MeetingLine, type Page, MEETING_VERSION, autoTitle, meetings, newMeetingId } from './meetings.ts'
@@ -298,12 +298,9 @@ export default function App() {
   }, [showLog])
   // 启动动画每次打开应用放一次
   const [splash, setSplash] = useState(true)
-  // 「整理排版」：忘掉记住的位置，整块重新排一次
+  // 全板美化与实时增量排版分开，避免每句话都打乱正在看的位置。
   const [tidy, setTidy] = useState(0)
-  const tidyUp = () => {
-    board.reset()
-    setTidy((t) => t + 1)
-  }
+  const [tidying, setTidying] = useState(false)
   // 导出菜单和保存后的提示
   const [exportMenu, setExportMenu] = useState(false)
   const [showKeys, setShowKeys] = useState(false)
@@ -726,18 +723,22 @@ export default function App() {
     // Saying something in a recorded demo makes it your own meeting, saved from now on
     demoMeetingId.current = null
     // 先按术语表纠正（说的和打的都纠）：内部叫法常被听成、打成别的字
-    const u = { ...said, text: correct(said.text, termsRef.current) }
+    const u = correctUtterance(said, termsRef.current)
     const previous = u.id ? linesRef.current.find((l) => l.id === u.id) : undefined
     if (previous) {
       if ((u.revision ?? 0) <= (previous.revision ?? 0)) return
       const changed = previous.text !== u.text
-      const patch = { text: u.text, heard, audio,
-        ...(changed ? { revision: u.revision, ms: undefined, ops: undefined, failed: undefined } : {}) }
+      const patch = { text: u.text, rawText: u.rawText, revision: u.revision, heard, audio,
+        ...(changed ? { ms: undefined, ops: undefined, failed: undefined } : {}) }
       const updated = { ...previous, ...patch }
       const revise = (ls: Line[]) => ls.map((l) => l.id === u.id ? { ...l, ...patch } : l)
       linesRef.current = revise(linesRef.current)
       setLines(revise)
-      if (!changed) return
+      if (!changed) {
+        if ((previous.page ?? 0) === pageRef.current) session.say(updated)
+        else pageRevisions.current.get(`${meetingIdRef.current}:${previous.page ?? 0}`)?.say(updated)
+        return
+      }
       const at = previous.page ?? 0
       if (at === pageRef.current) session.say(updated)
       else {
@@ -768,7 +769,7 @@ export default function App() {
               }
               session.history = session.history.map((l) => {
                 const revised = r.batch.find((u) => u.id === l.id)
-                return revised ? { ...l, text: revised.text, revision: revised.revision } : l
+                return revised ? { ...l, text: revised.text, rawText: revised.rawText, revision: revised.revision } : l
               })
               setLines((ls) => settle(ls, r.batch, (k) => ({ ms: r.ms, queueMs: r.queuedMs[k],
                 ops: k === r.batch.length - 1 ? formatOps(r.ops) || '-' : '', via: r.via })))
@@ -1140,6 +1141,34 @@ export default function App() {
   // 板上画着圈时，撤销先撤圈（不进板书的撤销记录）
   const undo = () => (circlePast.current.length ? undoCircle() : stepTo(editHistory.current.undo(now()), t.app.undoNote))
   const redo = () => stepTo(editHistory.current.redo(now()), t.app.redoNote)
+
+  async function tidyUp() {
+    if (tidying || replayRef.current || !session.graph.nodes.length) return
+    setTidying(true)
+    try {
+      const graph = session.graph
+      const page = pageRef.current
+      await board.layout(graph)
+      const before = { graph, layout: board.snapshot() }
+      const { beautify } = await import('./board/beautify.ts')
+      const layout = await beautify(graph, before.layout)
+      if (session.graph !== graph || pageRef.current !== page || replayRef.current || JSON.stringify(board.snapshot()) !== JSON.stringify(before.layout)) {
+        setToast({ ok: false, text: t.app.tidyChanged })
+        return
+      }
+      editHistory.current.record(before)
+      board.restore(layout)
+      setSelection(null)
+      setUndoTick((n) => n + 1)
+      setTidy((n) => n + 1)
+      setLines((ls) => [...ls, { text: t.app.tidiedNote, manual: true, ms: 0, page }])
+    } catch (e) {
+      recordError('beautify', e)
+      setToast({ ok: false, text: `${t.app.tidyFailed}: ${errText(e)}` })
+    } finally {
+      setTidying(false)
+    }
+  }
 
   /** 拖动：把新位置写进排版记忆，记一步撤销 */
   function moveSelection(sel: Selection, dx: number, dy: number) {
@@ -1863,7 +1892,7 @@ export default function App() {
           <button type="button" className="icon" onClick={redo} disabled={!!replay || !editHistory.current.canRedo} aria-label={t.app.redo} title={t.app.redoTitle}>
             <Redo />
           </button>
-          <button type="button" className="icon" onClick={tidyUp} disabled={!graph.nodes.length} aria-label={t.app.tidy} title={t.app.tidyTitle}>
+          <button type="button" className="icon" onClick={tidyUp} disabled={!graph.nodes.length || tidying || !!replay} aria-busy={tidying} aria-label={tidying ? t.app.tidying : t.app.tidy} title={tidying ? t.app.tidying : t.app.tidyTitle}>
             <Tidy />
           </button>
           <div className="menu-anchor">
@@ -2030,6 +2059,7 @@ export default function App() {
         )}
         {mode === 'ink' ? (
           <InkBoard
+            key={`${meeting.id}:${page}`}
             graph={graph}
             hot={hot}
             dark={dark}
@@ -2329,7 +2359,7 @@ export default function App() {
                     )}
                   </div>
                 )}
-                <p>
+                <p title={l.rawText ? `${t.app.originalText}: ${l.rawText}` : undefined}>
                   {l.text}
                   {l.fix && (
                     <span className="fix-tag" title={t.app.fixTitle}>

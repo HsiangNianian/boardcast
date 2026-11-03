@@ -133,6 +133,7 @@ Finalized speech, accepted revisions and typed text feed the board session; draw
 Final speech / revisions --+
 Typed text ----------------+--> Glossary + circled targets (up to 8)
 Drawn circles -------------+                  |
+                                  Phonetic label candidates
                                   +-----------+-----------+
                                   v                       v
                              Local rules              Board agent
@@ -152,9 +153,12 @@ Imports / handwriting edits ------------> Graph state --> Next-turn context
 ```
 
 - **Only final text reaches the board.** Provisional captions are display-only. New utterances receive glossary corrections and their circled targets. Standalone page-navigation commands switch boards without a model call.
+- **Misheard labels can reuse existing nodes.** Chinese pinyin, Japanese readings and English CMU pronunciations run locally in a worker shared by desktop and web. Exact names and glossary aliases win; identical pronunciations provide candidates on the current board. Simple circle, underline, star, highlight and connect commands resolve locally; negated commands do nothing, and deletion requires an exact target. Ambiguous names need pointing/context, while new concepts remain new. Original text is retained; guessed spellings are not saved as aliases. See [scope and regression evaluation](eval/phonetic.md).
 - **Revisions preserve identity.** The transcript keeps the segment's speaker and page. Queued text is replaced; superseded in-flight board results are discarded. If the original text has already been drawn, the board agent receives an explicit correction against that board. The history retains one utterance per segment.
 - **The board agent reads context.** Its inputs include entities, aliases, imported source text, the last two utterances, the glossary and bound targets. Each session queues model requests. Ordinary utterances may be batched; circled utterances and corrections are processed separately. Code applies the returned operations, confirms drafts as ink and removes unconfirmed drafts.
 - **Model and rendering have separate jobs.** Local llama.cpp uses GBNF and prompt-prefix caching; compatible APIs omit those grammar constraints and may fall back to a local model. Code controls incremental layout and handwriting strokes; PC Meeting mode uses Excalidraw. Saved transcript and graph changes drive replay/export without rerunning the model. Summaries use a separate request over the transcript and boards.
+
+- **Beautify without rewriting the meeting.** The toolbar’s **Beautify board** command uses local D2/TALA flowchart layout and aligns topic blocks with consistent spacing. Existing text, IDs, annotations and transcript references stay intact; undo restores the previous layout. Live recording keeps incremental layout. In PAD mode and HTML replay, moved or rewritten ink is wiped away before being drawn again, without an eraser cursor; reduced-motion settings skip the animation. The compiler loads only when needed and is not included in exported replay HTML.
 
 The audio review policy currently uses fixed rules; the board agent handles accepted text corrections. Learned denoising, overlapping-speaker separation and automatic alternate-ASR selection remain future work. GTCRN and Whisper comparisons are evaluation controls. See [dynamic policy and evaluation](eval/asr/README.md#dynamic-policy-and-revisions) and the [measured baseline](eval/asr/dynamic.md); the initial run showed unchanged recognition error, not an accuracy gain.
 
@@ -249,6 +253,7 @@ pnpm tauri dev                 # Desktop; first run downloads llama-server and s
 pnpm site:dev                  # Website at http://localhost:1430
 pnpm typecheck
 pnpm test                      # Engine and ASR tooling unit tests; no model needed
+pnpm eval:phonetic             # Offline multilingual label/action regression; no ASR or LLM needed
 pnpm build                     # Type check, replay player and production web build
 ```
 
@@ -337,3 +342,5 @@ A numeric version suffix creates a prerelease, excluded from automatic updates. 
 Report problems or discuss ideas in [Issues](https://github.com/HsiangNianian/boardcast/issues), or send a PR. Issues and the [changelog](CHANGELOG.md) track ongoing work.
 
 Code is licensed under [MIT](LICENSE). Chinese stroke data comes from [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data), derived from Make Me a Hanzi and Arphic fonts under the Arphic Public License; its license is distributed with the generated data. Japanese kana and supplementary kanji come from [KanjiVG](https://kanjivg.tagaini.net/) by Ulrich Apel, adapted into centerlines under [CC BY-SA 3.0](public/licenses/kanjivg-CC-BY-SA-3.0.txt). Default English strokes are derived from Excalifont under the [SIL OFL](public/licenses/handwritten-OFL.txt). Cursive Hershey glyphs come from [hersheytext](https://github.com/techninja/hersheytextjs) under MIT. The UI uses DM Sans and JetBrains Mono, and the website also includes a Noto Sans CJK subset. These fonts use SIL OFL; see the website font's [OFL.txt](landing/public/fonts/OFL.txt).
+
+D2/TALA layout uses the unmodified [D2 JavaScript package](https://github.com/d2lang/d2/tree/master/d2js), distributed under [MPL 2.0](public/licenses/d2-MPL-2.0.txt), with its [third-party notices](public/licenses/d2-THIRD-PARTY-NOTICES.txt).

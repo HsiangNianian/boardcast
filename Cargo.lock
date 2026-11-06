@@ -655,6 +655,7 @@ dependencies = [
  "anyhow",
  "boardcast-board",
  "libc",
+ "regex",
  "serde_json",
  "ureq",
 ]

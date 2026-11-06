@@ -68,6 +68,39 @@ for (let seed = 1; seed <= 80; seed++) {
   const g = applyOps(emptyGraph(), parseOps(ops), 'ink')
   stress.push({ seed, ops, layout: shot(await new StableLayout().layout(g)) })
 }
+// The summary's prompts and its fingerprint, which meetings store.
+const { boardsText, chunks, plainText, summaryFingerprint, summaryMessages, tidySummary, transcript } = await load('src/engine/summary.ts')
+const { spokenLang } = await load('src/engine/lang.ts')
+const summaries = []
+for (const file of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
+  const demo = JSON.parse(readFileSync(join(dir, file), 'utf8'))
+  let g = emptyGraph()
+  for (const line of demo.lines ?? []) if (typeof line.ops === 'string') g = applyOps(g, parseOps(line.ops), 'ink')
+  // Two boards in some, so the per-board wording is covered too.
+  const boards = summaries.length % 3 === 2 ? [g, applyOps(emptyGraph(), parseOps('T 「第二张」\nL 「第二张」 「条目」'), 'ink')] : [g]
+  const lines = (demo.lines ?? []).map((l, i) => (boards.length > 1 ? { ...l, page: i % 2 } : l))
+  const spoken = lines.filter((l) => !l.manual)
+  const lang = spokenLang(spoken.map((l) => l.text))
+  const said = transcript(spoken, lang)
+  summaries.push({
+    file, boards, lines: spoken.map(({ speaker, text, page }) => ({ speaker, text, page })), lang,
+    fingerprint: summaryFingerprint(boards, spoken), transcript: said, boardsText: boardsText(boards, undefined, lang),
+    messages: summaryMessages(boards, `${lang === 'en' ? 'Transcript:' : '会议记录：'}\n${said}`, false, lang),
+    partial: summaryMessages(boards, said, true, lang),
+    chunks: chunks(spoken, 40).map((p) => p.length),
+  })
+}
+const tidyInputs = [
+  ['好的，下面是摘要：\n```markdown\n### 结论\n- 先做登录\n### 待办\n- [ ] 写接口（负责人：小王）\n```', 'zh'],
+  ['**结论**\n- 用 Go\n## 决定：\n- 上 Redis\n【待办事项】\n- [ ] 写爬虫（负责人：A）\n待讨论：\n- 热度公式', 'zh'],
+  ['这场会主要聊了爬虫。', 'zh'],
+  ['', 'zh'],
+  ['Here is the summary:\n## Conclusions\n- Use Go\n**Action items:**\n- [ ] Ship it (owner: Sam)\nNext steps\n- Later\nOpen issues:\n- Budget', 'en'],
+  ['Decisions made\n- Yes', 'en'],
+  ['Nothing recognizable here.', 'en'],
+]
+const tidy = tidyInputs.map(([input, lang]) => ({ input, lang, output: tidySummary(input, lang) }))
+const plain = ['### 结论\n- **用 Go**\n\n\n### 待办\n- [ ] 写爬虫\n- [x] 定方案', '### 结论\n- 好\n### 决定\n- 无', '说明 `代码` ~~划掉~~\n  * 缩进\n+ [X] 大写'].map((input) => ({ input, output: plainText(input) }))
 const prefix = (text) => messages(emptyGraph(), [], { text }).slice(0, -1)
 // The fixed part of the prompt ships with the agent; this copy is the answer key it is tested against.
 writeFileSync(new URL('../../agent/prompts.json', import.meta.url), `${JSON.stringify({ zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') }, null, 1)}\n`)
@@ -75,5 +108,8 @@ writeFileSync(process.argv[3], `${JSON.stringify({
   prompts: { zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') },
   steps,
   stress,
+  summaries,
+  tidy,
+  plain,
 })}\n`)
 console.log(`${steps.length} steps`)

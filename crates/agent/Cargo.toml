@@ -1,0 +1,15 @@
+[package]
+name = "boardcast-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+
+
+[dependencies]
+anyhow.workspace = true
+boardcast-board.workspace = true
+libc = "0.2"
+serde_json.workspace = true
+ureq = { version = "2", features = ["json"] }

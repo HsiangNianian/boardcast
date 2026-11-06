@@ -15,3 +15,4 @@ public/player/
 eval/asr/.data/
 eval/asr/.models/
 eval/asr/__pycache__/
+target/

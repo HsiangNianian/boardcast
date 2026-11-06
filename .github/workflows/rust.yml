@@ -32,7 +32,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # The window and audio crates need system libraries and native downloads, and have no tests yet.
-      - run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-update -p boardcast-tools
+      - run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-export -p boardcast-update -p boardcast-tools
       - name: Check the recorded boards for layout defects
         run: cargo run --release -p boardcast-tools -- check . --all-demos --tidy
       - uses: pnpm/action-setup@v4

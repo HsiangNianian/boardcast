@@ -9,6 +9,7 @@
 
 mod agent_eval;
 mod check;
+mod export;
 mod meetings;
 
 use anyhow::{bail, Context, Result};
@@ -20,6 +21,7 @@ fn main() -> Result<()> {
         Some("check") => check::run(args),
         Some("agent-eval") => agent_eval::run(args),
         Some("meetings-check") => meetings::run(args),
+        Some("export") => export::run(args),
         Some("pack-glyphs") => pack_glyphs(args),
         Some("download-model") => download_model(args),
         Some("version-newer") => version_newer(args),

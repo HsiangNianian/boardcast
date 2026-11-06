@@ -140,14 +140,14 @@ fn has_parent(g: &Graph, n: &Node) -> bool {
     n.parent.as_deref().is_some_and(|p| g.nodes.iter().any(|o| o.id == p))
 }
 
-fn is_head(g: &Graph, n: &Node) -> bool {
+pub fn is_head(g: &Graph, n: &Node) -> bool {
     if has_parent(g, n) {
         return false;
     }
     n.kind == Kind::Topic || (n.kind == Kind::Node && g.children(&n.id).any(|c| c.kind == Kind::Item))
 }
 
-fn is_diagram(g: &Graph, n: &Node) -> bool {
+pub fn is_diagram(g: &Graph, n: &Node) -> bool {
     n.kind == Kind::Node && !is_head(g, n) && !has_parent(g, n)
 }
 

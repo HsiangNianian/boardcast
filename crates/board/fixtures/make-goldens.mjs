@@ -101,6 +101,50 @@ const tidyInputs = [
 ]
 const tidy = tidyInputs.map(([input, lang]) => ({ input, lang, output: tidySummary(input, lang) }))
 const plain = ['### 结论\n- **用 Go**\n\n\n### 待办\n- [ ] 写爬虫\n- [x] 定方案', '### 结论\n- 好\n### 决定\n- 无', '说明 `代码` ~~划掉~~\n  * 缩进\n+ [X] 大写'].map((input) => ({ input, output: plainText(input) }))
+// Markdown, in both languages, on recorded meetings and on labels written to break it.
+const { toMarkdown } = await load('src/board/markdown.ts')
+const { setLangChoice } = await load('src/i18n/index.ts')
+const exportedAt = new Date(2026, 0, 2, 3, 4)
+const hostile = {
+  nodes: [
+    { id: 'n1', label: '# 标题 *强调* [链接](x) <b>&', kind: 'topic', aliases: [], marks: ['圈出', '星标'], ink: 'ink' },
+    { id: 'n2', label: '- 不是列表', kind: 'item', parent: 'n1', aliases: [], marks: ['划掉', '下划线', '高亮'], ink: 'ink' },
+    { id: 'n3', label: '12. 不是编号', kind: 'item', parent: 'n1', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n4', label: '  + 换行\n第二行\r\n第三行', kind: 'item', parent: 'n3', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n5', label: 'x`y``z', kind: 'formula', parent: 'n3', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n6', label: '`a\n\n b ', kind: 'formula', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n7', label: '为什么？', kind: 'question', parent: 'n1', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n8', label: '备注一', kind: 'note', parent: 'gone', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n9', label: '草稿', kind: 'item', parent: 'n1', aliases: [], marks: [], ink: 'draft' },
+    { id: 'n10', label: '网关"<a>', kind: 'node', group: 'g1', aliases: [], marks: ['高亮'], ink: 'ink' },
+    { id: 'n11', label: '服务#1', kind: 'node', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n12', label: '挂件', kind: 'question', parent: 'n11', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n13', label: '原文', text: '原文全文 *x*', kind: 'region', aliases: [], marks: ['圈出'], spans: [{ mark: '高亮', text: '全文' }], ink: 'ink' },
+    { id: 'n14', label: '批注', kind: 'note', parent: 'n13', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n15', label: '三层', kind: 'item', parent: 'n4', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n16', label: '四层', kind: 'item', parent: 'n15', aliases: [], marks: [], ink: 'ink' },
+    { id: 'n17', label: '12.3 小数', kind: 'item', parent: 'n1', aliases: [], marks: [], ink: 'ink' },
+  ],
+  edges: [
+    { from: 'n10', to: 'n11', label: '调用"', ink: 'ink' },
+    { from: 'n11', to: 'n10', ink: 'draft' },
+    { from: 'n1', to: 'n11', label: '关联', ink: 'ink' },
+    { from: 'n2', to: 'missing', ink: 'ink' },
+  ],
+  groups: [{ id: 'g1', label: '后端&"网关"' }, { id: 'g2', label: '空组' }],
+  nextNode: 18, nextGroup: 3,
+}
+const markdownCases = []
+for (const lang of ['zh', 'en']) {
+  setLangChoice(lang, false)
+  const take = (name, boards, lines, title, summary) => markdownCases.push({ name: `${name} ${lang}`, lang, boards, lines, title, summary, output: toMarkdown(boards[0], lines, title, exportedAt, summary, boards.length > 1 ? boards : undefined) })
+  for (const s of summaries) take(s.file, s.boards, s.lines, s.file, summaries.indexOf(s) % 2 ? '### 结论\n- 好\n' : undefined)
+  const said = [{ text: '- 第一句 *a*' }, { speaker: 'A_1', text: '12. 第二句', page: 0 }, { text: '换行\n了', page: 1, manual: true }]
+  take('hostile', [hostile], said, '# 题目 [x]', '  ### 待办\n- [ ] 写\n  ')
+  take('hostile pages', [hostile, emptyGraph(), hostile], said, '题目', undefined)
+  take('empty', [emptyGraph()], [], '空', undefined)
+}
+setLangChoice('zh', false)
 const prefix = (text) => messages(emptyGraph(), [], { text }).slice(0, -1)
 // The fixed part of the prompt ships with the agent; this copy is the answer key it is tested against.
 writeFileSync(new URL('../../agent/prompts.json', import.meta.url), `${JSON.stringify({ zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') }, null, 1)}\n`)
@@ -111,5 +155,6 @@ writeFileSync(process.argv[3], `${JSON.stringify({
   summaries,
   tidy,
   plain,
+  markdown: markdownCases,
 })}\n`)
 console.log(`${steps.length} steps`)

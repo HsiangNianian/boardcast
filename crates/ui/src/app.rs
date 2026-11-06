@@ -18,6 +18,7 @@ use boardcast_update::Release;
 use crate::raster::Layer;
 use anyhow::{Context as _, Result};
 use boardcast_agent::summary::{self, Block, Line, Step};
+use boardcast_export::Kind as ExportKind;
 use gpui_kit::base::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::{
     canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, Entity, FillOptions, FocusHandle,
@@ -581,7 +582,13 @@ enum Panel {
     Transcript,
     Library,
     Summary,
+    Export,
     Settings,
+}
+
+enum Exported {
+    Saved { path: PathBuf, text_left_out: bool },
+    Failed(String),
 }
 
 /// A summary being written on another thread.
@@ -688,6 +695,10 @@ struct Workbench {
     library: Vec<Info>,
     form: SettingsForm,
     summary: SummaryPanel,
+    exporting: Option<ExportKind>,
+    exported: Option<Exported>,
+    /// Where the last file went, to start the next save there.
+    export_dir: Option<PathBuf>,
     /// Write the summary once the script has finished, for testing end to end.
     summarize_when_done: bool,
     /// A model given on the command line outranks the settings.
@@ -1016,6 +1027,66 @@ impl Workbench {
     fn copy_summary(&mut self, text: String, what: &str, cx: &mut Context<Self>) {
         cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text));
         self.summary.note = Some(what.to_string());
+        cx.notify();
+    }
+
+    /// The meeting is captured on the click, so what goes on while the dialog is open stays out of the file.
+    fn start_export(&mut self, kind: ExportKind, cx: &mut Context<Self>) {
+        if self.exporting.is_some() {
+            return;
+        }
+        let frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs);
+        let directory = self.export_dir.clone().unwrap_or_else(|| {
+            let home = std::env::var_os("HOME").map_or_else(|| self.data.clone(), PathBuf::from);
+            Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
+        });
+        let answer = cx.prompt_for_new_path(&directory, Some(&boardcast_export::file_name(kind)));
+        self.exporting = Some(kind);
+        self.exported = None;
+        cx.spawn(async move |this, cx| {
+            let chosen = match answer.await {
+                Ok(Ok(chosen)) => chosen,
+                Ok(Err(error)) => {
+                    let _ = this.update(cx, |this, cx| this.finish_export(Some(Exported::Failed(format!("{error:#}"))), cx));
+                    return;
+                }
+                Err(_) => None,
+            };
+            let Some(path) = chosen else {
+                let _ = this.update(cx, |this, cx| this.finish_export(None, cx));
+                return;
+            };
+            let path = boardcast_export::with_extension(path, kind);
+            let target = path.clone();
+            let written = cx
+                .background_executor()
+                .spawn(async move {
+                    let output = frozen.render(kind)?;
+                    boardcast_export::write_file(&target, &output.bytes)?;
+                    anyhow::Ok(output.text_left_out)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                let result = match written {
+                    Ok(text_left_out) => {
+                        this.export_dir = path.parent().map(PathBuf::from);
+                        Exported::Saved { path, text_left_out }
+                    }
+                    Err(error) => {
+                        eprintln!("export failed: {error:#}");
+                        Exported::Failed(format!("{error:#}"))
+                    }
+                };
+                this.finish_export(Some(result), cx);
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn finish_export(&mut self, result: Option<Exported>, cx: &mut Context<Self>) {
+        self.exporting = None;
+        self.exported = result;
         cx.notify();
     }
 
@@ -1520,6 +1591,63 @@ fn summary_blocks(text: &str, group: &'static str, tick: Option<&Context<Workben
 }
 
 impl Workbench {
+    fn export_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let drawn = !self.live.graph.nodes.is_empty();
+        let content = self.live.has_content();
+        let formats = [
+            (ExportKind::Markdown, "Markdown", tr("Key points, a Mermaid flow chart and the transcript.", "要点、Mermaid 流程图和会议记录。"), content),
+            (ExportKind::Png, tr("PNG image", "PNG 图片"), tr("This board, as it looks on screen.", "当前这张板，和画面上一样。"), drawn),
+            (ExportKind::Svg, tr("SVG vector", "SVG 矢量图"), tr("This board. Stays sharp at any size.", "当前这张板，放大不糊。"), drawn),
+            (ExportKind::Pdf, tr("Whole meeting PDF", "整场会 PDF"), tr("A page per board, then the summary and transcript, with selectable text.", "每张板一页，后面是摘要和会议记录，文字可以选中复制。"), content),
+        ];
+        let busy = self.exporting;
+        let rows = formats.into_iter().enumerate().map(|(i, (kind, name, hint, available))| {
+            let enabled = available && busy.is_none();
+            div()
+                .id(("export", i))
+                .p_2()
+                .min_h(px(48.))
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(0xdd_dd_d8))
+                .when(!enabled, |d| d.opacity(0.4))
+                .when(enabled, |d| d.cursor_pointer().on_click(cx.listener(move |this, _, _, cx| this.start_export(kind, cx))))
+                .child(div().text_sm().child(if busy == Some(kind) { format!("{name} · {}", tr("Exporting…", "正在导出…")) } else { name.to_string() }))
+                .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(hint))
+        });
+        let result = self.exported.as_ref().map(|result| match result {
+            Exported::Saved { path, text_left_out } => {
+                let shown = path.clone();
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(div().text_xs().child(format!("{} {}", tr("Saved to", "已保存到"), path.display())))
+                    .when(*text_left_out, |d| {
+                        d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr(
+                            "No usable font was found, so the summary and transcript are not in this PDF. Markdown has them.",
+                            "没有找到可用的字体，这份 PDF 里没有摘要和会议记录。可以导出 Markdown 获取这些内容。",
+                        )))
+                    })
+                    .child(button("reveal-export", tr("Show in folder", "在文件夹中显示")).on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&shown))))
+            }
+            Exported::Failed(error) => div().text_xs().text_color(rgb(0xa3_28_26)).child(format!("{}{error}", tr("Could not export: ", "导出失败："))),
+        });
+        div()
+            .id("export-panel")
+            .flex_1()
+            .overflow_y_scroll()
+            .p_3()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .when(self.live.read_only == Some(ViewOnly::ImportedContent), |d| {
+                d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("Imported pages and free-edit content are not included yet.", "导入页和自由编辑内容暂时不会导出。")))
+            })
+            .children(rows)
+            .when_some(result, |d, result| d.child(result))
+    }
+
     fn summary_panel(&mut self, editable: bool, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
         // Reading the whole meeting is only worth doing once per change.
         let (id, changes) = (self.live.id().to_string(), self.live.changes);
@@ -1909,6 +2037,7 @@ impl Render for Workbench {
             .child(button("library", tr("Meetings", "会议")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
             .child(button("new", tr("New", "新建")).when(self.store.is_some(), |d| d.on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
             .child(button("summary", tr("Summary", "摘要")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
+            .child(button("export", tr("Export", "导出")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
             .when(editable, |d| {
                 d.child(
                     div()
@@ -2147,6 +2276,7 @@ impl Render for Workbench {
             .when(forced, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
         let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
+        let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
         let side = div()
             .w(px(320.))
             .h_full()
@@ -2160,6 +2290,7 @@ impl Render for Workbench {
             })
             .when(self.panel == Panel::Library, |d| d.child(library))
             .when_some(summary_panel, |d, panel| d.child(panel))
+            .when_some(export_panel, |d, panel| d.child(panel))
             .when(self.panel == Panel::Settings, |d| d.child(settings));
         div()
             .id("workbench")
@@ -2375,6 +2506,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     library: vec![],
                     form: SettingsForm { base_url, model, key, remote, saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
+                    exporting: None,
+                    exported: None,
+                    export_dir: None,
                     summarize_when_done,
                     forced_backend,
                     models,

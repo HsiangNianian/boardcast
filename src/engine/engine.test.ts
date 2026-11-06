@@ -2,9 +2,20 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { emptyGraph, findNode } from './graph.ts'
 import { applyOps, eraseDrafts, formatOps, markDrafts, parseOps } from './ops.ts'
-import { type LlmConfig, chatUrl, proposeOps, stripThinking } from './llm.ts'
+import { type LlmConfig, chat, chatUrl, proposeOps, stripThinking } from './llm.ts'
 import { grammar } from './prompt.ts'
 import { mentions, quickOps } from './rules.ts'
+
+test('canceled work cannot start a custom model transport or fallback', async () => {
+  const controller = new AbortController()
+  controller.abort()
+  let calls = 0
+  const send = async () => { calls++; return { choices: [{ message: { content: '-' } }] } }
+  const cfg: LlmConfig = { baseUrl: 'remote', send, fallback: { baseUrl: 'local', send } }
+  await assert.rejects(proposeOps(cfg, emptyGraph(), [], { text: 'A canceled meeting statement' }, controller.signal), { name: 'AbortError' })
+  await assert.rejects(chat(cfg, [{ role: 'user', content: 'Canceled summary' }], 100, controller.signal), { name: 'AbortError' })
+  assert.equal(calls, 0)
+})
 
 test('parse and apply a small batch', () => {
   const ops = parseOps('E 「用户」 「小程序」 「打开」\nE 「小程序」 「登录接口」')

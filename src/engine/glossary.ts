@@ -16,23 +16,34 @@ export interface Term {
   also: string[]
 }
 
-export function parseGlossary(text: string): Term[] {
+const usable = (s: string) => /[^\s_-]/.test(s)
+
+export function readGlossary(text: string): { terms: Term[]; invalidLines: number[] } {
   const out: Term[] = []
-  for (const raw of text.split('\n')) {
-    const line = raw.replace(/#.*$/, '').trim()
+  const invalidLines: number[] = []
+  for (const [index, raw] of text.split('\n').entries()) {
+    const line = raw.replace(/(^|\s)#.*$/, '').trim()
     if (!line) continue
-    const [left, right = ''] = line.split(/\s*[=＝]\s*/, 2)
-    const term = left.trim()
-    if (!term) continue
-    const also = right
+    const parts = line.split(/[=＝]/)
+    const term = parts[0].trim()
+    const aliases = (parts[1] ?? '')
       .split(/[,，、;；]/)
       .map((s) => s.trim())
-      .filter((s) => s && s !== term)
+      .filter(Boolean)
+    if (parts.length > 2 || !usable(term) || (parts.length === 2 && (!aliases.length || aliases.some((s) => !usable(s))))) {
+      invalidLines.push(index + 1)
+      continue
+    }
+    const also = [...new Set(aliases)].filter((s) => s !== term)
     const hit = out.find((t) => t.term === term)
     if (hit) hit.also.push(...also.filter((a) => !hit.also.includes(a)))
     else out.push({ term, also })
   }
-  return out
+  return { terms: out, invalidLines }
+}
+
+export function parseGlossary(text: string): Term[] {
+  return readGlossary(text).terms
 }
 
 export function formatGlossary(terms: Term[]): string {
@@ -64,14 +75,19 @@ export function correct(text: string, terms: Term[]): string {
   if (!terms.length || !text) return text
   // 长的先换：「订单中心服务」要在「订单中心」之前
   const rules = terms
-    .flatMap((t) => [t.term, ...t.also].map((v) => ({ v, to: t.term })))
+    .filter((t) => usable(t.term))
+    .flatMap((t) => [t.term, ...t.also].filter(usable).map((v) => ({
+      v, to: t.term, canonical: v === t.term, source: pattern(v), match: new RegExp(`^(?:${pattern(v)})$`, 'i'),
+    })))
     .sort((a, b) => b.v.length - a.v.length)
-  let out = text
-  for (const { v, to } of rules) {
-    const re = new RegExp(pattern(v), 'gi')
-    out = out.replace(re, to)
-  }
-  return out
+  if (!rules.length) return text
+  // Match the original once: a corrected name must not become another rule's input.
+  return text.replace(new RegExp(rules.map((r) => `(?:${r.source})`).join('|'), 'gi'), (matched) => {
+    const hits = rules.filter((r) => r.match.test(matched))
+    const names = hits.filter((r) => r.canonical)
+    const outputs = new Set((names.length ? names : hits).map((r) => r.to))
+    return outputs.size === 1 ? [...outputs][0] : matched
+  })
 }
 
 /** 给模型看的一行：标准写法，用顿号隔开 */

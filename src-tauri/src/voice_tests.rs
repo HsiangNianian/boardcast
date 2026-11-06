@@ -10,6 +10,41 @@ fn dir() -> Option<PathBuf> {
     std::env::var_os("BOARDCAST_VOICE_DIR").map(PathBuf::from)
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "requires ALSA_CONFIG_PATH pointing to tests/audio-null.conf; no stream is opened"]
+fn selected_microphone_never_falls_back_to_default() {
+    use cpal::traits::DeviceTrait;
+    let config = std::env::var_os("ALSA_CONFIG_PATH").expect("Use the isolated null-device config");
+    assert_eq!(
+        std::fs::read_to_string(config).unwrap(),
+        include_str!("../tests/audio-null.conf")
+    );
+    let host = cpal::host_from_id(cpal::HostId::Alsa).unwrap();
+    let named = microphone(&host, Some("Boardcast Input QA 中文")).unwrap();
+    assert_eq!(
+        named.description().unwrap().name(),
+        "Boardcast Input QA 中文"
+    );
+    let default = microphone(&host, None).unwrap();
+    assert_ne!(named.id().unwrap(), default.id().unwrap());
+    assert_eq!(
+        microphone(&host, Some("")).unwrap().id().unwrap(),
+        default.id().unwrap()
+    );
+    for missing in [
+        "Disconnected USB microphone",
+        "boardcast input qa 中文",
+        "Boardcast Input QA 中文 ",
+    ] {
+        assert_eq!(
+            microphone(&host, Some(missing)).err().as_deref(),
+            Some("The selected microphone is no longer available"),
+            "{missing}"
+        );
+    }
+}
+
 /// Local hardware smoke test: use an explicitly named virtual input, never the default microphone.
 #[cfg(target_os = "linux")]
 #[test]

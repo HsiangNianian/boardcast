@@ -10,16 +10,19 @@ import { initial } from './speakers.ts'
 interface Props {
   /** 发一句话；speaker 是这句的说话人（句首的 @名字 已经拆出来了） */
   onSend: (text: string, speaker: string) => void
+  disabled: boolean
   speaker: string
   setSpeaker: (s: string) => void
   /** 已经出现过的说话人，加上默认的几个；顺序决定颜色 */
   speakers: string[]
+  onManageSpeakers: () => void
   // 收音（只有桌面版有）
   canListen: boolean
   listening: boolean
   pending: 'starting' | 'stopping' | null
   level: number
   partial: string
+  announceTranscript?: boolean
   micName?: string
   voiceErr: string | null
   toggleMic: () => void
@@ -63,7 +66,8 @@ export function splitSpeaker(line: string): { speaker?: string; text: string } {
 }
 
 export default function Composer(p: Props) {
-  const c = useT().composer
+  const t = useT()
+  const c = t.composer
   const [open, setOpen] = useState(() => load('boardcast.composer', 'open') === 'open')
   const [text, setText] = useState('')
   const area = useRef<HTMLTextAreaElement>(null)
@@ -81,7 +85,7 @@ export default function Composer(p: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
-      if (e.key !== '/' || t.closest('input, textarea, select, [contenteditable]')) return
+      if (e.key !== '/' || e.isComposing || document.querySelector('.modal') || t.closest('input, textarea, select, [contenteditable]')) return
       e.preventDefault()
       openInput()
     }
@@ -93,8 +97,19 @@ export default function Composer(p: Props) {
   useEffect(() => {
     const el = area.current
     if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+    const resize = () => {
+      el.style.height = 'auto'
+      el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+    }
+    resize()
+    let width = el.clientWidth
+    const observer = new ResizeObserver(() => {
+      if (width === el.clientWidth) return
+      width = el.clientWidth
+      resize()
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
   }, [text, open])
 
   function openInput() {
@@ -103,6 +118,7 @@ export default function Composer(p: Props) {
   }
 
   function send() {
+    if (p.disabled) return
     // 只写了「@名字」：换人，不发
     const only = /^[@＠](\S{1,12})$/.exec(text.trim())
     if (only) {
@@ -127,7 +143,7 @@ export default function Composer(p: Props) {
   return (
     <div className={`dock ${color(p.speaker)}${open ? '' : ' closed'}`}>
       {p.partial ? (
-        <p className="caption" aria-live="polite">
+        <p className="caption" aria-live={p.announceTranscript === false ? 'off' : 'polite'}>
           {p.speaker.trim() && <b>{p.speaker.trim()}</b>}
           {p.partial}
         </p>
@@ -142,15 +158,17 @@ export default function Composer(p: Props) {
               type="button"
               className="mic"
               onClick={p.toggleMic}
-              disabled={p.pending === 'stopping'}
+              disabled={p.disabled || p.pending === 'stopping'}
               aria-busy={!!p.pending}
               aria-pressed={p.listening}
               aria-label={p.pending === 'stopping' ? c.stopping : p.pending === 'starting' ? c.cancelStarting : p.listening ? c.stopListening : c.startListening}
               title={p.pending ? c[p.pending] : p.listening ? c.listeningOn(p.micName ?? '') : c.startListening}
             >
               {p.listening || p.pending ? <Stop size={14} /> : <Mic size={17} />}
+              <span className="mic-label">{p.pending === 'starting' ? c.cancelStarting : p.pending === 'stopping' ? c.stopping : p.listening ? c.stopListening : c.startListening}</span>
             </button>
             {p.pending ? <span className="mic-pending" role="status">{c[p.pending]}</span> : p.listening && <Waveform level={p.level} />}
+            {p.micName && <span className="mic-source" title={p.micName}>{p.micName}</span>}
           </div>
         )}
 
@@ -162,15 +180,17 @@ export default function Composer(p: Props) {
               send()
             }}
           >
-            <button type="button" className={`who${initial(p.speaker) === p.speaker ? ' solo' : ''}`} onClick={nextSpeaker} title={c.speakerTitle} aria-label={c.speakerAria(p.speaker)}>
+            <div className="speaker-actions"><button type="button" className={`who${initial(p.speaker) === p.speaker ? ' solo' : ''}`} disabled={p.disabled} onClick={nextSpeaker} title={c.speakerTitle} aria-label={c.speakerAria(p.speaker)}>
               <span className={`av ${color(p.speaker)}`}>{initial(p.speaker)}</span>
               {initial(p.speaker) !== p.speaker && <span className="name">{p.speaker}</span>}
             </button>
+            <button type="button" className="ghost small" disabled={p.disabled} onClick={p.onManageSpeakers}>{t.speakers.title}</button></div>
             {/* 嵌入官网时不抢焦点，否则浏览器会把外层页面滚到演示区。 */}
             <textarea
               ref={area}
               rows={1}
               value={text}
+              readOnly={p.disabled}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 // 输入法正在选字时的回车不算发送
@@ -192,7 +212,7 @@ export default function Composer(p: Props) {
         )}
 
         {open && (
-          <button type="button" className="send" onClick={send} disabled={!text.trim()} aria-label={c.send} title={c.sendTitle}>
+          <button type="button" className="send" onClick={send} disabled={p.disabled || !text.trim()} aria-label={c.send} title={c.sendTitle}>
             <ArrowUp size={16} />
           </button>
         )}

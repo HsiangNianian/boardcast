@@ -7,6 +7,8 @@ import { compose } from '../ink/compose.ts'
 import { WHITEBOARD } from '../ink/InkBoard.tsx'
 import type { ReplayData, ReplayPage } from '../player/data.ts'
 import { StableLayout } from './layout.ts'
+import { hidesInk, imageSvg, overlaySvg, sceneBounds, sceneHasContent } from './freeScene.ts'
+import { withSceneOverlay } from './sceneOverlay.ts'
 import { A4_LANDSCAPE, type PdfPage, makePdf } from './pdf.ts'
 
 /** 画布尺寸：A4 横向的两倍多，打印也够清楚 */
@@ -47,20 +49,22 @@ async function boardPage(page: ReplayPage, data: ReplayData, label: string): Pro
   layout.restore(page.layout)
   const l = await layout.layout(page.graph)
   const pieces = await compose(page.graph, l, new Set(), WHITEBOARD, data.messy, data.weight, page.base, undefined, data.englishWeight)
+  const state = page.scene ? await withSceneOverlay(page.scene, page.graph, page.base, page.steps?.[0]?.scene) : undefined
+  const bounds = sceneBounds(l.bounds, state?.overlay)
   const P = 40
-  const x0 = l.bounds.x0 - P
-  const y0 = l.bounds.y0 - P
-  const w = l.bounds.x1 - l.bounds.x0 + P * 2
-  const h = l.bounds.y1 - l.bounds.y0 + P * 2
+  const x0 = bounds.x0 - P
+  const y0 = bounds.y0 - P
+  const w = bounds.x1 - bounds.x0 + P * 2
+  const h = bounds.y1 - bounds.y0 + P * 2
   const paths = (under: boolean) =>
     pieces
-      .filter((p) => !!p.under === under)
+      .filter((p) => !!p.under === under && !hidesInk(p.key, state?.overlay))
       .map((p) => `<g fill="${p.color}" opacity="${p.opacity}"${under ? ' style="mix-blend-mode:multiply"' : ''}>${p.strokes.map((s) => `<path d="${s.d}"/>`).join('')}</g>`)
       .join('')
   const u = page.graph.underlay
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${w} ${h}" width="${w}" height="${h}">${
-    page.underlay && u ? `<image href="${page.underlay}" x="0" y="0" width="${u.w}" height="${u.h}" preserveAspectRatio="none"/>` : ''
-  }${paths(true)}${paths(false)}</svg>`
+    page.underlay && u ? imageSvg(page.underlay, 0, 0, u.w, u.h) : ''
+  }${paths(true)}${paths(false)}${overlaySvg(state?.overlay)}</svg>`
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
   const [c, x] = canvas()
   try {
@@ -174,10 +178,10 @@ async function textPages(data: ReplayData): Promise<PdfPage[]> {
 
 export async function meetingPdf(data: ReplayData, onPage?: (done: number, total: number) => void): Promise<Uint8Array> {
   const pages: PdfPage[] = []
-  const boards = data.pages.filter((p) => p.graph.nodes.length || p.underlay)
-  for (const [i, p] of boards.entries()) {
-    onPage?.(i, boards.length)
-    pages.push(await boardPage(p, data, boards.length > 1 ? msg().doc.board(i + 1) : msg().doc.boardSingle))
+  const boards = [...data.pages.entries()].filter(([, p]) => p.graph.nodes.length || p.underlay || sceneHasContent(p.scene))
+  for (const [done, [index, p]] of boards.entries()) {
+    onPage?.(done, boards.length)
+    pages.push(await boardPage(p, data, data.pages.length > 1 ? msg().doc.board(index + 1) : msg().doc.boardSingle))
   }
   if (data.summary?.trim() || data.lines.length) pages.push(...(await textPages(data)))
   return makePdf(pages, A4_LANDSCAPE, data.title)

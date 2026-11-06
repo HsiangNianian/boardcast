@@ -26,8 +26,8 @@ export function ownerOf(key: string): string {
   return head
 }
 
-/** 标记的笔画（划掉、下划线、圈出、星标）在 key 末尾带一个字母；原文上圈画的词句，key 的第二段是标记本身 */
-const MARK_SUFFIX: Record<string, Mark> = { x: '划掉', u: '下划线', o: '圈出', s: '星标' }
+/** 标记在 key 末尾带一个字母；原文上圈画的词句，key 的第二段是标记本身 */
+const MARK_SUFFIX: Record<string, Mark> = { x: '划掉', u: '下划线', o: '圈出', s: '星标', h: '高亮' }
 
 function markOf(key: string): Mark | undefined {
   const parts = key.split('|')

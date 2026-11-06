@@ -16,6 +16,8 @@ export interface Hit {
   where: 'title' | 'line' | 'board' | 'summary'
   /** 第几张板（从 0 数） */
   page?: number
+  /** Semantic board item to focus when opening a search hit. */
+  node?: string
   /** 会议记录里的第几条 */
   line?: number
   /** 命中处前后的一小段 */
@@ -27,7 +29,7 @@ export interface Hit {
 const MAX_HITS = 5
 const AROUND = 24
 
-export const terms = (q: string) => q.toLowerCase().split(/\s+/).filter(Boolean)
+export const terms = (q: string) => [...new Set(q.toLowerCase().split(/\s+/).filter(Boolean))]
 
 function snippet(s: string, ts: string[]): Pick<Hit, 'text' | 'marks'> | null {
   const flat = s.replace(/\s+/g, ' ').trim()
@@ -42,7 +44,13 @@ function snippet(s: string, ts: string[]): Pick<Hit, 'text' | 'marks'> | null {
   for (const t of ts)
     for (let i = lowText.indexOf(t); i >= 0; i = lowText.indexOf(t, i + t.length)) marks.push([i, i + t.length])
   marks.sort((a, b) => a[0] - b[0])
-  return { text, marks: marks.filter((m, i) => !i || m[0] >= marks[i - 1][1]) }
+  const merged: [number, number][] = []
+  for (const mark of marks) {
+    const previous = merged.at(-1)
+    if (previous && mark[0] <= previous[1]) previous[1] = Math.max(previous[1], mark[1])
+    else merged.push(mark)
+  }
+  return { text, marks: merged }
 }
 
 /** 这场会没有全部命中就返回 null；没搜词也返回 null */
@@ -51,7 +59,7 @@ export function searchMeeting(m: Searchable, query: string): Hit[] | null {
   if (!ts.length) return null
   const all: Hit[] = []
   const seen = new Set<string>()
-  const add = (s: string | undefined, hit: Pick<Hit, 'where' | 'page' | 'line'>) => {
+  const add = (s: string | undefined, hit: Pick<Hit, 'where' | 'page' | 'line' | 'node'>) => {
     if (!s) return
     const low = s.toLowerCase()
     const here = ts.filter((t) => low.includes(t))
@@ -62,11 +70,11 @@ export function searchMeeting(m: Searchable, query: string): Hit[] | null {
   }
   add(m.title, { where: 'title' })
   m.lines?.forEach((l, i) => {
-    if (!l.manual) add(l.text, { where: 'line', line: i, page: l.page })
+    if (!l.manual) add(l.text, { where: 'line', line: i, page: l.page ?? 0 })
   })
   const boards = m.pages?.length ? m.pages.map((p) => p.graph) : m.graph ? [m.graph] : []
   boards.forEach((g, page) => {
-    for (const n of g.nodes) add(n.text ?? n.label, { where: 'board', page })
+    for (const n of g.nodes) add(n.text ?? n.label, { where: 'board', page, node: n.id })
   })
   add(m.summary, { where: 'summary' })
   if (seen.size < ts.length) return null

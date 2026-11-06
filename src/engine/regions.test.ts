@@ -60,7 +60,7 @@ test('the page takes the top-left corner, regions keep their spot, notes go to t
 test('markdown export lists the marked and annotated source text', () => {
   const g = applyOps(page(), parseOps('M n1 星标\nK n2 「这里少了退款」'))
   const md = toMarkdown(g, [], '评审')
-  assert.match(md, /## 原文标注\n\n- 第一章 系统设计 ★\n- 用户通过小程序下单.*…\n {3}- 备注：这里少了退款/)
+  assert.match(md, /## 原文标注\n\n- 第一章 系统设计 ★\n- 用户通过小程序下单，订单服务校验库存后调用支付服务。支付成功后回调订单服务。\n {3}- 备注：这里少了退款/)
   assert.doesNotMatch(md, /（2）/, '没标注的原文不导出')
 })
 

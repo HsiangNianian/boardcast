@@ -5,14 +5,16 @@
 
 import { exportToBlob, exportToSvg, serializeAsJSON } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
-import { StableLayout, board } from './board/layout.ts'
+import { type LayoutMemory, StableLayout, board } from './board/layout.ts'
 import { type SaidLine, toMarkdown } from './board/markdown.ts'
 import { type Look, scene } from './board/scene.ts'
 import { isDesktop } from './desktop.ts'
 import type { Graph } from './engine/graph.ts'
-import { type Step, inkOnly } from './engine/steps.ts'
+import { type Step, inkOnly, replayTo } from './engine/steps.ts'
 import { type ReplayData, replayHtml, usedHan } from './player/data.ts'
-import { msg } from './i18n/index.ts'
+import { currentLang, msg } from './i18n/index.ts'
+import { type FreeScene, hidesInk, imageSvg, mergeScene, overlayElements, overlaySvg, sceneBounds, withInheritedInk, withPageUnderlay } from './board/freeScene.ts'
+import { withSceneOverlay } from './board/sceneOverlay.ts'
 
 export type ExportKind = 'md' | 'png' | 'svg' | 'anim' | 'excalidraw' | 'html' | 'pdf'
 
@@ -33,9 +35,13 @@ interface Board {
   /** 动态 SVG 用：这张板的回放记录（定先后）、导入页的底图、笔迹的潦草度和粗细（和白板上一样） */
   steps?: Step[]
   underlay?: string
+  base?: Graph
+  baseScene?: FreeScene
   messy?: number
   weight?: number
   englishWeight?: number
+  scene?: FreeScene
+  layout?: LayoutMemory
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -45,35 +51,27 @@ function fileName(ext: string, when = new Date()) {
 
 /** 手写板：把画面上的 SVG 裁到内容范围，去掉还没写完的遮罩，垫上纸色 */
 async function inkSvg(b: Board, scale = 1): Promise<{ svg: string; width: number; height: number }> {
-  const el = document.querySelector<SVGSVGElement>('.ink svg')
-  if (!el) throw new Error(msg().errors.noBoard)
-  const { bounds } = await board.layout(b.graph)
+  const [{ compose }, { WHITEBOARD }] = await Promise.all([import('./ink/compose.ts'), import('./ink/InkBoard.tsx')])
+  const layout = new StableLayout()
+  layout.restore(b.layout)
+  const l = await layout.layout(b.graph)
+  const bounds = sceneBounds(l.bounds, b.scene?.overlay)
+  const pieces = (await compose(b.graph, l, new Set(), WHITEBOARD, b.messy, b.weight, b.base, undefined, b.englishWeight)).filter((p) => !hidesInk(p.key, b.scene?.overlay))
   const P = 48
-  const x = bounds.x0 - P
-  const y = bounds.y0 - P
-  const w = bounds.x1 - bounds.x0 + 2 * P
-  const h = bounds.y1 - bounds.y0 + 2 * P
-  const NS = 'http://www.w3.org/2000/svg'
-  const svg = el.cloneNode(true) as SVGSVGElement
-  svg.setAttribute('xmlns', NS)
-  svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`)
-  svg.setAttribute('width', String(Math.round(w * scale)))
-  svg.setAttribute('height', String(Math.round(h * scale)))
-  svg.removeAttribute('data-messy')
-  // 正在写的笔画用遮罩一点点露出来；导出时直接全写完
-  for (const m of svg.querySelectorAll('[mask]')) m.removeAttribute('mask')
-  for (const m of svg.querySelectorAll('mask')) m.remove()
-  // 圈着说画的虚线圈只是开会时用的
-  for (const m of svg.querySelectorAll('.ink-lasso')) m.remove()
-  const bg = document.createElementNS(NS, 'rect')
-  for (const [k, v] of Object.entries({ x, y, width: w, height: h, fill: b.paper })) bg.setAttribute(k, String(v))
-  svg.insertBefore(bg, svg.firstChild)
-  return { svg: new XMLSerializer().serializeToString(svg), width: Math.round(w * scale), height: Math.round(h * scale) }
+  const x = bounds.x0 - P, y = bounds.y0 - P
+  const w = bounds.x1 - bounds.x0 + 2 * P, h = bounds.y1 - bounds.y0 + 2 * P
+  const width = Math.round(w * scale), height = Math.round(h * scale)
+  const u = b.graph.underlay
+  const underlay = b.underlay && u ? imageSvg(b.underlay, 0, 0, u.w, u.h) : ''
+  const paths = [true, false].map((under) => pieces.filter((p) => !!p.under === under).map((p) => `<g fill="${p.color}" opacity="${p.opacity}"${under ? ' style="mix-blend-mode:multiply"' : ''}>${p.strokes.map((s) => `<path d="${s.d}"/>`).join('')}</g>`).join('')).join('')
+  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${w} ${h}" width="${width}" height="${height}"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${WHITEBOARD.paper}"/>${underlay}${paths}${overlaySvg(b.scene?.overlay)}</svg>`, width, height }
 }
 
 /** 手写板的 PNG：同一份 SVG 画到 2 倍大的画布上 */
 async function inkPng(b: Board): Promise<Blob> {
-  const { bounds } = await board.layout(b.graph)
+  const layout = new StableLayout()
+  layout.restore(b.layout)
+  const bounds = sceneBounds((await layout.layout(b.graph)).bounds, b.scene?.overlay)
   const scale = Math.min(2, 8000 / Math.max(bounds.x1 - bounds.x0 + 96, bounds.y1 - bounds.y0 + 96))
   const { svg, width, height } = await inkSvg(b, scale)
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
@@ -100,45 +98,54 @@ async function animSvg(b: Board): Promise<string> {
   ])
   // 铅笔稿是一闪而过的，不算板书
   const g = inkOnly(b.graph)
-  if (!g.nodes.length) throw new Error(msg().errors.emptyBoard)
+  if (!g.nodes.length && !b.scene?.overlay?.url && !b.underlay) throw new Error(msg().errors.emptyBoard)
   // 另用一份排版，从白板现在的位置开始排：看到的和导出的一样，也不动白板自己的排版记忆
   const layout = new StableLayout()
-  layout.restore(board.snapshot())
+  layout.restore(b.layout)
   const l = await layout.layout(g)
-  const pieces = await compose(g, l, new Set(), WHITEBOARD, b.messy, b.weight, undefined, undefined, b.englishWeight)
+  const pieces = (await compose(g, l, new Set(), WHITEBOARD, b.messy, b.weight, b.base, undefined, b.englishWeight)).filter((p) => !hidesInk(p.key, b.scene?.overlay))
   const { timed } = timeline(pieces, ranks(g, l, b.steps ?? [], pieces.map((p) => p.key)))
   const P = 48
-  const box = { x: l.bounds.x0 - P, y: l.bounds.y0 - P, w: l.bounds.x1 - l.bounds.x0 + 2 * P, h: l.bounds.y1 - l.bounds.y0 + 2 * P }
+  const bounds = sceneBounds(l.bounds, b.scene?.overlay)
+  const box = { x: bounds.x0 - P, y: bounds.y0 - P, w: bounds.x1 - bounds.x0 + 2 * P, h: bounds.y1 - bounds.y0 + 2 * P }
   const u = g.underlay
-  return animatedSvg(timed, box, WHITEBOARD.paper, b.underlay && u ? { href: b.underlay, w: u.w, h: u.h } : undefined)
+  return animatedSvg(timed, box, WHITEBOARD.paper, b.underlay && u ? { href: b.underlay, w: u.w, h: u.h } : undefined).replace('</svg>', `${overlaySvg(b.scene?.overlay)}</svg>`)
 }
 
-async function pencilSvg(api: ExcalidrawImperativeAPI, paper: string): Promise<string> {
+async function pencilSvg(state: FreeScene, paper: string): Promise<string> {
   const el = await exportToSvg({
-    elements: api.getSceneElements(),
-    appState: { ...api.getAppState(), exportBackground: true, exportWithDarkMode: false, viewBackgroundColor: paper },
-    files: api.getFiles(),
+    elements: state.elements,
+    appState: { exportBackground: true, exportWithDarkMode: false, viewBackgroundColor: paper },
+    files: state.files,
     exportPadding: 48,
   })
   return new XMLSerializer().serializeToString(el)
 }
 
-async function pencilPng(api: ExcalidrawImperativeAPI, paper: string): Promise<Blob> {
+async function pencilPng(state: FreeScene, paper: string): Promise<Blob> {
   return exportToBlob({
-    elements: api.getSceneElements(),
+    elements: state.elements,
     // 导出永远是浅色的纸：深色模式只是 Excalidraw 在画面上反了色
-    appState: { ...api.getAppState(), exportBackground: true, exportWithDarkMode: false, viewBackgroundColor: paper },
-    files: api.getFiles(),
+    appState: { exportBackground: true, exportWithDarkMode: false, viewBackgroundColor: paper },
+    files: state.files,
     mimeType: 'image/png',
     exportPadding: 48,
-    getDimensions: (width: number, height: number) => ({ width: width * 2, height: height * 2, scale: 2 }),
+    getDimensions: (width: number, height: number) => {
+      const scale = Math.min(2, 8000 / Math.max(width, height))
+      return { width: width * scale, height: height * scale, scale }
+    },
   })
 }
 
+/** Excalidraw needs the page underlay as an actual image element as well as recovery metadata. */
+function pencilScene(b: Board): FreeScene {
+  return withPageUnderlay(withInheritedInk(b.scene!, b.graph, b.base, b.baseScene), b.graph, b.underlay)
+}
+
 async function excalidrawFile(b: Board): Promise<string> {
-  if (b.api) return serializeAsJSON(b.api.getSceneElements(), b.api.getAppState(), b.api.getFiles(), 'local')
-  const l = await board.layout(b.graph)
-  return serializeAsJSON(scene(b.graph, l, new Set(), b.look), { viewBackgroundColor: b.paper }, {}, 'local')
+  const state = pencilScene(b)
+  const drawing = JSON.parse(serializeAsJSON(state.elements, { viewBackgroundColor: b.paper }, state.files, 'local'))
+  return JSON.stringify({ ...drawing, boardcast: { version: 2, graph: b.graph, layout: b.layout, underlay: b.underlay, generated: b.scene!.generated, overrides: b.scene!.overrides, hiddenGenerated: b.scene!.hiddenGenerated, modelCandidates: b.scene!.modelCandidates } })
 }
 
 /** 回放网页：播放器、整场会的数据、用到的汉字笔画，全塞进一个 HTML，双击就能看，不联网 */
@@ -164,6 +171,25 @@ async function replayFile(data: ReplayData): Promise<Blob> {
 }
 
 export async function build(kind: ExportKind, b: Board): Promise<{ name: string; blob: Blob }> {
+  // Capture before the first await: switching pages/modes cannot change this export.
+  b = { ...b, graph: structuredClone(b.graph), base: structuredClone(b.base), baseScene: structuredClone(b.baseScene), scene: structuredClone(b.scene), layout: structuredClone(b.layout ?? board.snapshot()), replay: structuredClone(b.replay) }
+  if ((kind === 'html' || kind === 'pdf') && b.replay) {
+    for (const page of b.replay.pages) {
+      const layout = new StableLayout()
+      layout.restore(page.layout)
+      const projected = await layout.layout(page.graph)
+      page.layout = layout.snapshot()
+      if (page.scene) {
+        page.scene = await withSceneOverlay(mergeScene(page.scene, await scene(page.graph, projected, new Set(), b.look)), page.graph, page.base, page.steps?.[0]?.scene)
+      }
+      for (const [i, step] of (page.steps ?? []).entries()) if (step.scene) step.scene = await withSceneOverlay(step.scene, replayTo(page.steps!, i + 1), page.base, page.steps?.[0]?.scene)
+    }
+  }
+  if (kind !== 'md' && kind !== 'html' && kind !== 'pdf') {
+    const layout = new StableLayout()
+    layout.restore(b.layout)
+    b.scene = await withSceneOverlay(mergeScene(b.scene, await scene(b.graph, await layout.layout(b.graph), new Set(), b.look)), b.graph, b.base, b.baseScene)
+  }
   if (kind === 'html') {
     if (!b.replay) throw new Error(msg().doc.noData)
     return { name: fileName('html'), blob: await replayFile(b.replay) }
@@ -174,15 +200,20 @@ export async function build(kind: ExportKind, b: Board): Promise<{ name: string;
     const bytes = await meetingPdf(b.replay)
     return { name: fileName('pdf'), blob: new Blob([bytes as BlobPart], { type: 'application/pdf' }) }
   }
-  if (kind === 'md') return { name: fileName('md'), blob: new Blob([toMarkdown(b.graph, b.lines, b.title, new Date(), b.summary, b.pages)], { type: 'text/markdown' }) }
+  if (kind === 'md') {
+    const pages = b.replay?.pages ?? [{ scene: b.scene, underlay: b.underlay }]
+    const omitted = pages.some((p) => p.underlay || p.scene && overlayElements(p.scene).elements.length)
+    const note = omitted ? currentLang() === 'zh' ? '\n\n> 此 Markdown 不包含自由图形、笔迹、图片和自定义视觉样式；请同时导出 SVG、PDF 或 Excalidraw 保留完整视觉内容。\n' : '\n\n> This Markdown omits free drawings, strokes, images and custom visual styling. Export SVG, PDF or Excalidraw alongside it to preserve the complete visual board.\n' : ''
+    return { name: fileName('md'), blob: new Blob([toMarkdown(b.graph, b.lines, b.title, new Date(), b.summary, b.pages), note], { type: 'text/markdown' }) }
+  }
   if (kind === 'excalidraw')
     return { name: fileName('excalidraw'), blob: new Blob([await excalidrawFile(b)], { type: 'application/json' }) }
   if (kind === 'anim') return { name: fileName('anim.svg'), blob: new Blob([await animSvg(b)], { type: 'image/svg+xml' }) }
   if (kind === 'svg') {
-    const svg = b.mode === 'pencil' && b.api ? await pencilSvg(b.api, b.paper) : (await inkSvg(b)).svg
+    const svg = b.mode === 'pencil' ? await pencilSvg(pencilScene(b), b.paper) : (await inkSvg(b)).svg
     return { name: fileName('svg'), blob: new Blob([svg], { type: 'image/svg+xml' }) }
   }
-  const blob = b.mode === 'pencil' && b.api ? await pencilPng(b.api, b.paper) : await inkPng(b)
+  const blob = b.mode === 'pencil' ? await pencilPng(pencilScene(b), b.paper) : await inkPng(b)
   return { name: fileName('png'), blob }
 }
 

@@ -15,11 +15,11 @@ use futures_util::StreamExt;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::watch;
 
 struct Source {
     name: &'static str,
@@ -254,7 +254,7 @@ struct Progress {
 
 #[derive(Default)]
 pub struct Downloads {
-    current: Mutex<Option<(String, Arc<AtomicBool>)>>,
+    current: Mutex<Option<(String, watch::Sender<bool>)>>,
 }
 
 fn entry(id: &str) -> Result<&'static Entry, String> {
@@ -320,19 +320,19 @@ pub fn installed(id: &str, dir: &Path) -> bool {
 #[tauri::command]
 pub fn models_list(app: AppHandle, downloads: tauri::State<'_, Downloads>) -> Catalog {
     let dir = llm::models_dir(&app);
-    let sel = dir.as_deref().and_then(selected);
+    let sel = dir.as_deref().and_then(llm::pick_model);
     let rec = recommended(&app);
     // 安装包自带语音模型时，模型面板里就不再列出「语音识别」，免得让用户去下载
     let voice_bundled = crate::voice::bundled(&app).is_some();
     let models = CATALOG
         .iter()
         .filter(|e| !(voice_bundled && e.kind == Kind::Voice))
-        // 看图组件只列出已经装好的大模型配的那个
+        // 配套模型已安装或组件已占空间时都列出，删除板书模型后仍能管理保留的组件。
         .filter(|e| {
             e.kind != Kind::Vision
-                || dir
-                    .as_deref()
-                    .is_some_and(|d| installed(e.id.trim_end_matches("-vision"), d))
+                || dir.as_deref().is_some_and(|d| {
+                    installed(e.id.trim_end_matches("-vision"), d) || on_disk(e, d) > 0
+                })
         })
         .map(|e| {
             let installed = dir.as_deref().is_some_and(|d| installed(e.id, d));
@@ -344,7 +344,9 @@ pub fn models_list(app: AppHandle, downloads: tauri::State<'_, Downloads>) -> Ca
                 size: e.size(),
                 installed,
                 partial: dir.as_deref().map(|d| on_disk(e, d)).unwrap_or(0),
-                selected: e.kind == Kind::Llm && installed && sel.as_deref() == Some(e.main_file()),
+                selected: e.kind == Kind::Llm
+                    && installed
+                    && sel == dir.as_ref().map(|d| d.join(e.main_file())),
                 recommended: e.id == rec,
             }
         })
@@ -389,19 +391,22 @@ pub fn model_download(
 ) -> Result<(), String> {
     let e = entry(&id)?;
     let dir = llm::models_dir(&app).ok_or("App data folder not found")?;
-    let free = fs4::available_space(&dir).map_err(|err| format!("Couldn't check free disk space: {err}"))?;
+    let free = fs4::available_space(&dir)
+        .map_err(|err| format!("Couldn't check free disk space: {err}"))?;
     check_space(e, &dir, free)?;
-    let cancel = {
+    let mut cancel = {
         let mut cur = downloads.current.lock().unwrap();
         if let Some((other, _)) = cur.as_ref() {
-            return Err(format!("{other} is downloading; wait for it to finish or cancel it first"));
+            return Err(format!(
+                "{other} is downloading; wait for it to finish or cancel it first"
+            ));
         }
-        let flag = Arc::new(AtomicBool::new(false));
-        *cur = Some((id.clone(), flag.clone()));
-        flag
+        let (sender, receiver) = watch::channel(false);
+        *cur = Some((id.clone(), sender));
+        receiver
     };
     tauri::async_runtime::spawn(async move {
-        let result = download(&app, e, &dir, &cancel).await;
+        let result = download(&app, e, &dir, &mut cancel).await;
         app.state::<Downloads>().current.lock().unwrap().take();
         match result {
             Ok(()) => {
@@ -428,7 +433,7 @@ pub fn model_download(
 #[tauri::command]
 pub fn model_cancel(downloads: tauri::State<'_, Downloads>) {
     if let Some((_, flag)) = downloads.current.lock().unwrap().as_ref() {
-        flag.store(true, Ordering::SeqCst);
+        flag.send_replace(true);
     }
 }
 
@@ -437,7 +442,10 @@ pub fn model_select(app: AppHandle, id: String) -> Result<(), String> {
     let e = entry(&id)?;
     let dir = llm::models_dir(&app).ok_or("App data folder not found")?;
     if e.kind != Kind::Llm {
-        return Err(format!("{} can't be selected as the built-in model", e.label));
+        return Err(format!(
+            "{} can't be selected as the built-in model",
+            e.label
+        ));
     }
     if !installed(e.id, &dir) {
         return Err(format!("{} has not been downloaded yet", e.label));
@@ -469,16 +477,17 @@ pub fn model_delete(
         Kind::Llm | Kind::Vision => app.state::<llm::Llm>().shutdown(),
         Kind::Voice => crate::voice::unload(&app),
     }
-    for f in e.files {
+    let result = e.files.iter().try_for_each(|f| {
         let p = dir.join(f.name);
         let _ = std::fs::remove_file(part_of(&p));
         if p.exists() {
             std::fs::remove_file(&p).map_err(|err| err.to_string())?;
         }
-    }
+        Ok(())
+    });
     match e.kind {
         Kind::Llm => {
-            if selected(&dir).as_deref() == Some(e.main_file()) {
+            if result.is_ok() && selected(&dir).as_deref() == Some(e.main_file()) {
                 let _ = std::fs::remove_file(dir.join(llm::SELECTED));
             }
             llm::restart(&app);
@@ -486,7 +495,7 @@ pub fn model_delete(
         Kind::Vision => llm::restart(&app),
         Kind::Voice => crate::voice::reload(&app),
     }
-    Ok(())
+    result
 }
 
 enum DlError {
@@ -537,7 +546,7 @@ async fn download(
     app: &AppHandle,
     e: &Entry,
     dir: &Path,
-    cancel: &AtomicBool,
+    cancel: &mut watch::Receiver<bool>,
 ) -> Result<(), DlError> {
     let mut before: u64 = 0;
     for f in e.files {
@@ -560,9 +569,12 @@ async fn download(
 async fn fetch(
     f: &FileSpec,
     dir: &Path,
-    cancel: &AtomicBool,
+    cancel: &mut watch::Receiver<bool>,
     report: &mut Report<'_>,
 ) -> Result<(), DlError> {
+    if *cancel.borrow() {
+        return Err(DlError::Canceled);
+    }
     let path = dir.join(f.name);
     if path.is_file() {
         return Ok(());
@@ -578,7 +590,13 @@ async fn fetch(
     let mut hasher = Sha256::new();
     let mut have: u64 = 0;
     if let Ok(mut file) = tokio::fs::File::open(&part).await {
-        report("verifying", 0, 0, None, Some("Verifying the downloaded portion…".into()));
+        report(
+            "verifying",
+            0,
+            0,
+            None,
+            Some("Verifying the downloaded portion…".into()),
+        );
         let mut buf = vec![0u8; 8 << 20];
         loop {
             let n = file
@@ -590,7 +608,7 @@ async fn fetch(
             }
             hasher.update(&buf[..n]);
             have += n as u64;
-            if cancel.load(Ordering::SeqCst) {
+            if *cancel.borrow() {
                 return Err(DlError::Canceled);
             }
         }
@@ -604,6 +622,9 @@ async fn fetch(
 
     let mut last_error = String::from("All download sources failed");
     for src in f.sources {
+        if *cancel.borrow() {
+            return Err(DlError::Canceled);
+        }
         if have >= f.size {
             break;
         }
@@ -614,7 +635,13 @@ async fn fetch(
         if have > 0 {
             req = req.header(reqwest::header::RANGE, format!("bytes={have}-"));
         }
-        let resp = match req.send().await {
+        report("downloading", have, 0, Some(src.name), None);
+        let response = tokio::select! {
+            biased;
+            _ = cancel.changed() => return Err(DlError::Canceled),
+            response = req.send() => response,
+        };
+        let resp = match response {
             Ok(r) => r,
             Err(err) => {
                 last_error = format!("{}: {err}", src.name);
@@ -638,7 +665,11 @@ async fn fetch(
             .await
         {
             Ok(fh) => fh,
-            Err(err) => return Err(DlError::Failed(format!("Couldn't write to the model folder: {err}"))),
+            Err(err) => {
+                return Err(DlError::Failed(format!(
+                    "Couldn't write to the model folder: {err}"
+                )))
+            }
         };
         let mut stream = resp.bytes_stream();
         let mut last_emit = Instant::now();
@@ -646,11 +677,18 @@ async fn fetch(
         let mut window_bytes: u64 = 0;
         let mut speed: u64 = 0;
         let mut broken = false;
-        while let Some(chunk) = stream.next().await {
-            if cancel.load(Ordering::SeqCst) {
-                let _ = file.flush().await;
-                return Err(DlError::Canceled);
-            }
+        loop {
+            let chunk = tokio::select! {
+                biased;
+                _ = cancel.changed() => {
+                    file.flush().await.map_err(|err| DlError::Failed(format!("Write failed: {err}")))?;
+                    return Err(DlError::Canceled);
+                }
+                chunk = stream.next() => chunk,
+            };
+            let Some(chunk) = chunk else {
+                break;
+            };
             let chunk = match chunk {
                 Ok(c) => c,
                 Err(err) => {
@@ -677,7 +715,9 @@ async fn fetch(
                 report("downloading", have, speed, Some(src.name), None);
             }
         }
-        let _ = file.flush().await;
+        file.flush()
+            .await
+            .map_err(|err| DlError::Failed(format!("Write failed: {err}")))?;
         if !broken && have >= f.size {
             break;
         }
@@ -686,6 +726,9 @@ async fn fetch(
         return Err(DlError::Failed(last_error));
     }
 
+    if *cancel.borrow() {
+        return Err(DlError::Canceled);
+    }
     report("verifying", have, 0, None, Some("Verifying file…".into()));
     let got = format!("{:x}", hasher.finalize());
     if got != f.sha256 {

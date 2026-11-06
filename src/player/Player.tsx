@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { board } from '../board/layout.ts'
-import { replayTo } from '../engine/steps.ts'
+import { replaySceneTo, replayTo } from '../engine/steps.ts'
 import InkBoard from '../ink/InkBoard.tsx'
 import { DEFAULT_MESSY } from '../ink/defaults.ts'
 import ReplayBar, { SPEEDS } from '../ui/ReplayBar.tsx'
@@ -48,7 +48,9 @@ export default function Player({ data }: { data: ReplayData }) {
   const atRef = useRef(at)
   atRef.current = at
 
-  const graph = useMemo(() => (total ? replayTo(steps, at) : data.pages[page].graph), [steps, total, at, data, page])
+  const graph = useMemo(() => (total && at < total ? replayTo(steps, at) : data.pages[page].graph), [steps, total, at, data, page])
+
+  const overlay = at === total ? data.pages[page].scene?.overlay : replaySceneTo(steps, at)?.overlay
 
   // 放回这张板最终的排版（没有就清空）
   const restore = (i: number) => board.restore(data.pages[i]?.layout)
@@ -76,6 +78,10 @@ export default function Player({ data }: { data: ReplayData }) {
     }
     setPlaying(true)
   }
+  function exitReplay() {
+    setPlaying(false)
+    setAt(total)
+  }
 
   // 按当时的节奏播放（停顿压到 0.9–3 秒），再除以倍速
   useEffect(() => {
@@ -93,11 +99,19 @@ export default function Player({ data }: { data: ReplayData }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === ' ') {
-        e.preventDefault()
-        toggle()
+      if (!total || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      const target = e.target as HTMLElement
+      if (target.closest('input:not([type="range"]), textarea, select, [contenteditable]')) return
+      if (e.key === 'Escape') exitReplay()
+      else if (target.closest('input[type="range"]')) return
+      else if (e.key === ' ') {
+        // Space activates the focused button; a held playback key toggles only once.
+        if (target.closest('button, [role="button"]')) return
+        if (!e.repeat) toggle()
       } else if (e.key === 'ArrowLeft') seek(atRef.current - 1)
       else if (e.key === 'ArrowRight') seek(atRef.current + 1)
+      else return
+      e.preventDefault()
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
@@ -106,22 +120,32 @@ export default function Player({ data }: { data: ReplayData }) {
   // 会议记录：回放时只显示到当时那一句；最终状态显示全部
   const shownLines = total && at < total ? data.lines.slice(0, at ? steps[at - 1].line : 0) : data.lines
   const listEnd = useRef<HTMLDivElement>(null)
+  const previousPosition = useRef({ page, at })
   useEffect(() => {
-    if (total && at < total) listEnd.current?.scrollIntoView({ block: 'end' })
-  }, [at, total])
+    const previous = previousPosition.current
+    previousPosition.current = { page, at }
+    // 切板保留阅读位置；同一张板回放到最后一步也要跟到末句。
+    if (previous.page === page && previous.at !== at) listEnd.current?.scrollIntoView({ block: 'end' })
+  }, [page, at])
 
   const t = useT()
   const many = data.pages.length > 1
+  const pageSource = t.pages.sourcePage(data.pages[page].graph.underlay?.no)
   return (
     <div className="player">
       <header className="topbar">
         <b className="player-title">{data.title}</b>
         <span className="player-meta">{dateText(data.createdAt)} · {t.doc.replay}</span>
+        {pageSource && <span className="player-source">{pageSource}</span>}
         <span className="spacer" />
         {many && (
           <nav className="player-pages" aria-label={t.pages.aria}>
-            {data.pages.map((_, i) => (
-              <button key={i} type="button" className={i === page ? 'on' : ''} onClick={() => go(i)}>
+            {data.pages.map((p, i) => (
+              <button key={i} type="button" className={i === page ? 'on' : ''} aria-current={i === page ? 'page' : undefined}
+                aria-description={t.pages.sourcePage(p.graph.underlay?.no) || undefined}
+                title={`${t.pages.board(i + 1)}${t.pages.sourcePage(p.graph.underlay?.no) ? ` · ${t.pages.sourcePage(p.graph.underlay?.no)}` : ''}`}
+                onFocus={(event) => event.currentTarget.scrollIntoView({block: 'nearest', inline: 'nearest'})}
+                onClick={() => go(i)}>
                 {t.doc.boardShort(i + 1)}
               </button>
             ))}
@@ -129,7 +153,8 @@ export default function Player({ data }: { data: ReplayData }) {
         )}
       </header>
       <main className="board replaying">
-        <InkBoard key={page} graph={graph} hot={new Set()} dark={false} messy={data.messy ?? DEFAULT_MESSY} weight={data.weight} englishWeight={data.englishWeight} bottomInset={84} tidy={tidy} underlay={data.pages[page].underlay} base={data.pages[page].base} />
+        {data.pages[page].base && data.lines[0]?.manual && <div className="board-notices"><p className="board-origin">{data.lines[0].text}</p></div>}
+        <InkBoard key={page} graph={graph} overlay={overlay} hot={new Set()} dark={false} messy={data.messy ?? DEFAULT_MESSY} weight={data.weight} englishWeight={data.englishWeight} bottomInset={84} tidy={tidy} underlay={data.pages[page].underlay} base={data.pages[page].base} />
         {total > 0 ? (
           <ReplayBar
             at={at}
@@ -141,10 +166,7 @@ export default function Player({ data }: { data: ReplayData }) {
             onToggle={toggle}
             onSeek={seek}
             onSpeed={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed as 1) + 1) % SPEEDS.length])}
-            onExit={() => {
-              setPlaying(false)
-              setAt(total)
-            }}
+            onExit={exitReplay}
           />
         ) : null}
       </main>

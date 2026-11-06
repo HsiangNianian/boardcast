@@ -1,0 +1,34 @@
+.modal .panel.preparation {
+  width: min(600px, 100%);
+  border-radius: 12px;
+  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.preparation > :not(.preparation-checks) { flex-shrink: 0; }
+.preparation-checks { min-height: 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; list-style: none; margin: 0; padding: 0; counter-reset: preparation; }
+.preparation-checks > li { position: relative; padding: 16px 0 16px 36px; border-top: 1px solid var(--line); counter-increment: preparation; display: grid; gap: 10px; }
+.preparation-checks > li::before { content: counter(preparation); position: absolute; top: 17px; left: 0; font-size: 13px; color: var(--muted); }
+.preparation-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.preparation-heading h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.preparation-field { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; align-items: center; font-size: 13px; color: var(--muted); }
+.preparation-field select { width: 100%; min-width: 0; }
+.preparation-model { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.input-check { display: grid; gap: 8px; }
+.input-check > button { justify-self: start; }
+.input-check meter { width: 100%; height: 18px; }
+.preparation details { font-size: 13px; color: var(--muted); }
+.preparation summary { cursor: pointer; width: fit-content; }
+.preparation details[open] summary { margin-bottom: 8px; }
+.preparation details .hint + .hint { margin-top: 8px; }
+.preparation-checks > li > button { justify-self: start; }
+.preparation-actions, .preparation-footer { display: flex; flex-wrap: wrap; gap: 8px; }
+.preparation-footer { justify-content: flex-end; padding-top: 12px; border-top: 1px solid var(--line); }
+.preparation :is(.hint, .meta, .tag) { overflow-wrap: anywhere; }
+@media (max-width: 540px) {
+  .modal .panel.preparation { padding: 16px; }
+  .preparation-field { grid-template-columns: 1fr; gap: 6px; }
+  .preparation-checks > li { padding-left: 26px; }
+  .preparation-footer > button { flex: 1; min-height: 44px; white-space: normal; }
+}

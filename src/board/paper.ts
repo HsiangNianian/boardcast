@@ -1,7 +1,7 @@
 // PDF 一页的版面分析：把文字层的碎片切成一块块「原文」，并按论文里的叫法起名。
 // 普通文档也走这里，只是用不上图注、公式编号这些规则。
 //
-// 1. 去掉旋转的字（arXiv 侧边的竖排标记）和页码；
+// 1. 按文字方向分析，去掉页边 arXiv 标记和页码；
 // 2. 找栏缝：页面中间一条没有文字穿过的竖带，左右两栏各拼各的，跨栏的（标题、通栏大图）单独算；
 // 3. 拼行：同一栏里、高度差不多、横向挨着的碎片拼成一行；
 // 4. 给行分类：章节标题（3. / 3.1 / IV. / 一、 / Abstract / References）、图注表注（Figure 3. / Table 2 / 图 4）、
@@ -13,6 +13,7 @@
 
 import type { RegionRow } from '../engine/graph.ts'
 import type { Area } from '../engine/regions.ts'
+import { rotatePoint } from '../engine/spans.ts'
 
 export interface TextPiece {
   text: string
@@ -20,8 +21,8 @@ export interface TextPiece {
   y: number
   w: number
   h: number
-  /** 字是斜的或竖排的 */
-  rotated?: boolean
+  /** 局部文字坐标转到页面的弧度。 */
+  angle?: number
 }
 
 export type BlockKind = 'heading' | 'figure' | 'table' | 'equation' | 'reference' | 'text'
@@ -115,12 +116,37 @@ function gutter(ps: TextPiece[], W: number): number | null {
 }
 
 export function analyzePage(pieces: TextPiece[], W: number, H: number, state: PaperState = { inRefs: false }): PageAnalysis {
-  // —— 1. 去掉旋转的字、页码 ——
-  const ps = pieces.filter((p) => {
-    if (p.rotated || !p.text.trim() || p.w <= 0 || p.h <= 0) return false
+  if (!pieces.some((p) => p.angle)) return analyzeHorizontalPage(pieces, W, H, state)
+  const result: PageAnalysis = { areas: [], headings: [], columns: 1 }
+  for (const angle of new Set(pieces.map((p) => p.angle ?? 0))) {
+    const corners = [[0, 0], [W, 0], [0, H], [W, H]].map(([x, y]) => rotatePoint([x, y], -angle))
+    const x0 = Math.min(...corners.map(([x]) => x)), y0 = Math.min(...corners.map(([, y]) => y))
+    const width = Math.max(...corners.map(([x]) => x)) - x0, height = Math.max(...corners.map(([, y]) => y)) - y0
+    const group = pieces.filter((p) => (p.angle ?? 0) === angle).map((p) => ({ ...p, x: p.x - x0, y: p.y - y0 }))
+    const analyzed = analyzeHorizontalPage(group, width, height, state)
+    result.columns = Math.max(result.columns, analyzed.columns) as 1 | 2
+    result.headings.push(...analyzed.headings)
+    for (const area of analyzed.areas) {
+      const corners = [[area.x, area.y], [area.x + area.w, area.y], [area.x, area.y + area.h], [area.x + area.w, area.y + area.h]].map(([x, y]) => rotatePoint([x + x0, y + y0], angle))
+      const x = Math.min(...corners.map(([x]) => x)), y = Math.min(...corners.map(([, y]) => y))
+      // 同一水印可能被 PDF 拆成不同字体的碎片，拼好整行后再过滤。
+      if (angle && /^arXiv\s*:/i.test(area.text.trim()) && (x < W * 0.06 || x > W * 0.94)) continue
+      result.areas.push({ ...area, x, y, w: Math.max(...corners.map(([x]) => x)) - x, h: Math.max(...corners.map(([, y]) => y)) - y,
+        rows: area.rows?.map((r) => ({ ...r, y: r.y + y0, segs: r.segs.map((s) => ({ ...s, x: s.x + x0 })), ...(angle ? { angle } : {}) })) })
+    }
+  }
+  return result
+}
+
+function analyzeHorizontalPage(pieces: TextPiece[], W: number, H: number, state: PaperState): PageAnalysis {
+  // —— 1. 去掉空白、页码 ——
+  const valid = pieces.filter((p) => {
+    if (!p.text.trim() || p.w <= 0 || p.h <= 0) return false
     const pageNo = PAGE_NO.test(p.text) && (p.y > H * 0.9 || p.y + p.h < H * 0.07)
     return !pageNo
   })
+  const vertical = verticalText(valid)
+  const ps = vertical.rest
   const g = gutter(ps, W)
   const sideOf = (x: number, w: number): Side => (g === null ? 'left' : x + w <= g + 2 ? 'left' : x >= g - 2 ? 'right' : 'span')
   const body = median(ps.map((p) => p.h))
@@ -233,6 +259,10 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
     if (host) {
       host.text = `${host.text} ${l.text.trim()}`
       host.w = l.x + l.w - host.x
+      const top = Math.min(host.y, l.y)
+      host.h = Math.max(host.y + host.h, l.y + l.h) - top
+      host.y = top
+      if (host.row && l.row) host.row = { y: Math.round(top), h: Math.round(host.h), segs: [...host.row.segs, ...l.row.segs].sort((a, b) => a.x - b.x) }
       host.kind = 'equation'
       host.num = l.num
       l.text = ''
@@ -251,7 +281,8 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
     if (before && l.y > before.y) (pitches.get(l.side) ?? pitches.set(l.side, []).get(l.side)!).push(l.y - before.y)
     lastOf.set(l.side, l)
   }
-  const leading = (s: Side, lh: number) => Math.max(lh * 0.9, (median(pitches.get(s) ?? []) - lh) * 1.3)
+  // 稀疏页面的段落留白不能变成行距；上限仍容纳双倍行距的正文。
+  const leading = (s: Side, lh: number) => Math.max(lh * 0.9, Math.min(lh * 1.5, (median(pitches.get(s) ?? []) - lh) * 1.3))
   const blocks: Block[] = []
   const order: Side[] = ['span', 'left', 'right']
   const right = (s: Side) => Math.max(...live.filter((l) => l.side === s).map((l) => l.x + l.w))
@@ -302,6 +333,8 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
     } else
       blocks.push({ text: l.text, x: l.x, y: l.y, w: l.w, h: l.h, kind: l.kind, side: l.side, lh: l.h, lines: 1, num: l.num, lastRight: l.x + l.w, rows: l.row ? [l.row] : [] })
   }
+
+  for (const a of vertical.areas) blocks.push({ ...a, side: sideOf(a.x, a.w), lh: median(a.rows!.map(r => r.h)), lines: a.rows!.length, rows: a.rows! })
 
   // —— 5. 图表：从图注往上或往下找图表本身占的地方，里面的零碎文字（表格的格子、坐标轴、图例）并进来 ——
   // 真正的正文段落：够长、够宽、正文字号。图里的标注再宽也不算，它们挡不住找图的范围
@@ -390,4 +423,44 @@ export function analyzePage(pieces: TextPiece[], W: number, H: number, state: Pa
     // 图表的文字零零碎碎，圈就圈整块
     .map(({ text, x, y, w, h, kind, name, rows }) => ({ text, x, y, w, h, kind, ...(name ? { name } : {}), ...(kind === 'figure' || kind === 'table' ? {} : { rows }) }))
   return { areas, headings, columns: g === null ? 1 : 2 }
+}
+
+/** 逐字输出的竖排先按列复原；横向相接的字仍交给普通拼行。 */
+function verticalText(pieces: TextPiece[]): { areas: PaperArea[]; rest: TextPiece[] } {
+  const candidates = pieces.filter((p) => [...p.text.trim()].length === 1 && p.w >= p.h * 0.3 && p.w <= p.h * 1.5 && !pieces.some((q) =>
+    q !== p && Math.abs(q.y + q.h / 2 - p.y - p.h / 2) < Math.min(q.h, p.h) * 0.25 &&
+    Math.min(Math.abs(q.x - p.x - p.w), Math.abs(p.x - q.x - q.w)) < p.h * 0.35))
+  const columns: TextPiece[][] = []
+  for (const p of candidates.sort((a, b) => a.y - b.y || b.x - a.x)) {
+    const col = columns.find((c) => {
+      const last = c.at(-1)!
+      return Math.abs(last.x + last.w / 2 - p.x - p.w / 2) < Math.min(last.w, p.w) * 0.25 &&
+        p.y - last.y >= Math.min(last.h, p.h) * 0.6 && p.y - last.y <= Math.max(last.h, p.h) * 1.35
+    })
+    if (col) col.push(p)
+    else columns.push([p])
+  }
+  const used = new Set<TextPiece>()
+  const areas: PaperArea[] = []
+  const order = new Map(pieces.map((p, i) => [p, i]))
+  for (const col of columns) {
+    if (used.has(col[0]) || col.length < 3 || col.filter((p) => /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(p.text.normalize('NFKC'))).length < 2) continue
+    const group = [col]
+    used.add(col[0])
+    for (let i = 0; i < group.length; i++) for (const other of columns) {
+      const a = group[i][0], b = other[0], size = Math.max(a.h, b.h)
+      if (!used.has(b) && Math.abs(a.x - b.x) > size * 0.5 && Math.abs(a.x - b.x) <= size * 2.5 && Math.abs(a.y - b.y) <= size * 1.5) {
+        group.push(other)
+        used.add(b)
+      }
+    }
+    // shortcut: 按 PDF 文字流恢复列序；遇到文字流乱序的文档时再扩展阅读顺序识别。
+    const glyphs = group.sort((a, b) => Math.min(...a.map((p) => order.get(p)!)) - Math.min(...b.map((p) => order.get(p)!))).flat()
+    for (const p of glyphs) used.add(p)
+    const x = Math.min(...glyphs.map((p) => p.x)), y = Math.min(...glyphs.map((p) => p.y))
+    areas.push({ text: glyphs.map((p) => p.text.trim()).join(''), kind: 'text', x, y,
+      w: Math.max(...glyphs.map((p) => p.x + p.w)) - x, h: Math.max(...glyphs.map((p) => p.y + p.h)) - y,
+      rows: glyphs.map((p) => ({ y: Math.round(p.y), h: Math.round(p.h), segs: [{ t: p.text.trim(), x: Math.round(p.x * 10) / 10, w: Math.round(p.w * 10) / 10 }] })) })
+  }
+  return { areas, rest: pieces.filter((p) => !used.has(p)) }
 }

@@ -9,6 +9,60 @@ const L = 74
 const R = 454
 const CW = 348
 const line = (x: number, y: number, text: string, w = CW, h = 13): TextPiece => ({ text, x, y, w, h })
+
+test('vertical glyphs keep column reading order, short final columns and independent blocks', () => {
+  const column = (x: number, text: string) => [...text].map((text, i) => line(x, 100 + i * 20, text, 20, 20))
+  const pieces = [...column(212, '本地系统需要保存会'), ...column(176, '议'), ...column(622, '右列需要保存甲项︒'), ...column(586, '左列需要保存⼄项︒')]
+  const before = JSON.stringify(pieces)
+  const result = analyzePage(pieces, 900, 900)
+  assert.deepEqual(result.areas.map(a => a.text).sort(), ['本地系统需要保存会议', '右列需要保存甲项︒左列需要保存⼄项︒'].sort())
+  assert.deepEqual(result.areas.find(a => a.text.startsWith('本地'))!.rows!.slice(-2).map(r => [r.y, r.segs[0].x, r.segs[0].t]), [[260, 212, '会'], [100, 176, '议']])
+  assert.equal(result.areas.find(a => a.text.startsWith('右列'))!.rows!.length, 18)
+  assert.equal(JSON.stringify(pieces), before)
+})
+
+test('a horizontal grid of individual CJK glyphs stays in horizontal reading order', () => {
+  const pieces = ['保存会议', '本地记录', '继续工作'].flatMap((text, row) => [...text].map((text, col) => line(100 + col * 20, 100 + row * 24, text, 20, 20)))
+  const result = analyzePage(pieces, 900, 900)
+  assert.equal(result.areas.map(a => a.text).join(''), '保存会议本地记录继续工作')
+  assert.deepEqual(result.areas.flatMap(a => a.rows!).map(r => r.segs.map(s => s.t).join('')), ['保存会议', '本地记录', '继续工作'])
+})
+
+test('single-glyph table cells stay in the recognized table instead of becoming overlapping text regions', () => {
+  const cells = ['甲乙丙', '丁戊己'].flatMap((text, col) => [...text].map((text, row) => line(100 + col * 36, 100 + row * 20, text, 20, 20)))
+  const result = analyzePage([line(60, 50, 'Table 1. Three rows.', 250, 18), ...cells,
+    line(60, 250, 'This paragraph explains the table with enough normal text to stop its selected bounds before a second independent paragraph.', 760, 18)], 900, 900)
+  assert.equal(result.areas.length, 2)
+  const table = result.areas.find(a => a.kind === 'table')!
+  assert.equal(table.rows, undefined)
+  assert(cells.every(c => c.x >= table.x && c.x + c.w <= table.x + table.w && c.y >= table.y && c.y + c.h <= table.y + table.h))
+})
+
+test('mixed text directions preserve paragraphs and page bounds while excluding the arXiv margin label', () => {
+  const result = analyzePage([
+    line(50, 40, 'Horizontal text.', 200, 20),
+    { ...line(100, -260, 'Clockwise text.', 200, 20), angle: Math.PI / 2 },
+    { ...line(-800, -650, 'Inverted text.', 200, 20), angle: Math.PI },
+    { ...line(100, -28, 'arXiv:', 40, 12), angle: Math.PI / 2 },
+    { ...line(140, -28, '1234.56789v1', 120, 12), angle: Math.PI / 2 },
+    { ...line(260, -28, '[cs.AI]', 60, 12), angle: Math.PI / 2 },
+  ], 900, 760)
+  assert.deepEqual(result.areas.map(a => a.text), ['Horizontal text.', 'Clockwise text.', 'Inverted text.'])
+  for (const a of result.areas) assert(a.x >= 0 && a.y >= 0 && a.x + a.w <= 900 && a.y + a.h <= 760)
+  const clockwise = result.areas[1]
+  assert(Math.abs(clockwise.x - 240) < 0.01 && Math.abs(clockwise.y - 100) < 0.01)
+  assert(Math.abs(clockwise.w - 20) < 0.01 && Math.abs(clockwise.h - 200) < 0.01)
+  assert.equal(clockwise.rows![0].angle, Math.PI / 2)
+})
+
+test('large gaps between sparse paragraphs do not become the normal line spacing', () => {
+  const pieces = [line(60, 100, '本地系统需要及时保存每场会', 260, 20), line(60, 130, '议记录，方便大家复盘。下一句。', 300, 20),
+    ...['「系统需要保存会议记录。」下一句。', '使用API解析PDF并保存记录。', '扩展字𠮷后面仍要保存记录。', '他说「保存记录？！」下一句。', 'ASCII：foo-bar 与 source_text。'].map((text, i) => line(60, 230 + i * 90, text, 340, 20))]
+  const result = analyzePage(pieces, 900, 680, { inRefs: false })
+  assert.equal(result.areas.length, 6)
+  assert.equal(result.areas[0].rows!.length, 2)
+  assert(result.areas.slice(1).every(area => area.rows!.length === 1))
+})
 /** 一段正文：首行缩进，最后一行写不满 */
 function para(x: number, y: number, n: number, word = 'residual'): TextPiece[] {
   return Array.from({ length: n }, (_, i) => {
@@ -21,7 +75,7 @@ function para(x: number, y: number, n: number, word = 'residual'): TextPiece[] {
 function page(): TextPiece[] {
   return [
     // 侧边竖排的 arXiv 标记、页码
-    { text: 'arXiv:1512.03385v1 [cs.CV] 10 Dec 2015', x: 20, y: 300, w: 20, h: 400, rotated: true },
+    { text: 'arXiv:1512.03385v1 [cs.CV] 10 Dec 2015', x: 300, y: -40, w: 400, h: 20, angle: Math.PI / 2 },
     line(445, 1090, '3', 8),
     // 左栏：章节标题、两段正文、一个图（图里的零碎标注 + 图注在下面）
     line(L, 100, '3. Deep Residual Learning', 230, 16),
@@ -75,6 +129,8 @@ test('a two-column paper page is split by column, section, paragraph, figure, ta
   const eq = r.areas.find((a) => a.kind === 'equation')!
   assert.equal(eq.name, '公式 (1)')
   assert.match(eq.text, /y = F\(x.*\(1\)$/)
+  assert.equal(eq.rows![0].segs.at(-1)!.t, '(1)')
+  assert.equal(eq.rows![0].segs.at(-1)!.x, R + 330)
   // 竖排的 arXiv 标记、页码不要；正文里引用图的「Fig. 1).」不是图注
   assert.ok(!r.areas.some((a) => /arXiv|^3$/.test(a.text)))
   assert.equal(r.areas.filter((a) => a.kind === 'figure').length, 1)

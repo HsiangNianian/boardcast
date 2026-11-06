@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { join, normalize } from 'node:path'
 import react from '@vitejs/plugin-react'
 import { type Plugin, defineConfig } from 'vite'
@@ -58,7 +58,11 @@ export default defineConfig({
   plugins: [react(), pdfjsAssets(), pronunciationAssets()],
   worker: { format: 'es' },
   clearScreen: false,
-  server: { port: 1420, strictPort: true },
+  server: {
+    port: 1420, strictPort: true,
+    // Worktrees can share pnpm's package directory; their fonts still need to be served.
+    fs: { allow: [import.meta.dirname, realpathSync(join(import.meta.dirname, 'node_modules/.pnpm'))] },
+  },
   envPrefix: ['VITE_', 'TAURI_ENV_'],
   build: {
     target: 'es2022',

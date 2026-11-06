@@ -3,6 +3,7 @@
 // 不记操作文本：铅笔稿会先占掉节点编号，只重放模型的操作，编号会对不上；手动修改、撤销也不是操作。
 
 import { type Edge, type Graph, type Group, type Node, cloneGraph, emptyGraph } from './graph.ts'
+import type { FreeScene } from '../board/freeScene.ts'
 
 interface Part<T> {
   /** 新增或者改了的（整条存） */
@@ -29,6 +30,8 @@ export interface Step {
   /** 这时会议记录有几句（回放时显示到这一句） */
   line: number
   d: Diff
+  /** Only committed edit batches carry a scene; pointer moves are not separate steps. */
+  scene?: FreeScene | null
 }
 
 const edgeKey = (e: Edge) => `${e.from}>${e.to}`
@@ -101,6 +104,12 @@ export function replayTo(steps: Step[], count: number): Graph {
   let g = emptyGraph()
   for (const s of steps.slice(0, count)) g = patchGraph(g, s.d)
   return g
+}
+
+export function replaySceneTo(steps: Step[], count: number): FreeScene | undefined {
+  let scene: FreeScene | undefined
+  for (const step of steps.slice(0, count)) if (step.scene !== undefined) scene = step.scene ? structuredClone(step.scene) : undefined
+  return scene
 }
 
 /** 把所有步打完，得到的板书和 `g` 一致吗（用来判断这场会能不能完整回放） */

@@ -34,6 +34,8 @@ use tauri::{AppHandle, Emitter, Manager};
 pub(crate) mod auto;
 #[path = "voice_policy.rs"]
 mod policy;
+#[path = "voice_preview.rs"]
+pub(crate) mod preview;
 use policy::{Quality, Retry, Review, SourceAudio};
 static CAPTURE: AtomicU64 = AtomicU64::new(0);
 fn capture_id() -> String {
@@ -649,6 +651,7 @@ struct Running {
 #[derive(Default)]
 pub struct Voice {
     running: Mutex<Option<Running>>,
+    preview: Mutex<preview::Preview>,
     status: Mutex<VoiceStatus>,
     engine: Mutex<Option<Engine>>,
     apple: Mutex<Option<apple_speech::Session>>,
@@ -713,6 +716,7 @@ pub fn voice_prepare(app: AppHandle, locale: String) -> Result<(), String> {
 pub fn voice_select(app: AppHandle, provider: Provider, locale: String) -> Result<(), String> {
     let voice = app.state::<Voice>();
     let mut running = voice.running.lock().unwrap();
+    preview::stop_all(&app);
     if voice.shutting_down.load(Ordering::SeqCst) {
         return Err("Audio input is shutting down".into());
     }
@@ -881,6 +885,19 @@ pub fn voice_devices() -> Vec<String> {
     names
 }
 
+fn microphone(host: &cpal::Host, device: Option<&str>) -> Result<cpal::Device, String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    if let Some(name) = device.filter(|name| !name.is_empty()) {
+        host.input_devices()
+            .map_err(|error| error.to_string())?
+            .find(|device| device.description().is_ok_and(|d| d.name() == name))
+            .ok_or_else(|| "The selected microphone is no longer available".into())
+    } else {
+        host.default_input_device()
+            .ok_or_else(|| "No microphone found".into())
+    }
+}
+
 #[tauri::command(async)]
 pub fn voice_start(
     app: AppHandle,
@@ -888,11 +905,12 @@ pub fn voice_start(
     source: Option<String>,
 ) -> Result<(), String> {
     let source = Source::parse(source.as_deref());
+    let voice = app.state::<Voice>();
+    let mut running = voice.running.lock().unwrap();
+    preview::stop_all(&app);
     if !installed(&app) {
         return Err("Download the speech recognition model first".into());
     }
-    let voice = app.state::<Voice>();
-    let mut running = voice.running.lock().unwrap();
     if voice.shutting_down.load(Ordering::SeqCst) {
         return Err("Audio input is shutting down".into());
     }
@@ -955,6 +973,7 @@ pub fn voice_stop(app: AppHandle) {
 }
 
 fn stop(app: &AppHandle, running: &mut Option<Running>) {
+    preview::stop_all(app);
     if let Some(r) = running.take() {
         r.stop.store(true, Ordering::SeqCst);
         let _ = r.thread.join();
@@ -1141,7 +1160,7 @@ fn run(
     stop: Arc<AtomicBool>,
     ready: mpsc::Sender<Result<String, String>>,
 ) {
-    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    use cpal::traits::{DeviceTrait, StreamTrait};
 
     let voice = app.state::<Voice>();
     let mut cached = voice.engine.lock().unwrap();
@@ -1198,18 +1217,12 @@ fn run(
     let mut system_audio = None;
 
     if source != Source::System {
-        // 设置里选的麦克风拔掉了就退回系统默认的，不让收音直接失败
-        let chosen = device
-            .as_deref()
-            .filter(|n| !n.is_empty())
-            .and_then(|name| {
-                host.input_devices()
-                    .ok()
-                    .and_then(|mut ds| ds.find(|d| d.description().is_ok_and(|x| x.name() == name)))
-            });
-        let Some(dev) = chosen.or_else(|| host.default_input_device()) else {
-            let _ = ready.send(Err("No microphone found".into()));
-            return;
+        let dev = match microphone(&host, device.as_deref()) {
+            Ok(device) => device,
+            Err(error) => {
+                let _ = ready.send(Err(error));
+                return;
+            }
         };
         match open_stream(&dev, false, 0, tx.clone(), on_err.clone()) {
             Ok((stream, rate)) => {

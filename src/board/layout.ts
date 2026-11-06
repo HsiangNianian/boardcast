@@ -39,6 +39,11 @@ export interface Route {
   points: [number, number][]
 }
 
+export interface TopicRoute extends Route {
+  /** A label on the outside lane; the line behind it receives a paper backing. */
+  labelBox?: Box
+}
+
 export interface Row {
   id: string
   node: Node
@@ -55,6 +60,8 @@ export interface Region extends Box {
   head?: Node
   title?: { text: string; x: number; y: number; w: number }
   rows: Row[]
+  /** Explicit links inside this topic, in region-local coordinates. */
+  links?: TopicRoute[]
 }
 
 export interface Layout {
@@ -63,7 +70,7 @@ export interface Layout {
   page?: Box
   diagram?: { box: Box; nodes: Box[]; groups: (Box & { label: string })[]; edges: Route[] }
   /** 不在流程图内部的连线（话题、条目之间，或跨区域），画成弯曲的手绘箭头 */
-  links: { from: string; to: string }[]
+  links: { from: string; to: string; points?: [number, number][]; labelBox?: Box }[]
   /** 每个可以被箭头连接的东西的位置 */
   anchors: Map<string, Box>
   bounds: { x0: number; y0: number; x1: number; y1: number }
@@ -130,7 +137,21 @@ function topicRegion(g: Graph, head: Node): Region {
   }
   walk(head, 1)
   const titleW = textWidth(head.label, TITLE) + (head.icon ? 46 : 0)
-  const w = Math.max(titleW, ...rows.map((r) => r.x + (r.prefix ? 30 : 0) + r.w + 24)) + 16
+  let w = Math.max(titleW, ...rows.map((r) => r.x + (r.prefix ? 30 : 0) + r.w + 24)) + 16
+  const boxes = new Map<string, Box>([[head.id, { id: head.id, x: 0, y: 0, w: titleW, h: TITLE }],
+    ...rows.map((r) => [r.id, { id: r.id, x: r.x, y: r.y, w: r.w + (r.prefix ? 30 : 0), h: r.size + 8 }] as const)])
+  const links: TopicRoute[] = []
+  // A topic's region contains its children. Center-to-center clipping therefore
+  // starts inside a child's text; reserve an outside lane for each explicit edge.
+  for (const e of g.edges.filter((e) => e.from !== e.to && boxes.has(e.from) && boxes.has(e.to))) {
+    const a = boxes.get(e.from)!, b = boxes.get(e.to)!
+    const labelW = e.label ? textWidth(e.label, FONT - 4) : 0
+    const lane = w + 24 + labelW / 2
+    const ay = a.y + a.h / 2, by = b.y + b.h / 2
+    links.push({ from: e.from, to: e.to, points: [[a.x + a.w + 14, ay], [lane, ay], [lane, by], [b.x + b.w + 14, by]],
+      ...(e.label ? { labelBox: { id: `${e.from}>${e.to}:label`, x: lane - labelW / 2, y: (ay + by) / 2 - (FONT - 4) / 2, w: labelW, h: FONT - 4 } } : {}) })
+    w = lane + labelW / 2 + 24
+  }
   return {
     id: head.id,
     head,
@@ -140,8 +161,14 @@ function topicRegion(g: Graph, head: Node): Region {
     h: y + 8,
     title: { text: head.label, x: head.icon ? 46 : 0, y: 0, w: textWidth(head.label, TITLE) },
     rows,
+    ...(links.length ? { links } : {}),
   }
 }
+
+export const LOOSE_HEADINGS = {
+  en: ['Notes & questions', 'Open', 'Notes'],
+  zh: ['补充与问题', '待定', '补充'],
+} as const
 
 /** 流程图旁的补充与问题，连同它们的子条目一起保留。 */
 function looseRegion(g: Graph, loose: Node[]): Region {
@@ -149,7 +176,7 @@ function looseRegion(g: Graph, loose: Node[]): Region {
   const en = spokenLang(g.nodes.map((n) => n.label)) === 'en'
   const questions = loose.some((n) => n.kind === 'question')
   const notes = loose.some((n) => n.kind !== 'question')
-  const heading = questions ? (notes ? (en ? 'Notes & questions' : '补充与问题') : (en ? 'Open' : '待定')) : (en ? 'Notes' : '补充')
+  const heading = LOOSE_HEADINGS[en ? 'en' : 'zh'][questions ? (notes ? 0 : 1) : 2]
   const rows: Row[] = []
   const seen = new Set<string>()
   let y = TITLE + 26
@@ -345,9 +372,11 @@ export class StableLayout {
   private boxAt = new Map<string, Box>()
   private queue: Promise<unknown> = Promise.resolve()
   private cache = new WeakMap<Graph, Promise<Layout>>()
+  private generation = 0
 
   /** 忘掉所有位置，下一次整块重新排（清空白板、整理排版时用） */
   reset() {
+    this.generation++
     this.regionAt.clear()
     this.nodeAt.clear()
     this.routeAt.clear()
@@ -387,6 +416,7 @@ export class StableLayout {
       this.regionAt.set(id, { x: r.x + dx, y: r.y + dy })
     }
     this.cache = new WeakMap()
+    this.generation++
     return true
   }
 
@@ -399,7 +429,21 @@ export class StableLayout {
   layout(g: Graph): Promise<Layout> {
     let p = this.cache.get(g)
     if (!p) {
-      p = this.queue.then(() => this.compute(g))
+      const generation = this.generation
+      p = this.queue.then(async () => {
+        // ELK may finish after a page/meeting was restored or a user dragged a node.
+        // Compute privately; only the still-current layout may commit its memory.
+        const work = new StableLayout()
+        work.restore(this.snapshot())
+        const result = await work.compute(g)
+        if (generation === this.generation) {
+          this.regionAt = work.regionAt
+          this.nodeAt = work.nodeAt
+          this.routeAt = work.routeAt
+          this.boxAt = work.boxAt
+        }
+        return result
+      })
       this.queue = p.catch(() => undefined)
       this.cache.set(g, p)
     }
@@ -574,7 +618,9 @@ export class StableLayout {
       if (s.region) {
         const r = { ...s.region, x: px, y: py }
         regions.push(r)
-        anchors.set(r.id, { id: r.id, x: px, y: py, w: r.w, h: r.h })
+        anchors.set(r.id, r.links?.length && r.title
+          ? { id: r.id, x: px, y: py, w: r.title.w + r.title.x, h: TITLE }
+          : { id: r.id, x: px, y: py, w: r.w, h: r.h })
         for (const row of r.rows)
           anchors.set(row.id, { id: row.id, x: px + row.x, y: py + row.y, w: row.w + (row.prefix ? 30 : 0), h: row.size + 8 })
       } else if (dia) {
@@ -607,9 +653,13 @@ export class StableLayout {
     }
 
     const inDiagram = (e: { from: string; to: string }) => diagramIds.has(e.from) && diagramIds.has(e.to)
-    const links = g.edges.filter((e) => !inDiagram(e) && anchors.has(e.from) && anchors.has(e.to))
+    const topicRoutes = new Map(regions.flatMap((r) => (r.links ?? []).map((link) => [`${link.from}>${link.to}`, {
+      ...link, points: link.points.map(([x, y]) => [x + r.x, y + r.y] as [number, number]),
+      ...(link.labelBox ? { labelBox: { ...link.labelBox, x: link.labelBox.x + r.x, y: link.labelBox.y + r.y } } : {}),
+    }] as const)))
+    const links = g.edges.filter((e) => !inDiagram(e) && anchors.has(e.from) && anchors.has(e.to)).map((e) => topicRoutes.get(`${e.from}>${e.to}`) ?? e)
 
-    const all = [...anchors.values(), ...(diagram ? [diagram.box] : []), ...(page ? [page] : [])]
+    const all = [...anchors.values(), ...regions, ...(diagram ? [diagram.box] : []), ...(page ? [page] : [])]
     const bounds = all.length
       ? {
           x0: Math.min(...all.map((b) => b.x)),

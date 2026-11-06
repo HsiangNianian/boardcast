@@ -40,6 +40,18 @@ test('marks toggle on and off', () => {
   assert.deepEqual(b.nodes.find((n) => n.id === 'n2')?.marks, [])
 })
 
+test('unchanged names and stale selections preserve graph identity for undo and saving', () => {
+  const g = board()
+  for (const [sel, text] of [
+    [{ kind: 'node', id: 'n1' }, ' 爬虫 '],
+    [{ kind: 'node', id: 'n1' }, '「爬虫」'],
+    [{ kind: 'node', id: 'n99' }, 'Missing'],
+    [{ kind: 'edge', from: 'n4', to: 'n5' }, ' 请求 '],
+    [{ kind: 'edge', from: 'n5', to: 'n6' }, '   '],
+    [{ kind: 'edge', from: 'n4', to: 'n99' }, 'Missing'],
+  ] as const) assert.equal(rename(g, sel, text), g, JSON.stringify({ sel, text }))
+})
+
 test('descriptions and existence checks for the transcript and stale selections', () => {
   const g = board()
   assert.equal(describe(g, { kind: 'node', id: 'n1' }), '「爬虫」')

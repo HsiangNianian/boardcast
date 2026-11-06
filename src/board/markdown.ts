@@ -16,24 +16,41 @@ export interface SaidLine {
 const isAttach = (n: Node) => n.kind === 'question' || n.kind === 'formula' || n.kind === 'note'
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz'
 
-/** 条目文字加上标记：划掉 → 删除线，圈出 → 加粗，下划线 → 下划线，星标 → ★ */
+// 原话和标签是纯文字；换行不能逃出当前标题或列表项。
+const text = (s: string) => s
+  .replace(/[\\`*_{}[\]()#!<>|~&:@]/g, '\\$&')
+  .replace(/^([ \t]*)([-+])/, '$1\\$2')
+  .replace(/^([ \t]*\d+)\.(?=[ \t]|$)/, '$1\\.')
+  .replace(/\r\n?|\n/g, '<br />')
+
+function code(s: string): string {
+  return s.split(/\r\n?|\n/).map(line => {
+    if (!line) return ''
+    const fence = '`'.repeat(Math.max(0, ...(line.match(/`+/g) ?? []).map(run => run.length)) + 1)
+    const pad = /^[` ]|[` ]$/.test(line) && !/^ +$/.test(line) ? ' ' : ''
+    return `${fence}${pad}${line}${pad}${fence}`
+  }).join('<br />')
+}
+
+/** 条目文字加上标记：划掉 → 删除线，圈出 → 加粗，下划线 → 下划线，星标 → ★，高亮 → mark */
 function marked(n: Node): string {
-  let t = n.label
+  let t = n.kind === 'formula' ? code(n.label) : text(n.kind === 'region' ? n.text ?? n.label : n.label)
   if (n.marks.includes('划掉')) t = `~~${t}~~`
   if (n.marks.includes('圈出')) t = `**${t}**`
   if (n.marks.includes('下划线')) t = `<u>${t}</u>`
   if (n.marks.includes('星标')) t = `${t} ★`
+  if (n.marks.includes('高亮')) t = `<mark>${t}</mark>`
   return t
 }
 
 function attachLine(n: Node): string {
   if (n.kind === 'question') return `${msg().doc.question}${marked(n)}`
-  if (n.kind === 'formula') return `\`${n.label}\``
+  if (n.kind === 'formula') return marked(n)
   return `${msg().doc.note}${marked(n)}`
 }
 
-/** Mermaid 里的文字要转义引号 */
-const mm = (s: string) => s.replace(/"/g, '#quot;')
+/** Mermaid 实体保留字面符号；换行也不能关闭外层代码块。 */
+const mm = (s: string) => s.replace(/[&#"`<>]|\r\n?|\n/g, c => c === '\n' || c.startsWith('\r') ? '<br />' : `#${c.charCodeAt(0)};`)
 
 /**
  * `pages`：一场会的所有板（从第一张起）；不给或者只有一张时，就是 `g` 这一块板。
@@ -49,7 +66,7 @@ export function toMarkdown(
   const d = msg().doc
   const out: string[] = []
   const stamp = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')} ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')}`
-  out.push(`# ${title}`, '', `> ${stamp} · boardcast`, '')
+  out.push(`# ${text(title)}`, '', `> ${stamp} · boardcast`, '')
   if (summary?.trim()) out.push(`## ${d.summary}`, '', summary.trim(), '')
 
   const many = pages && pages.length > 1
@@ -65,14 +82,15 @@ export function toMarkdown(
     let page: number | undefined
     for (const l of lines) {
       if (many && (l.page ?? 0) !== page) {
+        if (page !== undefined) out.push('')
         page = l.page ?? 0
-        out.push('', `### ${d.board(page + 1)}`, '')
+        out.push(`### ${d.board(page + 1)}`, '')
       }
-      out.push(l.speaker ? `- **${l.speaker}**${d.colon}${l.text}` : `- ${l.text}`)
+      out.push(l.speaker ? `- **${text(l.speaker)}**${d.colon}${text(l.text)}` : `- ${text(l.text)}`)
     }
     out.push('')
   }
-  return out.join('\n').replace(/\n{3,}/g, '\n\n')
+  return out.join('\n')
 }
 
 /** 一块板的内容；`h` 是这一层小节标题用几个 # */
@@ -127,9 +145,10 @@ function board(g: Graph, out: string[], h: string) {
       out.push(e.label ? `  ${e.from} -->|"${mm(e.label)}"| ${e.to}` : `  ${e.from} --> ${e.to}`)
     }
     out.push('```', '')
+    for (const n of dia.filter((n) => n.marks.length)) out.push(`- ${text(n.label)}${d.colon}${n.marks.map((m) => msg().app.marks[m]).join(' · ')}`)
     // 挂在流程图节点上的问题、备注、公式
     const notes = g.nodes.filter((n) => live(n) && isAttach(n) && n.parent && ids.has(n.parent))
-    for (const n of notes) out.push(`- ${g.nodes.find((p) => p.id === n.parent)?.label}${d.colon}${attachLine(n)}`)
+    for (const n of notes) out.push(`- ${text(g.nodes.find((p) => p.id === n.parent)!.label)}${d.colon}${attachLine(n)}`)
     if (notes.length) out.push('')
   }
 
@@ -139,7 +158,7 @@ function board(g: Graph, out: string[], h: string) {
     out.push(`${h} ${d.annotations}`, '')
     for (const n of pins) {
       out.push(`- ${marked(n)}`)
-      for (const s of n.spans ?? []) out.push(`   - ${msg().app.marks[s.mark]}${d.colon}${s.text}`)
+      for (const s of n.spans ?? []) out.push(`   - ${msg().app.marks[s.mark]}${d.colon}${text(s.text)}`)
       for (const c of children(g, n.id).filter(live)) out.push(`   - ${attachLine(c)}`)
     }
     out.push('')
@@ -157,8 +176,8 @@ function board(g: Graph, out: string[], h: string) {
   const cross = g.edges.filter((e) => e.ink !== 'draft' && !(dia.some((n) => n.id === e.from) && dia.some((n) => n.id === e.to)))
   if (cross.length) {
     out.push(`${h} ${d.links}`, '')
-    const name = (id: string) => g.nodes.find((n) => n.id === id)?.label ?? id
-    for (const e of cross) out.push(`- ${name(e.from)} → ${name(e.to)}${e.label ? `${d.colon}${e.label}` : ''}`)
+    const name = (id: string) => text(g.nodes.find((n) => n.id === id)?.label ?? id)
+    for (const e of cross) out.push(`- ${name(e.from)} → ${name(e.to)}${e.label ? `${d.colon}${text(e.label)}` : ''}`)
     out.push('')
   }
 }

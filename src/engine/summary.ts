@@ -8,6 +8,14 @@ import { msg } from '../i18n/index.ts'
 import { type SpokenLang, spokenLang } from './lang.ts'
 import type { Utterance } from './prompt.ts'
 
+/** Content identity for one summary input snapshot; processing latency is irrelevant. */
+export function summaryFingerprint(boards: Graph[], lines: (Utterance & { page?: number; manual?: boolean })[]): string {
+  const source = JSON.stringify({ boards, lines: lines.filter((l) => !l.manual).map(({ text, speaker, page }) => ({ text, speaker, page })) })
+  let hash = 2166136261
+  for (let i = 0; i < source.length; i++) hash = Math.imul(hash ^ source.charCodeAt(i), 16777619)
+  return `${(hash >>> 0).toString(36)}-${source.length}`
+}
+
 /**
  * Model-facing wording of the summary, per meeting language. An English meeting gets English
  * instructions and English section headings, so the summary comes out in English.

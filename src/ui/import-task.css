@@ -1,0 +1,8 @@
+.import-task { display: grid; gap: 1rem; width: min(36rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; }
+.import-task header, .import-task .actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.import-task h2, .import-task p { margin: 0; }
+.import-task strong { overflow-wrap: anywhere; }
+.import-task ul { margin: 0; padding-inline-start: 1.25rem; }
+.import-task li + li { margin-top: .5rem; }
+.import-task progress { width: 100%; margin-top: .75rem; }
+.import-task [role="alert"] { color: var(--bad); overflow-wrap: anywhere; }

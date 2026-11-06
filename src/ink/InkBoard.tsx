@@ -1,3 +1,4 @@
+import { darkOverlayUrl } from '../board/overlayTheme.ts'
 // 手写模式：自己画 SVG，不走 Excalidraw。
 // 新出现的东西按笔顺一笔一笔写出来（骨架线做遮罩，stroke-dashoffset 从头描到尾），
 // 已有笔迹移动或改写时先擦除旧位置，再写新位置；手动拖动仍跟着指针走。
@@ -5,8 +6,9 @@
 
 import { type PointerEvent, type ReactNode, type WheelEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { type Layout, board } from '../board/layout.ts'
+import { hidesInk, sceneBounds, type SceneOverlay } from '../board/freeScene.ts'
 import type { Selection } from '../engine/edit.ts'
-import type { Graph } from '../engine/graph.ts'
+import type { Box, Graph } from '../engine/graph.ts'
 import { type InkLook, type Piece, type Trace, compose } from './compose.ts'
 import { DEFAULT_ENGLISH_WEIGHT, DEFAULT_WEIGHT } from './defaults.ts'
 import { localPoint } from '../ui/landscape.ts'
@@ -15,6 +17,8 @@ import { circled, hitTest, selectionBox, selectionLine } from './hit.ts'
 import { dashes, merge, overlaps } from './lasso.ts'
 import { ink, rng } from './pen.ts'
 import { ERASE_MS, changedInk, eraseSweep } from './transition.ts'
+import SelectionToolbar from './SelectionToolbar.tsx'
+import { useT } from '../i18n/index.ts'
 
 type Pt = [number, number]
 /** 圈选的一圈：用和板书一样的笔，切成一段段虚线（不填充） */
@@ -77,11 +81,13 @@ export default function InkBoard({
   weight = DEFAULT_WEIGHT,
   englishWeight = DEFAULT_ENGLISH_WEIGHT,
   selection = null,
+  focusContent = null,
   onSelect,
   toolbar,
   onMoveSel,
   layoutRev = 0,
   underlay,
+  overlay,
   lasso = false,
   onCircle,
   circles,
@@ -101,6 +107,7 @@ export default function InkBoard({
   englishWeight?: number
   /** 手动修改：选中的东西、点选回调、浮在选中物上方的按钮 */
   selection?: Selection | null
+  focusContent?: { selection?: Selection; box?: Box } | null
   onSelect?: (sel: Selection | null, at?: { x: number; y: number }) => void
   toolbar?: ReactNode
   /** 把选中的框或话题拖到了新位置（画板坐标的位移） */
@@ -109,12 +116,13 @@ export default function InkBoard({
   layoutRev?: number
   /** 垫在底下的导入页（PDF 的一页、一张图片），左上角对齐板书原点，大小是 graph.underlay */
   underlay?: string
+  overlay?: SceneOverlay
   /**
    * 圈着说（#48）：圈选开着时，在板上拖动是画一圈（不平移、不点选），画完交给 `onCircle`：
    * 这一圈、圈住的东西，和它合并掉的已有的圈（和它叠在一起的，合成一个大圈）
    */
   lasso?: boolean
-  onCircle?: (loop: Pt[], ids: string[], merged: number[]) => void
+  onCircle?: (loop: Pt[], ids: string[], merged: number[], grouped: boolean) => void
   /** 画好了、还没随话用掉的圈（板书坐标），画成虚线 */
   circles?: Pt[][]
   /** 带着旧板开会时的底板：上面原样留下的东西用淡墨 */
@@ -122,7 +130,9 @@ export default function InkBoard({
   /** 溯源：标出这个说话人提的东西，别的淡下去 */
   trace?: Trace | null
 }) {
+  const t = useT()
   const look = dark ? BLACKBOARD : WHITEBOARD
+  const overlayUrl = useMemo(() => dark && overlay?.url ? darkOverlayUrl(overlay.url) : overlay?.url, [dark, overlay?.url])
   const [pieces, setPieces] = useState<Piece[]>([])
   const previous = useRef<Piece[]>([])
   const [erasing, setErasing] = useState<Erasing[]>([])
@@ -140,6 +150,7 @@ export default function InkBoard({
   const [drawn, setDrawn] = useState(messy)
   const [bounds, setBounds] = useState({ x0: 0, y0: 0, x1: 800, y1: 600 })
   const [view, setView] = useState<{ x: number; y: number; k: number } | null>(null)
+  const [reading, setReading] = useState(false)
   const [, setTick] = useState(0)
   const timing = useRef(new Map<string, Timing>())
   const cursor = useRef(0)
@@ -168,9 +179,9 @@ export default function InkBoard({
     let eraseTimer: ReturnType<typeof setTimeout> | undefined
     void (async () => {
       const l = await board.layout(graph)
-      const ps = await compose(graph, l, hot, look, messy, weight, base, trace, englishWeight)
+      const ps = (await compose(graph, l, hot, look, messy, weight, base, trace, englishWeight)).filter((p) => !hidesInk(p.key, overlay))
       if (stale) return
-      const from = [graph, hot, look, messy, weight, englishWeight, tidy, bottomInset, layoutRev]
+      const from = [graph, hot, look, messy, weight, englishWeight, tidy, bottomInset, layoutRev, overlay]
       const restyled = from.every((x, i) => x === drewFor.current[i])
       const changed = graph !== drewFor.current[0] || tidy !== drewFor.current[6] || layoutRev !== drewFor.current[8]
       drewFor.current = from
@@ -222,10 +233,10 @@ export default function InkBoard({
       setPieces(ps)
       setDrawn(messy)
       if (!restyled) {
-        setBounds(l.bounds)
-        // 新内容还在画面里就不动视角，免得每说一句整块板缩放一次；跑出画面或者刚整理过才重新适配
+        const b = sceneBounds(l.bounds, overlay)
+        setBounds(b)
+        // 用户正在阅读或减少动态时，新增内容不能夺回镜头；主动整理仍适配整板。
         const cur = shown.current
-        const b = l.bounds
         const [w, h] = size.current
         const inside =
           cur &&
@@ -234,11 +245,13 @@ export default function InkBoard({
           b.x1 <= cur.x + w / cur.k &&
           b.y1 <= cur.y + Math.max(120, h - bottomInset) / cur.k
         // Keep the old ink in the same screen position until the wiping has finished.
-        const nextView = inside && had.current && tidied.current === tidy ? cur : null
+        const refit = tidied.current !== tidy
+        const nextView = !refit && (reading || (had.current && (reduced || inside))) ? cur : null
+        if (refit) setReading(false)
         afterEraseView.current = nextView
         setView(ghosts.current.length ? cur : nextView)
         tidied.current = tidy
-        had.current = graph.nodes.length > 0
+        had.current = graph.nodes.length > 0 || !!underlay || !!overlay
       }
       if (ghosts.current.length) eraseTimer = setTimeout(() => {
         if (!stale) { ghosts.current = []; setErasing([]); setView(afterEraseView.current) }
@@ -255,7 +268,7 @@ export default function InkBoard({
       clearTimeout(eraseTimer)
     }
     // trace 按内容比：每次渲染传进来的都是新对象也不会重画
-  }, [graph, hot, look, messy, weight, englishWeight, tidy, bottomInset, layoutRev, base, trace?.who, trace?.color, reduced])
+  }, [graph, hot, look, messy, weight, englishWeight, tidy, bottomInset, layoutRev, overlay, underlay, base, trace?.who, trace?.color, reduced, reading])
 
   // 画布尺寸放进 state：第一次渲染时 ref 还没挂上，窗口缩放时也要重新适配
   const [[W, H], setSize] = useState<[number, number]>([1000, 700])
@@ -279,6 +292,32 @@ export default function InkBoard({
   shown.current = v
   size.current = [W, H]
 
+  function readAt(next: NonNullable<typeof view>) {
+    setReading(true)
+    afterEraseView.current = next
+    setView(next)
+  }
+
+  function showLatest() {
+    setReading(false)
+    afterEraseView.current = null
+    setView(null)
+    wrap.current?.focus({ preventScroll: true })
+  }
+
+  const focusedContent = useRef<typeof focusContent>(null)
+  useEffect(() => {
+    if (!focusContent || focusContent === focusedContent.current || !lay || drewFor.current[0] !== graph) return
+    const sel = focusContent.selection
+    const target = focusContent.box ?? (sel && (selectionBox(lay, sel) ?? (sel.kind === 'node' ? graph.nodes.find((n) => n.id === sel.id)?.at : undefined)))
+    if (!target) return
+    focusedContent.current = focusContent
+    const height = Math.max(120, H - bottomInset)
+    const k = Math.min(1.5, W / Math.max(1, target.w + 120), height / Math.max(1, target.h + 120))
+    const next = { k, x: target.x + target.w / 2 - W / (2 * k), y: target.y + target.h / 2 - height / (2 * k) }
+    readAt(next)
+  }, [focusContent, lay, graph, W, H, bottomInset])
+
   // 手机上强制横屏时整个应用是转过的，指针位置都先换回画布自己的坐标
   const at = (e: { clientX: number; clientY: number }) => localPoint(wrap.current!, e.clientX, e.clientY)
   const onWheel = (e: WheelEvent) => {
@@ -287,7 +326,7 @@ export default function InkBoard({
     const mx = v.x + px / v.k
     const my = v.y + py / v.k
     const k = Math.min(4, Math.max(0.2, v.k * Math.exp(-e.deltaY * 0.0015)))
-    setView({ k, x: mx - px / k, y: my - py / k })
+    readAt({ k, x: mx - px / k, y: my - py / k })
   }
   /** 画好的圈：笔迹只在圈变了的时候重算 */
   const drawnCircles = useMemo(
@@ -314,13 +353,14 @@ export default function InkBoard({
   const onDown = (e: PointerEvent) => {
     if (e.button !== 0 || pointer.current !== null) return
     // 浮动按钮上的点击不算点白板
-    if ((e.target as Element).closest('.ink-toolbar')) return
+    if ((e.target as Element).closest('button, .ink-toolbar')) return
     const [x, y] = at(e)
     pointer.current = e.pointerId
     wrap.current!.setPointerCapture(e.pointerId)
     const wx = v.x + x / v.k
     const wy = v.y + y / v.k
     if (lasso) {
+      readAt(v)
       drawing.current = [[wx, wy]]
       setStroke(drawing.current)
       return
@@ -352,7 +392,9 @@ export default function InkBoard({
       // 和已有的圈叠在一起：合成一个大圈
       const merged = (circles ?? []).flatMap((c, i) => (overlaps(c, loop) ? [i] : []))
       const final = merged.length ? merge([...merged.map((i) => circles![i]), loop]) : loop
-      onCircle?.(final, circled(lay, graph, final, MAX_POINTED), merged)
+      const hits = circled(lay, graph, final)
+      const ids = hits.length > MAX_POINTED ? circled(lay, graph, final, MAX_POINTED) : hits
+      onCircle?.(final, ids, merged, ids.length < hits.length)
       return
     }
     if (moveFrom.current) {
@@ -360,6 +402,7 @@ export default function InkBoard({
       moveFrom.current = null
       setMoving(null)
       if (m && selection && Math.hypot(m.dx, m.dy) * v.k > 3 && onMoveSel) {
+        readAt(v)
         skipMotion.current = true
         onMoveSel(selection, m.dx, m.dy)
       }
@@ -371,7 +414,9 @@ export default function InkBoard({
     if (!p || p.moved || !onSelect || !lay) return
     // 点了一下（没拖动）：看点中了什么；点空白就取消选中
     const [x, y] = at(e)
-    onSelect(hitTest(lay, graph, v.x + x / v.k, v.y + y / v.k, 8 / v.k), { x: v.x + x / v.k, y: v.y + y / v.k })
+    const selected = hitTest(lay, graph, v.x + x / v.k, v.y + y / v.k, 8 / v.k)
+    if (selected) readAt(v)
+    onSelect(selected, { x: v.x + x / v.k, y: v.y + y / v.k })
   }
   const onMove = (e: PointerEvent) => {
     if (pointer.current !== e.pointerId) return
@@ -392,10 +437,11 @@ export default function InkBoard({
     if (!drag.current) return
     const [x, y] = at(e)
     if (press.current && Math.hypot(x - press.current.x, y - press.current.y) > 4) press.current.moved = true
+    if (!press.current?.moved) return
     const dx = (x - drag.current.x) / v.k
     const dy = (y - drag.current.y) / v.k
     drag.current = { x, y }
-    setView({ ...v, x: v.x - dx, y: v.y - dy })
+    readAt({ ...v, x: v.x - dx, y: v.y - dy })
   }
 
   const moved = useMemo(() => {
@@ -453,6 +499,9 @@ export default function InkBoard({
   return (
     <div
       ref={wrap}
+      role="region"
+      aria-label={t.workbench.board}
+      tabIndex={-1}
       className={`ink${lasso ? ' lasso' : ''}`}
       style={{ background: look.paper }}
       onWheel={onWheel}
@@ -465,8 +514,8 @@ export default function InkBoard({
       onLostPointerCapture={(e) => {
         if (pointer.current === e.pointerId) cancelPointer()
       }}
-      onDoubleClick={() => {
-        if (!lasso) setView(null)
+      onDoubleClick={(e) => {
+        if (!lasso && !(e.target as Element).closest('button, .ink-toolbar')) showLatest()
       }}
     >
       <svg width="100%" height="100%" viewBox={`${v.x} ${v.y} ${W / v.k} ${H / v.k}`} data-messy={drawn}>
@@ -492,7 +541,7 @@ export default function InkBoard({
         )}
         <g>{pieces.filter((p) => p.under).map(render)}</g>
         <g filter={`url(#${look.chalk ? 'chalk' : 'marker'})`}>
-          {erasing.map(({ piece: p, sweep: b, visible, start }, i) => {
+          {erasing.filter(({ piece }) => !hidesInk(piece.key, overlay)).map(({ piece: p, sweep: b, visible, start }, i) => {
             const id = `${maskPrefix}-erase${i}`
             return <g key={`${p.key}:${start}`} data-erasing={p.key} opacity={p.opacity} fill={p.color} pointerEvents="none" aria-hidden>
               <mask id={id} maskUnits="userSpaceOnUse" x={b.x} y={b.y} width={b.w} height={b.h} style={{ maskType: 'luminance' }}>
@@ -516,6 +565,7 @@ export default function InkBoard({
           })}
           {pieces.filter((p) => !p.under).map(render)}
         </g>
+        {overlay && <image className="free-scene" href={overlayUrl} x={overlay.x} y={overlay.y} width={overlay.width} height={overlay.height} pointerEvents="none" />}
         {circles?.length || stroke ? (
           <g className="ink-lasso" fill={look.blue} filter={`url(#${look.chalk ? 'chalk' : 'marker'})`} aria-hidden>
             {drawnCircles.map((ds, i) => (
@@ -544,18 +594,14 @@ export default function InkBoard({
           </g>
         )}
       </svg>
+      {(reading || (reduced && view !== null)) && <button type="button" className="secondary ink-follow" onClick={showLatest}>{t.workbench.followBoard}</button>}
       {selBox && toolbar && !moving && (
-        <div
-          className="ink-toolbar"
-          style={{
-            // 按钮条以选中物为中心；靠近边缘时整条往里收，别被裁掉（按钮条大约 300 宽）
-            left: Math.max(160, Math.min(W - 160, (selBox.x + selBox.w / 2 - v.x) * v.k)),
-            top: Math.max(8, (selBox.y - v.y) * v.k - 12),
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
+        <SelectionToolbar
+          anchor={{ x: (selBox.x + selBox.w / 2 - v.x) * v.k, top: (selBox.y - v.y) * v.k, bottom: (selBox.y + selBox.h - v.y) * v.k }}
+          viewport={{ width: W, height: H - bottomInset }}
         >
           {toolbar}
-        </div>
+        </SelectionToolbar>
       )}
     </div>
   )

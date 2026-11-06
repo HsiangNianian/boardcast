@@ -1,9 +1,10 @@
 // 导出诊断信息：先把会带上的每个文件摆出来，看过了再存。
 
+import Dialog from './Dialog.tsx'
 import { useEffect, useState } from 'react'
 import { diagnosticsInfo, isDesktop, llmStatus, updates, voice as speech } from '../desktop.ts'
-import { type DiagFile, cleanLog, makeZip, recentErrors, scrub } from '../engine/diagnostics.ts'
-import { msg, useT } from '../i18n/index.ts'
+import { type DiagFile, cleanLog, diagnosticErrors, diagnosticJson, makeZip } from '../engine/diagnostics.ts'
+import { useT } from '../i18n/index.ts'
 import { Close } from './icons.tsx'
 
 interface Props {
@@ -31,17 +32,19 @@ async function collect(voice: Record<string, unknown>, timing: unknown): Promise
     speechModels,
   }
   const files: DiagFile[] = [
-    { name: 'info.json', text: scrub(JSON.stringify(info, null, 2)) },
-    { name: 'timing.json', text: JSON.stringify(timing, null, 2) },
-    { name: 'errors.txt', text: recentErrors().join('\n') || msg().diagnostics.noErrors },
+    { name: 'info.json', text: diagnosticJson(info) },
+    { name: 'timing.json', text: diagnosticJson(timing) },
+    { name: 'errors.json', text: diagnosticJson(diagnosticErrors()) },
   ]
-  if (shell?.log) files.push({ name: 'llama-server.log', text: cleanLog(shell.log) })
+  if (shell?.log) files.push({ name: 'llama-server.json', text: cleanLog(shell.log) })
   return files
 }
 
 export default function DiagnosticsPanel(p: Props) {
   const s = useT().diagnostics
   const [files, setFiles] = useState<DiagFile[] | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     void collect(p.voice, p.timing).then(setFiles)
     // 打开时收集一次，内容就是看到的这些
@@ -49,25 +52,31 @@ export default function DiagnosticsPanel(p: Props) {
   }, [])
 
   async function save() {
-    if (!files) return
-    const { saveFile } = await import('../exporter.ts')
+    if (!files || saving) return
+    setSaving(true)
+    setError(null)
     try {
+      const { saveFile } = await import('../exporter.ts')
       const path = await saveFile('boardcast-diagnostics.zip', new Blob([makeZip(files) as BlobPart], { type: 'application/zip' }))
       if (path) {
         p.onSaved(true, s.saved(path))
         p.onClose()
       }
     } catch (e) {
-      p.onSaved(false, s.saveFailed(e instanceof Error ? e.message : String(e)))
+      const message = s.saveFailed(e instanceof Error ? e.message : String(e))
+      setError(message)
+      p.onSaved(false, message)
+    } finally {
+      setSaving(false)
     }
   }
 
   return (
-    <div className="modal" role="dialog" aria-label={s.title} onClick={(e) => e.target === e.currentTarget && p.onClose()}>
+    <Dialog label={s.title} onClose={p.onClose} dismissible={!saving}>
       <div className="panel diagnostics">
         <header>
           <h2>{s.title}</h2>
-          <button type="button" className="icon" onClick={p.onClose} aria-label={s.close}>
+          <button type="button" className="icon" onClick={p.onClose} disabled={saving} aria-label={s.close}>
             <Close size={16} />
           </button>
         </header>
@@ -81,15 +90,16 @@ export default function DiagnosticsPanel(p: Props) {
             <pre>{f.text}</pre>
           </details>
         ))}
+        {error && <p className="meta err" role="alert">{error}</p>}
         <div className="row end">
-          <button type="button" className="ghost" onClick={p.onClose}>
+          <button type="button" className="ghost" onClick={p.onClose} disabled={saving}>
             {s.cancel}
           </button>
-          <button type="button" disabled={!files} onClick={() => void save()}>
-            {s.export}
+          <button type="button" disabled={!files || saving} onClick={() => void save()}>
+            {saving ? s.saving : s.export}
           </button>
         </div>
       </div>
-    </div>
+    </Dialog>
   )
 }

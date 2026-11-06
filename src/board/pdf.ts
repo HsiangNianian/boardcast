@@ -44,7 +44,9 @@ export function makePdf(pages: PdfPage[], size = A4_LANDSCAPE, title = 'boardcas
     return `<${hex}>`
   }
 
-  push('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n')
+  // Tauri sniffs PDF markers inside JavaScript chunks; keep the marker out of the source text.
+  push(new Uint8Array([0x25, 0x50, 0x44, 0x46]))
+  push('-1.4\n%\xe2\xe3\xcf\xd3\n')
   obj(1, () => push('<< /Type /Catalog /Pages 2 0 R >>'))
   obj(2, () => push(`<< /Type /Pages /Count ${pages.length} /Kids [${pages.map((_, i) => `${pageObj(i)} 0 R`).join(' ')}] >>`))
   obj(3, () => push(`<< /Title ${utf16(title)} /Producer (boardcast) >>`))

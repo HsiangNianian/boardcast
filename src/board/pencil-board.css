@@ -1,0 +1,3 @@
+.pencil-stage { position: absolute; inset: 0; }
+.pencil-editor { width: 100%; height: 100%; }
+.pencil-loading { z-index: 2; background: var(--surface); }

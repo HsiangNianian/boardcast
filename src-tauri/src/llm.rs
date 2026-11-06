@@ -55,6 +55,27 @@ pub struct Llm {
 }
 
 impl Llm {
+    async fn chat(
+        &self,
+        base_url: &str,
+        body: &serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        // Only the currently owned server is reachable; stale views cannot target another service.
+        {
+            let status = self.status.lock().unwrap();
+            if status.state != "ready" || status.url.as_deref() != Some(base_url) {
+                return Err("LOCAL_MODEL_UNAVAILABLE".into());
+            }
+        }
+        crate::remote::post(
+            &format!("{base_url}/v1"),
+            "",
+            body,
+            Duration::from_secs(180),
+        )
+        .await
+    }
+
     fn set(&self, generation: u64, s: LlmStatus) {
         if self.generation.load(Ordering::SeqCst) == generation {
             *self.status.lock().unwrap() = s;
@@ -84,8 +105,97 @@ pub fn llm_status(llm: tauri::State<'_, Llm>) -> LlmStatus {
 }
 
 #[tauri::command]
+pub async fn llm_chat(
+    llm: tauri::State<'_, Llm>,
+    requests: tauri::State<'_, crate::remote::Requests>,
+    request_id: String,
+    base_url: String,
+    body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    requests.run(&request_id, llm.chat(&base_url, &body)).await
+}
+
+#[tauri::command]
 pub fn llm_restart(app: AppHandle) {
     restart(&app);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn local_chat_uses_only_the_current_server_without_cors_or_remote_credentials() {
+        let reply = r#"{"choices":[{"message":{"content":"OK"}}]}"#;
+        let (endpoint, server) = crate::remote::tests::reply_server("200 OK", reply, false).await;
+        let base = endpoint.strip_suffix("/v1").unwrap();
+        let llm = Llm::default();
+        let body = serde_json::json!({"model":"local", "grammar":"root ::= \"OK\"", "messages":[{"role":"user","content":"synthetic"}], "cache_prompt":true});
+        assert_eq!(
+            llm.chat(base, &body).await.unwrap_err(),
+            "LOCAL_MODEL_UNAVAILABLE"
+        );
+        *llm.status.lock().unwrap() = LlmStatus {
+            state: "ready".into(),
+            url: Some(base.into()),
+            ..Default::default()
+        };
+        for other in [
+            "http://127.0.0.1:1",
+            "https://external.invalid",
+            "http://localhost:1",
+            "file:///tmp/model",
+        ] {
+            assert_eq!(
+                llm.chat(other, &body).await.unwrap_err(),
+                "LOCAL_MODEL_UNAVAILABLE"
+            );
+        }
+        assert_eq!(
+            llm.chat(base, &body).await.unwrap()["choices"][0]["message"]["content"],
+            "OK"
+        );
+        let request = String::from_utf8(server.await.unwrap()).unwrap();
+        assert!(request.starts_with("POST /v1/chat/completions HTTP/1.1\r\n"));
+        assert!(!request.to_lowercase().contains("authorization:"));
+        assert!(!request.to_lowercase().contains("origin:"));
+        let sent: serde_json::Value =
+            serde_json::from_str(request.split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(sent, body);
+        llm.status.lock().unwrap().state = "starting".into();
+        assert_eq!(
+            llm.chat(base, &body).await.unwrap_err(),
+            "LOCAL_MODEL_UNAVAILABLE"
+        );
+    }
+
+    #[tokio::test]
+    async fn local_chat_preserves_inference_errors_and_rejects_invalid_replies() {
+        for (status, reply, expected) in [
+            (
+                "503 Service Unavailable",
+                r#"{"error":{"message":"GPU inference failed"}}"#,
+                "GPU inference failed",
+            ),
+            ("200 OK", "not JSON", "did not return JSON"),
+            ("200 OK", "{}", "no valid choices"),
+        ] {
+            let (endpoint, server) = crate::remote::tests::reply_server(status, reply, false).await;
+            let base = endpoint.strip_suffix("/v1").unwrap();
+            let llm = Llm::default();
+            *llm.status.lock().unwrap() = LlmStatus {
+                state: "ready".into(),
+                url: Some(base.into()),
+                ..Default::default()
+            };
+            assert!(llm
+                .chat(base, &serde_json::json!({}))
+                .await
+                .unwrap_err()
+                .contains(expected));
+            server.await.unwrap();
+        }
+    }
 }
 
 pub fn models_dir(app: &AppHandle) -> Option<PathBuf> {
@@ -112,7 +222,7 @@ fn is_model(p: &Path) -> bool {
         && (!name.contains("-of-") || name.contains("-00001-of-"))
 }
 
-fn pick_model(dir: &Path) -> Option<PathBuf> {
+pub(crate) fn pick_model(dir: &Path) -> Option<PathBuf> {
     if let Ok(p) = std::env::var("BOARDCAST_MODEL") {
         let p = PathBuf::from(p);
         if p.is_file() {
@@ -388,7 +498,9 @@ fn launch(app: AppHandle, run: bool) {
                 generation,
                 LlmStatus {
                     state: "no-model".into(),
-                    message: Some("No model installed; download one in Settings → Manage models".into()),
+                    message: Some(
+                        "No model installed; download one in Settings → Manage models".into(),
+                    ),
                     ..base
                 },
             );
@@ -409,7 +521,9 @@ fn launch(app: AppHandle, run: bool) {
                 LlmStatus {
                     state: "idle".into(),
                     model: model_name,
-                    message: Some("Using the remote model; the built-in model will start when needed".into()),
+                    message: Some(
+                        "Using the remote model; the built-in model will start when needed".into(),
+                    ),
                     ..base
                 },
             );
@@ -532,7 +646,10 @@ fn launch(app: AppHandle, run: bool) {
             LlmStatus {
                 state: "error".into(),
                 model: model_name,
-                message: Some(format!("llama-server failed to start; log: {}", log.display())),
+                message: Some(format!(
+                    "llama-server failed to start; log: {}",
+                    log.display()
+                )),
                 ..base
             },
         );

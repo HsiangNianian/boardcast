@@ -4,6 +4,7 @@
 // 模型一轮处理的一批话里只有一个人说话，就是他；几个人的话攒成一批时，看谁的话和名字最像。
 
 import { type Edge, type Graph, cloneGraph, norm } from './graph.ts'
+import { renameSceneSpeaker } from '../board/freeScene.ts'
 import type { Utterance } from './prompt.ts'
 import type { Step } from './steps.ts'
 
@@ -83,11 +84,12 @@ export function renameByInSteps(steps: Step[], from: string, to: string): Step[]
   const fix = <T extends { by?: string }>(xs: T[]) => xs.map((x) => (x.by === from ? { ...x, by: to } : x))
   return steps.map((s) => {
     const { nodes, edges } = s.d
-    if (!has(nodes?.set, from) && !has(edges?.set, from)) return s
+    const scene = s.scene ? renameSceneSpeaker(s.scene, from, to) : s.scene
+    if (!has(nodes?.set, from) && !has(edges?.set, from) && scene === s.scene) return s
     const d = { ...s.d }
     if (nodes?.set) d.nodes = { ...nodes, set: fix(nodes.set) }
     if (edges?.set) d.edges = { ...edges, set: fix(edges.set) }
-    return { ...s, d }
+    return { ...s, d, ...(scene ? { scene } : {}) }
   })
 }
 

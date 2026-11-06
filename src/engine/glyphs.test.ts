@@ -29,6 +29,19 @@ test('full-width Latin uses the same handwriting; cursive remains available', as
   assert.notDeepEqual((await glyph('a'))?.strokes, (await glyph('a', 'script'))?.strokes)
 })
 
+test('mathematical letters, operators and exponents retain their strokes offline', async (t) => {
+  t.mock.method(globalThis, 'fetch', () => { throw new Error('Math must work offline') })
+  for (const ch of 'αβγδθλμπσφωΔΣΩ∑∏∂∫√∞≤≥≠≈±÷∙²³⁰¹⁴⁵⁶⁷⁸⁹ⁿⁱ⁺⁻₀₁₂₃₄₅₆₇₈₉ᵢₙₓ₊₋') {
+    const g = await glyph(ch)
+    assert.ok(g && Number.isFinite(g.advance) && g.advance > 0, ch)
+    assert.ok(g.strokes.length > 0 && g.strokes.every(s => s.length >= 2 && s.every(p => p.length === 2 && p.every(Number.isFinite))), ch)
+    assert.deepEqual(await glyph(ch, 'script'), g, `math keeps its readable shape: ${ch}`)
+  }
+  const ys = async (ch: string) => (await glyph(ch))!.strokes.flat().map(p => p[1])
+  assert.ok(Math.max(...await ys('²')) < Math.max(...await ys('2')) - 0.1, 'superscript stays above the normal baseline')
+  assert.ok(Math.min(...await ys('₂')) > Math.min(...await ys('2')) + 0.1, 'subscript stays below the normal numeral')
+})
+
 test('board headings and timestamp ranges have offline punctuation strokes', async (t) => {
   t.mock.method(globalThis, 'fetch', () => { throw new Error('Punctuation must work offline') })
   for (const ch of ['·', '–']) assert.ok((await glyph(ch))?.strokes.length)

@@ -1,6 +1,6 @@
 //! boardcast on GPUI: talk, and the whiteboard draws itself.
 //!   boardcast [--open <id>] [--deepseek] [--llm <url>] [--skill]
-//!   boardcast --version | --self-check
+//!   boardcast --version | --self-check | --update
 //! For development, with a checkout as <root>:
 //!   boardcast --root <root> [--case <id>] [--wav <path>] [--exit-when-done] [--demo <name>]
 //!             [--synthetic <chars>] [--zoom-test] [--zoom <k>]
@@ -19,9 +19,10 @@ fn main() -> Result<()> {
     let mut args = std::env::args().skip(1).peekable();
     match args.peek().map(String::as_str) {
         Some("--version") => {
-            println!("boardcast {}", env!("CARGO_PKG_VERSION"));
+            println!("boardcast {}", boardcast_update::VERSION);
             Ok(())
         }
+        Some("--update") => update(),
         Some("--self-check") => {
             let (ok, report) = resources::locate(&boardcast_meetings::default_dir()?).self_check();
             println!("{report}");
@@ -33,4 +34,23 @@ fn main() -> Result<()> {
         }
         _ => app::run(args),
     }
+}
+
+/// Update from the command line, the same way the window does.
+fn update() -> Result<()> {
+    let Some(prefix) = boardcast_update::installed_prefix() else { bail!("this copy was not installed from a package") };
+    let Some(release) = boardcast_update::check()? else {
+        println!("boardcast {} is up to date", boardcast_update::VERSION);
+        return Ok(());
+    };
+    println!("downloading {}", release.version);
+    let dir = boardcast_meetings::default_dir()?.join("updates");
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let Some(archive) = boardcast_update::fetch(&release, &dir, &cancel, &mut |_| {})? else { bail!("cancelled") };
+    let result = boardcast_update::install(&archive, &release, &prefix);
+    // A package that failed verification or would not run is no use to retry from.
+    let _ = std::fs::remove_file(&archive);
+    result?;
+    println!("updated to {}", release.version);
+    Ok(())
 }

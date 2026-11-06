@@ -4,6 +4,7 @@
 //!              [--only-dev | --only-holdout] [--only <id>] [--workers <n>]
 //!   pack-glyphs <public/hanzi> <glyphs.pack>
 //!   download-model <id> <dir>
+//!   version-newer <new> <old>   Fails unless <new> is a later version than <old>.
 //!   meetings-check <data-dir>   Rewrites every meeting into <data-dir>'s v2 folder; use on a copy.
 
 mod agent_eval;
@@ -21,6 +22,7 @@ fn main() -> Result<()> {
         Some("meetings-check") => meetings::run(args),
         Some("pack-glyphs") => pack_glyphs(args),
         Some("download-model") => download_model(args),
+        Some("version-newer") => version_newer(args),
         _ => bail!("usage: check <root> ... | agent-eval <root> <output.json> ..."),
     }
 }
@@ -47,5 +49,14 @@ fn download_model(mut args: impl Iterator<Item = String>) -> Result<()> {
         }
     })?;
     println!("{outcome:?}");
+    Ok(())
+}
+
+fn version_newer(mut args: impl Iterator<Item = String>) -> Result<()> {
+    let new = semver::Version::parse(&args.next().context("new version")?)?;
+    let old = semver::Version::parse(&args.next().context("old version")?)?;
+    if new <= old {
+        bail!("{new} is not newer than {old}");
+    }
     Ok(())
 }

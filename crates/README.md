@@ -10,6 +10,7 @@ editing is dropped. The Tauri app in `src-tauri/` and `src/` stays until this on
 | `boardcast-agent` | Prompts, the layout skill, local and remote models, request queueing | UI, audio |
 | `boardcast-meetings` | Meeting files, the open meeting's state, undo, the replay record | UI, audio, network |
 | `boardcast-models` | The board models too large for the installer: the catalog and downloading | UI, audio, board |
+| `boardcast-update` | Finding, verifying and installing a new version | UI, audio, board |
 | `boardcast-ui` | The GPUI window, tiled ink rendering, wiring the chain together | |
 | `boardcast-tools` | `check` and `agent-eval` for CI and model evaluation | UI |
 
@@ -23,6 +24,18 @@ tar -xzf boardcast-*-linux.tar.gz
 
 The package holds the app, the speech models, `llama-server` and the handwriting data. A board model is about 3 to 6 GB, so
 the first launch offers to download one, or to use a remote model instead. It runs from the unpacked folder too.
+
+## Updates
+
+An installed copy looks for a newer version shortly after starting, and Settings and `boardcast --update` do it on request.
+It installs in the background and waits for you to restart, so a meeting is never interrupted, and a restart saves first.
+
+A package must carry a valid signature from the older app's update key, must contain a newer version, and must run its
+self-check from where it was unpacked. Only then is anything replaced, and a failed swap restores the previous version.
+Your meetings and models live elsewhere and are not touched. iPad versions will update through the App Store instead.
+
+Releases go to the `gpui-latest` tag, which the older app's update channel never reads. To publish one, raise the workspace
+version and run the **Release GPUI app** workflow.
 
 ## Develop
 
@@ -121,7 +134,8 @@ has tests).
 1. **Done:** crates, board, marks by voice and by hand, zoom, layout check, local and DeepSeek models.
 2. **Done:** save and reopen in the existing format, undo, a model and key setting.
 3. **Installable on Linux, done:** a package with its resources, model downloads, and automatic graphics selection.
-   Still to do: in-app updates, then Mac and Windows.
+   In-app updates are done too, though no release has been published through them yet. Mac and Windows are waiting
+   until they can be tested. iPad is the main target and Mac the second.
 4. **Migrate the rest once the core is stable:** summary and to-dos, replay, PDF and image import, all export
    formats, the web demo and website, speaker identification, and Apple speech. Only then retire `src/` and
    `src-tauri/`.

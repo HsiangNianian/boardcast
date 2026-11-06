@@ -2,7 +2,7 @@
 //! The format follows each file's extension.
 
 use anyhow::{bail, Context, Result};
-use boardcast_board::glyphs::Glyphs;
+use boardcast_board::glyphs::{Glyphs, HanziSource};
 use boardcast_export::{freeze, write_file, Kind};
 use boardcast_meetings::{Live, Loaded, Origin};
 use std::path::{Path, PathBuf};
@@ -17,7 +17,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         let path = Path::new(&out);
         let kind = Kind::from_path(path).with_context(|| format!("no format for {out}"))?;
         let live = Live::from_loaded(Loaded { raw: raw.clone(), origin: Origin::Current, revision: 0 });
-        let output = freeze(&live, false, &mut glyphs).render(kind)?;
+        let output = freeze(&live, false, &mut glyphs, HanziSource::Directory(root.join("public/hanzi"))).render(kind)?;
         write_file(path, &output.bytes)?;
         println!("{{\"file\":{},\"bytes\":{},\"text_left_out\":{}}}", serde_json::Value::from(out.as_str()), output.bytes.len(), output.text_left_out);
     }

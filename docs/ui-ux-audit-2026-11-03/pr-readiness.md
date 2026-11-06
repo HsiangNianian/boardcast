@@ -24,7 +24,9 @@
 
 本次未重跑每一份历史专题报告。近期专题结果包括 Markdown 下载/渲染 24 项、七格式导出 92 项、交接 70 项，以及 Linux 原生保存、菜单、输入、模型和冷启动检查，范围与构建身份分别记录在 [实施记录](implementation-progress.md)及其链接中。它们不能替代其他平台验收。
 
-[C48 续批](animated-export-validation.md)另补 30 项实际 SVG 下载/宿主检查、92 项七格式和 82 项外观回归；严格 release Clippy 与输入预览 2 项 Rust 检查通过（1 项虚拟音源测试未执行）。[C47 SVG 标题](svg-title-validation.md)补齐 36 项下载/XML/无障碍树检查，并在其最终构建重跑上述三组浏览器回归与 341 项 Node。GitHub 的 `503b677` 已通过前端、Linux x64、macOS ARM、Windows x64/ARM 构建/测试和三组 ASR；文字生成评测仍在运行。SVG 标题提交仍需新的 CI 结果。CI 构建不替代真实音源、升级和设备验收。
+[C48 续批](animated-export-validation.md)另补 30 项实际 SVG 下载/宿主检查、92 项七格式和 82 项外观回归；严格 release Clippy 与输入预览 2 项 Rust 检查通过（1 项虚拟音源测试未执行）。[C47 SVG 标题](svg-title-validation.md)补齐 36 项下载/XML/无障碍树检查，并在其最终构建重跑上述三组浏览器回归与 341 项 Node。GitHub 的 `503b677` 已通过前端、Linux x64、macOS ARM、Windows x64/ARM 构建/测试和三组 ASR；文字生成评测随新提交取消，未计为通过。后续提交仍需完整的新 CI 结果。CI 构建不替代真实音源、升级和设备验收。
+
+[C47 大 PNG](png-export-validation.md)随后补上生成失败时的 SVG 路径；33 项实际 PNG/SVG 与 73 项导出交接在该批最终构建通过。保存错误继续使用存储恢复指引。TypeScript、播放器与主应用构建通过，未因提示变化重跑完整 Node/Rust；该提交仍需独立 CI。
 
 ## 仍需完成的验收
 

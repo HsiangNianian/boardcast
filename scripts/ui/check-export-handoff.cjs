@@ -57,7 +57,7 @@ module.exports = async function checkExportHandoff(page, baseUrl, evidence = 'do
   const count = command => page.evaluate(command => window.qaExport.calls.filter(call => call.command === command).length, command);
   const exportFile = async (format = 'Markdown', lang = 'en') => {
     await clickMeetingAction(page, lang === 'en' ? 'Export' : '导出');
-    await page.getByRole('menuitemradio', {name: lang === 'en' ? 'Whole meeting' : '整场会议', exact: true}).click();
+    await page.getByRole('menuitemradio', {name: format === 'PNG' ? (lang === 'en' ? 'Current board' : '当前白板') : (lang === 'en' ? 'Whole meeting' : '整场会议'), exact: true}).click();
     await page.getByRole('menuitem', {name: new RegExp(`^${format}`)}).click();
   };
   try {
@@ -177,6 +177,7 @@ module.exports = async function checkExportHandoff(page, baseUrl, evidence = 'do
     await page.waitForFunction(() => document.activeElement === document.querySelector('.meeting-more'));
     check(true, 'a generation error also restores focus after the export trigger is enabled');
     check(await count('export_save') === beforeBuildFailure && await (await exported()).isEnabled(), 'generation failure never opens a save dialog and allows retry');
+    check(!(await toast.innerText()).includes('SVG vector'), 'a replay generation failure does not offer the PNG fallback');
     await page.unroute('**/player/player.js');
 
     await page.goto(`${baseUrl}/?handoffLang=zh`); await page.locator('.splash').waitFor({state: 'hidden'});
@@ -225,8 +226,9 @@ module.exports = async function checkExportHandoff(page, baseUrl, evidence = 'do
         check(await page.evaluate(line => window.qaExport.seed.lines.some(item => item.text === line), line) && await banner.count() === 0, `${lang}/${kind}: keyboard retry saves the retained transcript and clears the error`);
         if (exportHint) {
           await page.evaluate(error => {window.qaExport.saveFail = error;}, error);
-          await exportFile('Markdown', lang); await toast.getByText(error, {exact: false}).waitFor();
+          await exportFile(kind === 'permission' ? 'PNG' : 'Markdown', lang); await toast.getByText(error, {exact: false}).waitFor();
           check((await toast.innerText()).includes(exportHint) && (await toast.innerText()).includes(error) && await toast.getByRole('button', {name: en ? 'Open file' : '打开文件', exact: true}).count() === 0, `${lang}/${kind}: export offers cause-specific recovery without claiming a saved file`);
+          if (kind === 'permission') check(!(await toast.innerText()).includes(en ? 'SVG vector' : 'SVG 矢量图'), `${lang}: a PNG save error keeps storage recovery instead of suggesting another format`);
           await page.screenshot({path: `${evidence}/export-guidance-${lang}-${kind}.png`, animations: 'disabled'});
           await page.evaluate(() => {window.qaExport.saveFail = null;});
           await toast.getByRole('button', {name: en ? 'Export again' : '重新导出', exact: true}).click();

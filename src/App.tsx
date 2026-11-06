@@ -1609,7 +1609,8 @@ export default function App() {
     } catch (e) {
       const error = errText(e)
       const reason = saving && storageReason(error)
-      setToast({ ok: false, text: reason ? `${t.app.exportStorageFailed[reason]} ${error}` : saving ? t.app.exportSaveFailed(error) : t.app.exportFailed(error), retryExport: kind })
+      const text = reason ? `${t.app.exportStorageFailed[reason]} ${error}` : saving ? t.app.exportSaveFailed(error) : t.app.exportFailed(error)
+      setToast({ ok: false, text: !saving && kind === 'png' ? `${text} — ${t.app.exportPngFallback}` : text, retryExport: kind })
     } finally {
       exportingRef.current = false
       exportFocusEpoch.current = epoch

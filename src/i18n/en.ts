@@ -917,6 +917,7 @@ export const en = {
     exportRevealRequested: (path: string) => `Asked the system to show the folder for: ${path}`,
     exportOpenFailed: (path: string, error: string) => `Could not open ${path}. Retry, show its folder, or export again if the file has moved. ${error}`,
     exportFailed: (e: string) => `Export failed: ${e}`,
+    exportPngFallback: 'Try Export → Current board → SVG vector for this board.',
     exportAgain: 'Export again',
     exportSaveFailed: (e: string) => `The file could not be saved. Check free space or choose another writable folder, then export again. ${e}`,
     exportStorageFailed: {

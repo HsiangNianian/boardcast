@@ -901,6 +901,7 @@ export const zh: Messages = {
     exportRevealRequested: (path: string) => `已请求系统显示此文件所在位置：${path}`,
     exportOpenFailed: (path: string, error: string) => `未能打开 ${path}。可以重试、显示所在文件夹；文件已移动时请重新导出。${error}`,
     exportFailed: (e: string) => `导出失败：${e}`,
+    exportPngFallback: '可从“导出 → 当前白板 → SVG 矢量图”改用 SVG。',
     exportAgain: '重新导出',
     exportSaveFailed: (e: string) => `文件未能保存。请检查可用空间，或重新导出到有写入权限的文件夹。${e}`,
     exportStorageFailed: {

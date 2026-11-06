@@ -20,6 +20,7 @@ boardcast-audio = { path = "crates/audio" }
 boardcast-agent = { path = "crates/agent" }
 boardcast-meetings = { path = "crates/meetings" }
 boardcast-models = { path = "crates/models" }
+boardcast-export = { path = "crates/export" }
 boardcast-update = { path = "crates/update" }
 
 [profile.dev]

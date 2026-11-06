@@ -339,11 +339,31 @@ impl Live {
 
     /// Every board of the meeting, with the one on screen as it is now.
     pub fn boards(&self) -> Vec<Graph> {
+        self.board_pages().into_iter().map(|(graph, _)| graph).collect()
+    }
+
+    /// Every board with where its things were placed.
+    pub fn board_pages(&self) -> Vec<(Graph, Value)> {
         let Some(pages) = self.raw.get("pages").and_then(Value::as_array).filter(|p| !p.is_empty()) else {
-            return vec![self.graph.clone()];
+            return vec![(self.graph.clone(), self.memory.clone())];
         };
         let at = self.page();
-        pages.iter().enumerate().map(|(i, p)| if i == at { self.graph.clone() } else { serde_json::from_value(p["graph"].clone()).unwrap_or_default() }).collect()
+        pages
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                if i == at {
+                    (self.graph.clone(), self.memory.clone())
+                } else {
+                    (serde_json::from_value(p["graph"].clone()).unwrap_or_default(), p.get("layout").cloned().unwrap_or(Value::Null))
+                }
+            })
+            .collect()
+    }
+
+    /// When the meeting began, in milliseconds.
+    pub fn created_at(&self) -> Option<f64> {
+        self.raw.get("createdAt").and_then(Value::as_f64)
     }
 
     pub fn summary(&self) -> &str {

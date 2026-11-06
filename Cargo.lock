@@ -650,7 +650,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-agent"
-version = "0.0.0"
+version = "0.22.0-alpha.1"
 dependencies = [
  "anyhow",
  "boardcast-board",
@@ -661,7 +661,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-audio"
-version = "0.0.0"
+version = "0.22.0-alpha.1"
 dependencies = [
  "anyhow",
  "cpal",
@@ -670,7 +670,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-board"
-version = "0.0.0"
+version = "0.22.0-alpha.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -679,7 +679,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-meetings"
-version = "0.0.0"
+version = "0.22.0-alpha.1"
 dependencies = [
  "anyhow",
  "boardcast-board",
@@ -688,26 +688,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "boardcast-models"
+version = "0.22.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "libc",
+ "sha2 0.10.9",
+ "ureq",
+]
+
+[[package]]
 name = "boardcast-tools"
-version = "0.0.0"
+version = "0.22.0-alpha.1"
 dependencies = [
  "anyhow",
  "boardcast-agent",
  "boardcast-board",
  "boardcast-meetings",
+ "boardcast-models",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "boardcast-ui"
-version = "0.0.0"
+version = "0.22.0-alpha.1"
 dependencies = [
  "anyhow",
  "boardcast-agent",
  "boardcast-audio",
  "boardcast-board",
  "boardcast-meetings",
+ "boardcast-models",
  "chrono",
  "gpui-kit",
  "image",

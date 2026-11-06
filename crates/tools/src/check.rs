@@ -44,7 +44,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             other => bail!("unknown flag {other}"),
         }
     }
-    let mut glyphs = Glyphs::load(&root)?;
+    let mut glyphs = Glyphs::from_checkout(&root)?;
     let (mut hard_steps, mut steps, mut left) = (0, 0, 0);
     for (name, lines) in &sets {
         let mut g = Graph::default();

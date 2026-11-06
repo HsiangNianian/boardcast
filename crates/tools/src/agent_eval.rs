@@ -32,7 +32,7 @@ struct Options {
 }
 
 fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Value> {
-    let mut glyphs = Glyphs::load(root)?;
+    let mut glyphs = Glyphs::from_checkout(root)?;
     let mut graph = Graph::default();
     let mut board = StableLayout::default();
     let mut history: Vec<Utterance> = vec![];

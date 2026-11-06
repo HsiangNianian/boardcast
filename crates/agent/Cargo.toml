@@ -12,4 +12,4 @@ anyhow.workspace = true
 boardcast-board.workspace = true
 libc = "0.2"
 serde_json.workspace = true
-ureq = { version = "2", features = ["json"] }
+ureq = { version = "2", features = ["json", "proxy-from-env"] }

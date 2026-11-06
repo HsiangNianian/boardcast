@@ -368,7 +368,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let first = targets.remove(0);
     let marks = args.next().as_deref() == Some("marks");
     let board = Board {
-        glyphs: Glyphs::load(&root)?,
+        glyphs: Glyphs::from_checkout(&root)?,
         text: TEXT.chars().collect(),
         next_char: 0,
         x: MARGIN,

@@ -236,6 +236,43 @@ for (const size of [{ w: 900, h: 1200, no: 3 }, { w: 500, h: 300 }]) {
     })
   }
 }
+// Reading a PDF page's layout, on pages written to reach each of its rules.
+const { analyzePage } = await load('src/board/paper.ts')
+const { parseArxiv } = await load('src/board/arxiv.ts')
+const arxivCases = ['2401.12345', 'arXiv:2401.12345v2', 'ARXIV: 1512.03385', 'https://arxiv.org/abs/2401.12345', 'http://www.arxiv.org/pdf/2401.12345v3.pdf', 'arxiv.org/html/2401.12345/', 'https://export.arxiv.org/format/2401.12345?x=1#y', 'hep-th/9901001', 'math.GT/0309136v1', 'https://evil.example/abs/2401.12345', '24.12345', 'not an id', '', '  2401.12345  ', 'https://arxiv.org/abs/2401.12345/extra'].map((input) => ({ input, id: parseArxiv(input) }))
+const P = 900, Q = 1165, L = 74, R = 474, C = 352
+const put = (x, y, text, w = C, h = 13, angle) => ({ text, x, y, w, h, ...(angle ? { angle } : {}) })
+const prose = 'We present a method that eases the training of networks which are much deeper than those used before, and we show results'
+const body = (x, y, n, text = prose, w = C) => Array.from({ length: n }, (_, i) => put(x, y + i * 16, `${text} ${i}`.slice(0, 62), w))
+const twoColumn = (y = 100, n = 12) => [...body(L, y, n), ...body(R, y, n)]
+const paperDocuments = {
+  'one column': [[put(100, 60, 'A Plain Document', 300, 24), ...body(100, 100, 6, prose, 640), put(100, 220, 'A new paragraph that ends early.', 200), ...body(120, 240, 3, prose, 620), put(440, 1120, '12', 20, 12)]],
+  'two columns': [[put(200, 40, 'Deep Residual Learning', 500, 24), put(300, 70, 'Someone Else', 300, 13), ...twoColumn()]],
+  headings: [[put(L, 60, 'Abstract', 80), ...body(L, 80, 4), put(L, 160, '1. Introduction', 120), ...body(L, 180, 4), put(L, 260, '3.1 Our Method', 110), ...body(L, 280, 4), put(L, 360, 'IV. Results', 90), ...body(L, 380, 4), put(L, 460, '一、背景', 70), ...body(L, 480, 4), put(L, 560, '第二章 方法', 90), ...body(L, 580, 4), put(L, 660, '摘要', 40), put(L, 680, '10 The responses are good', 200), put(L, 700, '3 x3 conv', 70), put(L, 720, 'K. Anderson', 80), put(L, 740, '4 For each of them', 130), put(300, 760, '7 Introductions', 110), put(500, 760, 'beside', 60), put(L, 780, 'A very long numbered heading written to fill all of the column that it sits in. And more', 340), put(L, 800, '2. Big Heading', 300, 20), put(L, 824, 'continued on a second line', 300, 20)]],
+  captions: [
+    [put(L, 300, 'Figure 1. A picture of things.', 300), put(L, 100, 'axis', 40), put(L + 100, 200, 'legend', 60), ...body(L, 340, 5), put(L, 440, 'Table 2: Numbers here', 200), put(L, 460, '1.0 2.0', 60), put(L + 100, 480, '3.0 4.0', 60), put(L, 700, '图 3：系统结构', 120), put(L, 620, '组件', 40), put(L, 900, 'Fig. 3) shows it', 120), put(L, 920, 'Figure 1. A picture again here', 200)],
+    [put(L, 60, 'Table 2 (continued): More numbers', 260), put(L, 80, '5.0 6.0', 60), put(L, 100, 'Table S3. Without cells', 200), ...body(L, 300, 4), put(L, 500, 'Figure 9. No text around it', 220)],
+  ],
+  equations: [[...body(L, 80, 3), put(L, 140, 'y = f(x) + x (1)', 200), put(200, 170, 'a = b + c', 100), put(400, 170, '(2)', 24), put(L, 200, '(3)', 24), ...body(L, 230, 3), put(L, 300, 'a value that has no sign in it (4)', 300)]],
+  references: [
+    [...body(L, 80, 3), put(L, 200, 'References', 90), put(L, 220, '[1] A. Author. A title. 2015.', 300), put(L, 236, 'more of that entry here', 200), put(L, 252, '[2] B. Author. Another. 2016.', 300), put(L, 268, '(3) C. Author. Third. 2017.', 300), put(L, 284, '4. D. Author. Fourth. 2018.', 300)],
+    [put(L, 60, '[5] E. Author. Fifth. 2019.', 300), put(L, 80, 'Appendix A', 90), ...body(L, 100, 3)],
+    [put(L, 60, '参考文献', 80), put(L, 80, '[1] 作者. 题目. 2020.', 300), put(L, 100, '2. Big Numbered Part', 300, 20)],
+  ],
+  scanned: [[], [put(440, 500, '7', 20, 12)], [put(800, 40, 'S-6', 30, 12), put(800, 60, 'A figure with a page mark', 200)], [put(10, 1140, 'S-', 12, 12), put(23, 1140, '6', 8, 12)]],
+  superscripts: [[put(L, 100, 'The value of', 90), put(L + 92, 96, '10', 12, 8), put(L + 106, 100, 'and then', 60), put(L, 120, 'Some ', 40), put(L + 40, 117, 'italic', 40, 13), put(L + 84, 120, 'words', 40), put(L, 140, 'broken automa-', 340), put(L, 156, 'tion across a line of text in this paragraph here which goes on', 340), put(L, 172, 'double spaced', 340), put(L, 210, 'text keeps going in this paragraph across a large gap in lines', 340), put(L, 248, 'and ends here.', 100)]],
+  vertical: [[...[...'竖排的文字'].map((t, i) => put(600, 100 + i * 20, t, 20, 20)), ...[...'第二列文字在这'].map((t, i) => put(570, 100 + i * 20, t, 20, 20)), ...[...'另外一块独立'].map((t, i) => put(200, 300 + i * 20, t, 20, 20)), ...[...'ab'].map((t, i) => put(400, 100 + i * 20, t, 20, 20)), put(100, 80, '正常横排一行字', 140, 20)]],
+  rotated: [[put(20, -700, 'arXiv:1512.03385v1  [cs.CV]', 300, 14, 1.5707963), ...twoColumn(100, 4), put(300, 300, 'Sideways heading text', 200, 14, 0.5), ...body(300, 320, 3, prose, 300).map((p) => ({ ...p, angle: 0.5 }))]],
+  table: [[put(L, 100, '9', 12), put(L + 30, 100, 'Agent tool call', 120), put(L + 200, 100, '1,835', 40), put(L, 120, '10', 12), put(L + 30, 120, 'Another call', 120), put(L + 200, 120, '2,001', 40), put(L, 140, 'https://example.com/a', 200), put(L, 160, 'A short line.', 100)]],
+  'two column figures': [[put(200, 40, 'Title Here', 300, 24), ...twoColumn(80, 5), put(L, 300, 'Figure 2. On the left.', 300), put(L + 20, 200, 'x', 20), put(R, 300, 'Table 1. On the right.', 300), put(R + 20, 320, '1', 12), put(R + 20, 340, '2', 12), ...body(L, 400, 8), ...body(R, 400, 8), put(150, 600, 'Figure 3. Across both columns of the whole page, a wide one.', 600), put(200, 560, 'wide', 40)]],
+}
+const paperCases = Object.entries(paperDocuments).map(([name, pages]) => {
+  const state = { inRefs: false }
+  return { name, pages: pages.map((pieces, i) => {
+    const { areas, headings, columns } = analyzePage(pieces.map((p) => ({ ...p })), P, Q, state)
+    return { w: P, h: Q, pieces, areas, headings, columns, inRefs: state.inRefs, graph: pageGraph({ w: P, h: Q, no: i + 1 }, areas) }
+  }) }
+})
 const prefix = (text) => messages(emptyGraph(), [], { text }).slice(0, -1)
 // The fixed part of the prompt ships with the agent; this copy is the answer key it is tested against.
 writeFileSync(new URL('../../agent/prompts.json', import.meta.url), `${JSON.stringify({ zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') }, null, 1)}\n`)
@@ -249,6 +286,8 @@ writeFileSync(process.argv[3], `${JSON.stringify({
   markdown: markdownCases,
   ranks: rankCases,
   spans: spanCases,
+  arxiv: arxivCases,
+  paper: paperCases,
   pages: pageCases,
   timelines: timelineCases,
 })}\n`)

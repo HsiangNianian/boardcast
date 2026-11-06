@@ -15,6 +15,7 @@ boardcast-agent.workspace = true
 boardcast-audio.workspace = true
 boardcast-board.workspace = true
 boardcast-export.workspace = true
+boardcast-import.workspace = true
 boardcast-meetings.workspace = true
 boardcast-models.workspace = true
 boardcast-update.workspace = true

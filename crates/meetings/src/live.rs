@@ -231,6 +231,47 @@ impl Live {
         self.touch();
     }
 
+    /// Add imported pages, each a board and how to find its picture, and show the first. They take the
+    /// place of a board with nothing on it, and otherwise go after the others.
+    pub fn add_pages(&mut self, added: Vec<(Graph, String)>, note: &str) {
+        if added.is_empty() {
+            return;
+        }
+        self.store_page();
+        if self.raw.get("pages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+            self.raw.insert("pages".into(), json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]));
+        }
+        let current = self.page();
+        let blank = self.graph.underlay().is_none() && !self.graph.nodes.iter().any(|n| n.ink == "ink");
+        let pages = self.raw.get_mut("pages").and_then(Value::as_array_mut).expect("made above");
+        let at = if blank { current } else { pages.len() };
+        if blank {
+            pages.remove(current);
+        }
+        let first = added[0].0.clone();
+        let entries = added.into_iter().map(|(graph, underlay)| json!({ "graph": graph, "underlay": underlay }));
+        pages.splice(at..at, entries);
+        self.raw.insert("page".into(), json!(at));
+        self.graph = first;
+        self.memory = Value::Null;
+        self.steps = vec![];
+        self.recorded = Graph::default();
+        self.undo = History::default();
+        self.add_note(note);
+        // A meeting already under way keeps the name its own board gave it.
+        if blank {
+            self.refresh_title();
+        }
+        self.touch();
+    }
+
+    /// Name the meeting, so its board's contents no longer do.
+    pub fn set_title(&mut self, title: &str) {
+        self.raw.insert("title".into(), json!(title));
+        self.raw.insert("titled".into(), json!(true));
+        self.touch();
+    }
+
     /// The board on screen belongs in `pages` as well as the top level, as the older app keeps it.
     fn store_page(&mut self) {
         let page = self.page();
@@ -589,6 +630,57 @@ mod tests {
             assert_eq!(on_disk["migration"]["sourceHash"], Store::source_hash(&text));
         }
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn page_board(no: u32) -> Graph {
+        serde_json::from_value(json!({ "nodes": [{ "id": "n1", "label": format!("第 {no} 页"), "aliases": [], "kind": "region", "marks": [], "ink": "ink", "at": { "x": 1, "y": 2, "w": 3, "h": 4 } }], "edges": [], "groups": [], "nextNode": 2, "nextGroup": 1, "underlay": { "w": 900, "h": 1200, "no": no } })).unwrap()
+    }
+
+    #[test]
+    fn imported_pages_replace_an_empty_board() {
+        let mut live = Live::new();
+        live.add_pages(vec![(page_board(1), "asset:a.jpg".into()), (page_board(2), "asset:b.jpg".into())], "导入了");
+        assert_eq!((live.pages(), live.page()), (2, 0));
+        assert_eq!(live.graph.nodes[0].label, "第 1 页");
+        assert_eq!(live.board_images(), [Some("asset:a.jpg".to_string()), Some("asset:b.jpg".to_string())]);
+        assert_eq!(live.lines[0]["manual"], true);
+        assert_eq!(live.title(), "第 1 页");
+        assert!(live.has_content());
+        let raw = live.snapshot();
+        assert_eq!(raw["pages"][1]["graph"]["underlay"]["no"], 2);
+        live.go_to_page(1);
+        assert_eq!(live.graph.nodes[0].label, "第 2 页");
+    }
+
+    #[test]
+    fn imported_pages_go_after_a_board_in_use_and_leave_it_alone() {
+        let mut live = Live::new();
+        let drawn = with(&live.graph, "T 「已有内容」");
+        live.change_board(drawn.clone(), json!({ "n": 1 }));
+        live.add_pages(vec![(page_board(1), "asset:a.jpg".into())], "导入了");
+        assert_eq!((live.pages(), live.page()), (2, 1));
+        assert_eq!(live.lines.last().unwrap()["page"], 1);
+        assert!(!live.can_undo(), "an import is not undone with the board's edits");
+        assert!(live.steps.is_empty());
+        let boards = live.board_pages();
+        assert_eq!(boards[0].0.nodes, drawn.nodes);
+        assert_eq!(boards[0].1, json!({ "n": 1 }));
+        assert_eq!(live.board_images(), [None, Some("asset:a.jpg".to_string())]);
+        assert_eq!(live.title(), "已有内容", "the first board still names it");
+        // Marking the page records a step that holds the whole page, so a replay can show it.
+        let marked = with(&live.graph, "M n1 高亮");
+        live.change_board(marked.clone(), Value::Null);
+        assert_eq!(live.steps.len(), 1);
+        assert_eq!(replay(&live.steps).nodes, marked.nodes);
+        assert_eq!(replay(&live.steps).underlay(), Some((900.0, 1200.0)));
+    }
+
+    #[test]
+    fn a_given_title_stays() {
+        let mut live = Live::new();
+        live.set_title("论文");
+        live.add_pages(vec![(page_board(1), "asset:a.jpg".into())], "导入了");
+        assert_eq!(live.title(), "论文");
     }
 
     #[test]

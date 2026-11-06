@@ -21,6 +21,7 @@ boardcast-agent = { path = "crates/agent" }
 boardcast-meetings = { path = "crates/meetings" }
 boardcast-models = { path = "crates/models" }
 boardcast-export = { path = "crates/export" }
+boardcast-import = { path = "crates/import" }
 boardcast-update = { path = "crates/update" }
 
 [profile.dev]

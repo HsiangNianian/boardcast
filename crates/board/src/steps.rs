@@ -102,13 +102,15 @@ pub fn ink_only(g: &Graph) -> Graph {
 
 /// The board after every stored step. Steps this code cannot read are skipped.
 pub fn replay(steps: &[Value]) -> Graph {
-    let mut g = Graph::default();
-    for step in steps {
-        if let Ok(d) = serde_json::from_value::<Diff>(step["d"].clone()) {
-            g = patch(&g, &d);
-        }
+    steps.iter().fold(Graph::default(), |g, step| apply_step(&g, step))
+}
+
+/// The board after one more stored step. A step this code cannot read changes nothing.
+pub fn apply_step(g: &Graph, step: &Value) -> Graph {
+    match serde_json::from_value::<Diff>(step["d"].clone()) {
+        Ok(d) => patch(g, &d),
+        Err(_) => g.clone(),
     }
-    g
 }
 
 /// The board after the first `count` steps.

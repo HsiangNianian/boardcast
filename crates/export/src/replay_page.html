@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="__LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="boardcast">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>__TITLE__</title>
+<!--__LICENSES__-->
+<style>
+:root{color-scheme:light;--line:#dddcd8;--muted:#62665c;--ink:#1e1e1e;--accent:#286143;--paper:__PAPER__}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:14px/1.5 system-ui,-apple-system,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;color:var(--ink);background:#fffefa}
+#app{display:grid;grid-template:48px minmax(0,1fr)/minmax(0,1fr) 340px;height:100%}
+header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);min-width:0}
+#title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#meta{color:var(--muted);font-size:12px;white-space:nowrap}
+#pages{margin-left:auto;display:flex;gap:4px;overflow-x:auto;flex-shrink:0;max-width:50%}
+main{display:flex;flex-direction:column;min-width:0;min-height:0}
+#board{flex:1;min-height:0;width:100%;display:block;background:var(--paper);touch-action:none;cursor:grab}
+#bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line)}
+#bar[hidden]{display:none}
+#seek{flex:1;min-width:0;height:32px;accent-color:var(--accent)}
+#time{font-size:12px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+button{font:inherit;min-height:32px;padding:2px 10px;border:1px solid var(--line);border-radius:6px;background:#fffefa;color:inherit;cursor:pointer;white-space:nowrap}
+button.on{background:#24271f;color:#fff}
+aside{border-left:1px solid var(--line);overflow-y:auto;padding:12px;min-height:0}
+aside h2{font-size:14px;margin:0;font-weight:600}
+aside h3{font-size:13px;margin:10px 0 2px;font-weight:600}
+aside p{margin:2px 0}
+#summary:empty,#summary-title[hidden],#note[hidden]{display:none}
+#note{font-size:12px;color:#805300;margin:0 0 8px}
+#lines-head{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px}
+#count{font-size:12px;color:var(--muted)}
+.line{margin:8px 0}
+.line b{display:block;font-size:12px;font-weight:600}
+.line.manual{color:#858a80}
+.line.now{background:#ecefe7;border-radius:4px;box-shadow:0 0 0 4px #ecefe7}
+.w{fill:none;stroke:#fff;stroke-linecap:round;stroke-linejoin:round;animation:w linear both}
+@keyframes w{from{stroke-dashoffset:var(--length)}to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.w{animation:none;stroke-dashoffset:0}}
+@media (max-width:800px){#app{grid-template:48px minmax(0,3fr) minmax(0,2fr)/minmax(0,1fr)}aside{border-left:0;border-top:1px solid var(--line)}#meta{display:none}}
+</style>
+</head>
+<body>
+<div id="app">
+<header><span id="title"></span><span id="meta"></span><nav id="pages"></nav></header>
+<main>
+<svg id="board" xmlns="http://www.w3.org/2000/svg" role="img"><g id="under" style="mix-blend-mode:multiply"></g><g id="ink"></g></svg>
+<div id="bar"><button id="toggle" type="button"></button><input id="seek" type="range" min="0" step="1"><span id="time"></span><button id="speed" type="button"></button><button id="end" type="button"></button></div>
+</main>
+<aside><p id="note" hidden></p><h2 id="summary-title" hidden></h2><div id="summary"></div><div id="lines-head"><h2 id="lines-title"></h2><span id="count"></span></div><div id="lines"></div></aside>
+</div>
+<script>const DATA=__DATA__;</script>
+<script>
+(function () {
+  'use strict'
+  const $ = (id) => document.getElementById(id)
+  const NS = 'http://www.w3.org/2000/svg'
+  const SPEEDS = [1, 2, 4]
+  const svg = $('board'), inkLayer = $('ink'), underLayer = $('under'), seekBar = $('seek')
+  const W = DATA.words
+  let page = 0, at = 0, playing = false, speed = 1, timer = 0, view = null, mask = 0
+  let shown = new Map()
+
+  const board = () => DATA.boards[page]
+  const total = () => board().frames.length - 1
+  const clock = (ms) => {
+    const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
+    const pad = (n) => String(n).padStart(2, '0')
+    return h ? h + ':' + pad(m) + ':' + pad(s % 60) : m + ':' + pad(s % 60)
+  }
+  const el = (name, attrs) => {
+    const node = document.createElementNS(NS, name)
+    for (const key in attrs) node.setAttribute(key, attrs[key])
+    return node
+  }
+
+  /* A piece: colour, opacity, under, strokes of [outline, centre line, length, width]. */
+  function drawPiece(index, timing) {
+    const piece = board().pieces[index], box = board().box
+    const group = el('g', { fill: piece[0], opacity: piece[1] })
+    for (const [i, stroke] of piece[3].entries()) {
+      const shape = el('path', { d: stroke[0] })
+      const when = timing && timing[i]
+      if (when && !piece[2]) {
+        const id = 'm' + mask++, length = (stroke[2] + 1).toFixed(1)
+        const clip = el('mask', { id, maskUnits: 'userSpaceOnUse', x: box[0], y: box[1], width: box[2], height: box[3] })
+        const line = el('path', { class: 'w', d: stroke[1], 'stroke-width': Math.max(26, stroke[3] * 3), 'stroke-dasharray': length })
+        line.style.setProperty('--length', length)
+        line.style.animationDuration = when[1] + 'ms'
+        line.style.animationDelay = when[0] + 'ms'
+        clip.append(line)
+        group.append(clip)
+        shape.setAttribute('mask', 'url(#' + id + ')')
+      }
+      group.append(shape)
+    }
+    ;(piece[2] ? underLayer : inkLayer).append(group)
+    shown.set(index, group)
+  }
+
+  /* Written at the board's pen speed, sped up to finish before the next step is due. */
+  function writeNew(added, room) {
+    const time = (length) => Math.max(45, length / 0.9) + 35
+    const strokes = added.flatMap((i) => (board().pieces[i][2] ? [] : board().pieces[i][3]))
+    const natural = strokes.reduce((sum, s) => sum + time(s[2]), 0)
+    const k = natural > room ? room / natural : 1
+    let start = 0
+    for (const index of added) {
+      const piece = board().pieces[index]
+      if (piece[2]) { drawPiece(index); continue }
+      drawPiece(index, piece[3].map((s) => {
+        const when = [Math.round(start), Math.max(1, Math.round((time(s[2]) - 35) * k))]
+        start += time(s[2]) * k
+        return when
+      }))
+    }
+  }
+
+  function showBoard(animate) {
+    const want = board().frames[at].p
+    const keep = new Set(want)
+    if (animate) {
+      for (const [index, group] of shown) if (!keep.has(index)) { group.remove(); shown.delete(index) }
+      writeNew(want.filter((i) => !shown.has(i)), waitBefore(at) * 0.9)
+    } else {
+      inkLayer.replaceChildren(); underLayer.replaceChildren(); shown = new Map()
+      for (const index of want) drawPiece(index)
+    }
+  }
+
+  function waitBefore(step) {
+    if (step <= 0) return 300
+    const frames = board().frames
+    const gap = step < frames.length - 1 ? frames[step + 1].t - frames[step].t : 0
+    return Math.min(Math.max(gap, 900), 3000) / speed
+  }
+
+  function showView() {
+    const b = view || board().box
+    svg.setAttribute('viewBox', b.join(' '))
+  }
+
+  function paragraph(parent, text, tag) {
+    const node = document.createElement(tag || 'p')
+    node.textContent = text
+    parent.append(node)
+    return node
+  }
+
+  function showLines(follow) {
+    const atEnd = at >= total()
+    const count = atEnd ? DATA.lines.length : board().frames[at].l
+    const list = $('lines')
+    list.replaceChildren()
+    let last = null
+    for (const line of DATA.lines.slice(0, count)) {
+      const row = document.createElement('div')
+      row.className = 'line' + (line.m ? ' manual' : '')
+      if (line.s) paragraph(row, line.s, 'b')
+      paragraph(row, line.t)
+      list.append(row)
+      last = row
+    }
+    if (last && !atEnd) last.classList.add('now')
+    if (last && follow) last.scrollIntoView({ block: 'end' })
+  }
+
+  function showBar() {
+    const frames = board().frames, n = total()
+    $('bar').hidden = n === 0
+    seekBar.max = n
+    seekBar.value = at
+    $('toggle').textContent = playing ? W.pause : W.play
+    $('speed').textContent = speed + '×'
+    const first = n ? frames[1].t : 0
+    $('time').textContent = clock(at ? frames[at].t - first : 0) + ' / ' + clock(n ? frames[n].t - first : 0)
+  }
+
+  function schedule() {
+    clearTimeout(timer)
+    if (!playing) return
+    if (at >= total()) { playing = false; showBar(); return }
+    timer = setTimeout(() => seek(at + 1, true), waitBefore(at))
+  }
+
+  function seek(next, follow) {
+    next = Math.max(0, Math.min(total(), Math.round(next)))
+    if (next === at) return
+    const step = next === at + 1
+    at = next
+    showBoard(step)
+    showLines(follow !== false)
+    if (at >= total()) playing = false
+    showBar()
+    schedule()
+  }
+
+  function toggle() {
+    if (!total()) return
+    if (playing) playing = false
+    else {
+      playing = true
+      if (at >= total()) { at = 0; showBoard(false); showLines(false) }
+    }
+    showBar()
+    schedule()
+  }
+
+  function goToPage(i) {
+    if (i === page) return
+    page = i
+    at = total()
+    playing = false
+    view = null
+    clearTimeout(timer)
+    showAll()
+  }
+
+  function showAll() {
+    showView()
+    showBoard(false)
+    showLines(false)
+    showBar()
+    for (const [i, button] of [...$('pages').children].entries()) {
+      button.classList.toggle('on', i === page)
+      if (i === page) button.setAttribute('aria-current', 'page')
+      else button.removeAttribute('aria-current')
+    }
+  }
+
+  function summary() {
+    const box = $('summary')
+    if (!DATA.summary) return
+    $('summary-title').hidden = false
+    $('summary-title').textContent = W.summary
+    for (const raw of DATA.summary.split('\n')) {
+      if (!raw.trim()) continue
+      const todo = /^\s*[-*+]\s+\[( |x|X)\]\s*(.*)$/.exec(raw), item = /^\s*[-*+]\s+(.*)$/.exec(raw)
+      if (/^#{1,6}\s/.test(raw)) paragraph(box, raw.replace(/^#+\s*/, ''), 'h3')
+      else if (todo) paragraph(box, (todo[1] === ' ' ? '☐ ' : '☑ ') + todo[2])
+      else if (item) paragraph(box, '• ' + item[1])
+      else paragraph(box, raw)
+    }
+  }
+
+  /* Dragging pans, and the wheel or two fingers zoom. */
+  function zoom(factor, cx, cy) {
+    const b = (view || board().box).slice(), rect = svg.getBoundingClientRect()
+    const scale = Math.max(b[2] / rect.width, b[3] / rect.height)
+    const x = b[0] + (b[2] - rect.width * scale) / 2 + (cx - rect.left) * scale
+    const y = b[1] + (b[3] - rect.height * scale) / 2 + (cy - rect.top) * scale
+    view = [x - (x - b[0]) * factor, y - (y - b[1]) * factor, b[2] * factor, b[3] * factor]
+    showView()
+  }
+  svg.addEventListener('wheel', (e) => { e.preventDefault(); zoom(Math.exp(e.deltaY * 0.0015), e.clientX, e.clientY) }, { passive: false })
+  const touches = new Map()
+  let pinch = 0
+  svg.addEventListener('pointerdown', (e) => { svg.setPointerCapture(e.pointerId); touches.set(e.pointerId, [e.clientX, e.clientY]); pinch = 0 })
+  svg.addEventListener('pointermove', (e) => {
+    const last = touches.get(e.pointerId)
+    if (!last) return
+    touches.set(e.pointerId, [e.clientX, e.clientY])
+    if (touches.size === 1) {
+      const b = (view || board().box).slice(), rect = svg.getBoundingClientRect()
+      const scale = Math.max(b[2] / rect.width, b[3] / rect.height)
+      view = [b[0] - (e.clientX - last[0]) * scale, b[1] - (e.clientY - last[1]) * scale, b[2], b[3]]
+      showView()
+    } else if (touches.size === 2) {
+      const [a, c] = [...touches.values()], apart = Math.hypot(a[0] - c[0], a[1] - c[1])
+      if (pinch) zoom(pinch / apart, (a[0] + c[0]) / 2, (a[1] + c[1]) / 2)
+      pinch = apart
+    }
+  })
+  const lift = (e) => { touches.delete(e.pointerId); pinch = 0 }
+  svg.addEventListener('pointerup', lift)
+  svg.addEventListener('pointercancel', lift)
+
+  $('toggle').addEventListener('click', toggle)
+  $('end').addEventListener('click', () => { playing = false; clearTimeout(timer); seek(total()); showBar() })
+  $('speed').addEventListener('click', () => { speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; showBar(); schedule() })
+  seekBar.addEventListener('input', () => seek(Number(seekBar.value)))
+  addEventListener('keydown', (e) => {
+    if (!total() || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+    const onSlider = e.target === seekBar
+    if (e.key === 'Escape') { playing = false; clearTimeout(timer); seek(total()); showBar() }
+    else if (onSlider) return
+    else if (e.key === ' ') { if (e.target.closest && e.target.closest('button')) return; if (!e.repeat) toggle() }
+    else if (e.key === 'ArrowLeft') seek(at - 1)
+    else if (e.key === 'ArrowRight') seek(at + 1)
+    else return
+    e.preventDefault()
+  })
+
+  $('title').textContent = DATA.title
+  $('meta').textContent = DATA.began + ' · ' + W.replay
+  $('end').textContent = W.end
+  $('lines-title').textContent = W.transcript
+  $('count').textContent = W.count.replace('{}', DATA.lines.filter((l) => !l.m).length)
+  svg.setAttribute('aria-label', W.board)
+  if (DATA.note) { $('note').hidden = false; $('note').textContent = DATA.note }
+  if (DATA.boards.length > 1) {
+    for (const i of DATA.boards.keys()) {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.textContent = W.boardN.replace('{}', i + 1)
+      button.addEventListener('click', () => goToPage(i))
+      $('pages').append(button)
+    }
+  }
+  summary()
+  at = total()
+  showAll()
+})()
+</script>
+</body>
+</html>

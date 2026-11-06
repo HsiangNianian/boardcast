@@ -1,6 +1,6 @@
 //! The window: the board, the transcript, and an input that accepts Chinese through the IME.
 
-use boardcast_board::glyphs::{Glyphs, Pt};
+use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
 use boardcast_board::board_layout::{target_at, Bounds as BoardBounds, Rect, StableLayout};
 use boardcast_board::check::check;
 use boardcast_board::compose::{compose, Style, PAPER};
@@ -710,6 +710,8 @@ struct Workbench {
     form: SettingsForm,
     summary: SummaryPanel,
     replay: Option<Replaying>,
+    /// Where the stroke data is, for work that needs its own copy.
+    hanzi: HanziSource,
     exporting: Option<ExportKind>,
     exported: Option<Exported>,
     /// Where the last file went, to start the next save there.
@@ -1157,7 +1159,7 @@ impl Workbench {
         if self.exporting.is_some() {
             return;
         }
-        let frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs);
+        let frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs, self.hanzi.clone());
         let directory = self.export_dir.clone().unwrap_or_else(|| {
             let home = std::env::var_os("HOME").map_or_else(|| self.data.clone(), PathBuf::from);
             Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
@@ -1796,6 +1798,7 @@ impl Workbench {
             (ExportKind::Png, tr("PNG image", "PNG 图片"), tr("This board, as it looks on screen.", "当前这张板，和画面上一样。"), drawn),
             (ExportKind::Svg, tr("SVG vector", "SVG 矢量图"), tr("This board. Stays sharp at any size.", "当前这张板，放大不糊。"), drawn),
             (ExportKind::AnimatedSvg, tr("Animated SVG", "动态 SVG"), tr("This board, written out stroke by stroke in the order of the meeting.", "当前这张板，按会议顺序逐笔写出。"), drawn),
+            (ExportKind::ReplayPage, tr("Replay page", "回放网页"), tr("One .html file for someone who missed the meeting. Nothing to install.", "一个 .html 文件，发给没参会的人，双击就能看。"), content),
             (ExportKind::Pdf, tr("Whole meeting PDF", "整场会 PDF"), tr("A page per board, then the summary and transcript, with selectable text.", "每张板一页，后面是摘要和会议记录，文字可以选中复制。"), content),
         ];
         let busy = self.exporting;
@@ -2592,6 +2595,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         backend_from(&settings, false, &binaries, &models)
     };
     let guidance = skill.then_some(Guidance { rules: true, hint: true });
+    let hanzi = resources.hanzi.clone();
     let glyphs = Glyphs::load(resources.hanzi)?;
     let start_board = match &demo {
         Some(name) => Some(demo_board(root.as_ref().context("--demo needs --root <checkout>")?, name)?),
@@ -2721,6 +2725,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     form: SettingsForm { base_url, model, key, remote, saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,
+                    hanzi,
                     exporting: None,
                     exported: None,
                     export_dir: None,

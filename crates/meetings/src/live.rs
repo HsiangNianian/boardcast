@@ -383,6 +383,15 @@ impl Live {
             .collect()
     }
 
+    /// The record of every board, in the order of `board_pages`.
+    pub fn board_steps(&self) -> Vec<Vec<Value>> {
+        let Some(pages) = self.raw.get("pages").and_then(Value::as_array).filter(|p| !p.is_empty()) else {
+            return vec![self.steps.clone()];
+        };
+        let at = self.page();
+        pages.iter().enumerate().map(|(i, p)| if i == at { self.steps.clone() } else { array(p.as_object().unwrap_or(&Map::new()), "steps") }).collect()
+    }
+
     /// When the meeting began, in milliseconds.
     pub fn created_at(&self) -> Option<f64> {
         self.raw.get("createdAt").and_then(Value::as_f64)

@@ -43,6 +43,7 @@ const PUNCT: &[(char, &[&[Pt]], f32)] = &[
 ];
 
 /// The stroke data for Chinese and Japanese characters.
+#[derive(Clone)]
 pub enum HanziSource {
     /// One file holding them all, as an install ships them.
     Pack(PathBuf),

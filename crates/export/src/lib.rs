@@ -5,9 +5,10 @@ pub mod animate;
 pub mod ink;
 pub mod markdown;
 pub mod pdf;
+pub mod replay_page;
 
 use anyhow::{bail, Context, Result};
-use boardcast_board::glyphs::Glyphs;
+use boardcast_board::glyphs::{Glyphs, HanziSource};
 use boardcast_board::graph::Graph;
 use boardcast_board::steps::ink_only;
 use boardcast_meetings::{Live, ViewOnly};
@@ -22,6 +23,7 @@ pub enum Kind {
     Svg,
     AnimatedSvg,
     Pdf,
+    ReplayPage,
 }
 
 impl Kind {
@@ -32,6 +34,7 @@ impl Kind {
             Self::Svg => "svg",
             Self::AnimatedSvg => "anim.svg",
             Self::Pdf => "pdf",
+            Self::ReplayPage => "html",
         }
     }
 
@@ -49,6 +52,7 @@ impl Kind {
             "png" => Some(Self::Png),
             "svg" => Some(Self::Svg),
             "pdf" => Some(Self::Pdf),
+            "html" => Some(Self::ReplayPage),
             _ => None,
         }
     }
@@ -104,6 +108,9 @@ pub struct Frozen {
     steps: Vec<Value>,
     settled: ink::Composed,
     settled_nodes: Vec<Value>,
+    /// Every board with its record. A replay page lays out each step, so it does that on its own glyphs.
+    replay_pages: Vec<replay_page::Page>,
+    hanzi: HanziSource,
 }
 
 /// A finished file, and whether anything had to be left out of it.
@@ -117,12 +124,17 @@ fn stamp(when: chrono::DateTime<chrono::Local>) -> String {
 }
 
 /// Laying out needs the glyphs, which the caller keeps; the slow drawing waits for `render`.
-pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs) -> Frozen {
+pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSource) -> Frozen {
     let boards = live.board_pages();
     let began = live.created_at().and_then(|ms| chrono::Local.timestamp_millis_opt(ms as i64).single()).unwrap_or_else(chrono::Local::now);
     let pages = boards.iter().map(|(graph, memory)| ink::compose_board(graph, memory, glyphs)).collect();
     let settled_graph = ink_only(&live.graph);
     let settled = ink::compose_board(&settled_graph, &live.memory, glyphs);
+    let replay_pages = boards
+        .iter()
+        .zip(live.board_steps())
+        .map(|((graph, memory), steps)| replay_page::Page { graph: graph.clone(), memory: memory.clone(), steps })
+        .collect();
     let settled_nodes = settled_graph.nodes.iter().filter_map(|n| serde_json::to_value(n).ok()).collect();
     Frozen {
         doc: Doc {
@@ -140,18 +152,24 @@ pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs) -> Frozen {
         steps: live.steps.clone(),
         settled,
         settled_nodes,
+        replay_pages,
+        hanzi,
     }
 }
 
 impl Frozen {
     pub fn render(self, kind: Kind) -> Result<Output> {
-        let Self { doc, pages, current, steps, settled, settled_nodes } = self;
+        let Self { doc, pages, current, steps, settled, settled_nodes, replay_pages, hanzi } = self;
         let text_only = |bytes: Vec<u8>| Output { bytes, text_left_out: false };
         match kind {
             Kind::Markdown => Ok(text_only(markdown::markdown(&doc, current).into_bytes())),
             Kind::Pdf => {
                 let drawn: Vec<ink::Drawn> = pages.into_iter().map(ink::Composed::draw).collect();
                 pdf::pdf(&doc, &drawn)
+            }
+            Kind::ReplayPage => {
+                let mut glyphs = Glyphs::load(hanzi)?;
+                Ok(text_only(replay_page::replay_page(&doc, &replay_pages, &mut glyphs).into_bytes()))
             }
             Kind::AnimatedSvg => {
                 if settled.pieces.is_empty() {

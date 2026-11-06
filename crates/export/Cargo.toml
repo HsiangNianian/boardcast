@@ -10,6 +10,7 @@ boardcast-board.workspace = true
 boardcast-meetings.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 fontdb = "0.23"
+image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 krilla = "0.8"
 serde_json.workspace = true
 tiny-skia = "0.11"

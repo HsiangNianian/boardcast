@@ -100,7 +100,7 @@ older app reads as an edit, and numbers can be written differently, so the hash 
 - Saves are atomic and locked, and refuse a newer format, a deleted meeting, or a change made elsewhere.
 - A failed save keeps the meeting open, shows why, retries, and blocks leaving it. Closing is refused once.
 - Opening another meeting discards anything in flight for the old one: late replies, late failures and queued lines.
-- Imported pages and free-edit content are view-only until they move over, and those files are not touched.
+- Free-edit content is view-only for good, as free editing is gone, and those files are not touched.
 
 
 `crates/agent/skills/board-layout/SKILL.md` is the guidance, and `RULES.md` is its short form for the prompt.
@@ -139,6 +139,6 @@ has tests).
    In-app updates are done too, and the `gpui-latest` prerelease has been installed through them. Mac and Windows
    are waiting until they can be tested. iPad is the main target and Mac the second.
 4. **Migrate the rest once the core is stable:** summary and to-dos are done, and so are replay and Markdown, PNG, SVG,
-   animated SVG, PDF and replay page export. Next come PDF and image import, speaker identification, Apple speech,
-   and the web demo and website. `.excalidraw` export is still open. Only then retire `src/` and
+   animated SVG, PDF and replay page export, and imported pages open and can be marked. Next come importing new PDFs
+   and images, speaker identification, Apple speech, and the web demo and website. `.excalidraw` export is still open. Only then retire `src/` and
    `src-tauri/`.

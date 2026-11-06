@@ -1,14 +1,15 @@
 //! A whole meeting as a PDF: one page per board in vector ink, then the summary and transcript as
 //! real text. System fonts are embedded, cut down to the characters used.
 
-use crate::ink::Drawn;
+use crate::ink::{Drawn, Page};
 use crate::{Doc, Output};
 use anyhow::{anyhow, Result};
 use boardcast_board::compose::PAPER;
 use fontdb::{Database, Family, Query, Weight};
 use krilla::blend::BlendMode;
 use krilla::color::rgb;
-use krilla::geom::{PathBuilder, Point, Transform};
+use krilla::geom::{PathBuilder, Point, Size, Transform};
+use krilla::image::Image;
 use krilla::metadata::Metadata;
 use krilla::num::NormalizedF32;
 use krilla::page::PageSettings;
@@ -298,6 +299,25 @@ fn paper(surface: &mut Surface) {
     }
 }
 
+/// JPEG and PNG go in as they are; anything else is converted first.
+fn draw_page(surface: &mut Surface, page: &Page) {
+    let data = |bytes: Vec<u8>| krilla::Data::from(Arc::new(bytes));
+    let image = match page.image.mime.as_str() {
+        "image/jpeg" => Image::from_jpeg(data(page.image.bytes.clone()), true),
+        "image/png" => Image::from_png(data(page.image.bytes.clone()), true),
+        _ => image::load_from_memory(&page.image.bytes).map_err(|e| e.to_string()).and_then(|picture| {
+            let mut png = std::io::Cursor::new(vec![]);
+            picture.write_to(&mut png, image::ImageFormat::Png).map_err(|e| e.to_string())?;
+            Image::from_png(data(png.into_inner()), true)
+        }),
+    };
+    // A page that cannot be read costs the file its picture, not the marks on it.
+    let Ok(image) = image else { return };
+    if let Some(size) = Size::from_wh(page.w as f32, page.h as f32) {
+        surface.draw_image(image, size);
+    }
+}
+
 /// The board, as large as fits under the header and centred.
 fn draw_board(surface: &mut Surface, board: &Drawn) {
     let (x, y, w, h) = board.frame(BOARD_PADDING);
@@ -321,6 +341,9 @@ fn draw_board(surface: &mut Surface, board: &Drawn) {
             }
         }
     };
+    if let Some(page) = &board.page {
+        draw_page(surface, page);
+    }
     surface.push_blend_mode(BlendMode::Multiply);
     paint(surface, true);
     surface.pop();
@@ -380,7 +403,7 @@ pub fn pdf(doc: &Doc, boards: &[Drawn]) -> Result<Output> {
     let mut document = Document::new();
     document.set_metadata(Metadata::new().title(doc.title.clone()).creator("boardcast".to_string()));
     let settings = || PageSettings::from_wh(WIDTH, HEIGHT).ok_or_else(|| anyhow!("bad page size"));
-    let shown: Vec<(usize, &Drawn)> = boards.iter().enumerate().filter(|(_, b)| !b.strokes.is_empty()).collect();
+    let shown: Vec<(usize, &Drawn)> = boards.iter().enumerate().filter(|(_, b)| !b.strokes.is_empty() || b.page.is_some()).collect();
     for (index, board) in &shown {
         let mut page = document.start_page_with(settings()?);
         let mut surface = page.surface();

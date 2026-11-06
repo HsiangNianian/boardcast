@@ -64,7 +64,7 @@ pub enum ViewOnly {
     Unreadable,
     /// Saved by a newer version.
     NewerFormat,
-    /// Imported pages or free-edit content, which this version cannot edit yet.
+    /// Free-edit content, which this version cannot show or edit.
     ImportedContent,
 }
 
@@ -137,15 +137,7 @@ impl Live {
         }
         let recorded = replay(&steps);
         let pages = raw.get("pages").and_then(Value::as_array);
-        let imported = graph.has_imported_content()
-            || pages.is_some_and(|p| {
-                p.iter().any(|page| {
-                    page.get("underlay").is_some_and(|u| !u.is_null())
-                        || scene_has_content(page.get("scene"))
-                        || page["graph"]["nodes"].as_array().is_some_and(|n| n.iter().any(|x| x["kind"] == "region"))
-                })
-            })
-            || scene_has_content(raw.get("scene"));
+        let imported = pages.is_some_and(|p| p.iter().any(|page| scene_has_content(page.get("scene")))) || scene_has_content(raw.get("scene"));
         let read_only = if unreadable {
             Some(ViewOnly::Unreadable)
         } else if raw.get("version").and_then(Value::as_u64).unwrap_or(1) > crate::store::MEETING_VERSION {
@@ -220,8 +212,14 @@ impl Live {
         }
         let steps: Vec<Value> = self.steps[..at].to_vec();
         let graph = replay(&steps);
+        let from = self.page();
         let pages = self.raw.get_mut("pages").and_then(Value::as_array_mut).expect("made above");
-        pages.push(json!({ "graph": graph, "layout": memory, "steps": steps }));
+        let underlay = pages.get(from).and_then(|p| p.get("underlay")).cloned();
+        let mut entry = json!({ "graph": graph, "layout": memory, "steps": steps });
+        if let Some(underlay) = underlay {
+            entry["underlay"] = underlay;
+        }
+        pages.push(entry);
         let to = pages.len() - 1;
         self.raw.insert("page".into(), json!(to));
         self.recorded = graph.clone();
@@ -392,6 +390,14 @@ impl Live {
         pages.iter().enumerate().map(|(i, p)| if i == at { self.steps.clone() } else { array(p.as_object().unwrap_or(&Map::new()), "steps") }).collect()
     }
 
+    /// How each board refers to its imported page's image, in the order of `board_pages`.
+    pub fn board_images(&self) -> Vec<Option<String>> {
+        let Some(pages) = self.raw.get("pages").and_then(Value::as_array).filter(|p| !p.is_empty()) else {
+            return vec![None];
+        };
+        pages.iter().map(|p| p["underlay"].as_str().map(str::to_string)).collect()
+    }
+
     /// When the meeting began, in milliseconds.
     pub fn created_at(&self) -> Option<f64> {
         self.raw.get("createdAt").and_then(Value::as_f64)
@@ -465,6 +471,10 @@ impl Live {
 
     /// The saved copy has this revision; a later save builds on it.
     pub fn saved(&mut self, revision: u64) {
+        // The store records this on the first save, and every later save must keep it.
+        if let Origin::Legacy { source_hash } = &self.origin {
+            self.raw.entry("migration").or_insert_with(|| json!({ "sourceHash": source_hash }));
+        }
         self.revision = revision;
         self.origin = Origin::Current;
     }
@@ -550,6 +560,45 @@ mod tests {
         live.go_to_page(0);
         assert_eq!(live.graph.nodes, two.nodes);
         assert_eq!(live.steps.len(), 2);
+    }
+
+    #[test]
+    fn imported_pages_can_be_edited_and_free_edit_scenes_cannot() {
+        let page = json!({ "nodes": [{ "id": "n1", "label": "原文", "aliases": [], "kind": "region", "marks": [], "ink": "ink", "at": { "x": 1, "y": 2, "w": 3, "h": 4 } }], "edges": [], "groups": [], "nextNode": 2, "nextGroup": 1, "underlay": { "w": 900, "h": 1200 } });
+        let imported = loaded(json!({ "id": "m", "graph": page, "page": 0, "pages": [{ "graph": page, "underlay": "asset:abc.jpg" }] }), Origin::Current);
+        assert_eq!(imported.read_only, None);
+        assert_eq!(imported.board_images(), [Some("asset:abc.jpg".to_string())]);
+        let scene = json!({ "elements": [{ "id": "a" }], "files": {} });
+        let free = loaded(json!({ "id": "m", "graph": page, "page": 0, "pages": [{ "graph": page, "scene": scene }] }), Origin::Current);
+        assert_eq!(free.read_only, Some(ViewOnly::ImportedContent));
+    }
+
+    #[test]
+    fn saving_a_migrated_meeting_again_keeps_its_migration_record() {
+        let dir = std::env::temp_dir().join(format!("boardcast-migration-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("meetings")).unwrap();
+        let text = json!({ "id": "m1", "title": "旧" }).to_string();
+        std::fs::write(dir.join("meetings/m1.json"), &text).unwrap();
+        let store = Store::new(dir.clone());
+        let mut live = Live::from_loaded(store.load("m1").unwrap().unwrap());
+        for _ in 0..3 {
+            let revision = store.save("m1", live.snapshot(), &live.origin.clone(), live.revision).unwrap();
+            live.saved(revision);
+            let on_disk: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("meetings/v2/m1.json")).unwrap()).unwrap();
+            assert_eq!(on_disk["migration"]["sourceHash"], Store::source_hash(&text));
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_fork_keeps_the_page_it_was_drawn_on() {
+        let page = with(&Graph::default(), "T 「一」");
+        let mut live = loaded(json!({ "id": "m", "graph": page, "page": 0, "pages": [{ "graph": page, "underlay": "asset:abc.jpg" }] }), Origin::Current);
+        let two = with(&page, "T 「二」");
+        live.change_board(two, Value::Null);
+        live.fork_page(1, Value::Null, "另起");
+        assert_eq!(live.board_images(), [Some("asset:abc.jpg".to_string()), Some("asset:abc.jpg".to_string())]);
     }
 
     #[test]
@@ -641,11 +690,9 @@ mod tests {
     }
 
     #[test]
-    fn imported_or_unreadable_or_newer_meetings_are_view_only() {
+    fn free_edit_or_unreadable_or_newer_meetings_are_view_only() {
         let g = json!({ "nodes": [], "edges": [], "groups": [], "nextNode": 1, "nextGroup": 1 });
         let cases = [
-            json!({ "id": "a", "graph": g, "pages": [{ "graph": g, "underlay": "asset:x.png" }] }),
-            json!({ "id": "a", "graph": { "nodes": [{ "id": "n1", "label": "原文", "kind": "region" }], "edges": [], "groups": [], "nextNode": 2, "nextGroup": 1 } }),
             json!({ "id": "a", "graph": g, "scene": { "elements": [{ "id": "e" }] } }),
             json!({ "id": "a", "version": 3, "graph": g }),
             json!({ "id": "a", "graph": { "nodes": [{ "id": 7 }] } }),

@@ -9,6 +9,7 @@ use boardcast_board::graph::Graph;
 use boardcast_board::pen::{ink, outline, Rng};
 use boardcast_board::steps::{apply_step, ink_only};
 use boardcast_board::sugiyama::first_diagram;
+use boardcast_meetings::PageImage;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -21,6 +22,7 @@ pub struct Page {
     pub graph: Graph,
     pub memory: Value,
     pub steps: Vec<Value>,
+    pub image: Option<PageImage>,
 }
 
 fn path(points: &[Pt], close: bool) -> String {
@@ -58,7 +60,7 @@ fn board_data(page: &Page, glyphs: &mut Glyphs) -> Value {
     for (i, g) in graphs.iter().enumerate() {
         let laid = layout.layout(g, &mut first_diagram);
         let (composed, _) = compose(g, &laid, glyphs);
-        if !g.nodes.is_empty() {
+        if !g.nodes.is_empty() || g.underlay().is_some() {
             let b = &laid.bounds;
             area = Some(area.map_or([b.x0, b.y0, b.x1, b.y1], |a| [a[0].min(b.x0), a[1].min(b.y0), a[2].max(b.x1), a[3].max(b.y1)]));
         }
@@ -87,7 +89,8 @@ fn board_data(page: &Page, glyphs: &mut Glyphs) -> Value {
     }
     let a = area.unwrap_or([0.0, 0.0, 800.0, 500.0]);
     let bounds = [a[0] - PADDING, a[1] - PADDING, a[2] - a[0] + 2.0 * PADDING, a[3] - a[1] + 2.0 * PADDING];
-    json!({ "box": bounds, "pieces": pieces, "frames": frames })
+    let image = page.image.as_ref().zip(page.graph.underlay()).map(|(image, (w, h))| json!({ "href": image.data_url(), "w": w, "h": h }));
+    json!({ "box": bounds, "pieces": pieces, "frames": frames, "page": image })
 }
 
 /// JSON inside a script: `</script>` must not end it early, nor these two line separators break it.
@@ -144,7 +147,7 @@ mod tests {
             g.apply(&parse_ops(ops));
             steps.push(json!({ "t": 1000 + i * 1000, "line": i + 1, "d": diff(&before, &g).unwrap() }));
         }
-        Page { graph: g, memory: Value::Null, steps }
+        Page { graph: g, memory: Value::Null, steps, image: None }
     }
 
     fn doc(title: &str, text: &str) -> Doc {
@@ -197,7 +200,7 @@ mod tests {
     fn a_meeting_with_no_record_still_shows_its_board() {
         let mut g = Graph::default();
         g.apply(&parse_ops("T 「甲」"));
-        let html = replay_page(&doc("t", "x"), &[Page { graph: g, memory: Value::Null, steps: vec![] }], &mut glyphs());
+        let html = replay_page(&doc("t", "x"), &[Page { graph: g, memory: Value::Null, steps: vec![], image: None }], &mut glyphs());
         let frames = embedded(&html)["boards"][0]["frames"].as_array().unwrap().clone();
         assert_eq!(frames.len(), 1);
         assert!(!frames[0]["p"].as_array().unwrap().is_empty());

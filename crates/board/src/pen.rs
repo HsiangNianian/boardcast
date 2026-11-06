@@ -219,6 +219,21 @@ pub fn rough_box(x: f32, y: f32, w: f32, h: f32, r: &mut Rng) -> Vec<Stroke> {
 }
 
 /// One stroke for the shaft along `points`, two for the head.
+/// A line around several boxes one above another: a sentence over more than one line of text.
+pub fn around(boxes: &[[f32; 4]], pad: f32, r: &mut Rng) -> Stroke {
+    let (mut right, mut left): (Vec<Pt>, Vec<Pt>) = (vec![], vec![]);
+    for b in boxes {
+        right.push([b[0] + b[2] + pad, b[1] - pad / 2.0]);
+        right.push([b[0] + b[2] + pad, b[1] + b[3] + pad / 2.0]);
+        left.insert(0, [b[0] - pad, b[1] - pad / 2.0]);
+        left.insert(0, [b[0] - pad, b[1] + b[3] + pad / 2.0]);
+    }
+    let mut corners = right;
+    corners.extend(left);
+    corners.push(corners[0]);
+    corners.windows(2).flat_map(|w| line(w[0], w[1], r, 0.008)).collect()
+}
+
 pub fn arrow(points: &[Pt], r: &mut Rng) -> Vec<Stroke> {
     let shaft = if points.len() == 2 { line(points[0], points[1], r, 0.04) } else { points.to_vec() };
     let end = shaft[shaft.len() - 1];

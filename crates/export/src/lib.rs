@@ -11,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use boardcast_board::glyphs::{Glyphs, HanziSource};
 use boardcast_board::graph::Graph;
 use boardcast_board::steps::ink_only;
-use boardcast_meetings::{Live, ViewOnly};
+use boardcast_meetings::{Live, PageImage, ViewOnly};
 use chrono::TimeZone;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -124,16 +124,19 @@ fn stamp(when: chrono::DateTime<chrono::Local>) -> String {
 }
 
 /// Laying out needs the glyphs, which the caller keeps; the slow drawing waits for `render`.
-pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSource) -> Frozen {
+/// `images` are each board's page image, in the order of `Live::board_images`.
+pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSource, images: &[Option<PageImage>]) -> Frozen {
     let boards = live.board_pages();
+    let image_of = |i: usize| images.get(i).and_then(Option::as_ref);
     let began = live.created_at().and_then(|ms| chrono::Local.timestamp_millis_opt(ms as i64).single()).unwrap_or_else(chrono::Local::now);
-    let pages = boards.iter().map(|(graph, memory)| ink::compose_board(graph, memory, glyphs)).collect();
+    let pages = boards.iter().enumerate().map(|(i, (graph, memory))| ink::compose_board(graph, memory, image_of(i), glyphs)).collect();
     let settled_graph = ink_only(&live.graph);
-    let settled = ink::compose_board(&settled_graph, &live.memory, glyphs);
+    let settled = ink::compose_board(&settled_graph, &live.memory, image_of(live.page()), glyphs);
     let replay_pages = boards
         .iter()
         .zip(live.board_steps())
-        .map(|((graph, memory), steps)| replay_page::Page { graph: graph.clone(), memory: memory.clone(), steps })
+        .enumerate()
+        .map(|(i, ((graph, memory), steps))| replay_page::Page { graph: graph.clone(), memory: memory.clone(), steps, image: image_of(i).cloned() })
         .collect();
     let settled_nodes = settled_graph.nodes.iter().filter_map(|n| serde_json::to_value(n).ok()).collect();
     Frozen {
@@ -172,7 +175,7 @@ impl Frozen {
                 Ok(text_only(replay_page::replay_page(&doc, &replay_pages, &mut glyphs).into_bytes()))
             }
             Kind::AnimatedSvg => {
-                if settled.pieces.is_empty() {
+                if settled.pieces.is_empty() && settled.page.is_none() {
                     bail!("The board is empty.");
                 }
                 Ok(text_only(animate::animated_svg(&settled, &settled_nodes, &steps, &doc.title).into_bytes()))
@@ -180,7 +183,7 @@ impl Frozen {
             Kind::Png | Kind::Svg => {
                 let page = pages.into_iter().nth(current).context("no board to export")?;
                 let drawn = page.draw();
-                if drawn.strokes.is_empty() {
+                if drawn.strokes.is_empty() && drawn.page.is_none() {
                     bail!("The board is empty.");
                 }
                 Ok(text_only(if kind == Kind::Png { ink::png(&drawn)? } else { ink::svg(&drawn, &doc.title).into_bytes() }))

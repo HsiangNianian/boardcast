@@ -7,9 +7,10 @@ use boardcast_board::glyphs::{Glyphs, Pt};
 use boardcast_board::graph::Graph;
 use boardcast_board::pen::{ink, outline, Rng};
 use boardcast_board::sugiyama::first_diagram;
+use boardcast_meetings::PageImage;
 use serde_json::Value;
 use std::fmt::Write;
-use tiny_skia::{BlendMode, Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
+use tiny_skia::{BlendMode, Color, FillRule, FilterQuality, IntSize, Paint, PathBuilder, Pixmap, PixmapPaint, Transform};
 
 /// Room around the ink in a picture.
 const PADDING: f64 = 48.0;
@@ -22,6 +23,15 @@ pub struct Composed {
     pub(crate) bounds: Bounds,
     /// Each region's id and the nodes in it, which settle when an unnamed region appeared.
     pub(crate) regions: Vec<(String, Vec<String>)>,
+    pub(crate) page: Option<Page>,
+}
+
+/// An imported page under a board, with its size on the board.
+#[derive(Clone)]
+pub struct Page {
+    pub image: PageImage,
+    pub w: f64,
+    pub h: f64,
 }
 
 pub struct Shape {
@@ -33,16 +43,18 @@ pub struct Drawn {
     /// In the order they are painted: highlights first, so ink stays on top.
     pub strokes: Vec<Shape>,
     pub bounds: Bounds,
+    pub page: Option<Page>,
 }
 
 /// Lay a board out from where its things already are, leaving the live layout alone.
-pub fn compose_board(graph: &Graph, memory: &Value, glyphs: &mut Glyphs) -> Composed {
+pub fn compose_board(graph: &Graph, memory: &Value, image: Option<&PageImage>, glyphs: &mut Glyphs) -> Composed {
     let mut layout = StableLayout::default();
     layout.restore(memory);
     let laid = layout.layout(graph, &mut first_diagram);
     let (pieces, _) = compose(graph, &laid, glyphs);
     let regions = laid.regions.iter().map(|r| (r.rect.id.clone(), r.rows.iter().map(|row| row.id.clone()).collect())).collect();
-    Composed { pieces, bounds: laid.bounds, regions }
+    let page = image.zip(graph.underlay()).map(|(image, (w, h))| Page { image: image.clone(), w, h });
+    Composed { pieces, bounds: laid.bounds, regions, page }
 }
 
 impl Composed {
@@ -57,7 +69,7 @@ impl Composed {
             }
         }
         strokes.sort_by_key(|s| !s.style.under);
-        Drawn { strokes, bounds: self.bounds }
+        Drawn { strokes, bounds: self.bounds, page: self.page }
     }
 }
 
@@ -97,6 +109,9 @@ pub fn svg(board: &Drawn, title: &str) -> String {
         h.round(),
         xml_text(title),
     );
+    if let Some(page) = &board.page {
+        let _ = write!(out, r#"<image href="{}" x="0" y="0" width="{}" height="{}" preserveAspectRatio="none"/>"#, page.image.data_url(), page.w, page.h);
+    }
     let mut open: Option<Style> = None;
     for stroke in &board.strokes {
         if !open.is_some_and(|style| same_paint(style, stroke.style)) {
@@ -122,6 +137,20 @@ pub fn svg(board: &Drawn, title: &str) -> String {
     out
 }
 
+fn page_pixmap(image: &PageImage) -> Result<Pixmap> {
+    let decoded = image::load_from_memory(&image.bytes).context("reading the page image")?.to_rgba8();
+    let (w, h) = decoded.dimensions();
+    let mut data = decoded.into_raw();
+    // tiny-skia keeps its colours multiplied by their alpha.
+    for p in data.chunks_exact_mut(4) {
+        let a = u16::from(p[3]);
+        for c in &mut p[..3] {
+            *c = (u16::from(*c) * a / 255) as u8;
+        }
+    }
+    Pixmap::from_vec(data, IntSize::from_wh(w, h).context("the page image has no size")?).context("the page image is too big")
+}
+
 pub fn png(board: &Drawn) -> Result<Vec<u8>> {
     let (x, y, w, h) = board.frame(PADDING);
     let scale = PNG_SCALE.min(PNG_MAX_SIDE / w.max(h));
@@ -129,6 +158,11 @@ pub fn png(board: &Drawn) -> Result<Vec<u8>> {
     let [_, r, g, b] = PAPER.to_be_bytes();
     canvas.fill(Color::from_rgba8(r, g, b, 255));
     let at = Transform::from_translate(-x as f32, -y as f32).post_scale(scale as f32, scale as f32);
+    if let Some(page) = &board.page {
+        let picture = page_pixmap(&page.image)?;
+        let fit = Transform::from_scale((page.w / f64::from(picture.width())) as f32, (page.h / f64::from(picture.height())) as f32).post_concat(at);
+        canvas.draw_pixmap(0, 0, picture.as_ref(), &PixmapPaint { opacity: 1.0, blend_mode: BlendMode::SourceOver, quality: FilterQuality::Bilinear }, fit, None);
+    }
     for stroke in &board.strokes {
         let Some((first, rest)) = stroke.outline.split_first() else { continue };
         let mut path = PathBuilder::new();
@@ -159,7 +193,7 @@ pub(crate) mod tests {
         let mut g = Graph::default();
         g.apply(&parse_ops(ops));
         let mut glyphs = Glyphs::from_checkout(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))).unwrap();
-        compose_board(&g, &Value::Null, &mut glyphs).draw()
+        compose_board(&g, &Value::Null, None, &mut glyphs).draw()
     }
 
     #[test]
@@ -193,7 +227,7 @@ pub(crate) mod tests {
         let width = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
         let (_, _, w, _) = drawn.frame(PADDING);
         assert_eq!(width, (w * 2.0).round() as u32);
-        let huge = Drawn { strokes: vec![], bounds: Bounds { x0: 0.0, y0: 0.0, x1: 20000.0, y1: 10.0 } };
+        let huge = Drawn { strokes: vec![], bounds: Bounds { x0: 0.0, y0: 0.0, x1: 20000.0, y1: 10.0 }, page: None };
         let bytes = png(&huge).unwrap();
         assert_eq!(u32::from_be_bytes(bytes[16..20].try_into().unwrap()), 8000);
     }

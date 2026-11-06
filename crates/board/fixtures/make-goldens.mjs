@@ -181,6 +181,61 @@ const timelineCases = [
   const { timed, end } = timeline(pieces.map((p) => ({ under: p.under, strokes: p.lengths.map((length) => ({ length })) })), rank, total)
   return { pieces, rank, total, end, timed: timed.map(({ delays, durs }) => ({ delays, durs })) }
 })
+// Imported pages: finding words in their text, the model's operations on them, and how they lay out.
+const { locate, spanAt } = await load('src/engine/spans.ts')
+const { pageGraph } = await load('src/engine/regions.ts')
+const seg = (t, x, w) => ({ t, x, w })
+const english = [
+  { y: 10, h: 12, segs: [seg('Deep networks are hard to train. We present a resid-', 10, 400)] },
+  { y: 26, h: 12, segs: [seg('ual framework (see Fig. 3, et al.) that eases', 10, 300), seg('training.', 330, 60)] },
+  { y: 42, h: 12, segs: [seg('Results improve! Is it "stable?" Yes.', 10, 280)] },
+]
+const chinese = [
+  { y: 100, h: 16, segs: [seg('深度网络很难训练。我们提出一个残差框架，', 10, 340)] },
+  { y: 120, h: 16, segs: [seg('它让训练更容易。Ｆｕｌｌ ｗｉｄｔｈ 文字也能找到！', 10, 340)] },
+]
+const turned = [{ y: 5, h: 10, angle: 0.5, segs: [seg('Turned text here. Second one', 20, 200)] }, { y: 18, h: 10, angle: 0.5, segs: [seg('goes on.', 20, 60)] }]
+const spanCases = []
+const quoted = (name, rows, quote, unit) => spanCases.push({ name, rows, quote, unit, mark: '圈出', span: locate(rows, quote, '圈出', unit) })
+const pointed = (name, rows, x, y, unit) => spanCases.push({ name, rows, x, y, unit, mark: '高亮', span: spanAt(rows, x, y, '高亮', unit) })
+for (const unit of ['word', 'sentence']) {
+  for (const q of ['Deep', 'residual', 'RESIDUAL  framework', 'Fig', 'eases training', 'stable', 'not there', '', 'Yes']) quoted(`en ${q} ${unit}`, english, q, unit)
+  for (const q of ['残差', '框架它让', 'full width', '文字', '难训练']) quoted(`zh ${q} ${unit}`, chinese, q, unit)
+  quoted(`turned ${unit}`, turned, 'Second', unit)
+  for (const [x, y] of [[40, 15], [380, 15], [20, 30], [340, 32], [80, 48], [5, 5], [999, 999]]) pointed(`en point ${x},${y} ${unit}`, english, x, y, unit)
+  for (const [x, y] of [[30, 108], [120, 108], [200, 128], [300, 128]]) pointed(`zh point ${x},${y} ${unit}`, chinese, x, y, unit)
+  pointed(`turned point ${unit}`, turned, 60, 45, unit)
+}
+const pageAreas = [
+  { text: 'Deep networks are hard to train. We present a residual framework.', x: 40, y: 30, w: 400, h: 44, rows: english },
+  { text: '深度网络很难训练。我们提出一个残差框架，它让训练更容易。Full width 文字也能找到！', x: 40, y: 200, w: 400, h: 44, rows: chinese },
+  { text: 'A heading with no text layer, long enough that its label has to be cut short here', x: 40, y: 300, w: 300, h: 20 },
+  { text: '「 same 」', name: 'Same', x: 40, y: 340, w: 60, h: 14 },
+  { text: 'same again', name: 'Same', x: 40, y: 360, w: 60, h: 14 },
+]
+const pageOps = [
+  [],
+  ['M n1 圈出 「residual」', 'M n1 下划线 句 「Fig」', 'M n1 高亮', 'M n3 划掉', 'M n4 星标'],
+  ['M n1 圈出 「残差」', 'M n3 高亮 「not there at all」', 'M n1 星标 句 「残差」', 'M n1 圈出 「residual」', 'M n1 圈出 「residual」'],
+  ['K n1 这段重要', 'Q n2 为什么', 'K n3 很长的一条批注写在边栏里', 'F n1 x+y', 'L n1 不该是条目', 'T 「讨论」', 'L 「讨论」 「要点」', 'E n1 n2 对比', 'E 「讨论」 n3'],
+  ['R n1 改名', 'A n2 别名', 'D n3', 'G 分组 n4 n5', 'L 「讨论」 n1', 'M n1 划掉'],
+  ['E 「甲」 -> 「乙」', 'K 「甲」 流程上的备注'],
+]
+const pageCases = []
+for (const size of [{ w: 900, h: 1200, no: 3 }, { w: 500, h: 300 }]) {
+  for (const ops of pageOps) {
+    const before = pageGraph(size, pageAreas)
+    const g = applyOps(before, parseOps(ops.join('\n')), 'ink')
+    const memory = new StableLayout()
+    const l = await memory.layout(g)
+    pageCases.push({
+      name: `${size.w} ${ops.join(' / ')}`, before, ops: ops.join('\n'), graph: g, described: describe(g), step: diffGraph(before, g),
+      regions: l.regions.map((r) => ({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, rows: r.rows.map((x) => [x.id, x.prefix, x.text, x.x, x.y, x.w, x.size]) })),
+      anchors: Object.fromEntries([...l.anchors].map(([id, b]) => [id, [b.x, b.y, b.w, b.h]])),
+      bounds: l.bounds, links: l.links.map((e) => [e.from, e.to]), memory: memory.snapshot(),
+    })
+  }
+}
 const prefix = (text) => messages(emptyGraph(), [], { text }).slice(0, -1)
 // The fixed part of the prompt ships with the agent; this copy is the answer key it is tested against.
 writeFileSync(new URL('../../agent/prompts.json', import.meta.url), `${JSON.stringify({ zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') }, null, 1)}\n`)
@@ -193,6 +248,8 @@ writeFileSync(process.argv[3], `${JSON.stringify({
   plain,
   markdown: markdownCases,
   ranks: rankCases,
+  spans: spanCases,
+  pages: pageCases,
   timelines: timelineCases,
 })}\n`)
 console.log(`${steps.length} steps`)

@@ -20,7 +20,7 @@ boardcast-models.workspace = true
 boardcast-update.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 gpui-kit = { version = "=0.9.0", default-features = false, features = ["assets"] }
-image = { version = "0.25", default-features = false }
+image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 serde.workspace = true
 serde_json.workspace = true
 sherpa-onnx = "2.0.1"

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="boardcast">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
 <title>__TITLE__</title>
 <!--__LICENSES__-->
 <style>
@@ -47,7 +47,7 @@ aside p{margin:2px 0}
 <div id="app">
 <header><span id="title"></span><span id="meta"></span><nav id="pages"></nav></header>
 <main>
-<svg id="board" xmlns="http://www.w3.org/2000/svg" role="img"><g id="under" style="mix-blend-mode:multiply"></g><g id="ink"></g></svg>
+<svg id="board" xmlns="http://www.w3.org/2000/svg" role="img"><g id="sheet"></g><g id="under" style="mix-blend-mode:multiply"></g><g id="ink"></g></svg>
 <div id="bar"><button id="toggle" type="button"></button><input id="seek" type="range" min="0" step="1"><span id="time"></span><button id="speed" type="button"></button><button id="end" type="button"></button></div>
 </main>
 <aside><p id="note" hidden></p><h2 id="summary-title" hidden></h2><div id="summary"></div><div id="lines-head"><h2 id="lines-title"></h2><span id="count"></span></div><div id="lines"></div></aside>
@@ -219,8 +219,15 @@ aside p{margin:2px 0}
     showAll()
   }
 
+  function showSheet() {
+    const sheet = $('sheet'), page = board().page
+    sheet.replaceChildren()
+    if (page) sheet.append(el('image', { href: page.href, x: 0, y: 0, width: page.w, height: page.h, preserveAspectRatio: 'none' }))
+  }
+
   function showAll() {
     showView()
+    showSheet()
     showBoard(false)
     showLines(false)
     showBar()

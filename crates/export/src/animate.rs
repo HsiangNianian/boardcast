@@ -224,6 +224,9 @@ pub fn animated_svg(board: &Composed, nodes: &[Value], steps: &[Value], title: &
         "</style>\n",
     ));
     let _ = writeln!(out, "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"#{PAPER:06x}\"/>");
+    if let Some(page) = &board.page {
+        let _ = writeln!(out, "<image href=\"{}\" x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\"/>", page.image.data_url(), page.w, page.h);
+    }
     let mut mask = 0;
     for under in [true, false] {
         for (i, piece) in board.pieces.iter().enumerate() {

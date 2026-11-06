@@ -22,6 +22,16 @@
 
 最终复制 **22 项**、原有摘要 **21 项**、复盘 **4 组**检查通过，包括 80 行中日英文本在 640×400 下的 Tab→Enter 返回与可见命中。TypeScript、播放器和主应用构建通过，没有重跑完整 Node/Rust。入口为 `index-Cb1jvS84.js`，本地 [证据目录](evidence/implementation/summary-copy/)保留基线、截图和报告，未随 PR 上传。
 
+## Linux 原生续验
+
+同日以 `c97846e` 构建真实 Tauri/WebKit，在独立 Xvfb、D-Bus、XDG 数据与 Cua 端点运行。没有替换 Clipboard API 或旧式复制返回值；每次复制前写入不同哨兵，再由另一个进程读取实际 X11 剪贴板。[9 项证据核对](evidence/implementation/summary-copy/native/native-summary-copy-check.json)通过：
+
+- Markdown、纯文本完整保留中文、日文、欧元符号和表情；实际 Tab 从“Copy source”到“Text only”，Enter 写入对应纯文本，焦点轮廓可见。
+- A 会编辑摘要后打开 B 会，编辑状态重置，页面与复制结果只包含 B 会内容。实际 Ctrl+V 粘贴到未发送输入框，再 Ctrl+A/C 读回，文本逐字一致；随后清空草稿，没有发送。
+- 两份会议文件在操作和原生菜单退出后 SHA-256 不变；应用退出码为 0，私有进程和显示 socket 已清理，1423/1430 原预览仍在。
+
+[构建身份](evidence/implementation/summary-copy/native/identity.json)记录 197 个输入文件的哈希、与浏览器批次相同的前端入口，以及原生二进制 SHA-256 `703706192ad7477296871a4118963f5c783f5d8ec5027a1a45b97d714d6ea34d`。104 个本地证据文件共 3,912,516 字节，另有清单；后台输入拒绝、首次启动器 EOF 和切会后重新打开摘要页签的操作调整保留在运行说明中。本续验没有产品源码改动。
+
 ## 边界
 
-本批剪贴板回复是浏览器内受控测试，没有验证系统剪贴板权限提示、原生 WebKit/Safari、VoiceOver 或跨应用粘贴。原 Adreno 设备、Mac、实际安装升级和完整 G3/G4 仍待验收。
+浏览器内的拒绝、迟到与乱序回复仍是受控测试；Linux 续验没有复现原生权限拒绝、迟到回复或手动复制面板，也未验证 Safari、VoiceOver 或其他应用的富文本粘贴。原 Adreno 设备、Mac、实际安装升级和完整 G3/G4 仍待验收。

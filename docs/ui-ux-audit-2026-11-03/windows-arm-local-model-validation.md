@@ -1,6 +1,6 @@
 # Windows ARM 本地模型请求与预热
 
-2026-11-06 后续进展：PR #79 的 `d30155d` 已在 Windows ARM CI 完成安装包构建、随包 llama-server smoke 和 Rust 测试；[该次构建](https://github.com/HsiangNianian/boardcast/actions/runs/42184441188)的 `boardcast-windows-arm64` artifact（ID `13488320159`，保留至 11 月 20 日）包含本报告的本地请求与预热修复。它也包含动态 SVG、文档标题及 PNG 失败恢复续批，但早于摘要复制续批；未在用户的 Adreno 机器上验证，也未安装或发布。下面保留原排查批次的结果与边界。
+2026-11-06 后续进展：PR #79 的产品提交 `c97846e` 已在 Windows ARM CI 完成安装包构建、随包 llama-server smoke 和 Rust 测试；[最新测试包](https://github.com/HsiangNianian/boardcast/actions/runs/42188601525/artifacts/13489636682)为 `boardcast-windows-arm64`（ID `13489636682`，保留至 11 月 20 日），包含本报告的本地请求与预热修复，以及动态 SVG、文档标题、PNG 失败恢复和摘要复制续批。GitHub 提供的 ZIP 大小为 496,481,010 字节，摘要为 `sha256:e5b4a3577748a9cad61d0774a9fac4c9b4ab8f9ebb46ddb50b8476bb3142ac9f`。未在用户的 Adreno 机器上验证，也未安装或发布；该运行的其他作业不能仅凭 ARM 成功推断通过。下面保留原排查批次的结果与边界。
 
 2026-11-05，基线 `4f9ab26`。用户提供 Windows ARM64 的 `boardcast-diagnostics.zip`，报告 GPU 有占用但模型一直无法完成预热。本批修复桌面版本地请求通道和预热失败恢复，Windows ARM 真机验收仍待完成。
 
@@ -47,4 +47,4 @@
 
 ## 剩余边界
 
-没有可访问的 Windows ARM 真机，也没有生成或发布新的 Windows 安装包。当前已安装的 `0.21.1-5` 不包含这批修改；需要新构建在原 Adreno 机器复测，才能确认原问题是否还包含 GPU/驱动侧故障。本批没有声称修复音频缓冲异常。用户暂无测试 Mac；原 UI 全量验收和 G3/G4 继续保留。
+没有可访问的 Windows ARM 真机；后续 CI 已生成开头所列测试包，但尚未发布或在原设备安装。当前已安装的 `0.21.1-5` 不包含这批修改；需要新构建在原 Adreno 机器复测，才能确认原问题是否还包含 GPU/驱动侧故障。本批没有声称修复音频缓冲异常。用户暂无测试 Mac；原 UI 全量验收和 G3/G4 继续保留。

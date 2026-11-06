@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'crates/**'
+      - 'packaging/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'src/engine/**'
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - 'crates/**'
+      - 'packaging/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'src/engine/**'
@@ -30,7 +32,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # The window and audio crates need system libraries and native downloads, and have no tests yet.
-      - run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-tools
+      - run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-tools
       - name: Check the recorded boards for layout defects
         run: cargo run --release -p boardcast-tools -- check . --all-demos --tidy
       - uses: pnpm/action-setup@v4
@@ -43,3 +45,41 @@ jobs:
         run: |
           node crates/board/fixtures/make-goldens.mjs . crates/board/fixtures/goldens.json
           git diff --exit-code crates/board/fixtures/goldens.json crates/agent/prompts.json
+
+  package:
+    name: linux package
+    # An older base than developers use, so the package runs on more distributions.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libx11-xcb-dev libxcb1-dev libvulkan-dev libasound2-dev libssl-dev libzstd-dev libfontconfig-dev libfreetype-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache voice models
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/voice
+          key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
+      # The script ends by running the packaged app's self-check.
+      - run: sh packaging/linux/package.sh
+      - name: Install from the package and check again
+        run: |
+          mkdir unpacked
+          tar -xzf target/package/*.tar.gz -C unpacked
+          PREFIX="$PWD/prefix" sh unpacked/*/install.sh
+          rm -rf unpacked
+          prefix/bin/boardcast --self-check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boardcast-linux
+          path: target/package/*.tar.gz
+          retention-days: 14

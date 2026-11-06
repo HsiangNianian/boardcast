@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=boardcast
+GenericName=Live meeting whiteboard
+Comment=Talk, and the whiteboard draws itself
+Exec=@BINDIR@/boardcast
+Icon=boardcast
+Terminal=false
+Categories=Office;
+Keywords=meeting;whiteboard;transcription;notes;
+StartupNotify=true
+StartupWMClass=boardcast
+X-AppVersion=@VERSION@

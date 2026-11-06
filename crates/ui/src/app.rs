@@ -12,6 +12,8 @@ use boardcast_meetings::{default_dir, Info, Live, Store, ViewOnly};
 use boardcast_board::pen::{ink, outline, Inked, Rng};
 use crate::i18n::tr;
 use crate::pipeline::{Event, Pipeline, Script};
+use crate::resources;
+use boardcast_models::{Model, Outcome, Progress};
 use crate::raster::Layer;
 use anyhow::{Context as _, Result};
 use gpui_kit::base::input::{Input, InputEvent, InputState};
@@ -26,6 +28,7 @@ use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -578,6 +581,20 @@ enum Panel {
     Settings,
 }
 
+/// A model being downloaded.
+struct Download {
+    id: &'static str,
+    label: &'static str,
+    cancel: Arc<AtomicBool>,
+    updates: Receiver<DownloadUpdate>,
+    progress: Option<Progress>,
+}
+
+enum DownloadUpdate {
+    Progress(Progress),
+    Finished(Result<Outcome, String>),
+}
+
 struct SettingsForm {
     base_url: Entity<InputState>,
     model: Entity<InputState>,
@@ -609,6 +626,11 @@ struct Workbench {
     forced_backend: bool,
     models: PathBuf,
     binaries: PathBuf,
+    download: Option<Download>,
+    /// The discrete graphics memory, which decides the recommended model.
+    vram_mib: u64,
+    /// Nothing can draw yet, so opening the app leads to choosing a model.
+    needs_model: bool,
     notice: Option<String>,
     status: String,
     level: f32,
@@ -620,10 +642,16 @@ struct Workbench {
 
 fn backend_from(settings: &Settings, local_only: bool, binaries: &std::path::Path, models: &std::path::Path) -> Backend {
     if settings.enabled && settings.is_complete() && !local_only {
-        Backend::Ready(Provider::Remote { base_url: settings.base_url.clone(), key: settings.api_key.clone(), model: settings.model.clone() })
-    } else {
-        Backend::ManagedLocal(Arc::new(LocalServer { binaries: binaries.to_path_buf(), model: models.join("Qwen3.5-4B-Q4_K_M.gguf") }))
+        return Backend::Ready(Provider::Remote { base_url: settings.base_url.clone(), key: settings.api_key.clone(), model: settings.model.clone() });
     }
+    match boardcast_models::current(models) {
+        Some(model) => Backend::ManagedLocal(Arc::new(LocalServer { binaries: binaries.to_path_buf(), model })),
+        None => Backend::NoModel,
+    }
+}
+
+fn gigabytes(bytes: u64) -> String {
+    format!("{:.1} GB", bytes as f64 / 1e9)
 }
 
 fn spoken(lines: &[Utterance]) -> Vec<(Option<String>, String)> {
@@ -674,7 +702,15 @@ impl Workbench {
             changed = true;
             match event {
                 Event::Agent(Update::Loading) => self.status = tr("Loading the board model…", "正在加载板书模型…").into(),
-                Event::Agent(Update::Ready) => self.status = tr("Board model ready", "板书模型就绪").into(),
+                Event::Agent(Update::Ready) => {
+                    self.status = tr("Board model ready", "板书模型就绪").into();
+                    self.needs_model = false;
+                }
+                Event::Agent(Update::NoModel) => {
+                    self.status = tr("Choose a board model to start", "请先选择板书模型").into();
+                    self.needs_model = true;
+                    self.panel = Panel::Settings;
+                }
                 Event::Level(l) => self.level = l,
                 Event::Heard { meeting, speaker, text, asr_ms } => {
                     if meeting == self.session().meeting() {
@@ -727,6 +763,7 @@ impl Workbench {
             }
         }
         self.pump_probe(&mut changed);
+        self.pump_download(&mut changed);
         changed |= self.autosave();
         if changed {
             cx.notify();
@@ -747,6 +784,69 @@ impl Workbench {
             Err(TryRecvError::Disconnected) => self.form.probing = None,
             Err(TryRecvError::Empty) => {}
         }
+    }
+
+    fn pump_download(&mut self, changed: &mut bool) {
+        let Some(download) = &mut self.download else { return };
+        let mut finished = None;
+        while let Ok(update) = download.updates.try_recv() {
+            *changed = true;
+            match update {
+                DownloadUpdate::Progress(progress) => download.progress = Some(progress),
+                DownloadUpdate::Finished(result) => finished = Some(result),
+            }
+        }
+        let Some(result) = finished else { return };
+        let (id, label) = (download.id, download.label);
+        self.download = None;
+        match result {
+            Ok(Outcome::Finished(_)) => {
+                if let Some(model) = boardcast_models::catalog().iter().find(|m| m.id == id) {
+                    if let Err(e) = boardcast_models::select(model, &self.models) {
+                        self.notice = Some(format!("{e:#}"));
+                    }
+                }
+                self.needs_model = false;
+                self.form.note = Some(format!("{label} {}", tr("is ready.", "已就绪。")));
+                self.apply_backend();
+            }
+            Ok(Outcome::Cancelled) => self.form.note = Some(tr("Paused. Download again to continue from where it stopped.", "已暂停。再次下载会从中断处继续。").into()),
+            Err(error) => self.form.note = Some(error),
+        }
+    }
+
+    fn start_download(&mut self, model: Model, cx: &mut Context<Self>) {
+        if self.download.is_some() {
+            return;
+        }
+        let (tx, updates) = channel();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (flag, dir) = (cancel.clone(), self.models.clone());
+        self.download = Some(Download { id: model.id, label: model.label, cancel, updates, progress: None });
+        self.form.note = None;
+        std::thread::spawn(move || {
+            let progress = tx.clone();
+            let result = boardcast_models::download(&model, &dir, &flag, &mut |p| {
+                let _ = progress.send(DownloadUpdate::Progress(p));
+            });
+            let _ = tx.send(DownloadUpdate::Finished(result.map_err(|e| format!("{e:#}"))));
+        });
+        cx.notify();
+    }
+
+    fn use_model(&mut self, model: &Model, cx: &mut Context<Self>) {
+        match boardcast_models::select(model, &self.models) {
+            Ok(()) => {
+                self.form.remote = false;
+                self.form.saved.enabled = false;
+                if let Err(e) = self.form.saved.save() {
+                    self.form.note = Some(format!("{e:#}"));
+                }
+                self.apply_backend();
+            }
+            Err(e) => self.form.note = Some(format!("{e:#}")),
+        }
+        cx.notify();
     }
 
     fn finish_save(&mut self, result: Result<u64, String>, covers: u64) {
@@ -1045,6 +1145,10 @@ impl Workbench {
 }
 
 fn button(id: &'static str, label: impl Into<gpui_kit::SharedString>) -> gpui_kit::Stateful<gpui_kit::Div> {
+    div().id(id).px_2().py_1().rounded_md().cursor_pointer().text_sm().border_1().border_color(rgb(0xdd_dd_d8)).child(label.into())
+}
+
+fn button_id(id: (&'static str, usize), label: impl Into<gpui_kit::SharedString>) -> gpui_kit::Stateful<gpui_kit::Div> {
     div().id(id).px_2().py_1().rounded_md().cursor_pointer().text_sm().border_1().border_color(rgb(0xdd_dd_d8)).child(label.into())
 }
 
@@ -1406,6 +1510,50 @@ impl Render for Workbench {
         }));
         let field = |label: &'static str, input: &Entity<InputState>| div().flex().flex_col().gap_1().child(div().text_xs().text_color(rgb(0x62_66_5c)).child(label)).child(Input::new(input));
         let local_only = self.live.local_only();
+        let current_model = boardcast_models::current(&self.models);
+        let recommended = boardcast_models::recommended(self.vram_mib);
+        let using_remote = self.form.saved.enabled && self.form.saved.is_complete();
+        let progress_row = self.download.as_ref().map(|d| {
+            let text = match &d.progress {
+                Some(p) if p.verifying => format!("{} {}", d.label, tr("checking what was already downloaded…", "正在检查已下载的部分…")),
+                Some(p) => format!(
+                    "{} {} / {}{}",
+                    d.label,
+                    gigabytes(p.done),
+                    gigabytes(p.total),
+                    if p.speed > 0 { format!(" · {:.1} MB/s", p.speed as f64 / 1e6) } else { String::new() },
+                ),
+                None => format!("{} {}", d.label, tr("starting…", "正在开始…")),
+            };
+            let fraction = d.progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
+            (text, fraction)
+        });
+        let local_models = boardcast_models::catalog().into_iter().enumerate().map(|(i, model)| {
+            let installed = boardcast_models::installed(&model, &self.models);
+            let active = !using_remote && current_model.as_ref().is_some_and(|p| p.ends_with(&model.file));
+            let busy = self.download.is_some();
+            let name = format!(
+                "{} · {}{}",
+                model.label,
+                gigabytes(model.size),
+                if model.id == recommended { tr(" · recommended", " · 推荐") } else { "" },
+            );
+            let (action, fetch) = (model.clone(), model.clone());
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                // The name gives way, so a long one can never push its button out of reach.
+                .child(div().flex_1().min_w_0().text_sm().child(name))
+                .when(active, |d| d.child(div().text_xs().text_color(rgb(0x28_61_43)).child(tr("In use", "使用中"))))
+                .when(installed && !active, |d| {
+                    d.child(button_id(("use-model", i), tr("Use", "使用")).on_click(cx.listener(move |this, _, _, cx| this.use_model(&action, cx))))
+                })
+                .when(!installed && !busy, |d| {
+                    d.child(button_id(("get-model", i), tr("Download", "下载")).on_click(cx.listener(move |this, _, _, cx| this.start_download(fetch.clone(), cx))))
+                })
+        }).collect::<Vec<_>>();
         let forced = self.forced_backend;
         let key_hint = self.form.saved.key_hint();
         let settings = div()
@@ -1417,33 +1565,57 @@ impl Render for Workbench {
             .flex_col()
             .gap_3()
             .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Board model", "板书模型")))
+            .when(self.needs_model, |d| {
+                d.child(div().text_sm().child(tr(
+                    "To draw the board, download a model that runs on this computer, or set up a remote one. Speech recognition is already included.",
+                    "要开始画板书，请下载一个在本机运行的模型，或者设置远程模型。语音识别已经内置。",
+                )))
+            })
             .child(
                 div()
                     .flex()
                     .gap_1()
-                    .child(button("use-local", tr("Local", "本地")).when(!self.form.remote, |b| b.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff))).on_click(cx.listener(|this, _, _, cx| {
+                    .child(button("use-local", tr("On this computer", "本机模型")).when(!self.form.remote, |b| b.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff))).on_click(cx.listener(|this, _, _, cx| {
                         this.form.remote = false;
                         cx.notify();
                     })))
-                    .child(button("use-remote", tr("Remote", "远程")).when(self.form.remote, |b| b.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff))).on_click(cx.listener(|this, _, _, cx| {
+                    .child(button("use-remote", tr("Remote", "远程模型")).when(self.form.remote, |b| b.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff))).on_click(cx.listener(|this, _, _, cx| {
                         this.form.remote = true;
                         cx.notify();
                     }))),
             )
-            .child(field(tr("API address", "接口地址"), &self.form.base_url))
-            .child(field(tr("Model", "模型"), &self.form.model))
-            .child(field(tr("API key", "API key"), &self.form.key))
-            .child(div().text_xs().text_color(rgb(0x85_8a_80)).child(match key_hint {
-                Some(hint) => format!("{} {hint}{}", tr("Saved key:", "已保存的 key："), tr(". Leave empty to keep it.", "。留空则继续使用。")),
-                None => tr("No key saved. It is stored only on this computer.", "还没有保存 key。key 只存在这台电脑上。").to_string(),
-            }))
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(button("save-settings", tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
-                    .child(button("test-settings", tr("Test", "测试连接")).on_click(cx.listener(|this, _, _, cx| this.test_settings(cx)))),
-            )
+            .when(!self.form.remote, |d| d.children(local_models))
+            .when_some(progress_row, |d, (text, fraction)| {
+                d.child(div().text_xs().child(text))
+                    .child(div().h(px(6.)).w_full().rounded_sm().bg(rgb(0xe4_e4_df)).child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(0x28_61_43))))
+                    .child(button("stop-download", tr("Pause", "暂停")).on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(download) = &this.download {
+                            download.cancel.store(true, Ordering::Relaxed);
+                        }
+                        cx.notify();
+                    })))
+            })
+            .when(self.form.remote, |d| {
+                d
+                .child(field(tr("API address", "接口地址"), &self.form.base_url))
+                .child(field(tr("Model", "模型"), &self.form.model))
+                .child(field(tr("API key", "API key"), &self.form.key))
+                .child(div().text_xs().text_color(rgb(0x85_8a_80)).child(match key_hint {
+                    Some(hint) => format!("{} {hint}{}", tr("Saved key:", "已保存的 key："), tr(". Leave empty to keep it.", "。留空则继续使用。")),
+                    None => tr("No key saved. It is stored only on this computer.", "还没有保存 key。key 只存在这台电脑上。").to_string(),
+                }))
+                .child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(button("save-settings", tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
+                        .child(button("test-settings", tr("Test", "测试连接")).on_click(cx.listener(|this, _, _, cx| this.test_settings(cx)))),
+                )
+            })
+            // Leaving the remote model takes effect on saving, like choosing it does.
+            .when(!self.form.remote && self.form.saved.enabled, |d| {
+                d.child(button("save-local", tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
+            })
             .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
             .when(forced, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
@@ -1489,7 +1661,7 @@ struct Turn {
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let root = PathBuf::from(args.next().context("boardcast root")?);
+    let mut root: Option<PathBuf> = None;
     let mut case = None;
     let mut wav = None;
     let mut llm = None;
@@ -1514,18 +1686,21 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--skill" => skill = true,
             "--deepseek" => deepseek = true,
             "--open" => open = args.next(),
+            "--root" => root = args.next().map(PathBuf::from),
             other => anyhow::bail!("unknown flag {other}"),
         }
     }
     let mut turns = vec![];
     if let Some(id) = case {
+        let root = root.as_ref().context("--case needs --root <checkout>")?;
         let cases: Vec<Case> = serde_json::from_slice(&std::fs::read(root.join("eval/cases.json"))?)?;
         let found = cases.into_iter().find(|c| c.id == id).with_context(|| format!("no case {id}"))?;
         turns = found.turns.into_iter().map(|t| Utterance { speaker: t.speaker, text: t.text }).collect();
     }
     let data = default_dir()?;
     let models = data.join("models");
-    let binaries = root.join("src-tauri/llama");
+    let resources = resources::locate(&data);
+    let binaries = resources.binaries.clone();
     let settings = Settings::load();
     let forced_backend = deepseek || llm.is_some();
     let backend = if deepseek {
@@ -1536,9 +1711,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         backend_from(&settings, false, &binaries, &models)
     };
     let guidance = skill.then_some(Guidance { rules: true, hint: true });
-    let glyphs = Glyphs::load(&root)?;
+    let glyphs = Glyphs::load(resources.hanzi)?;
     let start_board = match &demo {
-        Some(name) => Some(demo_board(&root, name)?),
+        Some(name) => Some(demo_board(root.as_ref().context("--demo needs --root <checkout>")?, name)?),
         None => synthetic.map(synthetic_board),
     };
     // A sample or measurement never reads or writes real meetings, and a script starts a new one.
@@ -1548,11 +1723,14 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         (Some(store), Some(id)) => store.load(&id).ok().flatten().map(Live::from_loaded),
         _ => None,
     };
-    let pipeline = Pipeline::start(backend, guidance, models.join("voice"), Script { turns, wav });
+    let pipeline = Pipeline::start(backend, guidance, resources.voice, Script { turns, wav });
+    let vram_mib = boardcast_agent::list_gpus(&binaries).iter().filter(|g| g.discrete).map(|g| g.total_mib).max().unwrap_or(0);
     gpui_kit::application().with_assets(gpui_kit::assets::Assets).run(move |cx: &mut App| {
         gpui_kit::init(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::new(point(px(0.), px(0.)), size(px(1280.), px(800.))))),
+            titlebar: Some(gpui_kit::TitlebarOptions { title: Some("boardcast".into()), ..Default::default() }),
+            app_id: Some("boardcast".into()),
             ..Default::default()
         };
         let mut state = Ink {
@@ -1655,6 +1833,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     forced_backend,
                     models,
                     binaries,
+                    download: None,
+                    vram_mib,
+                    needs_model: false,
                     notice: None,
                     status: tr("Starting…", "启动中…").into(),
                     level: 0.0,

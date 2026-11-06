@@ -8,7 +8,7 @@
 
 pub mod settings;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, Graph, Utterance};
 use serde_json::{json, Value};
 use std::os::unix::process::CommandExt;
@@ -23,6 +23,7 @@ use std::time::{Duration, Instant};
 const CONTEXT_LINES: usize = 2;
 const LLAMA_PORT: u16 = 18_765;
 const ATTEMPTS: u32 = 4;
+const NO_MODEL: &str = "No board model is set up. Download one or add a remote model in Settings.";
 
 /// The layout skill's rules, short enough for a prompt. The full guidance is skills/board-layout/SKILL.md.
 pub const SKILL_RULES: &str = include_str!("../skills/board-layout/RULES.md");
@@ -94,7 +95,7 @@ impl Provider {
         };
         let mut last = anyhow!("no attempt made");
         for attempt in 0..ATTEMPTS {
-            let mut call = ureq::post(&url).timeout(Duration::from_secs(300));
+            let mut call = http().post(&url).timeout(Duration::from_secs(300));
             if let Self::Remote { key, .. } = self {
                 call = call.set("Authorization", &format!("Bearer {key}"));
             }
@@ -165,6 +166,8 @@ pub struct Said {
 pub enum Update {
     Loading,
     Ready,
+    /// Nothing is installed and no remote model is set up, so the user has to choose.
+    NoModel,
     Drawn { meeting: u64, graph: Graph, ops: String, lines: Vec<Utterance>, asr_ms: Option<u128>, llm_ms: u128, ended: Instant },
     Failed { meeting: u64, message: String, lines: Vec<Utterance> },
     /// Something went wrong outside any line, like the local model failing to start.
@@ -172,24 +175,73 @@ pub enum Update {
 }
 
 pub struct LocalServer {
-    /// A boardcast checkout's `src-tauri/llama`, until the app bundles its own copy.
+    /// The directory holding `llama-server` and its libraries.
     pub binaries: PathBuf,
     pub model: PathBuf,
 }
 
-/// The same launch arguments as the Tauri app. The child dies with the thread that started it.
-fn spawn_llama(server: &LocalServer) -> Result<Child> {
-    let device = std::env::var("LLAMA_DEVICE").unwrap_or_else(|_| "Vulkan1".into());
-    let mut cmd = Command::new(server.binaries.join("llama-server"));
-    cmd.env("LD_LIBRARY_PATH", &server.binaries)
-        .arg("-m")
+/// A graphics device llama-server can use.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Gpu {
+    pub id: String,
+    pub name: String,
+    pub total_mib: u64,
+    pub discrete: bool,
+}
+
+/// Parse `--list-devices`, whose rows look like `Vulkan1: NVIDIA GeForce RTX 3060 (6144 MiB, 5822 MiB free)`.
+fn parse_devices(text: &str) -> Vec<Gpu> {
+    const DISCRETE: [&str; 6] = ["nvidia", "geforce", "radeon rx", "radeon pro", " arc", "adreno"];
+    text.lines()
+        .filter_map(|line| {
+            let (id, rest) = line.trim().split_once(": ")?;
+            if id.is_empty() || id.contains(' ') {
+                return None;
+            }
+            // Log lines share the "word: text" shape, but only devices state their memory.
+            let (name, memory) = rest.rsplit_once(" (")?;
+            let total_mib = memory.split_once(" MiB")?.0.trim().parse().ok()?;
+            let lower = name.to_lowercase();
+            Some(Gpu { id: id.to_string(), name: name.to_string(), total_mib, discrete: DISCRETE.iter().any(|k| lower.contains(k)) })
+        })
+        .collect()
+}
+
+fn server_command(binaries: &std::path::Path) -> Command {
+    let mut cmd = Command::new(binaries.join("llama-server"));
+    cmd.env("LD_LIBRARY_PATH", binaries).stdin(Stdio::null());
+    cmd
+}
+
+/// The graphics devices on this machine; empty if there are none or the server cannot run.
+pub fn list_gpus(binaries: &std::path::Path) -> Vec<Gpu> {
+    let Ok(out) = server_command(binaries).arg("--list-devices").output() else { return vec![] };
+    parse_devices(&(String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr)))
+}
+
+/// The discrete card with the most memory, else any device. Numbering differs per machine, so it
+/// cannot be assumed. `LLAMA_DEVICE` overrides this for testing.
+fn pick_gpu(gpus: &[Gpu]) -> Option<String> {
+    if let Ok(device) = std::env::var("LLAMA_DEVICE") {
+        return Some(device);
+    }
+    gpus.iter().filter(|g| g.discrete).max_by_key(|g| g.total_mib).or_else(|| gpus.first()).map(|g| g.id.clone())
+}
+
+/// The same launch arguments as the older app. The child dies with the thread that started it.
+fn spawn_llama(server: &LocalServer, device: Option<&str>) -> Result<Child> {
+    let mut cmd = server_command(&server.binaries);
+    cmd.arg("-m")
         .arg(&server.model)
         .args(["--host", "127.0.0.1", "--port", &LLAMA_PORT.to_string()])
         .args(["-c", "4096", "-np", "1", "--jinja"])
-        .args(["--device", &device, "-ngl", "auto", "--fit", "on", "-fa", "auto"])
-        .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+    match device {
+        // Not a fixed layer count: if the model does not fit in VRAM, as many layers as fit go there.
+        Some(device) => cmd.args(["--device", device, "-ngl", "auto", "--fit", "on", "-fa", "auto"]),
+        None => cmd.args(["--device", "none", "-ngl", "0"]),
+    };
     // SAFETY: prctl is async-signal-safe and touches no parent state between fork and exec.
     unsafe {
         cmd.pre_exec(|| {
@@ -197,18 +249,47 @@ fn spawn_llama(server: &LocalServer) -> Result<Child> {
             Ok(())
         });
     }
-    cmd.spawn().context("starting llama-server")
+    cmd.spawn().with_context(|| format!("starting {}", server.binaries.join("llama-server").display()))
 }
 
-fn wait_for(url: &str) -> Result<()> {
+/// Start the server on the best device, falling back to the CPU if that fails to come up.
+fn start_llama(server: &LocalServer) -> Result<(Child, String)> {
+    let base = format!("http://127.0.0.1:{LLAMA_PORT}");
+    let health = format!("{base}/health");
+    let device = pick_gpu(&list_gpus(&server.binaries));
+    let mut child = spawn_llama(server, device.as_deref())?;
+    match wait_until_up(&health, &mut child) {
+        Ok(()) => Ok((child, base)),
+        Err(first) if device.is_some() => {
+            eprintln!("local model did not start on {device:?}: {first:#}; trying the CPU");
+            let _ = child.kill();
+            let _ = child.wait();
+            let mut child = spawn_llama(server, None)?;
+            wait_until_up(&health, &mut child)?;
+            Ok((child, base))
+        }
+        Err(first) => Err(first),
+    }
+}
+
+/// Wait for the server to answer, giving up early if it has already exited.
+fn wait_until_up(url: &str, child: &mut Child) -> Result<()> {
     let started = Instant::now();
     while started.elapsed() < Duration::from_secs(180) {
-        if ureq::get(url).timeout(Duration::from_secs(2)).call().is_ok() {
+        if let Some(status) = child.try_wait()? {
+            bail!("llama-server exited during startup ({status})");
+        }
+        if http().get(url).timeout(Duration::from_secs(2)).call().is_ok() {
             return Ok(());
         }
         thread::sleep(Duration::from_millis(250));
     }
     Err(anyhow!("timed out waiting for {url}"))
+}
+
+/// Requests honour the proxy settings in the environment, as the older app does.
+fn http() -> ureq::Agent {
+    ureq::AgentBuilder::new().try_proxy_from_env(true).build()
 }
 
 /// Which model answers the next line. It can change at any time from the settings.
@@ -217,6 +298,8 @@ pub enum Backend {
     /// Start a llama-server the first time it is needed, and talk to it.
     ManagedLocal(Arc<LocalServer>),
     Ready(Provider),
+    /// No model is available yet: nothing is installed and no remote model is set up.
+    NoModel,
 }
 
 /// The running session: one request at a time, with lines heard meanwhile merged into the next.
@@ -247,26 +330,38 @@ impl Session {
             (session.graph.clone(), session.history.clone(), session.hint.clone(), session.backend.clone(), session.guidance.clone(), session.meeting.clone());
         thread::spawn(move || {
             // Held for the thread's lifetime: the child's death signal is tied to this thread.
-            let mut server: Option<(Child, String)> = None;
+            let mut server: Option<(Child, String, PathBuf)> = None;
             let mut provider_now = |updates: &Sender<Update>| -> Result<Provider> {
                 let choice = backend.lock().expect("backend lock").clone();
                 match choice {
                     Backend::Ready(provider) => Ok(provider),
+                    Backend::NoModel => bail!("{NO_MODEL}"),
                     Backend::ManagedLocal(local) => {
+                        // Another model was chosen: the running server cannot switch.
+                        if server.as_ref().is_some_and(|(_, _, model)| model != &local.model) {
+                            if let Some((mut child, _, _)) = server.take() {
+                                let _ = child.kill();
+                                let _ = child.wait();
+                            }
+                        }
                         if server.is_none() {
                             let _ = updates.send(Update::Loading);
-                            let child = spawn_llama(&local)?;
-                            let base = format!("http://127.0.0.1:{LLAMA_PORT}");
-                            wait_for(&format!("{base}/health"))?;
-                            server = Some((child, base));
+                            let (child, base) = start_llama(&local)?;
+                            let _ = updates.send(Update::Ready);
+                            server = Some((child, base, local.model.clone()));
                         }
-                        Ok(Provider::Local { base: server.as_ref().map(|(_, b)| b.clone()).expect("just set") })
+                        Ok(Provider::Local { base: server.as_ref().map(|(_, b, _)| b.clone()).expect("just set") })
                     }
                 }
             };
-            match provider_now(&updates) {
+            let first_use = provider_now(&updates);
+            match &first_use {
+                Ok(Provider::Local { .. }) => {}
                 Ok(_) => {
                     let _ = updates.send(Update::Ready);
+                }
+                Err(e) if e.to_string() == NO_MODEL => {
+                    let _ = updates.send(Update::NoModel);
                 }
                 Err(e) => {
                     let _ = updates.send(Update::Broken(format!("{e:#}")));
@@ -390,6 +485,20 @@ mod tests {
         assert!(remote("https://api.deepseek.com").default_guidance().rules);
         assert!(!remote("https://example.com/v1").default_guidance().rules, "only measured on DeepSeek");
         assert!(!remote("https://api.deepseek.com").default_guidance().hint);
+    }
+
+    #[test]
+    fn devices_are_read_from_the_server_listing() {
+        let listing = "load_backend: loaded Vulkan backend\nAvailable devices:\n  Vulkan0: Intel(R) Iris(R) Xe Graphics (ADL GT2) (23827 MiB, 9687 MiB free)\n  Vulkan1: NVIDIA GeForce RTX 3060 Laptop GPU (6144 MiB, 5800 MiB free)\n";
+        let gpus = parse_devices(listing);
+        assert_eq!(gpus.len(), 2, "{gpus:?}");
+        assert_eq!(gpus[0].name, "Intel(R) Iris(R) Xe Graphics (ADL GT2)");
+        assert_eq!((gpus[0].total_mib, gpus[0].discrete), (23827, false));
+        assert_eq!((gpus[1].id.as_str(), gpus[1].total_mib, gpus[1].discrete), ("Vulkan1", 6144, true));
+        assert_eq!(pick_gpu(&gpus).as_deref(), Some("Vulkan1"), "a discrete card wins over a larger shared memory");
+        assert_eq!(pick_gpu(&gpus[..1]).as_deref(), Some("Vulkan0"));
+        assert_eq!(pick_gpu(&[]), None, "no graphics device means the CPU");
+        assert!(parse_devices("Available devices:\n").is_empty());
     }
 
     #[test]
@@ -521,6 +630,25 @@ mod tests {
         let board = h.session.board();
         assert_eq!(board.nodes.len(), 2);
         assert_eq!(board.nodes[0].marks, ["星标"]);
+    }
+
+    #[test]
+    fn with_no_model_the_user_is_told_and_a_line_fails_visibly() {
+        let (said, said_rx) = channel();
+        let (ready_tx, ready_rx) = channel();
+        let (drained_tx, drained) = channel();
+        let (updates_tx, updates) = channel();
+        let session = Session::start(Backend::NoModel, None, said_rx, ready_tx, drained_tx, updates_tx);
+        ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(updates.recv_timeout(Duration::from_secs(5)).unwrap(), Update::NoModel));
+        said.send(Said { line: Utterance { speaker: None, text: "这句没有模型".into() }, ended: Instant::now(), asr_ms: None, meeting: session.meeting() }).unwrap();
+        drained.recv_timeout(Duration::from_secs(5)).unwrap();
+        let Update::Failed { lines, .. } = updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("expected a failure") };
+        assert_eq!(lines[0].text, "这句没有模型");
+        session.set_backend(Backend::Ready(Provider::Scripted(Arc::new(|_| Ok("T 「现在有了」".into())))));
+        said.send(Said { line: Utterance { speaker: None, text: "再试".into() }, ended: Instant::now(), asr_ms: None, meeting: session.meeting() }).unwrap();
+        drained.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(session.board().nodes.len(), 1, "a model added later takes effect");
     }
 
     #[test]

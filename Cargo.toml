@@ -5,7 +5,7 @@ members = ["crates/*"]
 exclude = ["src-tauri"]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.22.0-alpha.1"
 edition = "2021"
 license = "MIT"
 publish = false
@@ -19,6 +19,7 @@ boardcast-board = { path = "crates/board" }
 boardcast-audio = { path = "crates/audio" }
 boardcast-agent = { path = "crates/agent" }
 boardcast-meetings = { path = "crates/meetings" }
+boardcast-models = { path = "crates/models" }
 
 [profile.dev]
 opt-level = 1

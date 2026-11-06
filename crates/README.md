@@ -9,19 +9,34 @@ editing is dropped. The Tauri app in `src-tauri/` and `src/` stays until this on
 | `boardcast-audio` | Capture, VAD, speech recognition | UI, board |
 | `boardcast-agent` | Prompts, the layout skill, local and remote models, request queueing | UI, audio |
 | `boardcast-meetings` | Meeting files, the open meeting's state, undo, the replay record | UI, audio, network |
+| `boardcast-models` | The board models too large for the installer: the catalog and downloading | UI, audio, board |
 | `boardcast-ui` | The GPUI window, tiled ink rendering, wiring the chain together | |
 | `boardcast-tools` | `check` and `agent-eval` for CI and model evaluation | UI |
 
+## Install on Linux
+
+```sh
+sh packaging/linux/package.sh     # target/package/boardcast-<version>-<arch>-linux.tar.gz
+tar -xzf boardcast-*-linux.tar.gz
+./boardcast-*-linux/install.sh    # into ~/.local, no root needed; --uninstall removes it and keeps your data
+```
+
+The package holds the app, the speech models, `llama-server` and the handwriting data. A board model is about 3 to 6 GB, so
+the first launch offers to download one, or to use a remote model instead. It runs from the unpacked folder too.
+
+## Develop
+
 ```sh
 export DEEPSEEK_API_KEY=...                                 # read from the environment, never stored
-cargo run --release -p boardcast-ui -- app <root> --deepseek
-cargo run --release -p boardcast-ui -- app <root>           # local Qwen 4B
-cargo run --release -p boardcast-ui -- app <root> --case login-flow --deepseek
-cargo run --release -p boardcast-ui -- app <root> --demo bs-mixed --llm http://127.0.0.1:1
-cargo run --release -p boardcast-ui -- app <root> --synthetic 5000 --zoom-test --llm http://127.0.0.1:1
+cargo run --release -p boardcast-ui                         # the model chosen in Settings
+cargo run --release -p boardcast-ui -- --deepseek
+cargo run --release -p boardcast-ui -- --root . --case login-flow --deepseek
+cargo run --release -p boardcast-ui -- --root . --demo bs-mixed --llm http://127.0.0.1:1
+cargo run --release -p boardcast-ui -- --synthetic 5000 --zoom-test --llm http://127.0.0.1:1
+cargo run --release -p boardcast-ui -- --self-check         # what was found, and which graphics devices
 cargo run --release -p boardcast-tools -- check <root> --all-demos --tidy
 cargo run --release -p boardcast-tools -- agent-eval <root> out.json --deepseek --only-dev --workers 6 --rules-only
-cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings
+cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models
 ```
 
 Meetings are shared with the older app's data directory, and `BOARDCAST_DATA` and `BOARDCAST_CONFIG` point elsewhere for
@@ -33,8 +48,7 @@ cargo run --release -p boardcast-tools -- meetings-check /tmp/copy
 node crates/meetings/fixtures/verify-with-typescript.mjs . /tmp/copy
 ```
 
-`<root>` is a boardcast checkout with `public/hanzi` generated, and models come from the Tauri app's data directory;
-both are bundled in a later milestone. Regenerate the answer key and `crates/agent/prompts.json` with
+A checkout runs with the older app's resources in `src-tauri/` and `public/hanzi`. Regenerate the answer key and `crates/agent/prompts.json` with
 `node crates/board/fixtures/make-goldens.mjs <root> crates/board/fixtures/goldens.json`.
 
 Measured on Linux with niri at 100 Hz, on Intel Iris Xe and an RTX 3060, each forced with `VK_DRIVER_FILES`.
@@ -97,8 +111,8 @@ The checker's auto-repair fired on real model output once, on DeepSeek's `group-
 
 ## Not validated
 
-Real clicks on the mark toolbar, the undo buttons and shortcuts, the library and settings panels (the logic behind them
-has unit tests), Mac and Windows, comparison with the Tauri app, icons, the pointing highlight, pencil drafts, speaker
+Real clicks on the mark toolbar, the undo buttons and shortcuts, the library and settings panels, and the download
+button (the logic behind them has unit tests), a machine without this one's libraries, Mac and Windows, comparison with the Tauri app, icons, the pointing highlight, pencil drafts, speaker
 identification, imports and exports, renaming and deleting meetings, and auto-tidy in a live meeting (the repair itself
 has tests).
 
@@ -106,7 +120,8 @@ has tests).
 
 1. **Done:** crates, board, marks by voice and by hand, zoom, layout check, local and DeepSeek models.
 2. **Done:** save and reopen in the existing format, undo, a model and key setting.
-3. **Ship it:** bundle models, glyphs and llama-server; packages and updates on Linux, then Mac and Windows.
+3. **Installable on Linux, done:** a package with its resources, model downloads, and automatic graphics selection.
+   Still to do: in-app updates, then Mac and Windows.
 4. **Migrate the rest once the core is stable:** summary and to-dos, replay, PDF and image import, all export
    formats, the web demo and website, speaker identification, and Apple speech. Only then retire `src/` and
    `src-tauri/`.

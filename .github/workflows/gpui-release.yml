@@ -1,0 +1,76 @@
+name: Release GPUI app
+
+# Publishes the Linux package to the rolling `gpui-latest` pre-release, which the GPUI app's updater reads.
+# It is separate from the older app's release workflow and never touches its `latest.json`.
+# Run by hand after raising the workspace version.
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: What changed, shown in the update prompt
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NOTES: ${{ inputs.notes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libx11-xcb-dev libxcb1-dev libvulkan-dev libasound2-dev libssl-dev libzstd-dev libfontconfig-dev libfreetype-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache voice models
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/voice
+          key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
+      - run: sh packaging/linux/package.sh
+      - name: Refuse a version that is not newer than the published one
+        run: |
+          version=$(cat target/package/boardcast-*-linux/VERSION)
+          if gh release download gpui-latest --pattern manifest.json --output published.json 2>/dev/null; then
+            target/release/boardcast-tools version-newer "$version" "$(node -p 'JSON.parse(require("fs").readFileSync("published.json")).version')"
+          fi
+      - name: Sign
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: pnpm tauri signer sign target/package/boardcast-*-linux.tar.gz
+      - name: Write the manifest
+        run: |
+          package=$(ls target/package/boardcast-*-linux.tar.gz)
+          node -e '
+            const fs = require("fs"), crypto = require("crypto"), path = require("path")
+            const file = process.argv[1], name = path.basename(file), bytes = fs.readFileSync(file)
+            fs.writeFileSync("manifest.json", JSON.stringify({
+              version: name.match(/^boardcast-(.+)-x86_64-linux\.tar\.gz$/)[1],
+              notes: process.env.NOTES,
+              platforms: { "x86_64-linux": {
+                url: `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/gpui-latest/${name}`,
+                size: bytes.length,
+                sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+                signature: fs.readFileSync(`${file}.sig`, "utf8").trim(),
+              } },
+            }, null, 1))
+          ' "$package"
+      - name: Publish
+        run: |
+          package=$(ls target/package/boardcast-*-linux.tar.gz)
+          gh release view gpui-latest >/dev/null 2>&1 || gh release create gpui-latest --prerelease --title "boardcast on GPUI" --notes "Rolling pre-release of the GPUI app."
+          # The manifest goes last, so it never points at a package that is not there yet.
+          gh release upload gpui-latest "$package" --clobber
+          gh release upload gpui-latest manifest.json --clobber

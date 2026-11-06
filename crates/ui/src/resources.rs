@@ -64,7 +64,7 @@ impl Resources {
         let ok = checks.iter().all(|(_, path)| path.exists());
         let gpus = boardcast_agent::list_gpus(&self.binaries);
         let report = json!({
-            "version": env!("CARGO_PKG_VERSION"),
+            "version": boardcast_update::VERSION,
             "installed": self.installed,
             "ok": ok,
             "checks": rows,

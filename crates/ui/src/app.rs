@@ -14,6 +14,7 @@ use crate::i18n::tr;
 use crate::pipeline::{Event, Pipeline, Script};
 use crate::resources;
 use boardcast_models::{Model, Outcome, Progress};
+use boardcast_update::Release;
 use crate::raster::Layer;
 use anyhow::{Context as _, Result};
 use gpui_kit::base::input::{Input, InputEvent, InputState};
@@ -581,6 +582,24 @@ enum Panel {
     Settings,
 }
 
+#[derive(Clone)]
+enum UpdateState {
+    Idle,
+    Checking,
+    UpToDate,
+    Available(Release),
+    Installing { release: Release, progress: Option<Progress> },
+    /// Installed; the next start runs it. Never restarted unasked, as a meeting may be under way.
+    ReadyToRestart(Release),
+    Failed(String),
+}
+
+enum UpdateEvent {
+    Checked(Result<Option<Release>, String>),
+    Progress(Progress),
+    Installed(Result<(), String>),
+}
+
 /// A model being downloaded.
 struct Download {
     id: &'static str,
@@ -627,6 +646,14 @@ struct Workbench {
     models: PathBuf,
     binaries: PathBuf,
     download: Option<Download>,
+    update: UpdateState,
+    silent_check: bool,
+    update_events: Option<Receiver<UpdateEvent>>,
+    /// The folder this copy is installed in; updates only apply to an installed copy.
+    prefix: Option<PathBuf>,
+    /// When to look for an update without being asked.
+    check_at: Option<Instant>,
+    data: PathBuf,
     /// The discrete graphics memory, which decides the recommended model.
     vram_mib: u64,
     /// Nothing can draw yet, so opening the app leads to choosing a model.
@@ -764,6 +791,7 @@ impl Workbench {
         }
         self.pump_probe(&mut changed);
         self.pump_download(&mut changed);
+        self.pump_update(&mut changed);
         changed |= self.autosave();
         if changed {
             cx.notify();
@@ -784,6 +812,108 @@ impl Workbench {
             Err(TryRecvError::Disconnected) => self.form.probing = None,
             Err(TryRecvError::Empty) => {}
         }
+    }
+
+    fn check_for_update(&mut self) {
+        if self.prefix.is_none() || self.update_events.is_some() {
+            return;
+        }
+        let (tx, rx) = channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(UpdateEvent::Checked(boardcast_update::check().map_err(|e| format!("{e:#}"))));
+        });
+        self.update_events = Some(rx);
+        self.update = UpdateState::Checking;
+    }
+
+    fn pump_update(&mut self, changed: &mut bool) {
+        if self.check_at.is_some_and(|at| Instant::now() >= at) {
+            self.check_at = None;
+            self.silent_check = true;
+            self.check_for_update();
+            *changed = true;
+        }
+        let Some(rx) = &self.update_events else { return };
+        let mut events = vec![];
+        let mut ended = false;
+        loop {
+            match rx.try_recv() {
+                Ok(event) => events.push(event),
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    ended = true;
+                    break;
+                }
+            }
+        }
+        for event in events {
+            *changed = true;
+            match event {
+                UpdateEvent::Checked(Ok(Some(release))) => self.update = UpdateState::Available(release),
+                UpdateEvent::Checked(Ok(None)) => self.update = UpdateState::UpToDate,
+                // A check nobody asked for stays quiet: being offline is not worth a message.
+                UpdateEvent::Checked(Err(_)) if self.silent_check => self.update = UpdateState::Idle,
+                UpdateEvent::Checked(Err(error)) => self.update = UpdateState::Failed(error),
+                UpdateEvent::Progress(p) => {
+                    if let UpdateState::Installing { progress, .. } = &mut self.update {
+                        *progress = Some(p);
+                    }
+                }
+                UpdateEvent::Installed(Ok(())) => {
+                    if let UpdateState::Installing { release, .. } = &self.update {
+                        self.update = UpdateState::ReadyToRestart(release.clone());
+                    }
+                }
+                UpdateEvent::Installed(Err(error)) => self.update = UpdateState::Failed(error),
+            }
+        }
+        if ended {
+            self.update_events = None;
+            self.silent_check = false;
+        }
+    }
+
+    /// Download and install in the background, so the meeting carries on meanwhile.
+    fn install_update(&mut self, cx: &mut Context<Self>) {
+        let (UpdateState::Available(release), Some(prefix)) = (self.update.clone(), self.prefix.clone()) else { return };
+        if self.update_events.is_some() {
+            return;
+        }
+        let dir = self.data.join("updates");
+        let (tx, rx) = channel();
+        let package = release.clone();
+        std::thread::spawn(move || {
+            let cancel = AtomicBool::new(false);
+            let progress = tx.clone();
+            let result = boardcast_update::fetch(&package, &dir, &cancel, &mut |p| {
+                let _ = progress.send(UpdateEvent::Progress(p));
+            })
+            .and_then(|archive| {
+                let archive = archive.context("the download was cancelled")?;
+                let installed = boardcast_update::install(&archive, &package, &prefix);
+                // Used or rejected, this package is finished with; a bad one must not be reused.
+                let _ = std::fs::remove_file(&archive);
+                installed
+            });
+            let _ = tx.send(UpdateEvent::Installed(result.map_err(|e| format!("{e:#}"))));
+        });
+        self.update_events = Some(rx);
+        self.update = UpdateState::Installing { release, progress: None };
+        cx.notify();
+    }
+
+    /// Start the new version, once the meeting is safely saved.
+    fn restart(&mut self, cx: &mut Context<Self>) {
+        let Some(prefix) = self.prefix.clone() else { return };
+        if !self.leave() {
+            cx.notify();
+            return;
+        }
+        match std::process::Command::new(prefix.join("bin/boardcast")).spawn() {
+            Ok(_) => cx.quit(),
+            Err(e) => self.update = UpdateState::Failed(format!("{}{e}", tr("Could not start the new version: ", "无法启动新版本："))),
+        }
+        cx.notify();
     }
 
     fn pump_download(&mut self, changed: &mut bool) {
@@ -1152,6 +1282,10 @@ fn button_id(id: (&'static str, usize), label: impl Into<gpui_kit::SharedString>
     div().id(id).px_2().py_1().rounded_md().cursor_pointer().text_sm().border_1().border_color(rgb(0xdd_dd_d8)).child(label.into())
 }
 
+fn case_or_measurement(turns: &[Utterance], wav: &Option<PathBuf>, demo: &Option<String>, synthetic: Option<usize>) -> bool {
+    !turns.is_empty() || wav.is_some() || demo.is_some() || synthetic.is_some()
+}
+
 fn local_time(ms: f64) -> String {
     use chrono::TimeZone;
     chrono::Local.timestamp_millis_opt(ms as i64).single().map_or(String::new(), |t| t.format("%Y-%m-%d %H:%M").to_string())
@@ -1458,6 +1592,19 @@ impl Render for Workbench {
                     .child(button("redo", tr("Redo", "重做")).when(!self.live.can_redo(), |b| b.opacity(0.4)).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
                     .child(button("tidy", tr("Tidy", "整理排版")).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
             })
+            .when_some(match &self.update {
+                UpdateState::Available(release) => Some(format!("{} {}", tr("Update to", "更新到"), release.version)),
+                UpdateState::ReadyToRestart(_) => Some(tr("Restart to update", "重启完成更新").to_string()),
+                _ => None,
+            }, |d, label| {
+                d.child(button("update-chip", label).bg(rgb(0x28_61_43)).text_color(rgb(0xff_ff_ff)).whitespace_nowrap().on_click(cx.listener(|this, _, _, cx| {
+                    if matches!(this.update, UpdateState::ReadyToRestart(_)) {
+                        this.restart(cx);
+                    } else {
+                        this.install_update(cx);
+                    }
+                })))
+            })
             .child(button("settings", tr("Settings", "设置")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))));
         let banner = self.notice.clone().or_else(|| match &self.save {
             SaveState::Failed(error) => Some(format!("{}{error}", tr("Your meeting is still open here, but it was not saved: ", "这场会还在这里，但没有保存成功："))),
@@ -1617,6 +1764,37 @@ impl Render for Workbench {
                 d.child(button("save-local", tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
             })
             .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
+            .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Updates", "更新")))
+            .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(format!("{} {}", tr("Version", "版本"), boardcast_update::VERSION)))
+            .child(match &self.update {
+                _ if self.prefix.is_none() => div().text_sm().child(tr("Updates apply to installed copies.", "只有安装版可以更新。")).into_any_element(),
+                UpdateState::Idle => button("check-update", tr("Check for updates", "检查更新")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
+                UpdateState::Checking => div().text_sm().child(tr("Checking…", "正在检查…")).into_any_element(),
+                UpdateState::UpToDate => div().flex().items_center().gap_2().child(div().text_sm().child(tr("Up to date.", "已是最新版本。"))).child(button("check-update", tr("Check again", "再次检查")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); }))).into_any_element(),
+                UpdateState::Available(release) => div().flex().flex_col().gap_2()
+                    .child(div().text_sm().child(format!("{} {} · {}", tr("New version", "新版本"), release.version, gigabytes(release.size))))
+                    .when(!release.notes.is_empty(), |d| d.child(div().text_xs().text_color(rgb(0x62_66_5c)).child(release.notes.clone())))
+                    .child(button("install-update", tr("Download and install", "下载并安装")).on_click(cx.listener(|this, _, _, cx| this.install_update(cx))))
+                    .into_any_element(),
+                UpdateState::Installing { release, progress } => {
+                    let text = progress.as_ref().map_or(tr("Starting…", "正在开始…").to_string(), |p| {
+                        if p.done >= p.total { tr("Verifying and installing…", "正在校验并安装…").to_string() } else { format!("{} / {}", gigabytes(p.done), gigabytes(p.total)) }
+                    });
+                    let fraction = progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
+                    div().flex().flex_col().gap_1()
+                        .child(div().text_xs().child(format!("{} {text}", release.version)))
+                        .child(div().h(px(6.)).w_full().rounded_sm().bg(rgb(0xe4_e4_df)).child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(0x28_61_43))))
+                        .into_any_element()
+                }
+                UpdateState::ReadyToRestart(release) => div().flex().flex_col().gap_2()
+                    .child(div().text_sm().child(format!("{} {}", release.version, tr("is installed. Your meeting keeps running until you restart.", "已安装。重启之前，当前会议不受影响。"))))
+                    .child(button("restart-update", tr("Save and restart", "保存并重启")).on_click(cx.listener(|this, _, _, cx| this.restart(cx))))
+                    .into_any_element(),
+                UpdateState::Failed(error) => div().flex().flex_col().gap_2()
+                    .child(div().text_sm().text_color(rgb(0xa3_28_26)).child(error.clone()))
+                    .child(button("check-update", tr("Try again", "重试")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })))
+                    .into_any_element(),
+            })
             .when(forced, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
         let side = div()
@@ -1700,6 +1878,11 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let data = default_dir()?;
     let models = data.join("models");
     let resources = resources::locate(&data);
+    let update_data = data.clone();
+    let prefix = boardcast_update::installed_prefix();
+    let scripted = case_or_measurement(&turns, &wav, &demo, synthetic);
+    // Looking for updates waits a moment, so it never competes with starting up.
+    let check_at = (prefix.is_some() && !scripted).then(|| Instant::now() + Duration::from_secs(8));
     let binaries = resources.binaries.clone();
     let settings = Settings::load();
     let forced_backend = deepseek || llm.is_some();
@@ -1834,6 +2017,12 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     models,
                     binaries,
                     download: None,
+                    update: UpdateState::Idle,
+                    silent_check: false,
+                    update_events: None,
+                    prefix,
+                    check_at,
+                    data: update_data,
                     vram_mib,
                     needs_model: false,
                     notice: None,

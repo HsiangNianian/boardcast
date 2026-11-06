@@ -134,8 +134,8 @@ has tests).
 1. **Done:** crates, board, marks by voice and by hand, zoom, layout check, local and DeepSeek models.
 2. **Done:** save and reopen in the existing format, undo, a model and key setting.
 3. **Installable on Linux, done:** a package with its resources, model downloads, and automatic graphics selection.
-   In-app updates are done too, though no release has been published through them yet. Mac and Windows are waiting
-   until they can be tested. iPad is the main target and Mac the second.
-4. **Migrate the rest once the core is stable:** summary and to-dos, replay, PDF and image import, all export
-   formats, the web demo and website, speaker identification, and Apple speech. Only then retire `src/` and
-   `src-tauri/`.
+   In-app updates are done too, and the `gpui-latest` prerelease has been installed through them. Mac and Windows
+   are waiting until they can be tested. iPad is the main target and Mac the second.
+4. **Migrate the rest once the core is stable:** summary and to-dos are done. Next come all export formats, replay,
+   PDF and image import, speaker identification, Apple speech, and the web demo and website. Only then retire `src/`
+   and `src-tauri/`.

@@ -180,7 +180,7 @@ impl Live {
     }
 
     pub fn has_content(&self) -> bool {
-        !self.lines.is_empty() || !self.graph.nodes.is_empty()
+        !self.lines.is_empty() || !self.graph.nodes.is_empty() || !self.summary().is_empty()
     }
 
     /// This meeting must not leave the machine, so it only uses the local model.
@@ -337,6 +337,46 @@ impl Live {
         Some(self.step_to(snap))
     }
 
+    /// Every board of the meeting, with the one on screen as it is now.
+    pub fn boards(&self) -> Vec<Graph> {
+        let Some(pages) = self.raw.get("pages").and_then(Value::as_array).filter(|p| !p.is_empty()) else {
+            return vec![self.graph.clone()];
+        };
+        let at = self.page();
+        pages.iter().enumerate().map(|(i, p)| if i == at { self.graph.clone() } else { serde_json::from_value(p["graph"].clone()).unwrap_or_default() }).collect()
+    }
+
+    pub fn summary(&self) -> &str {
+        self.raw.get("summary").and_then(Value::as_str).unwrap_or_default()
+    }
+
+    /// The fingerprint of what the summary was made from.
+    pub fn summary_source(&self) -> Option<&str> {
+        self.raw.get("summarySource").and_then(Value::as_str)
+    }
+
+    /// An empty summary is no summary: the file then has neither field, as the older app writes it.
+    pub fn set_summary(&mut self, text: &str, source: Option<&str>) {
+        if text.is_empty() {
+            self.raw.remove("summary");
+            self.raw.remove("summarySource");
+        } else {
+            self.raw.insert("summary".into(), json!(text));
+            match source {
+                Some(source) => self.raw.insert("summarySource".into(), json!(source)),
+                None => self.raw.remove("summarySource"),
+            };
+        }
+        self.touch();
+    }
+
+    /// Older meetings have a summary but no fingerprint, so opening one takes the meeting as it stands.
+    pub fn adopt_summary_source(&mut self, source: &str) {
+        if !self.summary().is_empty() && self.summary_source().is_none() {
+            self.raw.insert("summarySource".into(), json!(source));
+        }
+    }
+
     /// An unnamed meeting takes its title from the board: first topic, then first node, then first line.
     fn refresh_title(&mut self) {
         if self.raw.get("titled").and_then(Value::as_bool).unwrap_or(false) {
@@ -401,6 +441,50 @@ mod tests {
     fn loaded(value: Value, origin: Origin) -> Live {
         let Value::Object(raw) = value else { panic!("object") };
         Live::from_loaded(Loaded { raw, origin, revision: 0 })
+    }
+
+    #[test]
+    fn a_summary_is_written_and_removed_as_the_older_app_does() {
+        let mut live = Live::new();
+        assert!(!live.has_content());
+        let before = live.changes;
+        live.set_summary("### 结论\n- 好", Some("abc-1"));
+        assert!(live.has_content());
+        assert!(live.changes > before, "it needs saving");
+        let raw = live.snapshot();
+        assert_eq!(raw["summary"], "### 结论\n- 好");
+        assert_eq!(raw["summarySource"], "abc-1");
+        live.set_summary("", Some("abc-1"));
+        let raw = live.snapshot();
+        assert!(!raw.contains_key("summary") && !raw.contains_key("summarySource"));
+        assert_eq!(live.summary_source(), None);
+    }
+
+    #[test]
+    fn a_summary_without_a_fingerprint_takes_one_only_on_opening() {
+        let mut live = loaded(json!({ "id": "m", "summary": "旧摘要" }), Origin::Current);
+        let changes = live.changes;
+        live.adopt_summary_source("now-1");
+        assert_eq!(live.summary_source(), Some("now-1"));
+        assert_eq!(live.changes, changes, "opening a meeting is not a change");
+        live.adopt_summary_source("later-2");
+        assert_eq!(live.summary_source(), Some("now-1"));
+        let mut empty = Live::new();
+        empty.adopt_summary_source("now-1");
+        assert_eq!(empty.summary_source(), None);
+    }
+
+    #[test]
+    fn boards_cover_every_page_with_the_current_one_live() {
+        let one = with(&Graph::default(), "T 「一」");
+        let two = with(&Graph::default(), "T 「二」");
+        let mut live = loaded(json!({ "id": "m", "graph": one, "page": 0, "pages": [{ "graph": one }, { "graph": two }] }), Origin::Current);
+        assert_eq!(live.boards().len(), 2);
+        let changed = with(&one, "T 「三」");
+        live.change_board(changed.clone(), Value::Null);
+        assert_eq!(live.boards()[0].nodes, changed.nodes);
+        assert_eq!(live.boards()[1].nodes, two.nodes);
+        assert_eq!(Live::new().boards().len(), 1);
     }
 
     #[test]

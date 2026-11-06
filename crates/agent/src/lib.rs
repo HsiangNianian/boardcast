@@ -7,6 +7,7 @@
 //! Hints from the checker did not help on either model, so they stay opt-in.
 
 pub mod settings;
+pub mod summary;
 
 use anyhow::{anyhow, bail, Context, Result};
 use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, Graph, Utterance};
@@ -73,6 +74,37 @@ impl Provider {
         Guidance { rules: self.is_deepseek(), hint: false }
     }
 
+    /// An ordinary question with no grammar, as a summary needs.
+    pub fn chat(&self, messages: &[Value], max_tokens: u32) -> Result<String> {
+        let body = match self {
+            Self::Remote { model, .. } => {
+                let mut body = json!({ "model": model, "messages": messages, "temperature": 0.2, "max_tokens": max_tokens, "stream": false });
+                if self.is_deepseek() {
+                    body["thinking"] = json!({ "type": "enabled" });
+                    body["reasoning_effort"] = json!("high");
+                }
+                body
+            }
+            Self::Local { .. } => json!({ "model": "local", "messages": messages, "temperature": 0.2, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": false } }),
+            #[cfg(test)]
+            Self::Scripted(reply) => {
+                let said = messages.last().and_then(|m| m["content"].as_str()).unwrap_or_default().to_string();
+                return reply(&said);
+            }
+        };
+        let reply = self.send(&self.endpoint(), &body)?;
+        Ok(strip_thinking(reply["choices"][0]["message"]["content"].as_str().unwrap_or("")).to_string())
+    }
+
+    fn endpoint(&self) -> String {
+        match self {
+            Self::Remote { base_url, .. } => chat_url(base_url),
+            Self::Local { base } => format!("{base}/v1/chat/completions"),
+            #[cfg(test)]
+            Self::Scripted(_) => String::new(),
+        }
+    }
+
     fn call(&self, messages: Vec<Value>, graph: &Graph, english: bool) -> Result<Value> {
         let (url, body) = match self {
             Self::Remote { base_url, model, .. } => {
@@ -93,9 +125,13 @@ impl Provider {
                 return Ok(json!({ "choices": [{ "message": { "content": reply(&said)? } }] }));
             }
         };
+        self.send(&url, &body)
+    }
+
+    fn send(&self, url: &str, body: &Value) -> Result<Value> {
         let mut last = anyhow!("no attempt made");
         for attempt in 0..ATTEMPTS {
-            let mut call = http().post(&url).timeout(Duration::from_secs(300));
+            let mut call = http().post(url).timeout(Duration::from_secs(300));
             if let Self::Remote { key, .. } = self {
                 call = call.set("Authorization", &format!("Bearer {key}"));
             }
@@ -314,6 +350,8 @@ pub struct Session {
     backend: Arc<Mutex<Backend>>,
     guidance: Arc<Mutex<Option<Guidance>>>,
     meeting: Arc<AtomicU64>,
+    /// Where the local model is answering, once it has started.
+    local_base: Arc<Mutex<Option<String>>>,
 }
 
 impl Session {
@@ -325,9 +363,11 @@ impl Session {
             backend: Arc::new(Mutex::new(backend)),
             guidance: Arc::new(Mutex::new(guidance)),
             meeting: Arc::new(AtomicU64::new(0)),
+            local_base: Arc::new(Mutex::new(None)),
         };
         let (graph, history, hint, backend, guidance, meeting) =
             (session.graph.clone(), session.history.clone(), session.hint.clone(), session.backend.clone(), session.guidance.clone(), session.meeting.clone());
+        let local_base = session.local_base.clone();
         thread::spawn(move || {
             // Held for the thread's lifetime: the child's death signal is tied to this thread.
             let mut server: Option<(Child, String, PathBuf)> = None;
@@ -339,6 +379,7 @@ impl Session {
                     Backend::ManagedLocal(local) => {
                         // Another model was chosen: the running server cannot switch.
                         if server.as_ref().is_some_and(|(_, _, model)| model != &local.model) {
+                            *local_base.lock().expect("base lock") = None;
                             if let Some((mut child, _, _)) = server.take() {
                                 let _ = child.kill();
                                 let _ = child.wait();
@@ -348,6 +389,7 @@ impl Session {
                             let _ = updates.send(Update::Loading);
                             let (child, base) = start_llama(&local)?;
                             let _ = updates.send(Update::Ready);
+                            *local_base.lock().expect("base lock") = Some(base.clone());
                             server = Some((child, base, local.model.clone()));
                         }
                         Ok(Provider::Local { base: server.as_ref().map(|(_, b, _)| b.clone()).expect("just set") })
@@ -460,6 +502,19 @@ impl Session {
 
     pub fn set_hint(&self, hint: String) {
         *self.hint.lock().expect("hint lock") = Some(hint);
+    }
+
+    /// The model to ask for a summary: the one drawing the board, without starting anything new.
+    pub fn provider(&self) -> Result<Provider> {
+        let choice = self.backend.lock().expect("backend lock").clone();
+        match choice {
+            Backend::Ready(provider) => Ok(provider),
+            Backend::NoModel => bail!("{NO_MODEL}"),
+            Backend::ManagedLocal(_) => {
+                let base = self.local_base.lock().expect("base lock").clone();
+                base.map(|base| Provider::Local { base }).context("The local model is still loading. Try again in a moment.")
+            }
+        }
     }
 
     pub fn set_backend(&self, backend: Backend) {

@@ -17,7 +17,8 @@ use boardcast_models::{Model, Outcome, Progress};
 use boardcast_update::Release;
 use crate::raster::Layer;
 use anyhow::{Context as _, Result};
-use gpui_kit::base::input::{Input, InputEvent, InputState};
+use boardcast_agent::summary::{self, Block, Line, Step};
+use gpui_kit::base::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::{
     canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, Entity, FillOptions, FocusHandle,
     Hsla, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PathBuilder, PathStyle, Pixels, Point, Render, RenderImage,
@@ -579,7 +580,52 @@ enum SaveState {
 enum Panel {
     Transcript,
     Library,
+    Summary,
     Settings,
+}
+
+/// A summary being written on another thread.
+struct SummaryJob {
+    cancel: Arc<AtomicBool>,
+    updates: Receiver<SummaryUpdate>,
+    /// What it is being made from, stored with the result.
+    source: String,
+    /// Text already there, or edited meanwhile, is never overwritten without asking.
+    had_text: bool,
+    edits: u64,
+    step: Option<(usize, usize)>,
+}
+
+enum SummaryUpdate {
+    Step(usize, usize),
+    Finished(Result<String, String>),
+}
+
+struct SummaryPanel {
+    editor: Entity<TextareaState>,
+    editing: bool,
+    job: Option<SummaryJob>,
+    /// A generated draft waiting for the choice to replace or keep. Text, then its source.
+    draft: Option<(String, String)>,
+    /// What "undo" brings back after deleting.
+    cleared: Option<(String, Option<String>)>,
+    edits: u64,
+    note: Option<String>,
+    /// The fingerprint of the meeting now: meeting, its change count, then the value.
+    current: Option<(String, u64, String)>,
+}
+
+impl SummaryPanel {
+    fn reset(&mut self) {
+        if let Some(job) = self.job.take() {
+            job.cancel.store(true, Ordering::Relaxed);
+        }
+        self.editing = false;
+        self.draft = None;
+        self.cleared = None;
+        self.note = None;
+        self.edits += 1;
+    }
 }
 
 #[derive(Clone)]
@@ -641,6 +687,9 @@ struct Workbench {
     panel: Panel,
     library: Vec<Info>,
     form: SettingsForm,
+    summary: SummaryPanel,
+    /// Write the summary once the script has finished, for testing end to end.
+    summarize_when_done: bool,
     /// A model given on the command line outranks the settings.
     forced_backend: bool,
     models: PathBuf,
@@ -683,6 +732,10 @@ fn gigabytes(bytes: u64) -> String {
 
 fn spoken(lines: &[Utterance]) -> Vec<(Option<String>, String)> {
     lines.iter().map(|l| (l.speaker.clone(), l.text.clone())).collect()
+}
+
+fn fingerprint_of(live: &Live) -> String {
+    summary::fingerprint(&live.boards(), &Line::spoken(&live.lines))
 }
 
 fn line_note(line: &serde_json::Value) -> String {
@@ -777,25 +830,193 @@ impl Workbench {
                 }
                 Event::Done => {
                     println!("{{\"done\":true,\"rss_mb\":{}}}", rss_mb());
-                    if self.exit_when_done {
-                        cx.spawn(async move |this, cx| {
-                            cx.background_executor().timer(Duration::from_secs(6)).await;
-                            let saved = this.update(cx, |this, _| this.flush());
-                            println!("{{\"exit_save_ok\":{}}}", matches!(saved, Ok(Ok(()))));
-                            std::process::exit(0);
-                        })
-                        .detach();
+                    if self.summarize_when_done {
+                        self.panel = Panel::Summary;
+                        self.make_summary(cx);
+                    } else if self.exit_when_done {
+                        self.exit_soon(cx);
                     }
                 }
             }
         }
         self.pump_probe(&mut changed);
+        self.pump_summary(&mut changed, cx);
         self.pump_download(&mut changed);
         self.pump_update(&mut changed);
         changed |= self.autosave();
         if changed {
             cx.notify();
         }
+    }
+
+    /// Give the saves and the screen a moment, then leave. Only used by scripted runs.
+    fn exit_soon(&self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs(6)).await;
+            let saved = this.update(cx, |this, _| this.flush());
+            println!("{{\"exit_save_ok\":{}}}", matches!(saved, Ok(Ok(()))));
+            std::process::exit(0);
+        })
+        .detach();
+    }
+
+    fn pump_summary(&mut self, changed: &mut bool, cx: &mut Context<Self>) {
+        let Some(job) = &mut self.summary.job else { return };
+        let mut finished = None;
+        loop {
+            match job.updates.try_recv() {
+                Ok(SummaryUpdate::Step(done, total)) => {
+                    job.step = Some((done, total));
+                    *changed = true;
+                }
+                Ok(SummaryUpdate::Finished(result)) => {
+                    finished = Some(result);
+                    break;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    finished = Some(Err("the summary did not finish".to_string()));
+                    break;
+                }
+                Err(TryRecvError::Empty) => break,
+            }
+        }
+        let Some(result) = finished else { return };
+        let job = self.summary.job.take().expect("checked above");
+        *changed = true;
+        match result {
+            Ok(text) => {
+                println!("{{\"summary\":{}}}", serde_json::Value::from(text.clone()));
+                if job.had_text || !self.live.summary().trim().is_empty() || self.summary.edits != job.edits {
+                    self.summary.draft = Some((text, job.source));
+                } else {
+                    self.live.set_summary(&text, Some(&job.source));
+                    self.summary.cleared = None;
+                }
+            }
+            Err(error) => {
+                eprintln!("summary failed: {error}");
+                self.summary.note = Some(format!("{}{error}", tr("Could not write the summary: ", "生成摘要失败：")));
+            }
+        }
+        if self.summarize_when_done && self.exit_when_done {
+            self.exit_soon(cx);
+        }
+    }
+
+    fn make_summary(&mut self, cx: &mut Context<Self>) {
+        if !self.editable() || self.summary.job.is_some() || self.summary.draft.is_some() {
+            return;
+        }
+        let provider = match self.session().provider() {
+            Ok(provider) => provider,
+            Err(error) => {
+                self.summary.note = Some(format!("{}{error:#}", tr("Could not write the summary: ", "生成摘要失败：")));
+                cx.notify();
+                return;
+            }
+        };
+        let boards = self.live.boards();
+        let lines = Line::spoken(&self.live.lines);
+        let source = summary::fingerprint(&boards, &lines);
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (tx, updates) = channel();
+        let stop = cancel.clone();
+        std::thread::spawn(move || {
+            let result = summary::summarize(&provider, &boards, &lines, &stop, &mut |Step::Writing { done, total }| {
+                let _ = tx.send(SummaryUpdate::Step(done, total));
+            });
+            let _ = tx.send(SummaryUpdate::Finished(result.map_err(|e| format!("{e:#}"))));
+        });
+        self.summary.note = None;
+        self.summary.job = Some(SummaryJob { cancel, updates, source, had_text: !self.live.summary().trim().is_empty(), edits: self.summary.edits, step: None });
+        cx.notify();
+    }
+
+    /// A request already sent cannot be recalled, so whatever it returns is simply dropped with the job.
+    fn stop_summary(&mut self, cx: &mut Context<Self>) {
+        if let Some(job) = self.summary.job.take() {
+            job.cancel.store(true, Ordering::Relaxed);
+        }
+        cx.notify();
+    }
+
+    fn edit_summary(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.summary.editing {
+            self.summary.editing = false;
+            window.focus(&self.focus, cx);
+        } else if self.editable() {
+            let text = self.live.summary().to_string();
+            self.summary.editor.update(cx, |state, cx| state.set_value(text, window, cx));
+            self.summary.editing = true;
+            self.summary.editor.update(cx, |state, cx| state.focus(window, cx));
+        }
+        cx.notify();
+    }
+
+    /// Typing goes straight into the meeting, so nothing typed can be lost by leaving the panel.
+    fn summary_typed(&mut self, cx: &mut Context<Self>) {
+        if !self.summary.editing || !self.editable() {
+            return;
+        }
+        let text = self.summary.editor.read(cx).value().to_string();
+        if text != self.live.summary() {
+            let source = self.live.summary_source().map(str::to_string).unwrap_or_else(|| fingerprint_of(&self.live));
+            self.live.set_summary(&text, Some(&source));
+            self.summary.edits += 1;
+            self.summary.cleared = None;
+            cx.notify();
+        }
+    }
+
+    fn tick_todo(&mut self, line: usize, cx: &mut Context<Self>) {
+        if !self.editable() {
+            return;
+        }
+        let text = summary::toggle_todo(self.live.summary(), line);
+        let source = self.live.summary_source().map(str::to_string);
+        self.live.set_summary(&text, source.as_deref());
+        self.summary.edits += 1;
+        cx.notify();
+    }
+
+    fn clear_summary(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.editable() {
+            return;
+        }
+        self.summary.cleared = Some((self.live.summary().to_string(), self.live.summary_source().map(str::to_string)));
+        self.summary.editing = false;
+        self.summary.edits += 1;
+        self.live.set_summary("", None);
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    fn undo_clear(&mut self, cx: &mut Context<Self>) {
+        if let Some((text, source)) = self.summary.cleared.take() {
+            if self.editable() {
+                self.live.set_summary(&text, source.as_deref());
+                self.summary.edits += 1;
+            }
+        }
+        cx.notify();
+    }
+
+    fn use_draft(&mut self, cx: &mut Context<Self>) {
+        if let Some((text, source)) = self.summary.draft.take() {
+            if self.editable() {
+                self.live.set_summary(&text, Some(&source));
+                self.summary.edits += 1;
+                self.summary.editing = false;
+                self.summary.cleared = None;
+            }
+        }
+        cx.notify();
+    }
+
+    fn copy_summary(&mut self, text: String, what: &str, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text));
+        self.summary.note = Some(what.to_string());
+        cx.notify();
     }
 
     fn pump_probe(&mut self, changed: &mut bool) {
@@ -1078,7 +1299,9 @@ impl Workbench {
         let history: Vec<Utterance> = live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(live.graph.clone(), history);
         self.ink.borrow_mut().open(&live.graph, &live.memory);
+        self.summary.reset();
         self.live = live;
+        self.live.adopt_summary_source(&fingerprint_of(&self.live));
         self.saved_changes = self.live.changes;
         self.seen_changes = self.live.changes;
         self.save = SaveState::Idle;
@@ -1271,6 +1494,131 @@ impl Workbench {
             return false;
         }
         true
+    }
+}
+
+/// A summary as it reads on screen. To-dos can be ticked when `tick` is given, with a target big
+/// enough for a finger.
+fn summary_blocks(text: &str, group: &'static str, tick: Option<&Context<Workbench>>) -> Vec<gpui_kit::AnyElement> {
+    summary::blocks(text)
+        .into_iter()
+        .enumerate()
+        .map(|(i, block)| match block {
+            Block::Heading(text) => div().mt_2().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(text).into_any_element(),
+            Block::Paragraph(text) => div().text_sm().child(text).into_any_element(),
+            Block::Bullet(text) => div().flex().gap_2().text_sm().child(div().flex_shrink_0().child("•")).child(div().flex_1().min_w_0().child(text)).into_any_element(),
+            Block::Todo { done, text, line } => {
+                let tick_box = div().flex_shrink_0().mt(px(3.)).size(px(16.)).rounded_sm().border_1().border_color(rgb(0x85_8a_80)).flex().items_center().justify_center().text_xs().text_color(rgb(0xff_ff_ff)).when(done, |d| d.bg(rgb(0x28_61_43)).border_color(rgb(0x28_61_43)).child("✓"));
+                let row = div().id((group, i)).flex().items_start().gap_2().py_1().min_h(px(32.)).text_sm().child(tick_box).child(div().flex_1().min_w_0().when(done, |d| d.text_color(rgb(0x85_8a_80)).line_through()).child(text));
+                match tick {
+                    Some(cx) => row.cursor_pointer().on_click(cx.listener(move |this, _, _, cx| this.tick_todo(line, cx))).into_any_element(),
+                    None => row.into_any_element(),
+                }
+            }
+        })
+        .collect()
+}
+
+impl Workbench {
+    fn summary_panel(&mut self, editable: bool, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
+        // Reading the whole meeting is only worth doing once per change.
+        let (id, changes) = (self.live.id().to_string(), self.live.changes);
+        if !self.summary.current.as_ref().is_some_and(|(i, c, _)| *i == id && *c == changes) {
+            self.summary.current = Some((id, changes, fingerprint_of(&self.live)));
+        }
+        let current = self.summary.current.as_ref().map_or("", |(_, _, value)| value.as_str());
+        let text = self.live.summary().to_string();
+        // A view-only meeting cannot change, and its board may not have been read in full.
+        let stale = editable && !text.is_empty() && self.live.summary_source().is_some_and(|source| source != current);
+        let draft_stale = self.summary.draft.as_ref().is_some_and(|(_, source)| source != current);
+        let busy = self.summary.job.as_ref().map(|job| match job.step {
+            Some((done, total)) if total > 1 && done + 1 < total => format!("{} {}/{}…", tr("Writing part", "分段整理"), done + 1, total - 1),
+            Some((_, total)) if total > 1 => tr("Putting it together…", "合成摘要…").to_string(),
+            _ => tr("Writing…", "整理中…").to_string(),
+        });
+        let can_make = editable && self.summary.draft.is_none() && (self.live.has_content() || !text.is_empty());
+        let destination = match self.session().provider() {
+            Ok(Provider::Remote { base_url, model, .. }) => {
+                let host = base_url.split("//").last().unwrap_or(&base_url).split('/').next().unwrap_or_default().to_string();
+                Some(format!("{} {model}{} {host}", tr("Uses the cloud model", "用云端的"), tr("; the whole transcript is sent to", "生成：整场会议记录会发到")))
+            }
+            _ => None,
+        };
+        let notice = |t: &'static str| div().text_xs().text_color(rgb(0x80_53_00)).child(t);
+        let actions = div()
+            .flex()
+            .flex_wrap()
+            .gap_1()
+            .when(editable, |d| match &busy {
+                Some(_) => d.child(button("stop-summary", tr("Stop", "停止生成")).on_click(cx.listener(|this, _, _, cx| this.stop_summary(cx)))),
+                None => d.child(
+                    button("make-summary", if text.is_empty() { tr("Write summary", "生成摘要") } else { tr("Write again", "重新生成") })
+                        .when(!can_make, |b| b.opacity(0.4))
+                        .when(can_make, |b| b.on_click(cx.listener(|this, _, _, cx| this.make_summary(cx)))),
+                ),
+            })
+            .when(!text.is_empty(), |d| {
+                let (markdown, plain) = (text.clone(), summary::plain_text(&text));
+                d.child(button("copy-markdown", tr("Copy source", "复制原文")).on_click(cx.listener(move |this, _, _, cx| this.copy_summary(markdown.clone(), tr("Copied the Markdown source", "已复制 Markdown 原文"), cx))))
+                    .child(button("copy-plain", tr("Text only", "仅文本")).on_click(cx.listener(move |this, _, _, cx| this.copy_summary(plain.clone(), tr("Copied as plain text", "已复制纯文本"), cx))))
+                    .when(editable, |d| {
+                        d.child(button("edit-summary", if self.summary.editing { tr("Done editing", "改完了") } else { tr("Edit", "修改") }).on_click(cx.listener(|this, _, window, cx| this.edit_summary(window, cx))))
+                            .child(button("clear-summary", tr("Delete", "删除")).on_click(cx.listener(|this, _, window, cx| this.clear_summary(window, cx))))
+                    })
+            });
+        let tick = editable.then_some(&*cx);
+        let reading = (!self.summary.editing).then(|| summary_blocks(&text, "todo", tick)).unwrap_or_default();
+        let proposed = self.summary.draft.as_ref().map(|(draft, _)| summary_blocks(draft, "draft-todo", None));
+        div()
+            .id("summary-panel")
+            .flex_1()
+            .overflow_y_scroll()
+            .p_3()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(actions)
+            .when_some(busy.clone(), |d, status| d.child(div().text_xs().text_color(rgb(0x62_66_5c)).child(status)))
+            .when_some(destination.filter(|_| editable && busy.is_none() && self.summary.draft.is_none()), |d, text| d.child(div().text_xs().text_color(rgb(0x85_8a_80)).child(text)))
+            .when_some(self.summary.note.clone(), |d, note| d.child(div().text_xs().text_color(rgb(0x62_66_5c)).child(note)))
+            .when(stale, |d| d.child(notice(tr("The meeting has new content. Write the summary again to include it.", "会议有新内容，可重新生成摘要。"))))
+            .when(self.summary.cleared.is_some(), |d| {
+                d.child(div().flex().items_center().gap_2().child(div().text_xs().child(tr("Summary deleted.", "摘要已删除。"))).child(button("undo-clear", tr("Undo", "撤销删除")).on_click(cx.listener(|this, _, _, cx| this.undo_clear(cx)))))
+            })
+            .when(busy.is_some() && !text.is_empty(), |d| d.child(notice(tr("Your current text stays here and can be edited while the new one is written.", "正在生成新摘要，当前草稿仍可查看和编辑。"))))
+            .when(text.is_empty() && !self.summary.editing && busy.is_none() && self.summary.draft.is_none() && self.summary.cleared.is_none(), |d| {
+                d.child(div().text_sm().text_color(rgb(0x85_8a_80)).child(tr("Writes an editable draft from what was said: conclusions, decisions, to-dos and open questions.", "根据原话生成一份可编辑的摘要草稿：结论、决定、待办、待讨论。")))
+            })
+            .when(self.summary.editing, |d| d.child(div().h(px(360.)).flex_shrink_0().rounded_md().border_1().border_color(rgb(0xdd_dd_d8)).p_2().text_sm().child(Textarea::new(&self.summary.editor))))
+            .children(reading)
+            .when_some(proposed, |d, proposed| {
+                d.child(
+                    div()
+                        .mt_2()
+                        .p_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(rgb(0x28_61_43))
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("New generated draft", "新生成的草稿")))
+                        .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(tr("Review this draft, then replace the current summary or keep your text.", "检查新草稿后，选择替换当前摘要或保留当前内容。")))
+                        .when(draft_stale, |d| d.child(notice(tr("The meeting has moved on since this draft was written.", "这份草稿生成之后，会议又有了新内容。"))))
+                        .children(proposed)
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap_1()
+                                .child(button("use-draft", tr("Replace current", "替换当前摘要")).on_click(cx.listener(|this, _, _, cx| this.use_draft(cx))))
+                                .child(button("keep-current", tr("Keep current", "保留当前摘要")).on_click(cx.listener(|this, _, _, cx| {
+                                    this.summary.draft = None;
+                                    cx.notify();
+                                }))),
+                        ),
+                )
+            })
     }
 }
 
@@ -1560,6 +1908,7 @@ impl Render for Workbench {
             .child(div().text_xs().text_color(rgb(if matches!(self.save, SaveState::Failed(_)) { 0xa3_28_26 } else { 0x62_66_5c })).whitespace_nowrap().child(save_label))
             .child(button("library", tr("Meetings", "会议")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
             .child(button("new", tr("New", "新建")).when(self.store.is_some(), |d| d.on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
+            .child(button("summary", tr("Summary", "摘要")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
             .when(editable, |d| {
                 d.child(
                     div()
@@ -1797,6 +2146,7 @@ impl Render for Workbench {
             })
             .when(forced, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
+        let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
         let side = div()
             .w(px(320.))
             .h_full()
@@ -1809,6 +2159,7 @@ impl Render for Workbench {
                 d.child(transcript).when(editable, |d| d.child(div().p_3().border_t_1().border_color(rgb(0xdd_dd_d8)).child(Input::new(&self.input))))
             })
             .when(self.panel == Panel::Library, |d| d.child(library))
+            .when_some(summary_panel, |d, panel| d.child(panel))
             .when(self.panel == Panel::Settings, |d| d.child(settings));
         div()
             .id("workbench")
@@ -1851,6 +2202,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let mut skill = false;
     let mut deepseek = false;
     let mut open: Option<String> = None;
+    let mut summarize_when_done = false;
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--case" => case = args.next(),
@@ -1864,6 +2216,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--skill" => skill = true,
             "--deepseek" => deepseek = true,
             "--open" => open = args.next(),
+            "--summarize" => summarize_when_done = true,
             "--root" => root = args.next().map(PathBuf::from),
             other => anyhow::bail!("unknown flag {other}"),
         }
@@ -1949,6 +2302,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         if start_board.is_none() {
             pipeline.session().open(live.graph.clone(), live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect());
             state.open(&live.graph, &live.memory);
+            live.adopt_summary_source(&fingerprint_of(&live));
         }
         if let Some(graph) = &start_board {
             let started = Instant::now();
@@ -1976,10 +2330,17 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
             let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
             let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
+            let editor = cx.new(|cx| TextareaState::new(window, cx));
             let view = cx.new(|cx| {
                 cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {
                         this.submit(window, cx);
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&editor, window, |this: &mut Workbench, _, event, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.summary_typed(cx);
                     }
                 })
                 .detach();
@@ -2013,6 +2374,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     panel: Panel::Transcript,
                     library: vec![],
                     form: SettingsForm { base_url, model, key, remote, saved: settings, note: None, probing: None },
+                    summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
+                    summarize_when_done,
                     forced_backend,
                     models,
                     binaries,

@@ -1,6 +1,7 @@
 //! Writing a meeting out as a file. Everything is taken from a frozen copy, so carrying on with the
 //! meeting while a file is written cannot change it.
 
+pub mod animate;
 pub mod ink;
 pub mod markdown;
 pub mod pdf;
@@ -8,6 +9,7 @@ pub mod pdf;
 use anyhow::{bail, Context, Result};
 use boardcast_board::glyphs::Glyphs;
 use boardcast_board::graph::Graph;
+use boardcast_board::steps::ink_only;
 use boardcast_meetings::{Live, ViewOnly};
 use chrono::TimeZone;
 use serde_json::Value;
@@ -18,6 +20,7 @@ pub enum Kind {
     Markdown,
     Png,
     Svg,
+    AnimatedSvg,
     Pdf,
 }
 
@@ -27,16 +30,20 @@ impl Kind {
             Self::Markdown => "md",
             Self::Png => "png",
             Self::Svg => "svg",
+            Self::AnimatedSvg => "anim.svg",
             Self::Pdf => "pdf",
         }
     }
 
     /// Markdown and PDF cover the whole meeting; a picture is of the board on screen.
     pub fn needs_a_drawn_board(self) -> bool {
-        matches!(self, Self::Png | Self::Svg)
+        matches!(self, Self::Png | Self::Svg | Self::AnimatedSvg)
     }
 
     pub fn from_path(path: &Path) -> Option<Self> {
+        if path.to_str()?.to_ascii_lowercase().ends_with(".anim.svg") {
+            return Some(Self::AnimatedSvg);
+        }
         match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
             "md" => Some(Self::Markdown),
             "png" => Some(Self::Png),
@@ -93,6 +100,10 @@ pub struct Frozen {
     pub doc: Doc,
     pages: Vec<ink::Composed>,
     current: usize,
+    /// The record of the board on screen, and that board laid out without drafts, for the animation.
+    steps: Vec<Value>,
+    settled: ink::Composed,
+    settled_nodes: Vec<Value>,
 }
 
 /// A finished file, and whether anything had to be left out of it.
@@ -110,6 +121,9 @@ pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs) -> Frozen {
     let boards = live.board_pages();
     let began = live.created_at().and_then(|ms| chrono::Local.timestamp_millis_opt(ms as i64).single()).unwrap_or_else(chrono::Local::now);
     let pages = boards.iter().map(|(graph, memory)| ink::compose_board(graph, memory, glyphs)).collect();
+    let settled_graph = ink_only(&live.graph);
+    let settled = ink::compose_board(&settled_graph, &live.memory, glyphs);
+    let settled_nodes = settled_graph.nodes.iter().filter_map(|n| serde_json::to_value(n).ok()).collect();
     Frozen {
         doc: Doc {
             title: live.title().to_string(),
@@ -123,18 +137,27 @@ pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs) -> Frozen {
         },
         pages,
         current: live.page(),
+        steps: live.steps.clone(),
+        settled,
+        settled_nodes,
     }
 }
 
 impl Frozen {
     pub fn render(self, kind: Kind) -> Result<Output> {
-        let Self { doc, pages, current } = self;
+        let Self { doc, pages, current, steps, settled, settled_nodes } = self;
         let text_only = |bytes: Vec<u8>| Output { bytes, text_left_out: false };
         match kind {
             Kind::Markdown => Ok(text_only(markdown::markdown(&doc, current).into_bytes())),
             Kind::Pdf => {
                 let drawn: Vec<ink::Drawn> = pages.into_iter().map(ink::Composed::draw).collect();
                 pdf::pdf(&doc, &drawn)
+            }
+            Kind::AnimatedSvg => {
+                if settled.pieces.is_empty() {
+                    bail!("The board is empty.");
+                }
+                Ok(text_only(animate::animated_svg(&settled, &settled_nodes, &steps, &doc.title).into_bytes()))
             }
             Kind::Png | Kind::Svg => {
                 let page = pages.into_iter().nth(current).context("no board to export")?;
@@ -185,6 +208,9 @@ mod tests {
         assert_eq!(with_extension("/a/notes".into(), Kind::Pdf), PathBuf::from("/a/notes.pdf"));
         assert_eq!(with_extension("/a/notes.PDF".into(), Kind::Pdf), PathBuf::from("/a/notes.PDF"));
         assert_eq!(with_extension("/a/v1.2".into(), Kind::Svg), PathBuf::from("/a/v1.2.svg"));
+        assert_eq!(with_extension("/a/notes".into(), Kind::AnimatedSvg), PathBuf::from("/a/notes.anim.svg"));
+        assert_eq!(with_extension("/a/notes.anim.svg".into(), Kind::AnimatedSvg), PathBuf::from("/a/notes.anim.svg"));
+        assert_eq!(Kind::from_path(Path::new("/a/notes.svg")), Some(Kind::Svg));
     }
 
     #[test]

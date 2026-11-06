@@ -211,6 +211,28 @@ impl Live {
         self.raw.insert("page".into(), json!(page));
     }
 
+    /// A new board from step `at` of this one, placed as `memory` says. The original stays as it was.
+    pub fn fork_page(&mut self, at: usize, memory: Value, note: &str) {
+        self.store_page();
+        let at = at.min(self.steps.len());
+        if self.raw.get("pages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+            self.raw.insert("pages".into(), json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]));
+        }
+        let steps: Vec<Value> = self.steps[..at].to_vec();
+        let graph = replay(&steps);
+        let pages = self.raw.get_mut("pages").and_then(Value::as_array_mut).expect("made above");
+        pages.push(json!({ "graph": graph, "layout": memory, "steps": steps }));
+        let to = pages.len() - 1;
+        self.raw.insert("page".into(), json!(to));
+        self.recorded = graph.clone();
+        self.graph = graph;
+        self.memory = memory;
+        self.steps = steps;
+        self.undo = History::default();
+        self.add_note(note);
+        self.touch();
+    }
+
     /// The board on screen belongs in `pages` as well as the top level, as the older app keeps it.
     fn store_page(&mut self) {
         let page = self.page();
@@ -492,6 +514,33 @@ mod tests {
         let mut empty = Live::new();
         empty.adopt_summary_source("now-1");
         assert_eq!(empty.summary_source(), None);
+    }
+
+    #[test]
+    fn forking_keeps_the_original_and_starts_from_that_moment() {
+        let mut live = Live::new();
+        let one = with(&live.graph, "T 「一」");
+        live.change_board(one.clone(), json!({ "n": 1 }));
+        let two = with(&one, "T 「二」");
+        live.change_board(two.clone(), json!({ "n": 2 }));
+        assert_eq!(live.steps.len(), 2);
+        live.fork_page(1, json!({ "n": 9 }), "另起一板");
+        assert_eq!((live.pages(), live.page()), (2, 1));
+        assert_eq!(live.graph.nodes, one.nodes);
+        assert_eq!(live.memory, json!({ "n": 9 }));
+        assert_eq!(live.steps.len(), 1);
+        assert!(!live.can_undo());
+        assert_eq!(live.lines.last().unwrap()["manual"], true);
+        assert_eq!(live.lines.last().unwrap()["page"], 1);
+        let boards = live.board_pages();
+        assert_eq!(boards[0].0.nodes, two.nodes, "the original is untouched");
+        assert_eq!(boards[0].1, json!({ "n": 2 }));
+        let raw = live.snapshot();
+        assert_eq!(raw["pages"][0]["steps"].as_array().unwrap().len(), 2);
+        assert_eq!(replay(raw["steps"].as_array().unwrap()).nodes, one.nodes);
+        live.go_to_page(0);
+        assert_eq!(live.graph.nodes, two.nodes);
+        assert_eq!(live.steps.len(), 2);
     }
 
     #[test]

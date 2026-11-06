@@ -111,6 +111,108 @@ pub fn replay(steps: &[Value]) -> Graph {
     g
 }
 
+/// The board after the first `count` steps.
+pub fn replay_to(steps: &[Value], count: usize) -> Graph {
+    replay(&steps[..count.min(steps.len())])
+}
+
+/// `3:07`, or `1:02:45` for an hour or more.
+pub fn clock(ms: f64) -> String {
+    let s = (ms / 1000.0).round().max(0.0) as u64;
+    let (h, m) = (s / 3600, (s % 3600) / 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{:02}", s % 60)
+    } else {
+        format!("{m}:{:02}", s % 60)
+    }
+}
+
+pub const SPEEDS: [f64; 3] = [1.0, 2.0, 4.0];
+
+/// Where a replay has got to. It holds no board: the steps are passed in, as they belong to the meeting.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Player {
+    /// How many steps have been played; 0 is the empty board.
+    pub at: usize,
+    pub total: usize,
+    pub playing: bool,
+    pub speed: f64,
+}
+
+fn time_of(step: &Value) -> f64 {
+    step["t"].as_f64().unwrap_or(0.0)
+}
+
+impl Player {
+    pub fn new(total: usize) -> Self {
+        Self { at: 0, total, playing: true, speed: SPEEDS[0] }
+    }
+
+    /// Move to a step, stopping at the end. Says how far it moved, or `None` if it did not.
+    pub fn seek(&mut self, at: usize) -> Option<isize> {
+        let at = at.min(self.total);
+        if at == self.at {
+            return None;
+        }
+        let moved = at as isize - self.at as isize;
+        self.at = at;
+        self.playing = self.playing && at < self.total;
+        Some(moved)
+    }
+
+    /// Play or pause. Playing from the end starts over, and then it returns true.
+    pub fn toggle(&mut self) -> bool {
+        if self.playing {
+            self.playing = false;
+            return false;
+        }
+        self.playing = true;
+        if self.at >= self.total {
+            self.at = 0;
+            return true;
+        }
+        false
+    }
+
+    pub fn next_speed(&mut self) {
+        let i = SPEEDS.iter().position(|s| *s == self.speed).unwrap_or(0);
+        self.speed = SPEEDS[(i + 1) % SPEEDS.len()];
+    }
+
+    /// How long before the next step: the meeting's own pace, with long silences cut to 3 seconds and
+    /// at least 0.9 for the writing to show, divided by the speed.
+    pub fn wait_ms(&self, steps: &[Value]) -> f64 {
+        if self.at == 0 {
+            return 300.0;
+        }
+        let gap = match (steps.get(self.at - 1), steps.get(self.at)) {
+            (Some(a), Some(b)) => time_of(b) - time_of(a),
+            _ => 0.0,
+        };
+        gap.max(900.0).min(3000.0) / self.speed
+    }
+
+    /// How far into the meeting this step was, in milliseconds.
+    pub fn elapsed_ms(&self, steps: &[Value]) -> f64 {
+        match (steps.first(), self.at.checked_sub(1).and_then(|i| steps.get(i))) {
+            (Some(first), Some(now)) => time_of(now) - time_of(first),
+            _ => 0.0,
+        }
+    }
+
+    pub fn duration_ms(steps: &[Value]) -> f64 {
+        match (steps.first(), steps.last()) {
+            (Some(first), Some(last)) => time_of(last) - time_of(first),
+            _ => 0.0,
+        }
+    }
+
+    /// How many transcript lines had been said by this step.
+    pub fn lines_said(&self, steps: &[Value]) -> usize {
+        self.at.checked_sub(1).and_then(|i| steps.get(i)).and_then(|s| s["line"].as_u64()).unwrap_or(0) as usize
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,6 +240,81 @@ mod tests {
             assert_eq!(replayed.edges, g.edges, "{file}");
             assert_eq!(replayed.groups, g.groups, "{file}");
         }
+    }
+
+    fn recorded() -> Vec<Value> {
+        let boards = ["T 「甲」", "T 「甲」\nT 「乙」", "T 「甲」\nT 「乙」\nT 「丙」"];
+        let mut before = Graph::default();
+        let mut steps = vec![];
+        for (i, ops) in boards.iter().enumerate() {
+            let mut g = Graph::default();
+            g.apply(&parse_ops(ops));
+            let t = [1000, 1200, 61000][i];
+            steps.push(json!({ "t": t, "line": i + 1, "d": diff(&before, &g).unwrap() }));
+            before = g;
+        }
+        steps
+    }
+
+    #[test]
+    fn a_replay_can_stop_at_any_step() {
+        let steps = recorded();
+        assert!(replay_to(&steps, 0).nodes.is_empty());
+        assert_eq!(replay_to(&steps, 2).nodes.len(), 2);
+        assert_eq!(replay_to(&steps, 99).nodes.len(), 3);
+    }
+
+    #[test]
+    fn a_player_keeps_the_meetings_pace_within_limits() {
+        let steps = recorded();
+        let mut p = Player::new(3);
+        assert_eq!(p.wait_ms(&steps), 300.0);
+        p.seek(1);
+        assert_eq!(p.wait_ms(&steps), 900.0, "too quick to see is slowed down");
+        p.seek(2);
+        assert_eq!(p.wait_ms(&steps), 3000.0, "a long silence is cut");
+        p.next_speed();
+        assert_eq!(p.wait_ms(&steps), 1500.0);
+        p.next_speed();
+        p.next_speed();
+        assert_eq!(p.speed, 1.0);
+    }
+
+    #[test]
+    fn a_player_stops_at_the_end_and_starts_over_from_it() {
+        let mut p = Player::new(3);
+        assert_eq!(p.seek(0), None);
+        assert_eq!(p.seek(2), Some(2));
+        assert!(p.playing);
+        assert_eq!(p.seek(99), Some(1));
+        assert!(!p.playing);
+        assert_eq!(p.at, 3);
+        assert!(p.toggle(), "playing from the end starts over");
+        assert_eq!(p.at, 0);
+        assert!(p.playing);
+        assert_eq!(p.seek(1), Some(1));
+        assert!(!p.toggle());
+        assert!(!p.playing);
+        assert_eq!(p.seek(0), Some(-1));
+    }
+
+    #[test]
+    fn a_player_reads_time_and_lines_from_the_steps() {
+        let steps = recorded();
+        let mut p = Player::new(3);
+        assert_eq!((p.elapsed_ms(&steps), p.lines_said(&steps)), (0.0, 0));
+        p.seek(3);
+        assert_eq!((p.elapsed_ms(&steps), p.lines_said(&steps)), (60000.0, 3));
+        assert_eq!(Player::duration_ms(&steps), 60000.0);
+        assert_eq!(Player::duration_ms(&[]), 0.0);
+    }
+
+    #[test]
+    fn clocks_read_as_minutes_or_hours() {
+        assert_eq!(clock(0.0), "0:00");
+        assert_eq!(clock(187_000.0), "3:07");
+        assert_eq!(clock(3_765_000.0), "1:02:45");
+        assert_eq!(clock(-5.0), "0:00");
     }
 
     #[test]

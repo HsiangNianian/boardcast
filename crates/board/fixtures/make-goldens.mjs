@@ -145,6 +145,42 @@ for (const lang of ['zh', 'en']) {
   take('empty', [emptyGraph()], [], '空', undefined)
 }
 setLangChoice('zh', false)
+// When ink appears in the animated SVG.
+const { ranks, timeline } = await load('src/ink/animate.ts')
+const rankCases = []
+for (const [fileIndex, file] of readdirSync(dir).filter((f) => f.endsWith('.json')).sort().entries()) {
+  if (fileIndex % 3) continue
+  const demo = JSON.parse(readFileSync(join(dir, file), 'utf8'))
+  let g = emptyGraph()
+  const recorded = []
+  for (const line of demo.lines ?? []) {
+    if (typeof line.ops !== 'string') continue
+    const before = inkOnly(g)
+    g = applyOps(g, parseOps(line.ops), 'ink')
+    // Some things are left out of the record, as in a meeting recorded part way through.
+    const d = diffGraph(before, inkOnly(g))
+    if (d && recorded.length < (demo.lines.length * 3) / 4) recorded.push({ t: recorded.length, line: recorded.length, d })
+  }
+  const layout = await new StableLayout().layout(g)
+  const regions = layout.regions.map((r) => [r.id, r.rows.map((row) => row.node.id)])
+  const keys = [
+    ...g.nodes.flatMap((n) => [`${n.id}|box`, `${n.id}|${n.label}|x`, `${n.id}|高亮`, `${n.id}|${n.label}|h`, `${n.id}|pre|1.`]),
+    ...g.edges.flatMap((e) => [`${e.from}>${e.to}`, `${e.from}>${e.to}l|bg`, `${e.from}~${e.to}`, `${e.from}~${e.to}l`]),
+    ...g.groups.flatMap((x) => [`${x.id}|${x.label}`, `${x.id}t|${x.label}`]),
+    ...regions.map(([id]) => `${id}|标题|ul`),
+    'nowhere|x',
+  ]
+  rankCases.push({ file, nodes: g.nodes, regions, steps: recorded, keys, ranks: ranks(g, { regions: layout.regions }, recorded, keys) })
+}
+const timelineCases = [
+  [[{ lengths: [10, 900] }, { under: true, lengths: [50] }, { lengths: [5] }], [0, 1, 1], 12000],
+  [[{ lengths: [9000, 9000] }, { lengths: [9000] }, { under: true, lengths: [1] }], [2, 0, 1], 12000],
+  [[{ lengths: [100] }, { lengths: [100] }], [0, 0], 100],
+  [[], [], 12000],
+].map(([pieces, rank, total]) => {
+  const { timed, end } = timeline(pieces.map((p) => ({ under: p.under, strokes: p.lengths.map((length) => ({ length })) })), rank, total)
+  return { pieces, rank, total, end, timed: timed.map(({ delays, durs }) => ({ delays, durs })) }
+})
 const prefix = (text) => messages(emptyGraph(), [], { text }).slice(0, -1)
 // The fixed part of the prompt ships with the agent; this copy is the answer key it is tested against.
 writeFileSync(new URL('../../agent/prompts.json', import.meta.url), `${JSON.stringify({ zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') }, null, 1)}\n`)
@@ -156,5 +192,7 @@ writeFileSync(process.argv[3], `${JSON.stringify({
   tidy,
   plain,
   markdown: markdownCases,
+  ranks: rankCases,
+  timelines: timelineCases,
 })}\n`)
 console.log(`${steps.length} steps`)

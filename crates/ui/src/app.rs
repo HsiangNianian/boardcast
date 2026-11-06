@@ -19,7 +19,9 @@ use crate::raster::Layer;
 use anyhow::{Context as _, Result};
 use boardcast_agent::summary::{self, Block, Line, Step};
 use boardcast_export::Kind as ExportKind;
+use boardcast_board::steps::{clock, replay_to, Player};
 use gpui_kit::base::input::{Input, InputEvent, InputState, Textarea, TextareaState};
+use gpui_kit::base::slider::{Slider, SliderEvent, SliderIndicator, SliderState, SliderThumb, SliderTrack};
 use gpui_kit::{
     canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, Entity, FillOptions, FocusHandle,
     Hsla, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PathBuilder, PathStyle, Pixels, Point, Render, RenderImage,
@@ -586,6 +588,18 @@ enum Panel {
     Settings,
 }
 
+/// A replay on screen. It only moves the ink: the meeting itself is not touched, so leaving puts
+/// everything back.
+struct Replaying {
+    player: Player,
+    /// Where things were placed, and how the board was being viewed, before it began.
+    memory: serde_json::Value,
+    view: (Option<View>, bool),
+    next_at: Instant,
+    slider: Entity<SliderState>,
+    _slider_moved: gpui_kit::Subscription,
+}
+
 enum Exported {
     Saved { path: PathBuf, text_left_out: bool },
     Failed(String),
@@ -695,6 +709,7 @@ struct Workbench {
     library: Vec<Info>,
     form: SettingsForm,
     summary: SummaryPanel,
+    replay: Option<Replaying>,
     exporting: Option<ExportKind>,
     exported: Option<Exported>,
     /// Where the last file went, to start the next save there.
@@ -770,11 +785,11 @@ impl Workbench {
     }
 
     fn editable(&self) -> bool {
-        self.live.read_only.is_none()
+        self.live.read_only.is_none() && self.replay.is_none()
     }
 
     fn dirty(&self) -> bool {
-        self.store.is_some() && self.editable() && self.live.has_content() && self.live.changes != self.saved_changes
+        self.store.is_some() && self.live.read_only.is_none() && self.live.has_content() && self.live.changes != self.saved_changes
     }
 
     fn pump(&mut self, cx: &mut Context<Self>) {
@@ -785,7 +800,7 @@ impl Workbench {
             ink.maintain_sharpness();
             changed |= (ink.base.level, ink.detail.as_ref().map(|(t, c)| (t.level, *c))) != before;
             // Hints go to the model with the next line it is asked about.
-            if let Some(hint) = ink.hints.take() {
+            if let Some(hint) = ink.hints.take().filter(|_| self.replay.is_none()) {
                 self.session().set_hint(hint);
             }
         }
@@ -812,6 +827,7 @@ impl Workbench {
                     if meeting != self.session().meeting() {
                         continue;
                     }
+                    self.exit_replay(cx);
                     println!("{{\"ops\":{},\"board\":{}}}", serde_json::Value::from(ops.clone()), serde_json::Value::from(graph.describe()));
                     self.next_batch += 1;
                     let id = self.next_batch;
@@ -851,6 +867,7 @@ impl Workbench {
             }
         }
         self.pump_probe(&mut changed);
+        self.pump_replay(&mut changed, cx);
         self.pump_summary(&mut changed, cx);
         self.pump_download(&mut changed);
         self.pump_update(&mut changed);
@@ -1027,6 +1044,111 @@ impl Workbench {
     fn copy_summary(&mut self, text: String, what: &str, cx: &mut Context<Self>) {
         cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text));
         self.summary.note = Some(what.to_string());
+        cx.notify();
+    }
+
+    fn pump_replay(&mut self, changed: &mut bool, cx: &mut Context<Self>) {
+        let Some(replay) = &self.replay else { return };
+        if replay.player.playing && Instant::now() >= replay.next_at {
+            let next = replay.player.at + 1;
+            self.seek_replay(next, cx);
+            *changed = true;
+        }
+    }
+
+    fn wait_for_next_step(&mut self) {
+        if let Some(replay) = &mut self.replay {
+            replay.next_at = Instant::now() + Duration::from_secs_f64(replay.player.wait_ms(&self.live.steps) / 1000.0);
+        }
+    }
+
+    fn start_replay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.replay.is_some() {
+            return;
+        }
+        let waiting = self.live.lines.iter().any(|l| l["ms"].is_null() && !l["manual"].as_bool().unwrap_or(false));
+        if self.pipeline.listening() || waiting {
+            self.notice = Some(tr("Can't replay while listening or while the model is drawing.", "收音中或模型还在画时不能回放。").into());
+            cx.notify();
+            return;
+        }
+        let total = self.live.steps.len();
+        if total == 0 {
+            self.notice = Some(tr("This meeting has no board history to replay.", "这场会没有可以回放的记录。").into());
+            cx.notify();
+            return;
+        }
+        let slider = cx.new(|_| SliderState::new().min(0.0).max(total as f32).step(1.0).default_value(0.0));
+        let slider_moved = cx.subscribe(&slider, |this: &mut Self, _, event: &SliderEvent, cx| {
+            if let SliderEvent::Change(value) = event {
+                this.seek_replay(value.end().round() as usize, cx);
+            }
+        });
+        let mut ink = self.ink.borrow_mut();
+        let (memory, view) = (ink.board.snapshot(), (ink.view, ink.reading));
+        ink.open(&Graph::default(), &serde_json::Value::Null);
+        drop(ink);
+        self.notice = None;
+        self.panel = Panel::Transcript;
+        self.replay = Some(Replaying { player: Player::new(total), memory, view, next_at: Instant::now(), slider, _slider_moved: slider_moved });
+        self.wait_for_next_step();
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    fn seek_replay(&mut self, at: usize, cx: &mut Context<Self>) {
+        let Some(replay) = &mut self.replay else { return };
+        let Some(moved) = replay.player.seek(at) else { return };
+        let graph = replay_to(&self.live.steps, replay.player.at);
+        self.next_batch += 1;
+        let batch = self.next_batch;
+        let mut ink = self.ink.borrow_mut();
+        if moved < 0 {
+            // Going back lays out from the start, as new things found their places the first time.
+            ink.open(&graph, &serde_json::Value::Null);
+        } else {
+            // Writing out one step shows it being drawn; a jump just shows where things are.
+            ink.instant = moved > 1;
+            ink.update(&graph, batch);
+        }
+        drop(ink);
+        self.wait_for_next_step();
+        cx.notify();
+    }
+
+    fn toggle_replay(&mut self, cx: &mut Context<Self>) {
+        let Some(replay) = &mut self.replay else { return };
+        if replay.player.toggle() {
+            self.ink.borrow_mut().open(&Graph::default(), &serde_json::Value::Null);
+        }
+        self.wait_for_next_step();
+        cx.notify();
+    }
+
+    fn exit_replay(&mut self, cx: &mut Context<Self>) {
+        let Some(replay) = self.replay.take() else { return };
+        let mut ink = self.ink.borrow_mut();
+        ink.open(&self.live.graph, &replay.memory);
+        (ink.view, ink.reading) = replay.view;
+        cx.notify();
+    }
+
+    /// Carry on from this moment on a new board, with things where they are now. The original stays.
+    fn fork_replay(&mut self, cx: &mut Context<Self>) {
+        let Some(replay) = &self.replay else { return };
+        let at = replay.player.at;
+        if at == 0 || self.live.read_only.is_some() {
+            return;
+        }
+        let when = clock(replay.player.elapsed_ms(&self.live.steps));
+        let memory = self.ink.borrow().board.snapshot();
+        let (from, to) = (self.live.page() + 1, self.live.pages() + 1);
+        let note = if tr("en", "zh") == "en" { format!("Board {to} forked from board {from} as it was at {when}") } else { format!("从第 {from} 张板回放到 {when} 的那一刻，另起了第 {to} 张板") };
+        self.replay = None;
+        self.live.fork_page(at, memory, &note);
+        let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
+        self.session().open(self.live.graph.clone(), history);
+        self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
         cx.notify();
     }
 
@@ -1364,6 +1486,7 @@ impl Workbench {
 
     /// Put a meeting on screen. Anything still in flight for the previous one is discarded.
     fn show(&mut self, live: Live) {
+        self.replay = None;
         if self.pipeline.listening() {
             self.pipeline.toggle_mic();
         }
@@ -1419,6 +1542,11 @@ impl Workbench {
     }
 
     fn go_to_page(&mut self, page: usize, cx: &mut Context<Self>) {
+        if self.replay.is_some() {
+            self.notice = Some(tr("Can't switch boards during replay. Exit replay first.", "回放时不能切换板，请先退出回放。").into());
+            cx.notify();
+            return;
+        }
         self.live.go_to_page(page);
         let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(self.live.graph.clone(), history);
@@ -1442,6 +1570,9 @@ impl Workbench {
     }
 
     fn step(&mut self, forward: bool, cx: &mut Context<Self>) {
+        if !self.editable() {
+            return;
+        }
         let snap = if forward { self.live.redo() } else { self.live.undo() };
         if let Some(snap) = snap {
             self.session().set_graph(snap.graph.clone());
@@ -1468,8 +1599,20 @@ impl Workbench {
             return;
         }
         let keys = &event.keystroke;
+        if let Some(at) = self.replay.as_ref().map(|r| r.player.at) {
+            match keys.key.as_str() {
+                "escape" => self.exit_replay(cx),
+                "r" if keys.modifiers.shift && (keys.modifiers.control || keys.modifiers.platform) => self.exit_replay(cx),
+                "space" => self.toggle_replay(cx),
+                "left" => self.seek_replay(at.saturating_sub(1), cx),
+                "right" => self.seek_replay(at + 1, cx),
+                _ => {}
+            }
+            return;
+        }
         if keys.modifiers.control || keys.modifiers.platform {
             match keys.key.as_str() {
+                "r" if keys.modifiers.shift => self.start_replay(window, cx),
                 "z" if keys.modifiers.shift => self.step(true, cx),
                 "z" => self.step(false, cx),
                 "y" => self.step(true, cx),
@@ -1568,6 +1711,23 @@ impl Workbench {
     }
 }
 
+/// The slider's parts are unstyled. The indicator spans the whole track because a position is measured
+/// against it, so the filled part is a child, and the tall track leaves room for a finger.
+fn replay_slider(state: &Entity<SliderState>, fraction: f32) -> impl IntoElement {
+    Slider::new(state).accessibility_label(tr("Replay progress", "回放进度")).flex_1().min_w_0().child(
+        SliderTrack::new(state).w_full().h(px(32.)).flex().items_center().cursor_pointer().child(
+            SliderIndicator::new(state)
+                .relative()
+                .w_full()
+                .h(px(6.))
+                .rounded_sm()
+                .bg(rgb(0xe4_e4_df))
+                .child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(0x28_61_43)))
+                .child(SliderThumb::new(state).absolute().top(px(-5.)).left(gpui_kit::relative(fraction)).ml(px(-8.)).size(px(16.)).rounded_full().bg(rgb(0x28_61_43))),
+        ),
+    )
+}
+
 /// A summary as it reads on screen. To-dos can be ticked when `tick` is given, with a target big
 /// enough for a finger.
 fn summary_blocks(text: &str, group: &'static str, tick: Option<&Context<Workbench>>) -> Vec<gpui_kit::AnyElement> {
@@ -1591,6 +1751,43 @@ fn summary_blocks(text: &str, group: &'static str, tick: Option<&Context<Workben
 }
 
 impl Workbench {
+    fn replay_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<gpui_kit::Div> {
+        let replay = self.replay.as_ref()?;
+        let player = replay.player.clone();
+        // Steps move on their own, and the slider has to follow.
+        if replay.slider.read(cx).value().end() != player.at as f32 {
+            let value = player.at as f32;
+            replay.slider.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+        let steps = &self.live.steps;
+        let time = format!("{} / {}", clock(player.elapsed_ms(steps)), clock(Player::duration_ms(steps)));
+        let can_fork = player.at > 0 && self.live.read_only.is_none();
+        Some(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_3()
+                .h(px(48.))
+                .flex_shrink_0()
+                .border_t_1()
+                .border_color(rgb(0xdd_dd_d8))
+                .child(button("replay-toggle", if player.playing { tr("Pause", "暂停") } else { tr("Play", "播放") }).on_click(cx.listener(|this, _, _, cx| this.toggle_replay(cx))))
+                .child(replay_slider(&replay.slider, if player.total > 0 { player.at as f32 / player.total as f32 } else { 0.0 }))
+                .child(div().text_xs().whitespace_nowrap().text_color(rgb(0x62_66_5c)).child(time))
+                .child(button("replay-speed", format!("{}×", player.speed)).on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(replay) = &mut this.replay {
+                        replay.player.next_speed();
+                    }
+                    this.wait_for_next_step();
+                    cx.notify();
+                })))
+                .when(self.live.read_only.is_none(), |d| {
+                    d.child(button("replay-fork", tr("Fork a board", "另起一板")).whitespace_nowrap().when(!can_fork, |b| b.opacity(0.4)).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
+                }),
+        )
+    }
+
     fn export_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
         let drawn = !self.live.graph.nodes.is_empty();
         let content = self.live.has_content();
@@ -1598,6 +1795,7 @@ impl Workbench {
             (ExportKind::Markdown, "Markdown", tr("Key points, a Mermaid flow chart and the transcript.", "要点、Mermaid 流程图和会议记录。"), content),
             (ExportKind::Png, tr("PNG image", "PNG 图片"), tr("This board, as it looks on screen.", "当前这张板，和画面上一样。"), drawn),
             (ExportKind::Svg, tr("SVG vector", "SVG 矢量图"), tr("This board. Stays sharp at any size.", "当前这张板，放大不糊。"), drawn),
+            (ExportKind::AnimatedSvg, tr("Animated SVG", "动态 SVG"), tr("This board, written out stroke by stroke in the order of the meeting.", "当前这张板，按会议顺序逐笔写出。"), drawn),
             (ExportKind::Pdf, tr("Whole meeting PDF", "整场会 PDF"), tr("A page per board, then the summary and transcript, with selectable text.", "每张板一页，后面是摘要和会议记录，文字可以选中复制。"), content),
         ];
         let busy = self.exporting;
@@ -1852,7 +2050,8 @@ impl Render for Workbench {
             .id("board")
             .relative()
             .flex_1()
-            .h_full()
+            .min_h_0()
+            .w_full()
             .overflow_hidden()
             .bg(rgb(PAPER))
             .on_scroll(cx.listener(move |_, e: &ScrollEvent, window, cx| {
@@ -2016,6 +2215,7 @@ impl Render for Workbench {
         let (page, pages) = (self.live.page(), self.live.pages());
         let save_label: String = match &self.save {
             _ if self.store.is_none() => tr("Sample, not saved", "示例，不保存").into(),
+            _ if self.replay.is_some() => tr("Replaying", "回放中").into(),
             _ if !editable => tr("View only", "只读").into(),
             SaveState::Idle => String::new(),
             SaveState::Dirty => tr("Unsaved", "未保存").into(),
@@ -2038,6 +2238,17 @@ impl Render for Workbench {
             .child(button("new", tr("New", "新建")).when(self.store.is_some(), |d| d.on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
             .child(button("summary", tr("Summary", "摘要")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
             .child(button("export", tr("Export", "导出")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
+            .child(
+                button("replay", if self.replay.is_some() { tr("Exit replay", "退出回放") } else { tr("Replay", "回放") })
+                    .when(self.live.steps.is_empty(), |b| b.opacity(0.4))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        if this.replay.is_some() {
+                            this.exit_replay(cx);
+                        } else {
+                            this.start_replay(window, cx);
+                        }
+                    })),
+            )
             .when(editable, |d| {
                 d.child(
                     div()
@@ -2093,6 +2304,9 @@ impl Render for Workbench {
             ViewOnly::NewerFormat => tr("This meeting was saved by a newer version, so it is view-only.", "这场会是新版本保存的，只能查看。"),
             ViewOnly::ImportedContent => tr("This meeting has imported pages or free-edit content. It is view-only here, and some of it is not shown yet. Its file is unchanged.", "这场会含导入页或自由编辑内容，这里只能查看，部分内容暂不显示，文件不会被改动。"),
         });
+        // During a replay the transcript has only reached that moment.
+        let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&self.live.steps).min(self.live.lines.len()));
+        let replay_bar = self.replay_bar(window, cx);
         let transcript = div()
             .id("transcript")
             .flex_1()
@@ -2101,7 +2315,7 @@ impl Render for Workbench {
             .gap_3()
             .flex()
             .flex_col()
-            .children(self.live.lines.iter().rev().map(|l| {
+            .children(self.live.lines[..shown_lines].iter().rev().map(|l| {
                 let manual = l["manual"].as_bool().unwrap_or(false);
                 let note = line_note(l);
                 div()
@@ -2304,7 +2518,7 @@ impl Render for Workbench {
             .child(bar)
             .when_some(view_only, |d, text| d.child(div().px_3().py_1().flex_shrink_0().text_sm().bg(rgb(0xec_ef_e7)).child(text)))
             .when_some(banner, |d, text| d.child(div().px_3().py_1().flex_shrink_0().text_sm().text_color(rgb(0xa3_28_26)).bg(rgb(0xfb_ec_ea)).child(text)))
-            .child(div().flex_1().flex().min_h_0().child(board).child(side))
+            .child(div().flex_1().flex().min_h_0().child(div().flex_1().min_w_0().h_full().flex().flex_col().child(board).when_some(replay_bar, |d, bar| d.child(bar))).child(side))
     }
 }
 
@@ -2506,6 +2720,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     library: vec![],
                     form: SettingsForm { base_url, model, key, remote, saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
+                    replay: None,
                     exporting: None,
                     exported: None,
                     export_dir: None,

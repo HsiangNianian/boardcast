@@ -4,7 +4,8 @@
 use crate::board_layout::{Layout, Rect, Row, FONT, TITLE};
 use crate::glyphs::{Glyphs, Pt};
 use crate::graph::{Graph, Kind, Node};
-use crate::pen::{arrow, circle_mark, line, place, rough_box, strike, Rng};
+use crate::spans::{rotate_point, SpanBox};
+use crate::pen::{around, arrow, circle_mark, line, place, rough_box, strike, Rng};
 
 const WEIGHT: f32 = 0.65;
 const ENGLISH_WEIGHT: f32 = 1.0;
@@ -197,6 +198,113 @@ impl Canvas<'_> {
         }
     }
 
+    fn highlight(&mut self, key: String, boxes: &[[f32; 4]], opacity: f32) {
+        let mut r = Rng::new(&key);
+        let shapes: Vec<(Vec<Pt>, bool)> = boxes.iter().map(|b| (line([b[0] - 2.0, b[1] + b[3] / 2.0], [b[0] + b[2] + 2.0, b[1] + b[3] / 2.0], &mut r, 0.004), false)).collect();
+        let size = boxes.iter().map(|b| b[3]).fold(0.0, f32::max);
+        self.add(format!("{key}|h"), HIGHLIGHT, 0.45 * opacity, true, shapes, (size + 2.0) / WEIGHT);
+    }
+
+    /// Imported text is on the page already, so only what was marked on it is drawn.
+    fn page_marks(&mut self, g: &Graph, l: &Layout) {
+        let plain = |v: Vec<Vec<Pt>>| v.into_iter().map(|s| (s, false)).collect::<Vec<_>>();
+        let font = FONT as f32;
+        for n in g.nodes.iter().filter(|n| n.kind == Kind::Region) {
+            let Some([x, y, w, h]) = n.at().map(|a| a.map(|v| v as f32)) else { continue };
+            let mut r = Rng::new(&format!("{}|pin", n.id));
+            let o = alpha(Some(n));
+            let has = |mark: &str| n.marks.iter().any(|m| m == mark);
+            if has("高亮") {
+                self.highlight(n.id.clone(), &[[x, y, w, h]], o);
+            }
+            if has("圈出") {
+                let shape = circle_mark(x + w / 2.0, y + h / 2.0, w / 2.0 + 14.0, h / 2.0 + 12.0, &mut r);
+                self.add(format!("{}|o", n.id), RED, o, false, plain(vec![shape]), pen_for(font));
+            }
+            if has("下划线") {
+                let shape = line([x - 2.0, y + h + 6.0], [x + w + 4.0, y + h + 4.0], &mut r, 0.01);
+                self.add(format!("{}|u", n.id), RED, o, false, plain(vec![shape]), pen_for(font));
+            }
+            if has("划掉") {
+                let shapes = if n.rows().len() > 1 || h > 40.0 { vec![line([x, y], [x + w, y + h], &mut r, 0.02), line([x + w, y], [x, y + h], &mut r, 0.02)] } else { strike(x, y + h / 2.0, w, &mut r) };
+                self.add(format!("{}|x", n.id), RED, o, false, plain(shapes), pen_for(font));
+            }
+            if has("星标") {
+                let shapes = self.write("★", x - font - 10.0, y + (h - font) / 2.0, font, &format!("{}s", n.id));
+                self.add(format!("{}|s", n.id), RED, o, false, shapes, pen_for(font));
+            }
+            for s in n.spans() {
+                let places: Vec<String> = s.boxes.iter().map(|b| format!("{},{}", b.x, b.y)).collect();
+                let key = format!("{}|{}|{}", n.id, s.mark, places.join(";"));
+                let mut r = Rng::new(&key);
+                let thin = pen_for(font) * 0.8;
+                let turned = |points: Vec<Pt>, angle: Option<f64>| -> Vec<Pt> {
+                    points.into_iter().map(|p| {
+                        let q = rotate_point([f64::from(p[0]), f64::from(p[1])], angle.unwrap_or(0.0));
+                        [q[0] as f32, q[1] as f32]
+                    }).collect()
+                };
+                let area = |b: &SpanBox| [b.x as f32, b.y as f32, b.w as f32, b.h as f32];
+                match s.mark.as_str() {
+                    "高亮" => {
+                        let boxes: Vec<[f32; 4]> = s.boxes.iter().map(area).collect();
+                        self.highlight(key, &boxes, o);
+                    }
+                    "圈出" => {
+                        // A new column starts a new loop, so it does not cross text that was not chosen.
+                        let mut groups: Vec<Vec<&SpanBox>> = vec![];
+                        for b in &s.boxes {
+                            match groups.last_mut() {
+                                Some(group) if group.last().is_some_and(|last| b.y > last.y && b.angle == last.angle) => group.push(b),
+                                _ => groups.push(vec![b]),
+                            }
+                        }
+                        let shapes = groups.iter().map(|boxes| {
+                            let b = area(boxes[0]);
+                            let shape = if boxes.len() == 1 {
+                                circle_mark(b[0] + b[2] / 2.0, b[1] + b[3] / 2.0, b[2] / 2.0 + 6.0, b[3] / 2.0 + 4.0, &mut r)
+                            } else {
+                                around(&boxes.iter().map(|x| area(x)).collect::<Vec<_>>(), 4.0, &mut r)
+                            };
+                            turned(shape, boxes[0].angle)
+                        }).collect();
+                        self.add(key, RED, o, false, plain(shapes), thin);
+                    }
+                    "下划线" => {
+                        let shapes = s.boxes.iter().map(|b| {
+                            let a = area(b);
+                            turned(line([a[0], a[1] + a[3] + 2.0], [a[0] + a[2], a[1] + a[3] + 2.0], &mut r, 0.004), b.angle)
+                        }).collect();
+                        self.add(key, RED, o, false, plain(shapes), thin);
+                    }
+                    "划掉" => {
+                        let shapes = s.boxes.iter().flat_map(|b| {
+                            let a = area(b);
+                            strike(a[0], a[1] + a[3] / 2.0, a[2], &mut r).into_iter().map(|shape| turned(shape, b.angle)).collect::<Vec<_>>()
+                        }).collect();
+                        self.add(key, RED, o, false, plain(shapes), thin);
+                    }
+                    "星标" => {
+                        let Some(first) = s.boxes.first() else { continue };
+                        let shapes = self.write("★", first.x as f32 - 14.0, first.y as f32, 12.0, &key);
+                        let shapes = shapes.into_iter().map(|(p, latin)| (turned(p, first.angle), latin)).collect();
+                        self.add(key, RED, o, false, shapes, thin);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // A thin line ties each note in the margin back to the text it is about.
+        for row in l.regions.iter().filter(|r| r.rect.id == "__margin").flat_map(|r| &r.rows) {
+            let host = g.nodes.iter().find(|n| n.id == row.id).and_then(|n| n.parent.as_ref()).and_then(|p| g.nodes.iter().find(|x| &x.id == p)).and_then(|p| p.at());
+            let Some([x, y, w, h]) = host.map(|a| a.map(|v| v as f32)) else { continue };
+            let key = format!("{}|tether", row.id);
+            let mut r = Rng::new(&key);
+            let shape = line([x + w + 6.0, y + h.min(30.0) / 2.0], [row.x as f32 - 8.0, row.y as f32 + row.size as f32 / 2.0], &mut r, 0.02);
+            self.add(key, BLUE, 0.6, false, plain(vec![shape]), pen_for(font) * 0.6);
+        }
+    }
+
     fn row(&mut self, g: &Graph, row: &Row, ox: f32, oy: f32) {
         let n = g.nodes.iter().find(|n| n.id == row.id);
         let (x, y, size, w) = (ox + row.x as f32, oy + row.y as f32, row.size as f32, row.w as f32);
@@ -229,6 +337,8 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
     let font = FONT as f32;
     let title = TITLE as f32;
     let plain = |v: Vec<Vec<Pt>>| v.into_iter().map(|s| (s, false)).collect::<Vec<_>>();
+
+    c.page_marks(g, l);
 
     for reg in &l.regions {
         let (rx, ry) = (reg.rect.x as f32, reg.rect.y as f32);

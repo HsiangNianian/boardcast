@@ -72,7 +72,8 @@ pub fn diff(a: &Graph, b: &Graph) -> Option<Diff> {
         groups: diff_part(&a.groups, &b.groups, |g: &Group| g.id.clone()),
         next_node: (a.next_node != b.next_node).then_some(b.next_node),
         next_group: (a.next_group != b.next_group).then_some(b.next_group),
-        underlay: None,
+        // An explicit null takes a page away, as the older app's record does.
+        underlay: (a.extra.get("underlay") != b.extra.get("underlay")).then(|| b.extra.get("underlay").cloned().unwrap_or(Value::Null)),
     };
     (d != Diff::default()).then_some(d)
 }
@@ -87,6 +88,15 @@ pub fn patch(g: &Graph, d: &Diff) -> Graph {
     }
     if let Some(n) = d.next_group {
         out.next_group = n;
+    }
+    match &d.underlay {
+        Some(Value::Null) => {
+            out.extra.remove("underlay");
+        }
+        Some(page) => {
+            out.extra.insert("underlay".into(), page.clone());
+        }
+        None => {}
     }
     out
 }

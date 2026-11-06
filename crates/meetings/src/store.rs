@@ -4,6 +4,8 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Map, Value};
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -95,6 +97,86 @@ pub struct Loaded {
     pub raw: Map<String, Value>,
     pub origin: Origin,
     pub revision: u64,
+}
+
+/// An image kept for a meeting, as its bytes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PageImage {
+    pub mime: String,
+    pub bytes: Vec<u8>,
+}
+
+impl PageImage {
+    pub fn data_url(&self) -> String {
+        format!("data:{};base64,{}", self.mime, BASE64.encode(&self.bytes))
+    }
+}
+
+const ASSET: &str = "asset:";
+
+fn mime_of(key: &str) -> Option<&'static str> {
+    match key.rsplit_once('.')?.1 {
+        "jpg" => Some("image/jpeg"),
+        "png" => Some("image/png"),
+        "webp" => Some("image/webp"),
+        "gif" => Some("image/gif"),
+        "svg" => Some("image/svg+xml"),
+        _ => None,
+    }
+}
+
+fn valid_asset(key: &str) -> bool {
+    key.split_once('.').is_some_and(|(hash, _)| (16..=64).contains(&hash.len()) && hash.bytes().all(|b| b.is_ascii_hexdigit())) && mime_of(key).is_some()
+}
+
+fn sha256_hex(text: &str) -> String {
+    Sha256::digest(text.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// As the older app names them: part of the hash of the whole data URL, not of the bytes.
+fn asset_key(mime: &str, bytes: &[u8]) -> Option<String> {
+    let extension = ["jpg", "png", "webp", "gif", "svg"].into_iter().find(|e| mime_of(&format!("x.{e}")) == Some(mime))?;
+    let url = PageImage { mime: mime.to_string(), bytes: bytes.to_vec() }.data_url();
+    Some(format!("{}.{extension}", &sha256_hex(&url)[..32]))
+}
+
+fn check_asset(key: &str, bytes: &[u8]) -> Result<()> {
+    let (hash, _) = key.split_once('.').context("no image type")?;
+    let url = PageImage { mime: mime_of(key).context("unknown image type")?.to_string(), bytes: bytes.to_vec() }.data_url();
+    if !sha256_hex(&url).starts_with(&hash.to_ascii_lowercase()) {
+        bail!("Image {key} does not match its name, so it may be damaged.");
+    }
+    Ok(())
+}
+
+fn write_asset(target: &Path, bytes: &[u8]) -> Result<()> {
+    let dir = target.parent().context("an image has a folder")?;
+    fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    let tmp = target.with_extension("tmp");
+    fs::write(&tmp, bytes).with_context(|| format!("saving {}", target.display()))?;
+    fs::rename(&tmp, target).with_context(|| format!("saving {}", target.display()))
+}
+
+/// Images are only ever named in these fields, so ordinary text can never be mistaken for one.
+fn asset_keys(value: &Value, out: &mut Vec<String>) {
+    match value {
+        Value::Array(items) => items.iter().for_each(|v| asset_keys(v, out)),
+        Value::Object(fields) => {
+            for (name, v) in fields {
+                match v.as_str().and_then(|s| s.strip_prefix(ASSET)) {
+                    Some(key) if ["underlay", "dataURL", "url"].contains(&name.as_str()) => out.push(key.to_string()),
+                    _ => asset_keys(v, out),
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// An image carried inside a meeting rather than kept beside it.
+pub fn decode_data_url(url: &str) -> Result<PageImage> {
+    let (head, data) = url.strip_prefix("data:").and_then(|u| u.split_once(";base64,")).context("not an image")?;
+    Ok(PageImage { mime: head.to_string(), bytes: BASE64.decode(data).context("the image data is damaged")? })
 }
 
 #[derive(Clone, Debug)]
@@ -227,6 +309,16 @@ impl Store {
             if original.is_some_and(|text| &Self::source_hash(&text) != source_hash) {
                 bail!("The older copy of this meeting changed after it was opened. Reopen it before saving.");
             }
+            // The images come along before the file that points at them.
+            let mut keys = vec![];
+            for field in ["pages", "scene", "steps"] {
+                if let Some(value) = meeting.get(field) {
+                    asset_keys(value, &mut keys);
+                }
+            }
+            for key in keys {
+                self.bring_over(id, &key)?;
+            }
             meeting.entry("migration").or_insert_with(|| json!({ "sourceHash": source_hash }));
         }
         let revision = expected + 1;
@@ -247,6 +339,52 @@ impl Store {
         Ok(revision)
     }
 
+    fn asset_path(&self, dir: &Path, id: &str, key: &str) -> Result<PathBuf> {
+        valid(id)?;
+        if !valid_asset(key) {
+            bail!("Invalid image name: {key}");
+        }
+        Ok(dir.join(id).join(key))
+    }
+
+    fn bring_over(&self, id: &str, key: &str) -> Result<()> {
+        let target = self.asset_path(&self.current_dir(), id, key)?;
+        if target.is_file() {
+            return Ok(());
+        }
+        // One already lost stays referred to, so saving cannot erase what could still be recovered.
+        let Ok(bytes) = fs::read(self.asset_path(&self.legacy_dir(), id, key)?) else { return Ok(()) };
+        check_asset(key, &bytes)?;
+        write_asset(&target, &bytes)
+    }
+
+    /// An imported page's image, from a meeting's reference to it, checked against its name.
+    pub fn page_image(&self, id: &str, reference: &str) -> Result<PageImage> {
+        let Some(key) = reference.strip_prefix(ASSET) else { return decode_data_url(reference) };
+        let current = self.asset_path(&self.current_dir(), id, key)?;
+        let path = if current.is_file() { current } else { self.asset_path(&self.legacy_dir(), id, key)? };
+        let bytes = fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+        check_asset(key, &bytes)?;
+        let mime = mime_of(key).context("unknown image type")?.to_string();
+        Ok(PageImage { mime, bytes })
+    }
+
+    /// Keep an image for a meeting, and return how the meeting refers to it.
+    pub fn put_image(&self, id: &str, mime: &str, bytes: &[u8]) -> Result<String> {
+        let key = asset_key(mime, bytes).with_context(|| format!("unsupported image type {mime}"))?;
+        let dir = self.current_dir();
+        fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        let _lock = Self::lock(&dir, id)?;
+        if Self::deleted(&dir, id) {
+            bail!("This meeting has been deleted. Your current edits are still here.");
+        }
+        let target = self.asset_path(&dir, id, &key)?;
+        if !target.is_file() {
+            write_asset(&target, bytes)?;
+        }
+        Ok(format!("{ASSET}{key}"))
+    }
+
     /// The meeting to reopen at startup.
     pub fn last_opened(&self) -> Option<String> {
         fs::read_to_string(self.root.join("gpui-last-meeting")).ok().map(|s| s.trim().to_string()).filter(|s| valid(s).is_ok())
@@ -256,6 +394,67 @@ impl Store {
         fs::create_dir_all(&self.root)?;
         fs::write(self.root.join("gpui-last-meeting"), id)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod image_tests {
+    use super::*;
+
+    fn temporary(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("boardcast-images-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_name_matches_the_older_apps() {
+        // sha-256 of `data:image/png;base64,AQID`, cut as the older app cuts it.
+        assert_eq!(asset_key("image/png", &[1, 2, 3]).unwrap(), format!("{}.png", &sha256_hex("data:image/png;base64,AQID")[..32]));
+        assert_eq!(asset_key("text/plain", &[1]), None);
+    }
+
+    #[test]
+    fn an_image_is_kept_and_read_back_and_damage_is_noticed() {
+        let dir = temporary("keep");
+        let store = Store::new(dir.clone());
+        let reference = store.put_image("m1", "image/jpeg", b"bytes").unwrap();
+        let image = store.page_image("m1", &reference).unwrap();
+        assert_eq!((image.mime.as_str(), image.bytes.as_slice()), ("image/jpeg", &b"bytes"[..]));
+        let key = reference.strip_prefix(ASSET).unwrap();
+        fs::write(store.current_dir().join("m1").join(key), b"changed").unwrap();
+        assert!(store.page_image("m1", &reference).is_err());
+        assert!(store.page_image("m1", "asset:../../secret.jpg").is_err(), "names cannot leave the folder");
+        assert!(store.page_image("../x", &reference).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn an_image_in_a_meeting_is_read_directly() {
+        let image = decode_data_url("data:image/png;base64,AQID").unwrap();
+        assert_eq!((image.mime.as_str(), image.bytes.as_slice()), ("image/png", &[1u8, 2, 3][..]));
+        assert_eq!(image.data_url(), "data:image/png;base64,AQID");
+        assert!(decode_data_url("https://example.com/a.png").is_err());
+    }
+
+    #[test]
+    fn the_first_save_of_an_older_meeting_brings_its_images() {
+        let dir = temporary("legacy");
+        let store = Store::new(dir.clone());
+        let key = asset_key("image/png", b"page").unwrap();
+        let folder = store.legacy_dir().join("m2");
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(folder.join(&key), b"page").unwrap();
+        let reference = format!("{ASSET}{key}");
+        let text = json!({ "id": "m2", "title": "asset:not-an-image", "pages": [{ "underlay": reference }, { "underlay": "asset:0123456789abcdef0123456789abcdef.jpg" }] }).to_string();
+        fs::write(store.legacy_dir().join("m2.json"), &text).unwrap();
+        let loaded = store.load("m2").unwrap().unwrap();
+        store.save("m2", loaded.raw, &loaded.origin, loaded.revision).unwrap();
+        assert_eq!(fs::read(store.current_dir().join("m2").join(&key)).unwrap(), b"page");
+        assert_eq!(fs::read(folder.join(&key)).unwrap(), b"page", "the original stays");
+        assert_eq!(store.page_image("m2", &reference).unwrap().bytes, b"page");
+        fs::remove_dir_all(dir).unwrap();
     }
 }
 

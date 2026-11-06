@@ -1,14 +1,16 @@
 //! The board's state and the model's operations, ported from src/engine/{graph,ops,prompt,lang}.ts.
-//! Imported-page regions and pencil drafts are left out of the spike. Tests hold this to the
-//! TypeScript engine's output on real recorded model replies; see fixtures/make-goldens.mjs.
+//! Pencil drafts are left out, as free editing is gone. Tests hold this to the TypeScript engine's output on real recorded model replies; see fixtures/make-goldens.mjs.
 
+use crate::spans::{locate, RegionRow, Span, Unit};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 
 const MARKS: [&str; 5] = ["划掉", "圈出", "下划线", "星标", "高亮"];
+/// The most of an imported block's text the model is shown.
+const REGION_TEXT: usize = 3000;
 const ICONS: [&str; 9] = ["数据库", "表格", "手机", "人", "服务器", "文档", "云", "图表", "消息"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,7 +22,7 @@ pub enum Kind {
     Question,
     Formula,
     Note,
-    /// A block of an imported page. Not drawn or edited yet, but it must survive a save.
+    /// A block of an imported page, fixed in place. The page image shows it, so only marks are drawn.
     Region,
 }
 
@@ -265,10 +267,78 @@ impl Graph {
         }
     }
 
-    /// Whether the board holds imported pages, which this version can show only partly and must
-    /// not edit: marks and model operations on them need the page geometry.
-    pub fn has_imported_content(&self) -> bool {
-        self.extra.contains_key("underlay") || self.nodes.iter().any(|n| n.kind == Kind::Region)
+    /// The size of the imported page under this board, if there is one.
+    pub fn underlay(&self) -> Option<(f64, f64)> {
+        let u = self.extra.get("underlay")?;
+        Some((u["w"].as_f64()?, u["h"].as_f64()?))
+    }
+
+    /// Mark a word or sentence by hand, or take the mark off if it is already there.
+    pub fn toggle_span(&mut self, id: &str, span: Span) {
+        let Some(i) = self.index(id) else { return };
+        let node = &mut self.nodes[i];
+        let spans = node.spans();
+        if spans.iter().any(|s| s.same(&span)) {
+            let left: Vec<Span> = spans.into_iter().filter(|s| !s.same(&span)).collect();
+            if left.is_empty() {
+                node.extra.remove("spans");
+            } else {
+                node.extra.insert("spans".into(), json!(left));
+            }
+        } else {
+            node.add_span(span);
+        }
+    }
+
+    /// Mark a quote on the block it is in, wherever the model pointed: it may pick the wrong block.
+    fn mark_quote(&mut self, target: usize, quote: &str, sentence: bool, mark: &str) -> bool {
+        let unit = if sentence { Unit::Sentence } else { Unit::Word };
+        let others = (0..self.nodes.len()).filter(|i| *i != target && self.nodes[*i].kind == Kind::Region);
+        let hosts: Vec<usize> = std::iter::once(target).chain(others).collect();
+        for host in hosts {
+            let rows = self.nodes[host].rows();
+            if rows.is_empty() {
+                continue;
+            }
+            if let Some(span) = locate(&rows, quote, mark, unit) {
+                self.nodes[host].add_span(span);
+                self.nodes[host].ink = "ink".to_string();
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Put imported text back as it was, keeping any marks made on it.
+    fn restore_pinned(&mut self, pinned: Vec<Node>) {
+        let ids: Vec<String> = pinned.iter().map(|n| n.id.clone()).collect();
+        for was in pinned {
+            match self.index(&was.id) {
+                None => self.nodes.push(was),
+                Some(i) => {
+                    let n = &mut self.nodes[i];
+                    n.label.clone_from(&was.label);
+                    n.aliases.clone_from(&was.aliases);
+                    n.kind = Kind::Region;
+                    n.parent = None;
+                    n.group = None;
+                    match was.extra.get("at") {
+                        Some(at) => {
+                            n.extra.insert("at".into(), at.clone());
+                        }
+                        None => {
+                            n.extra.remove("at");
+                        }
+                    }
+                }
+            }
+        }
+        // Only notes and the like can hang on imported text.
+        for n in &mut self.nodes {
+            if n.kind == Kind::Item && n.parent.as_ref().is_some_and(|p| ids.contains(p)) {
+                n.kind = Kind::Note;
+            }
+        }
     }
 
     pub fn children<'a>(&'a self, id: &'a str) -> impl Iterator<Item = &'a Node> {
@@ -305,11 +375,19 @@ impl Graph {
         if !n.marks.is_empty() {
             extra.push(n.marks.join("、"));
         }
+        for s in n.spans() {
+            extra.push(format!("{}「{}」", s.mark, utf16_prefix(&s.text, 20)));
+        }
         if let Some(icon) = &n.icon {
             extra.push(format!("图标 {icon}"));
         }
         let extra = if extra.is_empty() { String::new() } else { format!("（{}）", extra.join("，")) };
-        lines.push(format!("{}{} {}{}{extra}", "  ".repeat(depth), n.id, n.kind.tag(), n.label));
+        let shown = match n.extra.get("text").and_then(Value::as_str).filter(|t| !t.is_empty()) {
+            Some(text) if text.encode_utf16().count() > REGION_TEXT => format!("{}…", utf16_prefix(text, REGION_TEXT)),
+            Some(text) => text.to_string(),
+            None => n.label.clone(),
+        };
+        lines.push(format!("{}{} {}{shown}{extra}", "  ".repeat(depth), n.id, n.kind.tag()));
         for c in self.children(&n.id) {
             self.describe_node(c, depth + 1, lines);
         }
@@ -317,6 +395,8 @@ impl Graph {
 
     /// Apply operations in order. Unresolvable ones are skipped, as a bad line must not cost a batch.
     pub fn apply(&mut self, ops: &[Op]) {
+        // Imported text stays put: the model can mark it, link it and note on it, but not change it.
+        let pinned: Vec<Node> = self.nodes.iter().filter(|n| n.kind == Kind::Region).cloned().collect();
         for o in ops {
             match o {
                 Op::N(name) => {
@@ -363,8 +443,13 @@ impl Graph {
                         }
                     }
                 }
-                Op::M(target, mark) => {
+                Op::M(target, mark, quote) => {
                     if let Some(i) = self.resolve(target, None).and_then(|id| self.index(&id)) {
+                        if let Some((text, sentence)) = quote.as_ref().filter(|_| self.nodes[i].kind == Kind::Region) {
+                            if self.mark_quote(i, text, *sentence, mark) {
+                                continue;
+                            }
+                        }
                         if !self.nodes[i].marks.contains(mark) {
                             self.nodes[i].marks.push(mark.clone());
                         }
@@ -437,8 +522,39 @@ impl Graph {
                 }
             }
         }
+        self.restore_pinned(pinned);
         let used: HashSet<String> = self.nodes.iter().filter_map(|n| n.group.clone()).collect();
         self.groups.retain(|x| used.contains(&x.id));
+    }
+}
+
+fn utf16_prefix(text: &str, units: usize) -> String {
+    let kept: Vec<u16> = text.encode_utf16().take(units).collect();
+    String::from_utf16_lossy(&kept)
+}
+
+impl NodeData {
+    /// Where an imported block sits on its page, as left, top, width and height.
+    pub fn at(&self) -> Option<[f64; 4]> {
+        let at = self.extra.get("at")?;
+        Some([at["x"].as_f64()?, at["y"].as_f64()?, at["w"].as_f64()?, at["h"].as_f64()?])
+    }
+
+    /// The text layer of an imported block.
+    pub fn rows(&self) -> Vec<RegionRow> {
+        self.extra.get("rows").and_then(|r| serde_json::from_value(r.clone()).ok()).unwrap_or_default()
+    }
+
+    pub fn spans(&self) -> Vec<Span> {
+        self.extra.get("spans").and_then(|s| serde_json::from_value(s.clone()).ok()).unwrap_or_default()
+    }
+
+    fn add_span(&mut self, span: Span) {
+        let mut spans = self.spans();
+        if !spans.iter().any(|s| s.same(&span)) {
+            spans.push(span);
+            self.extra.insert("spans".into(), json!(spans));
+        }
     }
 }
 
@@ -461,7 +577,8 @@ pub enum Op {
     /// Question or formula, optionally beside something.
     Attached(Kind, Option<Ref>, String),
     K(Ref, String),
-    M(Ref, String),
+    /// A mark, optionally on a quoted word or, if the flag is set, the sentence around it.
+    M(Ref, String, Option<(String, bool)>),
     H(Ref),
     I(Ref, String),
     E(Ref, Ref, Option<String>),
@@ -540,7 +657,11 @@ pub fn parse_ops(text: &str) -> Vec<Op> {
                     first.map(|s| Op::Attached(kind, None, s))
                 }
             }
-            "M" => a.zip(second.filter(|s| MARKS.contains(&s.as_str()))).map(|(a, s)| Op::M(a, s)),
+            "M" => a.zip(second.filter(|s| MARKS.contains(&s.as_str()))).map(|(a, s)| {
+                let sentence = rest.get(2).is_some_and(|t| t.text == "句" && !t.quoted);
+                let quote = rest.get(if sentence { 3 } else { 2 }).filter(|t| t.quoted && !t.text.is_empty());
+                Op::M(a, s, quote.map(|t| (t.text.clone(), sentence)))
+            }),
             "I" => a.zip(second.filter(|s| ICONS.contains(&s.as_str()))).map(|(a, s)| Op::I(a, s)),
             "G" if rest.len() > 1 => {
                 first.map(|g| Op::G(g, rest[1..].iter().filter_map(|t| reference(Some(t))).collect()))
@@ -636,6 +757,69 @@ pub fn grammar(g: &Graph, max_ops: usize, english: bool) -> String {
 
 #[cfg(test)]
 mod tests {
+    mod imported_pages {
+        use super::super::*;
+        use crate::board_layout::StableLayout;
+        use crate::steps::{diff, patch};
+        use crate::sugiyama::first_diagram;
+        use serde_json::Value;
+
+        #[test]
+        fn pages_match_the_typescript_engine() {
+            let goldens: Value = serde_json::from_str(include_str!("../fixtures/goldens.json")).unwrap();
+            let cases = goldens["pages"].as_array().unwrap();
+            assert!(cases.len() >= 12);
+            for case in cases {
+                let name = case["name"].as_str().unwrap();
+                let before: Graph = serde_json::from_value(case["before"].clone()).unwrap();
+                let mut g = before.clone();
+                g.apply(&parse_ops(case["ops"].as_str().unwrap()));
+                assert_eq!(serde_json::to_value(&g).unwrap(), case["graph"], "graph, {name}");
+                assert_eq!(g.describe(), case["described"], "description, {name}");
+                match diff(&before, &g) {
+                    Some(d) => assert_eq!(patch(&before, &d).nodes, g.nodes, "step, {name}"),
+                    None => assert!(case["step"].is_null(), "step, {name}"),
+                }
+                // The flow chart has its own layout here, unlike the older app's ELK.
+                if name.contains("->") {
+                    continue;
+                }
+                let mut memory = StableLayout::default();
+                let l = memory.layout(&g, &mut first_diagram);
+                let near = |a: f64, b: &Value, what: &str| assert!((a - b.as_f64().unwrap()).abs() < 0.01, "{what}: {a} vs {b}, {name}");
+                let b = &case["bounds"];
+                near(l.bounds.x0, &b["x0"], "x0");
+                near(l.bounds.y0, &b["y0"], "y0");
+                near(l.bounds.x1, &b["x1"], "x1");
+                near(l.bounds.y1, &b["y1"], "y1");
+                let anchors = case["anchors"].as_object().unwrap();
+                assert_eq!(l.anchors.len(), anchors.len(), "anchors, {name}");
+                for (id, a) in anchors {
+                    let r = &l.anchors[id];
+                    for (v, e) in [r.x, r.y, r.w, r.h].iter().zip(a.as_array().unwrap()) {
+                        near(*v, e, id);
+                    }
+                }
+                let regions = case["regions"].as_array().unwrap();
+                assert_eq!(l.regions.len(), regions.len(), "regions, {name}");
+                for (a, e) in l.regions.iter().zip(regions) {
+                    assert_eq!(a.rect.id, e["id"], "{name}");
+                    near(a.rect.x, &e["x"], "region x");
+                    near(a.rect.y, &e["y"], "region y");
+                    let rows = e["rows"].as_array().unwrap();
+                    assert_eq!(a.rows.len(), rows.len(), "{name}");
+                    for (row, er) in a.rows.iter().zip(rows) {
+                        assert_eq!(row.id, er[0], "{name}");
+                        assert_eq!(row.prefix, er[1], "{name}");
+                        assert_eq!(row.text, er[2], "{name}");
+                        near(row.x, &er[3], "row x");
+                        near(row.y, &er[4], "row y");
+                    }
+                }
+            }
+        }
+    }
+
     use super::*;
 
     #[derive(Deserialize)]
@@ -1082,7 +1266,7 @@ mod tests {
             "underlay": { "w": 10, "h": 20 },
         });
         let g: Graph = serde_json::from_value(raw.clone()).unwrap();
-        assert!(g.has_imported_content());
+        assert!(g.underlay().is_some());
         assert_eq!(serde_json::to_value(&g).unwrap(), raw);
     }
 

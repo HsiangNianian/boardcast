@@ -19,6 +19,7 @@ use crate::raster::Layer;
 use anyhow::{Context as _, Result};
 use boardcast_agent::summary::{self, Block, Line, Step};
 use boardcast_export::Kind as ExportKind;
+use boardcast_board::spans::{span_at, Unit};
 use boardcast_board::steps::{clock, replay_to, Player};
 use gpui_kit::base::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::base::slider::{Slider, SliderEvent, SliderIndicator, SliderState, SliderThumb, SliderTrack};
@@ -42,7 +43,15 @@ const INK_RGB: u32 = 0x1e_1e_1e;
 const MARKS: [(&str, &str); 5] = [("划掉", "Strike"), ("圈出", "Circle"), ("下划线", "Underline"), ("星标", "Star"), ("高亮", "Highlight")];
 const AUTOSAVE_AFTER: Duration = Duration::from_millis(500);
 const RETRY_SAVE_AFTER: Duration = Duration::from_secs(5);
+#[derive(Clone, Copy, PartialEq)]
+enum MarkUnit {
+    Word,
+    Sentence,
+    Block,
+}
+
 const TOOLBAR_W: f32 = 290.0;
+const TOOLBAR_W_WITH_UNITS: f32 = 520.0;
 const TOOLBAR_H: f32 = 36.0;
 /// A press that moves less than this is a click, not a pan.
 const CLICK_SLOP: f32 = 4.0;
@@ -151,6 +160,12 @@ struct Ink {
     targets: Vec<Rect>,
     /// The thing whose mark toolbar is open.
     selected: Option<String>,
+    /// Where the selection was clicked, in board coordinates, to find the word there.
+    selected_at: Option<(f64, f64)>,
+    /// How much of imported text a mark covers.
+    mark_unit: MarkUnit,
+    /// The imported page under the board, with its size on the board.
+    page: Option<(Arc<RenderImage>, f32, f32)>,
     /// What the layout check wants the model to hear next time.
     hints: Option<String>,
     /// The content's extent, which the automatic view fits.
@@ -293,6 +308,8 @@ impl Ink {
         let x = v.x + (f32::from(at.x) - f32::from(self.canvas.origin.x)) / v.k;
         let y = v.y + (f32::from(at.y) - f32::from(self.canvas.origin.y)) / v.k;
         self.selected = target_at(&self.targets, f64::from(x), f64::from(y)).map(|t| t.id.clone());
+        self.selected_at = self.selected.as_ref().map(|_| (f64::from(x), f64::from(y)));
+        self.mark_unit = MarkUnit::Block;
     }
 
     /// Where the toolbar goes, in canvas pixels: under the selection, kept inside the canvas.
@@ -305,7 +322,10 @@ impl Ink {
         let below = (t.y as f32 + t.h as f32 - v.y) * v.k + 8.0;
         let above = (t.y as f32 - v.y) * v.k - TOOLBAR_H - 8.0;
         let y = if below + TOOLBAR_H > h { above } else { below };
-        Some((x.clamp(8.0, (w - TOOLBAR_W - 8.0).max(8.0)), y.clamp(8.0, (h - TOOLBAR_H - 8.0).max(8.0))))
+        // Imported text also offers how much to mark, which makes the bar wider.
+        let has_text = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| !n.rows().is_empty());
+        let width = if has_text { TOOLBAR_W_WITH_UNITS } else { TOOLBAR_W };
+        Some((x.clamp(8.0, (w - width - 8.0).max(8.0)), y.clamp(8.0, (h - TOOLBAR_H - 8.0).max(8.0))))
     }
 
     /// Show another meeting: nothing of the old board remains, and the new one appears at once
@@ -754,6 +774,15 @@ fn backend_from(settings: &Settings, local_only: bool, binaries: &std::path::Pat
     }
 }
 
+/// An image as the screen takes it: blue first, with alpha left straight.
+fn page_render_image(bytes: &[u8]) -> Result<Arc<RenderImage>, String> {
+    let mut picture = image::load_from_memory(bytes).map_err(|e| e.to_string())?.to_rgba8();
+    for p in picture.pixels_mut() {
+        p.0.swap(0, 2);
+    }
+    Ok(Arc::new(RenderImage::new([image::Frame::new(picture)])))
+}
+
 fn gigabytes(bytes: u64) -> String {
     format!("{:.1} GB", bytes as f64 / 1e9)
 }
@@ -1151,6 +1180,7 @@ impl Workbench {
         let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(self.live.graph.clone(), history);
         self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
+        self.show_page_image();
         cx.notify();
     }
 
@@ -1159,7 +1189,18 @@ impl Workbench {
         if self.exporting.is_some() {
             return;
         }
-        let frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs, self.hanzi.clone());
+        let images: Vec<Option<boardcast_meetings::PageImage>> = self
+            .live
+            .board_images()
+            .iter()
+            .map(|r| {
+                r.as_ref().and_then(|r| match &self.store {
+                    Some(store) => store.page_image(self.live.id(), r).ok(),
+                    None => boardcast_meetings::decode_data_url(r).ok(),
+                })
+            })
+            .collect();
+        let frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images);
         let directory = self.export_dir.clone().unwrap_or_else(|| {
             let home = std::env::var_os("HOME").map_or_else(|| self.data.clone(), PathBuf::from);
             Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
@@ -1498,6 +1539,7 @@ impl Workbench {
         self.summary.reset();
         self.live = live;
         self.live.adopt_summary_source(&fingerprint_of(&self.live));
+        self.show_page_image();
         self.saved_changes = self.live.changes;
         self.seen_changes = self.live.changes;
         self.save = SaveState::Idle;
@@ -1553,7 +1595,30 @@ impl Workbench {
         let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(self.live.graph.clone(), history);
         self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
+        self.show_page_image();
         cx.notify();
+    }
+
+    /// Put this board's imported page on screen. A page that cannot be read is said, and the rest shown.
+    fn show_page_image(&mut self) {
+        let reference = self.live.board_images().into_iter().nth(self.live.page()).flatten();
+        let read = reference.map(|r| match &self.store {
+            Some(store) => store.page_image(self.live.id(), &r),
+            None => boardcast_meetings::decode_data_url(&r),
+        });
+        let picture = read.and_then(|image| match image.map_err(|e| format!("{e:#}")).and_then(|i| page_render_image(&i.bytes)) {
+            Ok(picture) => Some(picture),
+            Err(error) => {
+                self.notice = Some(format!("{}{error}", tr("The imported page could not be shown: ", "导入页显示失败：")));
+                None
+            }
+        });
+        let mut ink = self.ink.borrow_mut();
+        let size = self.live.graph.underlay();
+        let next = picture.zip(size).map(|(picture, (w, h))| (picture, w as f32, h as f32));
+        if let Some((old, _, _)) = std::mem::replace(&mut ink.page, next) {
+            ink.retired.push(old);
+        }
     }
 
     /// Toggle a mark by hand. It is drawn at once, in the same pen as a mark from the model.
@@ -1561,7 +1626,20 @@ impl Workbench {
         if !self.editable() {
             return;
         }
-        let graph = self.session().toggle_mark(id, mark);
+        let span = {
+            let ink = self.ink.borrow();
+            let unit = match ink.mark_unit {
+                MarkUnit::Word => Some(Unit::Word),
+                MarkUnit::Sentence => Some(Unit::Sentence),
+                MarkUnit::Block => None,
+            };
+            let rows = self.live.graph.nodes.iter().find(|n| n.id == id).map_or(vec![], |n| n.rows());
+            unit.zip(ink.selected_at).and_then(|(unit, (x, y))| span_at(&rows, x, y, mark, unit))
+        };
+        let graph = match span {
+            Some(span) => self.session().toggle_span(id, span),
+            None => self.session().toggle_mark(id, mark),
+        };
         self.next_batch += 1;
         let mut ink = self.ink.borrow_mut();
         ink.update(&graph, self.next_batch);
@@ -1791,7 +1869,7 @@ impl Workbench {
     }
 
     fn export_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
-        let drawn = !self.live.graph.nodes.is_empty();
+        let drawn = !self.live.graph.nodes.is_empty() || self.live.graph.underlay().is_some();
         let content = self.live.has_content();
         let formats = [
             (ExportKind::Markdown, "Markdown", tr("Key points, a Mermaid flow chart and the transcript.", "要点、Mermaid 流程图和会议记录。"), content),
@@ -1843,7 +1921,7 @@ impl Workbench {
             .flex_col()
             .gap_2()
             .when(self.live.read_only == Some(ViewOnly::ImportedContent), |d| {
-                d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("Imported pages and free-edit content are not included yet.", "导入页和自由编辑内容暂时不会导出。")))
+                d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("Free-edit content is not included.", "自由编辑内容不会导出。")))
             })
             .children(rows)
             .when_some(result, |d, result| d.child(result))
@@ -2121,6 +2199,11 @@ impl Render for Workbench {
                                 Some((tier, cover)) if inside(view, *cover) => tier,
                                 _ => &mut state.base,
                             };
+                            // Under everything, from the moment a replay reaches the page.
+                            if let Some((image, w, h)) = state.page.clone().filter(|_| state.graph.as_ref().is_some_and(|g| g.underlay().is_some())) {
+                                let area = Bounds::new(origin, size(px(w * v.k), px(h * v.k)));
+                                let _ = window.paint_image(area, area, gpui_kit::Corners::default(), image, 0, false);
+                            }
                             tier.under.paint(window, origin, v.k, Some(bounds));
                             tier.layer.paint(window, origin, v.k, Some(bounds));
                             if let Some(front) = b.queue.front().filter(|_| b.live > 0.0) {
@@ -2149,6 +2232,8 @@ impl Render for Workbench {
             ink.toolbar_at().zip(ink.selected.clone())
         };
         if let Some(((x, y), id)) = toolbar.filter(|_| self.editable()) {
+            let has_text = self.live.graph.nodes.iter().find(|n| n.id == id).is_some_and(|n| !n.rows().is_empty());
+            let unit_now = self.ink.borrow().mark_unit;
             let active: Vec<String> = self
                 .ink
                 .borrow()
@@ -2173,6 +2258,27 @@ impl Render for Workbench {
                     .bg(rgb(0xff_fe_fa))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .when(has_text, |d| {
+                        let units = [(MarkUnit::Word, "unit-word", tr("Word", "词")), (MarkUnit::Sentence, "unit-sentence", tr("Sentence", "句")), (MarkUnit::Block, "unit-block", tr("Block", "段"))];
+                        d.children(units.into_iter().map(|(unit, name, label)| {
+                            let chooser = self.ink.clone();
+                            div()
+                                .id(name)
+                                .px_2()
+                                .py_1()
+                                .rounded_sm()
+                                .cursor_pointer()
+                                .text_xs()
+                                .border_1()
+                                .border_color(rgb(0xdd_dd_d8))
+                                .when(unit_now == unit, |d| d.bg(rgb(0xec_ef_e7)))
+                                .child(label)
+                                .on_click(cx.listener(move |_, _, _, cx| {
+                                    chooser.borrow_mut().mark_unit = unit;
+                                    cx.notify();
+                                }))
+                        }))
+                    })
                     .children(MARKS.iter().map(|(mark, english)| {
                         let on = active.iter().any(|m| m == mark);
                         let id = id.clone();
@@ -2305,7 +2411,7 @@ impl Render for Workbench {
         let view_only = self.live.read_only.map(|reason| match reason {
             ViewOnly::Unreadable => tr("This meeting's board could not be read. It is view-only and its file is unchanged.", "这场会的板书读取失败，只能查看，文件不会被改动。"),
             ViewOnly::NewerFormat => tr("This meeting was saved by a newer version, so it is view-only.", "这场会是新版本保存的，只能查看。"),
-            ViewOnly::ImportedContent => tr("This meeting has imported pages or free-edit content. It is view-only here, and some of it is not shown yet. Its file is unchanged.", "这场会含导入页或自由编辑内容，这里只能查看，部分内容暂不显示，文件不会被改动。"),
+            ViewOnly::ImportedContent => tr("This meeting has free-edit content, which this version does not show. It is view-only here, and its file is unchanged.", "这场会含自由编辑内容，这个版本不显示，这里只能查看，文件不会被改动。"),
         });
         // During a replay the transcript has only reached that moment.
         let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&self.live.steps).min(self.live.lines.len()));
@@ -2634,6 +2740,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             next_tidy_batch: 0,
             targets: vec![],
             selected: None,
+            selected_at: None,
+            mark_unit: MarkUnit::Block,
+            page: None,
             hints: None,
             extent: BoardBounds::default(),
             view: None,
@@ -2707,7 +2816,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 if let Some(store) = &store {
                     let _ = store.remember_opened(live.id());
                 }
-                Workbench {
+                let mut workbench = Workbench {
                     ink,
                     pipeline,
                     input,
@@ -2748,7 +2857,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     next_batch: 0,
                     exit_when_done,
                     close_refused: false,
-                }
+                };
+                workbench.show_page_image();
+                workbench
             });
             let closing = view.clone();
             window.on_window_should_close(cx, move |_, cx| closing.update(cx, |this, cx| this.closing(cx)));

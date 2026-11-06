@@ -500,6 +500,13 @@ impl Session {
         graph.clone()
     }
 
+    /// Mark a word or sentence of imported text by hand, or take the mark off.
+    pub fn toggle_span(&self, id: &str, span: boardcast_board::spans::Span) -> Graph {
+        let mut graph = self.graph.lock().expect("graph lock");
+        graph.toggle_span(id, span);
+        graph.clone()
+    }
+
     pub fn set_hint(&self, hint: String) {
         *self.hint.lock().expect("hint lock") = Some(hint);
     }

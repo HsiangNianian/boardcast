@@ -9,6 +9,9 @@ use std::collections::HashMap;
 pub const FONT: f64 = 20.0;
 pub const TITLE: f64 = 28.0;
 const SMALL: f64 = 17.0;
+const PAGE_MARGIN: f64 = 320.0;
+const PAGE: &str = "__page";
+const MARGIN_REGION: &str = "__margin";
 pub const NODE_H: f64 = 64.0;
 const GAP: f64 = 90.0;
 const NODE_GAP: f64 = 40.0;
@@ -88,6 +91,8 @@ pub struct Layout {
     pub links: Vec<(String, String, Option<Route>)>,
     pub anchors: HashMap<String, Rect>,
     pub bounds: Bounds,
+    /// Imported blocks, fixed where the page prints them.
+    pub pins: Vec<Rect>,
 }
 
 impl Layout {
@@ -106,6 +111,8 @@ impl Layout {
                 out.push(Rect { id: row.id.clone(), x: r.rect.x + row.x, y: r.rect.y + row.y, w: row.w + pre, h: row.size + 8.0 });
             }
         }
+        // Last, as something written over a page should be what a click finds.
+        out.extend(self.pins.iter().cloned());
         out
     }
 }
@@ -520,6 +527,11 @@ impl StableLayout {
             .iter()
             .filter(|n| is_attach(n) && (!has_parent(g, n) || n.parent.as_ref().is_some_and(|p| ids.contains(p))))
             .collect();
+        // An imported page holds the top left, its text stays where it is printed, and notes on that
+        // text go in a margin to its right.
+        let page = g.underlay().map(|(w, h)| Rect { id: PAGE.into(), x: 0.0, y: 0.0, w: w + PAGE_MARGIN, h });
+        let pins: Vec<&Node> = g.nodes.iter().filter(|n| n.kind == Kind::Region && n.at().is_some()).collect();
+        let on_pins: Vec<&Node> = g.nodes.iter().filter(|n| is_attach(n) && n.parent.as_ref().is_some_and(|p| pins.iter().any(|x| &x.id == p))).collect();
         let mut slots = vec![];
         for n in &g.nodes {
             if is_head(g, n) {
@@ -546,7 +558,7 @@ impl StableLayout {
         self.box_at.retain(|k, _| slots.iter().any(|s| &s.key == k));
 
         // Remembered regions return to their place, pushed down if an earlier one has grown over them.
-        let mut placed: Vec<Rect> = vec![];
+        let mut placed: Vec<Rect> = page.iter().cloned().collect();
         let mut origin: HashMap<String, (f64, f64)> = HashMap::new();
         for s in &slots {
             let mut bx = if let Some(&(x, y)) = self.region_at.get(&s.key) {
@@ -607,6 +619,30 @@ impl StableLayout {
             }
         }
 
+        if let (Some(page), Some((page_w, _))) = (&page, g.underlay()) {
+            for n in &pins {
+                let [x, y, w, h] = n.at().expect("filtered above");
+                out.anchors.insert(n.id.clone(), Rect { id: n.id.clone(), x, y, w, h });
+                out.pins.push(Rect { id: n.id.clone(), x, y, w, h });
+            }
+            let host_y = |n: &Node| g.nodes.iter().find(|p| Some(&p.id) == n.parent.as_ref()).and_then(|p| p.at()).map_or(0.0, |a| a[1]);
+            let mut notes = on_pins.clone();
+            notes.sort_by(|a, b| host_y(a).total_cmp(&host_y(b)));
+            let mut rows = vec![];
+            let mut next = f64::NEG_INFINITY;
+            for n in notes {
+                let y = host_y(n).max(next);
+                rows.push(Row { id: n.id.clone(), prefix: prefix_for(n, 1, 0), text: n.label.clone(), x: page_w + 28.0, y, w: text_width(&n.label, SMALL), size: SMALL });
+                next = y + SMALL + 14.0;
+            }
+            if !rows.is_empty() {
+                for row in &rows {
+                    out.anchors.insert(row.id.clone(), Rect { id: row.id.clone(), x: row.x, y: row.y, w: row.w + 30.0, h: row.size + 8.0 });
+                }
+                out.regions.push(Region { rect: Rect { id: MARGIN_REGION.into(), x: 0.0, y: 0.0, w: page.w, h: page.h }, head: None, title: None, rows, links: vec![] });
+            }
+        }
+
         let mut topic_routes: HashMap<String, Route> = HashMap::new();
         for r in &out.regions {
             for link in &r.links {
@@ -632,6 +668,9 @@ impl StableLayout {
         let mut all: Vec<&Rect> = out.anchors.values().chain(out.regions.iter().map(|r| &r.rect)).collect();
         if let Some((frame, _)) = &out.diagram {
             all.push(frame);
+        }
+        if let Some(page) = &page {
+            all.push(page);
         }
         out.bounds = if all.is_empty() {
             Bounds { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }

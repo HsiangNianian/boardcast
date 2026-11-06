@@ -18,8 +18,10 @@ const PNG_MAX_SIDE: f64 = 8000.0;
 
 /// A board laid out, not yet drawn. Drawing a big board takes a while, so it can happen elsewhere.
 pub struct Composed {
-    pieces: Vec<Piece>,
-    bounds: Bounds,
+    pub(crate) pieces: Vec<Piece>,
+    pub(crate) bounds: Bounds,
+    /// Each region's id and the nodes in it, which settle when an unnamed region appeared.
+    pub(crate) regions: Vec<(String, Vec<String>)>,
 }
 
 pub struct Shape {
@@ -39,7 +41,8 @@ pub fn compose_board(graph: &Graph, memory: &Value, glyphs: &mut Glyphs) -> Comp
     layout.restore(memory);
     let laid = layout.layout(graph, &mut first_diagram);
     let (pieces, _) = compose(graph, &laid, glyphs);
-    Composed { pieces, bounds: laid.bounds }
+    let regions = laid.regions.iter().map(|r| (r.rect.id.clone(), r.rows.iter().map(|row| row.id.clone()).collect())).collect();
+    Composed { pieces, bounds: laid.bounds, regions }
 }
 
 impl Composed {
@@ -67,7 +70,7 @@ impl Drawn {
 }
 
 /// XML cannot hold control characters, which a saved title might.
-fn xml_text(text: &str) -> String {
+pub(crate) fn xml_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         match c {

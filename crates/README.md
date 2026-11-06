@@ -10,7 +10,7 @@ editing is dropped. The Tauri app in `src-tauri/` and `src/` stays until this on
 | `boardcast-agent` | Prompts, the layout skill, local and remote models, request queueing | UI, audio |
 | `boardcast-meetings` | Meeting files, the open meeting's state, undo, the replay record | UI, audio, network |
 | `boardcast-models` | The board models too large for the installer: the catalog and downloading | UI, audio, board |
-| `boardcast-export` | Writing a meeting out as Markdown, PNG, SVG or PDF | UI, audio |
+| `boardcast-export` | Writing a meeting out as Markdown, PNG, SVG, animated SVG or PDF | UI, audio |
 | `boardcast-update` | Finding, verifying and installing a new version | UI, audio, board |
 | `boardcast-ui` | The GPUI window, tiled ink rendering, wiring the chain together | |
 | `boardcast-tools` | `check` and `agent-eval` for CI and model evaluation | UI |
@@ -138,7 +138,7 @@ has tests).
 3. **Installable on Linux, done:** a package with its resources, model downloads, and automatic graphics selection.
    In-app updates are done too, and the `gpui-latest` prerelease has been installed through them. Mac and Windows
    are waiting until they can be tested. iPad is the main target and Mac the second.
-4. **Migrate the rest once the core is stable:** summary and to-dos are done, and so are Markdown, PNG, SVG and PDF
-   export. Next come replay with the animated SVG and replay page exports, PDF and image import, speaker
-   identification, Apple speech, and the web demo and website. `.excalidraw` export is still open. Only then retire
-   `src/` and `src-tauri/`.
+4. **Migrate the rest once the core is stable:** summary and to-dos are done, and so are replay and Markdown, PNG, SVG,
+   animated SVG and PDF export. Next come the replay page export, PDF and image import, speaker identification,
+   Apple speech, and the web demo and website. `.excalidraw` export is still open. Only then retire `src/` and
+   `src-tauri/`.

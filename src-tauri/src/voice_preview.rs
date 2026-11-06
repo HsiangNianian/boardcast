@@ -215,7 +215,7 @@ fn meter(
         let _ = errors.send(error);
     };
     let mut streams = Vec::new();
-    let mut resamplers = vec![None, None];
+    let mut resamplers = [None, None];
     let mut names = Vec::new();
     if source != Source::System {
         let dev = microphone(&host, device.as_deref())?;

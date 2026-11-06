@@ -7,4 +7,5 @@ pub mod compose;
 pub mod glyphs;
 pub mod graph;
 pub mod pen;
+pub mod steps;
 pub mod sugiyama;

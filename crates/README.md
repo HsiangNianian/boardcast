@@ -8,6 +8,7 @@ editing is dropped. The Tauri app in `src-tauri/` and `src/` stays until this on
 | `boardcast-board` | Board state, operations, layout, pen strokes, layout check | UI, audio, network |
 | `boardcast-audio` | Capture, VAD, speech recognition | UI, board |
 | `boardcast-agent` | Prompts, the layout skill, local and remote models, request queueing | UI, audio |
+| `boardcast-meetings` | Meeting files, the open meeting's state, undo, the replay record | UI, audio, network |
 | `boardcast-ui` | The GPUI window, tiled ink rendering, wiring the chain together | |
 | `boardcast-tools` | `check` and `agent-eval` for CI and model evaluation | UI |
 
@@ -20,7 +21,16 @@ cargo run --release -p boardcast-ui -- app <root> --demo bs-mixed --llm http://1
 cargo run --release -p boardcast-ui -- app <root> --synthetic 5000 --zoom-test --llm http://127.0.0.1:1
 cargo run --release -p boardcast-tools -- check <root> --all-demos --tidy
 cargo run --release -p boardcast-tools -- agent-eval <root> out.json --deepseek --only-dev --workers 6 --rules-only
-cargo test -p boardcast-board -p boardcast-agent
+cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings
+```
+
+Meetings are shared with the older app's data directory, and `BOARDCAST_DATA` and `BOARDCAST_CONFIG` point elsewhere for
+testing. To check a change to the file format against real data, work on a copy:
+
+```sh
+cp -r ~/.local/share/games.mmstudio.boardcast/meetings /tmp/copy/
+cargo run --release -p boardcast-tools -- meetings-check /tmp/copy
+node crates/meetings/fixtures/verify-with-typescript.mjs . /tmp/copy
 ```
 
 `<root>` is a boardcast checkout with `public/hanzi` generated, and models come from the Tauri app's data directory;
@@ -49,7 +59,20 @@ against 267, 3881 bends against 1390, and 1.6 times the area.
 **Layout check.** Incremental layout caused hard defects on 194 of 1682 steps of random growth. A full layout
 cleared all of them. No recorded sample has a hard defect.
 
-## Layout skill
+## Keeping a meeting
+
+Files stay compatible with the older app, in both directions. Twelve real meetings went through open and save, then the
+older app's own rules: migration hash, replay, node and edge text, and layout memory all held, and the v1 originals stayed
+byte-identical. That check caught two bugs unit tests had not: rewritten nodes had their fields reordered, which the
+older app reads as an edit, and numbers can be written differently, so the hash now covers the file's text.
+
+- A v1 file is never written to. Its first save goes to `meetings/v2/` with the original's hash.
+- Fields this version does not understand are kept, down to the field order of each node.
+- Saves are atomic and locked, and refuse a newer format, a deleted meeting, or a change made elsewhere.
+- A failed save keeps the meeting open, shows why, retries, and blocks leaving it. Closing is refused once.
+- Opening another meeting discards anything in flight for the old one: late replies, late failures and queued lines.
+- Imported pages and free-edit content are view-only until they move over, and those files are not touched.
+
 
 `crates/agent/skills/board-layout/SKILL.md` is the guidance, and `RULES.md` is its short form for the prompt.
 `Provider::default_rules` follows the results: on for DeepSeek, off for local Qwen 4B. Hints stay opt-in, since they
@@ -74,15 +97,15 @@ The checker's auto-repair fired on real model output once, on DeepSeek's `group-
 
 ## Not validated
 
-Real clicks on the mark toolbar (hit testing and toggling have unit tests), Mac and Windows, comparison with the
-Tauri app, icons, the pointing highlight, pencil drafts, speaker identification, saving meetings, imports and
-exports, and auto-tidy in a live meeting (the repair itself has tests).
+Real clicks on the mark toolbar, the undo buttons and shortcuts, the library and settings panels (the logic behind them
+has unit tests), Mac and Windows, comparison with the Tauri app, icons, the pointing highlight, pencil drafts, speaker
+identification, imports and exports, renaming and deleting meetings, and auto-tidy in a live meeting (the repair itself
+has tests).
 
 ## Migration order
 
 1. **Done:** crates, board, marks by voice and by hand, zoom, layout check, local and DeepSeek models.
-2. **Keep a meeting:** save and reopen in the existing format, undo, a model and key setting. A board that can be
-   lost is not usable, so this comes first.
+2. **Done:** save and reopen in the existing format, undo, a model and key setting.
 3. **Ship it:** bundle models, glyphs and llama-server; packages and updates on Linux, then Mac and Windows.
 4. **Migrate the rest once the core is stable:** summary and to-dos, replay, PDF and image import, all export
    formats, the web demo and website, speaker identification, and Apple speech. Only then retire `src/` and

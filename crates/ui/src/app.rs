@@ -6,15 +6,18 @@ use boardcast_board::check::check;
 use boardcast_board::compose::{compose, Style, PAPER};
 use boardcast_board::graph::{parse_ops, Graph, Utterance};
 use boardcast_board::sugiyama::first_diagram;
-use boardcast_agent::{Backend, Guidance, LocalServer, Provider, Said, Update};
+use boardcast_agent::settings::Settings;
+use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
+use boardcast_meetings::{default_dir, Info, Live, Store, ViewOnly};
 use boardcast_board::pen::{ink, outline, Inked, Rng};
+use crate::i18n::tr;
 use crate::pipeline::{Event, Pipeline, Script};
 use crate::raster::Layer;
 use anyhow::{Context as _, Result};
 use gpui_kit::base::input::{Input, InputEvent, InputState};
 use gpui_kit::{
-    canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, Entity, FillOptions,
-    Hsla, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PathBuilder, PathStyle, Pixels, Point, Render, RenderImage,
+    canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, Entity, FillOptions, FocusHandle,
+    Hsla, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PathBuilder, PathStyle, Pixels, Point, Render, RenderImage,
     ScrollEvent, Window, WindowBounds, WindowOptions,
 };
 use serde::Deserialize;
@@ -22,12 +25,15 @@ use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const INK_RGB: u32 = 0x1e_1e_1e;
-const MARKS: [&str; 5] = ["划掉", "圈出", "下划线", "星标", "高亮"];
+/// What the board stores, and what each is called on its button.
+const MARKS: [(&str, &str); 5] = [("划掉", "Strike"), ("圈出", "Circle"), ("下划线", "Underline"), ("星标", "Star"), ("高亮", "Highlight")];
+const AUTOSAVE_AFTER: Duration = Duration::from_millis(500);
+const RETRY_SAVE_AFTER: Duration = Duration::from_secs(5);
 const TOOLBAR_W: f32 = 290.0;
 const TOOLBAR_H: f32 = 36.0;
 /// A press that moves less than this is a click, not a pan.
@@ -294,6 +300,32 @@ impl Ink {
         Some((x.clamp(8.0, (w - TOOLBAR_W - 8.0).max(8.0)), y.clamp(8.0, (h - TOOLBAR_H - 8.0).max(8.0))))
     }
 
+    /// Show another meeting: nothing of the old board remains, and the new one appears at once
+    /// rather than being rewritten stroke by stroke.
+    fn open(&mut self, graph: &Graph, memory: &serde_json::Value) {
+        let level = self.base.level;
+        self.retired.extend(std::mem::replace(&mut self.base, Tier::new(level)).release());
+        self.retire_detail();
+        self.queue.clear();
+        self.finished.clear();
+        self.drawn.clear();
+        self.timings.clear();
+        self.targets.clear();
+        self.live = 0.0;
+        self.selected = None;
+        self.hints = None;
+        self.view = None;
+        self.reading = false;
+        self.drag = None;
+        self.extent = BoardBounds::default();
+        self.generation += 1;
+        self.rebuilding = None;
+        self.board = StableLayout::default();
+        self.board.restore(memory);
+        self.instant = true;
+        self.update(graph, 0);
+    }
+
     /// Fit everything: never above actual size, so a small board is not blown up.
     fn fit(&self) -> View {
         let (w, h) = (f32::from(self.canvas.size.width).max(1.0), f32::from(self.canvas.size.height).max(1.0));
@@ -476,6 +508,9 @@ impl Ink {
     }
 
     fn advance(&mut self) {
+        if self.queue.is_empty() {
+            self.instant = false;
+        }
         let now = Instant::now();
         let dt = self.last.replace(now).map_or(0.016, |l| (now - l).as_secs_f32()).min(0.1);
         let mut budget = if self.instant { f32::MAX } else { PEN_PX_PER_SECOND * (1.0 + self.queue.len() as f32 / 60.0) * dt };
@@ -527,24 +562,102 @@ impl Ink {
     }
 }
 
-struct Heard {
-    speaker: Option<String>,
-    text: String,
-    note: String,
+#[derive(Clone, Debug, PartialEq)]
+enum SaveState {
+    Idle,
+    Dirty,
+    Saving,
+    Saved,
+    Failed(String),
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Panel {
+    Transcript,
+    Library,
+    Settings,
+}
+
+struct SettingsForm {
+    base_url: Entity<InputState>,
+    model: Entity<InputState>,
+    key: Entity<InputState>,
+    remote: bool,
+    saved: Settings,
+    note: Option<String>,
+    probing: Option<Receiver<Result<u128, String>>>,
 }
 
 struct Workbench {
     ink: Rc<RefCell<Ink>>,
     pipeline: Pipeline,
     input: Entity<InputState>,
-    lines: Vec<Heard>,
+    focus: FocusHandle,
+    live: Live,
+    /// None for a sample or a measurement, which must not touch real meetings.
+    store: Option<Store>,
+    save: SaveState,
+    saving: Option<(Receiver<Result<u64, String>>, u64)>,
+    saved_changes: u64,
+    seen_changes: u64,
+    last_change: Instant,
+    last_attempt: Option<Instant>,
+    panel: Panel,
+    library: Vec<Info>,
+    form: SettingsForm,
+    /// A model given on the command line outranks the settings.
+    forced_backend: bool,
+    models: PathBuf,
+    binaries: PathBuf,
+    notice: Option<String>,
     status: String,
     level: f32,
     next_batch: u64,
     exit_when_done: bool,
+    /// A failed save blocked closing once; the next attempt closes anyway.
+    close_refused: bool,
+}
+
+fn backend_from(settings: &Settings, local_only: bool, binaries: &std::path::Path, models: &std::path::Path) -> Backend {
+    if settings.enabled && settings.is_complete() && !local_only {
+        Backend::Ready(Provider::Remote { base_url: settings.base_url.clone(), key: settings.api_key.clone(), model: settings.model.clone() })
+    } else {
+        Backend::ManagedLocal(Arc::new(LocalServer { binaries: binaries.to_path_buf(), model: models.join("Qwen3.5-4B-Q4_K_M.gguf") }))
+    }
+}
+
+fn spoken(lines: &[Utterance]) -> Vec<(Option<String>, String)> {
+    lines.iter().map(|l| (l.speaker.clone(), l.text.clone())).collect()
+}
+
+fn line_note(line: &serde_json::Value) -> String {
+    let mut parts = vec![];
+    if let Some(ms) = line["heard"]["asrMs"].as_u64() {
+        parts.push(format!("{} {ms} ms", tr("Heard", "识别")));
+    }
+    if line["failed"].as_bool().unwrap_or(false) {
+        parts.push(tr("Not drawn", "没有画上").to_string());
+    } else if line["ms"].is_null() {
+        parts.push(tr("Drawing…", "正在画…").to_string());
+    } else if let Some(ms) = line["ms"].as_u64().filter(|ms| *ms > 0) {
+        parts.push(format!("{} {ms} ms", tr("Model", "模型")));
+    }
+    parts.join(" · ")
 }
 
 impl Workbench {
+    fn session(&self) -> &boardcast_agent::Session {
+        self.pipeline.session()
+    }
+
+    fn editable(&self) -> bool {
+        self.live.read_only.is_none()
+    }
+
+    fn dirty(&self) -> bool {
+        self.store.is_some() && self.editable() && self.live.has_content() && self.live.changes != self.saved_changes
+    }
+
     fn pump(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
         {
@@ -552,41 +665,60 @@ impl Workbench {
             let before = (ink.base.level, ink.detail.as_ref().map(|(t, c)| (t.level, *c)));
             ink.maintain_sharpness();
             changed |= (ink.base.level, ink.detail.as_ref().map(|(t, c)| (t.level, *c))) != before;
+            // Hints go to the model with the next line it is asked about.
+            if let Some(hint) = ink.hints.take() {
+                self.session().set_hint(hint);
+            }
         }
         while let Ok(event) = self.pipeline.events.try_recv() {
             changed = true;
             match event {
-                Event::Agent(Update::Status(s)) => self.status = s,
+                Event::Agent(Update::Loading) => self.status = tr("Loading the board model…", "正在加载板书模型…").into(),
+                Event::Agent(Update::Ready) => self.status = tr("Board model ready", "板书模型就绪").into(),
                 Event::Level(l) => self.level = l,
-                Event::Heard { speaker, text, asr_ms } => {
-                    let note = asr_ms.map_or(String::new(), |ms| format!("识别 {ms} ms"));
-                    self.lines.push(Heard { speaker, text, note });
+                Event::Heard { meeting, speaker, text, asr_ms } => {
+                    if meeting == self.session().meeting() {
+                        self.live.add_line(speaker.as_deref(), &text, asr_ms);
+                    }
                 }
-                Event::Agent(Update::Drawn { graph, ops, text, asr_ms, llm_ms, batch, ended }) => {
+                Event::Agent(Update::Drawn { meeting, graph, ops, lines, asr_ms, llm_ms, ended }) => {
+                    if meeting != self.session().meeting() {
+                        continue;
+                    }
                     println!("{{\"ops\":{},\"board\":{}}}", serde_json::Value::from(ops.clone()), serde_json::Value::from(graph.describe()));
                     self.next_batch += 1;
                     let id = self.next_batch;
                     let arrived = Instant::now();
+                    let text = lines.last().map_or(String::new(), |l| l.text.clone());
                     let mut ink = self.ink.borrow_mut();
                     let strokes = ink.update(&graph, id);
                     if strokes > 0 {
-                        ink.timings.push(Timing { id, text: text.clone(), asr_ms, llm_ms, batch, ended, arrived, first_ink: None, strokes });
+                        ink.timings.push(Timing { id, text, asr_ms, llm_ms, batch: lines.len(), ended, arrived, first_ink: None, strokes });
                     }
+                    let memory = ink.board.snapshot();
                     drop(ink);
-                    if let Some(line) = self.lines.iter_mut().rev().find(|l| l.text == text) {
-                        line.note = format!("{} 模型 {llm_ms} ms", line.note).trim().to_string();
-                    }
-                    self.status = format!("板书 {}", ops.replace('\n', "  "));
+                    self.live.model_drew(&spoken(&lines), graph, memory, &ops, llm_ms);
+                    self.status = format!("{} {}", tr("Board", "板书"), ops.replace('\n', "  "));
                 }
-                Event::Agent(Update::Failed(e)) | Event::Failed(e) => {
-                    eprintln!("failed: {e}");
-                    self.status = format!("出错：{e}");
+                Event::Agent(Update::Failed { meeting, message, lines }) => {
+                    if meeting != self.session().meeting() {
+                        continue;
+                    }
+                    eprintln!("model failed: {message}");
+                    self.live.model_failed(&spoken(&lines));
+                    self.notice = Some(format!("{}{message}", tr("The model did not answer: ", "模型没有回应：")));
+                }
+                Event::Agent(Update::Broken(message)) | Event::Failed(message) => {
+                    eprintln!("failed: {message}");
+                    self.notice = Some(message);
                 }
                 Event::Done => {
                     println!("{{\"done\":true,\"rss_mb\":{}}}", rss_mb());
                     if self.exit_when_done {
-                        cx.spawn(async move |_, cx| {
-                            cx.background_executor().timer(Duration::from_secs(8)).await;
+                        cx.spawn(async move |this, cx| {
+                            cx.background_executor().timer(Duration::from_secs(6)).await;
+                            let saved = this.update(cx, |this, _| this.flush());
+                            println!("{{\"exit_save_ok\":{}}}", matches!(saved, Ok(Ok(()))));
                             std::process::exit(0);
                         })
                         .detach();
@@ -594,29 +726,331 @@ impl Workbench {
                 }
             }
         }
+        self.pump_probe(&mut changed);
+        changed |= self.autosave();
         if changed {
             cx.notify();
         }
     }
 
+    fn pump_probe(&mut self, changed: &mut bool) {
+        let Some(rx) = &self.form.probing else { return };
+        match rx.try_recv() {
+            Ok(result) => {
+                self.form.note = Some(match result {
+                    Ok(ms) => format!("{} {ms} ms", tr("Connected in", "连接成功，用时")),
+                    Err(e) => format!("{}{e}", tr("Could not connect: ", "连接失败：")),
+                });
+                self.form.probing = None;
+                *changed = true;
+            }
+            Err(TryRecvError::Disconnected) => self.form.probing = None,
+            Err(TryRecvError::Empty) => {}
+        }
+    }
+
+    fn finish_save(&mut self, result: Result<u64, String>, covers: u64) {
+        self.last_attempt = Some(Instant::now());
+        match result {
+            Ok(revision) => {
+                self.live.saved(revision);
+                self.saved_changes = covers;
+                self.save = if self.live.changes == covers { SaveState::Saved } else { SaveState::Dirty };
+            }
+            Err(error) => {
+                eprintln!("save failed: {error}");
+                self.save = SaveState::Failed(error);
+            }
+        }
+    }
+
+    /// Save a short while after the last change. Failures stay on screen and are retried, and the
+    /// meeting stays open with everything in it.
+    fn autosave(&mut self) -> bool {
+        let before = self.save.clone();
+        if self.live.changes != self.seen_changes {
+            self.seen_changes = self.live.changes;
+            self.last_change = Instant::now();
+            if !matches!(self.save, SaveState::Failed(_) | SaveState::Saving) && self.dirty() {
+                self.save = SaveState::Dirty;
+            }
+        }
+        if let Some((rx, covers)) = &self.saving {
+            let covers = *covers;
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.saving = None;
+                    self.finish_save(result, covers);
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.saving = None;
+                    self.finish_save(Err("the save did not finish".into()), covers);
+                }
+                Err(TryRecvError::Empty) => return self.save != before,
+            }
+        }
+        let waited = match self.save {
+            SaveState::Failed(_) => self.last_attempt.is_none_or(|t| t.elapsed() >= RETRY_SAVE_AFTER),
+            _ => self.last_change.elapsed() >= AUTOSAVE_AFTER,
+        };
+        if self.dirty() && waited {
+            self.start_save();
+        }
+        self.save != before
+    }
+
+    fn start_save(&mut self) {
+        let Some(store) = self.store.clone() else { return };
+        let covers = self.live.changes;
+        let (id, snapshot, origin, revision) = (self.live.id().to_string(), self.live.snapshot(), self.live.origin.clone(), self.live.revision);
+        let (tx, rx) = channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(store.save(&id, snapshot, &origin, revision).map_err(|e| format!("{e:#}")));
+        });
+        self.saving = Some((rx, covers));
+        if !matches!(self.save, SaveState::Failed(_)) {
+            self.save = SaveState::Saving;
+        }
+    }
+
+    /// Everything on disk before leaving this meeting. On failure the caller must stay.
+    fn flush(&mut self) -> Result<(), String> {
+        if let Some((rx, covers)) = self.saving.take() {
+            let result = rx.recv().unwrap_or_else(|_| Err("the save did not finish".into()));
+            self.finish_save(result, covers);
+        }
+        if self.dirty() {
+            let store = self.store.clone().expect("dirty needs a store");
+            let covers = self.live.changes;
+            let id = self.live.id().to_string();
+            let origin = self.live.origin.clone();
+            let revision = self.live.revision;
+            let result = store.save(&id, self.live.snapshot(), &origin, revision).map_err(|e| format!("{e:#}"));
+            self.finish_save(result, covers);
+        }
+        match &self.save {
+            SaveState::Failed(error) if self.dirty() => Err(error.clone()),
+            _ => Ok(()),
+        }
+    }
+
+    fn apply_backend(&self) {
+        if !self.forced_backend {
+            self.session().set_backend(backend_from(&self.form.saved, self.live.local_only(), &self.binaries, &self.models));
+        }
+    }
+
+    /// Put a meeting on screen. Anything still in flight for the previous one is discarded.
+    fn show(&mut self, live: Live) {
+        if self.pipeline.listening() {
+            self.pipeline.toggle_mic();
+        }
+        let history: Vec<Utterance> = live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
+        self.session().open(live.graph.clone(), history);
+        self.ink.borrow_mut().open(&live.graph, &live.memory);
+        self.live = live;
+        self.saved_changes = self.live.changes;
+        self.seen_changes = self.live.changes;
+        self.save = SaveState::Idle;
+        self.last_attempt = None;
+        self.notice = None;
+        self.apply_backend();
+        if let Some(store) = &self.store {
+            let _ = store.remember_opened(self.live.id());
+        }
+    }
+
+    /// Leave the current meeting only if it is safely saved; otherwise stay and say why.
+    fn leave(&mut self) -> bool {
+        match self.flush() {
+            Ok(()) => true,
+            Err(error) => {
+                self.notice = Some(format!("{}{error}", tr("Staying on this meeting because it could not be saved: ", "这场会保存失败，先留在这里：")));
+                false
+            }
+        }
+    }
+
+    fn new_meeting(&mut self, cx: &mut Context<Self>) {
+        if self.leave() {
+            self.show(Live::new());
+            self.panel = Panel::Transcript;
+        }
+        cx.notify();
+    }
+
+    fn open_meeting(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some(store) = self.store.clone() else { return };
+        if id != self.live.id() && self.leave() {
+            match store.load(id) {
+                Ok(Some(loaded)) => {
+                    self.show(Live::from_loaded(loaded));
+                    self.panel = Panel::Transcript;
+                }
+                Ok(None) => self.notice = Some(tr("That meeting no longer exists.", "这场会已经不存在了。").into()),
+                Err(e) => self.notice = Some(format!("{}{e:#}", tr("Could not open the meeting: ", "打不开这场会："))),
+            }
+        }
+        cx.notify();
+    }
+
+    fn go_to_page(&mut self, page: usize, cx: &mut Context<Self>) {
+        self.live.go_to_page(page);
+        let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
+        self.session().open(self.live.graph.clone(), history);
+        self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
+        cx.notify();
+    }
+
     /// Toggle a mark by hand. It is drawn at once, in the same pen as a mark from the model.
     fn mark(&mut self, id: &str, mark: &str, cx: &mut Context<Self>) {
-        let graph = self.pipeline.toggle_mark(id, mark);
+        if !self.editable() {
+            return;
+        }
+        let graph = self.session().toggle_mark(id, mark);
         self.next_batch += 1;
-        self.ink.borrow_mut().update(&graph, self.next_batch);
+        let mut ink = self.ink.borrow_mut();
+        ink.update(&graph, self.next_batch);
+        let memory = ink.board.snapshot();
+        drop(ink);
+        self.live.change_board(graph, memory);
+        cx.notify();
+    }
+
+    fn step(&mut self, forward: bool, cx: &mut Context<Self>) {
+        let snap = if forward { self.live.redo() } else { self.live.undo() };
+        if let Some(snap) = snap {
+            self.session().set_graph(snap.graph.clone());
+            self.next_batch += 1;
+            let mut ink = self.ink.borrow_mut();
+            ink.board.restore(&snap.memory);
+            ink.update(&snap.graph, self.next_batch);
+        }
+        cx.notify();
+    }
+
+    fn tidy(&mut self, cx: &mut Context<Self>) {
+        let mut ink = self.ink.borrow_mut();
+        ink.tidy();
+        let memory = ink.board.snapshot();
+        drop(ink);
+        self.live.change_board(self.live.graph.clone(), memory);
+        cx.notify();
+    }
+
+    fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        // Text fields keep their own undo.
+        if !self.focus.is_focused(window) {
+            return;
+        }
+        let keys = &event.keystroke;
+        if keys.modifiers.control || keys.modifiers.platform {
+            match keys.key.as_str() {
+                "z" if keys.modifiers.shift => self.step(true, cx),
+                "z" => self.step(false, cx),
+                "y" => self.step(true, cx),
+                _ => {}
+            }
+        }
+    }
+
+    fn toggle_panel(&mut self, panel: Panel, cx: &mut Context<Self>) {
+        self.panel = if self.panel == panel { Panel::Transcript } else { panel };
+        if self.panel == Panel::Library {
+            if let Some(store) = &self.store {
+                match store.list() {
+                    Ok(list) => self.library = list,
+                    Err(e) => self.notice = Some(format!("{}{e:#}", tr("Could not list meetings: ", "读取会议列表失败："))),
+                }
+            }
+        }
+        cx.notify();
+    }
+
+    fn form_settings(&self, cx: &App) -> Settings {
+        let value = |input: &Entity<InputState>| input.read(cx).value().trim().to_string();
+        let key = value(&self.form.key);
+        Settings {
+            base_url: value(&self.form.base_url),
+            model: value(&self.form.model),
+            // An empty field keeps the saved key, which is never shown again.
+            api_key: if key.is_empty() { self.form.saved.api_key.clone() } else { key },
+            enabled: self.form.remote,
+        }
+    }
+
+    fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let settings = self.form_settings(cx);
+        if settings.enabled && !settings.is_complete() {
+            self.form.note = Some(tr("Fill in the address, model and API key first.", "请先填写地址、模型和 API key。").into());
+            cx.notify();
+            return;
+        }
+        match settings.save() {
+            Ok(()) => {
+                self.form.saved = settings;
+                self.form.key.update(cx, |state, cx| state.set_value("", window, cx));
+                self.form.note = Some(tr("Saved.", "已保存。").into());
+                self.apply_backend();
+            }
+            Err(e) => self.form.note = Some(format!("{}{e:#}", tr("Could not save: ", "保存失败："))),
+        }
+        cx.notify();
+    }
+
+    fn test_settings(&mut self, cx: &mut Context<Self>) {
+        let settings = self.form_settings(cx);
+        if !settings.is_complete() {
+            self.form.note = Some(tr("Fill in the address, model and API key first.", "请先填写地址、模型和 API key。").into());
+            cx.notify();
+            return;
+        }
+        let provider = Provider::Remote { base_url: settings.base_url, key: settings.api_key, model: settings.model };
+        let (tx, rx) = channel();
+        std::thread::spawn(move || {
+            let hello = Utterance { speaker: None, text: "Hello".into() };
+            let reply = propose(&provider, &Graph::default(), &[], &hello, Guidance::default(), None);
+            let _ = tx.send(reply.map(|r| r.ms).map_err(|e| format!("{e:#}")));
+        });
+        self.form.probing = Some(rx);
+        self.form.note = Some(tr("Testing…", "正在测试…").into());
         cx.notify();
     }
 
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.input.read(cx).value().trim().to_string();
-        if text.is_empty() {
+        if text.is_empty() || !self.editable() {
             return;
         }
         self.input.update(cx, |state, cx| state.set_value("", window, cx));
-        self.lines.push(Heard { speaker: None, text: text.clone(), note: String::new() });
-        let _ = self.pipeline.said.send(Said { line: Utterance { speaker: None, text }, ended: Instant::now(), asr_ms: None });
+        self.live.add_line(None, &text, None);
+        let meeting = self.session().meeting();
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker: None, text }, ended: Instant::now(), asr_ms: None, meeting });
         cx.notify();
     }
+
+    /// On closing: save, and if that fails keep the window open once so the user can see why.
+    fn closing(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.close_refused {
+            return true;
+        }
+        if let Err(error) = self.flush() {
+            self.close_refused = true;
+            self.notice = Some(format!("{}{error}", tr("Not saved, so the window stayed open. Close again to discard: ", "没有保存成功，窗口先不关。再关一次将丢弃未保存内容：")));
+            cx.notify();
+            return false;
+        }
+        true
+    }
+}
+
+fn button(id: &'static str, label: impl Into<gpui_kit::SharedString>) -> gpui_kit::Stateful<gpui_kit::Div> {
+    div().id(id).px_2().py_1().rounded_md().cursor_pointer().text_sm().border_1().border_color(rgb(0xdd_dd_d8)).child(label.into())
+}
+
+fn local_time(ms: f64) -> String {
+    use chrono::TimeZone;
+    chrono::Local.timestamp_millis_opt(ms as i64).single().map_or(String::new(), |t| t.format("%Y-%m-%d %H:%M").to_string())
 }
 
 /// A recorded sample replayed from its stored model output, with no model involved.
@@ -690,10 +1124,6 @@ impl Render for Workbench {
                 window.request_animation_frame();
             }
         }
-        // Hints go to the model with the next line it is asked about.
-        if let Some(hint) = self.ink.borrow_mut().hints.take() {
-            self.pipeline.set_hint(hint);
-        }
         let (reading, zoom) = {
             let ink = self.ink.borrow();
             (ink.reading, ink.shown().k)
@@ -717,7 +1147,8 @@ impl Render for Workbench {
                 wheel.borrow_mut().zoom_at(e.position, (dy * 0.0015).exp());
                 cx.notify();
             }))
-            .on_mouse_down(MouseButton::Left, cx.listener(move |_, e: &MouseDownEvent, _, _| {
+            .on_mouse_down(MouseButton::Left, cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                window.focus(&this.focus, cx);
                 let mut b = press.borrow_mut();
                 let view = b.shown();
                 b.drag = Some((e.position, view));
@@ -801,7 +1232,7 @@ impl Render for Workbench {
             let ink = self.ink.borrow();
             ink.toolbar_at().zip(ink.selected.clone())
         };
-        if let Some(((x, y), id)) = toolbar {
+        if let Some(((x, y), id)) = toolbar.filter(|_| self.editable()) {
             let active: Vec<String> = self
                 .ink
                 .borrow()
@@ -826,9 +1257,10 @@ impl Render for Workbench {
                     .bg(rgb(0xff_fe_fa))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .children(MARKS.iter().map(|mark| {
+                    .children(MARKS.iter().map(|(mark, english)| {
                         let on = active.iter().any(|m| m == mark);
                         let id = id.clone();
+                        let label = if tr("en", "zh") == "zh" { *mark } else { *english };
                         div()
                             .id(*mark)
                             .px_2()
@@ -837,7 +1269,7 @@ impl Render for Workbench {
                             .cursor_pointer()
                             .text_sm()
                             .when(on, |d| d.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff)))
-                            .child(*mark)
+                            .child(label)
                             .on_click(cx.listener(move |this, _, _, cx| this.mark(&id, mark, cx)))
                     })),
             );
@@ -857,7 +1289,7 @@ impl Render for Workbench {
                     .bg(rgb(0x24_27_20))
                     .text_color(rgb(0xff_ff_ff))
                     .text_sm()
-                    .child("回到最新")
+                    .child(tr("Back to latest", "回到最新"))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(cx.listener(move |_, _, _, cx| {
                         back.borrow_mut().show_latest();
@@ -866,51 +1298,72 @@ impl Render for Workbench {
             );
         }
         let meter = (self.level.min(1.0) * 100.0).max(2.0);
+        let editable = self.editable();
+        let (page, pages) = (self.live.page(), self.live.pages());
+        let save_label: String = match &self.save {
+            _ if self.store.is_none() => tr("Sample, not saved", "示例，不保存").into(),
+            _ if !editable => tr("View only", "只读").into(),
+            SaveState::Idle => String::new(),
+            SaveState::Dirty => tr("Unsaved", "未保存").into(),
+            SaveState::Saving => tr("Saving…", "正在保存…").into(),
+            SaveState::Saved => tr("Saved", "已保存").into(),
+            SaveState::Failed(_) => tr("Not saved", "保存失败").into(),
+        };
         let bar = div()
             .flex()
             .items_center()
-            .gap_3()
+            .gap_2()
             .px_3()
             .h(px(44.))
+            .flex_shrink_0()
             .border_b_1()
             .border_color(rgb(0xdd_dd_d8))
-            .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child("boardcast · GPUI 原型"))
-            .child(
-                div()
-                    .id("mic")
-                    .px_3()
-                    .py_1()
-                    .rounded_md()
-                    .cursor_pointer()
-                    .text_color(rgb(0xff_ff_ff))
-                    .bg(rgb(if listening { 0xc7_44_32 } else { 0x24_27_20 }))
-                    .child(if listening { "停止收音" } else { "开始收音" })
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.pipeline.toggle_mic();
-                        cx.notify();
-                    })),
-            )
-            .child(div().w(px(80.)).h(px(6.)).rounded_sm().bg(rgb(0xe4_e4_df)).child(
-                div().h_full().rounded_sm().w(px(meter * 0.8)).bg(rgb(0x28_61_43)),
-            ))
-            .child(div().text_sm().text_color(rgb(0x62_66_5c)).child(format!("{:.0}%", zoom * 100.0)))
-            .child(
-                div()
-                    .id("tidy")
-                    .px_2()
-                    .py_1()
-                    .rounded_md()
-                    .cursor_pointer()
-                    .text_sm()
-                    .border_1()
-                    .border_color(rgb(0xdd_dd_d8))
-                    .child("整理排版")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.ink.borrow_mut().tidy();
-                        cx.notify();
-                    })),
-            )
-            .child(div().flex_1().overflow_hidden().text_sm().text_color(rgb(0x62_66_5c)).child(self.status.clone()));
+            .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).max_w(px(240.)).overflow_hidden().whitespace_nowrap().child(self.live.title().to_string()))
+            .child(div().text_xs().text_color(rgb(if matches!(self.save, SaveState::Failed(_)) { 0xa3_28_26 } else { 0x62_66_5c })).whitespace_nowrap().child(save_label))
+            .child(button("library", tr("Meetings", "会议")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
+            .child(button("new", tr("New", "新建")).when(self.store.is_some(), |d| d.on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
+            .when(editable, |d| {
+                d.child(
+                    div()
+                        .id("mic")
+                        .px_3()
+                        .py_1()
+                        .rounded_md()
+                        .cursor_pointer()
+                        .text_sm()
+                        .whitespace_nowrap()
+                        .text_color(rgb(0xff_ff_ff))
+                        .bg(rgb(if listening { 0xc7_44_32 } else { 0x24_27_20 }))
+                        .child(if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") })
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.pipeline.toggle_mic();
+                            cx.notify();
+                        })),
+                )
+                .child(div().w(px(60.)).h(px(6.)).rounded_sm().bg(rgb(0xe4_e4_df)).child(div().h_full().rounded_sm().w(px(meter * 0.6)).bg(rgb(0x28_61_43))))
+            })
+            .child(div().flex_1().overflow_hidden().whitespace_nowrap().text_xs().text_color(rgb(0x62_66_5c)).child(self.status.clone()))
+            .when(pages > 1, |d| {
+                d.child(button("previous", "‹").on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx))))
+                    .child(div().text_sm().whitespace_nowrap().child(format!("{} / {pages}", page + 1)))
+                    .child(button("next", "›").on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx))))
+            })
+            .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(format!("{:.0}%", zoom * 100.0)))
+            .when(editable, |d| {
+                d.child(button("undo", tr("Undo", "撤销")).when(!self.live.can_undo(), |b| b.opacity(0.4)).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
+                    .child(button("redo", tr("Redo", "重做")).when(!self.live.can_redo(), |b| b.opacity(0.4)).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
+                    .child(button("tidy", tr("Tidy", "整理排版")).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
+            })
+            .child(button("settings", tr("Settings", "设置")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))));
+        let banner = self.notice.clone().or_else(|| match &self.save {
+            SaveState::Failed(error) => Some(format!("{}{error}", tr("Your meeting is still open here, but it was not saved: ", "这场会还在这里，但没有保存成功："))),
+            _ => None,
+        });
+        let view_only = self.live.read_only.map(|reason| match reason {
+            ViewOnly::Unreadable => tr("This meeting's board could not be read. It is view-only and its file is unchanged.", "这场会的板书读取失败，只能查看，文件不会被改动。"),
+            ViewOnly::NewerFormat => tr("This meeting was saved by a newer version, so it is view-only.", "这场会是新版本保存的，只能查看。"),
+            ViewOnly::ImportedContent => tr("This meeting has imported pages or free-edit content. It is view-only here, and some of it is not shown yet. Its file is unchanged.", "这场会含导入页或自由编辑内容，这里只能查看，部分内容暂不显示，文件不会被改动。"),
+        });
         let transcript = div()
             .id("transcript")
             .flex_1()
@@ -919,30 +1372,106 @@ impl Render for Workbench {
             .gap_3()
             .flex()
             .flex_col()
-            .children(self.lines.iter().rev().map(|l| {
+            .children(self.live.lines.iter().rev().map(|l| {
+                let manual = l["manual"].as_bool().unwrap_or(false);
+                let note = line_note(l);
                 div()
                     .flex()
                     .flex_col()
-                    .when_some(l.speaker.clone(), |d, s| d.child(div().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(s)))
-                    .child(div().text_sm().child(l.text.clone()))
-                    .when(!l.note.is_empty(), |d| d.child(div().text_xs().text_color(rgb(0x85_8a_80)).child(l.note.clone())))
+                    .when_some(l["speaker"].as_str().map(str::to_string), |d, s| d.child(div().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(s)))
+                    .child(div().text_sm().when(manual, |d| d.text_color(rgb(0x85_8a_80))).child(l["text"].as_str().unwrap_or_default().to_string()))
+                    .when(!note.is_empty() && !manual, |d| {
+                        d.child(div().text_xs().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { 0xa3_28_26 } else { 0x85_8a_80 })).child(note))
+                    })
             }));
+        let library = div().id("library-list").flex_1().overflow_y_scroll().p_2().flex().flex_col().gap_1().when(self.library.is_empty(), |d| {
+            d.child(div().p_2().text_sm().text_color(rgb(0x85_8a_80)).child(tr("No meetings yet.", "还没有会议。")))
+        });
+        let library = library.children(self.library.iter().enumerate().map(|(i, m)| {
+            let id = m.id.clone();
+            let current = id == self.live.id();
+            let detail = match &m.read_error {
+                Some(_) => tr("Could not be read", "无法读取").to_string(),
+                None => format!("{} · {} {}", local_time(m.updated_at), m.lines, tr("lines", "句")),
+            };
+            div()
+                .id(("meeting", i))
+                .p_2()
+                .rounded_md()
+                .cursor_pointer()
+                .when(current, |d| d.bg(rgb(0xec_ef_e7)))
+                .child(div().text_sm().overflow_hidden().whitespace_nowrap().child(m.title.clone()))
+                .child(div().text_xs().text_color(rgb(if m.read_error.is_some() { 0xa3_28_26 } else { 0x85_8a_80 })).child(detail))
+                .when(m.read_error.is_none(), |d| d.on_click(cx.listener(move |this, _, _, cx| this.open_meeting(&id, cx))))
+        }));
+        let field = |label: &'static str, input: &Entity<InputState>| div().flex().flex_col().gap_1().child(div().text_xs().text_color(rgb(0x62_66_5c)).child(label)).child(Input::new(input));
+        let local_only = self.live.local_only();
+        let forced = self.forced_backend;
+        let key_hint = self.form.saved.key_hint();
+        let settings = div()
+            .id("settings-panel")
+            .flex_1()
+            .overflow_y_scroll()
+            .p_3()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Board model", "板书模型")))
+            .child(
+                div()
+                    .flex()
+                    .gap_1()
+                    .child(button("use-local", tr("Local", "本地")).when(!self.form.remote, |b| b.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff))).on_click(cx.listener(|this, _, _, cx| {
+                        this.form.remote = false;
+                        cx.notify();
+                    })))
+                    .child(button("use-remote", tr("Remote", "远程")).when(self.form.remote, |b| b.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff))).on_click(cx.listener(|this, _, _, cx| {
+                        this.form.remote = true;
+                        cx.notify();
+                    }))),
+            )
+            .child(field(tr("API address", "接口地址"), &self.form.base_url))
+            .child(field(tr("Model", "模型"), &self.form.model))
+            .child(field(tr("API key", "API key"), &self.form.key))
+            .child(div().text_xs().text_color(rgb(0x85_8a_80)).child(match key_hint {
+                Some(hint) => format!("{} {hint}{}", tr("Saved key:", "已保存的 key："), tr(". Leave empty to keep it.", "。留空则继续使用。")),
+                None => tr("No key saved. It is stored only on this computer.", "还没有保存 key。key 只存在这台电脑上。").to_string(),
+            }))
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(button("save-settings", tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
+                    .child(button("test-settings", tr("Test", "测试连接")).on_click(cx.listener(|this, _, _, cx| this.test_settings(cx)))),
+            )
+            .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
+            .when(forced, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
+            .when(local_only, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
         let side = div()
             .w(px(320.))
             .h_full()
             .flex()
             .flex_col()
+            .flex_shrink_0()
             .border_l_1()
             .border_color(rgb(0xdd_dd_d8))
-            .child(transcript)
-            .child(div().p_3().border_t_1().border_color(rgb(0xdd_dd_d8)).child(Input::new(&self.input)));
+            .when(self.panel == Panel::Transcript, |d| {
+                d.child(transcript).when(editable, |d| d.child(div().p_3().border_t_1().border_color(rgb(0xdd_dd_d8)).child(Input::new(&self.input))))
+            })
+            .when(self.panel == Panel::Library, |d| d.child(library))
+            .when(self.panel == Panel::Settings, |d| d.child(settings));
         div()
+            .id("workbench")
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::on_key))
             .size_full()
             .flex()
             .flex_col()
             .bg(rgb(0xff_fe_fa))
             .text_color(rgb(INK_RGB))
             .child(bar)
+            .when_some(view_only, |d, text| d.child(div().px_3().py_1().flex_shrink_0().text_sm().bg(rgb(0xec_ef_e7)).child(text)))
+            .when_some(banner, |d, text| d.child(div().px_3().py_1().flex_shrink_0().text_sm().text_color(rgb(0xa3_28_26)).bg(rgb(0xfb_ec_ea)).child(text)))
             .child(div().flex_1().flex().min_h_0().child(board).child(side))
     }
 }
@@ -971,6 +1500,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let mut zoom: Option<f32> = None;
     let mut skill = false;
     let mut deepseek = false;
+    let mut open: Option<String> = None;
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--case" => case = args.next(),
@@ -983,6 +1513,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--zoom" => zoom = args.next().map(|v| v.parse()).transpose()?,
             "--skill" => skill = true,
             "--deepseek" => deepseek = true,
+            "--open" => open = args.next(),
             other => anyhow::bail!("unknown flag {other}"),
         }
     }
@@ -992,14 +1523,17 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         let found = cases.into_iter().find(|c| c.id == id).with_context(|| format!("no case {id}"))?;
         turns = found.turns.into_iter().map(|t| Utterance { speaker: t.speaker, text: t.text }).collect();
     }
-    let home = std::env::var("HOME")?;
-    let models = PathBuf::from(home).join(".local/share/games.mmstudio.boardcast/models");
+    let data = default_dir()?;
+    let models = data.join("models");
+    let binaries = root.join("src-tauri/llama");
+    let settings = Settings::load();
+    let forced_backend = deepseek || llm.is_some();
     let backend = if deepseek {
         Backend::Ready(Provider::deepseek_from_env()?)
     } else if let Some(base) = llm {
         Backend::Ready(Provider::Local { base })
     } else {
-        Backend::ManagedLocal(LocalServer { binaries: root.join("src-tauri/llama"), model: models.join("Qwen3.5-4B-Q4_K_M.gguf") })
+        backend_from(&settings, false, &binaries, &models)
     };
     let guidance = skill.then_some(Guidance { rules: true, hint: true });
     let glyphs = Glyphs::load(&root)?;
@@ -1007,10 +1541,14 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         Some(name) => Some(demo_board(&root, name)?),
         None => synthetic.map(synthetic_board),
     };
+    // A sample or measurement never reads or writes real meetings, and a script starts a new one.
+    let store = start_board.is_none().then(|| Store::new(data));
+    let reopen = if turns.is_empty() && wav.is_none() { open.or_else(|| store.as_ref().and_then(Store::last_opened)) } else { None };
+    let start_meeting = match (&store, reopen) {
+        (Some(store), Some(id)) => store.load(&id).ok().flatten().map(Live::from_loaded),
+        _ => None,
+    };
     let pipeline = Pipeline::start(backend, guidance, models.join("voice"), Script { turns, wav });
-    if let Some(board) = &start_board {
-        pipeline.seed(board.clone());
-    }
     gpui_kit::application().with_assets(gpui_kit::assets::Assets).run(move |cx: &mut App| {
         gpui_kit::init(cx);
         let options = WindowOptions {
@@ -1046,19 +1584,37 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             zoom_test: zoom_test.then_some(ZoomTest { started: None, frames: vec![], last: None, base: 0.0, rebuilds: vec![], peak_rss: 0 }),
             instant: start_board.is_some(),
         };
+        let mut live = start_meeting.unwrap_or_default();
+        if start_board.is_none() {
+            pipeline.session().open(live.graph.clone(), live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect());
+            state.open(&live.graph, &live.memory);
+        }
         if let Some(graph) = &start_board {
             let started = Instant::now();
             let strokes = state.update(graph, 0);
             println!("{{\"synthetic_nodes\":{},\"strokes\":{strokes},\"layout_and_compose_ms\":{}}}", graph.nodes.len(), started.elapsed().as_millis());
+            pipeline.session().open(graph.clone(), vec![]);
+            live.change_board(graph.clone(), state.board.snapshot());
         }
         if let Some(k) = zoom {
             let e = &state.extent;
             state.view = Some(View { k, x: e.x0 as f32 - 20.0 / k, y: e.y0 as f32 - 20.0 / k });
             state.reading = true;
         }
+        pipeline.start_script();
         let ink = Rc::new(RefCell::new(state));
+        // Closing the last window ends the app, which also stops the local model.
+        cx.on_window_closed(|cx, _| {
+            if cx.windows().is_empty() {
+                cx.quit();
+            }
+        })
+        .detach();
         cx.open_window(options, move |window, cx| {
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder("输入一句话，回车上板"));
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Type a line, Enter puts it on the board", "输入一句话，回车上板")));
+            let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
+            let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
+            let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
             let view = cx.new(|cx| {
                 cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {
@@ -1073,17 +1629,42 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     }
                 })
                 .detach();
+                let focus = cx.focus_handle();
+                window.focus(&focus, cx);
+                let saved_changes = live.changes;
+                let remote = settings.enabled;
+                if let Some(store) = &store {
+                    let _ = store.remember_opened(live.id());
+                }
                 Workbench {
                     ink,
                     pipeline,
                     input,
-                    lines: vec![],
-                    status: "启动中…".into(),
+                    focus,
+                    live,
+                    store,
+                    save: SaveState::Idle,
+                    saving: None,
+                    saved_changes,
+                    seen_changes: saved_changes,
+                    last_change: Instant::now(),
+                    last_attempt: None,
+                    panel: Panel::Transcript,
+                    library: vec![],
+                    form: SettingsForm { base_url, model, key, remote, saved: settings, note: None, probing: None },
+                    forced_backend,
+                    models,
+                    binaries,
+                    notice: None,
+                    status: tr("Starting…", "启动中…").into(),
                     level: 0.0,
                     next_batch: 0,
                     exit_when_done,
+                    close_refused: false,
                 }
             });
+            let closing = view.clone();
+            window.on_window_should_close(cx, move |_, cx| closing.update(cx, |this, cx| this.closing(cx)));
             cx.new(|cx| gpui_kit::base::Root::new(view, window, cx))
         })
         .expect("open window");

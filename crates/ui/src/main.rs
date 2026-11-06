@@ -1,10 +1,11 @@
 //! boardcast on GPUI: talk, and the whiteboard draws itself.
-//!   app <root> [--case <id>] [--wav <path>] [--deepseek] [--llm <url>] [--skill] [--exit-when-done]
-//!              [--demo <name>] [--synthetic <chars>] [--zoom-test] [--zoom <k>]
+//!   app <root> [--open <id>] [--case <id>] [--wav <path>] [--deepseek] [--llm <url>] [--skill]
+//!              [--exit-when-done] [--demo <name>] [--synthetic <chars>] [--zoom-test] [--zoom <k>]
 //!   bench <root> <stroke|merged:N|raster> <speed> <targets,..> [marks]
 
 mod app;
 mod bench;
+mod i18n;
 mod pipeline;
 mod raster;
 

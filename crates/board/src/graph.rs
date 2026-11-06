@@ -2,13 +2,16 @@
 //! Imported-page regions and pencil drafts are left out of the spike. Tests hold this to the
 //! TypeScript engine's output on real recorded model replies; see fixtures/make-goldens.mjs.
 
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::collections::HashSet;
+use std::ops::{Deref, DerefMut};
 
 const MARKS: [&str; 5] = ["划掉", "圈出", "下划线", "星标", "高亮"];
 const ICONS: [&str; 9] = ["数据库", "表格", "手机", "人", "服务器", "文档", "云", "图表", "消息"];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
     Node,
@@ -17,6 +20,8 @@ pub enum Kind {
     Question,
     Formula,
     Note,
+    /// A block of an imported page. Not drawn or edited yet, but it must survive a save.
+    Region,
 }
 
 impl Kind {
@@ -27,47 +32,143 @@ impl Kind {
             Self::Question => "[问题] ",
             Self::Formula => "[公式] ",
             Self::Note => "[备注] ",
+            Self::Region => "[原文] ",
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct Node {
+fn ink() -> String {
+    "ink".into()
+}
+
+fn one() -> u32 {
+    1
+}
+
+// Meeting files are shared with the older app. `extra` carries every field this code does not
+// model (speaker attribution, imported text, future additions), so a save never loses them.
+/// A value that remembers the order of its JSON fields. The older app compares nodes by their exact
+/// text, so a node written back with its fields rearranged would look edited and break its replay.
+#[derive(Clone, Debug)]
+pub struct Ordered<T> {
+    value: T,
+    order: Vec<String>,
+}
+
+impl<T> Ordered<T> {
+    pub fn new(value: T) -> Self {
+        Self { value, order: vec![] }
+    }
+}
+
+impl<T> Deref for Ordered<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T> DerefMut for Ordered<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
+}
+
+/// Field order is how the value is written, not what it is.
+impl<T: PartialEq> PartialEq for Ordered<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl<T: Serialize> Serialize for Ordered<T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let Value::Object(mut fields) = serde_json::to_value(&self.value).map_err(serde::ser::Error::custom)? else {
+            return Err(serde::ser::Error::custom("expected an object"));
+        };
+        let mut out = Map::new();
+        for key in &self.order {
+            if let Some(v) = fields.shift_remove(key) {
+                out.insert(key.clone(), v);
+            }
+        }
+        // Fields that are new to this value go last.
+        out.extend(fields);
+        out.serialize(serializer)
+    }
+}
+
+impl<'de, T: DeserializeOwned> Deserialize<'de> for Ordered<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let fields = Map::<String, Value>::deserialize(deserializer)?;
+        let order = fields.keys().cloned().collect();
+        let value = serde_json::from_value(Value::Object(fields)).map_err(serde::de::Error::custom)?;
+        Ok(Self { value, order })
+    }
+}
+
+pub type Node = Ordered<NodeData>;
+pub type Edge = Ordered<EdgeData>;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct NodeData {
     pub id: String,
     pub label: String,
+    #[serde(default)]
     pub aliases: Vec<String>,
     pub kind: Kind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    #[serde(default)]
     pub marks: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
+    #[serde(default = "ink")]
+    pub ink: String,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct Edge {
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EdgeData {
     pub from: String,
     pub to: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    #[serde(default = "ink")]
+    pub ink: String,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Group {
     pub id: String,
     pub label: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Graph {
+    #[serde(default)]
     pub nodes: Vec<Node>,
+    #[serde(default)]
     pub edges: Vec<Edge>,
+    #[serde(default)]
     pub groups: Vec<Group>,
-    next_node: u32,
-    next_group: u32,
+    #[serde(rename = "nextNode", default = "one")]
+    pub next_node: u32,
+    #[serde(rename = "nextGroup", default = "one")]
+    pub next_group: u32,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
 }
 
 impl Default for Graph {
     fn default() -> Self {
-        Self { nodes: vec![], edges: vec![], groups: vec![], next_node: 1, next_group: 1 }
+        Self { nodes: vec![], edges: vec![], groups: vec![], next_node: 1, next_group: 1, extra: Map::new() }
     }
 }
 
@@ -80,25 +181,6 @@ fn norm(s: &str) -> String {
 }
 
 impl Graph {
-    /// The board in the shape the TypeScript engine stores, for its scoring code.
-    pub fn to_engine_json(&self) -> serde_json::Value {
-        let kind = |k: Kind| match k {
-            Kind::Node => "node",
-            Kind::Topic => "topic",
-            Kind::Item => "item",
-            Kind::Question => "question",
-            Kind::Formula => "formula",
-            Kind::Note => "note",
-        };
-        serde_json::json!({
-            "nodes": self.nodes.iter().map(|n| serde_json::json!({ "id": n.id, "label": n.label, "aliases": n.aliases, "kind": kind(n.kind), "parent": n.parent, "group": n.group, "marks": n.marks, "icon": n.icon, "ink": "ink" })).collect::<Vec<_>>(),
-            "edges": self.edges.iter().map(|e| serde_json::json!({ "from": e.from, "to": e.to, "label": e.label, "ink": "ink" })).collect::<Vec<_>>(),
-            "groups": self.groups.iter().map(|x| serde_json::json!({ "id": x.id, "label": x.label })).collect::<Vec<_>>(),
-            "nextNode": self.next_node,
-            "nextGroup": self.next_group,
-        })
-    }
-
     fn find(&self, name: &str) -> Option<usize> {
         let key = norm(name);
         if key.is_empty() {
@@ -116,7 +198,7 @@ impl Graph {
     fn add(&mut self, label: &str, kind: Kind, parent: Option<String>) -> String {
         let id = format!("n{}", self.next_node);
         self.next_node += 1;
-        self.nodes.push(Node {
+        self.nodes.push(Ordered::new(NodeData {
             id: id.clone(),
             label: label.to_string(),
             aliases: vec![],
@@ -125,7 +207,9 @@ impl Graph {
             group: None,
             marks: vec![],
             icon: None,
-        });
+            ink: ink(),
+            extra: Map::new(),
+        }));
         id
     }
 
@@ -179,6 +263,12 @@ impl Graph {
                 return out;
             }
         }
+    }
+
+    /// Whether the board holds imported pages, which this version can show only partly and must
+    /// not edit: marks and model operations on them need the page geometry.
+    pub fn has_imported_content(&self) -> bool {
+        self.extra.contains_key("underlay") || self.nodes.iter().any(|n| n.kind == Kind::Region)
     }
 
     pub fn children<'a>(&'a self, id: &'a str) -> impl Iterator<Item = &'a Node> {
@@ -298,7 +388,7 @@ impl Graph {
                             old.label.clone_from(label);
                         }
                     } else {
-                        self.edges.push(Edge { from, to, label: label.clone() });
+                        self.edges.push(Ordered::new(EdgeData { from, to, label: label.clone(), ink: ink(), extra: Map::new() }));
                     }
                 }
                 Op::X(from, to) => {
@@ -462,8 +552,9 @@ pub fn parse_ops(text: &str) -> Vec<Op> {
     ops
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Utterance {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speaker: Option<String>,
     pub text: String,
 }
@@ -636,6 +727,8 @@ mod tests {
 
     #[derive(Deserialize)]
     struct Step {
+        memory: Value,
+        diff: Value,
         layout: GLayout,
         file: String,
         text: String,
@@ -729,15 +822,47 @@ mod tests {
         let mut board = StableLayout::default();
         let mut file = String::new();
         let mut compared = 0;
+        let mut previous_board = Graph::default();
+        // Numbers differ only in float noise, so rows compare at the precision the layout cares about.
+        fn rounded(v: &Value) -> String {
+            match v {
+                Value::Number(n) => format!("{:.2}", n.as_f64().unwrap()),
+                Value::Array(a) => format!("[{}]", a.iter().map(rounded).collect::<Vec<_>>().join(",")),
+                Value::Object(o) => {
+                    let mut rows: Vec<String> = o.iter().map(|(k, v)| format!("{k}:{}", rounded(v))).collect();
+                    rows.sort();
+                    format!("{{{}}}", rows.join(","))
+                }
+                other => other.to_string(),
+            }
+        }
         for (i, s) in goldens.steps.iter().enumerate() {
             if s.file != file {
                 file.clone_from(&s.file);
                 g = Graph::default();
                 board = StableLayout::default();
+                previous_board = Graph::default();
             }
             let at = format!("step {i} of {}: {}", s.file, s.text);
             g.apply(&parse_ops(&s.ops));
+            // The positions the TypeScript layout remembered must work here too.
+            if let Some(previous) = i.checked_sub(1).map(|p| &goldens.steps[p]).filter(|p| p.file == s.file) {
+                board = StableLayout::default();
+                board.restore(&previous.memory);
+            }
             let l = board.layout(&g, &mut |_, _| elk_diagram(s.layout.diagram.as_ref().expect("first diagram")));
+            let (mine, theirs) = (board.snapshot(), &s.memory);
+            for key in ["regionAt", "nodeAt", "routeAt", "boxAt"] {
+                let sorted = |v: &Value| {
+                    let mut rows: Vec<String> = v[key].as_array().unwrap().iter().map(rounded).collect();
+                    rows.sort();
+                    rows
+                };
+                assert_eq!(sorted(&mine), sorted(theirs), "memory {key}, {at}");
+            }
+            assert!(g.nodes.iter().all(|n| n.ink == "ink"), "{at}");
+            assert_eq!(serde_json::to_value(crate::steps::diff(&previous_board, &g)).unwrap(), s.diff, "step, {at}");
+            previous_board = g.clone();
             assert_eq!(l.regions.len(), s.layout.regions.len(), "regions, {at}");
             for (a, b) in l.regions.iter().zip(&s.layout.regions) {
                 assert_eq!(a.rect.id, b.id, "region id, {at}");
@@ -934,6 +1059,31 @@ mod tests {
         assert_eq!(ours_all.node_overlaps, 0);
         assert_eq!(ours_all.edges_through_nodes, 0, "edges through nodes");
         assert_eq!(ours_frames, 0, "strangers inside group frames");
+    }
+
+    #[test]
+    fn nodes_keep_their_field_order_and_new_fields_go_last() {
+        let text = r#"{"label":"甲","id":"n1","marks":[],"by":"A","kind":"node","aliases":[],"ink":"ink"}"#;
+        let mut node: Node = serde_json::from_str(text).unwrap();
+        assert_eq!(serde_json::to_string(&node).unwrap(), text);
+        node.parent = Some("n9".into());
+        node.marks.push("星标".into());
+        assert_eq!(serde_json::to_string(&node).unwrap(), r#"{"label":"甲","id":"n1","marks":["星标"],"by":"A","kind":"node","aliases":[],"ink":"ink","parent":"n9"}"#);
+    }
+
+    #[test]
+    fn unknown_fields_survive_a_round_trip() {
+        let raw = serde_json::json!({
+            "nodes": [{ "id": "n1", "label": "甲", "aliases": [], "kind": "region", "marks": [], "ink": "draft", "by": "A", "at": { "x": 1 }, "rows": [] }],
+            "edges": [{ "from": "n1", "to": "n1", "ink": "ink", "by": "B" }],
+            "groups": [],
+            "nextNode": 2,
+            "nextGroup": 1,
+            "underlay": { "w": 10, "h": 20 },
+        });
+        let g: Graph = serde_json::from_value(raw.clone()).unwrap();
+        assert!(g.has_imported_content());
+        assert_eq!(serde_json::to_value(&g).unwrap(), raw);
     }
 
     #[test]

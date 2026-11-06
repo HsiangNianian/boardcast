@@ -356,7 +356,7 @@ Mac G3固定脚本：首次授权/拒绝两种音源→仅系统/混合/仅麦�
 | C54 | 原话阅读与追新控制 | B2/B3 · G1/G4 · 长会/多页/失败回退/滚动保留；[40板/2000条原话](transcript-reading-validation.md)、[连续尺寸/真实缩放](transcript-resize-validation.md)及[原话详情/原生矮窗口](transcript-state-validation.md)已验证，跨平台和用户试用继续 |
 | C55 | 姓名管理/溯源/合并 | B1/B4 · G1 · Enter/Esc/重名/摘要状态/跳原话 |
 | C56 | 摘要草稿生成与取消 | B0/B4 · G1/G2 · 长会/错误/回退/手改保护/跨会 |
-| C57 | 编辑/复制/清除摘要 | B4 · G1/G2 · 剪贴板错误/撤销/重开/回放 |
+| C57 | 编辑/复制/清除摘要 | B4 · G1/G2 · [摘要复制续批](summary-copy-validation.md)修复切会遗留内容/编辑状态、迟到或乱序回复和复制焦点丢失；22 项复制、21 项摘要与 4 组复盘检查通过，含窄窗长摘要键盘返回，纯复制保持原记录，删除/撤销及回放继续有效。实际系统剪贴板、原生读屏和跨平台仍待验收 |
 | C58 | 全局与本会术语 | B3/B4 · G1 · 坏格式/重复/继续会/rawText/隔离 |
 | C59 | 评测/偏好样本导出 | B4/B5 · G1/G2 · 有/无样本、cases/JSONL内容/取消 |
 | C60 | 系统/浅/深与笔迹 | B2 · G1/G2/G3 · 系统实时主题/边界参数/导出一致；[外观与导出](appearance-validation.md)及[Linux 真实系统主题/三种偏好冷启动](native-theme-validation.md)已有证据，原生 Wayland、Mac/VoiceOver 等范围仍保留 |

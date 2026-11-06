@@ -3518,6 +3518,7 @@ export default function App() {
         {(summing || summary || summaryCandidate || clearedSummary) && (!replay || replay.at >= replay.total) && (
           <Suspense fallback={null}>
             <Summary
+              key={meeting.id}
               text={summary}
               readOnly={!!replay || transitionBusy}
               onChange={editSummary}

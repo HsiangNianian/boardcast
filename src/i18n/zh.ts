@@ -528,7 +528,7 @@ export const zh: Messages = {
     keep: '保留当前摘要',
     cleared: '摘要已删除。',
     undoClear: '撤销删除',
-    copyFallback: '暂时无法自动复制。下方原文已选中，请使用系统复制快捷键。',
+    copyFallback: '暂时无法自动复制。请选中下方文字，使用系统复制快捷键。',
     copyFallbackLabel: '手动复制的文本',
     closeFallback: '关闭复制原文',
   },

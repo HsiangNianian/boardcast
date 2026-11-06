@@ -9,11 +9,13 @@ import { useT } from '../i18n/index.ts'
 import { Check, Close, Pen } from './icons.tsx'
 import './summary.css'
 
-async function copy(text: string) {
+async function copy(text: string, current: () => boolean) {
   try {
     await navigator.clipboard.writeText(text)
   } catch {
+    if (!current()) return
     // 有些 WebView 没开剪贴板接口：退回老办法
+    const focused = document.activeElement
     const t = document.createElement('textarea')
     t.value = text
     t.style.position = 'fixed'
@@ -24,6 +26,7 @@ async function copy(text: string) {
       if (!document.execCommand('copy')) throw new Error('copy failed')
     } finally {
       t.remove()
+      if (focused instanceof HTMLElement && focused.isConnected) focused.focus({ preventScroll: true })
     }
   }
 }
@@ -60,26 +63,30 @@ export default function Summary({
 }) {
   const s = useT().summary
   const [editing, setEditing] = useState(false)
-  const [copyFallback, setCopyFallback] = useState<string | null>(null)
+  const [copyFallback, setCopyFallback] = useState<{ text: string; button: HTMLButtonElement } | null>(null)
   const fallback = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => { if (copyFallback !== null) { fallback.current?.focus(); fallback.current?.select() } }, [copyFallback])
-  const put = (what: 'md' | 'text', body: string) =>
-    copy(body).then(
-      () => onToast({ ok: true, text: s.copied(what) }),
-      () => { setCopyFallback(body); onToast({ ok: false, text: s.copyFailed }) },
+  const copyRequest = useRef(0)
+  useEffect(() => { if (copyFallback && document.activeElement === copyFallback.button) { fallback.current?.focus(); fallback.current?.select() } }, [copyFallback])
+  const put = (what: 'md' | 'text', body: string, button: HTMLButtonElement) => {
+    const request = ++copyRequest.current
+    const current = () => request === copyRequest.current && button.isConnected
+    return copy(body, current).then(
+      () => { if (current()) onToast({ ok: true, text: s.copied(what) }) },
+      () => { if (current()) { setCopyFallback({ text: body, button }); onToast({ ok: false, text: s.copyFailed }) } },
     )
+  }
 
   return (
-    <section className="summary" aria-label={s.aria}>
+    <section className="summary" aria-label={s.aria} tabIndex={-1}>
       <div className="summary-head">
         <h3>{s.title}</h3>
         <span role="status">{status}</span>
         {!!text && (
           <>
-            <button type="button" className="ghost small" onClick={() => void put('md', text)} title={s.copyMdTitle}>
+            <button type="button" className="ghost small" onClick={(event) => void put('md', text, event.currentTarget)} title={s.copyMdTitle}>
               {s.copyMd}
             </button>
-            <button type="button" className="ghost small" onClick={() => void put('text', plainText(text))} title={s.copyTextTitle}>
+            <button type="button" className="ghost small" onClick={(event) => void put('text', plainText(text), event.currentTarget)} title={s.copyTextTitle}>
               {s.copyText}
             </button>
             <button
@@ -121,8 +128,12 @@ export default function Summary({
       </section>}
       {copyFallback !== null && <div className="summary-copy-fallback" role="alert">
         <p>{s.copyFallback}</p>
-        <textarea ref={fallback} aria-label={s.copyFallbackLabel} readOnly value={copyFallback} rows={Math.min(12, copyFallback.split('\n').length + 1)} onFocus={(e) => e.currentTarget.select()} />
-        <button type="button" className="ghost small" onClick={() => setCopyFallback(null)}>{s.closeFallback}</button>
+        <textarea ref={fallback} aria-label={s.copyFallbackLabel} readOnly value={copyFallback.text} rows={Math.min(12, copyFallback.text.split('\n').length + 1)} onFocus={(e) => e.currentTarget.select()} />
+        <button type="button" className="ghost small" onClick={() => {
+          const target = copyFallback.button.isConnected ? copyFallback.button : fallback.current?.closest<HTMLElement>('.summary')
+          setCopyFallback(null)
+          target?.focus()
+        }}>{s.closeFallback}</button>
       </div>}
     </section>
   )

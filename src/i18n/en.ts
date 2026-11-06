@@ -541,7 +541,7 @@ export const en = {
     keep: 'Keep current summary',
     cleared: 'Summary deleted.',
     undoClear: 'Undo deletion',
-    copyFallback: 'Copy is unavailable. The text below is selected; use your system copy command.',
+    copyFallback: 'Copy is unavailable. Select the text below and use your system copy command.',
     copyFallbackLabel: 'Text to copy manually',
     closeFallback: 'Close copy text',
   },

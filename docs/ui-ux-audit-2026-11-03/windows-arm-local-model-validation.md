@@ -1,6 +1,6 @@
 # Windows ARM 本地模型请求与预热
 
-2026-11-06 后续进展：PR #79 的 `503b677` 已在 Windows ARM CI 完成安装包构建、随包 llama-server smoke 和 Rust 测试；[该次构建](https://github.com/HsiangNianian/boardcast/actions/runs/42180042046)的 `boardcast-windows-arm64` artifact（ID `13486390167`，保留至 11 月 20 日）包含本报告的本地请求与预热修复。它也包含动态 SVG 续批，但早于 SVG 文档标题修复；未在用户的 Adreno 机器上验证，也未安装或发布。下面保留原排查批次的结果与边界。
+2026-11-06 后续进展：PR #79 的 `d30155d` 已在 Windows ARM CI 完成安装包构建、随包 llama-server smoke 和 Rust 测试；[该次构建](https://github.com/HsiangNianian/boardcast/actions/runs/42184441188)的 `boardcast-windows-arm64` artifact（ID `13488320159`，保留至 11 月 20 日）包含本报告的本地请求与预热修复。它也包含动态 SVG、文档标题及 PNG 失败恢复续批，但早于摘要复制续批；未在用户的 Adreno 机器上验证，也未安装或发布。下面保留原排查批次的结果与边界。
 
 2026-11-05，基线 `4f9ab26`。用户提供 Windows ARM64 的 `boardcast-diagnostics.zip`，报告 GPU 有占用但模型一直无法完成预热。本批修复桌面版本地请求通道和预热失败恢复，Windows ARM 真机验收仍待完成。
 

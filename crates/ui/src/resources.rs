@@ -11,6 +11,8 @@ pub struct Resources {
     pub binaries: PathBuf,
     /// The speech models.
     pub voice: PathBuf,
+    /// The PDF library.
+    pub pdfium: PathBuf,
     pub installed: bool,
 }
 
@@ -32,13 +34,14 @@ fn checkout_dir() -> Option<PathBuf> {
 
 pub fn locate(data: &Path) -> Resources {
     if let Some(dir) = installed_dir() {
-        return Resources { hanzi: HanziSource::Pack(dir.join("glyphs.pack")), binaries: dir.join("llama"), voice: dir.join("voice"), installed: true };
+        return Resources { hanzi: HanziSource::Pack(dir.join("glyphs.pack")), binaries: dir.join("llama"), pdfium: dir.join("pdfium"), voice: dir.join("voice"), installed: true };
     }
     let root = checkout_dir().unwrap_or_else(|| PathBuf::from("."));
     let bundled = root.join("src-tauri/voice");
     Resources {
         hanzi: HanziSource::Directory(root.join("public/hanzi")),
         binaries: root.join("src-tauri/llama"),
+        pdfium: root.join("target/pdfium"),
         voice: if bundled.join("silero_vad.onnx").is_file() { bundled } else { data.join("models/voice") },
         installed: false,
     }
@@ -59,6 +62,7 @@ impl Resources {
             ("voice activity model", self.voice.join("silero_vad.onnx")),
             ("speech model", self.voice.join("sense-voice/model.int8.onnx")),
             ("speech tokens", self.voice.join("sense-voice/tokens.txt")),
+            ("PDF library", boardcast_import::pdf::library_file(&self.pdfium)),
         ];
         let rows: Vec<_> = checks.iter().map(|(name, path)| json!({ "name": name, "path": path, "ok": path.exists() })).collect();
         let ok = checks.iter().all(|(_, path)| path.exists());

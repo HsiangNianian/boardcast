@@ -19,6 +19,7 @@ use crate::raster::Layer;
 use anyhow::{Context as _, Result};
 use boardcast_agent::summary::{self, Block, Line, Step};
 use boardcast_export::Kind as ExportKind;
+use boardcast_import::pdf::NewPage;
 use boardcast_board::spans::{span_at, Unit};
 use boardcast_board::steps::{clock, replay_to, Player};
 use gpui_kit::base::input::{Input, InputEvent, InputState, Textarea, TextareaState};
@@ -605,7 +606,38 @@ enum Panel {
     Library,
     Summary,
     Export,
+    Import,
     Settings,
+}
+
+enum ImportSource {
+    File(PathBuf),
+    Arxiv(String),
+}
+
+/// A file read and ready. Nothing joins a meeting until a place for it is chosen.
+struct ImportPreview {
+    name: String,
+    pages: Vec<NewPage>,
+    title: Option<String>,
+    /// What goes in the transcript.
+    note: String,
+    /// What was left out or is worth knowing.
+    details: Vec<String>,
+    /// What to tell people they can now say.
+    ready: String,
+}
+
+enum ImportUpdate {
+    Progress(String),
+    Finished(Result<ImportPreview, String>),
+}
+
+enum ImportState {
+    Idle,
+    Reading { progress: String, cancel: Arc<AtomicBool>, updates: Receiver<ImportUpdate> },
+    Ready(ImportPreview),
+    Failed(String),
 }
 
 /// A replay on screen. It only moves the ink: the meeting itself is not touched, so leaving puts
@@ -730,6 +762,9 @@ struct Workbench {
     form: SettingsForm,
     summary: SummaryPanel,
     replay: Option<Replaying>,
+    import: ImportState,
+    arxiv_input: Entity<InputState>,
+    pdfium: PathBuf,
     /// Where the stroke data is, for work that needs its own copy.
     hanzi: HanziSource,
     exporting: Option<ExportKind>,
@@ -781,6 +816,49 @@ fn page_render_image(bytes: &[u8]) -> Result<Arc<RenderImage>, String> {
         p.0.swap(0, 2);
     }
     Ok(Arc::new(RenderImage::new([image::Frame::new(picture)])))
+}
+
+/// Download if need be, read the file, and word what happened.
+fn read_import(source: ImportSource, library: &std::path::Path, english: bool, cancel: &AtomicBool, tx: &std::sync::mpsc::Sender<ImportUpdate>) -> anyhow::Result<ImportPreview> {
+    let (name, bytes) = match source {
+        ImportSource::File(path) => {
+            let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
+            (name, std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?)
+        }
+        ImportSource::Arxiv(id) => {
+            let _ = tx.send(ImportUpdate::Progress(if english { format!("Downloading {id} from arXiv…") } else { format!("正在从 arXiv 下载 {id}…") }));
+            (format!("arXiv {id}"), boardcast_import::arxiv::download(&id, cancel)?)
+        }
+    };
+    let imported = boardcast_import::pdf::import_pdf(&bytes, library, english, cancel, &mut |done, total| {
+        let _ = tx.send(ImportUpdate::Progress(if english { format!("Reading {name}: page {done}/{total}") } else { format!("正在读 {name}：{done}/{total} 页") }));
+    })?;
+    let plural = |n: usize, word: &str| if n == 1 { format!("1 {word}") } else { format!("{n} {word}s") };
+    let mut details = vec![];
+    if imported.refs_skipped > 0 {
+        details.push(if english { format!("{} of references skipped", plural(imported.refs_skipped, "page")) } else { format!("参考文献 {} 页没建板", imported.refs_skipped) });
+    }
+    if imported.unread > 0 {
+        details.push(if english { format!("board limit reached, last {} not imported", plural(imported.unread, "page")) } else { format!("板到上限了，最后 {} 页没导", imported.unread) });
+    }
+    if imported.scanned > 0 {
+        details.push(if english { format!("{} without a text layer, imported as images", plural(imported.scanned, "page")) } else { format!("{} 页没有文字层，整页算一张图", imported.scanned) });
+    }
+    let boards = imported.pages.len();
+    let note = if english {
+        let extra = if details.is_empty() { String::new() } else { format!("; {}", details.join("; ")) };
+        format!("Imported {name} ({}, {}{extra})", plural(imported.total, "page"), plural(boards, "board"))
+    } else {
+        let extra = if details.is_empty() { String::new() } else { format!("，{}", details.join("，")) };
+        format!("导入了 {name}（共 {} 页，建了 {boards} 张板{extra}）", imported.total)
+    };
+    let ready = match (imported.paper, english) {
+        (true, true) => format!("{name} is ready: split by sections, figures and equations. Try \"here in figure 3\" or \"equation 5 is wrong\""),
+        (true, false) => format!("{name} 导入好了：按论文的章节、图表、公式切好了，可以说「图 3 这里」「公式 5 有问题」"),
+        (false, true) => format!("{name} is ready: one board per page. Try \"circle this paragraph\""),
+        (false, false) => format!("{name} 导入好了：每页一张板，开会时可以说「把这一段圈出来」"),
+    };
+    Ok(ImportPreview { name, pages: imported.pages, title: imported.title, note, details, ready })
 }
 
 fn gigabytes(bytes: u64) -> String {
@@ -898,6 +976,7 @@ impl Workbench {
             }
         }
         self.pump_probe(&mut changed);
+        self.pump_import(&mut changed);
         self.pump_replay(&mut changed, cx);
         self.pump_summary(&mut changed, cx);
         self.pump_download(&mut changed);
@@ -1599,6 +1678,145 @@ impl Workbench {
         cx.notify();
     }
 
+    fn pump_import(&mut self, changed: &mut bool) {
+        let ImportState::Reading { updates, progress, .. } = &mut self.import else { return };
+        loop {
+            match updates.try_recv() {
+                Ok(ImportUpdate::Progress(text)) => {
+                    *progress = text;
+                    *changed = true;
+                }
+                Ok(ImportUpdate::Finished(result)) => {
+                    self.import = match result {
+                        Ok(preview) => ImportState::Ready(preview),
+                        Err(error) => {
+                            eprintln!("import failed: {error}");
+                            ImportState::Failed(error)
+                        }
+                    };
+                    *changed = true;
+                    return;
+                }
+                Err(TryRecvError::Empty) => return,
+                Err(TryRecvError::Disconnected) => {
+                    self.import = ImportState::Failed("the import did not finish".to_string());
+                    *changed = true;
+                    return;
+                }
+            }
+        }
+    }
+
+    fn pick_import_file(&mut self, cx: &mut Context<Self>) {
+        let answer = cx.prompt_for_paths(gpui_kit::PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(paths))) = answer.await else { return };
+            let _ = this.update(cx, |this, cx| this.import_paths(&paths, cx));
+        })
+        .detach();
+    }
+
+    fn import_paths(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
+        self.panel = Panel::Import;
+        match paths {
+            [path] if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) => self.start_import(ImportSource::File(path.clone()), cx),
+            [_] => {
+                self.import = ImportState::Failed(tr("You can import PDFs here. Images are coming next.", "这里可以导入 PDF，图片导入马上就来。").to_string());
+                cx.notify();
+            }
+            _ => {
+                self.import = ImportState::Failed(tr("Choose one file at a time. Nothing was imported.", "一次选一个文件，什么都没有导入。").to_string());
+                cx.notify();
+            }
+        }
+    }
+
+    fn import_arxiv(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let input = self.arxiv_input.read(cx).value().to_string();
+        match boardcast_import::arxiv::parse(&input) {
+            Some(id) => {
+                self.arxiv_input.update(cx, |state, cx| state.set_value("", window, cx));
+                self.start_import(ImportSource::Arxiv(id), cx);
+            }
+            None => {
+                self.import = ImportState::Failed(tr("That's not an arXiv ID: paste an arxiv.org/abs/… link or an ID like 2401.12345", "没认出 arXiv 编号：贴 arxiv.org/abs/… 的链接，或者 2401.12345 这样的编号").to_string());
+                cx.notify();
+            }
+        }
+    }
+
+    /// Reading goes on elsewhere, and only prepares a preview, so the meeting carries on meanwhile.
+    fn start_import(&mut self, source: ImportSource, cx: &mut Context<Self>) {
+        if matches!(self.import, ImportState::Reading { .. }) {
+            return;
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        let stop = cancel.clone();
+        let library = self.pdfium.clone();
+        let english = tr("en", "zh") == "en";
+        let (tx, updates) = channel();
+        std::thread::spawn(move || {
+            let result = read_import(source, &library, english, &stop, &tx);
+            let _ = tx.send(ImportUpdate::Finished(result.map_err(|e| format!("{e:#}"))));
+        });
+        self.import = ImportState::Reading { progress: tr("Reading the selected file…", "正在读取所选文件…").to_string(), cancel, updates };
+        cx.notify();
+    }
+
+    fn stop_import(&mut self, cx: &mut Context<Self>) {
+        if let ImportState::Reading { cancel, .. } = &self.import {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        self.import = ImportState::Idle;
+        cx.notify();
+    }
+
+    /// Put a read file in a meeting. Its pictures are kept first, so a failure leaves the preview ready.
+    fn place_import(&mut self, fresh: bool, cx: &mut Context<Self>) {
+        self.exit_replay(cx);
+        if self.live.lines.iter().any(|l| l["ms"].is_null() && !l["manual"].as_bool().unwrap_or(false)) {
+            self.notice = Some(tr("The model is still drawing. Import when it is done.", "模型还在画，画完再导入。").into());
+            cx.notify();
+            return;
+        }
+        let Some(store) = self.store.clone() else { return };
+        if !matches!(self.import, ImportState::Ready(_)) || (fresh && !self.leave()) {
+            cx.notify();
+            return;
+        }
+        let ImportState::Ready(preview) = std::mem::replace(&mut self.import, ImportState::Idle) else { return };
+        let keep = if fresh { Live::new() } else { std::mem::take(&mut self.live) };
+        let id = keep.id().to_string();
+        let mut stored = vec![];
+        for page in &preview.pages {
+            match store.put_image(&id, "image/jpeg", &page.jpeg) {
+                Ok(reference) => stored.push(reference),
+                Err(error) => {
+                    self.notice = Some(format!("{}{error:#}", tr("The imported pages could not be saved. Nothing was added: ", "导入页保存失败，什么都没有加进去：")));
+                    if !fresh {
+                        self.live = keep;
+                    }
+                    self.import = ImportState::Ready(preview);
+                    cx.notify();
+                    return;
+                }
+            }
+        }
+        let mut live = keep;
+        if fresh {
+            if let Some(title) = &preview.title {
+                live.set_title(title);
+            }
+        }
+        let added = preview.pages.into_iter().map(|p| p.graph).zip(stored).collect();
+        live.add_pages(added, &preview.note);
+        self.show(live);
+        self.live.changes += 1;
+        self.panel = Panel::Transcript;
+        self.status = preview.ready;
+        cx.notify();
+    }
+
     /// Put this board's imported page on screen. A page that cannot be read is said, and the rest shown.
     fn show_page_image(&mut self) {
         let reference = self.live.board_images().into_iter().nth(self.live.page()).flatten();
@@ -1866,6 +2084,33 @@ impl Workbench {
                     d.child(button("replay-fork", tr("Fork a board", "另起一板")).whitespace_nowrap().when(!can_fork, |b| b.opacity(0.4)).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
                 }),
         )
+    }
+
+    fn import_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let hint = |text: &'static str| div().text_xs().text_color(rgb(0x62_66_5c)).child(text);
+        let panel = div().id("import-panel").flex_1().overflow_y_scroll().p_3().flex().flex_col().gap_2();
+        let can_add_here = self.live.read_only.is_none();
+        match &self.import {
+            ImportState::Reading { progress, .. } => panel
+                .child(div().text_sm().child(progress.clone()))
+                .child(hint(tr("You can carry on with the meeting while this reads.", "读取的时候，会议可以继续。")))
+                .child(button("stop-import", tr("Stop", "停止")).on_click(cx.listener(|this, _, _, cx| this.stop_import(cx)))),
+            ImportState::Ready(preview) => panel
+                .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(format!("{} · {} {}", preview.name, preview.pages.len(), tr("boards", "张板"))))
+                .child(hint(tr("Choose where to put them.", "选择放到哪里。")))
+                .children(preview.details.iter().map(|d| div().text_xs().text_color(rgb(0x80_53_00)).child(d.clone())))
+                .child(button("import-new", tr("New meeting", "新开一场会")).on_click(cx.listener(|this, _, _, cx| this.place_import(true, cx))))
+                .when(can_add_here, |d| d.child(button("import-here", tr("Add to this meeting", "加到这场会")).on_click(cx.listener(|this, _, _, cx| this.place_import(false, cx)))))
+                .child(button("import-cancel", tr("Cancel", "取消")).on_click(cx.listener(|this, _, _, cx| this.stop_import(cx)))),
+            state => panel
+                .when_some(if let ImportState::Failed(error) = state { Some(error.clone()) } else { None }, |d, error| d.child(div().text_sm().text_color(rgb(0xa3_28_26)).child(error)))
+                .child(hint(tr("Each page becomes a board, with its text in place to circle, link and note on during the meeting.", "每页一张板，文字留在原位，开会时可以圈画、连线、写批注。")))
+                .child(button("pick-import", tr("Choose a PDF…", "选择 PDF…")).on_click(cx.listener(|this, _, _, cx| this.pick_import_file(cx))))
+                .child(hint(tr("You can also drop a file anywhere in this window.", "也可以把文件拖到窗口里。")))
+                .child(div().mt_2().text_xs().text_color(rgb(0x62_66_5c)).child(tr("An arXiv paper, by link or ID", "arXiv 论文的链接或编号")))
+                .child(Input::new(&self.arxiv_input))
+                .child(button("import-arxiv", tr("Download and read", "下载并读取")).on_click(cx.listener(|this, _, window, cx| this.import_arxiv(window, cx)))),
+        }
     }
 
     fn export_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
@@ -2346,6 +2591,7 @@ impl Render for Workbench {
             .child(button("library", tr("Meetings", "会议")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
             .child(button("new", tr("New", "新建")).when(self.store.is_some(), |d| d.on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
             .child(button("summary", tr("Summary", "摘要")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
+            .child(button("import", tr("Import", "导入")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))))
             .child(button("export", tr("Export", "导出")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
             .child(
                 button("replay", if self.replay.is_some() { tr("Exit replay", "退出回放") } else { tr("Replay", "回放") })
@@ -2600,6 +2846,7 @@ impl Render for Workbench {
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
         let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
+        let import_panel = (self.panel == Panel::Import).then(|| self.import_panel(cx));
         let side = div()
             .w(px(320.))
             .h_full()
@@ -2614,11 +2861,13 @@ impl Render for Workbench {
             .when(self.panel == Panel::Library, |d| d.child(library))
             .when_some(summary_panel, |d, panel| d.child(panel))
             .when_some(export_panel, |d, panel| d.child(panel))
+            .when_some(import_panel, |d, panel| d.child(panel))
             .when(self.panel == Panel::Settings, |d| d.child(settings));
         div()
             .id("workbench")
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
+            .on_drop(cx.listener(|this, paths: &gpui_kit::ExternalPaths, _, cx| this.import_paths(paths.paths(), cx)))
             .size_full()
             .flex()
             .flex_col()
@@ -2702,6 +2951,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     };
     let guidance = skill.then_some(Guidance { rules: true, hint: true });
     let hanzi = resources.hanzi.clone();
+    let pdfium = resources.pdfium.clone();
     let glyphs = Glyphs::load(resources.hanzi)?;
     let start_board = match &demo {
         Some(name) => Some(demo_board(root.as_ref().context("--demo needs --root <checkout>")?, name)?),
@@ -2789,6 +3039,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
             let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
             let editor = cx.new(|cx| TextareaState::new(window, cx));
+            let arxiv_input = cx.new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
             let view = cx.new(|cx| {
                 cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {
@@ -2834,6 +3085,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     form: SettingsForm { base_url, model, key, remote, saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,
+                    import: ImportState::Idle,
+                    arxiv_input,
+                    pdfium,
                     hanzi,
                     exporting: None,
                     exported: None,

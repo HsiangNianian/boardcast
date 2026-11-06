@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { on, voice, type SpeechModels as View, type VoiceStatus } from '../desktop.ts'
 import { recordError } from '../engine/diagnostics.ts'
-import { appleAssetIssue, appleLanguageChoice, appleLanguageState } from '../engine/speech.ts'
+import { appleAssetIssue, appleLanguageChoice, appleLanguageState, speechMessage } from '../engine/speech.ts'
 import { useT } from '../i18n/index.ts'
 
 export default function SpeechModels() {
   const s = useT().models
+  const titleId = useId()
   const [view, setView] = useState<View | null>(null)
   const [locale, setLocale] = useState('')
   const [busy, setBusy] = useState(false)
@@ -63,9 +64,9 @@ export default function SpeechModels() {
   const selected = view?.selection.provider === 'apple' && view.selection.locale === locale
   const appleReady = !!view && appleLanguageState(view, view.selection.locale) === 'installed'
   const disabled = busy || !!view?.listening || !!view?.preparing
-  return <section className="speech-models" aria-labelledby="speech-models-title" aria-busy={busy}>
+  return <section className="speech-models" aria-labelledby={titleId} aria-busy={busy}>
     <div className="row speech-heading">
-      <h3 id="speech-models-title">{s.speechTitle}</h3>
+      <h3 id={titleId}>{s.speechTitle}</h3>
       <button className="ghost" disabled={busy} onClick={() => void act()}>{s.detect}</button>
     </div>
     {!view && !error && <p className="hint" role="status">{s.detecting}</p>}
@@ -86,7 +87,7 @@ export default function SpeechModels() {
         </div>
         <p className="note">{s.appleNote}</p>
         <p className="meta">{s.appleStorage}</p>
-        {view.appleError ? <p className="meta err" role="alert">{view.appleError}</p>
+        {view.appleError ? <p className="meta err" role="alert">{speechMessage(view.appleError)}</p>
           : !view.apple?.available ? <p className="meta">{view.apple?.reason === 'os' ? s.appleNeedsOS
             : view.apple?.reason === 'hardware' ? s.appleUnsupported : s.appleNeedsMac}</p>
           : <>
@@ -116,6 +117,6 @@ export default function SpeechModels() {
       </div>
       {view.listening && <p className="hint">{s.stopToSwitch}</p>}
     </>}
-    {error && <p className="meta err" role="alert">{error}</p>}
+    {error && <p className="meta err" role="alert">{speechMessage(error)}</p>}
   </section>
 }

@@ -1,10 +1,11 @@
 // 导出的回放 HTML 里带的数据，和生成这份 HTML 的工具函数（应用里用）。
 
-import type { LayoutMemory } from '../board/layout.ts'
+import { LOOSE_HEADINGS, type LayoutMemory } from '../board/layout.ts'
 import type { Graph } from '../engine/graph.ts'
 import type { Step } from '../engine/steps.ts'
+import type { FreeScene } from '../board/freeScene.ts'
 import type { MeetingLine } from '../meetings.ts'
-import { msg } from '../i18n/index.ts'
+import { type Lang, currentLang, msg } from '../i18n/index.ts'
 
 export interface ReplayPage {
   graph: Graph
@@ -15,11 +16,14 @@ export interface ReplayPage {
   layout?: LayoutMemory
   /** 带着旧板开会时的底板：上面原样留下的东西用淡墨 */
   base?: Graph
+  scene?: FreeScene
 }
 
 export interface ReplayData {
   title: string
   createdAt: number
+  /** Offline controls keep the interface language chosen when exporting. */
+  lang?: Lang
   summary?: string
   lines: MeetingLine[]
   pages: ReplayPage[]
@@ -44,6 +48,8 @@ export function usedHan(data: ReplayData): string[] {
       for (const x of s.d.groups?.set ?? []) add(x.label)
     }
   }
+  // These headings can appear during replay without occurring in a saved node label.
+  for (const heading of LOOSE_HEADINGS.zh) add(heading)
   return [...out]
 }
 
@@ -56,15 +62,16 @@ const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '
 
 /** 拼成一个自带一切的 HTML：播放器代码、会议数据、用到的汉字笔画 */
 export function replayHtml(data: ReplayData, player: string, hanzi: Record<string, unknown>): string {
+  data = { ...data, lang: data.lang ?? currentLang() }
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${data.lang === 'zh' ? 'zh-CN' : 'en'}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="boardcast">
 <!-- Japanese stroke data: KanjiVG, Copyright (C) 2009/2010/2011 Ulrich Apel.
      https://kanjivg.tagaini.net/ — adapted centerlines, CC BY-SA 3.0 https://creativecommons.org/licenses/by-sa/3.0/ -->
-<title>${escapeHtml(data.title)} · ${escapeHtml(msg().doc.replay)}</title>
+<title>${escapeHtml(data.title)} · ${escapeHtml(msg(data.lang).doc.replay)}</title>
 </head>
 <body>
 <div id="root"></div>

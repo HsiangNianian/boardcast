@@ -1,5 +1,5 @@
 // Recorded sample meetings (issue #30): made once with a real model by eval/record.ts and served
-// from public/demos/, so the web demo can show a board growing without any model.
+// from public/demos/, so web and desktop can show a board growing without any model.
 
 import type { SpokenLang } from './engine/lang.ts'
 import type { Graph } from './engine/graph.ts'

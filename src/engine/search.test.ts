@@ -19,6 +19,7 @@ const meeting = {
 test('hits say where they are, so the result can jump there', () => {
   assert.deepEqual(searchMeeting(meeting, '小王')?.map((h) => [h.where, h.line, h.page]), [['line', 0, 1]])
   assert.deepEqual(searchMeeting(meeting, '部署')?.map((h) => [h.where, h.page]), [['board', 0]])
+  assert.equal(searchMeeting(meeting, '部署')?.[0].node, meeting.pages[0].graph.nodes[0].id)
   assert.equal(searchMeeting(meeting, '自建')?.[0].where, 'summary')
   assert.equal(searchMeeting(meeting, '客服')?.[0].where, 'title')
 })
@@ -34,4 +35,26 @@ test('every word must appear somewhere in the meeting', () => {
   assert.equal(searchMeeting(meeting, '小王 部署')?.length, 2)
   assert.equal(searchMeeting(meeting, '小王 不存在'), null)
   assert.equal(searchMeeting(meeting, '   '), null)
+})
+
+test('repeating a search term does not hide matching meetings', () => {
+  for (const [query, original] of [['小王 小王', '小王'], ['部署 小王 部署', '部署 小王'], ['PREDICTING predicting', 'predicting']]) {
+    assert.deepEqual(searchMeeting(meeting, query), searchMeeting(meeting, original))
+  }
+})
+
+test('overlapping search highlights preserve the snippet and every matched character', () => {
+  for (const query of ['cache ca he', 'he cache ca', 'ca he cache']) {
+    const [hit] = searchMeeting({ id: 'overlap', title: 'Cache' }, query)!
+    assert.deepEqual(hit.marks, [[0, 5]])
+  }
+  const [hit] = searchMeeting({ id: 'overlap', title: 'abc' }, 'ab bc')!
+  assert.deepEqual(hit.marks, [[0, 3]])
+})
+
+test('legacy transcript hits without a page point to the first board', () => {
+  const [hit] = searchMeeting({ ...meeting, lines: [{ text: 'Legacy transcript' }] }, 'Legacy')!
+  assert.equal(hit.where, 'line')
+  assert.equal(hit.line, 0)
+  assert.equal(hit.page, 0)
 })

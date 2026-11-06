@@ -6,6 +6,7 @@ import type { Page } from '../meetings.ts'
 import { type Area, pageGraph } from '../engine/regions.ts'
 import { segment } from './segment.ts'
 import { msg } from '../i18n/index.ts'
+import { localChat } from '../desktop.ts'
 
 /** 图片在板上的宽度（板书坐标），和 PDF 页一样 */
 const WIDTH = 900
@@ -20,33 +21,29 @@ export type Reader = (png: string) => Promise<string>
 const PROMPT = '图里写的是什么字？原样输出这些字，不要解释，不要加引号。图里没有字就只输出：无'
 
 /** 让本地的 llama-server（带视觉投影文件）读一块图 */
-export function llamaReader(baseUrl: string): Reader {
+export function llamaReader(baseUrl: string, signal?: AbortSignal): Reader {
   return async (png) => {
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: 'local',
-        temperature: 0,
-        max_tokens: 160,
-        chat_template_kwargs: { enable_thinking: false },
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: png } },
-              { type: 'text', text: PROMPT },
-            ],
-          },
-        ],
-      }),
+    signal?.throwIfAborted()
+    const j = await localChat(baseUrl, {
+      model: 'local',
+      temperature: 0,
+      max_tokens: 160,
+      chat_template_kwargs: { enable_thinking: false },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: png } },
+            { type: 'text', text: PROMPT },
+          ],
+        },
+      ],
+    }, signal).catch(error => {
+      signal?.throwIfAborted()
+      if (/\b[45]\d\d\b/.test(String(error)) && /image|mmproj|multimodal|vision/i.test(String(error))) throw new Error(msg().errors.needVision)
+      throw error
     })
-    if (!res.ok) {
-      const body = await res.text()
-      if (/image|mmproj|multimodal|vision/i.test(body)) throw new Error(msg().errors.needVision)
-      throw new Error(msg().errors.localHttp(res.status, body.slice(0, 200)))
-    }
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] }
+    signal?.throwIfAborted()
     return cleanRead(j.choices?.[0]?.message?.content ?? '')
   }
 }
@@ -77,13 +74,16 @@ export interface ImageImport {
   capped: boolean
 }
 
-export async function importImage(file: Blob, read: Reader, onStep?: (done: number, total: number) => void): Promise<ImageImport> {
+export async function importImage(file: Blob, read: Reader, onStep?: (done: number, total: number) => void, signal?: AbortSignal): Promise<ImageImport> {
+  signal?.throwIfAborted()
   let bmp: ImageBitmap
   try {
     bmp = await createImageBitmap(file)
   } catch {
+    signal?.throwIfAborted()
     throw new Error(msg().errors.imageBroken)
   }
+  if (signal?.aborted) { bmp.close(); signal.throwIfAborted() }
   const k = Math.min(1, WORK / bmp.width)
   const work = document.createElement('canvas')
   work.width = Math.round(bmp.width * k)
@@ -100,6 +100,7 @@ export async function importImage(file: Blob, read: Reader, onStep?: (done: numb
   const toBoard = WIDTH / work.width
   const found: Area[] = []
   for (const [i, a] of areas.entries()) {
+    signal?.throwIfAborted()
     onStep?.(i, areas.length)
     // 切出这一块，四周留点边；字太小就放大一点，模型读得更准
     const pad = 6
@@ -113,6 +114,7 @@ export async function importImage(file: Blob, read: Reader, onStep?: (done: numb
     crop.height = Math.round(h * up)
     crop.getContext('2d')!.drawImage(work, x, y, w, h, 0, 0, crop.width, crop.height)
     const text = await read(crop.toDataURL('image/png'))
+    signal?.throwIfAborted()
     if (meaningful(text)) found.push({ text, x: a.x * toBoard, y: a.y * toBoard, w: a.w * toBoard, h: a.h * toBoard })
   }
   onStep?.(areas.length, areas.length)

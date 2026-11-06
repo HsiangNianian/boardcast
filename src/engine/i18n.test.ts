@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { en } from '../i18n/en.ts'
 import { toMarkdown } from '../board/markdown.ts'
 import { emptyGraph } from './graph.ts'
-import { setLangChoice, systemLang } from '../i18n/index.ts'
+import { currentLang, langChoice, msg, setLangChoice, systemLang } from '../i18n/index.ts'
 import { zh } from '../i18n/zh.ts'
 
 test('system language picks the first one we have, English otherwise', () => {
@@ -23,6 +23,14 @@ function shape(o: object, at = ''): string[] {
 
 test('every dictionary has exactly the keys of the English one', () => {
   assert.deepEqual(shape(zh).sort(), shape(en).sort())
+})
+
+test('reading a frozen export dictionary does not change the interface choice', () => {
+  setLangChoice('zh')
+  assert.equal(msg('en'), en)
+  assert.equal(msg(), zh)
+  assert.equal(currentLang(), 'zh')
+  assert.equal(langChoice(), 'zh')
 })
 
 test('English plurals', () => {

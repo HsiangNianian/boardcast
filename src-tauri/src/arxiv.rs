@@ -33,7 +33,15 @@ pub fn valid_id(id: &str) -> bool {
 
 /// 下载 PDF，返回 base64
 #[tauri::command]
-pub async fn arxiv_pdf(id: String) -> Result<String, String> {
+pub async fn arxiv_pdf(
+    requests: tauri::State<'_, crate::remote::Requests>,
+    request_id: String,
+    id: String,
+) -> Result<String, String> {
+    requests.run(&request_id, download(id)).await
+}
+
+async fn download(id: String) -> Result<String, String> {
     let id = id.trim().to_string();
     if !valid_id(&id) {
         return Err(format!("Invalid arXiv ID: {id}"));
@@ -53,12 +61,20 @@ pub async fn arxiv_pdf(id: String) -> Result<String, String> {
     // 跳转以后也必须还在 arxiv.org
     let host = resp.url().host_str().unwrap_or_default().to_string();
     if !(host == "arxiv.org" || host.ends_with(".arxiv.org")) {
-        return Err(format!("arXiv redirected to another site ({host}); download canceled"));
+        return Err(format!(
+            "arXiv redirected to another site ({host}); download canceled"
+        ));
     }
     if !resp.status().is_success() {
-        return Err(format!("arXiv returned {}: the ID may be incorrect", resp.status()));
+        return Err(format!(
+            "arXiv returned {}: the ID may be incorrect",
+            resp.status()
+        ));
     }
-    let bytes = resp.bytes().await.map_err(|e| format!("Download failed: {e}"))?;
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| format!("Download failed: {e}"))?;
     if bytes.len() > MAX {
         return Err("PDF is too large (over 60 MB)".into());
     }
@@ -77,12 +93,12 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn real_arxiv_download() {
-        let b64 = arxiv_pdf("1512.03385v1".into()).await.expect("下载失败");
+        let b64 = download("1512.03385v1".into()).await.expect("下载失败");
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(b64)
             .unwrap();
         assert!(bytes.starts_with(b"%PDF") && bytes.len() > 100_000);
-        assert!(arxiv_pdf("../x".into()).await.is_err());
+        assert!(download("../x".into()).await.is_err());
     }
 
     #[test]

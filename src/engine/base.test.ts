@@ -1,8 +1,31 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { inherited } from './base.ts'
+import { inherited, oldTextOpacity } from './base.ts'
 import { emptyGraph } from './graph.ts'
 import { applyOps, parseOps } from './ops.ts'
+
+test('old text keeps contrast in both board themes without fading unreadable custom colors further', () => {
+  const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+  const luminance = (channels: number[]) => channels.reduce((sum, c, i) => sum + (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][i], 0)
+  for (const [colors, paper] of [[['#1d1f24', '#d02e2e', '#1f56c4'], '#fbfbf8'], [['#eeeee6', '#ff9c8a', '#9cc9f5'], '#22302a']] as const) {
+    for (const color of colors) {
+      const opacity = oldTextOpacity(color, paper), bg = rgb(paper)
+      const a = luminance(rgb(color).map((c, i) => c * opacity + bg[i] * (1 - opacity))), b = luminance(bg)
+      assert.ok((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= 4.5, `${color} on ${paper}`)
+    }
+  }
+  assert.equal(oldTextOpacity('#cccccc', '#ffffff'), 1)
+  assert.equal(oldTextOpacity('#000', '#ffffff', 0.4), 0.4)
+  assert.equal(oldTextOpacity('transparent', '#ffffff'), 1)
+})
+
+test('a new mark on a repeated word at different coordinates is not inherited', () => {
+  const base = board('N 「Repeated words」')
+  const span = { text: 'word', mark: '下划线' as const, boxes: [{ x: 10, y: 20, w: 30, h: 15 }] }
+  base.nodes[0].spans = [span]
+  assert.equal(inherited(base).span(base.nodes[0], span), true)
+  assert.equal(inherited(base).span(base.nodes[0], { ...span, boxes: [{ ...span.boxes[0], y: 50 }] }), false)
+})
 
 const board = (text: string, g = emptyGraph()) => applyOps(g, parseOps(text))
 

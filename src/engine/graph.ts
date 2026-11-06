@@ -10,7 +10,7 @@ export type Ink = 'draft' | 'ink'
 /** region：导入的 PDF / 图片上的一块内容，钉在底图上的固定位置，只能被标记、连线、加备注 */
 export type Kind = 'node' | 'topic' | 'item' | 'question' | 'formula' | 'note' | 'region'
 
-export const MARKS = ['划掉', '圈出', '下划线', '星标'] as const
+export const MARKS = ['划掉', '圈出', '下划线', '星标', '高亮'] as const
 export type Mark = (typeof MARKS)[number]
 
 /** 图标库：模型只能从这里挑，画法见 board/icons.ts */
@@ -22,6 +22,8 @@ export interface RegionRow {
   y: number
   h: number
   segs: { t: string; x: number; w: number }[]
+  /** 局部文字坐标绕页面原点转到板上的弧度；未指定时沿用横排坐标。 */
+  angle?: number
 }
 
 export interface Box {
@@ -29,6 +31,7 @@ export interface Box {
   y: number
   w: number
   h: number
+  angle?: number
 }
 
 /** 标记在原文的一个词或一句话上；一句话跨行时每行一个框 */

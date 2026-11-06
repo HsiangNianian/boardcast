@@ -3,7 +3,7 @@
 // 模型同一时间只跑一个请求。它忙的时候新来的句子先攒着，下一轮合并成一句处理：
 // 宁可跳过中间状态，也不能让板书越拖越晚。
 
-import { attribute } from './attribute.ts'
+import { attribute, renameBy } from './attribute.ts'
 import { type Graph, emptyGraph, findNode } from './graph.ts'
 import { type LlmConfig, type LlmResult, proposeOps } from './llm.ts'
 import { type Op, applyOps, eraseDrafts, markDrafts, parseOps } from './ops.ts'
@@ -11,7 +11,13 @@ import type { Utterance } from './prompt.ts'
 import type { Term } from './glossary.ts'
 import { mentions, quickOps } from './rules.ts'
 
+export class BoardModelUnavailable extends Error {
+  constructor() { super('No board model is configured'); this.name = 'BoardModelUnavailable' }
+}
+
 export interface SessionEvents {
+  /** Let a direct edit finish before reading the graph or applying returned operations. */
+  beforeApply?: (signal: AbortSignal) => Promise<void>
   /** 板书变了（铅笔稿或墨线） */
   graph?: (g: Graph, why: 'draft' | 'ink') => void
   /** 这句话提到了哪些已有节点，用来做高亮 */
@@ -39,6 +45,11 @@ export class Session {
   private pendingAt: number[] = []
   private busy = false
   private active: Utterance[] = []
+  private generation = 0
+  private request: AbortController | null = null
+  private failures = new Map<string, Utterance>()
+  private completed = new Map<string, number>()
+  private retrying = new Set<string>()
 
   constructor(llm: LlmConfig, on: SessionEvents = {}, context = 2) {
     this.llm = llm
@@ -59,12 +70,33 @@ export class Session {
         return
       }
       const drawn = this.history.find((p) => p.id === u.id)
-      if (drawn) u = { ...u, replaces: drawn.text }
+      const failed = this.failures.get(u.id)
+      if (drawn && !failed && !('failed' in drawn && drawn.failed)) u = { ...u, replaces: drawn.text }
+      else if (failed?.replaces) u = { ...u, replaces: failed.replaces }
       if (queued >= 0) {
         this.pending[queued] = u
         return
       }
     }
+    this.enqueue(u)
+  }
+
+  /** Retry exactly one failed revision, without appending a new transcript line. */
+  retry(u: Utterance & { failed?: boolean }): boolean {
+    if (!u.id || this.active.some((p) => p.id === u.id) || this.pending.some((p) => p.id === u.id)) return false
+    const revision = u.revision ?? 0
+    if ((this.completed.get(u.id) ?? -1) >= revision) return false
+    const failed = this.failures.get(u.id)
+    if ((!failed || (failed.revision ?? 0) !== revision) && !u.failed) return false
+    const { failed: _failed, ...line } = u
+    this.retrying.add(u.id)
+    this.enqueue({ ...((failed?.revision ?? 0) === revision ? failed : {}), ...line })
+    return true
+  }
+
+  private enqueue(u: Utterance) {
+    // Session owns queued utterances so a rename can update an in-flight batch safely.
+    u = { ...u }
     this.on.mention?.(mentions(this.graph, u.text))
     const quick = u.replaces === undefined ? quickOps(u.text) : []
     if (quick.length) {
@@ -76,16 +108,47 @@ export class Session {
     void this.pump()
   }
 
+  renameSpeaker(from: string, to: string) {
+    this.graph = renameBy(this.graph, from, to)
+    this.history = this.history.map((u) => u.speaker === from ? { ...u, speaker: to } : u)
+    // The awaited request retains this batch; update its attribution before it settles.
+    for (const u of [...this.active, ...this.pending, ...this.failures.values()]) if (u.speaker === from) u.speaker = to
+  }
+
+  isProcessing(line: Pick<Utterance, 'id' | 'revision'>): boolean {
+    return !!line.id && this.active.some((u) => u.id === line.id && (u.revision ?? 0) === (line.revision ?? 0))
+  }
+
   /** 等所有排队的句子处理完，评测时用。 */
   async drain(): Promise<void> {
     while (this.busy || this.pending.length) await new Promise((r) => setTimeout(r, 5))
   }
 
+  /** Native IPC may ignore abort; the generation also fences its late callbacks. */
+  cancel(): Utterance[] {
+    const unfinished = [...this.active, ...this.pending]
+    this.generation++
+    this.request?.abort()
+    this.request = null
+    this.active = []
+    this.pending = []
+    this.pendingAt = []
+    this.busy = false
+    this.failures.clear()
+    this.completed.clear()
+    this.retrying.clear()
+    this.graph = eraseDrafts(this.graph)
+    return unfinished
+  }
+
   private async pump(): Promise<void> {
     if (this.busy || !this.pending.length) return
     this.busy = true
+    const generation = this.generation
+    const request = new AbortController()
+    this.request = request
     // 指代随各自那句话发送，不能把两句「这个」的目标合成一份。
-    const pointed = this.pending.findIndex((u) => u.pointing?.length || u.replaces !== undefined)
+    const pointed = this.pending.findIndex((u) => u.pointing?.length || u.replaces !== undefined || u.id && this.retrying.has(u.id))
     const count = pointed < 0 ? this.pending.length : Math.max(1, pointed)
     const batch = this.pending.splice(0, count)
     this.active = batch
@@ -95,11 +158,19 @@ export class Session {
       batch.length === 1
         ? batch[0]
         : { text: batch.map((u) => (u.speaker ? `${u.speaker}：${u.text}` : u.text)).join(' ') }
+    const drafts = markDrafts(this.graph)
     try {
+      if (!this.llm.send && !this.llm.baseUrl.trim()) throw new BoardModelUnavailable()
+      if (this.on.beforeApply) {
+        await this.on.beforeApply(request.signal)
+        if (generation !== this.generation) return
+      }
       const seen = this.graph
-      const context = this.history.slice(-this.context)
-      const drafts = markDrafts(seen)
-      const r = await proposeOps(this.llm, seen, context, next, undefined, this.terms)
+      const context = this.history.filter((u) => !u.id || !this.retrying.has(u.id)).slice(-this.context)
+      const r = await proposeOps(this.llm, seen, context, next, request.signal, this.terms)
+      if (generation !== this.generation) return
+      await this.on.beforeApply?.(request.signal)
+      if (generation !== this.generation) return
       if (batch.some((u) => u.id && this.pending.some((p) => p.id === u.id))) {
         // The request may be a native IPC call which cannot be aborted; discard stale output.
         this.graph = eraseDrafts(this.graph, drafts)
@@ -107,6 +178,7 @@ export class Session {
         return
       }
       const ops = parseOps(r.text)
+      for (const u of batch) if (u.id) { this.completed.set(u.id, u.revision ?? 0); this.failures.delete(u.id) }
       // 这一轮新写成墨线的，记下是这批话里谁说的
       this.graph = attribute(this.graph, eraseDrafts(applyOps(this.graph, ops, 'ink'), drafts), batch)
       this.on.graph?.(this.graph, 'ink')
@@ -120,8 +192,15 @@ export class Session {
       if (shown.length) this.on.mention?.(shown)
       this.on.llm?.({ ...r, ops, batch, queuedMs, seen, context, said: next })
     } catch (e) {
-      if (!batch.some((u) => u.id && this.pending.some((p) => p.id === u.id))) this.on.error?.(e, batch)
+      if (generation !== this.generation) return
+      if (!batch.some((u) => u.id && this.pending.some((p) => p.id === u.id))) {
+        this.graph = eraseDrafts(this.graph, drafts)
+        this.on.graph?.(this.graph, 'draft')
+        for (const u of batch) if (u.id) this.failures.set(u.id, u)
+        this.on.error?.(e, batch)
+      }
     } finally {
+      if (generation !== this.generation) return
       const superseded = batch.some((u) => u.id && this.pending.some((p) => p.id === u.id))
       if (superseded) {
         const newer = batch.map((u) => {
@@ -141,6 +220,8 @@ export class Session {
         }
       }
       this.active = []
+      for (const u of batch) if (u.id) this.retrying.delete(u.id)
+      this.request = null
       this.busy = false
       void this.pump()
     }

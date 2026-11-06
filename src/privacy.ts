@@ -4,8 +4,10 @@
 /** 本机地址：数据不出这台电脑 */
 export function isLoopback(url: string): boolean {
   try {
-    const h = new URL(url.trim()).hostname.replace(/^\[|\]$/g, '')
-    return h === 'localhost' || h.endsWith('.localhost') || /^127\./.test(h) || h === '::1' || h === '0.0.0.0'
+    const parsed = new URL(url.trim())
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
+    const h = parsed.hostname.replace(/^\[|\]$/g, '')
+    return h === 'localhost' || h.endsWith('.localhost') || /^127(?:\.\d{1,3}){3}$/.test(h) || h === '::1' || h === '0.0.0.0'
   } catch {
     return false
   }

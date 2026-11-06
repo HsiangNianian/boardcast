@@ -32,6 +32,8 @@ function titleBox(l: Layout, id: string): Box | undefined {
 
 /** 跨区域连线没有存走线，按两端框的中心连一条直线近似 */
 function linkLine(l: Layout, from: string, to: string): Pt[] | undefined {
+  const route = l.links.find((link) => link.from === from && link.to === to)?.points
+  if (route) return route
   const a = l.anchors.get(from)
   const b = l.anchors.get(to)
   if (!a || !b) return undefined

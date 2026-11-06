@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { correct, formatGlossary, parseGlossary } from './glossary.ts'
+import { correct, correctUtterance, formatGlossary, parseGlossary, readGlossary } from './glossary.ts'
 import { userMessage } from './prompt.ts'
 import { emptyGraph } from './graph.ts'
 
@@ -38,4 +38,25 @@ test('the model sees the glossary before the board', () => {
   const msg = userMessage(emptyGraph(), [], { text: '先说爬虫' }, terms)
   assert.match(msg, /^术语（起名照这个写法）：MediaCrawler、graphRAG、ClickHouse、订单中心、API 网关\n白板：/)
   assert.doesNotMatch(userMessage(emptyGraph(), [], { text: '先说爬虫' }), /术语/)
+})
+
+test('invalid lines are reported without applying truncated or empty spelling rules', () => {
+  const result = readGlossary('C# = c sharp\nCache = cash = ignored\n= orphan\nCache = ---\nName =\n# comment\nCache = cash, cash\nCache = kashe, Cache # merged')
+  assert.deepEqual(result.invalidLines, [2, 3, 4, 5])
+  assert.deepEqual(result.terms, [{ term: 'C#', also: ['c sharp'] }, { term: 'Cache', also: ['cash', 'kashe'] }])
+  assert.equal(correct('c sharp / cash / .', result.terms), 'C# / Cache / .')
+  assert.equal(correct('.', [{ term: 'Cache', also: ['---', '', '_ _'] }]), '.')
+  assert.deepEqual(parseGlossary('API＝诶屁爱、A P I；api\nAPI = A P I'), [{ term: 'API', also: ['诶屁爱', 'A P I', 'api'] }])
+})
+
+test('correction is a single pass and preserves canonical names, ambiguous aliases and raw input', () => {
+  const terms = parseGlossary('Core = raw\nraw = probe\nFirst = shared\nSecond = shared\n$&Service = dollar\n订单中心 = 订单中兴\n订单中心服务 = 订单中兴服务')
+  const text = 'probe / raw / shared / dollar / 订单中兴服务'
+  const expected = 'raw / raw / shared / $&Service / 订单中心服务'
+  assert.equal(correct(text, terms), expected)
+  const utterance = correctUtterance({ id: 'original', text }, terms)
+  assert.equal(utterance.text, expected)
+  assert.equal(utterance.rawText, text)
+  assert.deepEqual(correctUtterance(utterance, terms), utterance)
+  assert.equal(correct('myprobe2 / SHARED', terms), 'myprobe2 / SHARED')
 })

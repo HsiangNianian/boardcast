@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="qa"></div><script type="module">
+import React,{useEffect,useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import Splash from '/src/ui/Splash.tsx';
+import '/src/style.css';
+const h=React.createElement;
+const qa=window.qa={keys:[],clicks:0,done:0};
+addEventListener('keydown',event=>qa.keys.push(event.key));
+function Fixture(){
+ const[show,setShow]=useState(true),[tick,setTick]=useState(0);
+ useEffect(()=>{const timer=setInterval(()=>setTick(x=>x+1),25);return()=>clearInterval(timer)},[]);
+ return h('div',null,h('button',{id:'background',onClick:()=>qa.clicks++},'Background action'),h('input',{'aria-label':'Background input'}),h('span',null,tick),show&&h(Splash,{onDone:()=>{qa.done++;setShow(false)}}));
+}
+createRoot(document.getElementById('qa')).render(h(Fixture));
+</script></body></html>

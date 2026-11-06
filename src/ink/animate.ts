@@ -1,6 +1,6 @@
 // 动态 SVG（#53）：最终那张板书，按会上画出来的先后一笔一笔写出来，写完停在全貌。
 // 和白板上写字是同一个办法：每一笔一个遮罩，骨架线的 stroke-dashoffset 从头描到尾，露出底下的墨迹。
-// 只用 CSS 动画、不带脚本，所以贴进 GitHub README、文档、群聊里的 <img> 也会自己播。
+// 只用 CSS 动画、不带脚本；支持动画的查看器逐笔播放，静态查看器显示全貌。
 
 import type { Layout } from '../board/layout.ts'
 import { type Graph, MARKS, type Mark, type Node } from '../engine/graph.ts'
@@ -26,8 +26,8 @@ export function ownerOf(key: string): string {
   return head
 }
 
-/** 标记的笔画（划掉、下划线、圈出、星标）在 key 末尾带一个字母；原文上圈画的词句，key 的第二段是标记本身 */
-const MARK_SUFFIX: Record<string, Mark> = { x: '划掉', u: '下划线', o: '圈出', s: '星标' }
+/** 标记在 key 末尾带一个字母；原文上圈画的词句，key 的第二段是标记本身 */
+const MARK_SUFFIX: Record<string, Mark> = { x: '划掉', u: '下划线', o: '圈出', s: '星标', h: '高亮' }
 
 function markOf(key: string): Mark | undefined {
   const parts = key.split('|')
@@ -87,21 +87,21 @@ export interface Timed {
 export function timeline(pieces: Piece[], rank: number[], total = TOTAL): { timed: Timed[]; end: number } {
   const order = pieces.map((p, i) => ({ p, r: rank[i], i })).sort((a, b) => a.r - b.r || a.i - b.i)
   const pen = order.filter((x) => !x.p.under)
-  const turns = new Set(pen.map((x) => x.r)).size
+  const turns = new Set(order.map((x) => x.r)).size
   const natural =
     pen.reduce((t, x) => t + x.p.strokes.reduce((u, s) => u + Math.max(MIN_STROKE, s.length / SPEED) + GAP, 0), 0) + Math.max(0, turns - 1) * PAUSE
   const k = natural > total ? total / natural : 1
   let at = 0
   let last: number | undefined
   const timed: Timed[] = []
-  for (const { p, r } of order) {
-    // 荧光笔垫底不写，跟着它那一轮直接出现
-    if (p.under) {
-      timed.push({ piece: p, delays: p.strokes.map(() => at), durs: p.strokes.map(() => 0) })
-      continue
-    }
+  for (const { p, r, i } of order) {
     if (last !== undefined && r !== last) at += PAUSE * k
     last = r
+    // 荧光笔垫底不写，跟着它那一轮直接出现
+    if (p.under) {
+      timed[i] = { piece: p, delays: p.strokes.map(() => Math.round(at)), durs: p.strokes.map(() => 0) }
+      continue
+    }
     const delays: number[] = []
     const durs: number[] = []
     for (const s of p.strokes) {
@@ -110,7 +110,8 @@ export function timeline(pieces: Piece[], rank: number[], total = TOTAL): { time
       durs.push(Math.round(dur))
       at += dur + GAP * k
     }
-    timed.push({ piece: p, delays, durs })
+    // 播放时间按发言排序，最终叠放仍沿用画布的顺序。
+    timed[i] = { piece: p, delays, durs }
   }
   return { timed, end: Math.round(at) }
 }
@@ -130,21 +131,22 @@ export function animatedSvg(
   const { x, y, w, h } = box
   // 遮罩的范围要写明：不写时默认按画布大小从原点算，板书坐标是负数的那部分（上边、左边）会被裁掉
   let n = 0
-  const body = timed
+  const body = [true, false].flatMap((under) => timed.filter(({ piece }) => !!piece.under === under))
     .map(({ piece: p, delays, durs }) => {
       const strokes = p.strokes
         .map((s, j) => {
           if (!durs[j]) return delays[j] ? `<path d="${s.d}" class="pop" style="animation-delay:${delays[j]}ms"/>` : `<path d="${s.d}"/>`
           const id = `m${n++}`
           const len = (s.length + 1).toFixed(1)
-          return `<mask id="${id}" maskUnits="userSpaceOnUse" x="${x}" y="${y}" width="${w}" height="${h}"><path class="w" d="${s.center}" stroke-dasharray="${len}" stroke-dashoffset="${len}" style="animation-duration:${durs[j]}ms;animation-delay:${delays[j]}ms"/></mask><path d="${s.d}" mask="url(#${id})"/>`
+          return `<mask id="${id}" maskUnits="userSpaceOnUse" x="${x}" y="${y}" width="${w}" height="${h}"><path class="w" d="${s.center}" stroke-dasharray="${len}" stroke-dashoffset="0" style="--length:${len};animation-duration:${durs[j]}ms;animation-delay:${delays[j]}ms"/></mask><path d="${s.d}" mask="url(#${id})"/>`
         })
         .join('')
       return `<g fill="${p.color}" opacity="${p.opacity}"${p.under ? ' style="mix-blend-mode:multiply"' : ''}>${strokes}</g>`
     })
     .join('\n')
   const style = [
-    '@keyframes w{to{stroke-dashoffset:0}}',
+    // 静态查看器忽略动画时保留全貌；只有播放中的关键帧遮住笔迹。
+    '@keyframes w{from{stroke-dashoffset:var(--length)}to{stroke-dashoffset:0}}',
     '@keyframes pop{from{opacity:0}to{opacity:1}}',
     '.w{fill:none;stroke:#fff;stroke-width:26;stroke-linecap:round;stroke-linejoin:round;animation-name:w;animation-timing-function:linear;animation-fill-mode:both}',
     '.pop{animation:pop 1ms both}',

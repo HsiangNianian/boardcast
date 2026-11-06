@@ -1,3 +1,4 @@
+import { msg } from '../i18n/index.ts'
 import type { Graph } from '../engine/graph.ts'
 import { type Box, type LayoutMemory, StableLayout, routeSignature } from './layout.ts'
 
@@ -14,6 +15,7 @@ export async function beautify(graph: Graph, memory: LayoutMemory): Promise<Layo
     const { D2 } = await import('@d2lang/d2')
     const d2 = new D2()
     let timer: ReturnType<typeof setTimeout> | undefined
+    let timedOut = false
     try {
       const nodes = layout.diagram.nodes
       const names = new Map<string, string>()
@@ -34,13 +36,13 @@ export async function beautify(graph: Graph, memory: LayoutMemory): Promise<Layo
       ].join('\n')
       const result = await Promise.race([
         d2.compile(input, { layout: 'tala' }),
-        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Board layout timed out')), 20_000) }),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => { timedOut = true; reject(new Error(msg().errors.layoutTimeout)) }, 20_000) }),
       ])
       const shapes = new Map(result.diagram.shapes.map((s) => [s.id, s]))
       const positions = new Map<string, Box>()
       for (const b of nodes) {
         const shape = shapes.get(names.get(b.id)!)
-        if (!shape || !Number.isFinite(shape.pos.x) || !Number.isFinite(shape.pos.y)) throw new Error('Incomplete board layout')
+        if (!shape || !Number.isFinite(shape.pos.x) || !Number.isFinite(shape.pos.y)) throw new Error(msg().errors.layoutIncomplete)
         positions.set(b.id, { ...b, x: shape.pos.x, y: shape.pos.y })
       }
       next.nodeAt = [...positions]
@@ -57,7 +59,10 @@ export async function beautify(graph: Graph, memory: LayoutMemory): Promise<Layo
       next = draft.snapshot()
     } finally {
       clearTimeout(timer)
-      await d2.dispose()
+      if (timedOut) {
+        // shortcut: D2 0.1.34 dispose waits for startup; use its worker until disposal can abort initialization.
+        await (d2 as unknown as { worker?: { terminate(): void | Promise<unknown> } }).worker?.terminate()
+      } else await d2.dispose()
     }
   }
 

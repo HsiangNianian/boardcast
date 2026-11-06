@@ -1,7 +1,51 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { cleanRead, meaningful } from '../board/importImage.ts'
+import { createServer } from 'node:http'
+import { once } from 'node:events'
+import { cleanRead, meaningful, llamaReader, importImage } from '../board/importImage.ts'
+import { importPdf } from '../board/importPdf.ts'
 import { segment } from '../board/segment.ts'
+
+test('image recognition does not forward the image through an HTTP redirect', async () => {
+  const requests: string[] = []
+  const server = createServer(async (req, res) => {
+    for await (const _ of req) { /* consume the synthetic image request */ }
+    requests.push(req.url ?? '')
+    res.writeHead(307, { Location: '/unapproved-image-endpoint' })
+    res.end()
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  try {
+    const address = server.address()
+    assert.ok(address && typeof address !== 'string')
+    await assert.rejects(llamaReader(`http://127.0.0.1:${address.port}`)('data:image/png;base64,synthetic'), TypeError)
+    assert.deepEqual(requests, ['/v1/chat/completions'])
+  } finally {
+    server.closeAllConnections()
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+  }
+})
+
+test('cancelled imports stop before decoding and the vision reader aborts its request', async () => {
+  const already = new AbortController()
+  already.abort()
+  await assert.rejects(importImage(new Blob(), async () => '' , undefined, already.signal), { name: 'AbortError' })
+  await assert.rejects(importPdf(new Uint8Array(), undefined, already.signal), { name: 'AbortError' })
+  const controller = new AbortController()
+  const original = globalThis.fetch
+  let seen: AbortSignal | null | undefined
+  try {
+    globalThis.fetch = async (_url, init) => {
+      seen = init?.signal
+      return await new Promise((_resolve, reject) => seen?.addEventListener('abort', () => reject(seen?.reason), { once: true }))
+    }
+    const pending = llamaReader('http://localhost:1234', controller.signal)('data:image/png;base64,test')
+    assert.equal(seen, controller.signal)
+    controller.abort()
+    await assert.rejects(pending, { name: 'AbortError' })
+  } finally { globalThis.fetch = original }
+})
 
 test('what the vision model reads is cleaned up, and arrowheads are not text', () => {
   assert.equal(cleanRead('「订单服务」'), '订单服务')

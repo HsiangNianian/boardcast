@@ -1,7 +1,7 @@
 // 手动修改板书：在手写板上点选以后的删除、改字、标记。都返回新图，不改原图。
 // 能用现成操作表达的（删节点、改名、删连线）就走 applyOps，和模型改板书是同一套规则。
 
-import { type Graph, type Mark, cloneGraph } from './graph.ts'
+import { type Graph, type Mark, cloneGraph, norm } from './graph.ts'
 import { applyOps } from './ops.ts'
 
 /** 手写板上选中的东西 */
@@ -24,7 +24,12 @@ export function remove(g: Graph, sel: Selection): Graph {
 export function rename(g: Graph, sel: Selection, text: string): Graph {
   const t = text.trim()
   if (pinned(g, sel)) return g
-  if (sel.kind === 'node') return t ? applyOps(g, [{ op: 'R', target: { id: sel.id }, name: t }]) : g
+  if (sel.kind === 'node') {
+    const n = g.nodes.find((x) => x.id === sel.id)
+    return n && t && norm(n.label) !== norm(t) ? applyOps(g, [{ op: 'R', target: { id: sel.id }, name: t }]) : g
+  }
+  const current = g.edges.find((x) => x.from === sel.from && x.to === sel.to)
+  if (!current || (current.label ?? '') === t) return g
   const out = cloneGraph(g)
   const e = out.edges.find((x) => x.from === sel.from && x.to === sel.to)
   if (e) e.label = t || undefined

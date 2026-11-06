@@ -32,6 +32,12 @@ export function actionFor(e: Key): Action | null {
   return null
 }
 
+export function shortcutLabel(keys: string, platform: string): string {
+  if (!/Mac|iPhone|iPad|iPod/.test(platform)) return keys
+  // Match the Mac native menu's redo accelerator.
+  return keys.replaceAll('Ctrl+Y', 'Ctrl+Shift+Z').replaceAll('Ctrl+Shift+', '⇧⌘').replaceAll('Ctrl+', '⌘')
+}
+
 /** 把一次按键写成全局快捷键的写法（Ctrl+Shift+Space）；只按了修饰键，或者没带修饰键，返回 null */
 export function accelFrom(e: Key & { code: string }): string | null {
   const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super'].filter(Boolean) as string[]

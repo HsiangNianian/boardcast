@@ -1,0 +1,10 @@
+.speakers-panel { width: min(100%, 460px); padding: 24px; }
+.speakers-panel h2 { margin: 0 0 16px; }
+.speakers-panel > label { display: grid; gap: 6px; margin: 16px 0 10px; }
+.speakers-panel input, .speakers-panel select { width: 100%; }
+.speaker-impact { margin: 16px 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.speaker-impact p { margin: 4px 0; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.line button.who { padding: 0; border: 0; }
+.line button.who:disabled { opacity: 1; cursor: default; }
+.dock .speaker-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.dock .speaker-actions > .small { font-size: 11px; padding: 2px 5px; height: auto; }

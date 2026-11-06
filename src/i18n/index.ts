@@ -66,9 +66,9 @@ export function langChoice(): LangChoice {
   return choice
 }
 
-export function setLangChoice(c: LangChoice) {
+export function setLangChoice(c: LangChoice, persist = true) {
   choice = c
-  if (typeof window !== 'undefined')
+  if (persist && typeof window !== 'undefined')
     try {
       if (c === 'system') localStorage.removeItem(KEY)
       else localStorage.setItem(KEY, c)
@@ -86,8 +86,8 @@ function subscribe(f: () => void) {
 }
 
 /** Strings in the current language, for code outside React */
-export function msg(): Messages {
-  return dicts[lang]
+export function msg(language: Lang = lang): Messages {
+  return dicts[language]
 }
 
 /** Strings in the current language; re-renders when it changes */

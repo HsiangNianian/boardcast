@@ -1,0 +1,55 @@
+// Browser check: pass an isolated Playwright page and the running Vite origin.
+const assert = require('node:assert/strict');
+module.exports = async function checkDialogs(page, baseUrl) {
+ await page.addInitScript(()=>localStorage.setItem('boardcast.lang','en'));
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(`${baseUrl}/scripts/ui/fixtures/settings.html`);
+ await page.getByRole('button',{name:'Open settings',exact:true}).click();
+ const settings=page.getByRole('dialog',{name:'Settings',exact:true});
+ await settings.waitFor();
+ assert.equal(await page.evaluate(()=>document.activeElement.closest('dialog')?.getAttribute('aria-label')),'Settings');
+ await page.locator('#background').evaluate(e=>e.focus());
+ assert.notEqual(await page.evaluate(()=>document.activeElement.id),'background','native modal must make background inert');
+ await settings.getByRole('button',{name:'Close',exact:true}).focus();
+ await page.keyboard.press('Shift+Tab');
+ assert.equal(await page.evaluate(()=>document.activeElement.closest('dialog')?.getAttribute('aria-label')),'Settings');
+ assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Show all shortcuts');
+ await page.keyboard.press('Tab');
+ assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Close');
+ await page.keyboard.press('/');
+ assert.equal(await page.evaluate(()=>document.activeElement.closest('dialog')?.getAttribute('aria-label')),'Settings');
+ assert.equal(await settings.getByRole('tab').count(),6);
+ for(const name of ['Audio & transcription','Board & models','Remote & privacy','Terminology & materials','Maintenance & advanced','General & appearance']){
+  await settings.getByRole('tab',{name,exact:true}).click();assert.equal(await settings.getByRole('tabpanel').getAttribute('aria-label'),name);
+ }
+ await settings.getByRole('button',{name:'Show all shortcuts',exact:true}).click();
+ const nested=page.getByRole('dialog',{name:'Nested test',exact:true});await nested.waitFor();
+ await nested.getByRole('button',{name:'Start work',exact:true}).click();await page.keyboard.press('Escape');assert.equal(await nested.count(),1);
+ await nested.getByRole('button',{name:'Finish work',exact:true}).click();await page.keyboard.press('Escape');assert.equal(await nested.count(),0);
+ assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Show all shortcuts');
+ await settings.getByRole('tab',{name:'Remote & privacy',exact:true}).click();
+ await settings.getByPlaceholder('https://api.openai.com/v1').fill('https://qa.invalid/v1');
+ await settings.getByPlaceholder(/e.g./).fill('QA model');
+ await settings.getByRole('button',{name:'Save and enable',exact:true}).click();
+ await page.getByRole('alertdialog',{name:'Confirm before enabling the remote model',exact:true}).waitFor();
+ await page.keyboard.press('Escape');assert.equal(await page.getByRole('alertdialog').count(),0);
+ await page.keyboard.press('Escape');await page.getByRole('alertdialog',{name:'Leave without saving the connection?',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Keep editing',exact:true}).click();assert.equal(await settings.getByPlaceholder('https://api.openai.com/v1').inputValue(),'https://qa.invalid/v1');
+ await page.setViewportSize({width:720,height:480});
+ assert.equal(await settings.getByRole('tab').count(),0);
+ await settings.getByRole('combobox',{name:'Settings sections',exact:true}).selectOption('audio');
+ assert.equal(await settings.getByRole('tabpanel').getAttribute('aria-label'),'Audio & transcription');
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await settings.getByRole('combobox',{name:'Settings sections',exact:true}).selectOption('general');
+ await settings.getByRole('tabpanel').evaluate(element=>{element.scrollTop=120;element.dispatchEvent(new Event('scroll',{bubbles:true}));});
+ const scrollTop=await settings.getByRole('tabpanel').evaluate(element=>element.scrollTop);
+ assert(scrollTop>0);
+ await settings.getByRole('combobox',{name:'Settings sections',exact:true}).selectOption('audio');
+ await settings.getByRole('combobox',{name:'Settings sections',exact:true}).selectOption('general');
+ assert.equal(await settings.getByRole('tabpanel').evaluate(element=>element.scrollTop),scrollTop,'returning to a category retains its scroll position');
+ await page.keyboard.press('Escape');await page.getByRole('button',{name:'Discard connection changes',exact:true}).click();
+ assert.equal(await page.getByRole('dialog').count(),0);
+ assert.equal(await page.evaluate(()=>document.activeElement.id),'open-settings');
+ assert.deepEqual(errors,[]);
+ console.log('PASS: native inert, Tab/Shift+Tab, / isolation, six categories, nested focus, busy Escape, consent/discard, 720px navigation/scroll restoration, restore focus.');
+};

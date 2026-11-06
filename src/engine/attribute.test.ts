@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import type { FreeScene } from '../board/freeScene.ts'
 import { firstSeen, renameBy, renameByInSteps, saidAt, whoSaid } from './attribute.ts'
 import { History } from './edit.ts'
 import { type Graph, emptyGraph } from './graph.ts'
@@ -72,6 +73,20 @@ test('renaming a speaker follows through the board, the replay steps and the und
   h.record(g)
   h.map((x) => renameBy(x, '说话人 1', '小王'))
   assert.equal(h.undo(r)?.nodes[0].by, '小王')
+})
+
+test('renaming a speaker also updates restorable candidates in scene-only replay steps', () => {
+  const original = applyOps(emptyGraph(), parseOps('N 「Original」')).nodes[0]
+  const scene: FreeScene = { elements: [], generated: [], files: {}, modelCandidates: {
+    [original.id]: { kind: 'node', id: original.id, restore: { ...original, by: 'Alice' } },
+  } }
+  const steps: Step[] = [{ t: 0, line: 1, d: {}, scene }]
+  const renamed = renameByInSteps(steps, 'Alice', 'Bob')
+  const candidate = renamed[0].scene?.modelCandidates?.[original.id]
+  assert.equal(candidate?.kind === 'node' && candidate.restore?.by, 'Bob')
+  const before = scene.modelCandidates?.[original.id]
+  assert.equal(before?.kind === 'node' && before.restore?.by, 'Alice')
+  assert.equal(renameByInSteps(steps, 'Unknown', 'Bob')[0], steps[0])
 })
 
 test('saidAt finds the line a board item came from', () => {

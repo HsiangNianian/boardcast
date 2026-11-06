@@ -6,7 +6,7 @@ const OLD = /([a-z][a-z-]*(?:\.[A-Z]{2})?\/\d{7}(?:v\d+)?)/
 export function parseArxiv(input: string): string | null {
   const s = input.trim()
   if (!s) return null
-  const url = /arxiv\.org\/(?:abs|pdf|html|format)\/([^?#\s]+)/i.exec(s)
+  const url = /^(?:https?:\/\/)?(?:[a-z0-9-]+\.)*arxiv\.org\/(?:abs|pdf|html|format)\/([^?#\s]+)(?:[?#]\S*)?$/i.exec(s)
   const body = (url ? url[1] : s.replace(/^arxiv:\s*/i, '')).replace(/\.pdf$/i, '').replace(/\/$/, '')
   const m = new RegExp(`^(?:${NEW.source}|${OLD.source})$`).exec(body)
   return m ? (m[1] ?? m[2]) : null

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { accelFrom, actionFor } from './shortcuts.ts'
+import { accelFrom, actionFor, shortcutLabel } from './shortcuts.ts'
 
 const key = (key: string, m: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }> = {}) => ({ key, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...m })
 
@@ -18,6 +18,18 @@ test('other keys are left alone', () => {
   assert.equal(actionFor(key('n')), null)
   assert.equal(actionFor(key('s', { ctrlKey: true })), null)
   assert.equal(actionFor(key('o', { ctrlKey: true, altKey: true })), null)
+})
+
+test('shortcut labels follow the platform and native redo command', () => {
+  assert.equal(shortcutLabel('Ctrl+Shift+R', 'MacIntel'), '⇧⌘R')
+  assert.equal(shortcutLabel('Ctrl+Z / Ctrl+Y', 'MacIntel'), '⌘Z / ⇧⌘Z')
+  assert.equal(shortcutLabel('Ctrl+[ / Ctrl+]', 'iPad'), '⌘[ / ⌘]')
+  for (const platform of ['Linux x86_64', 'Win32', '']) {
+    assert.equal(shortcutLabel('Ctrl+Z / Ctrl+Y', platform), 'Ctrl+Z / Ctrl+Y')
+  }
+  for (const keys of ['Hold Space', '按住空格', 'PageUp / PageDown', '?']) {
+    assert.equal(shortcutLabel(keys, 'MacIntel'), keys)
+  }
 })
 
 test('a pressed combination becomes an accelerator', () => {

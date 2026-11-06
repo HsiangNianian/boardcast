@@ -1,0 +1,9 @@
+.log .summary { max-height: 100%; overflow-y: auto; }
+.summary-head { flex-wrap: wrap; flex-shrink: 0; }
+.summary-notice { margin: 4px 0 8px; color: var(--muted); font-size: 12px; }
+.summary-proposal, .summary-copy-fallback { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.summary-proposal h4 { margin: 0 0 8px; }
+.summary-proposal > p, .summary-copy-fallback > p { margin: 4px 0 8px; font-size: 12px; }
+.summary-proposal .md { max-height: 260px; }
+.summary-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.summary-copy-fallback textarea { width: 100%; min-height: 100px; }

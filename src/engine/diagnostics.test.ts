@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { cleanLog, makeZip, recentErrors, recordError, scrub, lineTiming, timingReport } from './diagnostics.ts'
+import { cleanLog, diagnosticErrors, diagnosticJson, errorSummary, makeZip, recentErrors, recordError, scrub, lineTiming, timingReport } from './diagnostics.ts'
 
 test('keys and user names are removed', () => {
   assert.equal(scrub('auth sk-abc123456789 ok'), 'auth [key] ok')
@@ -11,9 +11,68 @@ test('keys and user names are removed', () => {
   assert.equal(scrub('C:\\Users\\alice\\x.log'), 'C:\\Users\\[user]\\x.log')
 })
 
-test('log lines with meeting text are dropped', () => {
-  const out = cleanLog('srv ready\nprompt: 豆包交给小王\nslot done')
-  assert.equal(out, 'srv ready\nslot done')
+test('diagnostic logs retain numeric metrics without exporting free text in any language', () => {
+  const input = [
+    'llama_context: n_ctx = 4096',
+    'prompt: PRIVATE-EN private acquisition plan',
+    'PRIVATE-CONTINUATION has no prefix',
+    'prompt: PRIVATE-ZH 豆包交给小王',
+    '{"messages":[{"content":"PRIVATE-JSON"}]}',
+    'slot print_timing: prompt eval time = 12.00 ms / 4 tokens',
+    'slot print_timing: eval time = 18.00 ms / 3 tokens',
+    'error: out of memory; prompt was PRIVATE-ERROR',
+    'Authorization: Bearer private-token-without-a-known-prefix',
+  ].join('\n')
+  const out = cleanLog(input)
+  assert.ok(!out.includes('PRIVATE-') && !out.includes('private-token'))
+  assert.ok(!out.includes('豆包') && !out.includes('acquisition'))
+  const data = JSON.parse(out)
+  assert.deepEqual(data.contextTokens, [4096])
+  assert.deepEqual(data.timings, [{ stage: 'prompt eval', ms: 12, tokens: 4 }, { stage: 'eval', ms: 18, tokens: 3 }])
+  assert.ok(data.signals.includes('out-of-memory'))
+  assert.equal(data.lines, 9)
+})
+
+test('exported errors preserve observed codes and source, never free-form response text', () => {
+  const raw = 'HTTP 401: PRIVATE-RESPONSE with arbitrary credentials token123; Permission denied (os error 13)'
+  assert.deepEqual(errorSummary(raw), { type: 'Error', signals: ['permission-denied'], httpStatus: [401], osError: [13] })
+  recordError('voice', new SyntaxError('PRIVATE-SYNTAX input from a meeting'))
+  recordError('console', raw)
+  const errors = diagnosticErrors().slice(-2)
+  assert.equal(errors[0].source, 'voice')
+  assert.equal(errors[0].type, 'SyntaxError')
+  assert.equal(errors[1].source, 'console')
+  assert.deepEqual(errors[1].httpStatus, [401])
+  assert.ok(!JSON.stringify(errors).includes('PRIVATE-') && !JSON.stringify(errors).includes('token123'))
+  assert.ok(recentErrors().at(-1)!.includes('PRIVATE-RESPONSE'), 'local error details remain available separately from the exported summary')
+})
+
+test('storage errors distinguish full disks, denied access and browser quota', () => {
+  for (const text of ["Couldn't save the image: No space left on device (os error 28)", 'ENOSPC', 'There is not enough space on the disk. (os error 112)']) {
+    assert.deepEqual(errorSummary(text).signals, ['disk-full'])
+  }
+  for (const text of ['Permission denied (os error 13)', 'Access is denied. (os error 5)', 'EACCES']) {
+    assert.deepEqual(errorSummary(text).signals, ['permission-denied'])
+  }
+  for (const text of ['QuotaExceededError', 'The quota has been exceeded.', 'Storage quota exceeded']) {
+    assert.deepEqual(errorSummary(text).signals, ['storage-quota'])
+  }
+  for (const text of ['This meeting changed in another window.', 'ASSET_HASH_MISMATCH', 'HTTP 503: unavailable']) {
+    assert.deepEqual(errorSummary(text).signals, [])
+  }
+})
+
+test('diagnostic JSON summarizes free-form status errors and scrubs paths before escaping', () => {
+  const text = diagnosticJson({ os: 'windows', voice: { error: 'HTTP 503 PRIVATE-VOICE', listening: false }, model: { message: 'PRIVATE-STATUS Permission denied', path: 'C:\\Users\\alice\\model.gguf' }, speechModels: { appleError: 'TimeoutError PRIVATE-APPLE' }, root: '/home/alice/models', api_key: 'private-credential-without-prefix', authorization: 'Bearer another-private-key' })
+  const data = JSON.parse(text)
+  assert.ok(!text.includes('PRIVATE-') && !text.includes('alice') && !text.includes('sk-private'))
+  assert.deepEqual(data.voice.error.httpStatus, [503])
+  assert.deepEqual(data.model.message.signals, ['permission-denied'])
+  assert.equal(data.speechModels.appleError.type, 'TimeoutError')
+  assert.equal(data.model.path, 'C:\\Users\\[user]\\model.gguf')
+  assert.equal(data.voice.listening, false)
+  assert.equal(data.api_key, '[key]')
+  assert.equal(data.authorization, '[key]')
 })
 
 test('recent errors are scrubbed and bounded', () => {

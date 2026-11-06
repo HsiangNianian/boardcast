@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="qa"></div><script type="module">
+import React,{useEffect,useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import SelectionToolbar from '/src/ink/SelectionToolbar.tsx';
+import '/src/style.css';
+const h=React.createElement;
+function Fixture(){
+ const [anchor,setAnchor]=useState({x:0,top:0,bottom:40});
+ const [viewport,setViewport]=useState({width:innerWidth,height:innerHeight});
+ useEffect(()=>{window.qaAnchor=setAnchor;const resize=()=>setViewport({width:innerWidth,height:innerHeight});addEventListener('resize',resize);return()=>removeEventListener('resize',resize)},[]);
+ return h('main',{style:{position:'relative',width:'100vw',height:'100vh'}},h(SelectionToolbar,{anchor,viewport},
+  h('form',{className:'rename',onSubmit:e=>e.preventDefault()},h('input',{'aria-label':'Name',defaultValue:'Long translated object name'}),h('button',null,'Rename')),
+  ...['Circle','Underline','Strike through','Highlight','Star','Add to meeting glossary','Delete'].map(text=>h('button',{key:text,type:'button'},text))));
+}
+createRoot(document.getElementById('qa')).render(h(Fixture));
+</script></body></html>

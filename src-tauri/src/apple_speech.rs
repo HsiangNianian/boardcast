@@ -371,14 +371,59 @@ pub struct SystemAudio {
 impl SystemAudio {
     #[cfg(target_os = "macos")]
     pub fn start(app: &AppHandle, audio: mpsc::Sender<(usize, Vec<f32>)>) -> Result<Self, String> {
+        Self::start_with_cancel(app, audio, None, Duration::from_secs(25))
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn start_cancellable(
+        app: &AppHandle,
+        audio: mpsc::Sender<(usize, Vec<f32>)>,
+        stop: &AtomicBool,
+        timeout: Duration,
+    ) -> Result<Self, String> {
+        Self::start_with_cancel(app, audio, Some(stop), timeout)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn start_with_cancel(
+        app: &AppHandle,
+        audio: mpsc::Sender<(usize, Vec<f32>)>,
+        stop: Option<&AtomicBool>,
+        timeout: Duration,
+    ) -> Result<Self, String> {
         let helper = Helper::spawn(
             command("capture-system", "")?,
             &app.state::<Jobs>(),
             Some(audio),
         )?;
-        match helper.receive(Duration::from_secs(25))? {
-            Message::Ready => Ok(Self { helper }),
-            _ => Err("System audio capture did not become ready".into()),
+        Self::wait_ready(helper, stop, timeout)
+    }
+
+    fn wait_ready(
+        helper: Helper,
+        stop: Option<&AtomicBool>,
+        timeout: Duration,
+    ) -> Result<Self, String> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            if stop.is_some_and(|stop| stop.load(Ordering::SeqCst)) {
+                return Err("Input check cancelled".into());
+            }
+            if Instant::now() >= deadline {
+                return Err("System audio capture did not become ready in time".into());
+            }
+            match helper.output.recv_timeout(
+                Duration::from_millis(100).min(deadline.saturating_duration_since(Instant::now())),
+            ) {
+                Ok(Ok(Message::Ready)) => return Ok(Self { helper }),
+                Ok(Ok(Message::Error { message })) => return Err(message),
+                Ok(Err(error)) => return Err(error),
+                Ok(_) => return Err("System audio capture did not become ready".into()),
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err("System audio helper closed before capture was ready".into())
+                }
+            }
         }
     }
 
@@ -692,16 +737,12 @@ mod tests {
         let mut command = Command::new("sh");
         command.args(["-c", "printf '%s\\n' '{\"type\":\"ready\"}' '{\"type\":\"audio\",\"samples\":[0.25,-0.5,0]}'; while read line; do :; done; exit 17"]);
         let helper = Helper::spawn(command, &jobs, Some(tx)).unwrap();
-        assert!(matches!(
-            helper.receive(Duration::from_secs(2)).unwrap(),
-            Message::Ready
-        ));
+        let capture = SystemAudio::wait_ready(helper, None, Duration::from_secs(2)).unwrap();
         assert_eq!(
             rx.recv_timeout(Duration::from_secs(2)).unwrap(),
             (1, vec![0.25, -0.5, 0.0])
         );
-        let child = helper.child.clone();
-        let capture = SystemAudio { helper };
+        let child = capture.helper.child.clone();
         assert!(capture.poll().is_ok());
         drop(capture);
         // The helper must see EOF and release its capture, rather than being killed mid-stream.
@@ -765,5 +806,41 @@ mod tests {
         drop(SystemAudio { helper });
         assert!(started.elapsed() < Duration::from_secs(5));
         assert!(child.lock().unwrap().try_wait().unwrap().is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn system_capture_startup_cancel_and_timeout_reap_an_unready_helper() {
+        for cancel in [true, false] {
+            let jobs = Jobs::default();
+            let mut command = Command::new("sh");
+            command.args(["-c", "read line"]);
+            let helper = Helper::spawn(command, &jobs, None).unwrap();
+            let child = helper.child.clone();
+            let stop = Arc::new(AtomicBool::new(false));
+            let flag = stop.clone();
+            let signal = thread::spawn(move || {
+                if cancel {
+                    thread::sleep(Duration::from_millis(20));
+                    flag.store(true, Ordering::SeqCst);
+                }
+            });
+            let started = Instant::now();
+            let error = SystemAudio::wait_ready(
+                helper,
+                Some(&stop),
+                if cancel {
+                    Duration::from_secs(10)
+                } else {
+                    Duration::from_millis(30)
+                },
+            )
+            .err()
+            .unwrap();
+            assert!(error.contains(if cancel { "cancelled" } else { "in time" }));
+            assert!(started.elapsed() < Duration::from_secs(1));
+            assert!(child.lock().unwrap().try_wait().unwrap().is_some());
+            signal.join().unwrap();
+        }
     }
 }

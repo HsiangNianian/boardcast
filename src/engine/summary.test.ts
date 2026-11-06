@@ -5,11 +5,25 @@ import { emptyGraph } from './graph.ts'
 import type { ChatResponse, LlmConfig } from './llm.ts'
 import { applyOps, parseOps } from './ops.ts'
 import { pageGraph } from './regions.ts'
-import { boardsText, chunks, plainText, summarize, summaryMessages, tidySummary, transcript } from './summary.ts'
+import { boardsText, chunks, plainText, summarize, summaryFingerprint, summaryMessages, tidySummary, transcript } from './summary.ts'
 import { setLangChoice } from '../i18n/index.ts'
 
 // These tests check the Chinese wording
 setLangChoice('zh')
+
+test('summary snapshot identity follows source content and ignores processing status', () => {
+  const graph = applyOps(emptyGraph(), parseOps('T 「登录」'))
+  const line = { text: '下一步验证登录', speaker: 'A', page: 0, ms: 20, failed: false }
+  const completedLine = { ...line, ms: 500, failed: true }
+  const fingerprint = summaryFingerprint([graph], [line])
+  assert.equal(summaryFingerprint([structuredClone(graph)], [completedLine]), fingerprint)
+  assert.equal(summaryFingerprint([graph], [line, { text: '移动对象', manual: true }]), fingerprint)
+  for (const changed of [{ ...line, text: '登录已经验证' }, { ...line, speaker: 'B' }, { ...line, page: 1 }]) {
+    assert.notEqual(summaryFingerprint([graph], [changed]), fingerprint)
+  }
+  assert.notEqual(summaryFingerprint([applyOps(graph, parseOps('T 「注册」'))], [line]), fingerprint)
+  assert.notEqual(summaryFingerprint([graph, emptyGraph()], [line]), fingerprint)
+})
 
 test('long transcripts are cut between sentences', () => {
   const lines = Array.from({ length: 10 }, (_, i) => ({ text: `${i}`.repeat(40) }))
@@ -110,6 +124,19 @@ test('an empty answer from a thinking model is retried with more room, then repo
 
   const mute: LlmConfig = { baseUrl: 'x', flavor: 'openai', send: async () => reply('') }
   await assert.rejects(summarize(mute, g, lines), /token 都用在思考上/)
+})
+
+test('canceling an uncancellable summary reply prevents subsequent chunks', async () => {
+  const controller = new AbortController()
+  let calls = 0
+  const cfg: LlmConfig = { baseUrl: 'remote', send: async (_body, signal) => {
+    assert.equal(signal, controller.signal)
+    calls++
+    controller.abort()
+    return { choices: [{ message: { content: 'A late partial summary' } }] }
+  } }
+  await assert.rejects(summarize(cfg, emptyGraph(), [{ text: 'A'.repeat(3000) }, { text: 'B'.repeat(3000) }], controller.signal), { name: 'AbortError' })
+  assert.equal(calls, 1)
 })
 
 test('copying as plain text drops the markdown', () => {

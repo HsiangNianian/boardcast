@@ -10,6 +10,7 @@ import { type Utterance, boardLang, grammar, messages } from './prompt.ts'
 import { msg } from '../i18n/index.ts'
 import { bindSpeechOps, speechPlan } from './phonetic.ts'
 import { formatOps, parseOps } from './ops.ts'
+import { isDesktop, localChat } from '../desktop.ts'
 
 export interface LlmConfig {
   baseUrl: string
@@ -19,7 +20,7 @@ export interface LlmConfig {
   maxTokens?: number
   flavor?: 'llamacpp' | 'openai'
   /** 自己发请求（桌面版由外壳代发远程请求，key 不进网页）；不给就用 fetch */
-  send?: (body: Record<string, unknown>) => Promise<ChatResponse>
+  send?: (body: Record<string, unknown>, signal?: AbortSignal) => Promise<ChatResponse>
   apiKey?: string
   /** 这个接口失败时改用的接口 */
   fallback?: LlmConfig
@@ -99,7 +100,9 @@ function rejectsExtras(e: unknown): boolean {
 }
 
 async function post(cfg: LlmConfig, b: Record<string, unknown>, signal?: AbortSignal): Promise<ChatResponse> {
-  if (cfg.send) return cfg.send(b)
+  signal?.throwIfAborted()
+  if (cfg.send) return cfg.send(b, signal)
+  if (isDesktop && cfg.flavor !== 'openai') return localChat(cfg.baseUrl, b, signal)
   const url = cfg.flavor === 'openai' ? chatUrl(cfg.baseUrl) : `${cfg.baseUrl}/v1/chat/completions`
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (cfg.apiKey) headers.authorization = `Bearer ${cfg.apiKey}`

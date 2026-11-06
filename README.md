@@ -37,8 +37,8 @@ To type your own content in the web app, connect a model endpoint that your brow
 ### Start a meeting on your computer
 
 1. Download the installer for your operating system and architecture from [Releases](https://github.com/HsiangNianian/boardcast/releases/latest).
-2. On first launch, download a model in the local model panel. Speech recognition models are bundled with the installer; the board model is a separate download.
-3. Click “Start listening,” or type in the bottom input bar. For online meetings, choose “Microphone + system audio” in Settings → Audio input.
+2. On first launch, download a board model in Settings → Board & models → Manage models. Speech recognition models are bundled with the installer; the board model is a separate download.
+3. Click “Start listening,” or type in the bottom input bar. For online meetings, choose “Microphone + system audio” in Settings → Audio & transcription.
 
 | System | Installer | Local inference / system audio |
 |---|---|---|
@@ -55,13 +55,13 @@ The macOS app is not yet Apple Developer signed or notarized. First launch may r
 |---|---|
 | **Talk and draw**: flowcharts, groups, topics, nested notes, formulas, questions and action items share one board. | **Summarize and trace**: collect conclusions, decisions, owners and tasks; jump from an item to who raised it and the corresponding transcript line. |
 | **Circle and refer**: circle something before saying “star this” or “connect these two,” giving the model explicit targets. | **Replay and branch**: watch the board grow, seek, change speed or fork a new board from any recorded moment. |
-| **Edit together**: rename, move, mark and undo in PAD Whiteboard mode, or edit freely in PC Meeting mode with Excalidraw. | **Continue a meeting**: search past meetings or start a new one from an old board; inherited content is faded while new changes use full ink. |
+| **Edit together**: rename, move, mark and undo in Hand-drawn view, or edit freely in Free edit view with Excalidraw. | **Continue a meeting**: search past meetings or start a new one from an old board; inherited content is faded while new changes use full ink. |
 
-PAD Whiteboard mode draws Chinese, Japanese and English stroke by stroke, with English strokes derived from Excalidraw’s Excalifont. Japanese kana and supplementary kanji are bundled for offline use. The defaults are 0 messiness, 65% Chinese/Japanese and line weight, and independently adjustable English weight at 100%; English lowercase switches to cursive at 60 messiness. Light mode uses whiteboard markers, dark mode uses chalk. The interface supports Chinese and English, while board labels and summaries follow the meeting language.
+Hand-drawn mode draws Chinese, Japanese and English stroke by stroke, with English strokes derived from Excalidraw’s Excalifont. Japanese kana, supplementary kanji and common mathematical symbols are bundled for offline use, including Greek letters and superscripts/subscripts. The defaults are 0 messiness, 65% Chinese/Japanese and line weight, and independently adjustable English weight at 100%; English lowercase switches to cursive at 60 messiness. Light mode uses whiteboard markers, dark mode uses chalk. The interface supports Chinese and English, while board labels and summaries follow the meeting language.
 
 ### Circle and refer
 
-Click “Circle” in the top bar, draw around objects with a mouse or finger in **PAD Whiteboard mode**, then speak or send a line of text:
+Click “Circle” in the top bar, draw around objects with a mouse or finger in **Hand-drawn view**, then speak or send a line of text:
 
 > “Connect these two.” · “Star this paragraph.” · “Add rollback rehearsal under this topic.”
 
@@ -76,9 +76,9 @@ Use the import menu or drag a file onto the board:
 | **PDF / papers** | Get one board per page with the original page underneath. Annotate words, sentences and paragraphs; connect regions and add margin notes. Layout analysis recognizes headings, columns, figures, tables and equations. |
 | **arXiv** | Paste a link or paper ID in the desktop import menu to download the PDF. In the web app, download the PDF first, then import it. |
 | **PNG / JPEG / WebP** | Use the local vision add-on to read text in a screenshot or photographed whiteboard. Download the add-on matching your active model in the model manager first. |
-| **Excalidraw** | Turn text, shapes, bound arrows and groups into board content, then continue the discussion. The board is laid out again rather than keeping the original coordinates. |
+| **Excalidraw** | Import text, shapes, bound arrows and groups as board content. Free edit retains supported objects and their layout so you can continue editing. |
 
-PDF imports are limited to 40 retained pages. Scans without a text layer appear as page images without automatic OCR. Arrows in imported images do not become editable connections. Use PAD Whiteboard mode for imported pages; PC Meeting mode does not show their background images yet.
+PDF imports are limited to 40 retained pages. Scans without a text layer appear as page images without automatic OCR. Arrows in imported images do not become editable connections. Imported page backgrounds are available in both Hand-drawn and Free edit views.
 
 ### Take the meeting with you
 
@@ -86,7 +86,7 @@ PDF imports are limited to 40 retained pages. Scans without a text layer appear 
 |---|---|
 | **Markdown** | Conclusions, tasks, board content and the full transcript, with Mermaid flowcharts you can keep editing. |
 | **PNG / SVG** | Boards in documents or slides, including marks and imported page backgrounds. |
-| **Animated SVG** | The final board writes itself in meeting order in about 12 seconds. Pure CSS animation, embeddable in a README, with reduced-motion support. |
+| **Animated SVG** | Writes the final board in meeting order within 12 seconds, with free drawings kept static. Reduced-motion and static viewers show the complete board immediately. |
 | **Excalidraw** | Further editing in Excalidraw. |
 | **Meeting PDF** | One board per page, followed by the summary and transcript. Pages are rasterized; use Markdown for selectable text. |
 | **Replay page** | A standalone HTML file containing the player, boards, transcript and assets. Open it offline in a browser without installing boardcast. |
@@ -149,22 +149,22 @@ Imports / handwriting edits ------------> Graph state --> Next-turn context
                     Regions / ELK flowcharts       Transcript / board / assets
                              |                                 |
                              v                                 v
-                 PAD board / PC meeting                  Replay / export
+                 Hand-drawn / Free edit                  Replay / export
 ```
 
 - **Only final text reaches the board.** Provisional captions are display-only. New utterances receive glossary corrections and their circled targets. Standalone page-navigation commands switch boards without a model call.
 - **Misheard labels can reuse existing nodes.** Chinese pinyin, Japanese readings and English CMU pronunciations run locally in a worker shared by desktop and web. Exact names and glossary aliases win; identical pronunciations provide candidates on the current board. Simple circle, underline, star, highlight and connect commands resolve locally; negated commands do nothing, and deletion requires an exact target. Ambiguous names need pointing/context, while new concepts remain new. Original text is retained; guessed spellings are not saved as aliases. See [scope and regression evaluation](eval/phonetic.md).
 - **Revisions preserve identity.** The transcript keeps the segment's speaker and page. Queued text is replaced; superseded in-flight board results are discarded. If the original text has already been drawn, the board agent receives an explicit correction against that board. The history retains one utterance per segment.
 - **The board agent reads context.** Its inputs include entities, aliases, imported source text, the last two utterances, the glossary and bound targets. Each session queues model requests. Ordinary utterances may be batched; circled utterances and corrections are processed separately. Code applies the returned operations, confirms drafts as ink and removes unconfirmed drafts.
-- **Model and rendering have separate jobs.** Local llama.cpp uses GBNF and prompt-prefix caching; compatible APIs omit those grammar constraints and may fall back to a local model. Code controls incremental layout and handwriting strokes; PC Meeting mode uses Excalidraw. Saved transcript and graph changes drive replay/export without rerunning the model. Summaries use a separate request over the transcript and boards.
+- **Model and rendering have separate jobs.** Local llama.cpp uses GBNF and prompt-prefix caching; compatible APIs omit those grammar constraints and may fall back to a local model. Code controls incremental layout and handwriting strokes; Free edit view uses Excalidraw. Saved transcript and graph changes drive replay/export without rerunning the model. Summaries use a separate request over the transcript and boards.
 
-- **Beautify without rewriting the meeting.** The toolbar’s **Beautify board** command uses local D2/TALA flowchart layout and aligns topic blocks with consistent spacing. Existing text, IDs, annotations and transcript references stay intact; undo restores the previous layout. Live recording keeps incremental layout. In PAD mode and HTML replay, moved or rewritten ink is wiped away before being drawn again, without an eraser cursor; reduced-motion settings skip the animation. The compiler loads only when needed and is not included in exported replay HTML.
+- **Beautify without rewriting the meeting.** The toolbar’s **Beautify board** command uses local D2/TALA flowchart layout and aligns topic blocks with consistent spacing. Existing text, IDs, annotations and transcript references stay intact; undo restores the previous layout. Live recording keeps incremental layout. In the Hand-drawn view and HTML replay, moved or rewritten ink is wiped away before being drawn again, without an eraser cursor; reduced-motion settings skip the animation. The compiler loads only when needed and is not included in exported replay HTML.
 
 The audio review policy currently uses fixed rules; the board agent handles accepted text corrections. Learned denoising, overlapping-speaker separation and automatic alternate-ASR selection remain future work. GTCRN and Whisper comparisons are evaluation controls. See [dynamic policy and evaluation](eval/asr/README.md#dynamic-policy-and-revisions) and the [measured baseline](eval/asr/dynamic.md); the initial run showed unchanged recognition error, not an accuracy gain.
 
 ## Models and privacy
 
-**Apple transcription (experimental):** on macOS 26+, open **Local models → Speech recognition** to detect support and switch to SpeechAnalyzer. The language list defaults to **Auto**, which identifies Chinese, Japanese or English from the opening speech, retains that audio for transcription, and keeps the chosen language for the recording. The download button prepares any missing Apple assets for these three languages; saved manual language choices are preserved. It uses the normal recording controls with microphone, system audio, or both, and stays on-device; this route currently uses the selected speaker rather than automatic speaker recognition. Availability depends on the actual device and language. See [setup, limits and current development priorities](docs/development-priorities.md).
+**Apple transcription (experimental):** on macOS 26+, open **Settings → Audio & transcription** to detect support and switch to SpeechAnalyzer. The language list defaults to **Auto**, which identifies Chinese, Japanese or English from the opening speech, retains that audio for transcription, and keeps the chosen language for the recording. The download button prepares any missing Apple assets for these three languages; saved manual language choices are preserved. It uses the normal recording controls with microphone, system audio, or both, and stays on-device; this route currently uses the selected speaker rather than automatic speaker recognition. Availability depends on the actual device and language. See [setup, limits and current development priorities](docs/development-priorities.md).
 
 The desktop app bundles llama.cpp's `llama-server` and manages its lifecycle. Linux and Windows use Vulkan, offloading layers to the GPU when available and keeping the rest on the CPU. macOS Apple Silicon uses Metal.
 
@@ -183,7 +183,7 @@ Downloads support pausing, resuming, free-space checks and SHA-256 verification,
 <details>
 <summary><strong>Custom models, data directories and troubleshooting</strong></summary>
 
-Place a `.gguf` in the model directory or select one with `BOARDCAST_MODEL=/path/to/model.gguf`. Board quality still depends on the model and its chat template. For a compatible service, enter the base URL, API key and model name in Settings → Remote model; saving performs a real connectivity check.
+Place a `.gguf` in the model directory or select one with `BOARDCAST_MODEL=/path/to/model.gguf`. Board quality still depends on the model and its chat template. For a compatible service, enter the base URL, API key and model name in Settings → Remote & privacy; saving performs a real connectivity check.
 
 | System | Default app data directory |
 |---|---|
@@ -193,7 +193,7 @@ Place a `.gguf` in the model directory or select one with `BOARDCAST_MODEL=/path
 
 Models live in `models/`; meeting JSON files and imported assets live in `meetings/`. Web meetings live in the current browser: clearing site data deletes them, so export first. Remote settings are stored in `remote.json` in the app configuration directory, which may differ from the data directory above.
 
-For a bug report, preview and export a diagnostics bundle in Settings → Diagnostics, then attach it to an [issue](https://github.com/HsiangNianian/boardcast/issues). It excludes meeting content, audio and API keys.
+For a bug report, preview and export a diagnostics bundle in Settings → Maintenance & advanced → Diagnostics, then attach it to an [issue](https://github.com/HsiangNianian/boardcast/issues). It excludes meeting content, audio and API keys.
 
 </details>
 
@@ -202,7 +202,7 @@ For a bug report, preview and export a diagnostics bundle in Settings → Diagno
 <details>
 <summary><strong>How do I use an existing meeting recording?</strong></summary>
 
-There is no direct `.mp3` / `.wav` transcription import yet. On Linux or Windows, choose “System audio only” in Settings → Audio input, start listening, then play the recording in a media player. Stop listening when it ends. Capture uses the default output device and processes the recording in real time.
+There is no direct `.mp3` / `.wav` transcription import yet. On Linux or Windows, choose “System audio only” in Settings → Audio & transcription, start listening, then play the recording in a media player. Stop listening when it ends. Capture uses the default output device and processes the recording in real time.
 
 For an online meeting, use “Microphone + system audio.” Headphones help prevent other participants being captured twice through your speakers and microphone. On macOS 13+, allow boardcast in System Settings → Privacy & Security → Screen & System Audio Recording (Screen Recording on older macOS), then restart the app. Only audio is processed; screen images are not saved.
 
@@ -213,14 +213,14 @@ For an online meeting, use “Microphone + system audio.” Headphones help prev
 
 Speech models preload silently at startup and are reused when recording starts. Preloading does not open the microphone; exiting stops the speech threads and releases the models. SenseVoice transcribes Chinese, English, Japanese, Korean and Cantonese. Silero detects pauses; long utterances can end at a breath so the board need not wait for the entire sentence. Provisional captions appear while you speak. CAM++ distinguishes speakers by voice; rename or merge them in the transcript, or turn the feature off in Settings. Short or overlapping speech can still be misattributed.
 
-For names that are often misrecognized, add a glossary entry such as `MediaCrawler = media crawler, media crowler` in Settings → Glossary. Entries can apply to all meetings or only the current one, and also correct typed input.
+For names that are often misrecognized, add a glossary entry such as `MediaCrawler = media crawler, media crowler` in Settings → Terminology & materials. Entries can apply to all meetings or only the current one, and also correct typed input.
 
 </details>
 
 <details>
 <summary><strong>Useful shortcuts</strong></summary>
 
-These shortcuts mainly apply to PAD Whiteboard mode and leave focused text fields and dialogs alone. Use `Cmd` instead of `Ctrl` for regular app actions on macOS.
+These shortcuts mainly apply to Hand-drawn view and leave focused text fields and dialogs alone. Use `Cmd` instead of `Ctrl` for regular app actions on macOS.
 
 | Key | Action |
 |---|---|
@@ -233,7 +233,7 @@ These shortcuts mainly apply to PAD Whiteboard mode and leave focused text field
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `?` | Show all shortcuts |
 
-The default global microphone shortcut is `Ctrl+Shift+Space`, configurable in Settings. On Wayland, bind `boardcast --toggle-mic` in your desktop environment instead.
+The default global microphone shortcut is `Ctrl+Shift+Space`, configurable in Settings. On Wayland, bind `boardcast --toggle-mic` in your desktop environment instead. The command also works when the app is closed: it restores the last meeting before starting, or opens speech-model preparation if a model is missing. Two toggle requests received during startup cancel each other.
 
 </details>
 
@@ -320,7 +320,7 @@ CI uses **Qwen3.5-4B · Q4_K_M**, matching the recommended desktop model. Other 
 
 Reports go to `eval/reports/`. For v0.20.0, Qwen3.5-4B scored 1.000 for item F1, strike F1 and mark accuracy on the pointing set, with 18 cases repeated three times. These are synthetic, targeted cases, not a measure of accuracy on arbitrary real meetings; the timing excludes speech recognition. The general holdout still has a known failure to apply a correction. See the [pointing evaluation record](eval/pointing.md) and [changelog](CHANGELOG.md) for model, hardware, prompt version and reproduction details.
 
-The model can omit content, connect the wrong items or misread emphasis. Recognition and segmentation also affect results; check important conclusions. After fixing something the model just drew, export correction cases or DPO / SFT JSONL in Settings → Correction samples. These samples are not uploaded automatically.
+The model can omit content, connect the wrong items or misread emphasis. Recognition and segmentation also affect results; check important conclusions. After fixing something the model just drew, export correction cases or DPO / SFT JSONL in Settings → Maintenance & advanced → Correction samples. These samples are not uploaded automatically.
 
 </details>
 
@@ -341,6 +341,6 @@ A numeric version suffix creates a prerelease, excluded from automatic updates. 
 
 Report problems or discuss ideas in [Issues](https://github.com/HsiangNianian/boardcast/issues), or send a PR. Issues and the [changelog](CHANGELOG.md) track ongoing work.
 
-Code is licensed under [MIT](LICENSE). Chinese stroke data comes from [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data), derived from Make Me a Hanzi and Arphic fonts under the Arphic Public License; its license is distributed with the generated data. Japanese kana and supplementary kanji come from [KanjiVG](https://kanjivg.tagaini.net/) by Ulrich Apel, adapted into centerlines under [CC BY-SA 3.0](public/licenses/kanjivg-CC-BY-SA-3.0.txt). Default English strokes are derived from Excalifont under the [SIL OFL](public/licenses/handwritten-OFL.txt). Cursive Hershey glyphs come from [hersheytext](https://github.com/techninja/hersheytextjs) under MIT. The UI uses DM Sans and JetBrains Mono, and the website also includes a Noto Sans CJK subset. These fonts use SIL OFL; see the website font's [OFL.txt](landing/public/fonts/OFL.txt).
+Code is licensed under [MIT](LICENSE). Chinese stroke data comes from [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data), derived from Make Me a Hanzi and Arphic fonts under the Arphic Public License; its license is distributed with the generated data. Japanese kana and supplementary kanji come from [KanjiVG](https://kanjivg.tagaini.net/) by Ulrich Apel, adapted into centerlines under [CC BY-SA 3.0](public/licenses/kanjivg-CC-BY-SA-3.0.txt). Default English and mathematical strokes are derived from Excalifont under the [SIL OFL](public/licenses/handwritten-OFL.txt), with additional mathematical glyphs from the bundled Cascadia Code font under its [included license](public/licenses/handwritten-cascadia.txt). Cursive Hershey glyphs come from [hersheytext](https://github.com/techninja/hersheytextjs) under MIT. The UI uses DM Sans and JetBrains Mono, and the website also includes a Noto Sans CJK subset. These fonts use SIL OFL; see the website font's [OFL.txt](landing/public/fonts/OFL.txt).
 
 D2/TALA layout uses the unmodified [D2 JavaScript package](https://github.com/d2lang/d2/tree/master/d2js), distributed under [MPL 2.0](public/licenses/d2-MPL-2.0.txt), with its [third-party notices](public/licenses/d2-THIRD-PARTY-NOTICES.txt).

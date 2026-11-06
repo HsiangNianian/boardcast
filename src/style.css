@@ -4,18 +4,20 @@
 /* —— 颜色和字体 ——
    界面本身是中性的黑白灰和极细的线，颜色只留给板书和说话人。 */
 :root {
-  --bg: #fbfbf9;
-  --surface: #ffffff;
-  --surface-2: #f4f4f1;
-  --ink: #171717;
-  --muted: #6b6b6b;
-  --faint: #a3a3a3;
-  --line: #e7e6e2;
-  --line-strong: #d4d3ce;
-  --accent: #2563eb;
-  --ok: #16a34a;
-  --bad: #dc2626;
-  --warn: #d97706;
+  --bg: #F5F3ED;
+  --surface: #FFFEFA;
+  --surface-2: #ECEFE7;
+  --ink: #242720;
+  --muted: #62665C;
+  --faint: #62665C;
+  --line: #D8DAD1;
+  --line-strong: #858A80;
+  --control-border: #858A80;
+  --focus: #2E5A9F;
+  --accent: #A83C2C;
+  --ok: #286143;
+  --bad: #A32826;
+  --warn: #805300;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -8px rgb(0 0 0 / 0.12);
   --sans: 'DM Sans Variable', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
   --mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -28,35 +30,39 @@
 /* 主题：跟随系统时看 prefers-color-scheme；手动选了浅色或深色时，<html data-theme> 说了算 */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #111111;
-    --surface: #181818;
-    --surface-2: #202020;
-    --ink: #ededed;
-    --muted: #a1a1a1;
-    --faint: #6b6b6b;
-    --line: #262626;
-    --line-strong: #363636;
-    --accent: #7aa7ff;
-    --ok: #4ade80;
-    --bad: #f87171;
-    --warn: #fbbf24;
+    --bg: #171C19;
+    --surface: #202722;
+    --surface-2: #2B342D;
+    --ink: #F2F3ED;
+    --muted: #B6BDB4;
+    --faint: #B6BDB4;
+    --line: #3D493F;
+    --line-strong: #778174;
+  --control-border: #778174;
+  --focus: #90BBFF;
+    --accent: #FFAB94;
+    --ok: #9AD7AC;
+    --bad: #FFB3AE;
+    --warn: #F0CD82;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -8px rgb(0 0 0 / 0.6);
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --bg: #111111;
-  --surface: #181818;
-  --surface-2: #202020;
-  --ink: #ededed;
-  --muted: #a1a1a1;
-  --faint: #6b6b6b;
-  --line: #262626;
-  --line-strong: #363636;
-  --accent: #7aa7ff;
-  --ok: #4ade80;
-  --bad: #f87171;
-  --warn: #fbbf24;
+  --bg: #171C19;
+  --surface: #202722;
+  --surface-2: #2B342D;
+  --ink: #F2F3ED;
+  --muted: #B6BDB4;
+  --faint: #B6BDB4;
+  --line: #3D493F;
+  --line-strong: #778174;
+  --control-border: #778174;
+  --focus: #90BBFF;
+  --accent: #FFAB94;
+  --ok: #9AD7AC;
+  --bad: #FFB3AE;
+  --warn: #F0CD82;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -8px rgb(0 0 0 / 0.6);
   color-scheme: dark;
 }
@@ -91,24 +97,24 @@ button {
 input,
 select {
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
   padding: 8px 11px;
   transition: border-color 0.15s;
 }
 input:focus,
 select:focus {
   outline: none;
-  border-color: var(--line-strong);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 8%, transparent);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 25%, transparent);
 }
 
 button {
   cursor: pointer;
   white-space: nowrap;
   border: 1px solid var(--ink);
-  border-radius: 999px;
-  padding: 7px 14px;
+  border-radius: 8px;
+  padding: 8px 14px;
   background: var(--ink);
   color: var(--bg);
   font-weight: 500;
@@ -138,7 +144,7 @@ button.secondary:hover:not(:disabled) {
   background: var(--surface-2);
 }
 button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -201,25 +207,63 @@ button.link {
 
 /* —— 整体布局：顶栏 + 白板 + 会议记录 —— */
 .app {
+  --page-width: 0px;
+  --log-width: var(--sidebar-width, 320px);
   display: grid;
-  grid-template-columns: 1fr 360px;
-  grid-template-rows: 56px 1fr;
+  grid-template-columns: var(--page-width) minmax(0, 1fr) var(--log-width);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
 }
-.app.no-log {
-  grid-template-columns: 1fr 0;
-}
-
+.app.has-pages { --page-width: 80px; }
+.app.no-log { --log-width: 0px; }
 .topbar {
   grid-column: 1 / -1;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 12px 0 20px;
-  border-bottom: 1px solid var(--line);
+  flex-direction: column;
   background: var(--surface);
   min-width: 0;
 }
+.meeting-bar, .boardbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+}
+.meeting-bar { min-height: 56px; }
+.boardbar { min-height: 48px; gap: 20px; }
+.board-origin { flex: none; margin: 0; padding: 6px 16px; font-size: 13px; line-height: 1.5; color: var(--ink); background: var(--surface-2); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.board:has(.board-notices, .lasso-hint) { display: grid; grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr); }
+.board-notices { grid-area: 1 / 1; z-index: 3; }
+.mode-note { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface-2); border-bottom: 1px solid var(--line); color: var(--ink); z-index: 3; }
+.mode-note p { flex: 1; margin: 0; font-size: 14px; line-height: 22px; }
+.mode-note button { flex: none; }
+.board:has(.board-notices, .lasso-hint) > .lasso-hint { grid-area: 2 / 1; position: relative; inset: auto; transform: none; justify-self: center; margin: 6px; }
+.board:has(.board-notices, .lasso-hint) > .ink,
+.board:has(.board-notices, .lasso-hint) .pencil-stage,
+.board:has(.board-notices, .lasso-hint) > .hero { grid-area: 3 / 1; position: relative; inset: auto; min-height: 0; }
+.board:has(.board-notices, .lasso-hint) > .hero { place-self: center; transform: none; max-height: 100%; overflow: auto; pointer-events: auto; animation: none; }
+.meeting-actions { display: flex; align-items: center; gap: 4px; }
+.meeting-actions .meeting-action-label { display: none; }
+.topbar-scroll { display: contents; }
+.menu.meeting-menu .menu-anchor { display: contents; }
+.menu.meeting-menu button { display: flex; align-items: center; gap: 8px; width: 100%; height: auto; min-height: 36px; padding: 8px 10px; color: var(--ink); }
+.library-label { flex: none; font-weight: 500; color: var(--ink); }
+.board-location { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.save-state { display: inline-flex; flex: none; align-items: center; gap: 6px; white-space: nowrap; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.save-state.saved { color: var(--ok); }
+.save-state.error { color: var(--bad); }
+.save-error { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: color-mix(in srgb, var(--bad) 8%, var(--surface)); border-bottom: 1px solid var(--bad); }
+.save-error > div { flex: 1; min-width: 0; }
+.save-error strong { color: var(--bad); }
+.save-error p { margin: 4px 0 0; max-height: 80px; overflow: auto; overflow-wrap: anywhere; font-size: 12px; }
+.transition-state { padding: 8px 16px; font-size: 13px; color: var(--muted); }
+.asset-warning { padding: 8px 16px; font-size: 12px; background: var(--surface-2); border-top: 1px solid var(--line); }
+.asset-warning summary { color: var(--bad); cursor: pointer; }
+.asset-warning p { max-width: 80ch; }
+.asset-warning code { overflow-wrap: anywhere; }
+button.icon.labeled { display: inline-flex; gap: 6px; width: auto; padding: 0 10px; border-color: var(--line); color: var(--ink); }
 .topbar .brand {
   display: flex;
   align-items: center;
@@ -331,6 +375,8 @@ button.link {
 }
 
 .board {
+  grid-column: 2;
+  grid-row: 2;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -346,6 +392,19 @@ button.link {
 }
 .ink:active {
   cursor: grabbing;
+}
+.ink-follow {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  max-width: calc(100% - 24px);
+  min-height: 36px;
+  white-space: normal;
+  z-index: 1;
+}
+.pencil-follow { top: auto; bottom: 48px; z-index: 3; }
+@media (pointer: coarse) {
+  .ink-follow { min-height: 44px; }
 }
 
 @keyframes bc-write {
@@ -448,6 +507,8 @@ button.link {
 
 .dock .bar {
   display: flex;
+  height: auto;
+  overflow: visible;
   align-items: center;
   min-height: 52px;
   padding: 6px;
@@ -481,34 +542,37 @@ button.link {
   pointer-events: none;
 }
 
-/* 几张板：左上角一排缩略图 */
+/* Page navigation has its own column and never covers the drawing. */
 .pages {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 4;
+  position: relative;
+  grid-column: 1;
+  grid-row: 2 / 4;
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  max-width: calc(100% - 24px);
-  overflow-x: auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
   scrollbar-width: thin;
-  /* 给缩略图的阴影留地方，不然被滚动区裁掉 */
-  padding: 2px 2px 6px;
+  padding: 12px 4px;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
 }
+.page-picker { display: none; }
 .pages .page {
   position: relative;
   flex: none;
   display: grid;
   place-items: center;
-  width: 72px;
-  height: 46px;
+  width: 64px;
+  height: 52px;
   padding: 3px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   color: var(--faint);
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 .pages .page:hover:not(:disabled) {
   border-color: var(--line-strong);
@@ -525,22 +589,28 @@ button.link {
 .pages .page svg line.head {
   stroke: var(--accent);
 }
-.pages .page span {
+.pages .page-number {
   position: absolute;
   right: 4px;
   bottom: 2px;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
 }
+.pages .page.has-source { height: 72px; padding-bottom: 23px; }
+.pages .page.has-source .page-number { bottom: 23px; }
+.pages .page-source { position: absolute; inset: auto 2px 2px; font-size: 12px; line-height: 18px; color: var(--muted); }
 .pages .page.new {
-  width: 32px;
+  width: 64px;
   color: var(--muted);
   border-style: dashed;
   box-shadow: none;
 }
 .pages .suggest {
   display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  white-space: normal;
   align-items: center;
   gap: 6px;
   flex: none;
@@ -923,6 +993,8 @@ kbd {
 
 /* —— 会议记录 —— */
 .log {
+  grid-column: 3;
+  grid-row: 2 / 4;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1147,7 +1219,7 @@ label.check input {
 .who.c3,
 .av.c3 {
   background: #fde8c8;
-  color: #a8550f;
+  color: #9f4f0b;
 }
 .who.c4,
 .av.c4 {
@@ -1159,17 +1231,14 @@ label.check input {
   background: #e2e8f0;
   color: #475569;
 }
-/* 名字一行，耗时浮在同一行的右边 */
 .line .head {
   display: flex;
   align-items: center;
   min-height: 18px;
 }
 .line .head .name {
-  max-width: 42%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-size: 12.5px;
   font-weight: 600;
   line-height: 18px;
@@ -1188,25 +1257,18 @@ label.check input {
   overflow-wrap: anywhere;
 }
 .line details summary {
-  position: absolute;
-  top: 9px;
-  right: 18px;
-  max-width: 55%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin-top: 6px;
+  min-height: 24px;
+  padding-block: 3px;
+  overflow-wrap: anywhere;
   cursor: pointer;
-  list-style: none;
-  color: var(--faint);
-  font-family: var(--mono);
-  font-size: 11px;
+  list-style-position: inside;
+  color: var(--muted);
+  font-size: 12px;
   line-height: 18px;
 }
-.line details summary::-webkit-details-marker {
-  display: none;
-}
 .line details summary:hover {
-  color: var(--muted);
+  color: var(--ink);
 }
 .line details summary em,
 .line details p.warn {
@@ -1219,9 +1281,9 @@ label.check input {
 /* Where this line's time went: pause, recognition, queue, model */
 .line details p.timing {
   margin: 6px 0 0;
-  color: var(--faint);
+  color: var(--muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 .line details pre {
   margin: 6px 0 0;
@@ -1230,7 +1292,7 @@ label.check input {
   background: var(--surface-2);
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
@@ -1243,30 +1305,30 @@ label.check input {
   font-style: italic;
 }
 
+@media (max-width: 1100px) {
+  .topbar .brand, .topbar .web-demo, .meeting-bar .new-version { display: none; }
+  .meeting-bar { gap: 8px; padding: 8px 12px; }
+  .topbar .status { max-width: 180px; }
+}
 @media (max-width: 900px) {
-  .topbar .brand,
-  .topbar .web-demo {
-    display: none;
+  .app, .app.no-log {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
   }
-  .app,
-  .app.no-log {
-    grid-template-columns: 1fr;
-  }
-  .log {
-    position: fixed;
-    top: 56px;
-    right: 0;
-    bottom: 0;
-    z-index: 8;
-    width: min(360px, 100%);
-    box-shadow: var(--shadow);
-  }
-  .seg button {
-    padding: 5px 9px;
-  }
-  .seg button svg + * {
-    display: none;
-  }
+  .board, .log { grid-column: 1; grid-row: 3; }
+  .app:not(.no-log) > .board { visibility: hidden; pointer-events: none; }
+  .log { position: relative; width: auto; box-shadow: none; border-left: 0; }
+  .meeting-footer { grid-column: 1; grid-row: 4; }
+  .pages { grid-column: 1; grid-row: 2; flex-direction: row; padding: 6px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .pages .page:not(.new) { display: none; }
+  .page-picker { display: block; max-width: min(260px, 55vw); height: 34px; padding: 4px 10px; }
+  .pages .page.new { width: 34px; height: 34px; }
+  .pages .suggest { flex-direction: row; max-width: 50%; }
+  .boardbar { gap: 8px; padding: 6px 12px; flex-wrap: wrap; }
+  .board-location { display: none; }
+  .meeting-bar .status { display: none; }
+  .topbar .meeting-heading { max-width: none; flex: 1; }
+  .seg button { padding: 6px 9px; }
 }
 @media (max-width: 640px) {
   .topbar .status {
@@ -1276,9 +1338,15 @@ label.check input {
 
 /* —— 启动动画 ——
    和界面同一套底色、墨色：纯色底，品牌字一笔一笔写出来，下面一道细线跟着走完，然后淡出。 */
-.splash {
+.modal.splash {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border-radius: 0;
   z-index: 100;
   display: grid;
   place-items: center;
@@ -1289,7 +1357,6 @@ label.check input {
 }
 .splash.out {
   opacity: 0;
-  pointer-events: none;
 }
 .splash .mark {
   display: grid;
@@ -1567,6 +1634,13 @@ a.chip.web-demo {
   border: 1px solid var(--line);
   border-radius: 14px;
 }
+.model-panel, .model-remove { overflow-wrap: anywhere; }
+.model-group { display: grid; gap: 10px; }
+.model-group h3 { margin: 12px 0 0; font-size: 15px; }
+.model p { margin: 0; }
+.model .row1, .model .actions { flex-wrap: wrap; }
+.model details { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.model progress { width: 100%; height: 6px; accent-color: var(--ink); }
 .speech-heading { justify-content: space-between; }
 .speech-heading h3 { margin: 12px 0; font-size: 14px; }
 .speech-language { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 10px; font-size: 13px; }
@@ -1656,19 +1730,8 @@ a.chip.web-demo {
 
 /* 横屏的手机（真的横过来，或者上面转过来的）：高度很紧，顶栏、引导和输入框都收紧一点 */
 @media (max-height: 500px), (orientation: portrait) and (pointer: coarse) and (max-width: 900px) {
-  .app,
-  .app.no-log {
-    grid-template-rows: 44px 1fr;
-  }
-  .topbar {
-    padding: 0 6px 0 12px;
-    gap: 8px;
-  }
   .topbar .status {
     display: none;
-  }
-  .log {
-    top: 44px;
   }
   .hero {
     top: 34%;
@@ -1807,6 +1870,11 @@ a.chip.web-demo {
 .toast.err {
   color: var(--bad);
 }
+.toast-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.toast .toast-actions button { margin: 0; }
+.menu .export-scope { display: flex; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 6px; }
+.menu .export-scope button { width: auto; flex: 1; padding: 8px; white-space: nowrap; }
+.menu .export-scope [aria-checked="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 button.icon:disabled {
   opacity: 0.35;
 }
@@ -1832,13 +1900,13 @@ button.icon:disabled {
 }
 
 /* —— 会议：顶栏的会议名和会议列表 —— */
-.topbar .meeting-title {
+.meeting-heading { display: flex; flex: 0 0 260px; align-items: center; min-width: 0; max-width: 260px; }
+.topbar .meeting-heading button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  max-width: 260px;
-  height: 30px;
+  min-height: 36px;
   padding: 0 10px;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -1847,11 +1915,14 @@ button.icon:disabled {
   font-size: 13px;
   font-weight: 500;
 }
-.topbar .meeting-title:hover {
+.topbar .meeting-heading button:hover {
   border-color: var(--line);
   background: var(--surface-2);
   color: var(--ink);
 }
+.meeting-library, .meeting-heading svg { flex: none; }
+.meeting-title { flex: 1; }
+.panel.meeting-title-dialog { width: min(480px, 100%); border-radius: 12px; }
 .topbar .meeting-title span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1864,6 +1935,12 @@ button.icon:disabled {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+.meeting-read-errors {
+  overflow-wrap: anywhere;
+}
+.meeting-read-errors details {
+  margin-bottom: 12px;
 }
 .meeting-list {
   display: grid;
@@ -1888,8 +1965,9 @@ button.icon:disabled {
 }
 .meeting-list .open {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
-  flex: 1;
+  flex: 1 1 200px;
   min-width: 0;
   padding: 8px 12px;
   border: 0;
@@ -1921,9 +1999,11 @@ button.icon:disabled {
 }
 .meeting-list .ops {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   flex: none;
+  max-width: 100%;
 }
 .meeting-list .ops button {
   padding: 4px 10px;
@@ -1932,6 +2012,7 @@ button.icon:disabled {
 .meeting-list .ops .sure {
   color: var(--bad);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 /* 接着开会：有几张板时先选一张 */
 .meeting-list .pick-board {
@@ -1953,8 +2034,8 @@ button.icon:disabled {
   position: relative;
   display: grid;
   place-items: center;
-  width: 72px;
-  height: 46px;
+  width: 64px;
+  height: 52px;
   padding: 3px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2008,10 +2089,11 @@ button.danger {
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: calc(100% - 200px);
-  padding: 5px 6px 5px 12px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 8px 10px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 12px;
   background: var(--surface);
   box-shadow: var(--shadow);
   color: var(--muted);
@@ -2023,26 +2105,20 @@ button.danger {
 }
 .board .lasso-hint span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
 }
+.board .lasso-hint small { display: block; margin-top: 4px; color: var(--ink); font-size: inherit; }
 .board .lasso-hint b {
   color: var(--ink);
   font-weight: 500;
 }
 .board .lasso-hint button {
   flex: none;
-  height: 26px;
+  min-height: 36px;
   padding: 0 10px;
   border-radius: 999px;
   font-size: 12px;
-}
-@media (max-width: 640px) {
-  .board .lasso-hint {
-    max-width: calc(100% - 24px);
-    top: 64px;
-  }
 }
 /* 会议记录里：这句说的时候圈着什么 */
 .line .point-tag {
@@ -2079,13 +2155,14 @@ button.danger {
   position: absolute;
   z-index: 6;
   display: flex;
+  flex-wrap: wrap;
+  overflow: auto;
   gap: 2px;
   padding: 3px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
   box-shadow: var(--shadow);
-  transform: translate(-50%, -100%);
   white-space: nowrap;
   animation: bc-pop 0.14s ease-out;
 }
@@ -2312,4 +2389,116 @@ button.danger {
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* Capture and playback stay in the document flow, outside the canvas. */
+.meeting-footer {
+  grid-column: 2;
+  grid-row: 3;
+  min-width: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+.meeting-footer > .dock {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  width: 100%;
+  padding: 10px 16px;
+  animation: none;
+}
+.meeting-footer .bar { box-shadow: none; border: 0; border-radius: 0; padding: 0; background: none; }
+.meeting-footer textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+.meeting-footer.is-replaying > .dock:not(.replay-dock) { display: none; }
+.meeting-footer .caption { position: static; transform: none; width: auto; max-width: none; margin: 0 0 8px; }
+.meeting-footer .mic { width: auto; min-width: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 8px; }
+.meeting-footer .mic-label { font-size: 13px; white-space: nowrap; }
+.meeting-footer .mic-source { color: var(--muted); font-size: 12px; }
+.work-status { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 8px 16px 0; color: var(--muted); font-size: 12px; }
+.work-status > span { min-width: 0; overflow-wrap: anywhere; }
+.work-status span { overflow-wrap: anywhere; }
+.content-tabs { display: flex; gap: 2px; margin-right: 8px; }
+.content-tabs button { padding: 6px 10px; background: transparent; color: var(--muted); border-color: transparent; font-size: 13px; }
+.content-tabs button[aria-selected='true'] { background: var(--surface-2); color: var(--ink); border-color: var(--control-border); }
+.line-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 0; color: var(--warn); font-size: 12px; line-height: 1.6; }
+.line-recovery > span { flex-basis: 100%; }
+.follow-transcript { margin: 8px 16px; padding: 6px 12px; background: var(--surface-2); color: var(--ink); border-color: var(--control-border); }
+.ink-toolbar .rename { min-width: 0; max-width: 100%; }
+.panel.import-choice { position: relative; inset: auto; transform: none; display: flex; flex-wrap: wrap; gap: 12px; padding: 24px; width: min(560px, 100%); max-width: 100%; }
+.panel.import-choice > span { flex-basis: 100%; line-height: 1.7; margin-bottom: 4px; }
+.menu button:disabled { cursor: not-allowed; }
+.menu { max-width: calc(100vw - 24px); max-height: calc(100dvh - 140px); overflow-y: auto; }
+.menu-note { margin: 8px 10px; max-width: 340px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.meeting-items { min-width: 0; margin: 0; padding: 0; border: 0; }
+.title-edit-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.title-edit-row input { flex: 1; min-width: 120px; }
+.title-edit-row button { flex: none; }
+@media (max-width: 900px) {
+  .meeting-footer { grid-column: 1; grid-row: 4; }
+  .meeting-footer > .dock { padding: 8px 12px; }
+  .meeting-bar { flex-wrap: nowrap; }
+  .topbar .meeting-heading { flex: 1; min-width: 0; }
+  .topbar .spacer { display: none; }
+  .meeting-actions { flex-wrap: wrap; max-width: 100%; margin-left: auto; }
+}
+@media (max-width: 560px) {
+  .save-error { flex-wrap: wrap; }
+  .save-error > div { flex-basis: 100%; }
+  .meeting-actions { gap: 4px; flex-wrap: wrap; max-width: 100%; }
+  .meeting-bar { gap: 4px; padding-left: 8px; padding-right: 8px; }
+  .topbar .meeting-heading button { padding-left: 6px; padding-right: 6px; }
+  .meeting-actions { margin-left: auto; }
+  .meeting-footer .mic-source { display: none; }
+  .meeting-footer .bar { flex-wrap: wrap; gap: 8px; }
+  .meeting-footer .write { min-width: 150px; }
+  .topbar .icons { flex-wrap: wrap; }
+}
+
+/* Menus escape the independently scrollable header at high browser zoom. */
+.menu.action-menu { position: fixed; right: auto; z-index: 50; min-width: min(260px, calc(100vw - 24px)); }
+
+/* Short native windows and browser zoom need a content viewport while the
+   header and capture controls remain keyboard-scrollable. */
+@media (max-width: 900px) and (max-height: 500px) {
+  .app, .app.no-log { grid-template-rows: 88px auto minmax(0, 1fr) 78px; }
+  .topbar { min-height: 0; }
+  .topbar-scroll { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; }
+  .meeting-bar, .boardbar { flex: none; }
+  .meeting-bar { min-height: 44px; padding: 2px 8px; }
+  .boardbar { min-height: 40px; padding: 4px 12px; }
+  .pages { padding: 2px 12px; }
+  .pages .page.new { height: 28px; }
+  .meeting-footer { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  .meeting-footer .bar { align-items: flex-start; }
+  .work-status { flex-wrap: nowrap; gap: 12px; padding: 3px 12px 0; overflow-x: auto; }
+  .work-status span { flex: none; white-space: nowrap; }
+  .meeting-footer > .dock { padding-top: 4px; }
+  .meeting-footer textarea { max-height: 56px; }
+  .log { overflow-y: auto; }
+  .log > header, .sidebar-tabs { flex: none; }
+  .log .sidebar-panel { flex: none; overflow: visible; }
+  .log .lines { overflow: visible; }
+}
+
+.meetings .sure small { display: block; margin-top: 4px; font-weight: normal; }
+
+@media (pointer: coarse) {
+  :is(.app, .modal, .action-menu) :is(
+    button, select, textarea,
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='hidden'])
+  ):not(.excalidraw *) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  :is(.app, .modal) label:has(> input:is([type='checkbox'], [type='radio'])):not(.excalidraw *) { min-height: 44px; }
+  .dock .speaker-actions { flex-direction: row; align-items: center; }
+  .line { grid-template-columns: 44px minmax(0, 1fr); }
+}
+@media (pointer: coarse) and (max-width: 900px) {
+  .meeting-footer .mic-source { display: none; }
+}
+@media (pointer: coarse) and (max-width: 900px) and (max-height: 500px) {
+  .app, .app.no-log { grid-template-rows: 96px auto minmax(0, 1fr) 64px; }
+  .meeting-footer > .dock { padding-top: 0; padding-bottom: 0; }
 }

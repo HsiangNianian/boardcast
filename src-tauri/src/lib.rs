@@ -8,9 +8,9 @@
 // - 自动更新（updater.rs）
 // - 按 arXiv 编号下载论文（arxiv.rs）
 
-mod diagnostics;
 mod apple_speech;
 mod arxiv;
+mod diagnostics;
 mod export;
 mod llm;
 mod meetings;
@@ -36,16 +36,34 @@ pub fn run() {
         .plugin(shell::shortcut_plugin())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(shell::Shell::default())
         .manage(updater::Pending::default())
+        .manage(export::SavedExports::default())
         .manage(llm::Llm::default())
         .manage(models::Downloads::default())
+        .manage(remote::Requests::default())
         .manage(voice::Voice::default())
         .manage(apple_speech::Jobs::default())
+        .on_menu_event(|app, event| shell::menu_action(app, event.id().as_ref()))
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && !shell::exit_approved(window.app_handle()) {
+                    api.prevent_close();
+                    shell::request_exit(window.app_handle(), shell::ExitReason::Close);
+                }
+            }
+        })
         .setup(|app| {
+            shell::init_menu(app.handle())?;
             if let Err(e) = shell::init_tray(app.handle()) {
                 eprintln!("托盘启动失败：{e}");
             }
             voice::init(app.handle());
+            #[cfg(target_os = "linux")]
+            shell::watch_webview(app.handle())?;
+            if std::env::args_os().any(|arg| arg == shell::TOGGLE_ARG) {
+                shell::toggle(app.handle());
+            }
             // 启用了远程模型就先不拉起内置模型（不占显存、不预热），远程不可用时前端再叫它起来
             if remote::enabled(app.handle()) {
                 llm::stand_by(app.handle().clone());
@@ -58,7 +76,13 @@ pub fn run() {
             diagnostics::diagnostics_info,
             shell::shortcut_set,
             shell::session_wayland,
+            shell::shell_set_locale,
+            shell::shell_show_window,
+            shell::shell_take_toggle,
+            shell::shell_pending_exit,
+            shell::shell_resolve_exit,
             llm::llm_status,
+            llm::llm_chat,
             llm::llm_restart,
             llm::llm_ensure,
             llm::llm_stop,
@@ -71,14 +95,20 @@ pub fn run() {
             voice::voice_devices,
             voice::voice_start,
             voice::voice_stop,
+            voice::preview::voice_input_check_start,
+            voice::preview::voice_input_check_stop,
             voice::voice_models,
             voice::voice_select,
             voice::voice_prepare,
             remote::remote_get,
             remote::remote_save,
             remote::remote_test,
+            remote::remote_prepare,
+            remote::remote_cancel,
             remote::remote_chat,
             export::export_save,
+            export::export_open,
+            export::export_reveal,
             arxiv::arxiv_pdf,
             meetings::meetings_list,
             meetings::meeting_load,
@@ -87,14 +117,25 @@ pub fn run() {
             meetings::meeting_asset_save,
             meetings::meeting_asset_load,
             updater::update_check,
+            updater::update_download,
             updater::update_install,
         ])
         .build(tauri::generate_context!())
         .expect("error while building boardcast")
         .run(|app, event| {
-            if let RunEvent::Exit = event {
-                voice::shutdown(app);
-                app.state::<llm::Llm>().shutdown();
+            match event {
+                // Tauri cannot prevent restart; updater only reaches it after onBeforeInstall saves.
+                RunEvent::ExitRequested { code, api, .. }
+                    if code != Some(tauri::RESTART_EXIT_CODE) && !shell::exit_approved(app) =>
+                {
+                    api.prevent_exit();
+                    shell::request_exit(app, shell::ExitReason::Quit);
+                }
+                RunEvent::Exit => {
+                    voice::shutdown(app);
+                    app.state::<llm::Llm>().shutdown();
+                }
+                _ => {}
             }
         });
 }

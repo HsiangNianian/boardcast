@@ -17,10 +17,41 @@ export function scrub(s: string): string {
     .replace(/([A-Za-z]:\\Users\\)[^\\\s"']+/g, '$1[user]')
 }
 
-/** 日志里只留纯 ASCII 的行：正常的日志没有中文，带中文的很可能是会上说的话，宁可不要 */
+/** Free-form errors can echo prompts or credentials; exported diagnostics keep only fixed signals and numeric codes. */
+export function errorSummary(text: string) {
+  const signals = [
+    ['timeout', /timed?\s*out|timeout/i],
+    ['permission-denied', /permission denied|access (?:is )?denied|EACCES|EPERM/i],
+    ['disk-full', /disk full|no space left|not enough space on the disk|ENOSPC/i],
+    ['storage-quota', /QuotaExceededError|quota (?:has been )?exceeded/i],
+    ['out-of-memory', /out of memory|failed to allocate|ENOMEM/i],
+    ['network', /failed to fetch|connection refused|network error|ECONNREFUSED/i],
+  ] as const
+  const codes = (pattern: RegExp) => [...new Set([...text.matchAll(pattern)].map((m) => Number(m[1])))].sort((a, b) => a - b)
+  return {
+    type: text.match(/\b(TypeError|SyntaxError|RangeError|ReferenceError|AbortError|TimeoutError)\b/)?.[1] ?? 'Error',
+    signals: signals.filter(([, pattern]) => pattern.test(text)).map(([name]) => name),
+    httpStatus: codes(/\bHTTP[ :]+([1-5]\d{2})\b/gi),
+    osError: codes(/\bos error (\d{1,4})\b/gi),
+  }
+}
+
+/** Keep diagnostic metrics, not log prose: prompts and continuations may be in any language. */
 export function cleanLog(log: string): string {
-  const kept = log.split('\n').filter((l) => /^[\x20-\x7e\t]*$/.test(l))
-  return scrub(kept.join('\n'))
+  const { signals, httpStatus, osError } = errorSummary(log)
+  const contextTokens = [...new Set([...log.matchAll(/^llama_context:\s+n_ctx\s*=\s*(\d+)\s*$/gm)].map((m) => Number(m[1])))].filter(Number.isSafeInteger)
+  const timings = [...log.matchAll(/^slot\s+print_timing:[^\n]*?\b(prompt eval|eval|total) time\s*=\s*(\d+(?:\.\d+)?)\s*ms(?:\s*\/\s*(\d+)\s*tokens?)?/gm)]
+    .slice(-20).map((m) => ({ stage: m[1], ms: Number(m[2]), ...(m[3] ? { tokens: Number(m[3]) } : {}) }))
+    .filter((t) => Number.isFinite(t.ms) && (t.tokens === undefined || Number.isSafeInteger(t.tokens)))
+  return JSON.stringify({ lines: log.split(/\r?\n/).filter(Boolean).length, signals, httpStatus, osError, contextTokens, timings }, null, 2)
+}
+
+export function diagnosticJson(value: unknown): string {
+  return JSON.stringify(value, (key, field) => {
+    if (/^(api[_-]?key|authorization)$/i.test(key)) return '[key]'
+    if (typeof field !== 'string') return field
+    return /(?:error|message)$/i.test(key) ? errorSummary(field) : scrub(field)
+  }, 2)
 }
 
 const CRC = Array.from({ length: 256 }, (_, n) => {
@@ -124,15 +155,21 @@ export function timingReport(lines: TimedLine[], model?: string) {
 // —— 最近的报错 ——
 
 const MAX = 60
-const recent: string[] = []
+const recent: { at: string; source: string; detail: string }[] = []
 
 export function recordError(where: string, e: unknown): void {
   const msg = e instanceof Error ? (e.stack ?? e.message) : typeof e === 'string' ? e : JSON.stringify(e)
-  recent.push(`${new Date().toISOString()} [${where}] ${scrub(String(msg)).slice(0, 800)}`)
+  recent.push({ at: new Date().toISOString(), source: where, detail: scrub(String(msg)).slice(0, 800) })
   if (recent.length > MAX) recent.shift()
 }
 
-export const recentErrors = () => [...recent]
+export const recentErrors = () => recent.map((e) => `${e.at} [${e.source}] ${e.detail}`)
+
+export const diagnosticErrors = () => recent.map((e) => ({
+  at: e.at,
+  source: ['console', 'window', 'promise', 'voice', 'speech-model', 'beautify', 'menu', 'exit'].includes(e.source) ? e.source : 'other',
+  ...errorSummary(e.detail),
+}))
 
 /** 接住 console.error 和没人处理的报错 */
 export function captureErrors(target: { addEventListener: (type: string, fn: (e: never) => void) => void }, con: { error: (...a: unknown[]) => void }): void {

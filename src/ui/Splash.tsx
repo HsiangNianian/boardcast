@@ -2,9 +2,10 @@
 // 字形加载好了才开始计时，免得字还没写完就退场；无论如何最多 3 秒。
 // 点一下或按任意键跳过；系统设置了减少动态效果时只做一次淡出。
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useT } from '../i18n/index.ts'
 import Wordmark from './Wordmark.tsx'
+import Dialog from './Dialog.tsx'
 
 const WRITE_MS = 1200
 const HOLD_MS = 450
@@ -16,17 +17,23 @@ export default function Splash({ onDone }: { onDone: () => void }) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
   const [ready, setReady] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const done = useRef(onDone)
+  done.current = onDone
 
   // 跳过、兜底：不管字形加载得多慢，3 秒后一定退场
   useEffect(() => {
-    const cap = setTimeout(() => setLeaving(true), MAX_MS)
-    const skip = () => setLeaving(true)
-    addEventListener('keydown', skip)
+    const cap = setTimeout(() => setLeaving(true), reduced ? 0 : MAX_MS - EXIT_MS)
+    const skip = (event: KeyboardEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+      setLeaving(true)
+    }
+    addEventListener('keydown', skip, true)
     return () => {
       clearTimeout(cap)
-      removeEventListener('keydown', skip)
+      removeEventListener('keydown', skip, true)
     }
-  }, [])
+  }, [reduced])
 
   // 字写完再停一会儿
   useEffect(() => {
@@ -37,17 +44,18 @@ export default function Splash({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     if (!leaving) return
-    const t = setTimeout(onDone, EXIT_MS)
+    const t = setTimeout(() => done.current(), reduced ? 0 : EXIT_MS)
     return () => clearTimeout(t)
-  }, [leaving, onDone])
+  }, [leaving, reduced])
 
   return (
-    <div className={`splash${leaving ? ' out' : ''}`} onClick={() => setLeaving(true)} aria-hidden>
-      <div className="mark">
+    <Dialog label="boardcast" className={`splash${leaving ? ' out' : ''}`} onClose={() => setLeaving(true)}>
+      <div className="mark" onClick={() => setLeaving(true)}>
         <Wordmark size={64} animate={reduced ? undefined : WRITE_MS} onReady={() => setReady(true)} />
         <span className={`rule${ready ? ' go' : ''}`} style={{ ['--write' as string]: `${WRITE_MS}ms` }} />
         <p>{t.splash}</p>
+        <button type="button" className="ghost small" autoFocus onClick={() => setLeaving(true)}>{t.skipIntro}</button>
       </div>
-    </div>
+    </Dialog>
   )
 }

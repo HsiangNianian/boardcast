@@ -765,7 +765,7 @@ export const zh: Messages = {
     exportSvg: 'SVG 矢量图',
     exportSvgHint: '放大不糊，可以插进文档或者接着改',
     exportAnim: '动态 SVG',
-    exportAnimHint: '插进 README、文档、群聊，自己一笔一笔写出来',
+    exportAnimHint: '按会议顺序逐笔写出，自由绘图保持静态',
     exportPdf: '整场会 PDF',
     exportPdfHint: '每张板一页，后面是摘要和会议记录；页面是图片，字不能复制',
     exportHtml: '回放网页',

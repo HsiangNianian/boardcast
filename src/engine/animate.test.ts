@@ -63,6 +63,25 @@ test('the timeline writes stroke after stroke, pauses between rounds, and squeez
   assert.ok(fast.end > 11000)
 })
 
+test('reveal times follow the meeting without changing the final painting order', () => {
+  const pieces = [piece('later'), piece('earlier')]
+  const { timed } = timeline(pieces, [1, 0])
+  assert.deepEqual(timed.map((t) => t.piece.key), ['later', 'earlier'])
+  assert.equal(timed[1].delays[0], 0)
+  assert(timed[0].delays[0] > timed[1].delays[0] + timed[1].durs[0])
+})
+
+test('highlight-only rounds retain their order and fit the animation budget', () => {
+  const { timed, end } = timeline([piece('last', 1, true), piece('first', 1, true), piece('middle', 1, true)], [2, 0, 1])
+  assert.deepEqual(timed.map((t) => t.delays[0]), [600, 0, 300])
+  assert(timed.every((t) => t.durs[0] === 0))
+  assert.equal(end, 600)
+  const many = Array.from({ length: 100 }, (_, i) => piece(`mark${i}`, 1, true))
+  const fast = timeline(many, many.map((_, i) => i))
+  assert(fast.timed[99].delays[0] > 11000)
+  assert(fast.end <= 12000)
+})
+
 test('the svg animates every stroke with CSS only and falls back to the full board for reduced motion', () => {
   const { timed } = timeline([piece('n1|网关', 2)], [0])
   const svg = animatedSvg(timed, { x: -48, y: -48, w: 300, h: 200 }, '#fbfbf8', { href: 'data:image/png;base64,AA"<', w: 100, h: 50 })

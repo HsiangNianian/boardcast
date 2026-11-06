@@ -86,7 +86,7 @@ PDF imports are limited to 40 retained pages. Scans without a text layer appear 
 |---|---|
 | **Markdown** | Conclusions, tasks, board content and the full transcript, with Mermaid flowcharts you can keep editing. |
 | **PNG / SVG** | Boards in documents or slides, including marks and imported page backgrounds. |
-| **Animated SVG** | The final board writes itself in meeting order in about 12 seconds. Pure CSS animation, embeddable in a README, with reduced-motion support. |
+| **Animated SVG** | Writes the final board in meeting order within 12 seconds, with free drawings kept static. Reduced-motion and static viewers show the complete board immediately. |
 | **Excalidraw** | Further editing in Excalidraw. |
 | **Meeting PDF** | One board per page, followed by the summary and transcript. Pages are rasterized; use Markdown for selectable text. |
 | **Replay page** | A standalone HTML file containing the player, boards, transcript and assets. Open it offline in a browser without installing boardcast. |

@@ -780,7 +780,7 @@ export const en = {
     exportSvg: 'SVG vector',
     exportSvgHint: 'Stays sharp when zoomed; paste into docs or keep editing',
     exportAnim: 'Animated SVG',
-    exportAnimHint: 'Drop into a README or chat; it writes itself stroke by stroke',
+    exportAnimHint: 'Writes in meeting order; free drawings stay still',
     exportPdf: 'Whole meeting PDF',
     exportPdfHint: 'One page per board, then summary and transcript; pages are images, text is not selectable',
     exportHtml: 'Replay page',

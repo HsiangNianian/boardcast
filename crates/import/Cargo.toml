@@ -8,7 +8,7 @@ license.workspace = true
 anyhow.workspace = true
 boardcast-board.workspace = true
 fancy-regex = "0.14"
-image = { version = "0.25", default-features = false, features = ["jpeg"] }
+image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 pdfium-render = { version = "0.8", default-features = false, features = ["pdfium_latest", "thread_safe"] }
 regex = "1"
 serde.workspace = true

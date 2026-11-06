@@ -79,6 +79,27 @@ pub fn recommended(vram_mib: u64) -> &'static str {
     models.iter().rfind(|m| m.vram_mib <= vram_mib).unwrap_or(&models[0]).id
 }
 
+/// What lets a board model read images, by the board model's file name. It is downloaded the same way
+/// and never chosen as a model itself.
+pub fn vision_for(model_file: &str) -> Option<Model> {
+    let add_on = |id, label, file: &str, size, sha256: &str, repo: &str| Model {
+        id,
+        label,
+        file: file.to_string(),
+        size,
+        sha256: sha256.to_string(),
+        vram_mib: 0,
+        sources: sources(&format!("{repo}/resolve/master/mmproj-F16.gguf"), &format!("{repo}/resolve/main/mmproj-F16.gguf")),
+    };
+    if model_file.starts_with("Qwen3.5-4B") {
+        Some(add_on("qwen3.5-4b-vision", "Vision add-on · Qwen3.5-4B", "Qwen3.5-4B-mmproj-F16.gguf", 672_423_616, "cd88edcf8d031894960bb0c9c5b9b7e1fea6ebee02b9f7ce925a00d12891f864", "unsloth/Qwen3.5-4B-GGUF"))
+    } else if model_file.starts_with("Qwen3.5-9B") {
+        Some(add_on("qwen3.5-9b-vision", "Vision add-on · Qwen3.5-9B", "Qwen3.5-9B-mmproj-F16.gguf", 918_166_080, "f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f", "unsloth/Qwen3.5-9B-GGUF"))
+    } else {
+        None
+    }
+}
+
 pub fn installed(model: &Model, dir: &Path) -> bool {
     dir.join(&model.file).is_file()
 }

@@ -18,6 +18,7 @@ use boardcast_update::Release;
 use crate::raster::Layer;
 use anyhow::{Context as _, Result};
 use boardcast_agent::summary::{self, Block, Line, Step};
+use boardcast_agent::vision::VisionServer;
 use boardcast_export::Kind as ExportKind;
 use boardcast_import::pdf::NewPage;
 use boardcast_board::spans::{span_at, Unit};
@@ -613,6 +614,8 @@ enum Panel {
 enum ImportSource {
     File(PathBuf),
     Arxiv(String),
+    /// An image, with the local model and add-on that will read it.
+    Image { path: PathBuf, binaries: PathBuf, model: PathBuf, projector: PathBuf },
 }
 
 /// A file read and ready. Nothing joins a meeting until a place for it is chosen.
@@ -638,6 +641,8 @@ enum ImportState {
     Reading { progress: String, cancel: Arc<AtomicBool>, updates: Receiver<ImportUpdate> },
     Ready(ImportPreview),
     Failed(String),
+    /// An image is waiting for the add-on that lets the local model read it.
+    NeedsVision { path: PathBuf, add_on: Model },
 }
 
 /// A replay on screen. It only moves the ink: the meeting itself is not touched, so leaving puts
@@ -818,9 +823,46 @@ fn page_render_image(bytes: &[u8]) -> Result<Arc<RenderImage>, String> {
     Ok(Arc::new(RenderImage::new([image::Frame::new(picture)])))
 }
 
+const IMAGE_TYPES: [&str; 5] = ["png", "jpg", "jpeg", "webp", "gif"];
+
+/// Start a local model that can see, have it read the blocks of the image, and word what happened.
+fn read_image(path: &std::path::Path, binaries: &std::path::Path, model: &std::path::Path, projector: &std::path::Path, english: bool, cancel: &AtomicBool, tx: &std::sync::mpsc::Sender<ImportUpdate>) -> anyhow::Result<ImportPreview> {
+    let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
+    let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let _ = tx.send(ImportUpdate::Progress(if english { "Starting the local model to read the image…".to_string() } else { "正在启动本地模型来读图…".to_string() }));
+    let server = VisionServer::start(binaries, model, projector)?;
+    let imported = boardcast_import::image::import_image(&bytes, english, cancel, &mut |png| server.read(png), &mut |done, total| {
+        let _ = tx.send(ImportUpdate::Progress(if english { format!("Reading {name}: block {done}/{total}") } else { format!("正在读 {name}：{done}/{total} 块") }));
+    })?;
+    let limit = boardcast_import::image::MAX_AREAS;
+    let mut details = vec![if english { format!("Found {} regions; recognized text in {}.", imported.found, imported.read) } else { format!("找到 {} 个区域，其中 {} 个识别到了文字。", imported.found, imported.read) }];
+    if imported.capped {
+        details.push(if english { format!("Only the first {limit} regions were read; the full image is retained.") } else { format!("只读了前 {limit} 个区域，完整图片仍然保留。") });
+    }
+    if imported.read == 0 {
+        details.push(if english { "No text was recognized. The original image will still be available on the board.".to_string() } else { "没有识别到文字。原图仍会显示在板上。".to_string() });
+    }
+    let read = imported.read;
+    let word = if read == 1 { "text block" } else { "text blocks" };
+    let note = match (english, imported.capped) {
+        (true, false) => format!("Imported {name} ({read} {word} read)"),
+        (true, true) => format!("Imported {name} ({read} {word} read, too many blocks, so only some were read)"),
+        (false, false) => format!("导入了 {name}（读出 {read} 块文字）"),
+        (false, true) => format!("导入了 {name}（读出 {read} 块文字，块太多只读了一部分）"),
+    };
+    let ready = match (english, read > 0) {
+        (true, true) => format!("{name} is ready. Try \"circle this\" during the meeting"),
+        (true, false) => format!("No text found in {name}; it can only be used as a background"),
+        (false, true) => format!("{name} 导入好了，开会时可以说「把这里圈出来」"),
+        (false, false) => format!("{name} 里没有读出文字，只能当背景用"),
+    };
+    Ok(ImportPreview { name, pages: vec![imported.page], title: None, note, details, ready })
+}
+
 /// Download if need be, read the file, and word what happened.
 fn read_import(source: ImportSource, library: &std::path::Path, english: bool, cancel: &AtomicBool, tx: &std::sync::mpsc::Sender<ImportUpdate>) -> anyhow::Result<ImportPreview> {
     let (name, bytes) = match source {
+        ImportSource::Image { path, binaries, model, projector } => return read_image(&path, &binaries, &model, &projector, english, cancel, tx),
         ImportSource::File(path) => {
             let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
             (name, std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?)
@@ -1472,7 +1514,10 @@ impl Workbench {
                         self.notice = Some(format!("{e:#}"));
                     }
                 }
-                self.needs_model = false;
+                // A vision add-on is not a board model, so it leaves that choice alone.
+                if boardcast_models::catalog().iter().any(|m| m.id == id) {
+                    self.needs_model = false;
+                }
                 self.form.note = Some(format!("{label} {}", tr("is ready.", "已就绪。")));
                 self.apply_backend();
             }
@@ -1720,14 +1765,37 @@ impl Workbench {
         self.panel = Panel::Import;
         match paths {
             [path] if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) => self.start_import(ImportSource::File(path.clone()), cx),
+            [path] if path.extension().and_then(|e| e.to_str()).is_some_and(|e| IMAGE_TYPES.contains(&e.to_ascii_lowercase().as_str())) => self.import_image_file(path.clone(), cx),
             [_] => {
-                self.import = ImportState::Failed(tr("You can import PDFs here. Images are coming next.", "这里可以导入 PDF，图片导入马上就来。").to_string());
+                self.import = ImportState::Failed(tr("You can import PDFs and images (PNG, JPEG, WebP and GIF).", "可以导入 PDF 和图片（PNG、JPEG、WebP、GIF）。").to_string());
                 cx.notify();
             }
             _ => {
                 self.import = ImportState::Failed(tr("Choose one file at a time. Nothing was imported.", "一次选一个文件，什么都没有导入。").to_string());
                 cx.notify();
             }
+        }
+    }
+
+    /// Reading an image takes a model on this device, whichever model draws the board.
+    fn import_image_file(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        let Some(model) = boardcast_models::current(&self.models) else {
+            self.import = ImportState::Failed(tr("Reading text in an image takes a local model, and images are not sent anywhere else. Download one in Settings first.", "读图里的字需要本地模型，图片不会发到别处。请先在设置里下载一个。").to_string());
+            cx.notify();
+            return;
+        };
+        let file = model.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+        let Some(add_on) = boardcast_models::vision_for(&file) else {
+            self.import = ImportState::Failed(tr("This local model can't read images.", "这个本地模型不能看图。").to_string());
+            cx.notify();
+            return;
+        };
+        if boardcast_models::installed(&add_on, &self.models) {
+            let projector = self.models.join(&add_on.file);
+            self.start_import(ImportSource::Image { path, binaries: self.binaries.clone(), model, projector }, cx);
+        } else {
+            self.import = ImportState::NeedsVision { path, add_on };
+            cx.notify();
         }
     }
 
@@ -2091,6 +2159,25 @@ impl Workbench {
         let panel = div().id("import-panel").flex_1().overflow_y_scroll().p_3().flex().flex_col().gap_2();
         let can_add_here = self.live.read_only.is_none();
         match &self.import {
+            ImportState::NeedsVision { add_on, path } => {
+                let (fetch, retry) = (add_on.clone(), path.clone());
+                let downloading = self.download.as_ref().filter(|d| d.id == add_on.id);
+                let progress = downloading.map(|d| match &d.progress {
+                    Some(p) if p.verifying => tr("Checking what was already downloaded…", "正在检查已下载的部分…").to_string(),
+                    Some(p) => format!("{} / {}", gigabytes(p.done), gigabytes(p.total)),
+                    None => tr("Starting…", "正在开始…").to_string(),
+                });
+                let ready = boardcast_models::installed(add_on, &self.models);
+                panel
+                    .child(div().text_sm().child(tr("To read the text in an image, the local model needs its vision add-on. Images stay on this device.", "要读图里的字，本地模型需要看图组件。图片只在本机处理。")))
+                    .child(hint(if downloading.is_some() { add_on.label } else { tr("One download, and then images just work.", "下载一次，之后都能用。") }))
+                    .when_some(progress, |d, text| d.child(div().text_xs().child(text)))
+                    .when(ready, |d| d.child(button("read-image", tr("Read the image", "读取图片")).on_click(cx.listener(move |this, _, _, cx| this.import_image_file(retry.clone(), cx)))))
+                    .when(!ready && downloading.is_none() && self.download.is_none(), |d| {
+                        d.child(button("get-vision", format!("{} · {}", tr("Download", "下载"), gigabytes(add_on.size))).on_click(cx.listener(move |this, _, _, cx| this.start_download(fetch.clone(), cx))))
+                    })
+                    .child(button("import-cancel", tr("Cancel", "取消")).on_click(cx.listener(|this, _, _, cx| this.stop_import(cx))))
+            }
             ImportState::Reading { progress, .. } => panel
                 .child(div().text_sm().child(progress.clone()))
                 .child(hint(tr("You can carry on with the meeting while this reads.", "读取的时候，会议可以继续。")))
@@ -2104,8 +2191,8 @@ impl Workbench {
                 .child(button("import-cancel", tr("Cancel", "取消")).on_click(cx.listener(|this, _, _, cx| this.stop_import(cx)))),
             state => panel
                 .when_some(if let ImportState::Failed(error) = state { Some(error.clone()) } else { None }, |d, error| d.child(div().text_sm().text_color(rgb(0xa3_28_26)).child(error)))
-                .child(hint(tr("Each page becomes a board, with its text in place to circle, link and note on during the meeting.", "每页一张板，文字留在原位，开会时可以圈画、连线、写批注。")))
-                .child(button("pick-import", tr("Choose a PDF…", "选择 PDF…")).on_click(cx.listener(|this, _, _, cx| this.pick_import_file(cx))))
+                .child(hint(tr("A PDF page or an image becomes a board, with its text in place to circle, link and note on during the meeting.", "PDF 的每一页或一张图片变成一张板，文字留在原位，开会时可以圈画、连线、写批注。")))
+                .child(button("pick-import", tr("Choose a file…", "选择文件…")).on_click(cx.listener(|this, _, _, cx| this.pick_import_file(cx))))
                 .child(hint(tr("You can also drop a file anywhere in this window.", "也可以把文件拖到窗口里。")))
                 .child(div().mt_2().text_xs().text_color(rgb(0x62_66_5c)).child(tr("An arXiv paper, by link or ID", "arXiv 论文的链接或编号")))
                 .child(Input::new(&self.arxiv_input))

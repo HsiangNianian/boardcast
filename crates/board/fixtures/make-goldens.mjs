@@ -273,6 +273,32 @@ const paperCases = Object.entries(paperDocuments).map(([name, pages]) => {
     return { w: P, h: Q, pieces, areas, headings, columns, inRefs: state.inRefs, graph: pageGraph({ w: P, h: Q, no: i + 1 }, areas) }
   }) }
 })
+// Finding blocks in an image by its pixels, and tidying what a vision model says about them.
+const { segment } = await load('src/board/segment.ts')
+const imageSource = readFileSync(join(root, 'src/board/importImage.ts'), 'utf8')
+if (!imageSource.includes('export function cleanRead')) throw new Error('importImage.ts moved')
+// importImage.ts reaches for the desktop shell, so its two pure functions are taken on their own here.
+const pureFunctions = imageSource.slice(imageSource.indexOf('export function cleanRead'), imageSource.indexOf('export interface ImageImport'))
+const { cleanRead, meaningful } = await import(`data:text/javascript,${encodeURIComponent(pureFunctions.replace(/: string/g, '').replace(/: boolean/g, ''))}`)
+const glyphRow = (x, y, n, size = 14, step = 18) => Array.from({ length: n }, (_, i) => [x + i * step, y, size, size])
+const segmentCases = [
+  { name: 'text, a box and an arrow', w: 600, h: 300, paper: 255, ink: 20, rects: [...glyphRow(20, 20, 16), ...glyphRow(20, 42, 16), [380, 120, 160, 2], [380, 200, 160, 2], [380, 120, 2, 82], [538, 120, 2, 82], ...glyphRow(440, 154, 2), [200, 160, 180, 2], ...glyphRow(20, 260, 6)] },
+  { name: 'a blackboard', w: 400, h: 200, paper: 30, ink: 230, rects: [...glyphRow(20, 30, 8), ...glyphRow(20, 120, 5, 20, 26)] },
+  { name: 'nothing', w: 100, h: 100, paper: 255, ink: 0, rects: [] },
+  { name: 'specks', w: 200, h: 200, paper: 255, ink: 0, rects: [[10, 10, 2, 2], [50, 50, 1, 8], [90, 90, 9, 1]] },
+  { name: 'a table', w: 500, h: 300, paper: 250, ink: 10, rects: [[20, 20, 460, 2], [20, 100, 460, 2], [20, 180, 460, 2], [20, 20, 2, 162], [240, 20, 2, 162], [478, 20, 2, 162], ...glyphRow(40, 50, 5), ...glyphRow(280, 50, 5), ...glyphRow(40, 130, 5), ...glyphRow(280, 130, 5)] },
+  { name: 'sizes that stay apart', w: 500, h: 300, paper: 255, ink: 0, rects: [...glyphRow(20, 20, 6, 30, 36), ...glyphRow(20, 60, 12, 10, 13), ...glyphRow(20, 74, 12, 10, 13)] },
+  { name: 'a thick line kept as ink', w: 400, h: 200, paper: 255, ink: 0, rects: [[20, 50, 300, 16], ...glyphRow(20, 120, 4)] },
+  { name: 'transparent ground', w: 300, h: 120, paper: 255, ink: 0, clear: true, rects: [...glyphRow(20, 30, 6)] },
+  { name: 'a stroke inside a block', w: 300, h: 200, paper: 255, ink: 0, rects: [[20, 20, 200, 60], [30, 100, 4, 4], [20, 90, 200, 20]] },
+].map((c) => {
+  const data = new Uint8ClampedArray(c.w * c.h * 4).fill(255)
+  for (let i = 0; i < c.w * c.h; i++) data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = c.paper
+  for (const [x0, y0, w, h] of c.rects) for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) { const i = (y * c.w + x) * 4; data[i] = data[i + 1] = data[i + 2] = c.ink }
+  if (c.clear) for (let i = 0; i < c.w * c.h; i++) if (data[i * 4] === 255) data[i * 4 + 3] = 0
+  return { ...c, blocks: segment({ width: c.w, height: c.h, data }).map((b) => [b.x, b.y, b.w, b.h]) }
+})
+const readCases = ['「订单服务」', '```\nAPI 网关\n```', '<think>嗯</think>MySQL', '<think>没完', '无', '无。', '没有文字', 'None', 'n/a.', '（无）', '(无)', '  a   b\n c ', '1>1', '->', '', '写库', 'HTTPS', '2026', '12', '"quoted\'', '无论如何'].map((input) => ({ input, clean: cleanRead(input), meaningful: meaningful(input) }))
 const prefix = (text) => messages(emptyGraph(), [], { text }).slice(0, -1)
 // The fixed part of the prompt ships with the agent; this copy is the answer key it is tested against.
 writeFileSync(new URL('../../agent/prompts.json', import.meta.url), `${JSON.stringify({ zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') }, null, 1)}\n`)
@@ -287,6 +313,8 @@ writeFileSync(process.argv[3], `${JSON.stringify({
   ranks: rankCases,
   spans: spanCases,
   arxiv: arxivCases,
+  segments: segmentCases,
+  reads: readCases,
   paper: paperCases,
   pages: pageCases,
   timelines: timelineCases,

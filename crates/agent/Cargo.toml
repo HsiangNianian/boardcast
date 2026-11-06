@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+base64 = "0.22"
 boardcast-board.workspace = true
 libc = "0.2"
 regex = "1"

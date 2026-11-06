@@ -61,7 +61,18 @@ pub fn check(g: &Graph, l: &Layout, unclear: &[String]) -> Report {
     let mut r = Report::default();
     let name = |id: &str| g.nodes.iter().find(|n| n.id == id).map_or_else(|| id.to_string(), |n| n.label.clone());
 
-    for n in &g.nodes {
+    // Imported pages are preserved but not laid out yet, and nothing here can repair them.
+    let imported = |id: &str| -> bool {
+        let mut at = g.nodes.iter().find(|n| n.id == id);
+        while let Some(n) = at {
+            if n.kind == Kind::Region {
+                return true;
+            }
+            at = n.parent.as_deref().and_then(|p| g.nodes.iter().find(|o| o.id == p));
+        }
+        false
+    };
+    for n in g.nodes.iter().filter(|n| !imported(&n.id)) {
         if !l.anchors.contains_key(&n.id) {
             r.hard.push(Issue { code: "unplaced_node", detail: n.label.clone() });
         }

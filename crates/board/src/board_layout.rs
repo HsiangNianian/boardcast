@@ -3,6 +3,7 @@
 //! Only the first flow layout differs, as ELK is replaced by the injected `first` function.
 
 use crate::graph::{Graph, Kind, Node};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 
 pub const FONT: f64 = 20.0;
@@ -321,6 +322,38 @@ struct Slot {
 }
 
 impl StableLayout {
+    /// The remembered positions, in the shape meeting files store them.
+    pub fn snapshot(&self) -> Value {
+        let rect = |b: &Rect| json!({ "id": b.id, "x": b.x, "y": b.y, "w": b.w, "h": b.h });
+        json!({
+            "regionAt": self.region_at.iter().map(|(k, (x, y))| json!([k, { "x": x, "y": y }])).collect::<Vec<_>>(),
+            "nodeAt": self.node_at.iter().map(|b| json!([b.id, rect(b)])).collect::<Vec<_>>(),
+            "routeAt": self.route_at.iter().map(|(k, (sig, points))| json!([k, { "sig": sig, "points": points }])).collect::<Vec<_>>(),
+            "boxAt": self.box_at.iter().map(|(k, b)| json!([k, rect(b)])).collect::<Vec<_>>(),
+        })
+    }
+
+    /// Put remembered positions back, so a reopened board keeps its arrangement. Malformed entries are
+    /// skipped: at worst those things are placed again.
+    pub fn restore(&mut self, memory: &Value) {
+        fn rows<'a>(memory: &'a Value, key: &str) -> impl Iterator<Item = (&'a str, &'a Value)> {
+            memory[key].as_array().into_iter().flatten().filter_map(|row| Some((row.get(0)?.as_str()?, row.get(1)?)))
+        }
+        fn rect(id: &str, v: &Value) -> Option<Rect> {
+            Some(Rect { id: id.to_string(), x: v["x"].as_f64()?, y: v["y"].as_f64()?, w: v["w"].as_f64()?, h: v["h"].as_f64()? })
+        }
+        *self = Self::default();
+        self.region_at = rows(memory, "regionAt").filter_map(|(k, v)| Some((k.to_string(), (v["x"].as_f64()?, v["y"].as_f64()?)))).collect();
+        self.node_at = rows(memory, "nodeAt").filter_map(|(k, v)| rect(k, v)).collect();
+        self.box_at = rows(memory, "boxAt").filter_map(|(k, v)| Some((k.to_string(), rect(k, v)?))).collect();
+        self.route_at = rows(memory, "routeAt")
+            .filter_map(|(k, v)| {
+                let points = v["points"].as_array()?.iter().map(|p| Some([p.get(0)?.as_f64()?, p.get(1)?.as_f64()?])).collect::<Option<Vec<P>>>()?;
+                Some((k.to_string(), (v["sig"].as_str()?.to_string(), points)))
+            })
+            .collect();
+    }
+
     fn diagram(&mut self, g: &Graph, ids: &[String], first: &mut dyn FnMut(&Graph, &[String]) -> Diagram) -> Diagram {
         self.node_at.retain(|b| ids.contains(&b.id));
         let inner: Vec<_> = g.edges.iter().filter(|e| ids.contains(&e.from) && ids.contains(&e.to)).collect();

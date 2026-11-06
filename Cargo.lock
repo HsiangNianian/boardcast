@@ -678,12 +678,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "boardcast-meetings"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "boardcast-board",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "boardcast-tools"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "boardcast-agent",
  "boardcast-board",
+ "boardcast-meetings",
  "serde",
  "serde_json",
 ]
@@ -696,6 +707,8 @@ dependencies = [
  "boardcast-agent",
  "boardcast-audio",
  "boardcast-board",
+ "boardcast-meetings",
+ "chrono",
  "gpui-kit",
  "image",
  "serde",

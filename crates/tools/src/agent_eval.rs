@@ -64,7 +64,7 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Value> {
     println!("{} soft={} hard_steps={hard_steps} hints={hints_sent} empty={empty} {model_ms}ms", case.id, last.soft.len());
     Ok(json!({
         "id": case.id,
-        "graph": graph.to_engine_json(),
+        "graph": graph,
         "final_soft": last.soft,
         "final_hard": last.hard,
         "fit_zoom": last.fit_zoom,

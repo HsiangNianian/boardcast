@@ -1,0 +1,45 @@
+name: Rust
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'src/engine/**'
+      - 'src/board/layout.ts'
+      - 'public/demos/**'
+      - '.github/workflows/rust.yml'
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'src/engine/**'
+      - 'src/board/layout.ts'
+      - 'public/demos/**'
+      - '.github/workflows/rust.yml'
+
+jobs:
+  core:
+    name: core crates and the TypeScript answer key
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The window and audio crates need system libraries and native downloads, and have no tests yet.
+      - run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-tools
+      - name: Check the recorded boards for layout defects
+        run: cargo run --release -p boardcast-tools -- check . --all-demos --tidy
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: The Rust port's answer key must match the TypeScript engine
+        run: |
+          node crates/board/fixtures/make-goldens.mjs . crates/board/fixtures/goldens.json
+          git diff --exit-code crates/board/fixtures/goldens.json crates/agent/prompts.json

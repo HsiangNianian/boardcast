@@ -10,6 +10,7 @@ const { applyOps, parseOps } = await load('src/engine/ops.ts')
 const { describe, emptyGraph } = await load('src/engine/graph.ts')
 const { boardLang, grammar, messages, userMessage } = await load('src/engine/prompt.ts')
 const { StableLayout } = await load('src/board/layout.ts')
+const { diffGraph, inkOnly } = await load('src/engine/steps.ts')
 
 const rect = (b) => ({ id: b.id, x: b.x, y: b.y, w: b.w, h: b.h })
 const shot = (l) => ({
@@ -31,6 +32,7 @@ for (const file of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
   const demo = JSON.parse(readFileSync(join(dir, file), 'utf8'))
   let g = emptyGraph()
   let recent = []
+  let previous = emptyGraph()
   const board = new StableLayout()
   for (const line of demo.lines ?? []) {
     if (line.manual || typeof line.ops !== 'string') continue
@@ -38,7 +40,8 @@ for (const file of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
     const context = recent.slice(-2)
     const before = { describe: describe(g), user: userMessage(g, context, next), lang: boardLang(context, next), grammar: grammar(g, 8, boardLang(context, next)) }
     g = applyOps(g, parseOps(line.ops), 'ink')
-    steps.push({ file, text: line.text, speaker: line.speaker ?? null, ops: line.ops, ...before, after: shape(g), layout: shot(await board.layout(g)) })
+    steps.push({ file, text: line.text, speaker: line.speaker ?? null, ops: line.ops, ...before, after: shape(g), layout: shot(await board.layout(g)), memory: board.snapshot(), diff: diffGraph(previous, inkOnly(g)) })
+    previous = g
     recent.push(next)
   }
 }
@@ -68,9 +71,9 @@ for (let seed = 1; seed <= 80; seed++) {
 const prefix = (text) => messages(emptyGraph(), [], { text }).slice(0, -1)
 // The fixed part of the prompt ships with the agent; this copy is the answer key it is tested against.
 writeFileSync(new URL('../../agent/prompts.json', import.meta.url), `${JSON.stringify({ zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') }, null, 1)}\n`)
-writeFileSync(process.argv[3], JSON.stringify({
+writeFileSync(process.argv[3], `${JSON.stringify({
   prompts: { zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') },
   steps,
   stress,
-}))
+})}\n`)
 console.log(`${steps.length} steps`)

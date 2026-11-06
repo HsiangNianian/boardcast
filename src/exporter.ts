@@ -173,6 +173,8 @@ async function replayFile(data: ReplayData): Promise<Blob> {
 export async function build(kind: ExportKind, b: Board): Promise<{ name: string; blob: Blob }> {
   // Capture before the first await: switching pages/modes cannot change this export.
   b = { ...b, graph: structuredClone(b.graph), base: structuredClone(b.base), baseScene: structuredClone(b.baseScene), scene: structuredClone(b.scene), layout: structuredClone(b.layout ?? board.snapshot()), replay: structuredClone(b.replay) }
+  // XML cannot represent control characters or unpaired surrogates in saved titles.
+  const svgTitle = (b.title?.trim() || msg().app.untitled).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ud800-\udfff\ufffe\uffff]/gu, '\ufffd')
   if ((kind === 'html' || kind === 'pdf') && b.replay) {
     for (const page of b.replay.pages) {
       const layout = new StableLayout()
@@ -208,10 +210,14 @@ export async function build(kind: ExportKind, b: Board): Promise<{ name: string;
   }
   if (kind === 'excalidraw')
     return { name: fileName('excalidraw'), blob: new Blob([await excalidrawFile(b)], { type: 'application/json' }) }
-  if (kind === 'anim') return { name: fileName('anim.svg'), blob: new Blob([await animSvg(b)], { type: 'image/svg+xml' }) }
-  if (kind === 'svg') {
-    const svg = b.mode === 'pencil' ? await pencilSvg(pencilScene(b), b.paper) : (await inkSvg(b)).svg
-    return { name: fileName('svg'), blob: new Blob([svg], { type: 'image/svg+xml' }) }
+  if (kind === 'svg' || kind === 'anim') {
+    const svg = kind === 'anim' ? await animSvg(b) : b.mode === 'pencil' ? await pencilSvg(pencilScene(b), b.paper) : (await inkSvg(b)).svg
+    const doc = new DOMParser().parseFromString(svg, 'image/svg+xml'), root = doc.documentElement
+    if (root.namespaceURI !== 'http://www.w3.org/2000/svg' || root.localName !== 'svg') throw new Error(msg().errors.imageFailed)
+    const title = doc.createElementNS(root.namespaceURI, 'title')
+    title.textContent = svgTitle
+    root.prepend(title)
+    return { name: fileName(kind === 'anim' ? 'anim.svg' : 'svg'), blob: new Blob([new XMLSerializer().serializeToString(doc)], { type: 'image/svg+xml' }) }
   }
   const blob = b.mode === 'pencil' ? await pencilPng(pencilScene(b), b.paper) : await inkPng(b)
   return { name: fileName('png'), blob }

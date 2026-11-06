@@ -24,11 +24,11 @@
 
 本次未重跑每一份历史专题报告。近期专题结果包括 Markdown 下载/渲染 24 项、七格式导出 92 项、交接 70 项，以及 Linux 原生保存、菜单、输入、模型和冷启动检查，范围与构建身份分别记录在 [实施记录](implementation-progress.md)及其链接中。它们不能替代其他平台验收。
 
-[C48 续批](animated-export-validation.md)另补 30 项实际 SVG 下载/宿主检查、92 项七格式和 82 项外观回归；严格 release Clippy 与输入预览 2 项 Rust 检查通过（1 项虚拟音源测试未执行）。GitHub 的 `d69409b` 已通过前端、macOS ARM、Windows x64/ARM 构建/测试；Linux Clippy 的固定数组警告已修复，后续提交仍需新的 CI 结果。CI 构建不替代真实音源、升级和设备验收。
+[C48 续批](animated-export-validation.md)另补 30 项实际 SVG 下载/宿主检查、92 项七格式和 82 项外观回归；严格 release Clippy 与输入预览 2 项 Rust 检查通过（1 项虚拟音源测试未执行）。[C47 SVG 标题](svg-title-validation.md)补齐 36 项下载/XML/无障碍树检查，并在其最终构建重跑上述三组浏览器回归与 341 项 Node。GitHub 的 `503b677` 已通过前端、Linux x64、macOS ARM、Windows x64/ARM 构建/测试和三组 ASR；文字生成评测仍在运行。SVG 标题提交仍需新的 CI 结果。CI 构建不替代真实音源、升级和设备验收。
 
 ## 仍需完成的验收
 
-- **Windows ARM：** `d69409b` 已生成包含本地模型修复的 CI 测试包（见 [ARM 报告](windows-arm-local-model-validation.md)）；在用户的 Adreno 机器重测预热、生成、摘要、取消和重启，后续提交仍需对应的新构建。现有 `0.21.1-5` 不包含本次修复；诊断不足以排除额外 GPU/驱动问题。
+- **Windows ARM：** `503b677` 已生成包含本地模型修复的 CI 测试包（见 [ARM 报告](windows-arm-local-model-validation.md)）；在用户的 Adreno 机器重测预热、生成、摘要、取消和重启，后续提交仍需对应的新构建。现有 `0.21.1-5` 不包含本次修复；诊断不足以排除额外 GPU/驱动问题。
 - **G3：** 用户暂无测试 Mac。macOS 原生音源/权限、Apple 转录、VoiceOver、真实长会议与签名更新，以及其他平台的物理设备组合仍待测试。
 - **安装与升级：** 新安装包、实际版本升级和重新启动尚未作为本次 PR 的整链路验收完成。
 - **完整矩阵与 G4：** 各报告保留未测变体，包括其他输入法、物理触控和辅助功能；至少 5 位新用户的任务试用尚未执行。部分 Linux AT-SPI 定向聚焦仍会触发底层异常，已记录恢复路径，不宣称根因解决。

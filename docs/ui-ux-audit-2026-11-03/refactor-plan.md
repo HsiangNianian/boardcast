@@ -346,7 +346,7 @@ Mac G3固定脚本：首次授权/拒绝两种音源→仅系统/混合/仅麦�
 | C44 | Excalidraw转结构说明 | B1/B4 · G1 · [重复文字/分组/并行箭头/坏数据/customData/笔触及 Linux 实测](native-drawing-validation.md)已接续；任意未来字段与图种保真边界保留 |
 | C45 | 分格式能力与原生保存 | B2/B4 · G1/G2 · 空页/原话/自由对象/无权限/重复；[原生导出返回续批](native-export-focus-validation.md)修复系统保存取消后的焦点丢失，最终 Linux 保存/取消与 70 项交接、92 项七格式回归已验，其他平台及完整变体保留 |
 | C46 | Markdown整场可读输出 | B4 · G1 · [导出续批](markdown-export-validation.md)修复纯文字/公式/Mermaid转义与摘要空行，24项实际下载及独立渲染检查覆盖中日英、三板/旧页码、自由对象提示和记录保持；39项逻辑、七格式/保存/原文/图形/存储恢复回归通过，外部阅读器差异与完整准入边界保留 |
-| C47 | PNG/SVG完整可视输出 | B1/B4 · G1/G2 · 主题/底图/边界/超大/逐页 |
+| C47 | PNG/SVG完整可视输出 | B1/B4 · G1/G2 · [SVG 标题续批](svg-title-validation.md)补齐手绘/自由编辑/动态 SVG 文档标题；36 项实际下载、XML 与 Chromium 无障碍检查通过，特殊字符和自由编辑可读文字保持。主题/底图/边界/超大/逐页完整组合与实际读屏仍保留 |
 | C48 | 动态SVG与减少动态 | B4 · G1 · [动态 SVG 续批](animated-export-validation.md)修复终态叠放、高亮轮次和静态宿主缺笔迹；30 项实际下载、Chromium 自然播放/减少动态及 librsvg 终态、自由对象和记录保持通过。GitHub/聊天代理、Safari/系统减少动态仍保留；GIF/WebM另跟踪 |
 | C49 | PDF完整会议产物 | B4 · G1/G2 · 长文本分页/字形/扫描/当前空页；[板号续批](pdf-page-numbers-validation.md)修复过滤空白板后页眉与原话引用错位，25 项实际 PDF、92 项七格式回归及 Linux 系统保存/冷恢复已验，其他平台与完整变体保留 |
 | C50 | Excalidraw可恢复输出 | B1/B4 · G1 · [scene/图片附件/双视图/真实导出再导入及冷启动](native-drawing-validation.md)已接续；其他图种与平台保留 |

@@ -33,6 +33,8 @@ mkdir -p "$lib/voice/speaker"
 cp resources/voice/speaker/campplus_zh_en.onnx "$lib/voice/speaker/"
 mkdir -p "$lib/voice/parakeet-en"
 cp resources/voice/parakeet-en/encoder.int8.onnx resources/voice/parakeet-en/decoder.int8.onnx resources/voice/parakeet-en/joiner.int8.onnx resources/voice/parakeet-en/tokens.txt "$lib/voice/parakeet-en/"
+mkdir -p "$lib/voice/reazon-ja"
+cp resources/voice/reazon-ja/encoder-epoch-99-avg-1.int8.onnx resources/voice/reazon-ja/decoder-epoch-99-avg-1.int8.onnx resources/voice/reazon-ja/joiner-epoch-99-avg-1.int8.onnx resources/voice/reazon-ja/tokens.txt "$lib/voice/reazon-ja/"
 cp resources/voice/sense-voice/model.int8.onnx resources/voice/sense-voice/tokens.txt "$lib/voice/sense-voice/"
 
 cp LICENSE public/licenses/* public/hanzi/ARPHICPL.TXT "$out/share/licenses/boardcast/"

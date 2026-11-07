@@ -12,6 +12,7 @@ mod i18n;
 mod pipeline;
 mod raster;
 mod resources;
+mod theme;
 
 use anyhow::{bail, Result};
 

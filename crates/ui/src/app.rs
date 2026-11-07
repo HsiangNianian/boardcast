@@ -11,6 +11,7 @@ use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, U
 use boardcast_meetings::{default_dir, Info, Live, Store, ViewOnly};
 use boardcast_board::pen::{ink, outline, Inked, Rng};
 use crate::i18n::tr;
+use crate::theme::{self, icon, ACCENT, DANGER, DANGER_SOFT, FAINT, LINE, MUTED, ON_STRONG, SELECTED, STRONG, SURFACE, TRACK, WARNING};
 use crate::pipeline::{Event, Pipeline, Script};
 use crate::resources;
 use boardcast_models::{Model, Outcome, Progress};
@@ -24,8 +25,15 @@ use boardcast_import::pdf::NewPage;
 use boardcast_board::spans::{span_at, Unit};
 use boardcast_board::speakers::{by_of_edge, by_of_node, first_seen, initial, said_at};
 use boardcast_board::steps::{clock, replay_to, Player};
-use gpui_kit::base::input::{Input, InputEvent, InputState, Textarea, TextareaState};
-use gpui_kit::base::slider::{Slider, SliderEvent, SliderIndicator, SliderState, SliderThumb, SliderTrack};
+use gpui_kit::base::input::{Textarea, TextareaState};
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::separator::Separator;
+use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
+use gpui_kit::component::switch::Switch;
+use gpui_kit::component::tag::Tag;
+use gpui_kit::component::toolbar::Toolbar;
+use gpui_kit::component::{Disableable, Selectable, Sizable};
 use gpui_kit::{
     canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, Entity, FillOptions, FocusHandle,
     Hsla, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PathBuilder, PathStyle, Pixels, Point, Render, RenderImage,
@@ -57,6 +65,11 @@ const TOOLBAR_W: f32 = 290.0;
 const TOOLBAR_W_WITH_UNITS: f32 = 520.0;
 const TOOLBAR_W_SPEAKER: f32 = 110.0;
 const TOOLBAR_H: f32 = 36.0;
+/// The width of what floats at the side, how far things float from the edge, and the room kept for the
+/// bars above and below the board.
+const SIDE_W: f32 = 340.0;
+const FLOAT_GAP: f32 = 12.0;
+const BAR_ROOM: f32 = 60.0;
 const JUMP_SHOWN: Duration = Duration::from_millis(2500);
 const JUMP_SCROLLING: Duration = Duration::from_millis(300);
 /// How far everything else fades while one speaker is traced.
@@ -188,6 +201,9 @@ struct Ink {
     /// The user zoomed or panned: new content must not move the view until they return to latest.
     reading: bool,
     canvas: Bounds<Pixels>,
+    /// What floats over each side of the canvas, as left, top, right and bottom. The whole board fits
+    /// between them, while the board still runs on underneath.
+    insets: [f32; 4],
     dpr: f32,
     zoomed_at: Instant,
     /// Bumped when finished strokes are removed, which invalidates a rendering in progress.
@@ -388,12 +404,24 @@ impl Ink {
 
     /// Fit everything: never above actual size, so a small board is not blown up.
     fn fit(&self) -> View {
-        let (w, h) = (f32::from(self.canvas.size.width).max(1.0), f32::from(self.canvas.size.height).max(1.0));
+        let [left, top, right, bottom] = self.insets;
+        let (w, h) = (f32::from(self.canvas.size.width), f32::from(self.canvas.size.height));
+        let (free_w, free_h) = ((w - left - right).max(1.0), (h - top - bottom).max(1.0));
         let e = &self.extent;
         let bw = (e.x1 - e.x0) as f32 + 120.0;
         let bh = (e.y1 - e.y0) as f32 + 120.0;
-        let k = (w / bw).min(h / bh).min(1.0);
-        View { k, x: (e.x0 + e.x1) as f32 / 2.0 - w / (2.0 * k), y: (e.y0 + e.y1) as f32 / 2.0 - h / (2.0 * k) }
+        let k = (free_w / bw).min(free_h / bh).min(1.0);
+        View { k, x: (e.x0 + e.x1) as f32 / 2.0 - (left + free_w / 2.0) / k, y: (e.y0 + e.y1) as f32 / 2.0 - (top + free_h / 2.0) / k }
+    }
+
+    /// The controls float somewhere new: unless the user chose the view, fit the board between them.
+    fn set_insets(&mut self, insets: [f32; 4]) {
+        if self.insets != insets {
+            self.insets = insets;
+            if !self.reading {
+                self.view = None;
+            }
+        }
     }
 
     fn shown(&self) -> View {
@@ -407,11 +435,12 @@ impl Ink {
         }
         let cur = self.shown();
         let (w, h) = (f32::from(self.canvas.size.width), f32::from(self.canvas.size.height));
+        let [left, top, right, bottom] = self.insets;
         let inside = self.extent.x1 > self.extent.x0
-            && next.x0 as f32 >= cur.x
-            && next.y0 as f32 >= cur.y
-            && next.x1 as f32 <= cur.x + w / cur.k
-            && next.y1 as f32 <= cur.y + h / cur.k;
+            && next.x0 as f32 >= cur.x + left / cur.k
+            && next.y0 as f32 >= cur.y + top / cur.k
+            && next.x1 as f32 <= cur.x + (w - right) / cur.k
+            && next.y1 as f32 <= cur.y + (h - bottom) / cur.k;
         let view = inside.then_some(cur);
         if view.map(|v| v.k) != self.view.map(|v| v.k) {
             self.zoomed_at = Instant::now();
@@ -805,6 +834,8 @@ struct Workbench {
     /// The speaker being looked at in the speakers panel, and the name being written for them.
     speaker_chosen: Option<String>,
     speaker_name: Entity<InputState>,
+    /// Whether the transcript is out. Other panels always show, and close back to it.
+    transcript_open: bool,
     /// The speaker under the pointer, whose contributions stand out on the board.
     speaker_hovered: Option<String>,
     transcript_scroll: gpui_kit::ScrollHandle,
@@ -2144,6 +2175,7 @@ impl Workbench {
             return;
         };
         self.panel = Panel::Transcript;
+        self.transcript_open = true;
         self.jumped_line = Some((line, Instant::now()));
         cx.notify();
     }
@@ -2193,11 +2225,11 @@ impl Workbench {
                 .p_1()
                 .rounded_md()
                 .cursor_pointer()
-                .when(chosen, |d| d.bg(rgb(0xec_ef_e7)))
+                .when(chosen, |d| d.bg(rgb(SELECTED)))
                 .child(speaker_badge(&names, name))
                 .child(div().flex_1().min_w_0().text_sm().child(name.clone()))
-                .when(self.speaker.as_deref() == Some(name.as_str()), |d| d.child(div().text_xs().text_color(rgb(0x28_61_43)).child(tr("next", "下一句"))))
-                .child(div().text_xs().text_color(rgb(0x85_8a_80)).child(format!("{lines} {}", tr("lines", "句"))))
+                .when(self.speaker.as_deref() == Some(name.as_str()), |d| d.child(div().text_xs().text_color(rgb(ACCENT)).child(tr("next", "下一句"))))
+                .child(div().text_xs().text_color(rgb(FAINT)).child(format!("{lines} {}", tr("lines", "句"))))
                 .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx)))
         }).collect::<Vec<_>>();
         let editing = self.speaker_chosen.clone().filter(|name| editable && names.contains(name)).map(|from| {
@@ -2221,11 +2253,10 @@ impl Workbench {
                 .flex()
                 .flex_col()
                 .gap_2()
-                .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(tr("New name", "新名字")))
-                // Left alone, an input takes all the height it can get.
-                .child(div().h(px(34.)).flex().items_center().px_2().rounded_md().border_1().border_color(rgb(0xdd_dd_d8)).child(Input::new(&self.speaker_name)))
-                .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(affects))
-                .when_some(notice, |d, text| d.child(div().text_xs().text_color(rgb(if merging { 0x80_53_00 } else { 0x62_66_5c })).child(text)))
+                .child(div().text_xs().text_color(rgb(MUTED)).child(tr("New name", "新名字")))
+                .child(Input::new(&self.speaker_name))
+                .child(div().text_xs().text_color(rgb(MUTED)).child(affects))
+                .when_some(notice, |d, text| d.child(div().text_xs().text_color(rgb(if merging { WARNING } else { MUTED })).child(text)))
                 .child(
                     div()
                         .flex()
@@ -2250,7 +2281,7 @@ impl Workbench {
             .flex_col()
             .gap_2()
             .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Speakers", "说话人")))
-            .when(names.is_empty(), |d| d.child(div().text_sm().text_color(rgb(0x85_8a_80)).child(tr("Nobody has spoken yet.", "还没有人说话。"))))
+            .when(names.is_empty(), |d| d.child(div().text_sm().text_color(rgb(FAINT)).child(tr("Nobody has spoken yet.", "还没有人说话。"))))
             .children(rows)
             .when_some(editing, |d, editing| d.child(editing))
     }
@@ -2286,19 +2317,8 @@ impl Workbench {
 
 /// The slider's parts are unstyled. The indicator spans the whole track because a position is measured
 /// against it, so the filled part is a child, and the tall track leaves room for a finger.
-fn replay_slider(state: &Entity<SliderState>, fraction: f32) -> impl IntoElement {
-    Slider::new(state).accessibility_label(tr("Replay progress", "回放进度")).flex_1().min_w_0().child(
-        SliderTrack::new(state).w_full().h(px(32.)).flex().items_center().cursor_pointer().child(
-            SliderIndicator::new(state)
-                .relative()
-                .w_full()
-                .h(px(6.))
-                .rounded_sm()
-                .bg(rgb(0xe4_e4_df))
-                .child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(0x28_61_43)))
-                .child(SliderThumb::new(state).absolute().top(px(-5.)).left(gpui_kit::relative(fraction)).ml(px(-8.)).size(px(16.)).rounded_full().bg(rgb(0x28_61_43))),
-        ),
-    )
+fn replay_slider(state: &Entity<SliderState>) -> impl IntoElement {
+    Slider::new(state).accessibility_label(tr("Replay progress", "回放进度")).flex_1().min_w_0()
 }
 
 /// A summary as it reads on screen. To-dos can be ticked when `tick` is given, with a target big
@@ -2312,8 +2332,8 @@ fn summary_blocks(text: &str, group: &'static str, tick: Option<&Context<Workben
             Block::Paragraph(text) => div().text_sm().child(text).into_any_element(),
             Block::Bullet(text) => div().flex().gap_2().text_sm().child(div().flex_shrink_0().child("•")).child(div().flex_1().min_w_0().child(text)).into_any_element(),
             Block::Todo { done, text, line } => {
-                let tick_box = div().flex_shrink_0().mt(px(3.)).size(px(16.)).rounded_sm().border_1().border_color(rgb(0x85_8a_80)).flex().items_center().justify_center().text_xs().text_color(rgb(0xff_ff_ff)).when(done, |d| d.bg(rgb(0x28_61_43)).border_color(rgb(0x28_61_43)).child("✓"));
-                let row = div().id((group, i)).flex().items_start().gap_2().py_1().min_h(px(32.)).text_sm().child(tick_box).child(div().flex_1().min_w_0().when(done, |d| d.text_color(rgb(0x85_8a_80)).line_through()).child(text));
+                let tick_box = div().flex_shrink_0().mt(px(3.)).size(px(16.)).rounded_sm().border_1().border_color(rgb(FAINT)).flex().items_center().justify_center().text_xs().text_color(rgb(ON_STRONG)).when(done, |d| d.bg(rgb(ACCENT)).border_color(rgb(ACCENT)).child("✓"));
+                let row = div().id((group, i)).flex().items_start().gap_2().py_1().min_h(px(32.)).text_sm().child(tick_box).child(div().flex_1().min_w_0().when(done, |d| d.text_color(rgb(FAINT)).line_through()).child(text));
                 match tick {
                     Some(cx) => row.cursor_pointer().on_click(cx.listener(move |this, _, _, cx| this.tick_todo(line, cx))).into_any_element(),
                     None => row.into_any_element(),
@@ -2343,11 +2363,9 @@ impl Workbench {
                 .px_3()
                 .h(px(48.))
                 .flex_shrink_0()
-                .border_t_1()
-                .border_color(rgb(0xdd_dd_d8))
                 .child(button("replay-toggle", if player.playing { tr("Pause", "暂停") } else { tr("Play", "播放") }).on_click(cx.listener(|this, _, _, cx| this.toggle_replay(cx))))
-                .child(replay_slider(&replay.slider, if player.total > 0 { player.at as f32 / player.total as f32 } else { 0.0 }))
-                .child(div().text_xs().whitespace_nowrap().text_color(rgb(0x62_66_5c)).child(time))
+                .child(replay_slider(&replay.slider))
+                .child(div().text_xs().whitespace_nowrap().text_color(rgb(MUTED)).child(time))
                 .child(button("replay-speed", format!("{}×", player.speed)).on_click(cx.listener(|this, _, _, cx| {
                     if let Some(replay) = &mut this.replay {
                         replay.player.next_speed();
@@ -2356,13 +2374,13 @@ impl Workbench {
                     cx.notify();
                 })))
                 .when(self.live.read_only.is_none(), |d| {
-                    d.child(button("replay-fork", tr("Fork a board", "另起一板")).whitespace_nowrap().when(!can_fork, |b| b.opacity(0.4)).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
+                    d.child(button("replay-fork", tr("Fork a board", "另起一板")).whitespace_nowrap().disabled(!can_fork).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
                 }),
         )
     }
 
     fn import_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
-        let hint = |text: &'static str| div().text_xs().text_color(rgb(0x62_66_5c)).child(text);
+        let hint = |text: &'static str| div().text_xs().text_color(rgb(MUTED)).child(text);
         let panel = div().id("import-panel").flex_1().overflow_y_scroll().p_3().flex().flex_col().gap_2();
         let can_add_here = self.live.read_only.is_none();
         match &self.import {
@@ -2392,16 +2410,16 @@ impl Workbench {
             ImportState::Ready(preview) => panel
                 .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(format!("{} · {} {}", preview.name, preview.pages.len(), tr("boards", "张板"))))
                 .child(hint(tr("Choose where to put them.", "选择放到哪里。")))
-                .children(preview.details.iter().map(|d| div().text_xs().text_color(rgb(0x80_53_00)).child(d.clone())))
+                .children(preview.details.iter().map(|d| div().text_xs().text_color(rgb(WARNING)).child(d.clone())))
                 .child(button("import-new", tr("New meeting", "新开一场会")).on_click(cx.listener(|this, _, _, cx| this.place_import(true, cx))))
                 .when(can_add_here, |d| d.child(button("import-here", tr("Add to this meeting", "加到这场会")).on_click(cx.listener(|this, _, _, cx| this.place_import(false, cx)))))
                 .child(button("import-cancel", tr("Cancel", "取消")).on_click(cx.listener(|this, _, _, cx| this.stop_import(cx)))),
             state => panel
-                .when_some(if let ImportState::Failed(error) = state { Some(error.clone()) } else { None }, |d, error| d.child(div().text_sm().text_color(rgb(0xa3_28_26)).child(error)))
+                .when_some(if let ImportState::Failed(error) = state { Some(error.clone()) } else { None }, |d, error| d.child(div().text_sm().text_color(rgb(DANGER)).child(error)))
                 .child(hint(tr("A PDF page or an image becomes a board, with its text in place to circle, link and note on during the meeting.", "PDF 的每一页或一张图片变成一张板，文字留在原位，开会时可以圈画、连线、写批注。")))
                 .child(button("pick-import", tr("Choose a file…", "选择文件…")).on_click(cx.listener(|this, _, _, cx| this.pick_import_file(cx))))
                 .child(hint(tr("You can also drop a file anywhere in this window.", "也可以把文件拖到窗口里。")))
-                .child(div().mt_2().text_xs().text_color(rgb(0x62_66_5c)).child(tr("An arXiv paper, by link or ID", "arXiv 论文的链接或编号")))
+                .child(div().mt_2().text_xs().text_color(rgb(MUTED)).child(tr("An arXiv paper, by link or ID", "arXiv 论文的链接或编号")))
                 .child(Input::new(&self.arxiv_input))
                 .child(button("import-arxiv", tr("Download and read", "下载并读取")).on_click(cx.listener(|this, _, window, cx| this.import_arxiv(window, cx)))),
         }
@@ -2427,11 +2445,11 @@ impl Workbench {
                 .min_h(px(48.))
                 .rounded_md()
                 .border_1()
-                .border_color(rgb(0xdd_dd_d8))
+                .border_color(rgb(LINE))
                 .when(!enabled, |d| d.opacity(0.4))
                 .when(enabled, |d| d.cursor_pointer().on_click(cx.listener(move |this, _, _, cx| this.start_export(kind, cx))))
                 .child(div().text_sm().child(if busy == Some(kind) { format!("{name} · {}", tr("Exporting…", "正在导出…")) } else { name.to_string() }))
-                .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(hint))
+                .child(div().text_xs().text_color(rgb(MUTED)).child(hint))
         });
         let result = self.exported.as_ref().map(|result| match result {
             Exported::Saved { path, text_left_out } => {
@@ -2442,14 +2460,14 @@ impl Workbench {
                     .gap_1()
                     .child(div().text_xs().child(format!("{} {}", tr("Saved to", "已保存到"), path.display())))
                     .when(*text_left_out, |d| {
-                        d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr(
+                        d.child(div().text_xs().text_color(rgb(WARNING)).child(tr(
                             "No usable font was found, so the summary and transcript are not in this PDF. Markdown has them.",
                             "没有找到可用的字体，这份 PDF 里没有摘要和会议记录。可以导出 Markdown 获取这些内容。",
                         )))
                     })
                     .child(button("reveal-export", tr("Show in folder", "在文件夹中显示")).on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&shown))))
             }
-            Exported::Failed(error) => div().text_xs().text_color(rgb(0xa3_28_26)).child(format!("{}{error}", tr("Could not export: ", "导出失败："))),
+            Exported::Failed(error) => div().text_xs().text_color(rgb(DANGER)).child(format!("{}{error}", tr("Could not export: ", "导出失败："))),
         });
         div()
             .id("export-panel")
@@ -2460,7 +2478,7 @@ impl Workbench {
             .flex_col()
             .gap_2()
             .when(self.live.read_only == Some(ViewOnly::ImportedContent), |d| {
-                d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("Free-edit content is not included.", "自由编辑内容不会导出。")))
+                d.child(div().text_xs().text_color(rgb(WARNING)).child(tr("Free-edit content is not included.", "自由编辑内容不会导出。")))
             })
             .children(rows)
             .when_some(result, |d, result| d.child(result))
@@ -2490,7 +2508,7 @@ impl Workbench {
             }
             _ => None,
         };
-        let notice = |t: &'static str| div().text_xs().text_color(rgb(0x80_53_00)).child(t);
+        let notice = |t: &'static str| div().text_xs().text_color(rgb(WARNING)).child(t);
         let actions = div()
             .flex()
             .flex_wrap()
@@ -2499,7 +2517,7 @@ impl Workbench {
                 Some(_) => d.child(button("stop-summary", tr("Stop", "停止生成")).on_click(cx.listener(|this, _, _, cx| this.stop_summary(cx)))),
                 None => d.child(
                     button("make-summary", if text.is_empty() { tr("Write summary", "生成摘要") } else { tr("Write again", "重新生成") })
-                        .when(!can_make, |b| b.opacity(0.4))
+                        .disabled(!can_make)
                         .when(can_make, |b| b.on_click(cx.listener(|this, _, _, cx| this.make_summary(cx)))),
                 ),
             })
@@ -2524,18 +2542,18 @@ impl Workbench {
             .flex_col()
             .gap_2()
             .child(actions)
-            .when_some(busy.clone(), |d, status| d.child(div().text_xs().text_color(rgb(0x62_66_5c)).child(status)))
-            .when_some(destination.filter(|_| editable && busy.is_none() && self.summary.draft.is_none()), |d, text| d.child(div().text_xs().text_color(rgb(0x85_8a_80)).child(text)))
-            .when_some(self.summary.note.clone(), |d, note| d.child(div().text_xs().text_color(rgb(0x62_66_5c)).child(note)))
+            .when_some(busy.clone(), |d, status| d.child(div().text_xs().text_color(rgb(MUTED)).child(status)))
+            .when_some(destination.filter(|_| editable && busy.is_none() && self.summary.draft.is_none()), |d, text| d.child(div().text_xs().text_color(rgb(FAINT)).child(text)))
+            .when_some(self.summary.note.clone(), |d, note| d.child(div().text_xs().text_color(rgb(MUTED)).child(note)))
             .when(stale, |d| d.child(notice(tr("The meeting has new content. Write the summary again to include it.", "会议有新内容，可重新生成摘要。"))))
             .when(self.summary.cleared.is_some(), |d| {
                 d.child(div().flex().items_center().gap_2().child(div().text_xs().child(tr("Summary deleted.", "摘要已删除。"))).child(button("undo-clear", tr("Undo", "撤销删除")).on_click(cx.listener(|this, _, _, cx| this.undo_clear(cx)))))
             })
             .when(busy.is_some() && !text.is_empty(), |d| d.child(notice(tr("Your current text stays here and can be edited while the new one is written.", "正在生成新摘要，当前草稿仍可查看和编辑。"))))
             .when(text.is_empty() && !self.summary.editing && busy.is_none() && self.summary.draft.is_none() && self.summary.cleared.is_none(), |d| {
-                d.child(div().text_sm().text_color(rgb(0x85_8a_80)).child(tr("Writes an editable draft from what was said: conclusions, decisions, to-dos and open questions.", "根据原话生成一份可编辑的摘要草稿：结论、决定、待办、待讨论。")))
+                d.child(div().text_sm().text_color(rgb(FAINT)).child(tr("Writes an editable draft from what was said: conclusions, decisions, to-dos and open questions.", "根据原话生成一份可编辑的摘要草稿：结论、决定、待办、待讨论。")))
             })
-            .when(self.summary.editing, |d| d.child(div().h(px(360.)).flex_shrink_0().rounded_md().border_1().border_color(rgb(0xdd_dd_d8)).p_2().text_sm().child(Textarea::new(&self.summary.editor))))
+            .when(self.summary.editing, |d| d.child(div().h(px(360.)).flex_shrink_0().rounded_md().border_1().border_color(rgb(LINE)).p_2().text_sm().child(Textarea::new(&self.summary.editor))))
             .children(reading)
             .when_some(proposed, |d, proposed| {
                 d.child(
@@ -2544,12 +2562,12 @@ impl Workbench {
                         .p_2()
                         .rounded_md()
                         .border_1()
-                        .border_color(rgb(0x28_61_43))
+                        .border_color(rgb(ACCENT))
                         .flex()
                         .flex_col()
                         .gap_2()
                         .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("New generated draft", "新生成的草稿")))
-                        .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(tr("Review this draft, then replace the current summary or keep your text.", "检查新草稿后，选择替换当前摘要或保留当前内容。")))
+                        .child(div().text_xs().text_color(rgb(MUTED)).child(tr("Review this draft, then replace the current summary or keep your text.", "检查新草稿后，选择替换当前摘要或保留当前内容。")))
                         .when(draft_stale, |d| d.child(notice(tr("The meeting has moved on since this draft was written.", "这份草稿生成之后，会议又有了新内容。"))))
                         .children(proposed)
                         .child(
@@ -2569,10 +2587,10 @@ impl Workbench {
 }
 
 /// A speaker's letter in their color, which follows the order people first spoke in.
-fn speaker_badge(speakers: &[String], name: &str) -> gpui_kit::Div {
+fn speaker_badge(speakers: &[String], name: &str) -> Tag {
     const COLORS: [(u32, u32); 6] = [(0xfc_d7_ea, 0xa6_1e_4d), (0xd6_e6_ff, 0x1c_4f_9c), (0xd4_f5_e7, 0x1f_7a_45), (0xfd_e8_c8, 0x9f_4f_0b), (0xe5_dc_ff, 0x5b_3c_c4), (0xe2_e8_f0, 0x47_55_69)];
     let (background, ink) = COLORS[speakers.iter().position(|s| s == name).unwrap_or(0) % COLORS.len()];
-    div().size(px(20.)).flex_shrink_0().flex().items_center().justify_center().rounded_full().text_xs().bg(rgb(background)).text_color(rgb(ink)).child(initial(name))
+    Tag::custom(rgb(background).into(), rgb(ink).into(), rgb(background).into()).xsmall().rounded(px(10.)).child(initial(name))
 }
 
 /// The highlighter that goes with a speaker's badge: the same hue, strong enough to show under ink.
@@ -2581,12 +2599,18 @@ fn speaker_marker(speakers: &[String], name: &str) -> u32 {
     MARKERS[speakers.iter().position(|s| s == name).unwrap_or(0) % MARKERS.len()]
 }
 
-fn button(id: &'static str, label: impl Into<gpui_kit::SharedString>) -> gpui_kit::Stateful<gpui_kit::Div> {
-    div().id(id).px_2().py_1().rounded_md().cursor_pointer().text_sm().border_1().border_color(rgb(0xdd_dd_d8)).child(label.into())
+fn button(id: impl Into<gpui_kit::ElementId>, label: impl Into<gpui_kit::SharedString>) -> Button {
+    Button::new(id).small().outline().label(label)
 }
 
-fn button_id(id: (&'static str, usize), label: impl Into<gpui_kit::SharedString>) -> gpui_kit::Stateful<gpui_kit::Div> {
-    div().id(id).px_2().py_1().rounded_md().cursor_pointer().text_sm().border_1().border_color(rgb(0xdd_dd_d8)).child(label.into())
+/// An icon that does something, named in a tooltip.
+fn icon_button(id: &'static str, name: &'static str, tooltip: &'static str) -> Button {
+    Button::new(id).small().ghost().icon(icon(name)).tooltip(tooltip)
+}
+
+/// A row of controls floating over the board.
+fn floating_bar(id: &'static str) -> Toolbar {
+    Toolbar::new(id).p_1().gap_1().rounded_lg().bg(rgb(SURFACE)).border_1().border_color(rgb(LINE)).shadow_md()
 }
 
 fn case_or_measurement(turns: &[Utterance], wav: &Option<PathBuf>, demo: &Option<String>, synthetic: Option<usize>) -> bool {
@@ -2681,10 +2705,8 @@ impl Render for Workbench {
         let listening = self.pipeline.listening();
         let mut board = div()
             .id("board")
-            .relative()
-            .flex_1()
-            .min_h_0()
-            .w_full()
+            .absolute()
+            .size_full()
             .overflow_hidden()
             .bg(rgb(PAPER))
             .on_scroll(cx.listener(move |_, e: &ScrollEvent, window, cx| {
@@ -2833,8 +2855,8 @@ impl Render for Workbench {
                     .px_1()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(0xdd_dd_d8))
-                    .bg(rgb(0xff_fe_fa))
+                    .border_color(rgb(LINE))
+                    .bg(rgb(SURFACE))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .when_some(raised.clone(), |d, who| {
@@ -2866,8 +2888,8 @@ impl Render for Workbench {
                                 .cursor_pointer()
                                 .text_xs()
                                 .border_1()
-                                .border_color(rgb(0xdd_dd_d8))
-                                .when(unit_now == unit, |d| d.bg(rgb(0xec_ef_e7)))
+                                .border_color(rgb(LINE))
+                                .when(unit_now == unit, |d| d.bg(rgb(SELECTED)))
                                 .child(label)
                                 .on_click(cx.listener(move |_, _, _, cx| {
                                     chooser.borrow_mut().mark_unit = unit;
@@ -2886,7 +2908,7 @@ impl Render for Workbench {
                             .rounded_sm()
                             .cursor_pointer()
                             .text_sm()
-                            .when(on, |d| d.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff)))
+                            .when(on, |d| d.bg(rgb(STRONG)).text_color(rgb(ON_STRONG)))
                             .child(label)
                             .on_click(cx.listener(move |this, _, _, cx| this.mark(&id, mark, cx)))
                     })),
@@ -2898,14 +2920,14 @@ impl Render for Workbench {
                 div()
                     .id("latest")
                     .absolute()
-                    .bottom(px(16.))
-                    .left(px(16.))
+                    .bottom(px(44.))
+                    .left(px(FLOAT_GAP))
                     .px_3()
                     .py_1()
                     .rounded_md()
                     .cursor_pointer()
-                    .bg(rgb(0x24_27_20))
-                    .text_color(rgb(0xff_ff_ff))
+                    .bg(rgb(STRONG))
+                    .text_color(rgb(ON_STRONG))
                     .text_sm()
                     .child(tr("Back to latest", "回到最新"))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -2928,25 +2950,73 @@ impl Render for Workbench {
             SaveState::Saved => tr("Saved", "已保存").into(),
             SaveState::Failed(_) => tr("Not saved", "保存失败").into(),
         };
-        let bar = div()
-            .flex()
-            .items_center()
-            .gap_2()
-            .px_3()
-            .h(px(44.))
-            .flex_shrink_0()
-            .border_b_1()
-            .border_color(rgb(0xdd_dd_d8))
-            .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).max_w(px(240.)).overflow_hidden().whitespace_nowrap().child(self.live.title().to_string()))
-            .child(div().text_xs().text_color(rgb(if matches!(self.save, SaveState::Failed(_)) { 0xa3_28_26 } else { 0x62_66_5c })).whitespace_nowrap().child(save_label))
-            .child(button("library", tr("Meetings", "会议")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
-            .child(button("new", tr("New", "新建")).when(self.store.is_some(), |d| d.on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
-            .child(button("summary", tr("Summary", "摘要")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
-            .child(button("import", tr("Import", "导入")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))))
-            .child(button("export", tr("Export", "导出")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
+        let side_shown = self.panel != Panel::Transcript || self.transcript_open;
+        let (right_inset, bottom_inset) = (if side_shown { SIDE_W + FLOAT_GAP * 2.0 } else { FLOAT_GAP }, BAR_ROOM);
+        self.ink.borrow_mut().set_insets([FLOAT_GAP, BAR_ROOM, right_inset, bottom_inset]);
+        let title_bar = floating_bar("title-bar")
+            .max_w(px(420.))
+            .content(div().pl_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).max_w(px(240.)).overflow_hidden().whitespace_nowrap().child(self.live.title().to_string()))
+            .when(!save_label.is_empty(), |d| d.content(div().px_1().text_xs().text_color(rgb(if matches!(self.save, SaveState::Failed(_)) { DANGER } else { FAINT })).whitespace_nowrap().child(save_label)))
+            .content(Separator::vertical().h(px(18.)).mx_1())
+            .child(icon_button("library", "folder-open", tr("Meetings", "会议")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
+            .child(icon_button("new", "file-plus", tr("New meeting", "新建会议")).when(self.store.is_some(), |d| d.on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
+            .when(pages > 1, |d| {
+                d.content(Separator::vertical().h(px(18.)).mx_1())
+                    .child(icon_button("previous", "chevron-left", tr("Previous board", "上一张板")).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx))))
+                    .content(div().text_sm().whitespace_nowrap().child(format!("{} / {pages}", page + 1)))
+                    .child(icon_button("next", "chevron-right", tr("Next board", "下一张板")).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx))))
+            });
+        let views_bar = floating_bar("views-bar")
+            .when_some(match &self.update {
+                UpdateState::Available(release) => Some(format!("{} {}", tr("Update to", "更新到"), release.version)),
+                UpdateState::ReadyToRestart(_) => Some(tr("Restart to update", "重启完成更新").to_string()),
+                _ => None,
+            }, |d, label| {
+                d.child(Button::new("update-chip").small().success().label(label).on_click(cx.listener(|this, _, _, cx| {
+                    if matches!(this.update, UpdateState::ReadyToRestart(_)) {
+                        this.restart(cx);
+                    } else {
+                        this.install_update(cx);
+                    }
+                })))
+            })
+            .child(icon_button("speakers", "users", tr("Speakers", "说话人")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Speakers, cx))))
+            .child(icon_button("settings", "settings", tr("Settings", "设置")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))))
+            .content(Separator::vertical().h(px(18.)).mx_1())
+            .child(icon_button("transcript-toggle", if self.transcript_open { "panel-right-close" } else { "panel-right-open" }, tr("Transcript", "转写")).on_click(cx.listener(|this, _, _, cx| {
+                if this.panel == Panel::Transcript {
+                    this.transcript_open = !this.transcript_open;
+                } else {
+                    this.panel = Panel::Transcript;
+                    this.transcript_open = true;
+                }
+                cx.notify();
+            })));
+        let dock = floating_bar("dock")
+            .when(editable, |d| {
+                // As content, since the toolbar turns the buttons it is given into plain commands.
+                d.content(
+                    Button::new("mic")
+                        .small()
+                        .icon(icon(if listening { "square" } else { "mic" }))
+                        .label(if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") })
+                        .when(listening, |b| b.danger())
+                        .when(!listening, |b| b.primary())
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.pipeline.toggle_mic();
+                            cx.notify();
+                        })),
+                )
+                .when(listening, |d| d.content(div().w(px(40.)).h(px(4.)).mx_1().rounded_sm().bg(rgb(TRACK)).child(div().h_full().rounded_sm().w(px(meter * 0.4)).bg(rgb(ACCENT)))))
+                .content(Separator::vertical().h(px(18.)).mx_1())
+            })
+            .child(icon_button("summary", "sparkles", tr("Summary", "摘要")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
+            .child(icon_button("import", "import", tr("Import", "导入")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))))
+            .child(icon_button("export", "file-down", tr("Export", "导出")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
             .child(
-                button("replay", if self.replay.is_some() { tr("Exit replay", "退出回放") } else { tr("Replay", "回放") })
-                    .when(self.live.steps.is_empty(), |b| b.opacity(0.4))
+                icon_button("replay", "rotate-ccw", if self.replay.is_some() { tr("Exit replay", "退出回放") } else { tr("Replay", "回放") })
+                    .selected(self.replay.is_some())
+                    .disabled(self.live.steps.is_empty())
                     .on_click(cx.listener(|this, _, window, cx| {
                         if this.replay.is_some() {
                             this.exit_replay(cx);
@@ -2956,52 +3026,27 @@ impl Render for Workbench {
                     })),
             )
             .when(editable, |d| {
-                d.child(
-                    div()
-                        .id("mic")
-                        .px_3()
-                        .py_1()
-                        .rounded_md()
-                        .cursor_pointer()
-                        .text_sm()
-                        .whitespace_nowrap()
-                        .text_color(rgb(0xff_ff_ff))
-                        .bg(rgb(if listening { 0xc7_44_32 } else { 0x24_27_20 }))
-                        .child(if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") })
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.pipeline.toggle_mic();
-                            cx.notify();
-                        })),
-                )
-                .child(div().w(px(60.)).h(px(6.)).rounded_sm().bg(rgb(0xe4_e4_df)).child(div().h_full().rounded_sm().w(px(meter * 0.6)).bg(rgb(0x28_61_43))))
-            })
-            .child(div().flex_1().overflow_hidden().whitespace_nowrap().text_xs().text_color(rgb(0x62_66_5c)).child(self.status.clone()))
-            .when(pages > 1, |d| {
-                d.child(button("previous", "‹").on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx))))
-                    .child(div().text_sm().whitespace_nowrap().child(format!("{} / {pages}", page + 1)))
-                    .child(button("next", "›").on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx))))
-            })
-            .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(format!("{:.0}%", zoom * 100.0)))
-            .when(editable, |d| {
-                d.child(button("undo", tr("Undo", "撤销")).when(!self.live.can_undo(), |b| b.opacity(0.4)).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
-                    .child(button("redo", tr("Redo", "重做")).when(!self.live.can_redo(), |b| b.opacity(0.4)).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
-                    .child(button("tidy", tr("Tidy", "整理排版")).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
-            })
-            .when_some(match &self.update {
-                UpdateState::Available(release) => Some(format!("{} {}", tr("Update to", "更新到"), release.version)),
-                UpdateState::ReadyToRestart(_) => Some(tr("Restart to update", "重启完成更新").to_string()),
-                _ => None,
-            }, |d, label| {
-                d.child(button("update-chip", label).bg(rgb(0x28_61_43)).text_color(rgb(0xff_ff_ff)).whitespace_nowrap().on_click(cx.listener(|this, _, _, cx| {
-                    if matches!(this.update, UpdateState::ReadyToRestart(_)) {
-                        this.restart(cx);
-                    } else {
-                        this.install_update(cx);
-                    }
-                })))
-            })
-            .child(button("speakers", tr("Speakers", "说话人")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Speakers, cx))))
-            .child(button("settings", tr("Settings", "设置")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))));
+                d.content(Separator::vertical().h(px(18.)).mx_1())
+                    .child(icon_button("undo", "undo-2", tr("Undo", "撤销")).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
+                    .child(icon_button("redo", "redo-2", tr("Redo", "重做")).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
+                    .child(icon_button("tidy", "wand-sparkles", tr("Tidy", "整理排版")).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
+            });
+        let status = div()
+            .max_w(px(280.))
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_2()
+            .h(px(24.))
+            .rounded_md()
+            .text_xs()
+            .text_color(rgb(FAINT))
+            .whitespace_nowrap()
+            .overflow_hidden()
+            .child(format!("{:.0}%", zoom * 100.0))
+            .child(self.status.clone());
+        // With the transcript away, the latest line still shows that the room is being heard.
+        let caption = self.live.lines.iter().rev().find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !side_shown && self.replay.is_none());
         let banner = self.notice.clone().or_else(|| match &self.save {
             SaveState::Failed(error) => Some(format!("{}{error}", tr("Your meeting is still open here, but it was not saved: ", "这场会还在这里，但没有保存成功："))),
             _ => None,
@@ -3047,13 +3092,13 @@ impl Render for Workbench {
                                 .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx))),
                         )
                     })
-                    .child(div().text_sm().when(manual, |d| d.text_color(rgb(0x85_8a_80))).child(l["text"].as_str().unwrap_or_default().to_string()))
+                    .child(div().text_sm().when(manual, |d| d.text_color(rgb(FAINT))).child(l["text"].as_str().unwrap_or_default().to_string()))
                     .when(!note.is_empty() && !manual, |d| {
-                        d.child(div().text_xs().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { 0xa3_28_26 } else { 0x85_8a_80 })).child(note))
+                        d.child(div().text_xs().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { DANGER } else { FAINT })).child(note))
                     })
             }));
         let library = div().id("library-list").flex_1().overflow_y_scroll().p_2().flex().flex_col().gap_1().when(self.library.is_empty(), |d| {
-            d.child(div().p_2().text_sm().text_color(rgb(0x85_8a_80)).child(tr("No meetings yet.", "还没有会议。")))
+            d.child(div().p_2().text_sm().text_color(rgb(FAINT)).child(tr("No meetings yet.", "还没有会议。")))
         });
         let library = library.children(self.library.iter().enumerate().map(|(i, m)| {
             let id = m.id.clone();
@@ -3067,12 +3112,12 @@ impl Render for Workbench {
                 .p_2()
                 .rounded_md()
                 .cursor_pointer()
-                .when(current, |d| d.bg(rgb(0xec_ef_e7)))
+                .when(current, |d| d.bg(rgb(SELECTED)))
                 .child(div().text_sm().overflow_hidden().whitespace_nowrap().child(m.title.clone()))
-                .child(div().text_xs().text_color(rgb(if m.read_error.is_some() { 0xa3_28_26 } else { 0x85_8a_80 })).child(detail))
+                .child(div().text_xs().text_color(rgb(if m.read_error.is_some() { DANGER } else { FAINT })).child(detail))
                 .when(m.read_error.is_none(), |d| d.on_click(cx.listener(move |this, _, _, cx| this.open_meeting(&id, cx))))
         }));
-        let field = |label: &'static str, input: &Entity<InputState>| div().flex().flex_col().gap_1().child(div().text_xs().text_color(rgb(0x62_66_5c)).child(label)).child(Input::new(input));
+        let field = |label: &'static str, input: &Entity<InputState>| div().flex().flex_col().gap_1().child(div().text_xs().text_color(rgb(MUTED)).child(label)).child(Input::new(input));
         let local_only = self.live.local_only();
         let current_model = boardcast_models::current(&self.models);
         let recommended = boardcast_models::recommended(self.vram_mib);
@@ -3114,14 +3159,14 @@ impl Render for Workbench {
                         .flex_1()
                         .min_w_0()
                         .child(div().text_sm().child(name))
-                        .when_some(model.note, |d, (en, zh)| d.child(div().text_xs().text_color(rgb(0x62_66_5c)).child(tr(en, zh)))),
+                        .when_some(model.note, |d, (en, zh)| d.child(div().text_xs().text_color(rgb(MUTED)).child(tr(en, zh)))),
                 )
-                .when(active, |d| d.child(div().text_xs().text_color(rgb(0x28_61_43)).child(tr("In use", "使用中"))))
+                .when(active, |d| d.child(div().text_xs().text_color(rgb(ACCENT)).child(tr("In use", "使用中"))))
                 .when(installed && !active, |d| {
-                    d.child(button_id(("use-model", i), tr("Use", "使用")).on_click(cx.listener(move |this, _, _, cx| this.use_model(&action, cx))))
+                    d.child(button(("use-model", i), tr("Use", "使用")).on_click(cx.listener(move |this, _, _, cx| this.use_model(&action, cx))))
                 })
                 .when(!installed && !busy, |d| {
-                    d.child(button_id(("get-model", i), tr("Download", "下载")).on_click(cx.listener(move |this, _, _, cx| this.start_download(fetch.clone(), cx))))
+                    d.child(button(("get-model", i), tr("Download", "下载")).on_click(cx.listener(move |this, _, _, cx| this.start_download(fetch.clone(), cx))))
                 })
         }).collect::<Vec<_>>();
         let forced = self.forced_backend;
@@ -3145,11 +3190,11 @@ impl Render for Workbench {
                 div()
                     .flex()
                     .gap_1()
-                    .child(button("use-local", tr("On this computer", "本机模型")).when(!self.form.remote, |b| b.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff))).on_click(cx.listener(|this, _, _, cx| {
+                    .child(button("use-local", tr("On this computer", "本机模型")).when(!self.form.remote, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| {
                         this.form.remote = false;
                         cx.notify();
                     })))
-                    .child(button("use-remote", tr("Remote", "远程模型")).when(self.form.remote, |b| b.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff))).on_click(cx.listener(|this, _, _, cx| {
+                    .child(button("use-remote", tr("Remote", "远程模型")).when(self.form.remote, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| {
                         this.form.remote = true;
                         cx.notify();
                     }))),
@@ -3157,7 +3202,7 @@ impl Render for Workbench {
             .when(!self.form.remote, |d| d.children(local_models))
             .when_some(progress_row, |d, (text, fraction)| {
                 d.child(div().text_xs().child(text))
-                    .child(div().h(px(6.)).w_full().rounded_sm().bg(rgb(0xe4_e4_df)).child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(0x28_61_43))))
+                    .child(div().h(px(6.)).w_full().rounded_sm().bg(rgb(TRACK)).child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(ACCENT))))
                     .child(button("stop-download", tr("Pause", "暂停")).on_click(cx.listener(|this, _, _, cx| {
                         if let Some(download) = &this.download {
                             download.cancel.store(true, Ordering::Relaxed);
@@ -3170,7 +3215,7 @@ impl Render for Workbench {
                 .child(field(tr("API address", "接口地址"), &self.form.base_url))
                 .child(field(tr("Model", "模型"), &self.form.model))
                 .child(field(tr("API key", "API key"), &self.form.key))
-                .child(div().text_xs().text_color(rgb(0x85_8a_80)).child(match key_hint {
+                .child(div().text_xs().text_color(rgb(FAINT)).child(match key_hint {
                     Some(hint) => format!("{} {hint}{}", tr("Saved key:", "已保存的 key："), tr(". Leave empty to keep it.", "。留空则继续使用。")),
                     None => tr("No key saved. It is stored only on this computer.", "还没有保存 key。key 只存在这台电脑上。").to_string(),
                 }))
@@ -3188,7 +3233,7 @@ impl Render for Workbench {
             })
             .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
             .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Updates", "更新")))
-            .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(format!("{} {}", tr("Version", "版本"), boardcast_update::VERSION)))
+            .child(div().text_xs().text_color(rgb(MUTED)).child(format!("{} {}", tr("Version", "版本"), boardcast_update::VERSION)))
             .child(match &self.update {
                 _ if self.prefix.is_none() => div().text_sm().child(tr("Updates apply to installed copies.", "只有安装版可以更新。")).into_any_element(),
                 UpdateState::Idle => button("check-update", tr("Check for updates", "检查更新")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
@@ -3196,7 +3241,7 @@ impl Render for Workbench {
                 UpdateState::UpToDate => div().flex().items_center().gap_2().child(div().text_sm().child(tr("Up to date.", "已是最新版本。"))).child(button("check-update", tr("Check again", "再次检查")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); }))).into_any_element(),
                 UpdateState::Available(release) => div().flex().flex_col().gap_2()
                     .child(div().text_sm().child(format!("{} {} · {}", tr("New version", "新版本"), release.version, gigabytes(release.size))))
-                    .when(!release.notes.is_empty(), |d| d.child(div().text_xs().text_color(rgb(0x62_66_5c)).child(release.notes.clone())))
+                    .when(!release.notes.is_empty(), |d| d.child(div().text_xs().text_color(rgb(MUTED)).child(release.notes.clone())))
                     .child(button("install-update", tr("Download and install", "下载并安装")).on_click(cx.listener(|this, _, _, cx| this.install_update(cx))))
                     .into_any_element(),
                 UpdateState::Installing { release, progress } => {
@@ -3206,7 +3251,7 @@ impl Render for Workbench {
                     let fraction = progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
                     div().flex().flex_col().gap_1()
                         .child(div().text_xs().child(format!("{} {text}", release.version)))
-                        .child(div().h(px(6.)).w_full().rounded_sm().bg(rgb(0xe4_e4_df)).child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(0x28_61_43))))
+                        .child(div().h(px(6.)).w_full().rounded_sm().bg(rgb(TRACK)).child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(ACCENT))))
                         .into_any_element()
                 }
                 UpdateState::ReadyToRestart(release) => div().flex().flex_col().gap_2()
@@ -3214,7 +3259,7 @@ impl Render for Workbench {
                     .child(button("restart-update", tr("Save and restart", "保存并重启")).on_click(cx.listener(|this, _, _, cx| this.restart(cx))))
                     .into_any_element(),
                 UpdateState::Failed(error) => div().flex().flex_col().gap_2()
-                    .child(div().text_sm().text_color(rgb(0xa3_28_26)).child(error.clone()))
+                    .child(div().text_sm().text_color(rgb(DANGER)).child(error.clone()))
                     .child(button("check-update", tr("Try again", "重试")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })))
                     .into_any_element(),
             })
@@ -3226,39 +3271,47 @@ impl Render for Workbench {
                     .justify_between()
                     .gap_2()
                     .child(div().flex_1().min_w_0().text_sm().child(tr("Tell speakers apart by voice", "按声音区分说话人")))
-                    .child(button("diarize", if self.form.saved.diarize { tr("On", "开") } else { tr("Off", "关") }).when(self.form.saved.diarize, |b| b.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff))).on_click(cx.listener(|this, _, _, cx| {
-                        this.form.saved.diarize = !this.form.saved.diarize;
+                    .child(Switch::new("diarize").checked(self.form.saved.diarize).accessibility_label(tr("Tell speakers apart by voice", "按声音区分说话人")).on_click(cx.listener(|this, checked: &bool, _, cx| {
+                        this.form.saved.diarize = *checked;
                         if let Err(e) = this.form.saved.save() {
                             this.form.note = Some(format!("{e:#}"));
                         }
                         cx.notify();
                     }))),
             )
-            .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(tr(
+            .child(div().text_xs().text_color(rgb(MUTED)).child(tr(
                 "New voices are named A, B, C in order. Click a speaker to give them a real name, and the same voice keeps it. Voice data stays in the meeting file on this device. Very short sentences go to whoever spoke last.",
                 "新的声音按 A、B、C 命名。点说话人可以改成真名，同一个声音之后都用这个名字。声纹只保存在本机的会议文件里。很短的句子会算给上一个说话的人。",
             )))
-            .when(forced, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
-            .when(local_only, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
+            .when(forced, |d| d.child(div().text_xs().text_color(rgb(WARNING)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
+            .when(local_only, |d| d.child(div().text_xs().text_color(rgb(WARNING)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
         let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
         let import_panel = (self.panel == Panel::Import).then(|| self.import_panel(cx));
         let speakers_panel = (self.panel == Panel::Speakers).then(|| self.speakers_panel(editable, cx));
         let side = div()
-            .w(px(320.))
-            .h_full()
+            .id("side")
+            .occlude()
+            .absolute()
+            .top(px(BAR_ROOM))
+            .right(px(FLOAT_GAP))
+            .bottom(px(FLOAT_GAP))
+            .w(px(SIDE_W))
             .flex()
             .flex_col()
-            .flex_shrink_0()
-            .border_l_1()
-            .border_color(rgb(0xdd_dd_d8))
+            .overflow_hidden()
+            .rounded_lg()
+            .bg(rgb(SURFACE))
+            .border_1()
+            .border_color(rgb(LINE))
+            .shadow_md()
             .when(self.panel == Panel::Transcript, |d| {
                 d.child(transcript).when(editable, |d| {
                     d.child(
                         div()
                             .p_3()
                             .border_t_1()
-                            .border_color(rgb(0xdd_dd_d8))
+                            .border_color(rgb(LINE))
                             .flex()
                             .flex_col()
                             .gap_1()
@@ -3272,7 +3325,7 @@ impl Render for Workbench {
                                         .gap_1()
                                         .cursor_pointer()
                                         .text_xs()
-                                        .text_color(rgb(0x62_66_5c))
+                                        .text_color(rgb(MUTED))
                                         .child(speaker_badge(&speakers, &name))
                                         .child(format!("{}{name}", tr("Typing as ", "输入身份：")))
                                         .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx))),
@@ -3288,20 +3341,52 @@ impl Render for Workbench {
             .when_some(import_panel, |d, panel| d.child(panel))
             .when_some(speakers_panel, |d, panel| d.child(panel))
             .when(self.panel == Panel::Settings, |d| d.child(settings));
+        // Over the board, where a message can't be missed, and never on top of the controls.
+        let notices = (view_only.is_some() || banner.is_some()).then(|| {
+            div()
+                .absolute()
+                .top(px(BAR_ROOM))
+                .left_0()
+                .right(px(right_inset))
+                .flex()
+                .flex_col()
+                .items_center()
+                .gap_1()
+                .when_some(view_only, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().bg(rgb(SELECTED)).border_1().border_color(rgb(LINE)).child(text)))
+                .when_some(banner, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().text_color(rgb(DANGER)).bg(rgb(DANGER_SOFT)).border_1().border_color(rgb(LINE)).child(text)))
+        });
         div()
             .id("workbench")
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
             .on_drop(cx.listener(|this, paths: &gpui_kit::ExternalPaths, _, cx| this.import_paths(paths.paths(), cx)))
+            .relative()
             .size_full()
-            .flex()
-            .flex_col()
-            .bg(rgb(0xff_fe_fa))
+            .bg(rgb(PAPER))
             .text_color(rgb(INK_RGB))
-            .child(bar)
-            .when_some(view_only, |d, text| d.child(div().px_3().py_1().flex_shrink_0().text_sm().bg(rgb(0xec_ef_e7)).child(text)))
-            .when_some(banner, |d, text| d.child(div().px_3().py_1().flex_shrink_0().text_sm().text_color(rgb(0xa3_28_26)).bg(rgb(0xfb_ec_ea)).child(text)))
-            .child(div().flex_1().flex().min_h_0().child(div().flex_1().min_w_0().h_full().flex().flex_col().child(board).when_some(replay_bar, |d, bar| d.child(bar))).child(side))
+            .child(board)
+            .child(div().absolute().top(px(FLOAT_GAP)).left(px(FLOAT_GAP)).occlude().child(title_bar))
+            .child(div().absolute().top(px(FLOAT_GAP)).right(px(FLOAT_GAP)).occlude().child(views_bar))
+            .child(div().absolute().bottom(px(FLOAT_GAP)).left(px(FLOAT_GAP)).child(status))
+            .child(
+                // Centered on the part of the board that is showing, with what belongs to it above.
+                div()
+                    .absolute()
+                    .bottom(px(FLOAT_GAP))
+                    .left_0()
+                    .right(px(right_inset))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap_2()
+                    .when_some(caption, |d, text| {
+                        d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().bg(rgb(STRONG)).text_color(rgb(ON_STRONG)).text_sm().overflow_hidden().whitespace_nowrap().child(text))
+                    })
+                    .when_some(replay_bar, |d, bar| d.child(div().occlude().w(px(560.)).rounded_lg().bg(rgb(SURFACE)).border_1().border_color(rgb(LINE)).shadow_md().child(bar)))
+                    .child(div().occlude().child(dock)),
+            )
+            .when_some(notices, |d, notices| d.child(notices))
+            .when(side_shown, |d| d.child(side))
     }
 }
 
@@ -3391,8 +3476,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     };
     let pipeline = Pipeline::start(backend, guidance, resources.voice, Script { turns, wav });
     let vram_mib = boardcast_agent::list_gpus(&binaries).iter().filter(|g| g.discrete).map(|g| g.total_mib).max().unwrap_or(0);
-    gpui_kit::application().with_assets(gpui_kit::assets::Assets).run(move |cx: &mut App| {
+    gpui_kit::application().with_assets(theme::Assets).run(move |cx: &mut App| {
         gpui_kit::init(cx);
+        theme::apply(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::new(point(px(0.), px(0.)), size(px(1280.), px(800.))))),
             titlebar: Some(gpui_kit::TitlebarOptions { title: Some("boardcast".into()), ..Default::default() }),
@@ -3415,6 +3501,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             next_tidy_batch: 0,
             targets: vec![],
             ink_boxes: vec![],
+            insets: [0.0; 4],
             trace: None,
             selected: None,
             selected_at: None,
@@ -3460,7 +3547,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             }
         })
         .detach();
-        cx.open_window(options, move |window, cx| {
+        gpui_kit::open_window(options, cx, move |window, cx| {
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Type a line, Enter puts it on the board", "输入一句话，回车上板")));
             let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
             let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
@@ -3524,6 +3611,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     speaker: None,
                     speaker_chosen: None,
                     speaker_name,
+                    transcript_open: true,
                     speaker_hovered: None,
                     transcript_scroll: gpui_kit::ScrollHandle::new(),
                     jumped_line: None,

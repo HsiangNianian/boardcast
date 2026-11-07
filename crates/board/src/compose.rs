@@ -164,13 +164,32 @@ fn route_cost(curve: &[Pt], from: &str, to: &str, text: &[(String, Area)], lines
     (over_text, along)
 }
 
+/// How far each of two opposite connections keeps to its own side, and how little it curves. Bowed
+/// from the same two points they would close into a sliver with their arrowheads on top of each other.
+const TWO_WAY_SIDE: f32 = 13.0;
+const TWO_WAY_BEND: f32 = 0.03;
+
+/// The straight way between two things, moved to its own side: its right as it travels, so that the
+/// opposite connection, travelling the other way, takes the other side by itself.
+fn to_one_side(p0: Pt, p1: Pt) -> (Pt, Pt) {
+    let len = (p1[0] - p0[0]).hypot(p1[1] - p0[1]).max(1.0);
+    let (nx, ny) = (-(p1[1] - p0[1]) / len * TWO_WAY_SIDE, (p1[0] - p0[0]) / len * TWO_WAY_SIDE);
+    ([p0[0] + nx, p0[1] + ny], [p1[0] + nx, p1[1] + ny])
+}
+
 /// A hand draws a connection around what is written: the plain bow if that is clear, which also keeps
 /// a board from rearranging itself, or otherwise the clearest of other sides and curves.
-fn clear_bow(a: &Rect, b: &Rect, from: &str, to: &str, text: &[(String, Area)], lines: &[Vec<Pt>]) -> Bow {
+fn clear_bow(a: &Rect, b: &Rect, from: &str, to: &str, two_way: bool, text: &[(String, Area)], lines: &[Vec<Pt>]) -> Bow {
     const BENDS: [f32; 6] = [0.15, -0.15, 0.3, -0.3, 0.5, -0.5];
     let (a, b) = (area(a), area(b));
     let (ca, cb) = ([a.x + a.w / 2.0, a.y + a.h / 2.0], [b.x + b.w / 2.0, b.y + b.h / 2.0]);
-    let plain = bow(edge_point(a, ca, cb), edge_point(b, cb, ca), BENDS[0]);
+    let (start, end) = (edge_point(a, ca, cb), edge_point(b, cb, ca));
+    let plain = if two_way {
+        let (p0, p1) = to_one_side(start, end);
+        bow(p0, p1, TWO_WAY_BEND)
+    } else {
+        bow(start, end, BENDS[0])
+    };
     let mut best_cost = route_cost(&plain.curve, from, to, text, lines);
     if best_cost == (0, 0) {
         return plain;
@@ -566,14 +585,15 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
             }
             continue;
         }
-        let Bow { curve, mid, p0, p1 } = clear_bow(a, b, from, to, &text_areas, &lines);
+        let two_way = l.links.iter().any(|(f, t, r)| f == to && t == from && r.is_none());
+        let Bow { curve, mid, p0, p1 } = clear_bow(a, b, from, to, two_way, &text_areas, &lines);
         let len = (p1[0] - p0[0]).hypot(p1[1] - p0[1]).max(1.0);
         c.add(key.clone(), INK, 1.0, false, plain(arrow(&curve, &mut r)), pen_for(font) * 0.9);
         lines.push(curve.clone());
         if let Some(t) = &e.label {
             let on = [(p0[0] + 2.0 * mid[0] + p1[0]) / 4.0, (p0[1] + 2.0 * mid[1] + p1[1]) / 4.0];
             let (nx, ny) = (-(p1[1] - p0[1]) / len, (p1[0] - p0[0]) / len);
-            labels.push(Label { key: format!("{key}l"), text: t.clone(), route: curve, prefer: vec![[on[0] + nx * 22.0 - 12.0, on[1] + ny * 22.0 - 10.0]], fixed: None });
+            labels.push(Label { key: format!("{key}l"), text: t.clone(), route: curve, prefer: if two_way { vec![] } else { vec![[on[0] + nx * 22.0 - 12.0, on[1] + ny * 22.0 - 10.0]] }, fixed: None });
         }
     }
 
@@ -657,7 +677,7 @@ mod tests {
             let (cx, cy) = ([x.x + x.w / 2.0, x.y + x.h / 2.0], [y.x + y.w / 2.0, y.y + y.h / 2.0]);
             let drawn = bow(edge_point(x, cx, cy), edge_point(y, cy, cx), 0.15);
             plain += usize::from(route_cost(&drawn.curve, from, to, &text, &[]).0 > 0);
-            let picked = clear_bow(a, b, from, to, &text, &lines);
+            let picked = clear_bow(a, b, from, to, false, &text, &lines);
             chosen += usize::from(route_cost(&picked.curve, from, to, &text, &[]).0 > 0);
             lines.push(picked.curve);
         }
@@ -678,20 +698,33 @@ mod tests {
         let plain = bow(edge_point(x, cx, cy), edge_point(y, cy, cx), 0.15);
         assert!(route_cost(&plain.curve, "top", "below", &text, &[]).0 > 0, "the case must start out crossing");
 
-        let chosen = clear_bow(&top, &below, "top", "below", &text, &[]);
+        let chosen = clear_bow(&top, &below, "top", "below", false, &text, &[]);
         assert_eq!(route_cost(&chosen.curve, "top", "below", &text, &[]).0, 0);
 
         // The way back keeps off the first line rather than lying along it.
-        let back = clear_bow(&below, &top, "below", "top", &text, &[chosen.curve.clone()]);
+        let back = clear_bow(&below, &top, "below", "top", false, &text, &[chosen.curve.clone()]);
         assert_eq!(route_cost(&back.curve, "below", "top", &text, &[chosen.curve]), (0, 0));
     }
 
+    /// From a report: two opposite arrows between neighbours closed into an unreadable sliver.
+    #[test]
+    fn opposite_connections_run_apart_all_the_way() {
+        let (left, right) = (rect("left", 0.0, 0.0, 100.0, 40.0), rect("right", 230.0, 0.0, 100.0, 40.0));
+        let out = clear_bow(&left, &right, "left", "right", true, &[], &[]);
+        let back = clear_bow(&right, &left, "right", "left", true, &[], &[out.curve.clone()]);
+        for p in &out.curve {
+            let nearest = back.curve.iter().map(|q| (p[0] - q[0]).hypot(p[1] - q[1])).fold(f32::MAX, f32::min);
+            assert!(nearest >= 20.0, "{nearest} apart at {p:?}");
+        }
+    }
+
+    #[test]
     #[test]
     fn a_clear_connection_is_left_as_it_was_so_the_board_stays_put() {
         let (left, right) = (rect("left", 0.0, 0.0, 100.0, 40.0), rect("right", 400.0, 0.0, 100.0, 40.0));
         let (x, y) = (area(&left), area(&right));
         let (cx, cy) = ([x.x + x.w / 2.0, x.y + x.h / 2.0], [y.x + y.w / 2.0, y.y + y.h / 2.0]);
-        assert_eq!(clear_bow(&left, &right, "left", "right", &[], &[]).curve, bow(edge_point(x, cx, cy), edge_point(y, cy, cx), 0.15).curve);
+        assert_eq!(clear_bow(&left, &right, "left", "right", false, &[], &[]).curve, bow(edge_point(x, cx, cy), edge_point(y, cy, cx), 0.15).curve);
     }
 
     #[test]

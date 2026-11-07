@@ -89,7 +89,8 @@ impl Provider {
                 }
                 body
             }
-            Self::Local { .. } => json!({ "model": "local", "messages": messages, "temperature": 0.2, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": false } }),
+            // Left to itself a small model can fall into repeating the same few lines until it runs out of room.
+            Self::Local { .. } => json!({ "model": "local", "messages": messages, "temperature": 0.2, "repeat_penalty": 1.15, "repeat_last_n": 256, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": false } }),
             #[cfg(test)]
             Self::Scripted(reply) => {
                 let said = messages.last().and_then(|m| m["content"].as_str()).unwrap_or_default().to_string();

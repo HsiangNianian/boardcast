@@ -3,7 +3,7 @@
 
 use crate::store::{new_id, Loaded, Origin};
 use boardcast_board::graph::{Graph, Kind};
-use boardcast_board::speakers::{identify, raised_by, rename_by, rename_by_in_steps, rename_voice, Voice};
+use boardcast_board::speakers::{identify_sentence, raised_by, rename_by, rename_by_in_steps, rename_voice, Voice};
 use boardcast_board::steps::{diff, ink_only, replay};
 use serde_json::{json, Map, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -306,14 +306,15 @@ impl Live {
         self.touch();
     }
 
-    /// Whose voice this is. The voice joins the ones this meeting has heard, so it keeps its name.
-    pub fn identify_voice(&mut self, voiceprint: &[f32]) -> String {
+    /// Whose voice this is, joining the ones this meeting has heard so that it keeps its name. `None` if
+    /// the sentence is too short to name someone new.
+    pub fn identify_voice(&mut self, voiceprint: &[f32], seconds: f64) -> Option<String> {
         let print: Vec<f64> = voiceprint.iter().map(|x| f64::from(*x)).collect();
         let taken: Vec<&str> = self.lines.iter().filter_map(|l| l["speaker"].as_str()).collect();
-        let name = identify(&mut self.voices, &print, &taken);
+        let name = identify_sentence(&mut self.voices, &print, seconds, &taken)?;
         self.voices_changed = true;
         self.touch();
-        name
+        Some(name)
     }
 
     /// Everyone in this meeting, in the order they first spoke.
@@ -788,9 +789,9 @@ mod tests {
         let mut live = Live::new();
         live.add_line(Some("A"), "手写的名字", None);
         let (one, other) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
-        assert_eq!(live.identify_voice(&one), "B");
-        assert_eq!(live.identify_voice(&other), "C");
-        assert_eq!(live.identify_voice(&one), "B");
+        assert_eq!(live.identify_voice(&one, 3.0).unwrap(), "B");
+        assert_eq!(live.identify_voice(&other, 3.0).unwrap(), "C");
+        assert_eq!(live.identify_voice(&one, 3.0).unwrap(), "B");
         assert_eq!(live.speakers(), ["A", "B", "C"]);
     }
 
@@ -798,7 +799,7 @@ mod tests {
     fn a_new_name_reaches_every_page_step_and_undo_and_stays_with_the_voice() {
         let mut live = Live::new();
         let print = [1.0, 0.0];
-        let name = live.identify_voice(&print);
+        let name = live.identify_voice(&print, 3.0).unwrap();
         live.add_line(Some(&name), "网关", None);
         live.model_drew(&[(Some(name.clone()), "网关".into())], board_by(&name), Value::Null, "", 1);
         live.add_pages(vec![(board_by("别人"), "asset:a.jpg".into())], "导入了");
@@ -822,29 +823,29 @@ mod tests {
         live.go_to_page(0);
         assert_eq!(said_by(&live.graph), [Some("李工")]);
         // The same voice now answers to the new name.
-        assert_eq!(live.identify_voice(&print), "李工");
+        assert_eq!(live.identify_voice(&print, 3.0).unwrap(), "李工");
     }
 
     #[test]
     fn taking_a_name_in_use_joins_the_two_voices() {
         let mut live = Live::new();
-        let (a, b) = (live.identify_voice(&[1.0, 0.0]), live.identify_voice(&[0.0, 1.0]));
+        let (a, b) = (live.identify_voice(&[1.0, 0.0], 3.0).unwrap(), live.identify_voice(&[0.0, 1.0], 3.0).unwrap());
         live.add_line(Some(&a), "一", None);
         live.add_line(Some(&b), "二", None);
         live.rename_speaker(&a, &b);
         assert_eq!(live.speakers(), [b.as_str()]);
         assert_eq!(live.speaker_impact(&b).0, 2);
-        assert_eq!(live.identify_voice(&[1.0, 1.0]), b);
+        assert_eq!(live.identify_voice(&[1.0, 1.0], 3.0).unwrap(), b);
     }
 
     #[test]
     fn voices_are_kept_in_the_file_and_left_as_written_until_changed() {
         let mut live = Live::new();
-        live.identify_voice(&[1.0, 0.0]);
+        live.identify_voice(&[1.0, 0.0], 3.0).unwrap();
         let written = live.snapshot();
         assert_eq!(written["voices"][0]["name"], "A");
         let mut again = Live::build(written, Origin::Current, 1);
-        assert_eq!(again.identify_voice(&[1.0, 0.0]), "A");
+        assert_eq!(again.identify_voice(&[1.0, 0.0], 3.0).unwrap(), "A");
         let strange = Live::build(json!({ "id": "x", "voices": [1] }).as_object().unwrap().clone(), Origin::Current, 1).snapshot();
         assert_eq!(strange["voices"], json!([1]));
     }

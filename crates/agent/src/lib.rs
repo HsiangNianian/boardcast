@@ -268,9 +268,18 @@ fn pick_gpu(gpus: &[Gpu]) -> Option<String> {
     gpus.iter().filter(|g| g.discrete).max_by_key(|g| g.total_mib).or_else(|| gpus.first()).map(|g| g.id.clone())
 }
 
-/// The same launch arguments as the older app. The child dies with the thread that started it.
-fn spawn_llama(server: &LocalServer, device: Option<&str>, port: u16, projector: Option<&std::path::Path>) -> Result<Child> {
+fn is_discrete(gpus: &[Gpu], device: Option<&str>) -> bool {
+    gpus.iter().any(|g| g.discrete && Some(g.id.as_str()) == device)
+}
+
+/// The same launch arguments as the older app.
+fn llama_command(server: &LocalServer, device: Option<&str>, discrete: bool, port: u16, projector: Option<&std::path::Path>) -> Command {
     let mut cmd = server_command(&server.binaries);
+    if discrete {
+        // Without this the CPU copies the model into graphics memory across the bus itself, which took 80 s
+        // on an RTX 3060 Laptop. This way the card fetches it, in under 2 s.
+        cmd.env("GGML_VK_DISABLE_HOST_VISIBLE_VIDMEM", "1");
+    }
     if let Some(projector) = projector {
         cmd.arg("--mmproj").arg(projector);
     }
@@ -285,6 +294,12 @@ fn spawn_llama(server: &LocalServer, device: Option<&str>, port: u16, projector:
         Some(device) => cmd.args(["--device", device, "-ngl", "auto", "--fit", "on", "-fa", "auto"]),
         None => cmd.args(["--device", "none", "-ngl", "0"]),
     };
+    cmd
+}
+
+/// The child dies with the thread that started it.
+fn spawn_llama(server: &LocalServer, device: Option<&str>, discrete: bool, port: u16, projector: Option<&std::path::Path>) -> Result<Child> {
+    let mut cmd = llama_command(server, device, discrete, port, projector);
     // SAFETY: prctl is async-signal-safe and touches no parent state between fork and exec.
     unsafe {
         cmd.pre_exec(|| {
@@ -299,15 +314,16 @@ fn spawn_llama(server: &LocalServer, device: Option<&str>, port: u16, projector:
 fn start_llama(server: &LocalServer) -> Result<(Child, String)> {
     let base = format!("http://127.0.0.1:{LLAMA_PORT}");
     let health = format!("{base}/health");
-    let device = pick_gpu(&list_gpus(&server.binaries));
-    let mut child = spawn_llama(server, device.as_deref(), LLAMA_PORT, None)?;
+    let gpus = list_gpus(&server.binaries);
+    let device = pick_gpu(&gpus);
+    let mut child = spawn_llama(server, device.as_deref(), is_discrete(&gpus, device.as_deref()), LLAMA_PORT, None)?;
     match wait_until_up(&health, &mut child) {
         Ok(()) => Ok((child, base)),
         Err(first) if device.is_some() => {
             eprintln!("local model did not start on {device:?}: {first:#}; trying the CPU");
             let _ = child.kill();
             let _ = child.wait();
-            let mut child = spawn_llama(server, None, LLAMA_PORT, None)?;
+            let mut child = spawn_llama(server, None, false, LLAMA_PORT, None)?;
             wait_until_up(&health, &mut child)?;
             Ok((child, base))
         }
@@ -611,6 +627,18 @@ mod tests {
         assert_eq!(pick_gpu(&gpus[..1]).as_deref(), Some("Vulkan0"));
         assert_eq!(pick_gpu(&[]), None, "no graphics device means the CPU");
         assert!(parse_devices("Available devices:\n").is_empty());
+    }
+
+    #[test]
+    fn a_discrete_card_fetches_the_model_itself() {
+        let server = LocalServer { binaries: "bin".into(), model: "m.gguf".into() };
+        let asks = |discrete| llama_command(&server, Some("Vulkan1"), discrete, 1, None).get_envs().any(|(k, _)| k == "GGML_VK_DISABLE_HOST_VISIBLE_VIDMEM");
+        assert!(asks(true));
+        assert!(!asks(false));
+        let gpus = [Gpu { id: "Vulkan0".into(), name: "Intel".into(), total_mib: 8000, discrete: false }, Gpu { id: "Vulkan1".into(), name: "NVIDIA".into(), total_mib: 6000, discrete: true }];
+        assert!(is_discrete(&gpus, Some("Vulkan1")));
+        assert!(!is_discrete(&gpus, Some("Vulkan0")));
+        assert!(!is_discrete(&gpus, None));
     }
 
     #[test]

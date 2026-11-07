@@ -81,13 +81,20 @@ pub struct Inked {
     pub center: Stroke,
     pub width: f32,
     pub length: f32,
+    /// A highlighter: a flat tip of one width from end to end, rather than a pen that responds to speed.
+    pub flat: bool,
 }
 
 pub fn ink(points: &[Pt], width: f32, wobble_amp: f32, r: &mut Rng) -> Inked {
     let mut center = densify(points, width * 0.3);
     wobble(&mut center, wobble_amp, r);
     let length = center.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum();
-    Inked { center, width, length }
+    Inked { center, width, length, flat: false }
+}
+
+/// A pass of a highlighter along these points.
+pub fn marker(points: &[Pt], width: f32, wobble_amp: f32, r: &mut Rng) -> Inked {
+    Inked { flat: true, ..ink(points, width, wobble_amp, r) }
 }
 
 const THINNING: f32 = 0.32;
@@ -115,6 +122,10 @@ pub fn outline(s: &Inked, upto: f32) -> Vec<Pt> {
     if pts.len() < 2 {
         let c = pts.first().copied().unwrap_or([0.0, 0.0]);
         return circle(c, s.width * 0.5);
+    }
+
+    if s.flat {
+        return flat_outline(&pts, s.width * 0.5);
     }
 
     let taper = if s.length > s.width * 5.0 { (s.width * 2.0).min(s.length * 0.2) } else { 0.0 };
@@ -152,6 +163,27 @@ pub fn outline(s: &Inked, upto: f32) -> Vec<Pt> {
     out.extend(right.iter().rev());
     cap(&mut out, pts[0], start_radius.min(s.width * 0.5), start_heading + std::f32::consts::PI);
     out
+}
+
+/// The band a flat tip leaves: both edges waver a little on their own, and the tip is held at a slant, so
+/// the ends are cut at an angle rather than rounded.
+fn flat_outline(pts: &[Pt], radius: f32) -> Vec<Pt> {
+    let slant = radius * 0.45;
+    let mut left = Vec::with_capacity(pts.len());
+    let mut right = Vec::with_capacity(pts.len());
+    let mut along = 0.0;
+    for (i, p) in pts.iter().enumerate() {
+        let a = pts[i.saturating_sub(1)];
+        let b = pts[(i + 1).min(pts.len() - 1)];
+        along += (p[0] - a[0]).hypot(p[1] - a[1]);
+        let (ny, nx) = (b[1] - a[1]).atan2(b[0] - a[0]).sin_cos();
+        let up = radius * (1.0 + 0.05 * (along * 0.031).sin() + 0.03 * (along * 0.083 + 1.0).sin());
+        let down = radius * (1.0 + 0.05 * (along * 0.023 + 2.0).sin() + 0.03 * (along * 0.071).sin());
+        left.push([p[0] + ny * up + nx * slant, p[1] - nx * up + ny * slant]);
+        right.push([p[0] - ny * down - nx * slant, p[1] + nx * down - ny * slant]);
+    }
+    left.extend(right.iter().rev());
+    left
 }
 
 /// A half circle around `c`, swept from the left of `heading` to its right.

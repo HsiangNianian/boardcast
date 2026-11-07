@@ -9,7 +9,7 @@ use boardcast_board::sugiyama::first_diagram;
 use boardcast_agent::settings::Settings;
 use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
 use boardcast_meetings::{default_dir, Info, Live, Store, ViewOnly};
-use boardcast_board::pen::{ink, outline, Inked, Rng};
+use boardcast_board::pen::{marker, outline, Inked, Rng};
 use crate::i18n::tr;
 use crate::pipeline::{Event, Pipeline, Script};
 use crate::resources;
@@ -294,7 +294,7 @@ impl Ink {
             let mut r = Rng::new(&piece.seed);
             for line in &piece.lines {
                 self.queue.push_back(Queued {
-                    inked: ink(&line.points, line.width, line.wobble, &mut r),
+                    inked: line.inked(&mut r),
                     style: line.style,
                     key: piece.key.clone(),
                     batch,
@@ -2764,15 +2764,28 @@ impl Render for Workbench {
                             tier.layer.paint(window, origin, v.k, Some(bounds));
                             // Ink is already on textures, so tracing someone veils the board and paints
                             // their parts again on top, which costs next to nothing to turn on and off.
-                            if let Some((marker, shown, marked)) = trace {
+                            if let Some((tone, shown, marked)) = trace {
                                 let on_screen = |area: &[f32; 4]| Bounds::new(origin + point(px(area[0] * v.k), px(area[1] * v.k)), size(px(area[2] * v.k), px(area[3] * v.k)));
                                 let mut veil: Hsla = rgb(PAPER).into();
                                 veil.a = TRACE_VEIL;
                                 window.paint_quad(gpui_kit::fill(bounds, veil));
-                                let mut mark: Hsla = rgb(marker).into();
+                                let mut mark: Hsla = rgb(tone).into();
                                 mark.a = TRACE_MARK;
                                 for area in &marked {
-                                    window.paint_quad(gpui_kit::fill(on_screen(area), mark));
+                                    // The same highlighter the board's own marks use.
+                                    let middle = area[1] + area[3] / 2.0;
+                                    let band = marker(&[[area[0], middle], [area[0] + area[2], middle]], area[3], 0.0, &mut Rng::new("trace"));
+                                    let shape = outline(&band, 1.0);
+                                    let mut pb = fill_builder();
+                                    let at = |p: &Pt| origin + point(px(p[0] * v.k), px(p[1] * v.k));
+                                    if let Some(first) = shape.first() {
+                                        pb.move_to(at(first));
+                                        shape[1..].iter().for_each(|p| pb.line_to(at(p)));
+                                        pb.close();
+                                    }
+                                    if let Ok(path) = pb.build() {
+                                        window.paint_path(path, Background::from(mark));
+                                    }
                                 }
                                 for area in &shown {
                                     let patch = on_screen(area);

@@ -34,6 +34,7 @@ use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::toolbar::Toolbar;
+use gpui_kit::component::TitleBar;
 use gpui_kit::component::{Disableable, Selectable, Sizable};
 use gpui_kit::{
     canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, Entity, FillOptions, FocusHandle,
@@ -838,6 +839,12 @@ struct Workbench {
     /// The speaker being looked at in the speakers panel, and the name being written for them.
     speaker_chosen: Option<String>,
     speaker_name: Entity<InputState>,
+    /// The meeting's name while it is being changed in the title bar.
+    title_input: Entity<InputState>,
+    editing_title: bool,
+    /// When the microphone went on, so the title bar can count the time.
+    listening_since: Option<Instant>,
+    clock_second: u64,
     preparing: Option<Preparing>,
     /// Whether the transcript is out. Other panels always show, and close back to it.
     transcript_open: bool,
@@ -1064,6 +1071,57 @@ impl Workbench {
         self.live.read_only.is_none() && self.replay.is_none()
     }
 
+    /// Turn the microphone on or off, counting the time it was on towards the meeting.
+    fn toggle_mic(&mut self) {
+        let was_listening = self.pipeline.listening();
+        self.pipeline.toggle_mic();
+        if !was_listening {
+            self.listening_since = Some(Instant::now());
+        } else if let Some(since) = self.listening_since.take() {
+            self.live.add_recorded(since.elapsed().as_secs_f64() * 1000.0);
+        }
+    }
+
+    /// Put the listening so far into the meeting before it is saved, and go on counting from here.
+    fn count_listening(&mut self) {
+        if let Some(since) = self.listening_since.replace(Instant::now()) {
+            self.live.add_recorded(since.elapsed().as_secs_f64() * 1000.0);
+        } else {
+            self.listening_since = None;
+        }
+    }
+
+    /// The time the microphone has been on for this meeting, counting now.
+    fn recorded(&self) -> Duration {
+        Duration::from_millis(self.live.recorded_ms() as u64) + self.listening_since.map_or(Duration::ZERO, |since| since.elapsed())
+    }
+
+    fn edit_title(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.editable() {
+            return;
+        }
+        let title = self.live.title().to_string();
+        self.title_input.update(cx, |state, cx| {
+            state.set_value(title, window, cx);
+            state.focus(window, cx);
+            state.select_all(window, cx);
+        });
+        self.editing_title = true;
+        cx.notify();
+    }
+
+    fn finish_title(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !std::mem::take(&mut self.editing_title) {
+            return;
+        }
+        let title = self.title_input.read(cx).value().trim().to_string();
+        if !title.is_empty() && title != self.live.title() {
+            self.live.set_title(&title);
+        }
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
     fn dirty(&self) -> bool {
         self.store.is_some() && self.live.read_only.is_none() && self.live.has_content() && self.live.changes != self.saved_changes
     }
@@ -1079,6 +1137,10 @@ impl Workbench {
             if let Some(hint) = ink.hints.take().filter(|_| self.replay.is_none()) {
                 self.session().set_hint(hint);
             }
+        }
+        if let Some(since) = self.listening_since {
+            let second = since.elapsed().as_secs();
+            changed |= std::mem::replace(&mut self.clock_second, second) != second;
         }
         while let Ok(event) = self.pipeline.events.try_recv() {
             changed = true;
@@ -1816,8 +1878,9 @@ impl Workbench {
     fn show(&mut self, live: Live) {
         self.replay = None;
         if self.pipeline.listening() {
-            self.pipeline.toggle_mic();
+            self.toggle_mic();
         }
+        self.editing_title = false;
         let history: Vec<Utterance> = live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(live.graph.clone(), history);
         self.ink.borrow_mut().open(&live.graph, &live.memory);
@@ -1842,6 +1905,7 @@ impl Workbench {
 
     /// Leave the current meeting only if it is safely saved; otherwise stay and say why.
     fn leave(&mut self) -> bool {
+        self.count_listening();
         match self.flush() {
             Ok(()) => true,
             Err(error) => {
@@ -2383,6 +2447,7 @@ impl Workbench {
         if self.close_refused {
             return true;
         }
+        self.count_listening();
         if let Err(error) = self.flush() {
             self.close_refused = true;
             self.notice = Some(format!("{}{error}", tr("Not saved, so the window stayed open. Close again to discard: ", "没有保存成功，窗口先不关。再关一次将丢弃未保存内容：")));
@@ -3042,11 +3107,51 @@ impl Render for Workbench {
         let side_shown = self.panel != Panel::Transcript || self.transcript_open;
         let (right_inset, bottom_inset) = (if side_shown { SIDE_W + FLOAT_GAP * 2.0 } else { FLOAT_GAP }, BAR_ROOM);
         self.ink.borrow_mut().set_insets([FLOAT_GAP, BAR_ROOM, right_inset, bottom_inset]);
+        let recording = self.pipeline.listening();
+        let recorded = self.recorded();
+        // The window's own title bar: what the meeting is called, when it began and how long it has been recorded.
+        let window_bar = TitleBar::new().bg(rgb(SURFACE)).border_color(rgb(LINE)).child(
+            div()
+                .flex()
+                .items_center()
+                .gap_3()
+                .min_w_0()
+                .pr_3()
+                .map(|d| {
+                    if self.editing_title {
+                        d.child(div().w(px(280.)).on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()).child(Input::new(&self.title_input).small()))
+                    } else {
+                        d.child(
+                            Button::new("meeting-title")
+                                .ghost()
+                                .small()
+                                .max_w(px(320.))
+                                .label(self.live.title().to_string())
+                                .when(editable, |b| b.tooltip(tr("Rename the meeting", "修改会议名称")))
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .on_click(cx.listener(|this, _, window, cx| this.edit_title(window, cx))),
+                        )
+                    }
+                })
+                .when_some(self.live.created_at().map(local_time).filter(|t| !t.is_empty()), |d, started| {
+                    d.child(div().text_xs().text_color(rgb(FAINT)).whitespace_nowrap().child(format!("{} {started}", tr("Started", "开始于"))))
+                })
+                .when(recording || !recorded.is_zero(), |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .text_xs()
+                            .whitespace_nowrap()
+                            .text_color(rgb(if recording { DANGER } else { FAINT }))
+                            .when(recording, |d| d.child(div().size(px(7.)).rounded_full().bg(rgb(DANGER))))
+                            .child(format!("{} {}", tr("Recorded", "录音"), clock(recorded.as_secs_f64() * 1000.0))),
+                    )
+                })
+                .when(!save_label.is_empty(), |d| d.child(div().text_xs().text_color(rgb(if matches!(self.save, SaveState::Failed(_)) { DANGER } else { FAINT })).whitespace_nowrap().child(save_label))),
+        );
         let title_bar = floating_bar("title-bar")
-            .max_w(px(420.))
-            .content(div().pl_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).max_w(px(240.)).overflow_hidden().whitespace_nowrap().child(self.live.title().to_string()))
-            .when(!save_label.is_empty(), |d| d.content(div().px_1().text_xs().text_color(rgb(if matches!(self.save, SaveState::Failed(_)) { DANGER } else { FAINT })).whitespace_nowrap().child(save_label)))
-            .content(Separator::vertical().h(px(18.)).mx_1())
             .child(icon_button("library", "folder-open", tr("Meetings", "会议")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
             .child(icon_button("new", "file-plus", tr("New meeting", "新建会议")).when(self.store.is_some(), |d| d.on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
             .when(pages > 1, |d| {
@@ -3092,7 +3197,7 @@ impl Render for Workbench {
                         .when(listening, |b| b.danger())
                         .when(!listening, |b| b.primary())
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.pipeline.toggle_mic();
+                            this.toggle_mic();
                             cx.notify();
                         })),
                 )
@@ -3502,15 +3607,11 @@ impl Render for Workbench {
                 .when_some(view_only, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().bg(rgb(SELECTED)).border_1().border_color(rgb(LINE)).child(text)))
                 .when_some(banner, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().text_color(rgb(DANGER)).bg(rgb(DANGER_SOFT)).border_1().border_color(rgb(LINE)).child(text)))
         });
-        div()
-            .id("workbench")
-            .track_focus(&self.focus)
-            .on_key_down(cx.listener(Self::on_key))
-            .on_drop(cx.listener(|this, paths: &gpui_kit::ExternalPaths, _, cx| this.import_paths(paths.paths(), cx)))
+        let content = div()
             .relative()
-            .size_full()
-            .bg(rgb(PAPER))
-            .text_color(rgb(INK_RGB))
+            .flex_1()
+            .min_h_0()
+            .w_full()
             .child(board)
             .child(div().absolute().top(px(FLOAT_GAP)).left(px(FLOAT_GAP)).occlude().child(title_bar))
             .child(div().absolute().top(px(FLOAT_GAP)).right(px(FLOAT_GAP)).occlude().child(views_bar))
@@ -3534,7 +3635,19 @@ impl Render for Workbench {
             )
             .when_some(notices, |d, notices| d.child(notices))
             .when(side_shown, |d| d.child(side))
-            .when_some(preparing_page, |d, page| d.child(page))
+            .when_some(preparing_page, |d, page| d.child(page));
+        div()
+            .id("workbench")
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::on_key))
+            .on_drop(cx.listener(|this, paths: &gpui_kit::ExternalPaths, _, cx| this.import_paths(paths.paths(), cx)))
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(rgb(PAPER))
+            .text_color(rgb(INK_RGB))
+            .child(window_bar)
+            .child(content)
     }
 }
 
@@ -3573,7 +3686,8 @@ impl Render for Shell {
     fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div().size_full().bg(rgb(PAPER)).map(|d| match &self.workbench {
             Some(workbench) => d.child(workbench.clone()).into_any_element(),
-            None => d.child(crate::splash::splash(&self.word, self.started, window)).into_any_element(),
+            // The bar is there from the start, so the window can be moved while the app gets ready.
+            None => d.flex().flex_col().child(TitleBar::new().bg(rgb(SURFACE)).border_color(rgb(LINE))).child(div().flex_1().min_h_0().child(crate::splash::splash(&self.word, self.started, window))).into_any_element(),
         })
     }
 }
@@ -3729,9 +3843,14 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         theme::apply(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::new(point(px(0.), px(0.)), size(px(1280.), px(800.))))),
-            titlebar: Some(gpui_kit::TitlebarOptions { title: Some("boardcast".into()), ..Default::default() }),
             app_id: Some("boardcast".into()),
-            ..Default::default()
+            // On a Mac the system bar goes, and ours takes its place with the window buttons in it.
+            ..if cfg!(target_os = "macos") {
+                let base = TitleBar::window_options();
+                WindowOptions { titlebar: base.titlebar.map(|t| gpui_kit::TitlebarOptions { title: Some("boardcast".into()), ..t }), ..base }
+            } else {
+                WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some("boardcast".into()), ..Default::default() }), ..Default::default() }
+            }
         };
         // Closing the last window ends the app, which also stops the local model.
         cx.on_window_closed(|cx, _| {
@@ -3753,6 +3872,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let editor = cx.new(|cx| TextareaState::new(window, cx));
             let arxiv_input = cx.new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
             let speaker_name = cx.new(|cx| InputState::new(window, cx));
+            let title_input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Meeting name", "会议名称")));
             let view = cx.new(|cx| {
                 cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {
@@ -3763,6 +3883,12 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 cx.subscribe_in(&speaker_name, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {
                         this.rename_speaker(window, cx);
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&title_input, window, |this: &mut Workbench, _, event, window, cx| {
+                    if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                        this.finish_title(window, cx);
                     }
                 })
                 .detach();
@@ -3809,6 +3935,10 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     speaker: None,
                     speaker_chosen: None,
                     speaker_name,
+                    title_input,
+                    editing_title: false,
+                    listening_since: None,
+                    clock_second: 0,
                     preparing: None,
                     transcript_open: true,
                     speaker_hovered: None,

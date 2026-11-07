@@ -539,6 +539,18 @@ impl Live {
         self.raw.get("createdAt").and_then(Value::as_f64)
     }
 
+    /// How long the microphone has been on for this meeting, in milliseconds.
+    pub fn recorded_ms(&self) -> f64 {
+        self.raw.get("recordedMs").and_then(Value::as_f64).unwrap_or(0.0)
+    }
+
+    /// Count another stretch of listening towards the meeting.
+    pub fn add_recorded(&mut self, ms: f64) {
+        let total = self.recorded_ms() + ms.max(0.0);
+        self.raw.insert("recordedMs".into(), json!(total.round()));
+        self.touch();
+    }
+
     pub fn summary(&self) -> &str {
         self.raw.get("summary").and_then(Value::as_str).unwrap_or_default()
     }
@@ -883,6 +895,15 @@ mod tests {
         live.set_title("论文");
         live.add_pages(vec![(page_board(1), "asset:a.jpg".into())], "导入了");
         assert_eq!(live.title(), "论文");
+    }
+
+    #[test]
+    fn listening_adds_up_and_is_kept() {
+        let mut live = Live::new();
+        live.add_recorded(1500.0);
+        live.add_recorded(2500.4);
+        let again = loaded(json!(live.snapshot()), Origin::Current);
+        assert_eq!(again.recorded_ms(), 4000.0);
     }
 
     #[test]

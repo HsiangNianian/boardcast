@@ -295,7 +295,10 @@ pub fn play_wav(path: &Path, samples: &Sender<Vec<f32>>) -> Result<()> {
 /// Live microphone capture, mono at 16 kHz, until `stop` is set.
 pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>) -> Result<()> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    #[cfg(target_os = "linux")]
     let host = cpal::host_from_id(cpal::HostId::PulseAudio).unwrap_or_else(|_| cpal::default_host());
+    #[cfg(not(target_os = "linux"))]
+    let host = cpal::default_host();
     let device = host.default_input_device().context("no microphone")?;
     let supported = device.default_input_config()?;
     let channels = supported.channels() as usize;

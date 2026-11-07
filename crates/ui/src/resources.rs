@@ -1,4 +1,4 @@
-//! Finding what ships with the app. An install keeps it in `<prefix>/lib/boardcast`, next to `bin/`,
+//! Finding what ships with the app. An install keeps it in `<prefix>/lib/boardcast`, next to `bin/`, or a Mac app in `Contents/Resources/boardcast`,
 //! whichever folder the package was unpacked into. In a checkout the older app's folders serve.
 
 use boardcast_board::glyphs::HanziSource;
@@ -22,8 +22,9 @@ fn installed_dir() -> Option<PathBuf> {
     }
     // Canonical, so a symlink on PATH still leads back to the real install.
     let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
-    let dir = exe.parent()?.parent()?.join("lib/boardcast");
-    dir.join("glyphs.pack").is_file().then_some(dir)
+    // <prefix>/bin/boardcast beside <prefix>/lib/boardcast, or inside an app on a Mac.
+    let top = exe.parent()?.parent()?;
+    [top.join("lib/boardcast"), top.join("Resources/boardcast")].into_iter().find(|dir| dir.join("glyphs.pack").is_file())
 }
 
 /// A boardcast checkout above this executable, as when running from `target/`.

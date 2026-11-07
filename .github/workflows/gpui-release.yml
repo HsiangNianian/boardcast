@@ -1,6 +1,7 @@
 name: Release GPUI app
 
-# Publishes the Linux package to the rolling `gpui-latest` pre-release, which the GPUI app's updater reads.
+# Publishes the Linux package to the rolling `gpui-latest` pre-release, which the GPUI app's updater reads,
+# and a Mac app beside it to download by hand. The updater only knows Linux, as the manifest lists nothing else.
 # It is separate from the older app's release workflow and never touches its `latest.json`.
 # Run by hand after raising the workspace version.
 on:
@@ -74,3 +75,28 @@ jobs:
           # The manifest goes last, so it never points at a package that is not there yet.
           gh release upload gpui-latest "$package" --clobber
           gh release upload gpui-latest manifest.json --clobber
+
+  macos:
+    # After the Linux job, which creates the release and refuses a version that isn't newer.
+    needs: release
+    runs-on: macos-26
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache voice models
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/voice
+          key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
+      - run: sh packaging/macos/package.sh
+      - name: Publish
+        run: gh release upload gpui-latest target/package/boardcast-*-macos.zip --clobber

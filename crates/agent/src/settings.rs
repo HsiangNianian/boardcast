@@ -29,6 +29,9 @@ fn config_dir() -> Result<PathBuf> {
     if let Ok(dir) = std::env::var("BOARDCAST_CONFIG") {
         return Ok(PathBuf::from(dir));
     }
+    #[cfg(target_os = "macos")]
+    let base = PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join("Library/Application Support");
+    #[cfg(not(target_os = "macos"))]
     let base = match std::env::var("XDG_CONFIG_HOME") {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join(".config"),

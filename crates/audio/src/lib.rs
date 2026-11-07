@@ -1,8 +1,8 @@
-//! The audio chain: microphone or file -> 16 kHz mono -> Silero VAD -> SenseVoice -> finished text.
+//! The audio chain: microphone or file -> 16 kHz mono -> Silero VAD -> SenseVoice and CAM++ -> a finished sentence.
 //! It knows nothing about boards; callers receive each sentence through a callback.
 
 use anyhow::{anyhow, Context, Result};
-use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, SileroVadModelConfig, VadModelConfig, VoiceActivityDetector, Wave};
+use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, SileroVadModelConfig, SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, VadModelConfig, VoiceActivityDetector, Wave};
 use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -80,13 +80,27 @@ fn soft_break(loudness: &[f32]) -> Option<usize> {
     (run >= need).then_some(run / 2)
 }
 
-/// A finished sentence, its recognition time, and when the sentence was detected as over.
-pub trait Heard: FnMut(String, u128, Instant) {}
-impl<F: FnMut(String, u128, Instant)> Heard for F {}
+/// Shorter than this says too little about a voice, so "yeah" and "right" carry no voiceprint.
+const MIN_VOICEPRINT: usize = SAMPLE_RATE as usize * 4 / 5;
+
+pub struct Sentence {
+    pub text: String,
+    /// At unit length, so a dot product is the cosine similarity. Missing if it was too short to tell.
+    pub voiceprint: Option<Vec<f32>>,
+    pub asr_ms: u128,
+    /// When the sentence was detected as over.
+    pub ended: Instant,
+    /// Where in the input it began, in seconds.
+    pub start: f64,
+}
+
+pub trait Heard: FnMut(Sentence) {}
+impl<F: FnMut(Sentence)> Heard for F {}
 
 pub struct Ear {
     vad: VoiceActivityDetector,
     asr: OfflineRecognizer,
+    speaker: Option<SpeakerEmbeddingExtractor>,
     pending: Vec<f32>,
     /// The sentence being said, from the moment speech was detected and with some audio before it.
     speech: Vec<f32>,
@@ -104,7 +118,8 @@ pub struct Ear {
 }
 
 impl Ear {
-    /// `models` holds `silero_vad.onnx` and `sense-voice/`.
+    /// `models` holds `silero_vad.onnx`, `sense-voice/` and `speaker/`. Without the last, speech is still
+    /// heard but speakers are not told apart.
     pub fn load(models: &Path) -> Result<Self> {
         let path = |p: &str| models.join(p).to_string_lossy().to_string();
         let vad_config = VadModelConfig {
@@ -130,9 +145,14 @@ impl Ear {
         asr_config.model_config.tokens = Some(path("sense-voice/tokens.txt"));
         asr_config.model_config.num_threads = 2;
         let asr = OfflineRecognizer::create(&asr_config).context("loading SenseVoice")?;
+        let speaker = SpeakerEmbeddingExtractor::create(&SpeakerEmbeddingExtractorConfig { model: Some(path("speaker/campplus_zh_en.onnx")), num_threads: 1, ..Default::default() });
+        if speaker.is_none() {
+            eprintln!("the speaker model did not load, so speakers will not be told apart");
+        }
         Ok(Self {
             vad,
             asr,
+            speaker,
             pending: vec![],
             speech: vec![],
             loudness: vec![],
@@ -191,10 +211,10 @@ impl Ear {
         let windows = self.loudness.len();
         self.loudness.drain(..windows - back.min(windows));
         self.sent_until = self.fed - keep;
-        self.hear(&head, heard);
+        self.hear(&head, self.sent_until - head.len(), heard);
     }
 
-    fn hear(&mut self, samples: &[f32], heard: &mut impl Heard) {
+    fn hear(&mut self, samples: &[f32], start: usize, heard: &mut impl Heard) {
         if samples.len() < VAD_WINDOW {
             return;
         }
@@ -204,7 +224,8 @@ impl Ear {
         self.asr.decode(&stream);
         let text = stream.get_result().map(|r| r.text.trim().to_string()).unwrap_or_default();
         if !text.is_empty() {
-            heard(text, ended.elapsed().as_millis(), ended);
+            let asr_ms = ended.elapsed().as_millis();
+            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE) });
         }
     }
 
@@ -215,7 +236,7 @@ impl Ear {
             let skip = self.sent_until.saturating_sub(start).min(length);
             let offset = (start + skip).saturating_sub(self.fed - self.audio.len());
             let samples: Vec<f32> = self.audio.iter().skip(offset).take(length - skip).copied().collect();
-            self.hear(&samples, heard);
+            self.hear(&samples, start + skip, heard);
             self.sent_until = start + length;
             self.vad.pop();
             self.in_speech = self.vad.detected();
@@ -228,6 +249,26 @@ impl Ear {
             self.speech.clear();
             self.loudness.clear();
         }
+    }
+
+    fn voiceprint(&self, samples: &[f32]) -> Option<Vec<f32>> {
+        let extractor = self.speaker.as_ref()?;
+        if samples.len() < MIN_VOICEPRINT {
+            return None;
+        }
+        let stream = extractor.create_stream()?;
+        stream.accept_waveform(SAMPLE_RATE, samples);
+        stream.input_finished();
+        if !extractor.is_ready(&stream) {
+            return None;
+        }
+        let mut print = extractor.compute(&stream)?;
+        let length = print.iter().map(|x| x * x).sum::<f32>().sqrt();
+        if !length.is_finite() || length == 0.0 {
+            return None;
+        }
+        print.iter_mut().for_each(|x| *x /= length);
+        Some(print)
     }
 
     /// The input ended: whatever is still buffered counts as a sentence.
@@ -368,7 +409,7 @@ mod tests {
 
     fn hear_all(ear: &mut Ear, samples: &[f32]) -> Vec<String> {
         let mut said = vec![];
-        let mut heard = |text: String, _: u128, _: Instant| said.push(text);
+        let mut heard = |sentence: Sentence| said.push(sentence.text);
         for chunk in samples.chunks(SAMPLE_RATE as usize / 10) {
             ear.feed(chunk, &mut heard);
         }

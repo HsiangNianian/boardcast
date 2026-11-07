@@ -681,7 +681,9 @@ name = "boardcast-audio"
 version = "0.22.0-alpha.1"
 dependencies = [
  "anyhow",
+ "boardcast-board",
  "cpal",
+ "serde_json",
  "sherpa-onnx",
 ]
 

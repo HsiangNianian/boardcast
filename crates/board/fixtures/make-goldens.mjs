@@ -299,6 +299,54 @@ const segmentCases = [
   return { ...c, blocks: segment({ width: c.w, height: c.h, data }).map((b) => [b.x, b.y, b.w, b.h]) }
 })
 const readCases = ['「订单服务」', '```\nAPI 网关\n```', '<think>嗯</think>MySQL', '<think>没完', '无', '无。', '没有文字', 'None', 'n/a.', '（无）', '(无)', '  a   b\n c ', '1>1', '->', '', '写库', 'HTTPS', '2026', '12', '"quoted\'', '无论如何'].map((input) => ({ input, clean: cleanRead(input), meaningful: meaningful(input) }))
+// Telling voices apart, and remembering who raised what.
+const { identify, nextName, renameVoice } = await load('src/engine/voices.ts')
+const { attribute, renameBy } = await load('src/engine/attribute.ts')
+const { initial } = await load('src/ui/speakers.ts')
+const voicePerson = (seed) => Array.from({ length: 16 }, (_, i) => Math.sin(seed * 12.9898 + i * 78.233) * 0.5)
+const voiceSay = (person, noise, k) => {
+  const v = person.map((x, i) => x + noise * Math.sin(k * 3.17 + i * 1.91))
+  const len = Math.hypot(...v)
+  return v.map((x) => x / len)
+}
+const voiceCases = [
+  { name: 'two people taking turns', who: [1, 1, 2, 1, 2, 2], noise: 0.1, taken: [], renames: [['A', '李工']] },
+  { name: 'three people, one of them new late on', who: [1, 2, 1, 2, 3, 3, 1], noise: 0.15, taken: [], renames: [['C', '王工'], ['王工', 'A']] },
+  { name: 'names already taken by hand', who: [1, 2], noise: 0.1, taken: ['A', 'C'], renames: [['B', 'A'], ['missing', 'X'], ['A', 'A']] },
+  { name: 'noise that splits one voice', who: [4, 4, 4], noise: 3, taken: [], renames: [] },
+  { name: 'many sentences, past the memory limit', who: Array.from({ length: 40 }, () => 5), noise: 0.2, taken: [], renames: [] },
+].map((c) => {
+  let voices = []
+  const steps = c.who.map((who, k) => {
+    const print = voiceSay(voicePerson(who), c.noise, k)
+    const r = identify(voices, print, c.taken)
+    voices = r.voices
+    return { print, taken: c.taken, name: r.name, voices }
+  })
+  const renames = c.renames.map(([from, to]) => {
+    voices = renameVoice(voices, from, to)
+    return { from, to, voices }
+  })
+  return { name: c.name, steps, renames }
+})
+const nameCases = [[], ['A'], ['A', 'B', 'D'], Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)), [...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)), 'A2']].map((taken) => ({ taken, next: nextName(taken) }))
+const initialCases = ['李工', '小王', '老张', '阿强', '小', 'Alice', ' bob ', '说话人 2', 'Speaker 123', 'A2', '...', '', '🙂x', 'élan', '王', '田中さん', '-1a'].map((name) => ({ name, initial: initial(name) }))
+const attributionNode = (id, label, more = {}) => ({ id, label, aliases: [], kind: 'node', marks: [], ink: 'ink', ...more })
+const attributionEdge = (from, to, more = {}) => ({ from, to, ink: 'ink', ...more })
+const attributionGraph = (nodes, edges = []) => ({ nodes, edges, groups: [], nextNode: nodes.length + 1, nextGroup: 1 })
+const attributionCases = [
+  { name: 'one speaker raises it all', before: attributionGraph([]), after: attributionGraph([attributionNode('n1', '网关'), attributionNode('n2', '登录')], [attributionEdge('n1', 'n2', { label: '转给' })]), batch: [{ speaker: 'A', text: '网关转给登录' }] },
+  { name: 'two speakers, by what each said', before: attributionGraph([]), after: attributionGraph([attributionNode('n1', '网关'), attributionNode('n2', '用户库', { aliases: ['user db'] })], [attributionEdge('n1', 'n2')]), batch: [{ speaker: 'B', text: '先过网关' }, { speaker: 'A', text: '然后查 user db' }] },
+  { name: 'what was there stays', before: attributionGraph([attributionNode('n1', '网关', { by: 'B' }), attributionNode('n2', '登录')], [attributionEdge('n1', 'n2')]), after: attributionGraph([attributionNode('n1', '网关', { by: 'B' }), attributionNode('n2', '登录'), attributionNode('n3', '日志')], [attributionEdge('n1', 'n2'), attributionEdge('n2', 'n3')]), batch: [{ speaker: 'A', text: '写日志' }] },
+  { name: 'nobody said it', before: attributionGraph([]), after: attributionGraph([attributionNode('n1', '网关')]), batch: [{ speaker: 'A', text: '嗯' }, { speaker: 'B', text: '对' }] },
+  { name: 'no speakers', before: attributionGraph([]), after: attributionGraph([attributionNode('n1', '网关')]), batch: [{ text: '网关' }] },
+  { name: 'a single character', before: attributionGraph([]), after: attributionGraph([attributionNode('n1', '甲')]), batch: [{ speaker: 'A', text: '乙' }, { speaker: 'B', text: '甲' }] },
+  { name: 'a tie goes to the first', before: attributionGraph([]), after: attributionGraph([attributionNode('n1', '网关')]), batch: [{ speaker: 'B', text: '网关' }, { speaker: 'A', text: '网关' }] },
+  { name: 'a draft turned to ink', before: attributionGraph([attributionNode('n1', '网关', { ink: 'draft' })]), after: attributionGraph([attributionNode('n1', '网关')]), batch: [{ speaker: 'A', text: '网关' }] },
+].map((c) => {
+  const attributed = attribute(c.before, c.after, c.batch)
+  return { ...c, attributed, renamed: renameBy(attributed, 'A', '甲') }
+})
 const prefix = (text) => messages(emptyGraph(), [], { text }).slice(0, -1)
 // The fixed part of the prompt ships with the agent; this copy is the answer key it is tested against.
 writeFileSync(new URL('../../agent/prompts.json', import.meta.url), `${JSON.stringify({ zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') }, null, 1)}\n`)
@@ -318,5 +366,9 @@ writeFileSync(process.argv[3], `${JSON.stringify({
   paper: paperCases,
   pages: pageCases,
   timelines: timelineCases,
+  voices: voiceCases,
+  names: nameCases,
+  initials: initialCases,
+  attribution: attributionCases,
 })}\n`)
 console.log(`${steps.length} steps`)

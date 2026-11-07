@@ -1,7 +1,7 @@
 //! Wires the audio chain to the board agent on background threads, and reports to the UI over a channel.
 
 use boardcast_agent::{Backend, Guidance, Said, Session, Update};
-use boardcast_audio::{capture, play_wav, Ear};
+use boardcast_audio::{capture, play_wav, Ear, Sentence};
 use boardcast_board::graph::Utterance;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,6 +14,9 @@ pub enum Event {
     Agent(Update),
     Level(f32),
     Heard { meeting: u64, speaker: Option<String>, text: String, asr_ms: Option<u128> },
+    /// A sentence from the microphone or a recording. The window works out who said it, as it holds
+    /// the meeting's voices, and passes it on to the model.
+    Spoken { meeting: u64, sentence: Sentence },
     Failed(String),
     /// A scripted source has finished and every queued line has been drawn.
     Done,
@@ -51,7 +54,6 @@ impl Pipeline {
         });
 
         let tx = event_tx.clone();
-        let to_model = said.clone();
         let stamp = session.stamp();
         let (finish_tx, finish_rx) = channel::<()>();
         thread::spawn(move || {
@@ -62,10 +64,8 @@ impl Pipeline {
                     return;
                 }
             };
-            let mut heard = |text: String, asr_ms: u128, ended: Instant| {
-                let meeting = stamp.load(Ordering::SeqCst);
-                let _ = tx.send(Event::Heard { meeting, speaker: None, text: text.clone(), asr_ms: Some(asr_ms) });
-                let _ = to_model.send(Said { line: Utterance { speaker: None, text }, ended, asr_ms: Some(asr_ms), meeting });
+            let mut heard = |sentence: Sentence| {
+                let _ = tx.send(Event::Spoken { meeting: stamp.load(Ordering::SeqCst), sentence });
             };
             loop {
                 match samples_rx.recv_timeout(Duration::from_millis(100)) {
@@ -111,7 +111,7 @@ impl Pipeline {
             for turn in script.turns {
                 let meeting = stamp.load(Ordering::SeqCst);
                 let _ = tx.send(Event::Heard { meeting, speaker: turn.speaker.clone(), text: turn.text.clone(), asr_ms: None });
-                let _ = to_model.send(Said { line: turn, ended: Instant::now(), asr_ms: None, meeting });
+                let _ = to_model.send(Said { line: turn, ended: Instant::now(), asr_ms: None, meeting, renames: 0 });
                 thread::sleep(Duration::from_millis(2500));
             }
             // Lines can merge into one request, so this waits for silence rather than a count.

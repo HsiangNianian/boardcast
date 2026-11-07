@@ -370,6 +370,26 @@ impl Live {
         self.touch();
     }
 
+    /// Try a line the model never drew again: it goes back to waiting, and out of the context it was
+    /// added to when it failed. Gives back who said what, to send on.
+    pub fn retry_line(&mut self, index: usize) -> Option<(Option<String>, String)> {
+        let line = self.lines.get_mut(index).filter(|l| l["failed"].as_bool().unwrap_or(false))?;
+        let was_remembered = line["boardFailure"] == "request";
+        let fields = line.as_object_mut()?;
+        for field in ["ms", "failed", "boardFailure", "ops"] {
+            fields.remove(field);
+        }
+        let text = line["text"].as_str()?.to_string();
+        let speaker = line["speaker"].as_str().map(str::to_string);
+        if was_remembered {
+            if let Some(at) = self.history.iter().rposition(|said| said["text"] == text.as_str()) {
+                self.history.remove(at);
+            }
+        }
+        self.touch();
+        Some((speaker, text))
+    }
+
     /// A note about a hand-made change. Marked manual, so it is never read as something said.
     pub fn add_note(&mut self, text: &str) {
         self.lines.push(json!({ "text": text, "manual": true, "ms": 0, "page": self.page() }));
@@ -827,6 +847,33 @@ mod tests {
         assert_eq!(again.identify_voice(&[1.0, 0.0]), "A");
         let strange = Live::build(json!({ "id": "x", "voices": [1] }).as_object().unwrap().clone(), Origin::Current, 1).snapshot();
         assert_eq!(strange["voices"], json!([1]));
+    }
+
+    #[test]
+    fn a_line_that_was_not_drawn_can_be_tried_again() {
+        let mut live = Live::new();
+        live.add_line(Some("A"), "网关", None);
+        live.add_line(None, "还在等", None);
+        live.model_failed(&[(Some("A".into()), "网关".into())]);
+        assert_eq!(live.history.len(), 1);
+        assert_eq!(live.retry_line(1), None, "only a failed line");
+        assert_eq!(live.retry_line(0), Some((Some("A".into()), "网关".into())));
+        assert!(live.lines[0]["ms"].is_null() && live.lines[0]["failed"].is_null());
+        assert!(live.history.is_empty());
+        // Back to waiting, so the reply settles it as usual.
+        live.model_drew(&[(Some("A".into()), "网关".into())], Graph::default(), Value::Null, "", 5);
+        assert_eq!(live.lines[0]["ms"], 5);
+        assert_eq!(live.history.len(), 1);
+    }
+
+    #[test]
+    fn a_line_cut_off_by_closing_is_reopened_for_another_try() {
+        let mut live = Live::new();
+        live.add_line(None, "没等到", None);
+        let mut again = Live::build(live.snapshot(), Origin::Current, 1);
+        assert_eq!(again.lines[0]["boardFailure"], "cancelled");
+        assert!(again.retry_line(0).is_some());
+        assert!(again.history.is_empty());
     }
 
     #[test]

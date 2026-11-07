@@ -14,6 +14,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, Graph, Utterance};
 use boardcast_board::speakers::{attribute, rename_by};
 use serde_json::{json, Value};
+use std::io::{BufRead, BufReader};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -205,6 +206,8 @@ pub struct Said {
 
 pub enum Update {
     Loading,
+    /// The model is up and working through the fixed part of the prompt, this many tokens of that many.
+    Preparing { done: u64, total: u64 },
     Ready,
     /// Nothing is installed and no remote model is set up, so the user has to choose.
     NoModel,
@@ -218,6 +221,8 @@ pub struct LocalServer {
     /// The directory holding `llama-server` and its libraries.
     pub binaries: PathBuf,
     pub model: PathBuf,
+    /// Where the graphics driver keeps the shaders it compiles, so that happens once rather than per launch.
+    pub shaders: Option<PathBuf>,
 }
 
 /// A graphics device llama-server can use.
@@ -275,6 +280,11 @@ fn is_discrete(gpus: &[Gpu], device: Option<&str>) -> bool {
 /// The same launch arguments as the older app.
 fn llama_command(server: &LocalServer, device: Option<&str>, discrete: bool, port: u16, projector: Option<&std::path::Path>) -> Command {
     let mut cmd = server_command(&server.binaries);
+    if let Some(dir) = &server.shaders {
+        let _ = std::fs::create_dir_all(dir);
+        // NVIDIA and Mesa each have their own setting. Without the second, NVIDIA trims its cache by age.
+        cmd.env("__GL_SHADER_DISK_CACHE_PATH", dir).env("__GL_SHADER_DISK_CACHE_SKIP_CLEANUP", "1").env("MESA_SHADER_CACHE_DIR", dir);
+    }
     if discrete {
         // Without this the CPU copies the model into graphics memory across the bus itself, which took 80 s
         // on an RTX 3060 Laptop. This way the card fetches it, in under 2 s.
@@ -328,6 +338,35 @@ fn start_llama(server: &LocalServer) -> Result<(Child, String)> {
             Ok((child, base))
         }
         Err(first) => Err(first),
+    }
+}
+
+/// Read the prompt's progress from one line of a streamed reply.
+fn prompt_progress(line: &str) -> Option<(u64, u64)> {
+    let value: Value = serde_json::from_str(line.strip_prefix("data: ")?).ok()?;
+    let progress = value.get("prompt_progress")?;
+    Some((progress["processed"].as_u64()?, progress["total"].as_u64()?))
+}
+
+/// Have the server work through the fixed part of the prompt now, and keep it, so the first line said costs
+/// no more than the ones after it. This is also what makes the driver compile its shaders if it has to.
+/// Chinese, as the two languages share about half of it and English then only costs a moment more. It
+/// is only a head start, so a failure here is left for the first real line to report.
+fn prepare_prompt(base: &str, updates: &Sender<Update>) {
+    let Some(mut messages) = prompts()["zh"].as_array().cloned() else { return };
+    messages.push(json!({ "role": "user", "content": "你好" }));
+    let body = json!({ "model": "local", "messages": messages, "temperature": 0, "max_tokens": 1, "cache_prompt": true, "stream": true, "return_progress": true, "chat_template_kwargs": { "enable_thinking": false } });
+    let response = match http().post(&chat_url(base)).send_json(&body) {
+        Ok(response) => response,
+        Err(e) => {
+            eprintln!("could not prepare the prompt: {e}");
+            return;
+        }
+    };
+    for line in BufReader::new(response.into_reader()).lines().map_while(std::result::Result::ok) {
+        if let Some((done, total)) = prompt_progress(&line) {
+            let _ = updates.send(Update::Preparing { done, total });
+        }
     }
 }
 
@@ -423,6 +462,7 @@ impl Session {
                         if server.is_none() {
                             let _ = updates.send(Update::Loading);
                             let (child, base) = start_llama(&local)?;
+                            prepare_prompt(&base, updates);
                             let _ = updates.send(Update::Ready);
                             *local_base.lock().expect("base lock") = Some(base.clone());
                             server = Some((child, base, local.model.clone()));
@@ -631,7 +671,8 @@ mod tests {
 
     #[test]
     fn a_discrete_card_fetches_the_model_itself() {
-        let server = LocalServer { binaries: "bin".into(), model: "m.gguf".into() };
+        let server = LocalServer { binaries: "bin".into(), model: "m.gguf".into(), shaders: Some(std::env::temp_dir().join("boardcast-agent-shaders")) };
+        assert!(llama_command(&server, None, false, 1, None).get_envs().any(|(k, v)| k == "__GL_SHADER_DISK_CACHE_PATH" && v.is_some()));
         let asks = |discrete| llama_command(&server, Some("Vulkan1"), discrete, 1, None).get_envs().any(|(k, _)| k == "GGML_VK_DISABLE_HOST_VISIBLE_VIDMEM");
         assert!(asks(true));
         assert!(!asks(false));
@@ -639,6 +680,14 @@ mod tests {
         assert!(is_discrete(&gpus, Some("Vulkan1")));
         assert!(!is_discrete(&gpus, Some("Vulkan0")));
         assert!(!is_discrete(&gpus, None));
+    }
+
+    #[test]
+    fn the_prompt_reports_how_far_it_has_got() {
+        assert_eq!(prompt_progress(r#"data: {"choices":[],"prompt_progress":{"total":2151,"cache":0,"processed":1118,"time_ms":1}}"#), Some((1118, 2151)));
+        assert_eq!(prompt_progress(r#"data: {"choices":[{"delta":{"content":"N"}}]}"#), None);
+        assert_eq!(prompt_progress("data: [DONE]"), None);
+        assert_eq!(prompt_progress(""), None);
     }
 
     #[test]

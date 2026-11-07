@@ -24,7 +24,7 @@ tar -xzf boardcast-*-linux.tar.gz
 ./boardcast-*-linux/install.sh    # into ~/.local, no root needed; --uninstall removes it and keeps your data
 ```
 
-The package holds the app, the speech models, `llama-server` and the handwriting data. A board model is about 3 to 6 GB, so
+The package holds the app, the speech models, `llama-server` and the handwriting data. A board model is about 0.7 to 6 GB, so
 the first launch offers to download one, or to use a remote model instead. It runs from the unpacked folder too.
 
 ## Updates
@@ -125,6 +125,19 @@ On DeepSeek's dev set, rules cut layout issues summed over turns from 94 to 57; 
 that became a note without rules became an item with them, and only items count.
 
 The checker's auto-repair fired on real model output once, on DeepSeek's `group-phrasing`.
+
+The smaller local models were compared with Qwen 4B on the same cases, prompt and grammar, without rules or hints. The
+prompt was tuned for Qwen, which may favour it, and only Q4_K_M files were tried. Worse and better count holdout cases
+against Qwen 4B. Time is the model's per turn, and memory is the whole graphics card's peak, on an RTX 3060 Laptop.
+
+| Model | Node precision | Edge precision | Item recall | Mark accuracy | Worse / better | Time | Memory |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Qwen 4B | 0.974 | 0.886 | 0.891 | 0.852 | | 667 ms | 3049 MiB |
+| MiniCPM5-2B | 0.903 | 0.741 | 0.561 | 0.789 | 15 / 4 | 300 ms | 1845 MiB |
+| MiniCPM-V 4.7 1B | 0.733 | 0.333 | 0.394 | 0.378 | 25 / 1 | 317 ms | 759 MiB |
+| MiniCPM5-1B | 0.438 | 0.204 | 0.076 | 0.059 | 26 / 0 | 162 ms | 961 MiB |
+
+So Qwen stays the default, and the other three can be chosen in Settings with a note saying what they fall short on.
 
 ## Not validated
 

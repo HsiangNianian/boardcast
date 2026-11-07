@@ -9,6 +9,8 @@ eval/reports/
 .playwright-mcp/
 public/hanzi/
 src-tauri/llama/
+resources/llama/
+resources/voice/
 src-tauri/voice/
 src-tauri/apple-speech/boardcast-speech-*
 public/player/

@@ -1,7 +1,7 @@
 # boardcast on GPUI
 
 The native rewrite of boardcast. Its core is producing the board from speech and marking on it. Excalidraw free
-editing is dropped. The Tauri app in `src-tauri/` and `src/` stays until this one covers the agreed scope.
+editing is dropped. The Tauri app in `src-tauri/` and `src/` is no longer released, and stays only while other work still reads it: the answer key, the web demo and the speech evaluation.
 
 | Crate | Owns | Must not depend on |
 | --- | --- | --- |
@@ -65,7 +65,7 @@ cargo run --release -p boardcast-tools -- meetings-check /tmp/copy
 node crates/meetings/fixtures/verify-with-typescript.mjs . /tmp/copy
 ```
 
-A checkout runs with the older app's resources in `src-tauri/` and `public/hanzi`. Regenerate the answer key and `crates/agent/prompts.json` with
+A checkout runs with the resources in `resources/`, fetched by `scripts/fetch-llama.mjs` and `scripts/fetch-voice.mjs`, and `public/hanzi`. Regenerate the answer key and `crates/agent/prompts.json` with
 `node crates/board/fixtures/make-goldens.mjs <root> crates/board/fixtures/goldens.json`.
 
 Measured on Linux with niri at 100 Hz, on Intel Iris Xe and an RTX 3060, each forced with `VK_DRIVER_FILES`.
@@ -133,7 +133,7 @@ person keeps one name. These are two recordings, so the threshold was left alone
 renaming or merging in the speakers panel.
 
 ```sh
-cargo run --release -p boardcast-audio --example speaker-eval -- src-tauri/voice <recording.wav> <reference.json>
+cargo run --release -p boardcast-audio --example speaker-eval -- resources/voice <recording.wav> <reference.json>
 ```
 
 | Recording | Voices found | Purity | Coverage |

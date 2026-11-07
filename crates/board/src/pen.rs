@@ -77,6 +77,7 @@ pub fn place(strokes: &[Stroke], x: f32, y: f32, s: f32, r: &mut Rng) -> Vec<Str
 }
 
 /// Skeleton after densify and wobble. `outline` turns any prefix of it into a filled shape.
+#[derive(Clone)]
 pub struct Inked {
     pub center: Stroke,
     pub width: f32,

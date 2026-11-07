@@ -3550,6 +3550,34 @@ struct Turn {
     text: String,
 }
 
+/// What the slow part of starting up has to say.
+enum Startup {
+    Word(Vec<Inked>),
+    Ready(Box<Result<Prepared>>),
+}
+
+struct Prepared {
+    state: Ink,
+    live: Live,
+    vram_mib: u64,
+}
+
+/// The window from the moment it opens: the name being written, then the app.
+struct Shell {
+    workbench: Option<Entity<Workbench>>,
+    word: Vec<Inked>,
+    started: Instant,
+}
+
+impl Render for Shell {
+    fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().size_full().bg(rgb(PAPER)).map(|d| match &self.workbench {
+            Some(workbench) => d.child(workbench.clone()).into_any_element(),
+            None => d.child(crate::splash::splash(&self.word, self.started, window)).into_any_element(),
+        })
+    }
+}
+
 gpui_kit::actions!(boardcast, [Quit]);
 
 /// A Mac app quits from its menu and with Cmd+Q, and either way saves first, as closing the window does.
@@ -3619,20 +3647,83 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let guidance = skill.then_some(Guidance { rules: true, hint: true });
     let hanzi = resources.hanzi.clone();
     let pdfium = resources.pdfium.clone();
-    let glyphs = Glyphs::load(resources.hanzi)?;
     let start_board = match &demo {
         Some(name) => Some(demo_board(root.as_ref().context("--demo needs --root <checkout>")?, name)?),
         None => synthetic.map(synthetic_board),
     };
     // A sample or measurement never reads or writes real meetings, and a script starts a new one.
-    let store = start_board.is_none().then(|| Store::new(data));
+    let store = start_board.is_none().then(|| Store::new(data.clone()));
     let reopen = if turns.is_empty() && wav.is_none() { open.or_else(|| store.as_ref().and_then(Store::last_opened)) } else { None };
-    let start_meeting = match (&store, reopen) {
-        (Some(store), Some(id)) => store.load(&id).ok().flatten().map(Live::from_loaded),
-        _ => None,
-    };
+    let reads_meetings = store.is_some();
     let pipeline = Pipeline::start(backend, guidance, resources.voice, Script { turns, wav });
-    let vram_mib = boardcast_agent::list_gpus(&binaries).iter().filter(|g| g.discrete).map(|g| g.total_mib).max().unwrap_or(0);
+    // Everything slow happens away from the window, which has to appear straight away.
+    let (startup, starting) = channel::<Startup>();
+    let probe_binaries = binaries.clone();
+    let hanzi_source = resources.hanzi;
+    std::thread::spawn(move || {
+        let prepared = (|| -> Result<Prepared> {
+            let mut glyphs = Glyphs::load(hanzi_source)?;
+            let _ = startup.send(Startup::Word(crate::splash::word_strokes(&mut glyphs)));
+            let start_meeting = match (reads_meetings.then(|| Store::new(data)), reopen) {
+                (Some(store), Some(id)) => store.load(&id).ok().flatten().map(Live::from_loaded),
+                _ => None,
+            };
+            let vram_mib = boardcast_agent::list_gpus(&probe_binaries).iter().filter(|g| g.discrete).map(|g| g.total_mib).max().unwrap_or(0);
+            let mut state = Ink {
+                glyphs,
+                board: StableLayout::default(),
+                base: Tier::new(1.0),
+                detail: None,
+                retired: vec![],
+                queue: VecDeque::new(),
+                live: 0.0,
+                finished: vec![],
+                drawn: HashSet::new(),
+                last: None,
+                timings: vec![],
+                graph: None,
+                next_tidy_batch: 0,
+                targets: vec![],
+                ink_boxes: vec![],
+                insets: [0.0; 4],
+                trace: None,
+                selected: None,
+                selected_at: None,
+                mark_unit: MarkUnit::Block,
+                page: None,
+                hints: None,
+                extent: BoardBounds::default(),
+                view: None,
+                reading: false,
+                canvas: Bounds::new(point(px(0.), px(0.)), size(px(960.), px(756.))),
+                dpr: 1.0,
+                zoomed_at: Instant::now(),
+                generation: 0,
+                rebuilding: None,
+                drag: None,
+                zoom_test: zoom_test.then_some(ZoomTest { started: None, frames: vec![], last: None, base: 0.0, rebuilds: vec![], peak_rss: 0 }),
+                instant: start_board.is_some(),
+            };
+            let mut live = start_meeting.unwrap_or_default();
+            if start_board.is_none() {
+                                state.open(&live.graph, &live.memory);
+                live.adopt_summary_source(&fingerprint_of(&live));
+            }
+            if let Some(graph) = &start_board {
+                let started = Instant::now();
+                let strokes = state.update(graph, 0);
+                println!("{{\"synthetic_nodes\":{},\"strokes\":{strokes},\"layout_and_compose_ms\":{}}}", graph.nodes.len(), started.elapsed().as_millis());
+                                live.change_board(graph.clone(), state.board.snapshot());
+            }
+            if let Some(k) = zoom {
+                let e = &state.extent;
+                state.view = Some(View { k, x: e.x0 as f32 - 20.0 / k, y: e.y0 as f32 - 20.0 / k });
+                state.reading = true;
+            }
+            Ok(Prepared { state, live, vram_mib })
+        })();
+        let _ = startup.send(Startup::Ready(Box::new(prepared)));
+    });
     gpui_kit::application().with_assets(theme::Assets).run(move |cx: &mut App| {
         gpui_kit::init(cx);
         theme::apply(cx);
@@ -3642,61 +3733,6 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             app_id: Some("boardcast".into()),
             ..Default::default()
         };
-        let mut state = Ink {
-            glyphs,
-            board: StableLayout::default(),
-            base: Tier::new(1.0),
-            detail: None,
-            retired: vec![],
-            queue: VecDeque::new(),
-            live: 0.0,
-            finished: vec![],
-            drawn: HashSet::new(),
-            last: None,
-            timings: vec![],
-            graph: None,
-            next_tidy_batch: 0,
-            targets: vec![],
-            ink_boxes: vec![],
-            insets: [0.0; 4],
-            trace: None,
-            selected: None,
-            selected_at: None,
-            mark_unit: MarkUnit::Block,
-            page: None,
-            hints: None,
-            extent: BoardBounds::default(),
-            view: None,
-            reading: false,
-            canvas: Bounds::new(point(px(0.), px(0.)), size(px(960.), px(756.))),
-            dpr: 1.0,
-            zoomed_at: Instant::now(),
-            generation: 0,
-            rebuilding: None,
-            drag: None,
-            zoom_test: zoom_test.then_some(ZoomTest { started: None, frames: vec![], last: None, base: 0.0, rebuilds: vec![], peak_rss: 0 }),
-            instant: start_board.is_some(),
-        };
-        let mut live = start_meeting.unwrap_or_default();
-        if start_board.is_none() {
-            pipeline.session().open(live.graph.clone(), live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect());
-            state.open(&live.graph, &live.memory);
-            live.adopt_summary_source(&fingerprint_of(&live));
-        }
-        if let Some(graph) = &start_board {
-            let started = Instant::now();
-            let strokes = state.update(graph, 0);
-            println!("{{\"synthetic_nodes\":{},\"strokes\":{strokes},\"layout_and_compose_ms\":{}}}", graph.nodes.len(), started.elapsed().as_millis());
-            pipeline.session().open(graph.clone(), vec![]);
-            live.change_board(graph.clone(), state.board.snapshot());
-        }
-        if let Some(k) = zoom {
-            let e = &state.extent;
-            state.view = Some(View { k, x: e.x0 as f32 - 20.0 / k, y: e.y0 as f32 - 20.0 / k });
-            state.reading = true;
-        }
-        pipeline.start_script();
-        let ink = Rc::new(RefCell::new(state));
         // Closing the last window ends the app, which also stops the local model.
         cx.on_window_closed(|cx, _| {
             if cx.windows().is_empty() {
@@ -3704,7 +3740,12 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             }
         })
         .detach();
-        gpui_kit::open_window(options, cx, move |window, cx| {
+        let build = move |prepared: Prepared, window: &mut Window, cx: &mut App| -> Entity<Workbench> {
+            let Prepared { state, live, vram_mib } = prepared;
+            let history: Vec<Utterance> = live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
+            pipeline.session().open(live.graph.clone(), history);
+            pipeline.start_script();
+            let ink = Rc::new(RefCell::new(state));
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Type a line, Enter puts it on the board", "输入一句话，回车上板")));
             let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
             let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
@@ -3811,8 +3852,48 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             });
             #[cfg(target_os = "macos")]
             app_menu(cx);
-            // The kit wraps it in the root view it needs.
             view
+        };
+        gpui_kit::open_window(options, cx, move |window, cx| {
+            cx.new(|cx| {
+                cx.spawn_in(window, async move |this, cx| {
+                    let mut build = Some(build);
+                    let mut ready: Option<Prepared> = None;
+                    loop {
+                        cx.background_executor().timer(Duration::from_millis(16)).await;
+                        while let Ok(update) = starting.try_recv() {
+                            match update {
+                                Startup::Word(strokes) => {
+                                    let _ = this.update(cx, |shell: &mut Shell, cx| {
+                                        shell.word = strokes;
+                                        shell.started = Instant::now();
+                                        cx.notify();
+                                    });
+                                }
+                                Startup::Ready(prepared) => match *prepared {
+                                    Ok(prepared) => ready = Some(prepared),
+                                    Err(e) => {
+                                        eprintln!("could not start: {e:#}");
+                                        std::process::exit(1);
+                                    }
+                                },
+                            }
+                        }
+                        let written = this.update(cx, |shell: &mut Shell, _| shell.started.elapsed() >= crate::splash::WRITING).unwrap_or(true);
+                        if ready.is_some() && (written || scripted) {
+                            break;
+                        }
+                    }
+                    let prepared = ready.take().expect("checked above");
+                    let build = build.take().expect("runs once");
+                    let _ = this.update_in(cx, |shell: &mut Shell, window, cx| {
+                        shell.workbench = Some(build(prepared, window, cx));
+                        cx.notify();
+                    });
+                })
+                .detach();
+                Shell { workbench: None, word: vec![], started: Instant::now() }
+            })
         })
         .expect("open window");
     });

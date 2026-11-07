@@ -20,3 +20,4 @@ eval/asr/__pycache__/
 target/
 # The model downloader is code; only downloaded models are ignored above.
 !crates/models/
+/eval/asr/own-voice/recordings/

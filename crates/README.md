@@ -126,6 +126,12 @@ that became a note without rules became an item with them, and only items count.
 
 The checker's auto-repair fired on real model output once, on DeepSeek's `group-phrasing`.
 
+Speech is recognized by SenseVoice. A sentence it hears as English, with no Chinese, Japanese or Korean in it, is recognized
+again by Parakeet Unified EN, which did better on English meetings (18.49% against 13.79% WER on four business calls in
+`eval/asr/long-meetings-2026-11-02.md`). Chinese with English terms stays with SenseVoice, as Parakeet has no Chinese.
+`crates/audio/examples/asr-compare.rs` compares the two and the routing on any recordings with known text, such as
+`eval/asr/own-voice/`.
+
 Speakers are told apart by voice with CAM++, comparing each sentence with the voices heard so far, as the older app does and
 with its threshold. On the two recordings in `eval/asr/corpus.json` with four labelled speakers, run through the whole
 speech chain, it found the right number of voices. Purity is how often a name holds one person, and coverage how often a

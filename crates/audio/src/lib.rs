@@ -2,7 +2,7 @@
 //! It knows nothing about boards; callers receive each sentence through a callback.
 
 use anyhow::{anyhow, Context, Result};
-use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, SileroVadModelConfig, SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, VadModelConfig, VoiceActivityDetector, Wave};
+use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, OfflineTransducerModelConfig, SileroVadModelConfig, SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, VadModelConfig, VoiceActivityDetector, Wave};
 use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -100,14 +100,71 @@ pub struct Sentence {
     /// Where in the input it began, in seconds.
     pub start: f64,
     pub seconds: f64,
+    /// Which recognizer wrote the text.
+    pub engine: Engine,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Engine {
+    SenseVoice,
+    Parakeet,
+}
+
+/// Whether recognized text is English rather than another language: letters, and no Chinese, Japanese
+/// or Korean. Chinese with English terms stays with SenseVoice, which handles that mix.
+pub fn is_english(text: &str) -> bool {
+    let cjk = text.chars().any(|c| matches!(c as u32, 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF));
+    let letters = text.chars().filter(char::is_ascii_alphabetic).count();
+    !cjk && letters >= 2
 }
 
 pub trait Heard: FnMut(Sentence) {}
 impl<F: FnMut(Sentence)> Heard for F {}
 
+fn recognize(asr: &OfflineRecognizer, samples: &[f32]) -> String {
+    let stream = asr.create_stream();
+    stream.accept_waveform(SAMPLE_RATE, samples);
+    asr.decode(&stream);
+    stream.get_result().map(|r| r.text.trim().to_string()).unwrap_or_default()
+}
+
+/// Parakeet Unified EN, from `dir`, if its files are there.
+pub fn load_parakeet(dir: &Path) -> Option<OfflineRecognizer> {
+    let file = |name: &str| dir.join(name).is_file().then(|| dir.join(name).to_string_lossy().to_string());
+    let mut config = OfflineRecognizerConfig::default();
+    config.model_config.transducer = OfflineTransducerModelConfig { encoder: file("encoder.int8.onnx"), decoder: file("decoder.int8.onnx"), joiner: file("joiner.int8.onnx") };
+    config.model_config.tokens = file("tokens.txt");
+    config.model_config.model_type = Some("nemo_transducer".into());
+    config.model_config.num_threads = 2;
+    if config.model_config.transducer.encoder.is_none() || config.model_config.tokens.is_none() {
+        return None;
+    }
+    let recognizer = OfflineRecognizer::create(&config);
+    if recognizer.is_none() {
+        eprintln!("Parakeet did not load, so SenseVoice recognizes English too");
+    }
+    recognizer
+}
+
+/// SenseVoice, from `dir`.
+pub fn load_sense_voice(dir: &Path) -> Result<OfflineRecognizer> {
+    let mut config = OfflineRecognizerConfig::default();
+    config.model_config.sense_voice = OfflineSenseVoiceModelConfig { model: Some(dir.join("model.int8.onnx").to_string_lossy().to_string()), language: Some("auto".into()), use_itn: true };
+    config.model_config.tokens = Some(dir.join("tokens.txt").to_string_lossy().to_string());
+    config.model_config.num_threads = 2;
+    OfflineRecognizer::create(&config).context("loading SenseVoice")
+}
+
+/// Recognize a whole recording with one engine, for comparing them on the same audio.
+pub fn transcribe(asr: &OfflineRecognizer, samples: &[f32]) -> String {
+    recognize(asr, samples)
+}
+
 pub struct Ear {
     vad: VoiceActivityDetector,
     asr: OfflineRecognizer,
+    /// Recognizes English again, as it does English better. Without its files, SenseVoice does everything.
+    english: Option<OfflineRecognizer>,
     speaker: Option<SpeakerEmbeddingExtractor>,
     pending: Vec<f32>,
     /// The sentence being said, from the moment speech was detected and with some audio before it.
@@ -126,8 +183,8 @@ pub struct Ear {
 }
 
 impl Ear {
-    /// `models` holds `silero_vad.onnx`, `sense-voice/` and `speaker/`. Without the last, speech is still
-    /// heard but speakers are not told apart.
+    /// `models` holds `silero_vad.onnx`, `sense-voice/`, `speaker/` and `parakeet-en/`. Without the last two,
+    /// speech is still heard, but speakers are not told apart and English is left to SenseVoice.
     pub fn load(models: &Path) -> Result<Self> {
         let path = |p: &str| models.join(p).to_string_lossy().to_string();
         let vad_config = VadModelConfig {
@@ -153,6 +210,7 @@ impl Ear {
         asr_config.model_config.tokens = Some(path("sense-voice/tokens.txt"));
         asr_config.model_config.num_threads = 2;
         let asr = OfflineRecognizer::create(&asr_config).context("loading SenseVoice")?;
+        let english = load_parakeet(&models.join("parakeet-en"));
         let speaker = SpeakerEmbeddingExtractor::create(&SpeakerEmbeddingExtractorConfig { model: Some(path("speaker/campplus_zh_en.onnx")), num_threads: 1, ..Default::default() });
         if speaker.is_none() {
             eprintln!("the speaker model did not load, so speakers will not be told apart");
@@ -160,6 +218,7 @@ impl Ear {
         Ok(Self {
             vad,
             asr,
+            english,
             speaker,
             pending: vec![],
             speech: vec![],
@@ -227,13 +286,17 @@ impl Ear {
             return;
         }
         let ended = Instant::now();
-        let stream = self.asr.create_stream();
-        stream.accept_waveform(SAMPLE_RATE, samples);
-        self.asr.decode(&stream);
-        let text = stream.get_result().map(|r| r.text.trim().to_string()).unwrap_or_default();
+        let mut text = recognize(&self.asr, samples);
+        let mut engine = Engine::SenseVoice;
+        if let Some(english) = self.english.as_ref().filter(|_| is_english(&text)) {
+            let again = recognize(english, samples);
+            if !again.is_empty() {
+                (text, engine) = (again, Engine::Parakeet);
+            }
+        }
         if !text.is_empty() {
             let asr_ms = ended.elapsed().as_millis();
-            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE) });
+            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine });
         }
     }
 
@@ -362,6 +425,16 @@ pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn english_goes_to_parakeet_and_chinese_with_english_terms_does_not() {
+        assert!(is_english("The gateway forwards the request."));
+        assert!(!is_english("小程序把请求发给后端的异步 API。"));
+        assert!(!is_english("Account 下面有 User API。"));
+        assert!(!is_english("はい、そうです"));
+        assert!(!is_english("1."));
+        assert!(!is_english(""));
+    }
 
     #[test]
     fn the_meter_shows_quiet_speech_and_nothing_for_silence() {

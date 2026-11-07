@@ -1,4 +1,4 @@
-// 下载语音模型（SenseVoice int8 + tokens + Silero VAD + CAM++ 声纹，约 268 MB）到 resources/voice/，
+// 下载语音模型（SenseVoice int8 + tokens + Silero VAD + CAM++ 声纹 + Parakeet 英文，约 930 MB）到 resources/voice/，
 // 打包时作为资源带进安装包，用户装完就能直接收音，不用再到「本地模型」里下载。
 //   node scripts/fetch-voice.mjs
 // 已经下好、sha256 也对得上的文件直接跳过。设置了 BOARDCAST_VOICE_DIR 且那里的文件校验通过时，直接从那里复制。
@@ -36,6 +36,27 @@ const FILES = [
     sha256: 'aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2',
     hf: 'csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
     gh: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+  },
+  // Parakeet Unified EN, about 663 MB: English sentences are recognized again with it. Pinned to a revision.
+  {
+    name: 'voice/parakeet-en/encoder.int8.onnx',
+    sha256: '6716910b7a0833997fec7a410494c995d70124001a0e9b66d6370d6aced577e0',
+    hf: 'csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/encoder.int8.onnx',
+  },
+  {
+    name: 'voice/parakeet-en/decoder.int8.onnx',
+    sha256: 'a5e223392c90e75f8144cdb5eb95af7625db389e39edef2bd1a9c872b3298fe6',
+    hf: 'csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/decoder.int8.onnx',
+  },
+  {
+    name: 'voice/parakeet-en/joiner.int8.onnx',
+    sha256: '869f43f7d24595c55581ad3bf249a935fb8a71389fbdaa7504b9f46f93140f8a',
+    hf: 'csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/joiner.int8.onnx',
+  },
+  {
+    name: 'voice/parakeet-en/tokens.txt',
+    sha256: 'dc0b4584ab2e4ddbf888425c076c61b736e7356a015250db7d307e6f1a8188ff',
+    hf: 'csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/tokens.txt',
   },
 ]
 

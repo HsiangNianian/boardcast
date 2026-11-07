@@ -1,7 +1,7 @@
 //! Reading the text in a piece of an image with a local model. It runs on this machine only and goes
 //! away when done, so a meeting using a remote model never sends it an image.
 
-use crate::{list_gpus, pick_gpu, spawn_llama, wait_until_up, LocalServer, LLAMA_PORT};
+use crate::{is_discrete, list_gpus, pick_gpu, spawn_llama, wait_until_up, LocalServer, LLAMA_PORT};
 use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
@@ -26,8 +26,9 @@ impl VisionServer {
         let server = LocalServer { binaries: binaries.to_path_buf(), model: model.to_path_buf() };
         let base = format!("http://127.0.0.1:{VISION_PORT}");
         let health = format!("{base}/health");
-        let device = pick_gpu(&list_gpus(binaries));
-        let mut child = spawn_llama(&server, device.as_deref(), VISION_PORT, Some(projector))?;
+        let gpus = list_gpus(binaries);
+        let device = pick_gpu(&gpus);
+        let mut child = spawn_llama(&server, device.as_deref(), is_discrete(&gpus, device.as_deref()), VISION_PORT, Some(projector))?;
         if let Err(first) = wait_until_up(&health, &mut child) {
             let _ = child.kill();
             let _ = child.wait();
@@ -35,7 +36,7 @@ impl VisionServer {
                 return Err(first);
             }
             eprintln!("image model did not start on {device:?}: {first:#}; trying the CPU");
-            child = spawn_llama(&server, None, VISION_PORT, Some(projector))?;
+            child = spawn_llama(&server, None, false, VISION_PORT, Some(projector))?;
             wait_until_up(&health, &mut child)?;
         }
         Ok(Self { child, base })

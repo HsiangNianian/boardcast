@@ -3,6 +3,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, SileroVadModelConfig, VadModelConfig, VoiceActivityDetector, Wave};
+use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
@@ -13,6 +14,71 @@ pub const SAMPLE_RATE: i32 = 16_000;
 const VAD_WINDOW: usize = 512;
 /// Same pause as the desktop app: this long a silence ends a sentence.
 const MIN_SILENCE: f32 = 0.45;
+const MAX_SPEECH: f32 = 10.0;
+/// Once a sentence is this long, in seconds, a short dip in loudness is enough to end it. People who
+/// talk continuously rarely pause for `MIN_SILENCE`, and waiting for `MAX_SPEECH` leaves the board behind.
+const SOFT_MAX: f32 = 4.0;
+/// How many quiet windows of 32 ms make a dip. Right after `SOFT_MAX` it takes a breath, so the gaps
+/// between words don't cut a clause in half; the longer the sentence runs, the shorter the dip needed.
+const SOFT_PAUSE: usize = 10;
+const SOFT_PAUSE_MIN: usize = 4;
+/// A window is quiet below this share of the sentence's median loudness.
+const QUIET_RATIO: f32 = 0.3;
+/// Taken from before speech was detected, or the first word is lost: the detector only reports speech
+/// after `min_speech_duration` and its own delay. SenseVoice also reads a first word better after some silence.
+const PREROLL: usize = SAMPLE_RATE as usize;
+/// The most audio kept for one unbroken stretch of speech. Soft cuts do not empty the detector's own
+/// buffer, so past this it is flushed without resetting its clock.
+const RETAIN: usize = SAMPLE_RATE as usize * 30;
+
+/// Levels only the detector's copy: quiet speech can be recognizable yet below Silero's input range.
+struct VadLevel {
+    peak: f32,
+    gain: f32,
+}
+
+impl Default for VadLevel {
+    fn default() -> Self {
+        Self { peak: 0.0, gain: 1.0 }
+    }
+}
+
+impl VadLevel {
+    fn apply(&mut self, samples: &mut [f32]) {
+        self.peak = samples.iter().fold(self.peak * 0.95, |peak, x| peak.max(x.abs()));
+        let target = if self.peak >= 0.08 { 1.0 } else { (0.2 / self.peak.max(0.025)).clamp(1.0, 8.0) };
+        // Fast reduction, gradual increase: the quiet onset of normal speech must not be boosted 8x.
+        let rise = if rms(samples) >= 0.0005 { 0.125 } else { 0.0 };
+        self.gain = target.min(self.gain + rise);
+        for sample in samples {
+            *sample *= self.gain;
+        }
+    }
+}
+
+fn rms(samples: &[f32]) -> f32 {
+    (samples.iter().map(|x| x * x).sum::<f32>() / samples.len().max(1) as f32).sqrt()
+}
+
+/// Given each window's loudness, whether the sentence can end at the dip it finishes on, and how many
+/// windows at the end belong to the next one.
+fn soft_break(loudness: &[f32]) -> Option<usize> {
+    let n = loudness.len();
+    if n * VAD_WINDOW < (SOFT_MAX * SAMPLE_RATE as f32) as usize {
+        return None;
+    }
+    let mut sorted = loudness.to_vec();
+    sorted.sort_by(f32::total_cmp);
+    // The quiet-room floor stays below speech itself; an absolute floor cuts quiet words in half.
+    let median = sorted[n / 2];
+    let quiet = (median * QUIET_RATIO).max(0.003_f32.min(median * 0.5));
+    let run = loudness.iter().rev().take_while(|&&r| r < quiet).count();
+    // One window less per second past SOFT_MAX.
+    let over = (n * VAD_WINDOW) as f32 / SAMPLE_RATE as f32 - SOFT_MAX;
+    let need = (SOFT_PAUSE as f32 - over).round().clamp(SOFT_PAUSE_MIN as f32, SOFT_PAUSE as f32) as usize;
+    // After a cut only the tail is kept, so this does not fire again on the same dip.
+    (run >= need).then_some(run / 2)
+}
 
 /// A finished sentence, its recognition time, and when the sentence was detected as over.
 pub trait Heard: FnMut(String, u128, Instant) {}
@@ -22,6 +88,19 @@ pub struct Ear {
     vad: VoiceActivityDetector,
     asr: OfflineRecognizer,
     pending: Vec<f32>,
+    /// The sentence being said, from the moment speech was detected and with some audio before it.
+    speech: Vec<f32>,
+    /// The loudness of each window of `speech`.
+    loudness: Vec<f32>,
+    /// Everything before this sample, counted like `fed`, was already heard.
+    sent_until: usize,
+    recent: Vec<f32>,
+    in_speech: bool,
+    speech_start: usize,
+    fed: usize,
+    level: VadLevel,
+    /// The original samples: recognition must not hear the detector's gain.
+    audio: VecDeque<f32>,
 }
 
 impl Ear {
@@ -35,7 +114,7 @@ impl Ear {
                 min_silence_duration: MIN_SILENCE,
                 min_speech_duration: 0.25,
                 window_size: VAD_WINDOW as i32,
-                max_speech_duration: 10.0,
+                max_speech_duration: MAX_SPEECH,
             },
             sample_rate: SAMPLE_RATE,
             num_threads: 1,
@@ -51,36 +130,111 @@ impl Ear {
         asr_config.model_config.tokens = Some(path("sense-voice/tokens.txt"));
         asr_config.model_config.num_threads = 2;
         let asr = OfflineRecognizer::create(&asr_config).context("loading SenseVoice")?;
-        Ok(Self { vad, asr, pending: vec![] })
+        Ok(Self {
+            vad,
+            asr,
+            pending: vec![],
+            speech: vec![],
+            loudness: vec![],
+            sent_until: 0,
+            recent: vec![],
+            in_speech: false,
+            speech_start: 0,
+            fed: 0,
+            level: VadLevel::default(),
+            audio: VecDeque::new(),
+        })
     }
 
     pub fn feed(&mut self, samples: &[f32], heard: &mut impl Heard) {
         self.pending.extend_from_slice(samples);
-        let whole = self.pending.len() / VAD_WINDOW * VAD_WINDOW;
-        for chunk in self.pending[..whole].chunks_exact(VAD_WINDOW) {
-            self.vad.accept_waveform(chunk);
+        while self.pending.len() >= VAD_WINDOW {
+            let chunk: Vec<f32> = self.pending.drain(..VAD_WINDOW).collect();
+            self.fed += VAD_WINDOW;
+            self.audio.extend(&chunk);
+            let mut leveled = chunk.clone();
+            self.level.apply(&mut leveled);
+            self.vad.accept_waveform(&leveled);
+
+            if self.in_speech {
+                self.speech.extend_from_slice(&chunk);
+                self.loudness.push(rms(&chunk));
+                if let Some(back) = soft_break(&self.loudness) {
+                    self.soft_cut(back, heard);
+                }
+            } else {
+                self.recent.extend_from_slice(&chunk);
+                let extra = self.recent.len().saturating_sub(PREROLL);
+                self.recent.drain(..extra);
+            }
+            if self.vad.detected() && !self.in_speech {
+                self.in_speech = true;
+                self.speech = std::mem::take(&mut self.recent);
+                self.speech_start = self.fed - self.speech.len();
+                self.loudness = self.speech.chunks(VAD_WINDOW).map(rms).collect();
+            }
+            if self.in_speech && self.fed - self.speech_start >= RETAIN - PREROLL {
+                self.vad.flush();
+            }
+            self.drain(heard);
+            let keep_from = if self.in_speech { self.sent_until } else { self.fed.saturating_sub(PREROLL) };
+            let discard = keep_from.saturating_sub(self.fed - self.audio.len()).min(self.audio.len());
+            self.audio.drain(..discard);
         }
-        self.pending.drain(..whole);
-        self.drain(heard);
+    }
+
+    /// End a sentence at a dip. What was sent stays recorded in `sent_until`, so the detector's own
+    /// segment, which still holds it, is not heard twice.
+    fn soft_cut(&mut self, back: usize, heard: &mut impl Heard) {
+        let keep = (back * VAD_WINDOW).min(self.speech.len());
+        let head: Vec<f32> = self.speech.drain(..self.speech.len() - keep).collect();
+        let windows = self.loudness.len();
+        self.loudness.drain(..windows - back.min(windows));
+        self.sent_until = self.fed - keep;
+        self.hear(&head, heard);
+    }
+
+    fn hear(&mut self, samples: &[f32], heard: &mut impl Heard) {
+        if samples.len() < VAD_WINDOW {
+            return;
+        }
+        let ended = Instant::now();
+        let stream = self.asr.create_stream();
+        stream.accept_waveform(SAMPLE_RATE, samples);
+        self.asr.decode(&stream);
+        let text = stream.get_result().map(|r| r.text.trim().to_string()).unwrap_or_default();
+        if !text.is_empty() {
+            heard(text, ended.elapsed().as_millis(), ended);
+        }
     }
 
     fn drain(&mut self, heard: &mut impl Heard) {
         while let Some(segment) = self.vad.front() {
-            let ended = Instant::now();
-            let stream = self.asr.create_stream();
-            stream.accept_waveform(SAMPLE_RATE, segment.samples());
-            self.asr.decode(&stream);
-            let text = stream.get_result().map(|r| r.text.trim().to_string()).unwrap_or_default();
-            let asr_ms = ended.elapsed().as_millis();
+            let start = usize::try_from(segment.start()).unwrap_or(0);
+            let length = segment.samples().len();
+            let skip = self.sent_until.saturating_sub(start).min(length);
+            let offset = (start + skip).saturating_sub(self.fed - self.audio.len());
+            let samples: Vec<f32> = self.audio.iter().skip(offset).take(length - skip).copied().collect();
+            self.hear(&samples, heard);
+            self.sent_until = start + length;
             self.vad.pop();
-            if !text.is_empty() {
-                heard(text, asr_ms, ended);
-            }
+            self.in_speech = self.vad.detected();
+            self.speech.clear();
+            self.loudness.clear();
+        }
+        // The detector no longer hears speech but gave no segment, as it was too short to keep.
+        if !self.vad.detected() && self.in_speech && self.vad.is_empty() {
+            self.in_speech = false;
+            self.speech.clear();
+            self.loudness.clear();
         }
     }
 
     /// The input ended: whatever is still buffered counts as a sentence.
     pub fn finish(&mut self, heard: &mut impl Heard) {
+        if !self.pending.is_empty() {
+            self.feed(&vec![0.0; VAD_WINDOW - self.pending.len()], heard);
+        }
         self.vad.flush();
         self.drain(heard);
     }
@@ -151,4 +305,95 @@ pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>) -> Result<()> {
         thread::sleep(Duration::from_millis(50));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_detector_gain_is_bounded_and_leaves_silence_and_normal_levels_alone() {
+        let mut level = VadLevel::default();
+        let mut silent = [0.0; VAD_WINDOW];
+        level.apply(&mut silent);
+        assert_eq!(silent, [0.0; VAD_WINDOW]);
+        let mut quiet = [0.002; VAD_WINDOW];
+        level.apply(&mut quiet);
+        assert!(quiet[0] > 0.002 && quiet[0] < 0.003, "the gain must rise gradually");
+        for _ in 0..100 {
+            quiet.fill(0.002);
+            level.apply(&mut quiet);
+        }
+        assert!(quiet.iter().all(|&x| (x - 0.016).abs() < 1e-6));
+        let mut normal = [0.5, -0.8, 1.0, -1.0];
+        level.apply(&mut normal);
+        assert_eq!(normal, [0.5, -0.8, 1.0, -1.0]);
+        // A brief dip after a loud frame must not immediately amplify the noise floor.
+        let mut dip = [0.001; VAD_WINDOW];
+        level.apply(&mut dip);
+        assert_eq!(dip, [0.001; VAD_WINDOW]);
+    }
+
+    #[test]
+    fn a_soft_break_needs_a_long_sentence_and_a_dip() {
+        let loud = vec![0.1_f32; 200];
+        assert_eq!(soft_break(&loud), None);
+        let quiet_speech: Vec<f32> = loud.iter().map(|r| r * 0.01).collect();
+        assert_eq!(soft_break(&quiet_speech), None, "quiet speech is not a pause");
+        let mut short = vec![0.1_f32; 60];
+        short.extend([0.001; SOFT_PAUSE]);
+        assert_eq!(soft_break(&short), None);
+        // Just past SOFT_MAX a gap between words is not enough, and a breath is.
+        let mut just = vec![0.1_f32; 120];
+        just.extend([0.001; 6]);
+        assert_eq!(soft_break(&just), None);
+        just.extend([0.001; SOFT_PAUSE - 6]);
+        assert_eq!(soft_break(&just), Some(SOFT_PAUSE / 2));
+        let quiet_pause: Vec<f32> = just.iter().map(|r| r * 0.01).collect();
+        assert_eq!(soft_break(&quiet_pause), soft_break(&just));
+        // Near MAX_SPEECH a short dip is enough.
+        let mut late = vec![0.1_f32; 310];
+        late.extend([0.001; SOFT_PAUSE_MIN]);
+        assert_eq!(soft_break(&late), Some(SOFT_PAUSE_MIN / 2));
+        // A dip relative to the speaker's level counts even in a loud room.
+        let mut loud_room = vec![0.4_f32; 200];
+        loud_room.extend([0.05; SOFT_PAUSE]);
+        assert!(soft_break(&loud_room).is_some());
+    }
+
+    /// Models and speech, from `BOARDCAST_VOICE_DIR`. CI runs these with the packaged models.
+    fn models() -> Option<std::path::PathBuf> {
+        std::env::var_os("BOARDCAST_VOICE_DIR").map(std::path::PathBuf::from)
+    }
+
+    fn hear_all(ear: &mut Ear, samples: &[f32]) -> Vec<String> {
+        let mut said = vec![];
+        let mut heard = |text: String, _: u128, _: Instant| said.push(text);
+        for chunk in samples.chunks(SAMPLE_RATE as usize / 10) {
+            ear.feed(chunk, &mut heard);
+        }
+        ear.finish(&mut heard);
+        said
+    }
+
+    #[test]
+    fn silence_and_noise_produce_nothing() {
+        let Some(dir) = models() else { return };
+        let mut ear = Ear::load(&dir).unwrap();
+        assert_eq!(hear_all(&mut ear, &vec![0.0; SAMPLE_RATE as usize * 3]), Vec::<String>::new());
+        // Broadband noise and hum, at levels the detector's gain will boost.
+        for amplitude in [0.001, 0.01] {
+            let mut seed = 7_u32;
+            let noise: Vec<f32> = (0..SAMPLE_RATE as usize * 4)
+                .map(|i| {
+                    seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    let white = f64::from(seed) / f64::from(u32::MAX) * 2.0 - 1.0;
+                    let hum = (i as f64 * std::f64::consts::TAU * 50.0 / f64::from(SAMPLE_RATE)).sin();
+                    ((white + hum) * amplitude) as f32
+                })
+                .collect();
+            let mut ear = Ear::load(&dir).unwrap();
+            assert_eq!(hear_all(&mut ear, &noise), Vec::<String>::new());
+        }
+    }
 }

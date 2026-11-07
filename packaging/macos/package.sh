@@ -24,6 +24,7 @@ mkdir -p "$app/MacOS" "$lib/voice/sense-voice" "$lib/voice/speaker" "$lib/pdfium
 
 install -m755 target/release/boardcast "$app/MacOS/boardcast"
 strip "$app/MacOS/boardcast"
+sh scripts/build-apple-speech.sh "$app/MacOS/boardcast-speech"
 sed "s/@VERSION@/$version/g" packaging/macos/Info.plist.in > "$app/Info.plist"
 cp packaging/icons/icon.icns "$app/Resources/icon.icns"
 

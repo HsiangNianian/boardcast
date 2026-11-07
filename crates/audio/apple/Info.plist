@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>games.mmstudio.boardcast.speech</string>
+  <key>CFBundleName</key><string>boardcast Speech</string>
+  <key>LSUIElement</key><true/>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>boardcast recognizes what is said in a meeting with Apple's speech recognition, on this Mac when it can.</string>
+</dict></plist>

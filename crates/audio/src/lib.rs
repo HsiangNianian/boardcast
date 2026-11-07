@@ -11,6 +11,8 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::{Duration, Instant};
 
+pub mod system;
+
 pub const SAMPLE_RATE: i32 = 16_000;
 const VAD_WINDOW: usize = 512;
 /// Same pause as the desktop app: this long a silence ends a sentence.
@@ -224,6 +226,16 @@ impl Recognizers {
     /// Whatever models are in `models`: `sense-voice/`, `parakeet-en/` and `reazon-ja/`.
     pub fn load(models: &Path) -> Self {
         Self { system: None, sense_voice: load_sense_voice_if_there(&models.join("sense-voice")), english: load_parakeet(&models.join("parakeet-en")), japanese: load_reazon(&models.join("reazon-ja")) }
+    }
+
+    /// Only the system's recognizer, for when it was chosen and nothing else needs loading.
+    pub fn system(recognizer: Box<dyn Recognizer>) -> Self {
+        Self { system: Some(recognizer), sense_voice: None, english: None, japanese: None }
+    }
+
+    /// The models there, by name, for saying what hears.
+    pub fn names(&self) -> Vec<&'static str> {
+        [(self.sense_voice.is_some(), "SenseVoice"), (self.english.is_some(), "Parakeet"), (self.japanese.is_some(), "ReazonSpeech")].into_iter().filter_map(|(there, name)| there.then_some(name)).collect()
     }
 
     pub fn is_empty(&self) -> bool {

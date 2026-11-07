@@ -15,6 +15,7 @@ use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message,
 use boardcast_board::speakers::{attribute, rename_by};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};
+#[cfg(target_os = "linux")]
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -254,7 +255,11 @@ fn parse_devices(text: &str) -> Vec<Gpu> {
 
 fn server_command(binaries: &std::path::Path) -> Command {
     let mut cmd = Command::new(binaries.join("llama-server"));
-    cmd.env("LD_LIBRARY_PATH", binaries).stdin(Stdio::null());
+    #[cfg(target_os = "macos")]
+    cmd.env("DYLD_LIBRARY_PATH", binaries);
+    #[cfg(not(target_os = "macos"))]
+    cmd.env("LD_LIBRARY_PATH", binaries);
+    cmd.stdin(Stdio::null());
     cmd
 }
 
@@ -307,9 +312,10 @@ fn llama_command(server: &LocalServer, device: Option<&str>, discrete: bool, por
     cmd
 }
 
-/// The child dies with the thread that started it.
+/// The child dies with the thread that started it on Linux, and with this process elsewhere.
 fn spawn_llama(server: &LocalServer, device: Option<&str>, discrete: bool, port: u16, projector: Option<&std::path::Path>) -> Result<Child> {
     let mut cmd = llama_command(server, device, discrete, port, projector);
+    #[cfg(target_os = "linux")]
     // SAFETY: prctl is async-signal-safe and touches no parent state between fork and exec.
     unsafe {
         cmd.pre_exec(|| {
@@ -317,7 +323,20 @@ fn spawn_llama(server: &LocalServer, device: Option<&str>, discrete: bool, port:
             Ok(())
         });
     }
-    cmd.spawn().with_context(|| format!("starting {}", server.binaries.join("llama-server").display()))
+    let child = cmd.spawn().with_context(|| format!("starting {}", server.binaries.join("llama-server").display()))?;
+    #[cfg(not(target_os = "linux"))]
+    end_with_this_process(child.id());
+    Ok(child)
+}
+
+/// Other systems can't tie a child's life to its parent, so a small shell waits for this process to go,
+/// however it goes, and then ends the child. It goes away by itself if the child ends first.
+#[cfg(not(target_os = "linux"))]
+fn end_with_this_process(child: u32) {
+    let script = format!("while kill -0 {parent} 2>/dev/null && kill -0 {child} 2>/dev/null; do sleep 1; done; kill {child} 2>/dev/null", parent = std::process::id());
+    if let Err(e) = Command::new("/bin/sh").args(["-c", &script]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+        eprintln!("could not tie the model to this process: {e}");
+    }
 }
 
 /// Start the server on the best device, falling back to the CPU if that fails to come up.

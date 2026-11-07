@@ -1,9 +1,10 @@
 //! How well voices are told apart on a recording whose speakers are known.
 //! Usage: speaker-eval <voice-models> <recording.wav> <reference.json>
 //! The reference is a list of `{ start, end, speaker }` in seconds, as in eval/asr/corpus.json.
+//! `SPEAKER_EVAL_EVERY_SENTENCE` lets any sentence start a new voice, to compare with the app's rule.
 
 use boardcast_audio::{Ear, Sentence, SAMPLE_RATE};
-use boardcast_board::speakers::{identify, Voice};
+use boardcast_board::speakers::{identify, identify_sentence, Voice};
 use serde_json::Value;
 use sherpa_onnx::Wave;
 use std::collections::{BTreeMap, BTreeSet};
@@ -28,6 +29,7 @@ fn truth_at(reference: &[Value], start: f64, end: f64) -> Option<String> {
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let every_sentence = std::env::var_os("SPEAKER_EVAL_EVERY_SENTENCE").is_some();
     let [models, recording, reference] = args.as_slice() else { anyhow::bail!("usage: speaker-eval <voice-models> <recording.wav> <reference.json>") };
     let reference: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(reference)?)?;
     let wave = Wave::read(recording).ok_or_else(|| anyhow::anyhow!("cannot read {recording}"))?;
@@ -47,7 +49,14 @@ fn main() -> anyhow::Result<()> {
     for (i, sentence) in sentences.iter().enumerate() {
         let end = sentences.get(i + 1).map_or(total, |next| next.start);
         let named = match &sentence.voiceprint {
-            Some(print) => identify(&mut voices, &print.iter().map(|x| f64::from(*x)).collect::<Vec<_>>(), &[]),
+            Some(print) => {
+                let print: Vec<f64> = print.iter().map(|x| f64::from(*x)).collect();
+                if every_sentence {
+                    identify(&mut voices, &print, &[])
+                } else {
+                    identify_sentence(&mut voices, &print, sentence.seconds, &[]).unwrap_or_else(|| last.clone())
+                }
+            }
             None => last.clone(),
         };
         last.clone_from(&named);

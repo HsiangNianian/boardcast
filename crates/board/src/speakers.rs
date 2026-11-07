@@ -65,6 +65,17 @@ pub fn identify(voices: &mut Vec<Voice>, voiceprint: &[f64], taken: &[&str]) -> 
     name
 }
 
+/// A sentence shorter than this can join a voice but not start one, in seconds. A word or two says little
+/// about a voice, and a stray new speaker is more of a nuisance than one short line given to the last speaker.
+const NEW_VOICE_SECONDS: f64 = 1.5;
+
+/// Who said this sentence, if its voice can tell. `None` means it is too short to name someone new, and
+/// belongs to whoever spoke last.
+pub fn identify_sentence(voices: &mut Vec<Voice>, voiceprint: &[f64], seconds: f64, taken: &[&str]) -> Option<String> {
+    let known = voices.iter().any(|voice| dot(&voice.centroid, voiceprint) >= SAME);
+    (known || seconds >= NEW_VOICE_SECONDS).then(|| identify(voices, voiceprint, taken))
+}
+
 /// Rename a voice. Taking a name another voice has joins the two, which had been told apart by mistake.
 pub fn rename_voice(voices: &mut Vec<Voice>, from: &str, to: &str) {
     if from == to {
@@ -312,6 +323,19 @@ mod tests {
             let found = said_at(lines, case["who"].as_str().unwrap(), &names, case["page"].as_u64().unwrap() as usize, seen);
             assert_eq!(found, case["found"].as_u64().map(|n| n as usize), "{}", case["name"]);
         }
+    }
+
+    #[test]
+    fn a_short_sentence_can_join_a_voice_but_not_start_one() {
+        let mut voices = vec![];
+        let (one, other) = ([1.0, 0.0], [0.0, 1.0]);
+        assert_eq!(identify_sentence(&mut voices, &one, 1.0, &[]), None);
+        assert!(voices.is_empty());
+        assert_eq!(identify_sentence(&mut voices, &one, 3.0, &[]).as_deref(), Some("A"));
+        assert_eq!(identify_sentence(&mut voices, &one, 1.0, &[]).as_deref(), Some("A"));
+        assert_eq!(identify_sentence(&mut voices, &other, 1.0, &[]), None);
+        assert_eq!(voices.len(), 1);
+        assert_eq!(identify_sentence(&mut voices, &other, 2.0, &[]).as_deref(), Some("B"));
     }
 
     #[test]

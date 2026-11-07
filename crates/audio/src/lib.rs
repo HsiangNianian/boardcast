@@ -81,7 +81,14 @@ fn soft_break(loudness: &[f32]) -> Option<usize> {
 }
 
 /// Shorter than this says too little about a voice, so "yeah" and "right" carry no voiceprint.
+const METER_RANGE_DB: f32 = 60.0;
 const MIN_VOICEPRINT: usize = SAMPLE_RATE as usize * 4 / 5;
+
+/// How full a level meter should be for a peak sample, from 0 to 1. Hearing is logarithmic: on a linear
+/// scale ordinary speech, whose peaks are often below a tenth, barely moves the bar.
+pub fn loudness(peak: f32) -> f32 {
+    (1.0 + 20.0 * peak.max(1e-5).log10() / METER_RANGE_DB).clamp(0.0, 1.0)
+}
 
 pub struct Sentence {
     pub text: String,
@@ -92,6 +99,7 @@ pub struct Sentence {
     pub ended: Instant,
     /// Where in the input it began, in seconds.
     pub start: f64,
+    pub seconds: f64,
 }
 
 pub trait Heard: FnMut(Sentence) {}
@@ -225,7 +233,7 @@ impl Ear {
         let text = stream.get_result().map(|r| r.text.trim().to_string()).unwrap_or_default();
         if !text.is_empty() {
             let asr_ms = ended.elapsed().as_millis();
-            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE) });
+            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE) });
         }
     }
 
@@ -354,6 +362,14 @@ pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_meter_shows_quiet_speech_and_nothing_for_silence() {
+        assert_eq!(loudness(0.0), 0.0);
+        assert_eq!(loudness(1.0), 1.0);
+        assert!(loudness(0.03) > 0.45, "{}", loudness(0.03));
+        assert!(loudness(0.3) > loudness(0.03));
+    }
 
     #[test]
     fn the_detector_gain_is_bounded_and_leaves_silence_and_normal_levels_alone() {

@@ -361,10 +361,24 @@ pub enum Step {
 
 /// Ask once; a reasoning model can spend everything on thinking and leave the answer empty, so an
 /// empty reply gets one retry with double the room.
+/// Take out lines the model has already written, when it has gone round in a loop. Headings and blank
+/// lines may repeat, and only list items and sentences of some length count, as `- 无` can fairly recur.
+fn drop_repeated_lines(text: &str) -> String {
+    let mut seen = std::collections::HashSet::new();
+    let kept: Vec<&str> = text
+        .split('\n')
+        .filter(|line| {
+            let line = line.trim();
+            line.starts_with('#') || line.chars().count() < 8 || seen.insert(line.to_string())
+        })
+        .collect();
+    kept.join("\n")
+}
+
 fn ask(provider: &Provider, messages: &[Value], tokens: u32, cancel: &AtomicBool) -> Result<String> {
     let reply = provider.chat(messages, tokens)?;
     if !reply.trim().is_empty() {
-        return Ok(reply);
+        return Ok(drop_repeated_lines(&reply));
     }
     if cancel.load(Ordering::Relaxed) {
         bail!("cancelled");
@@ -373,7 +387,7 @@ fn ask(provider: &Provider, messages: &[Value], tokens: u32, cancel: &AtomicBool
     if again.trim().is_empty() {
         return Err(anyhow!("The model returned no text."));
     }
-    Ok(again)
+    Ok(drop_repeated_lines(&again))
 }
 
 /// Write the summary. Between requests it notices `cancel`; a request already sent cannot be recalled,
@@ -422,6 +436,12 @@ mod tests {
 
     fn lines_of(v: &Value) -> Vec<Line> {
         Line::spoken(v.as_array().unwrap())
+    }
+
+    #[test]
+    fn a_model_going_round_in_a_loop_is_cut_back_to_one_pass() {
+        let looped = "### 待办\n- 固定切分在第四步切翻的原因\n- 提示词中语气词的处理逻辑\n- 无\n\n- 固定切分在第四步切翻的原因\n- 提示词中语气词的处理逻辑\n- 无\n### 待办\n- 另一件新的事情要做";
+        assert_eq!(drop_repeated_lines(looped), "### 待办\n- 固定切分在第四步切翻的原因\n- 提示词中语气词的处理逻辑\n- 无\n\n- 无\n### 待办\n- 另一件新的事情要做");
     }
 
     #[test]

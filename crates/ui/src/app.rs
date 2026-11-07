@@ -1105,7 +1105,8 @@ impl Workbench {
                     self.needs_model = true;
                     self.panel = Panel::Settings;
                 }
-                Event::Level(l) => self.level = l,
+                // Rises at once and falls away gently, so the bar reads as speech rather than flicker.
+                Event::Level(peak) => self.level = boardcast_audio::loudness(peak).max(self.level * 0.9),
                 Event::Heard { meeting, speaker, text, asr_ms } => {
                     if meeting == self.session().meeting() {
                         self.live.add_line(speaker.as_deref(), &text, asr_ms);
@@ -1113,7 +1114,7 @@ impl Workbench {
                 }
                 Event::Spoken { meeting, sentence } => {
                     if meeting == self.session().meeting() {
-                        let speaker = self.who_spoke(sentence.voiceprint.as_deref());
+                        let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds);
                         self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
                         let renames = self.session().renames_seen();
                         let line = Utterance { speaker, text: sentence.text };
@@ -1138,7 +1139,7 @@ impl Workbench {
                     let memory = ink.board.snapshot();
                     drop(ink);
                     self.live.model_drew(&spoken(&lines), graph, memory, &ops, llm_ms);
-                    self.status = format!("{} {}", tr("Board", "板书"), ops.replace('\n', "  "));
+                    self.status = String::new();
                 }
                 Event::Agent(Update::Failed { meeting, message, lines }) => {
                     if meeting != self.session().meeting() {
@@ -2256,9 +2257,11 @@ impl Workbench {
     }
 
     /// A voice says who it is. A sentence too short to tell goes to whoever spoke last.
-    fn who_spoke(&mut self, voiceprint: Option<&[f32]>) -> Option<String> {
+    fn who_spoke(&mut self, voiceprint: Option<&[f32]>, seconds: f64) -> Option<String> {
         if let Some(print) = voiceprint.filter(|_| self.form.saved.diarize) {
-            self.speaker = Some(self.live.identify_voice(print));
+            if let Some(name) = self.live.identify_voice(print, seconds) {
+                self.speaker = Some(name);
+            }
         }
         self.speaker.clone()
     }
@@ -3023,7 +3026,7 @@ impl Render for Workbench {
                     })),
             );
         }
-        let meter = (self.level.min(1.0) * 100.0).max(2.0);
+        let meter = self.level * 100.0;
         let editable = self.editable();
         let (page, pages) = (self.live.page(), self.live.pages());
         let save_label: String = match &self.save {
@@ -3321,7 +3324,8 @@ impl Render for Workbench {
                 d.child(button("save-local", tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
             })
             .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
-            .when(self.panel == Panel::Settings, |d| {
+            // Metal keeps its own shaders, so there is nothing here for a Mac to manage.
+            .when(self.panel == Panel::Settings && cfg!(not(target_os = "macos")), |d| {
                 let size = dir_size(&shader_dir(&self.models));
                 d.child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Graphics cache", "显卡缓存")))
                     .child(div().text_xs().text_color(rgb(MUTED)).child(format!(
@@ -3330,12 +3334,12 @@ impl Render for Workbench {
                         size as f64 / 1e6,
                         tr("Deleting them is safe, and the next start compiles them again, which takes about half a minute.", "删除是安全的，下次启动模型时会重新编译，大约需要半分钟。"),
                     )))
-                    .child(button("clear-shaders", tr("Delete", "删除")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
+                    .child(div().flex().child(button("clear-shaders", tr("Delete", "删除")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
                         if let Err(e) = std::fs::remove_dir_all(shader_dir(&this.models)) {
                             this.form.note = Some(format!("{e:#}"));
                         }
                         cx.notify();
-                    })))
+                    }))))
             })
             .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Updates", "更新")))
             .child(div().text_xs().text_color(rgb(MUTED)).child(format!("{} {}", tr("Version", "版本"), boardcast_update::VERSION)))

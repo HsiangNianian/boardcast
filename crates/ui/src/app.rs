@@ -22,6 +22,7 @@ use boardcast_agent::vision::VisionServer;
 use boardcast_export::Kind as ExportKind;
 use boardcast_import::pdf::NewPage;
 use boardcast_board::spans::{span_at, Unit};
+use boardcast_board::speakers::initial;
 use boardcast_board::steps::{clock, replay_to, Player};
 use gpui_kit::base::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::base::slider::{Slider, SliderEvent, SliderIndicator, SliderState, SliderThumb, SliderTrack};
@@ -608,6 +609,7 @@ enum Panel {
     Summary,
     Export,
     Import,
+    Speakers,
     Settings,
 }
 
@@ -769,6 +771,11 @@ struct Workbench {
     replay: Option<Replaying>,
     import: ImportState,
     arxiv_input: Entity<InputState>,
+    /// Who is speaking now, as far as anyone knows: lines with no voiceprint and typed lines go to them.
+    speaker: Option<String>,
+    /// The speaker being looked at in the speakers panel, and the name being written for them.
+    speaker_chosen: Option<String>,
+    speaker_name: Entity<InputState>,
     pdfium: PathBuf,
     /// Where the stroke data is, for work that needs its own copy.
     hanzi: HanziSource,
@@ -972,6 +979,15 @@ impl Workbench {
                 Event::Heard { meeting, speaker, text, asr_ms } => {
                     if meeting == self.session().meeting() {
                         self.live.add_line(speaker.as_deref(), &text, asr_ms);
+                    }
+                }
+                Event::Spoken { meeting, sentence } => {
+                    if meeting == self.session().meeting() {
+                        let speaker = self.who_spoke(sentence.voiceprint.as_deref());
+                        self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
+                        let renames = self.session().renames_seen();
+                        let line = Utterance { speaker, text: sentence.text };
+                        let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, asr_ms: Some(sentence.asr_ms), meeting, renames });
                     }
                 }
                 Event::Agent(Update::Drawn { meeting, graph, ops, lines, asr_ms, llm_ms, ended }) => {
@@ -1661,6 +1677,8 @@ impl Workbench {
         self.session().open(live.graph.clone(), history);
         self.ink.borrow_mut().open(&live.graph, &live.memory);
         self.summary.reset();
+        self.speaker = None;
+        self.speaker_chosen = None;
         self.live = live;
         self.live.adopt_summary_source(&fingerprint_of(&self.live));
         self.show_page_image();
@@ -2009,6 +2027,7 @@ impl Workbench {
             // An empty field keeps the saved key, which is never shown again.
             api_key: if key.is_empty() { self.form.saved.api_key.clone() } else { key },
             enabled: self.form.remote,
+            diarize: self.form.saved.diarize,
         }
     }
 
@@ -2050,15 +2069,122 @@ impl Workbench {
         cx.notify();
     }
 
+    /// A voice says who it is. A sentence too short to tell goes to whoever spoke last.
+    fn who_spoke(&mut self, voiceprint: Option<&[f32]>) -> Option<String> {
+        if let Some(print) = voiceprint.filter(|_| self.form.saved.diarize) {
+            self.speaker = Some(self.live.identify_voice(print));
+        }
+        self.speaker.clone()
+    }
+
+    fn choose_speaker(&mut self, name: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.speaker_name.update(cx, |state, cx| state.set_value(name.clone(), window, cx));
+        self.speaker_chosen = Some(name);
+        self.panel = Panel::Speakers;
+        cx.notify();
+    }
+
+    fn rename_speaker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let to = self.speaker_name.read(cx).value().trim().to_string();
+        let Some(from) = self.speaker_chosen.clone() else { return };
+        if !self.editable() || to.is_empty() || to == from {
+            return;
+        }
+        self.session().rename_speaker(&from, &to);
+        self.live.rename_speaker(&from, &to);
+        if self.speaker.as_deref() == Some(from.as_str()) {
+            self.speaker = Some(to.clone());
+        }
+        self.choose_speaker(to, window, cx);
+    }
+
+    fn speakers_panel(&self, editable: bool, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let names = self.live.speakers();
+        let rows = names.iter().enumerate().map(|(i, name)| {
+            let chosen = self.speaker_chosen.as_deref() == Some(name.as_str());
+            let (lines, _, _) = self.live.speaker_impact(name);
+            let picked = name.clone();
+            div()
+                .id(("speaker-row", i))
+                .flex()
+                .items_center()
+                .gap_2()
+                .p_1()
+                .rounded_md()
+                .cursor_pointer()
+                .when(chosen, |d| d.bg(rgb(0xec_ef_e7)))
+                .child(speaker_badge(&names, name))
+                .child(div().flex_1().min_w_0().text_sm().child(name.clone()))
+                .when(self.speaker.as_deref() == Some(name.as_str()), |d| d.child(div().text_xs().text_color(rgb(0x28_61_43)).child(tr("next", "下一句"))))
+                .child(div().text_xs().text_color(rgb(0x85_8a_80)).child(format!("{lines} {}", tr("lines", "句"))))
+                .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx)))
+        }).collect::<Vec<_>>();
+        let editing = self.speaker_chosen.clone().filter(|name| editable && names.contains(name)).map(|from| {
+            let to = self.speaker_name.read(cx).value().trim().to_string();
+            let merging = to != from && names.contains(&to);
+            let (lines, items, boards) = self.live.speaker_impact(&from);
+            let affects = tr("Affects {lines} transcript lines and {items} board items on {boards} boards.", "会改动 {lines} 句记录，以及 {boards} 张板上的 {items} 项内容。")
+                .replace("{lines}", &lines.to_string())
+                .replace("{items}", &items.to_string())
+                .replace("{boards}", &boards.to_string());
+            let notice = (to != from && !to.is_empty()).then(|| {
+                let text = if merging {
+                    tr("“{to}” already exists, so “{from}” will become part of that speaker, voice included. This can't be undone.", "“{to}”已经存在，“{from}”会并入这个人，声纹也一起合并。这一步不能撤销。")
+                } else {
+                    tr("“{from}” becomes “{to}”, including lines still waiting for the board.", "“{from}”会改成“{to}”，还在排队上板的句子也一样。")
+                };
+                text.replace("{from}", &from).replace("{to}", &to)
+            });
+            let next = from.clone();
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(tr("New name", "新名字")))
+                // Left alone, an input takes all the height it can get.
+                .child(div().h(px(34.)).flex().items_center().px_2().rounded_md().border_1().border_color(rgb(0xdd_dd_d8)).child(Input::new(&self.speaker_name)))
+                .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(affects))
+                .when_some(notice, |d, text| d.child(div().text_xs().text_color(rgb(if merging { 0x80_53_00 } else { 0x62_66_5c })).child(text)))
+                .child(
+                    div()
+                        .flex()
+                        .gap_1()
+                        .child(
+                            button("rename-speaker", if merging { tr("Merge speakers", "合并说话人") } else { tr("Rename", "改名") })
+                                .when(to.is_empty() || to == from, |b| b.opacity(0.4))
+                                .on_click(cx.listener(|this, _, window, cx| this.rename_speaker(window, cx))),
+                        )
+                        .child(button("use-speaker", tr("Use for next line", "下一句用这个人")).on_click(cx.listener(move |this, _, _, cx| {
+                            this.speaker = Some(next.clone());
+                            cx.notify();
+                        }))),
+                )
+        });
+        div()
+            .id("speakers-panel")
+            .flex_1()
+            .overflow_y_scroll()
+            .p_3()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Speakers", "说话人")))
+            .when(names.is_empty(), |d| d.child(div().text_sm().text_color(rgb(0x85_8a_80)).child(tr("Nobody has spoken yet.", "还没有人说话。"))))
+            .children(rows)
+            .when_some(editing, |d, editing| d.child(editing))
+    }
+
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.input.read(cx).value().trim().to_string();
         if text.is_empty() || !self.editable() {
             return;
         }
         self.input.update(cx, |state, cx| state.set_value("", window, cx));
-        self.live.add_line(None, &text, None);
+        let speaker = self.speaker.clone();
+        self.live.add_line(speaker.as_deref(), &text, None);
         let meeting = self.session().meeting();
-        let _ = self.pipeline.said.send(Said { line: Utterance { speaker: None, text }, ended: Instant::now(), asr_ms: None, meeting });
+        let renames = self.session().renames_seen();
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text }, ended: Instant::now(), asr_ms: None, meeting, renames });
         cx.notify();
     }
 
@@ -2359,6 +2485,13 @@ impl Workbench {
                 )
             })
     }
+}
+
+/// A speaker's letter in their color, which follows the order people first spoke in.
+fn speaker_badge(speakers: &[String], name: &str) -> gpui_kit::Div {
+    const COLORS: [(u32, u32); 6] = [(0xfc_d7_ea, 0xa6_1e_4d), (0xd6_e6_ff, 0x1c_4f_9c), (0xd4_f5_e7, 0x1f_7a_45), (0xfd_e8_c8, 0x9f_4f_0b), (0xe5_dc_ff, 0x5b_3c_c4), (0xe2_e8_f0, 0x47_55_69)];
+    let (background, ink) = COLORS[speakers.iter().position(|s| s == name).unwrap_or(0) % COLORS.len()];
+    div().size(px(20.)).flex_shrink_0().flex().items_center().justify_center().rounded_full().text_xs().bg(rgb(background)).text_color(rgb(ink)).child(initial(name))
 }
 
 fn button(id: &'static str, label: impl Into<gpui_kit::SharedString>) -> gpui_kit::Stateful<gpui_kit::Div> {
@@ -2736,6 +2869,7 @@ impl Render for Workbench {
                     }
                 })))
             })
+            .child(button("speakers", tr("Speakers", "说话人")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Speakers, cx))))
             .child(button("settings", tr("Settings", "设置")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))));
         let banner = self.notice.clone().or_else(|| match &self.save {
             SaveState::Failed(error) => Some(format!("{}{error}", tr("Your meeting is still open here, but it was not saved: ", "这场会还在这里，但没有保存成功："))),
@@ -2749,6 +2883,7 @@ impl Render for Workbench {
         // During a replay the transcript has only reached that moment.
         let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&self.live.steps).min(self.live.lines.len()));
         let replay_bar = self.replay_bar(window, cx);
+        let speakers = self.live.speakers();
         let transcript = div()
             .id("transcript")
             .flex_1()
@@ -2757,13 +2892,27 @@ impl Render for Workbench {
             .gap_3()
             .flex()
             .flex_col()
-            .children(self.live.lines[..shown_lines].iter().rev().map(|l| {
+            .children(self.live.lines[..shown_lines].iter().enumerate().rev().map(|(i, l)| {
                 let manual = l["manual"].as_bool().unwrap_or(false);
                 let note = line_note(l);
                 div()
                     .flex()
                     .flex_col()
-                    .when_some(l["speaker"].as_str().map(str::to_string), |d, s| d.child(div().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(s)))
+                    .when_some(l["speaker"].as_str().filter(|s| !s.is_empty()).map(str::to_string), |d, name| {
+                        let picked = name.clone();
+                        d.child(
+                            div()
+                                .id(("line-speaker", i))
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .mb_1()
+                                .cursor_pointer()
+                                .child(speaker_badge(&speakers, &name))
+                                .child(div().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name))
+                                .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx))),
+                        )
+                    })
                     .child(div().text_sm().when(manual, |d| d.text_color(rgb(0x85_8a_80))).child(l["text"].as_str().unwrap_or_default().to_string()))
                     .when(!note.is_empty() && !manual, |d| {
                         d.child(div().text_xs().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { 0xa3_28_26 } else { 0x85_8a_80 })).child(note))
@@ -2935,11 +3084,32 @@ impl Render for Workbench {
                     .child(button("check-update", tr("Try again", "重试")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })))
                     .into_any_element(),
             })
+            .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Speech", "语音")))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(div().flex_1().min_w_0().text_sm().child(tr("Tell speakers apart by voice", "按声音区分说话人")))
+                    .child(button("diarize", if self.form.saved.diarize { tr("On", "开") } else { tr("Off", "关") }).when(self.form.saved.diarize, |b| b.bg(rgb(0x24_27_20)).text_color(rgb(0xff_ff_ff))).on_click(cx.listener(|this, _, _, cx| {
+                        this.form.saved.diarize = !this.form.saved.diarize;
+                        if let Err(e) = this.form.saved.save() {
+                            this.form.note = Some(format!("{e:#}"));
+                        }
+                        cx.notify();
+                    }))),
+            )
+            .child(div().text_xs().text_color(rgb(0x62_66_5c)).child(tr(
+                "New voices are named A, B, C in order. Click a speaker to give them a real name, and the same voice keeps it. Voice data stays in the meeting file on this device. Very short sentences go to whoever spoke last.",
+                "新的声音按 A、B、C 命名。点说话人可以改成真名，同一个声音之后都用这个名字。声纹只保存在本机的会议文件里。很短的句子会算给上一个说话的人。",
+            )))
             .when(forced, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(0x80_53_00)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
         let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
         let import_panel = (self.panel == Panel::Import).then(|| self.import_panel(cx));
+        let speakers_panel = (self.panel == Panel::Speakers).then(|| self.speakers_panel(editable, cx));
         let side = div()
             .w(px(320.))
             .h_full()
@@ -2949,12 +3119,40 @@ impl Render for Workbench {
             .border_l_1()
             .border_color(rgb(0xdd_dd_d8))
             .when(self.panel == Panel::Transcript, |d| {
-                d.child(transcript).when(editable, |d| d.child(div().p_3().border_t_1().border_color(rgb(0xdd_dd_d8)).child(Input::new(&self.input))))
+                d.child(transcript).when(editable, |d| {
+                    d.child(
+                        div()
+                            .p_3()
+                            .border_t_1()
+                            .border_color(rgb(0xdd_dd_d8))
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .when_some(self.speaker.clone(), |d, name| {
+                                let picked = name.clone();
+                                d.child(
+                                    div()
+                                        .id("next-speaker")
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .cursor_pointer()
+                                        .text_xs()
+                                        .text_color(rgb(0x62_66_5c))
+                                        .child(speaker_badge(&speakers, &name))
+                                        .child(format!("{}{name}", tr("Typing as ", "输入身份：")))
+                                        .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx))),
+                                )
+                            })
+                            .child(Input::new(&self.input)),
+                    )
+                })
             })
             .when(self.panel == Panel::Library, |d| d.child(library))
             .when_some(summary_panel, |d, panel| d.child(panel))
             .when_some(export_panel, |d, panel| d.child(panel))
             .when_some(import_panel, |d, panel| d.child(panel))
+            .when_some(speakers_panel, |d, panel| d.child(panel))
             .when(self.panel == Panel::Settings, |d| d.child(settings));
         div()
             .id("workbench")
@@ -3133,10 +3331,17 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
             let editor = cx.new(|cx| TextareaState::new(window, cx));
             let arxiv_input = cx.new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
+            let speaker_name = cx.new(|cx| InputState::new(window, cx));
             let view = cx.new(|cx| {
                 cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {
                         this.submit(window, cx);
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&speaker_name, window, |this: &mut Workbench, _, event, window, cx| {
+                    if matches!(event, InputEvent::PressEnter { .. }) {
+                        this.rename_speaker(window, cx);
                     }
                 })
                 .detach();
@@ -3180,6 +3385,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     replay: None,
                     import: ImportState::Idle,
                     arxiv_input,
+                    speaker: None,
+                    speaker_chosen: None,
+                    speaker_name,
                     pdfium,
                     hanzi,
                     exporting: None,

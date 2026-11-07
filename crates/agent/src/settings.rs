@@ -8,13 +8,21 @@ use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
     pub base_url: String,
     pub api_key: String,
     pub model: String,
     /// Use the remote model rather than the local one.
     pub enabled: bool,
+    /// Tell speakers apart by voice.
+    pub diarize: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true }
+    }
 }
 
 fn config_dir() -> Result<PathBuf> {
@@ -37,13 +45,13 @@ impl Settings {
     fn parse(text: &str) -> Self {
         let v: Value = serde_json::from_str(text).unwrap_or(Value::Null);
         let text = |key: &str| v[key].as_str().unwrap_or_default().to_string();
-        Self { base_url: text("baseUrl"), api_key: text("apiKey"), model: text("model"), enabled: v["enabled"].as_bool().unwrap_or(false) }
+        Self { base_url: text("baseUrl"), api_key: text("apiKey"), model: text("model"), enabled: v["enabled"].as_bool().unwrap_or(false), diarize: v["diarize"].as_bool().unwrap_or(true) }
     }
 
     pub fn save(&self) -> Result<()> {
         let dir = config_dir()?;
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled }))?;
+        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize }))?;
         let tmp = dir.join("remote.json.tmp");
         // Private from the first byte: the key must never sit in a file others can read.
         let _ = fs::remove_file(&tmp);
@@ -95,7 +103,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("boardcast-settings-{}", std::process::id()));
         std::env::set_var("BOARDCAST_CONFIG", &dir);
-        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true };
+        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false };
         s.save().unwrap();
         assert_eq!(Settings::load(), s);
         assert_eq!(fs::metadata(dir.join("remote.json")).unwrap().permissions().mode() & 0o777, 0o600);

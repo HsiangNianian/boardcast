@@ -126,6 +126,21 @@ that became a note without rules became an item with them, and only items count.
 
 The checker's auto-repair fired on real model output once, on DeepSeek's `group-phrasing`.
 
+Speakers are told apart by voice with CAM++, comparing each sentence with the voices heard so far, as the older app does and
+with its threshold. On the two recordings in `eval/asr/corpus.json` with four labelled speakers, run through the whole
+speech chain, it found the right number of voices. Purity is how often a name holds one person, and coverage how often a
+person keeps one name. These are two recordings, so the threshold was left alone; a wrong split or join is put right by
+renaming or merging in the speakers panel.
+
+```sh
+cargo run --release -p boardcast-audio --example speaker-eval -- src-tauri/voice <recording.wav> <reference.json>
+```
+
+| Recording | Voices found | Purity | Coverage |
+| --- | --- | --- | --- |
+| `en-ami`, -22 dB | 4 of 4 | 0.893 | 0.929 |
+| `zh-alimeeting`, -39 dB, far-field with much overlap | 4 of 4 | 0.680 | 0.640 |
+
 The smaller local models were compared with Qwen 4B on the same cases, prompt and grammar, without rules or hints. The
 prompt was tuned for Qwen, which may favour it, and only Q4_K_M files were tried. Worse and better count holdout cases
 against Qwen 4B. Time is the model's per turn, and memory is the whole graphics card's peak, on an RTX 3060 Laptop.
@@ -142,8 +157,8 @@ So Qwen stays the default, and the other three can be chosen in Settings with a 
 ## Not validated
 
 Real clicks on the mark toolbar, the undo buttons and shortcuts, the library and settings panels, and the download
-button (the logic behind them has unit tests), a machine without this one's libraries, Mac and Windows, comparison with the Tauri app, icons, the pointing highlight, pencil drafts, speaker
-identification, imports and exports, renaming and deleting meetings, and auto-tidy in a live meeting (the repair itself
+button (the logic behind them has unit tests), a machine without this one's libraries, Mac and Windows, comparison with the Tauri app, icons, the pointing highlight, pencil drafts, real clicks in
+the speakers panel (it was driven by a test script), a live microphone with several people, imports and exports, renaming and deleting meetings, and auto-tidy in a live meeting (the repair itself
 has tests).
 
 ## Migration order
@@ -154,6 +169,6 @@ has tests).
    In-app updates are done too, and the `gpui-latest` prerelease has been installed through them. Mac and Windows
    are waiting until they can be tested. iPad is the main target and Mac the second.
 4. **Migrate the rest once the core is stable:** summary and to-dos are done, and so are replay and Markdown, PNG, SVG,
-   animated SVG, PDF and replay page export, imported pages can be marked, and PDFs, arXiv papers and images can be imported. Next
-   come speaker identification, Apple speech, and the web demo and website. `.excalidraw` export is still open. Only then retire `src/` and
+   animated SVG, PDF and replay page export, imported pages can be marked, PDFs, arXiv papers and images can be imported, and speakers
+   are told apart by voice and can be renamed or merged. Next come showing who raised what on the board, Apple speech, and the web demo and website. `.excalidraw` export is still open. Only then retire `src/` and
    `src-tauri/`.

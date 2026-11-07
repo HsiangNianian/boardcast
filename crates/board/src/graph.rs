@@ -175,7 +175,7 @@ impl Default for Graph {
 }
 
 /// Names compare without case, spaces or common punctuation.
-fn norm(s: &str) -> String {
+pub(crate) fn norm(s: &str) -> String {
     s.to_lowercase()
         .chars()
         .filter(|c| !c.is_whitespace() && !"·・,，。.、\"“”'‘’「」『』()（）?？!！".contains(*c))

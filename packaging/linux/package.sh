@@ -28,8 +28,9 @@ cp -r src-tauri/llama "$lib/llama"
 mkdir -p "$lib/pdfium"
 cp target/pdfium/libpdfium.so "$lib/pdfium/"
 rm -f "$lib/llama/.version"
-# The speaker model stays out until speaker identification moves over.
 cp src-tauri/voice/silero_vad.onnx "$lib/voice/"
+mkdir -p "$lib/voice/speaker"
+cp src-tauri/voice/speaker/campplus_zh_en.onnx "$lib/voice/speaker/"
 cp src-tauri/voice/sense-voice/model.int8.onnx src-tauri/voice/sense-voice/tokens.txt "$lib/voice/sense-voice/"
 
 cp LICENSE public/licenses/* public/hanzi/ARPHICPL.TXT "$out/share/licenses/boardcast/"

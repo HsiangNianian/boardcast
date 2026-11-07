@@ -12,6 +12,7 @@ pub mod vision;
 
 use anyhow::{anyhow, bail, Context, Result};
 use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, Graph, Utterance};
+use boardcast_board::speakers::{attribute, rename_by};
 use serde_json::{json, Value};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
@@ -198,6 +199,8 @@ pub struct Said {
     pub asr_ms: Option<u128>,
     /// The meeting this was said in, from `Session::meeting`. A line from another meeting is dropped.
     pub meeting: u64,
+    /// From `Session::renames_seen`: speakers renamed after this count are renamed in this line too.
+    pub renames: usize,
 }
 
 pub enum Update {
@@ -356,6 +359,16 @@ pub struct Session {
     meeting: Arc<AtomicU64>,
     /// Where the local model is answering, once it has started.
     local_base: Arc<Mutex<Option<String>>>,
+    /// Speakers renamed in this meeting, in order, for lines that were on their way at the time.
+    renames: Arc<Mutex<Vec<(String, String)>>>,
+}
+
+fn rename_line(line: &mut Utterance, renames: &[(String, String)]) {
+    for (from, to) in renames {
+        if line.speaker.as_deref() == Some(from) {
+            line.speaker = Some(to.clone());
+        }
+    }
 }
 
 impl Session {
@@ -368,10 +381,12 @@ impl Session {
             guidance: Arc::new(Mutex::new(guidance)),
             meeting: Arc::new(AtomicU64::new(0)),
             local_base: Arc::new(Mutex::new(None)),
+            renames: Arc::new(Mutex::new(vec![])),
         };
         let (graph, history, hint, backend, guidance, meeting) =
             (session.graph.clone(), session.history.clone(), session.hint.clone(), session.backend.clone(), session.guidance.clone(), session.meeting.clone());
         let local_base = session.local_base.clone();
+        let renames = session.renames.clone();
         thread::spawn(move || {
             // Held for the thread's lifetime: the child's death signal is tied to this thread.
             let mut server: Option<(Child, String, PathBuf)> = None;
@@ -425,6 +440,13 @@ impl Session {
                     let _ = drained.send(());
                     continue;
                 }
+                let renames_seen = {
+                    let renames = renames.lock().expect("renames lock");
+                    for said in &mut batch {
+                        rename_line(&mut said.line, renames.get(said.renames..).unwrap_or_default());
+                    }
+                    renames.len()
+                };
                 let next = if batch.len() == 1 {
                     batch[0].line.clone()
                 } else {
@@ -440,7 +462,6 @@ impl Session {
                 };
                 let seen = graph.lock().expect("graph lock").clone();
                 let note = hint.lock().expect("hint lock").take();
-                let lines: Vec<Utterance> = batch.iter().map(|s| s.line.clone()).collect();
                 let result = provider_now(&updates).and_then(|provider| {
                     let chosen = guidance.lock().expect("guidance lock").unwrap_or_else(|| provider.default_guidance());
                     propose(&provider, &seen, &recent, &next, chosen, note.as_deref())
@@ -452,11 +473,18 @@ impl Session {
                     let _ = drained.send(());
                     continue;
                 }
+                // A rename also holds the board's lock, so none can come between this and the write.
+                let mut lines: Vec<Utterance> = batch.iter().map(|s| s.line.clone()).collect();
+                for line in &mut lines {
+                    rename_line(line, renames.lock().expect("renames lock").get(renames_seen..).unwrap_or_default());
+                }
                 history.lock().expect("history lock").extend(lines.iter().cloned());
                 let tail = &batch[batch.len() - 1];
                 let update = match result {
                     Ok(reply) => {
+                        let before = board.clone();
                         board.apply(&parse_ops(&reply.ops));
+                        attribute(&before, &mut board, &lines);
                         Update::Drawn { meeting: current, graph: board.clone(), ops: reply.ops, lines, asr_ms: tail.asr_ms, llm_ms: reply.ms, ended: batch[0].ended }
                     }
                     Err(e) => Update::Failed { meeting: current, message: format!("{e:#}"), lines },
@@ -486,6 +514,24 @@ impl Session {
         *board = graph;
         *self.history.lock().expect("history lock") = history;
         *self.hint.lock().expect("hint lock") = None;
+        self.renames.lock().expect("renames lock").clear();
+    }
+
+    /// Give a speaker a new name, or join them to the speaker who has it, including in anything in flight.
+    pub fn rename_speaker(&self, from: &str, to: &str) {
+        let mut board = self.graph.lock().expect("graph lock");
+        rename_by(&mut board, from, to);
+        for line in self.history.lock().expect("history lock").iter_mut() {
+            if line.speaker.as_deref() == Some(from) {
+                line.speaker = Some(to.to_string());
+            }
+        }
+        self.renames.lock().expect("renames lock").push((from.to_string(), to.to_string()));
+    }
+
+    /// To go in a line being sent now.
+    pub fn renames_seen(&self) -> usize {
+        self.renames.lock().expect("renames lock").len()
     }
 
     /// Change the board without touching context or anything in flight, as undo does.
@@ -595,7 +641,7 @@ mod tests {
 
     impl Harness {
         fn say(&self, text: &str) {
-            self.said.send(Said { line: Utterance { speaker: None, text: text.into() }, ended: Instant::now(), asr_ms: None, meeting: self.session.meeting() }).unwrap();
+            self.said.send(Said { line: Utterance { speaker: None, text: text.into() }, ended: Instant::now(), asr_ms: None, meeting: self.session.meeting(), renames: 0 }).unwrap();
         }
 
         fn wait(&self) {
@@ -665,13 +711,41 @@ mod tests {
         });
         let stale = h.session.meeting();
         h.session.open(Graph::default(), vec![]);
-        h.said.send(Said { line: Utterance { speaker: None, text: "排队的旧话".into() }, ended: Instant::now(), asr_ms: None, meeting: stale }).unwrap();
+        h.said.send(Said { line: Utterance { speaker: None, text: "排队的旧话".into() }, ended: Instant::now(), asr_ms: None, meeting: stale, renames: 0 }).unwrap();
         h.wait();
         h.say("新会议的话");
         h.wait();
         let seen = seen.lock().unwrap();
         assert_eq!(seen.len(), 1);
         assert!(seen[0].contains("新会议的话") && !seen[0].contains("排队的旧话"));
+    }
+
+    #[test]
+    fn what_is_drawn_remembers_who_said_it_under_their_latest_name() {
+        let (entered_tx, entered) = channel();
+        let (release, release_rx) = channel::<()>();
+        let release_rx = Mutex::new(release_rx);
+        let h = harness(move |_| {
+            entered_tx.send(()).unwrap();
+            release_rx.lock().unwrap().recv().unwrap();
+            Ok("N n1 「网关」".into())
+        });
+        let line = |renames| Said { line: Utterance { speaker: Some("B".into()), text: "网关".into() }, ended: Instant::now(), asr_ms: None, meeting: h.session.meeting(), renames };
+        h.said.send(line(0)).unwrap();
+        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        // Renamed while the model is answering, with the name then given to someone else's next line.
+        h.session.rename_speaker("B", "李工");
+        h.session.rename_speaker("C", "B");
+        h.said.send(Said { line: Utterance { speaker: Some("B".into()), text: "日志".into() }, ..line(h.session.renames_seen()) }).unwrap();
+        release.send(()).unwrap();
+        h.wait();
+        let Update::Drawn { graph, lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("not drawn") };
+        assert_eq!(lines[0].speaker.as_deref(), Some("李工"));
+        assert_eq!(boardcast_board::speakers::by_of_node(&graph.nodes[0]), Some("李工"));
+        release.send(()).unwrap();
+        h.wait();
+        let Update::Drawn { lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("not drawn") };
+        assert_eq!(lines[0].speaker.as_deref(), Some("B"), "the name now belongs to the next speaker");
     }
 
     #[test]
@@ -707,12 +781,12 @@ mod tests {
         let session = Session::start(Backend::NoModel, None, said_rx, ready_tx, drained_tx, updates_tx);
         ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(matches!(updates.recv_timeout(Duration::from_secs(5)).unwrap(), Update::NoModel));
-        said.send(Said { line: Utterance { speaker: None, text: "这句没有模型".into() }, ended: Instant::now(), asr_ms: None, meeting: session.meeting() }).unwrap();
+        said.send(Said { line: Utterance { speaker: None, text: "这句没有模型".into() }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
         drained.recv_timeout(Duration::from_secs(5)).unwrap();
         let Update::Failed { lines, .. } = updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("expected a failure") };
         assert_eq!(lines[0].text, "这句没有模型");
         session.set_backend(Backend::Ready(Provider::Scripted(Arc::new(|_| Ok("T 「现在有了」".into())))));
-        said.send(Said { line: Utterance { speaker: None, text: "再试".into() }, ended: Instant::now(), asr_ms: None, meeting: session.meeting() }).unwrap();
+        said.send(Said { line: Utterance { speaker: None, text: "再试".into() }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
         drained.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(session.board().nodes.len(), 1, "a model added later takes effect");
     }

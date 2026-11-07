@@ -3,6 +3,7 @@
 
 use crate::store::{new_id, Loaded, Origin};
 use boardcast_board::graph::{Graph, Kind};
+use boardcast_board::speakers::{identify, raised_by, rename_by, rename_by_in_steps, rename_voice, Voice};
 use boardcast_board::steps::{diff, ink_only, replay};
 use serde_json::{json, Map, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -55,6 +56,10 @@ impl<T> History<T> {
     pub fn can_redo(&self) -> bool {
         !self.future.is_empty()
     }
+
+    fn each_mut(&mut self, mut change: impl FnMut(&mut T)) {
+        self.past.iter_mut().chain(&mut self.future).for_each(&mut change);
+    }
 }
 
 /// Why a meeting opens without editing. Its file is left exactly as it is.
@@ -84,6 +89,9 @@ pub struct Live {
     pub lines: Vec<Value>,
     pub history: Vec<Value>,
     pub steps: Vec<Value>,
+    voices: Vec<Voice>,
+    /// A file's voices stay as written unless this meeting changed them.
+    voices_changed: bool,
     /// What the replay record has reached, to diff the next change against.
     recorded: Graph,
     undo: History<Snap>,
@@ -148,6 +156,8 @@ impl Live {
             None
         };
         Self {
+            voices: raw.get("voices").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
+            voices_changed: false,
             memory: raw.get("layout").cloned().unwrap_or(Value::Null),
             history: array(&raw, "history"),
             lines,
@@ -293,6 +303,70 @@ impl Live {
             line["heard"] = json!({ "asrMs": ms });
         }
         self.lines.push(line);
+        self.touch();
+    }
+
+    /// Whose voice this is. The voice joins the ones this meeting has heard, so it keeps its name.
+    pub fn identify_voice(&mut self, voiceprint: &[f32]) -> String {
+        let print: Vec<f64> = voiceprint.iter().map(|x| f64::from(*x)).collect();
+        let taken: Vec<&str> = self.lines.iter().filter_map(|l| l["speaker"].as_str()).collect();
+        let name = identify(&mut self.voices, &print, &taken);
+        self.voices_changed = true;
+        self.touch();
+        name
+    }
+
+    /// Everyone in this meeting, in the order they first spoke.
+    pub fn speakers(&self) -> Vec<String> {
+        let mut names: Vec<String> = vec![];
+        let spoken = self.lines.iter().filter_map(|l| l["speaker"].as_str());
+        for name in spoken.chain(self.voices.iter().map(|v| v.name.as_str())) {
+            if !name.is_empty() && !names.iter().any(|n| n == name) {
+                names.push(name.to_string());
+            }
+        }
+        names
+    }
+
+    /// What renaming a speaker touches: lines of the transcript, things on boards, and how many boards.
+    pub fn speaker_impact(&self, who: &str) -> (usize, usize, usize) {
+        let lines = self.lines.iter().filter(|l| l["speaker"] == who).count();
+        let raised: Vec<usize> = self.boards().iter().map(|graph| raised_by(graph, who)).collect();
+        (lines, raised.iter().sum(), raised.iter().filter(|n| **n > 0).count())
+    }
+
+    /// Give a speaker a new name everywhere it is written. Taking a name someone has joins the two.
+    pub fn rename_speaker(&mut self, from: &str, to: &str) {
+        if from == to {
+            return;
+        }
+        for said in self.lines.iter_mut().chain(&mut self.history) {
+            if said["speaker"] == from {
+                said["speaker"] = json!(to);
+            }
+        }
+        rename_voice(&mut self.voices, from, to);
+        self.voices_changed = true;
+        rename_by(&mut self.graph, from, to);
+        rename_by(&mut self.recorded, from, to);
+        rename_by_in_steps(&mut self.steps, from, to);
+        self.undo.each_mut(|snap| rename_by(&mut snap.graph, from, to));
+        // The boards not on screen stay in the file's own form until they are opened.
+        if let Some(pages) = self.raw.get_mut("pages").and_then(Value::as_array_mut) {
+            for page in pages {
+                for board in ["graph", "base"] {
+                    for part in ["nodes", "edges"] {
+                        let Some(items) = page.get_mut(board).and_then(|b| b.get_mut(part)).and_then(Value::as_array_mut) else { continue };
+                        for item in items.iter_mut().filter(|item| item["by"] == from) {
+                            item["by"] = json!(to);
+                        }
+                    }
+                }
+                if let Some(steps) = page.get_mut("steps").and_then(Value::as_array_mut) {
+                    rename_by_in_steps(steps, from, to);
+                }
+            }
+        }
         self.touch();
     }
 
@@ -507,6 +581,9 @@ impl Live {
         out.insert("lines".into(), json!(self.lines));
         out.insert("history".into(), json!(self.history));
         out.insert("steps".into(), json!(self.steps));
+        if self.voices_changed {
+            out.insert("voices".into(), json!(self.voices));
+        }
         out
     }
 
@@ -673,6 +750,83 @@ mod tests {
         assert_eq!(live.steps.len(), 1);
         assert_eq!(replay(&live.steps).nodes, marked.nodes);
         assert_eq!(replay(&live.steps).underlay(), Some((900.0, 1200.0)));
+    }
+
+    fn said_by(graph: &Graph) -> Vec<Option<&str>> {
+        graph.nodes.iter().map(|n| boardcast_board::speakers::by_of_node(n)).collect()
+    }
+
+    fn board_by(who: &str) -> Graph {
+        let mut graph = page_board(1);
+        graph.nodes[0].extra.insert("by".into(), json!(who));
+        graph.nodes[0].ink = "ink".into();
+        graph
+    }
+
+    #[test]
+    fn the_same_voice_keeps_its_name_and_new_ones_avoid_names_in_use() {
+        let mut live = Live::new();
+        live.add_line(Some("A"), "手写的名字", None);
+        let (one, other) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
+        assert_eq!(live.identify_voice(&one), "B");
+        assert_eq!(live.identify_voice(&other), "C");
+        assert_eq!(live.identify_voice(&one), "B");
+        assert_eq!(live.speakers(), ["A", "B", "C"]);
+    }
+
+    #[test]
+    fn a_new_name_reaches_every_page_step_and_undo_and_stays_with_the_voice() {
+        let mut live = Live::new();
+        let print = [1.0, 0.0];
+        let name = live.identify_voice(&print);
+        live.add_line(Some(&name), "网关", None);
+        live.model_drew(&[(Some(name.clone()), "网关".into())], board_by(&name), Value::Null, "", 1);
+        live.add_pages(vec![(board_by("别人"), "asset:a.jpg".into())], "导入了");
+        // On this page the old name is only in the replay record and the undo stack.
+        live.change_board(board_by(&name), Value::Null);
+        live.change_board(board_by("别人"), Value::Null);
+        assert_eq!(live.page(), 1);
+        assert_eq!(live.speaker_impact(&name), (1, 1, 1));
+
+        live.rename_speaker(&name, "李工");
+
+        assert_eq!(live.lines[0]["speaker"], "李工");
+        assert_eq!(live.history[0]["speaker"], "李工");
+        assert_eq!(live.speaker_impact("李工"), (1, 1, 1));
+        assert_eq!(live.speaker_impact(&name), (0, 0, 0));
+        let written = serde_json::to_string(&live.snapshot()).unwrap();
+        assert!(!written.contains(&format!("\"by\":\"{name}\"")), "{written}");
+        assert!(written.contains("\"by\":\"别人\""));
+        let snap = live.undo().unwrap();
+        assert_eq!(said_by(&snap.graph), [Some("李工")]);
+        live.go_to_page(0);
+        assert_eq!(said_by(&live.graph), [Some("李工")]);
+        // The same voice now answers to the new name.
+        assert_eq!(live.identify_voice(&print), "李工");
+    }
+
+    #[test]
+    fn taking_a_name_in_use_joins_the_two_voices() {
+        let mut live = Live::new();
+        let (a, b) = (live.identify_voice(&[1.0, 0.0]), live.identify_voice(&[0.0, 1.0]));
+        live.add_line(Some(&a), "一", None);
+        live.add_line(Some(&b), "二", None);
+        live.rename_speaker(&a, &b);
+        assert_eq!(live.speakers(), [b.as_str()]);
+        assert_eq!(live.speaker_impact(&b).0, 2);
+        assert_eq!(live.identify_voice(&[1.0, 1.0]), b);
+    }
+
+    #[test]
+    fn voices_are_kept_in_the_file_and_left_as_written_until_changed() {
+        let mut live = Live::new();
+        live.identify_voice(&[1.0, 0.0]);
+        let written = live.snapshot();
+        assert_eq!(written["voices"][0]["name"], "A");
+        let mut again = Live::build(written, Origin::Current, 1);
+        assert_eq!(again.identify_voice(&[1.0, 0.0]), "A");
+        let strange = Live::build(json!({ "id": "x", "voices": [1] }).as_object().unwrap().clone(), Origin::Current, 1).snapshot();
+        assert_eq!(strange["voices"], json!([1]));
     }
 
     #[test]

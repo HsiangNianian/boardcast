@@ -8,5 +8,6 @@ pub mod glyphs;
 pub mod graph;
 pub mod pen;
 pub mod spans;
+pub mod speakers;
 pub mod steps;
 pub mod sugiyama;

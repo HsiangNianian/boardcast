@@ -72,6 +72,10 @@ jobs:
           key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
       # The script ends by running the packaged app's self-check.
       - run: sh packaging/linux/package.sh
+      - name: How speech is heard, with the packaged models
+        run: cargo test --release -p boardcast-audio
+        env:
+          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/src-tauri/voice
       - name: Install from the package and check again
         run: |
           mkdir unpacked

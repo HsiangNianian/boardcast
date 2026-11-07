@@ -8,6 +8,7 @@
 
 pub mod settings;
 pub mod summary;
+pub mod vision;
 
 use anyhow::{anyhow, bail, Context, Result};
 use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, Graph, Utterance};
@@ -265,11 +266,14 @@ fn pick_gpu(gpus: &[Gpu]) -> Option<String> {
 }
 
 /// The same launch arguments as the older app. The child dies with the thread that started it.
-fn spawn_llama(server: &LocalServer, device: Option<&str>) -> Result<Child> {
+fn spawn_llama(server: &LocalServer, device: Option<&str>, port: u16, projector: Option<&std::path::Path>) -> Result<Child> {
     let mut cmd = server_command(&server.binaries);
+    if let Some(projector) = projector {
+        cmd.arg("--mmproj").arg(projector);
+    }
     cmd.arg("-m")
         .arg(&server.model)
-        .args(["--host", "127.0.0.1", "--port", &LLAMA_PORT.to_string()])
+        .args(["--host", "127.0.0.1", "--port", &port.to_string()])
         .args(["-c", "4096", "-np", "1", "--jinja"])
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -293,14 +297,14 @@ fn start_llama(server: &LocalServer) -> Result<(Child, String)> {
     let base = format!("http://127.0.0.1:{LLAMA_PORT}");
     let health = format!("{base}/health");
     let device = pick_gpu(&list_gpus(&server.binaries));
-    let mut child = spawn_llama(server, device.as_deref())?;
+    let mut child = spawn_llama(server, device.as_deref(), LLAMA_PORT, None)?;
     match wait_until_up(&health, &mut child) {
         Ok(()) => Ok((child, base)),
         Err(first) if device.is_some() => {
             eprintln!("local model did not start on {device:?}: {first:#}; trying the CPU");
             let _ = child.kill();
             let _ = child.wait();
-            let mut child = spawn_llama(server, None)?;
+            let mut child = spawn_llama(server, None, LLAMA_PORT, None)?;
             wait_until_up(&health, &mut child)?;
             Ok((child, base))
         }

@@ -2,6 +2,7 @@
 //! for the model and people to mark during a meeting.
 
 pub mod arxiv;
+pub mod image;
 pub mod paper;
 pub mod pdf;
 pub mod regions;

@@ -2390,8 +2390,6 @@ impl Workbench {
     }
 }
 
-/// The slider's parts are unstyled. The indicator spans the whole track because a position is measured
-/// against it, so the filled part is a child, and the tall track leaves room for a finger.
 fn replay_slider(state: &Entity<SliderState>) -> impl IntoElement {
     Slider::new(state).accessibility_label(tr("Replay progress", "回放进度")).flex_1().min_w_0()
 }
@@ -3548,6 +3546,15 @@ struct Turn {
     text: String,
 }
 
+gpui_kit::actions!(boardcast, [Quit]);
+
+/// A Mac app quits from its menu and with Cmd+Q, and either way saves first, as closing the window does.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn app_menu(cx: &mut App) {
+    cx.bind_keys([gpui_kit::KeyBinding::new("cmd-q", Quit, None)]);
+    cx.set_menus(vec![gpui_kit::Menu { name: "boardcast".into(), items: vec![gpui_kit::MenuItem::action(tr("Quit boardcast", "退出 boardcast"), Quit)], disabled: false }]);
+}
+
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let mut root: Option<PathBuf> = None;
     let mut case = None;
@@ -3792,7 +3799,16 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             });
             let closing = view.clone();
             window.on_window_should_close(cx, move |_, cx| closing.update(cx, |this, cx| this.closing(cx)));
-            cx.new(|cx| gpui_kit::base::Root::new(view, window, cx))
+            let quitting = view.clone();
+            cx.on_action(move |_: &Quit, cx: &mut App| {
+                if quitting.update(cx, |this, cx| this.closing(cx)) {
+                    cx.quit();
+                }
+            });
+            #[cfg(target_os = "macos")]
+            app_menu(cx);
+            // The kit wraps it in the root view it needs.
+            view
         })
         .expect("open window");
     });

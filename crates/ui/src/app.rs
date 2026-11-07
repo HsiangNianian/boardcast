@@ -12,7 +12,7 @@ use boardcast_meetings::{default_dir, Info, Live, Store, ViewOnly};
 use boardcast_board::pen::{marker, outline, Inked, Rng};
 use crate::i18n::tr;
 use crate::theme::{self, icon, ACCENT, DANGER, DANGER_SOFT, FAINT, LINE, MUTED, ON_STRONG, SELECTED, STRONG, SURFACE, TRACK, WARNING};
-use crate::pipeline::{Event, Pipeline, Script};
+use crate::pipeline::{Event, Pipeline, Script, Speech};
 use crate::resources;
 use boardcast_models::{Model, Outcome, Progress};
 use boardcast_update::Release;
@@ -842,6 +842,10 @@ struct Workbench {
     /// The meeting's name while it is being changed in the title bar.
     title_input: Entity<InputState>,
     editing_title: bool,
+    /// What recognizes speech, once the ear is ready.
+    hearing: Option<String>,
+    /// The system's recognizer, where there is one to choose.
+    speech_helper: Option<PathBuf>,
     /// When the microphone went on, so the title bar can count the time.
     listening_since: Option<Instant>,
     clock_second: u64,
@@ -1122,6 +1126,21 @@ impl Workbench {
         cx.notify();
     }
 
+    /// Hear with Apple's recognizer or the speech models, in `language` for Apple's.
+    fn choose_speech(&mut self, system: bool, language: Option<&str>, cx: &mut Context<Self>) {
+        let saved = &mut self.form.saved;
+        saved.system_speech = system;
+        if let Some(language) = language {
+            saved.speech_language = language.to_string();
+        }
+        if let Err(e) = saved.save() {
+            self.form.note = Some(format!("{e:#}"));
+        }
+        self.pipeline.set_speech(Speech { helper: self.speech_helper.clone(), system, language: saved.speech_language.clone() });
+        self.hearing = None;
+        cx.notify();
+    }
+
     fn dirty(&self) -> bool {
         self.store.is_some() && self.live.read_only.is_none() && self.live.has_content() && self.live.changes != self.saved_changes
     }
@@ -1210,6 +1229,12 @@ impl Workbench {
                     eprintln!("model failed: {message}");
                     self.live.model_failed(&spoken(&lines));
                     self.notice = Some(format!("{}{message}", tr("The model did not answer: ", "模型没有回应：")));
+                }
+                Event::Hearing { with, note } => {
+                    if let Some(note) = note {
+                        self.notice = Some(format!("{}{note}", tr("Apple's speech recognition did not start, so the speech models hear instead: ", "Apple 语音识别没能启动，改用语音模型：")));
+                    }
+                    self.hearing = Some(with);
                 }
                 Event::Agent(Update::Broken(message)) | Event::Failed(message) => {
                     self.preparing = None;
@@ -2239,6 +2264,8 @@ impl Workbench {
             api_key: if key.is_empty() { self.form.saved.api_key.clone() } else { key },
             enabled: self.form.remote,
             diarize: self.form.saved.diarize,
+            system_speech: self.form.saved.system_speech,
+            speech_language: self.form.saved.speech_language.clone(),
         }
     }
 
@@ -3497,6 +3524,31 @@ impl Render for Workbench {
                 "New voices are named A, B, C in order. Click a speaker to give them a real name, and the same voice keeps it. Voice data stays in the meeting file on this device. Very short sentences go to whoever spoke last.",
                 "新的声音按 A、B、C 命名。点说话人可以改成真名，同一个声音之后都用这个名字。声纹只保存在本机的会议文件里。很短的句子会算给上一个说话的人。",
             )))
+            .when(self.speech_helper.is_some(), |d| {
+                let system = self.form.saved.system_speech;
+                let language = self.form.saved.speech_language.clone();
+                let languages = [("auto", tr("System language", "跟随系统")), ("ja-JP", "日本語"), ("en-US", "English"), ("zh-CN", "中文")];
+                d.child(div().text_sm().child(tr("Recognize speech with", "语音识别")))
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(button("speech-models", tr("Speech models", "语音模型")).when(!system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, cx))))
+                            .child(button("speech-apple", tr("Apple", "Apple")).when(system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, cx)))),
+                    )
+                    .when(system, |d| {
+                        d.child(div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
+                            button(gpui_kit::ElementId::Name(format!("speech-language-{id}").into()), label)
+                                .when(language == id, |b| b.primary())
+                                .on_click(cx.listener(move |this, _, _, cx| this.choose_speech(true, Some(id), cx)))
+                        })))
+                        .child(div().text_xs().text_color(rgb(MUTED)).child(tr(
+                            "Apple's recognizer hears one language at a time. On macOS 26 it uses SpeechAnalyzer; on older systems, or where that can't be used, the older recognizer.",
+                            "Apple 的识别一次只听一种语言。macOS 26 上用 SpeechAnalyzer，更早的系统或用不了时改用旧的识别器。",
+                        )))
+                    })
+            })
+            .when_some(self.hearing.clone(), |d, with| d.child(div().text_xs().text_color(rgb(MUTED)).child(format!("{} {with}", tr("Hearing with", "当前识别：")))))
             .when(forced, |d| d.child(div().text_xs().text_color(rgb(WARNING)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(WARNING)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
         let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
@@ -3769,7 +3821,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let store = start_board.is_none().then(|| Store::new(data.clone()));
     let reopen = if turns.is_empty() && wav.is_none() { open.or_else(|| store.as_ref().and_then(Store::last_opened)) } else { None };
     let reads_meetings = store.is_some();
-    let pipeline = Pipeline::start(backend, guidance, resources.voice, Script { turns, wav });
+    let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone() };
+    let pipeline = Pipeline::start(backend, guidance, resources.voice, speech, Script { turns, wav });
     // Everything slow happens away from the window, which has to appear straight away.
     let (startup, starting) = channel::<Startup>();
     let probe_binaries = binaries.clone();
@@ -3937,6 +3990,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     speaker_name,
                     title_input,
                     editing_title: false,
+                    hearing: None,
+                    speech_helper: Speech::helper_path(),
                     listening_since: None,
                     clock_second: 0,
                     preparing: None,

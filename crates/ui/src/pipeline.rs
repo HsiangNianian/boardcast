@@ -1,9 +1,11 @@
 //! Wires the audio chain to the board agent on background threads, and reports to the UI over a channel.
 
 use boardcast_agent::{Backend, Guidance, Said, Session, Update};
-use boardcast_audio::{capture, play_wav, Ear, Sentence};
+use anyhow::Result;
+use boardcast_audio::system::SystemSpeech;
+use boardcast_audio::{capture, play_wav, Ear, Recognizers, Sentence};
 use boardcast_board::graph::Utterance;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
@@ -18,8 +20,55 @@ pub enum Event {
     /// the meeting's voices, and passes it on to the model.
     Spoken { meeting: u64, sentence: Sentence },
     Failed(String),
+    /// What recognizes speech now, and why it isn't what was chosen, if it isn't.
+    Hearing { with: String, note: Option<String> },
     /// A scripted source has finished and every queued line has been drawn.
     Done,
+}
+
+/// Which recognizer hears speech.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Speech {
+    /// The helper for the system's recognizer, where this platform has one.
+    pub helper: Option<PathBuf>,
+    /// Use the system's recognizer rather than the bundled models.
+    pub system: bool,
+    /// The language the system's recognizer listens for, or "auto".
+    pub language: String,
+}
+
+impl Speech {
+    /// Apple's helper sits beside the app's executable in a Mac package.
+    pub fn helper_path() -> Option<PathBuf> {
+        let helper = std::env::current_exe().ok()?.parent()?.join("boardcast-speech");
+        helper.is_file().then_some(helper)
+    }
+}
+
+/// An ear for the choice, falling back to whatever can hear: the models when the system's recognizer
+/// fails, and the system's when there are no models.
+fn ear_for(models: &Path, speech: &Speech) -> Result<(Ear, String, Option<String>)> {
+    let system = |helper: &Path| -> Result<(Ear, String)> {
+        let recognizer = SystemSpeech::start(helper, &speech.language)?;
+        let with = format!("Apple {}", if recognizer.engine == "analyzer" { "SpeechAnalyzer" } else { "SFSpeechRecognizer" });
+        Ok((Ear::with(models, Recognizers::system(Box::new(recognizer)))?, with))
+    };
+    let mut note = None;
+    if let Some(helper) = speech.helper.as_deref().filter(|_| speech.system) {
+        match system(helper) {
+            Ok((ear, with)) => return Ok((ear, with, None)),
+            Err(e) => note = Some(format!("{e:#}")),
+        }
+    }
+    let models_there = Recognizers::load(models);
+    if models_there.is_empty() {
+        if let Some(helper) = speech.helper.as_deref().filter(|_| !speech.system) {
+            let (ear, with) = system(helper)?;
+            return Ok((ear, with, None));
+        }
+    }
+    let with = models_there.names().join(" + ");
+    Ok((Ear::with(models, models_there)?, with, note))
 }
 
 pub struct Script {
@@ -35,10 +84,11 @@ pub struct Pipeline {
     mic_stop: Option<Arc<AtomicBool>>,
     event_tx: Sender<Event>,
     script_start: Sender<()>,
+    speech: Sender<Speech>,
 }
 
 impl Pipeline {
-    pub fn start(backend: Backend, guidance: Option<Guidance>, voice_models: PathBuf, script: Script) -> Self {
+    pub fn start(backend: Backend, guidance: Option<Guidance>, voice_models: PathBuf, speech: Speech, script: Script) -> Self {
         let (event_tx, events) = channel();
         let (said, said_rx) = channel::<Said>();
         let (drained_tx, drained_rx) = channel::<()>();
@@ -56,29 +106,47 @@ impl Pipeline {
         let tx = event_tx.clone();
         let stamp = session.stamp();
         let (finish_tx, finish_rx) = channel::<()>();
+        let (speech_tx, speech_rx) = channel::<Speech>();
         thread::spawn(move || {
-            let mut ear = match Ear::load(&voice_models) {
-                Ok(ear) => ear,
+            let load = |speech: &Speech| match ear_for(&voice_models, speech) {
+                Ok((ear, with, note)) => {
+                    let _ = tx.send(Event::Hearing { with, note });
+                    Some(ear)
+                }
                 Err(e) => {
                     let _ = tx.send(Event::Failed(format!("{e:#}")));
-                    return;
+                    None
                 }
             };
+            let mut ear = load(&speech);
             let mut heard = |sentence: Sentence| {
                 let _ = tx.send(Event::Spoken { meeting: stamp.load(Ordering::SeqCst), sentence });
             };
             loop {
+                // A new choice replaces the ear; what the old one was hearing is finished first.
+                if let Some(speech) = speech_rx.try_iter().last() {
+                    if let Some(old) = ear.as_mut() {
+                        old.finish(&mut heard);
+                    }
+                    // The old one goes first, so two sets of models are never loaded at once.
+                    drop(ear.take());
+                    ear = load(&speech);
+                }
                 match samples_rx.recv_timeout(Duration::from_millis(100)) {
                     Ok(chunk) => {
                         let level = chunk.iter().fold(0.0_f32, |m, s| m.max(s.abs()));
                         let _ = tx.send(Event::Level(level));
-                        ear.feed(&chunk, &mut heard);
+                        if let Some(ear) = ear.as_mut() {
+                            ear.feed(&chunk, &mut heard);
+                        }
                     }
                     Err(RecvTimeoutError::Timeout) => {}
                     Err(RecvTimeoutError::Disconnected) => return,
                 }
                 if finish_rx.try_recv().is_ok() {
-                    ear.finish(&mut heard);
+                    if let Some(ear) = ear.as_mut() {
+                        ear.finish(&mut heard);
+                    }
                 }
             }
         });
@@ -122,7 +190,7 @@ impl Pipeline {
             let _ = tx.send(Event::Done);
         });
 
-        Self { said, events, session, samples, mic_stop: None, event_tx, script_start }
+        Self { said, events, session, samples, mic_stop: None, event_tx, script_start, speech: speech_tx }
     }
 
     /// The window is ready for a scripted meeting to begin.
@@ -132,6 +200,11 @@ impl Pipeline {
 
     pub fn session(&self) -> &Session {
         &self.session
+    }
+
+    /// Hear with another recognizer from now on.
+    pub fn set_speech(&self, speech: Speech) {
+        let _ = self.speech.send(speech);
     }
 
     pub fn listening(&self) -> bool {

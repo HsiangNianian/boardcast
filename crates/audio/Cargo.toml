@@ -11,10 +11,10 @@ publish.workspace = true
 anyhow.workspace = true
 cpal = "0.18"
 sherpa-onnx = "2.0.1"
+serde_json.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 cpal = { version = "0.18", features = ["pulseaudio"] }
 
 [dev-dependencies]
 boardcast-board.workspace = true
-serde_json.workspace = true

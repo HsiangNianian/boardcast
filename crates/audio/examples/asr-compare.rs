@@ -2,6 +2,8 @@
 //! Usage: asr-compare <voice-models> <cases.json>
 //! `cases.json` lists `{ "id", "wav", "text", "language" }`; each recording is one sentence or turn.
 //! Chinese is scored by character and English by word, with punctuation and case removed.
+//! `ENHANCE=gain` first brings each recording to the same loudness, and `ENHANCE=gtcrn:<model.onnx>`
+//! first runs GTCRN denoising, to see whether either helps quiet or noisy recordings.
 
 use boardcast_audio::{is_english, load_parakeet, load_sense_voice, transcribe};
 use serde_json::Value;
@@ -53,6 +55,28 @@ fn edits(a: &[String], b: &[String]) -> usize {
     row[b.len()]
 }
 
+/// Bring speech to about -20 dBFS RMS, never past a peak of 0.95.
+fn louder(samples: &[f32]) -> Vec<f32> {
+    let rms = (samples.iter().map(|x| x * x).sum::<f32>() / samples.len().max(1) as f32).sqrt().max(1e-6);
+    let peak = samples.iter().fold(0.0_f32, |m, x| m.max(x.abs())).max(1e-6);
+    let gain = (0.1 / rms).min(0.95 / peak);
+    samples.iter().map(|x| x * gain).collect()
+}
+
+fn enhance(samples: &[f32]) -> Vec<f32> {
+    match std::env::var("ENHANCE").as_deref() {
+        Ok("gain") => louder(samples),
+        Ok(other) if other.starts_with("gtcrn:") => {
+            use sherpa_onnx::{OfflineSpeechDenoiser, OfflineSpeechDenoiserConfig};
+            let mut config = OfflineSpeechDenoiserConfig::default();
+            config.model.gtcrn.model = Some(other["gtcrn:".len()..].to_string());
+            let denoiser = OfflineSpeechDenoiser::create(&config).expect("GTCRN loads");
+            denoiser.run(samples, boardcast_audio::SAMPLE_RATE).samples
+        }
+        _ => samples.to_vec(),
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [models, cases] = args.as_slice() else { anyhow::bail!("usage: asr-compare <voice-models> <cases.json>") };
@@ -69,12 +93,13 @@ fn main() -> anyhow::Result<()> {
             eprintln!("skipped {wav}: cannot read");
             continue;
         };
+        let samples = enhance(wave.samples());
         let reference = units(case["text"].as_str().unwrap_or_default(), language);
         let t = Instant::now();
-        let by_sense = transcribe(&sense, wave.samples());
+        let by_sense = transcribe(&sense, &samples);
         let sense_s = t.elapsed().as_secs_f64();
         let t = Instant::now();
-        let by_parakeet = transcribe(&parakeet, wave.samples());
+        let by_parakeet = transcribe(&parakeet, &samples);
         let parakeet_s = t.elapsed().as_secs_f64();
         let routed = if is_english(&by_sense) && !by_parakeet.is_empty() { by_parakeet.clone() } else { by_sense.clone() };
         let routed_s = sense_s + if is_english(&by_sense) { parakeet_s } else { 0.0 };

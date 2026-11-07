@@ -1,5 +1,5 @@
 //! Finding what ships with the app. An install keeps it in `<prefix>/lib/boardcast`, next to `bin/`, or a Mac app in `Contents/Resources/boardcast`,
-//! whichever folder the package was unpacked into. In a checkout the older app's folders serve.
+//! whichever folder the package was unpacked into. A checkout has them in `resources/`.
 
 use boardcast_board::glyphs::HanziSource;
 use serde_json::json;
@@ -30,7 +30,7 @@ fn installed_dir() -> Option<PathBuf> {
 /// A boardcast checkout above this executable, as when running from `target/`.
 fn checkout_dir() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
-    exe.ancestors().find(|d| d.join("src-tauri/tauri.conf.json").is_file()).map(Path::to_path_buf)
+    exe.ancestors().find(|d| d.join("crates/ui/Cargo.toml").is_file()).map(Path::to_path_buf)
 }
 
 pub fn locate(data: &Path) -> Resources {
@@ -38,10 +38,10 @@ pub fn locate(data: &Path) -> Resources {
         return Resources { hanzi: HanziSource::Pack(dir.join("glyphs.pack")), binaries: dir.join("llama"), pdfium: dir.join("pdfium"), voice: dir.join("voice"), installed: true };
     }
     let root = checkout_dir().unwrap_or_else(|| PathBuf::from("."));
-    let bundled = root.join("src-tauri/voice");
+    let bundled = root.join("resources/voice");
     Resources {
         hanzi: HanziSource::Directory(root.join("public/hanzi")),
-        binaries: root.join("src-tauri/llama"),
+        binaries: root.join("resources/llama"),
         pdfium: root.join("target/pdfium"),
         voice: if bundled.join("silero_vad.onnx").is_file() { bundled } else { data.join("models/voice") },
         installed: false,

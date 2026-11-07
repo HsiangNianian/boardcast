@@ -1,4 +1,4 @@
-// 下载语音模型（SenseVoice int8 + tokens + Silero VAD + CAM++ 声纹，约 268 MB）到 src-tauri/voice/，
+// 下载语音模型（SenseVoice int8 + tokens + Silero VAD + CAM++ 声纹，约 268 MB）到 resources/voice/，
 // 打包时作为资源带进安装包，用户装完就能直接收音，不用再到「本地模型」里下载。
 //   node scripts/fetch-voice.mjs
 // 已经下好、sha256 也对得上的文件直接跳过。设置了 BOARDCAST_VOICE_DIR 且那里的文件校验通过时，直接从那里复制。
@@ -40,7 +40,7 @@ const FILES = [
 ]
 
 const root = fileURLToPath(new URL('..', import.meta.url))
-const out = join(root, 'src-tauri')
+const out = join(root, 'resources')
 
 function sha256(path) {
   return new Promise((ok, fail) => {
@@ -100,4 +100,4 @@ for (const f of FILES) {
   }
   fetched++
 }
-if (fetched) console.log(`fetch-voice: 语音模型已就位（新取了 ${fetched} 个文件）→ src-tauri/voice/`)
+if (fetched) console.log(`fetch-voice: 语音模型已就位（新取了 ${fetched} 个文件）→ resources/voice/`)

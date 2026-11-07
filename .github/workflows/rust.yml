@@ -68,7 +68,7 @@ jobs:
       - name: Cache voice models
         uses: actions/cache@v4
         with:
-          path: src-tauri/voice
+          path: resources/voice
           key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
       # The script ends by running the packaged app's self-check.
       - run: sh packaging/linux/package.sh
@@ -77,7 +77,7 @@ jobs:
       - name: How speech is heard, with the packaged models
         run: cargo test -p boardcast-audio
         env:
-          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/src-tauri/voice
+          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
           CARGO_TARGET_DIR: ${{ runner.temp }}/audio-tests
       - name: Install from the package and check again
         run: |
@@ -109,14 +109,14 @@ jobs:
       - name: Cache voice models
         uses: actions/cache@v4
         with:
-          path: src-tauri/voice
+          path: resources/voice
           key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
       # The script ends by running the packaged app's self-check.
       - run: sh packaging/macos/package.sh
       - name: Core crates and speech, with the packaged models
         run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-audio
         env:
-          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/src-tauri/voice
+          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
           CARGO_TARGET_DIR: ${{ runner.temp }}/macos-tests
       - uses: actions/upload-artifact@v4
         with:

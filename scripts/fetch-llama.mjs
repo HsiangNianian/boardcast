@@ -1,4 +1,4 @@
-// 下载 llama.cpp 官方预编译的 llama-server，精简后放到 src-tauri/llama/，打包时作为资源带进安装包。
+// 下载 llama.cpp 官方预编译的 llama-server，精简后放到 resources/llama/，打包时作为资源带进安装包。
 //   node scripts/fetch-llama.mjs [linux-x64 | windows-x64 | windows-arm64 | macos-arm64 | macos-x64]
 // 不传参数就按当前机器判断。已经准备好同一个版本就跳过。
 //
@@ -45,7 +45,7 @@ if (!asset) {
 }
 
 const root = fileURLToPath(new URL('..', import.meta.url))
-const out = join(root, 'src-tauri/llama')
+const out = join(root, 'resources/llama')
 const marker = join(out, '.version')
 const want = `${LLAMA_BUILD} ${target}`
 if (existsSync(marker) && readFileSync(marker, 'utf8').trim() === want) process.exit(0)
@@ -110,4 +110,4 @@ if (!existsSync(join(out, exe))) {
 }
 writeFileSync(marker, `${want}\n`)
 rmSync(tmp, { recursive: true, force: true })
-console.log(`fetch-llama: ${target} → src-tauri/llama/（${kept} 个文件，${(bytes / 1e6).toFixed(1)} MB）`)
+console.log(`fetch-llama: ${target} → resources/llama/（${kept} 个文件，${(bytes / 1e6).toFixed(1)} MB）`)

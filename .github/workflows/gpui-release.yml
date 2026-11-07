@@ -37,7 +37,7 @@ jobs:
       - name: Cache voice models
         uses: actions/cache@v4
         with:
-          path: src-tauri/voice
+          path: resources/voice
           key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
       - run: sh packaging/linux/package.sh
       - name: Refuse a version that is not newer than the published one
@@ -95,7 +95,7 @@ jobs:
       - name: Cache voice models
         uses: actions/cache@v4
         with:
-          path: src-tauri/voice
+          path: resources/voice
           key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
       - run: sh packaging/macos/package.sh
       - name: Publish

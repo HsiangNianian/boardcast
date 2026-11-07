@@ -170,5 +170,5 @@ has tests).
    are waiting until they can be tested. iPad is the main target and Mac the second.
 4. **Migrate the rest once the core is stable:** summary and to-dos are done, and so are replay and Markdown, PNG, SVG,
    animated SVG, PDF and replay page export, imported pages can be marked, PDFs, arXiv papers and images can be imported, and speakers
-   are told apart by voice and can be renamed or merged. Next come showing who raised what on the board, Apple speech, and the web demo and website. `.excalidraw` export is still open. Only then retire `src/` and
+   are told apart by voice and can be renamed or merged. Pointing at a speaker shows what they raised on the board, and a selected item leads back to its line. Next come Apple speech, and the web demo and website. `.excalidraw` export is still open. Only then retire `src/` and
    `src-tauri/`.

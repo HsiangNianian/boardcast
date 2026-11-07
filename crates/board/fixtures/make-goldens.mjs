@@ -301,7 +301,7 @@ const segmentCases = [
 const readCases = ['「订单服务」', '```\nAPI 网关\n```', '<think>嗯</think>MySQL', '<think>没完', '无', '无。', '没有文字', 'None', 'n/a.', '（无）', '(无)', '  a   b\n c ', '1>1', '->', '', '写库', 'HTTPS', '2026', '12', '"quoted\'', '无论如何'].map((input) => ({ input, clean: cleanRead(input), meaningful: meaningful(input) }))
 // Telling voices apart, and remembering who raised what.
 const { identify, nextName, renameVoice } = await load('src/engine/voices.ts')
-const { attribute, renameBy } = await load('src/engine/attribute.ts')
+const { attribute, firstSeen, renameBy, saidAt } = await load('src/engine/attribute.ts')
 const { initial } = await load('src/ui/speakers.ts')
 const voicePerson = (seed) => Array.from({ length: 16 }, (_, i) => Math.sin(seed * 12.9898 + i * 78.233) * 0.5)
 const voiceSay = (person, noise, k) => {
@@ -347,6 +347,27 @@ const attributionCases = [
   const attributed = attribute(c.before, c.after, c.batch)
   return { ...c, attributed, renamed: renameBy(attributed, 'A', '甲') }
 })
+const sourceLines = [
+  { text: '先过网关', speaker: 'A', page: 0 },
+  { text: '网关转给登录接口', speaker: 'B', page: 0 },
+  { text: '网关要限流', speaker: 'A' },
+  { text: '网关', manual: true, speaker: 'A', page: 0 },
+  { text: '另一张板的网关', speaker: 'A', page: 1 },
+  { text: '嗯', speaker: 'A', page: 0 },
+]
+const sourceStep = (line, ...ids) => ({ t: line, line, d: { nodes: { set: ids.map((id) => ({ id })) } } })
+const sourceCases = [
+  { name: 'known step', lines: sourceLines, steps: [sourceStep(1, 'n1')], node: 'n1', who: 'A', names: ['网关'], page: 0 },
+  { name: 'latest among equals', lines: sourceLines, steps: [sourceStep(3, 'n1')], node: 'n1', who: 'A', names: ['网关'], page: 0 },
+  { name: 'no step at all', lines: sourceLines, steps: [], node: 'n1', who: 'A', names: ['网关'], page: 0 },
+  { name: 'nothing alike is still the latest', lines: sourceLines, steps: [], node: 'n9', who: 'A', names: ['数据库'], page: 0 },
+  { name: 'another page', lines: sourceLines, steps: [sourceStep(5, 'n2'), sourceStep(9, 'n1')], node: 'n1', who: 'A', names: ['网关'], page: 1 },
+  { name: 'someone else', lines: sourceLines, steps: [], node: 'n1', who: 'Z', names: ['网关'], page: 0 },
+  { name: 'before anyone spoke', lines: sourceLines, steps: [sourceStep(0, 'n1')], node: 'n1', who: 'A', names: ['网关'], page: 0 },
+].map((c) => {
+  const seen = firstSeen(c.steps, { kind: 'node', id: c.node })
+  return { ...c, seen: seen ?? null, found: saidAt(c.lines, c.who, c.names, c.page, seen) ?? null }
+})
 const prefix = (text) => messages(emptyGraph(), [], { text }).slice(0, -1)
 // The fixed part of the prompt ships with the agent; this copy is the answer key it is tested against.
 writeFileSync(new URL('../../agent/prompts.json', import.meta.url), `${JSON.stringify({ zh: prefix('今天讨论登录'), en: prefix('Let us discuss the login flow today') }, null, 1)}\n`)
@@ -370,5 +391,6 @@ writeFileSync(process.argv[3], `${JSON.stringify({
   names: nameCases,
   initials: initialCases,
   attribution: attributionCases,
+  sources: sourceCases,
 })}\n`)
 console.log(`${steps.length} steps`)

@@ -1786,7 +1786,7 @@ impl Workbench {
         };
         let file = model.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
         let Some(add_on) = boardcast_models::vision_for(&file) else {
-            self.import = ImportState::Failed(tr("This local model can't read images.", "这个本地模型不能看图。").to_string());
+            self.import = ImportState::Failed(tr("This local model can't read images. To read one, choose Qwen3.5 or MiniCPM-V in Settings.", "这个本地模型不能看图。要读图，请在设置里选择 Qwen3.5 或 MiniCPM-V。").to_string());
             cx.notify();
             return;
         };
@@ -2826,7 +2826,13 @@ impl Render for Workbench {
                 .justify_between()
                 .gap_2()
                 // The name gives way, so a long one can never push its button out of reach.
-                .child(div().flex_1().min_w_0().text_sm().child(name))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(div().text_sm().child(name))
+                        .when_some(model.note, |d, (en, zh)| d.child(div().text_xs().text_color(rgb(0x62_66_5c)).child(tr(en, zh)))),
+                )
                 .when(active, |d| d.child(div().text_xs().text_color(rgb(0x28_61_43)).child(tr("In use", "使用中"))))
                 .when(installed && !active, |d| {
                     d.child(button_id(("use-model", i), tr("Use", "使用")).on_click(cx.listener(move |this, _, _, cx| this.use_model(&action, cx))))

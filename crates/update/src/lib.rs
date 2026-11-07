@@ -90,6 +90,7 @@ pub fn fetch(release: &Release, dir: &Path, cancel: &AtomicBool, report: &mut dy
         size: release.size,
         sha256: release.sha256.clone(),
         vram_mib: 0,
+        note: None,
         sources: vec![Source { name: "GitHub".into(), url: release.url.clone(), direct: false }],
     };
     match download(&model, dir, cancel, report)? {

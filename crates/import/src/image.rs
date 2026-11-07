@@ -43,12 +43,8 @@ pub fn clean_read(text: &str) -> String {
     let t = FENCE.replace_all(&t, "");
     let t = OPENING.replace(&t, "");
     let t = CLOSING.replace(&t, "");
-    let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
-    if NOTHING.is_match(&t) {
-        String::new()
-    } else {
-        t
-    }
+    // Some models read the text and then add a line saying "nothing", so each line is judged alone.
+    t.lines().filter(|line| !NOTHING.is_match(line.trim())).flat_map(str::split_whitespace).collect::<Vec<_>>().join(" ")
 }
 
 /// Whether it reads as text: arrowheads often come back as "1>1" or "->".
@@ -372,6 +368,13 @@ mod tests {
             assert_eq!(clean_read(input), case["clean"].as_str().unwrap(), "{input}");
             assert_eq!(meaningful(input), case["meaningful"].as_bool().unwrap(), "{input}");
         }
+    }
+
+    #[test]
+    fn a_line_saying_nothing_is_dropped_from_what_was_read() {
+        assert_eq!(clean_read("感谢信\n无"), "感谢信");
+        assert_eq!(clean_read("无\n没有"), "");
+        assert_eq!(clean_read("无论如何\n写库"), "无论如何 写库");
     }
 
     fn png_with_blocks(rects: &[[usize; 4]], width: u32, height: u32) -> Vec<u8> {

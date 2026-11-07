@@ -703,7 +703,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-agent"
-version = "0.22.0-alpha.1"
+version = "0.22.0-alpha.2"
 dependencies = [
  "anyhow",
  "base64",
@@ -716,7 +716,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-audio"
-version = "0.22.0-alpha.1"
+version = "0.22.0-alpha.2"
 dependencies = [
  "anyhow",
  "boardcast-board",
@@ -727,7 +727,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-board"
-version = "0.22.0-alpha.1"
+version = "0.22.0-alpha.2"
 dependencies = [
  "anyhow",
  "icu_segmenter",
@@ -739,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-export"
-version = "0.22.0-alpha.1"
+version = "0.22.0-alpha.2"
 dependencies = [
  "anyhow",
  "boardcast-board",
@@ -755,7 +755,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-import"
-version = "0.22.0-alpha.1"
+version = "0.22.0-alpha.2"
 dependencies = [
  "anyhow",
  "boardcast-board",
@@ -770,7 +770,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-meetings"
-version = "0.22.0-alpha.1"
+version = "0.22.0-alpha.2"
 dependencies = [
  "anyhow",
  "base64",
@@ -781,7 +781,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-models"
-version = "0.22.0-alpha.1"
+version = "0.22.0-alpha.2"
 dependencies = [
  "anyhow",
  "libc",
@@ -791,7 +791,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-tools"
-version = "0.22.0-alpha.1"
+version = "0.22.0-alpha.2"
 dependencies = [
  "anyhow",
  "boardcast-agent",
@@ -807,7 +807,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-ui"
-version = "0.22.0-alpha.1"
+version = "0.22.0-alpha.2"
 dependencies = [
  "anyhow",
  "boardcast-agent",
@@ -830,7 +830,7 @@ dependencies = [
 
 [[package]]
 name = "boardcast-update"
-version = "0.22.0-alpha.1"
+version = "0.22.0-alpha.2"
 dependencies = [
  "anyhow",
  "base64",

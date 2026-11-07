@@ -22,8 +22,8 @@ pub struct VisionServer {
 }
 
 impl VisionServer {
-    pub fn start(binaries: &Path, model: &Path, projector: &Path) -> Result<Self> {
-        let server = LocalServer { binaries: binaries.to_path_buf(), model: model.to_path_buf() };
+    pub fn start(binaries: &Path, model: &Path, projector: &Path, shaders: Option<&Path>) -> Result<Self> {
+        let server = LocalServer { binaries: binaries.to_path_buf(), model: model.to_path_buf(), shaders: shaders.map(Path::to_path_buf) };
         let base = format!("http://127.0.0.1:{VISION_PORT}");
         let health = format!("{base}/health");
         let gpus = list_gpus(binaries);

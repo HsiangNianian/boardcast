@@ -28,6 +28,7 @@ use boardcast_board::steps::{clock, replay_to, Player};
 use gpui_kit::base::input::{Textarea, TextareaState};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::progress::Progress as ProgressBar;
 use gpui_kit::component::separator::Separator;
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
 use gpui_kit::component::switch::Switch;
@@ -65,6 +66,9 @@ const TOOLBAR_W: f32 = 290.0;
 const TOOLBAR_W_WITH_UNITS: f32 = 520.0;
 const TOOLBAR_W_SPEAKER: f32 = 110.0;
 const TOOLBAR_H: f32 = 36.0;
+const PREPARING_PAGE_AFTER: Duration = Duration::from_secs(5);
+/// How much of the progress bar is estimated, ahead of the part that counts real tokens.
+const ESTIMATED_SHARE: f32 = 0.7;
 /// The width of what floats at the side, how far things float from the edge, and the room kept for the
 /// bars above and below the board.
 const SIDE_W: f32 = 340.0;
@@ -834,6 +838,7 @@ struct Workbench {
     /// The speaker being looked at in the speakers panel, and the name being written for them.
     speaker_chosen: Option<String>,
     speaker_name: Entity<InputState>,
+    preparing: Option<Preparing>,
     /// Whether the transcript is out. Other panels always show, and close back to it.
     transcript_open: bool,
     /// The speaker under the pointer, whose contributions stand out on the board.
@@ -876,12 +881,59 @@ struct Workbench {
     close_refused: bool,
 }
 
+/// Where the graphics driver keeps the shaders it compiles for the local model, beside the models.
+fn shader_dir(models: &std::path::Path) -> PathBuf {
+    models.parent().unwrap_or(models).join("shader-cache")
+}
+
+/// Left beside the shaders once a start has got all the way through. The driver writes into the folder
+/// from the moment it starts, so what is there says nothing about whether it finished.
+const SHADERS_READY: &str = "ready";
+
+fn dir_size(dir: &std::path::Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(dir) else { return 0 };
+    entries
+        .flatten()
+        .map(|entry| match entry.metadata() {
+            Ok(meta) if meta.is_dir() => dir_size(&entry.path()),
+            Ok(meta) => meta.len(),
+            Err(_) => 0,
+        })
+        .sum()
+}
+
+/// The local model getting ready: a page says so, as a first start can take half a minute.
+struct Preparing {
+    started: Instant,
+    /// No start has finished here yet, so the driver has shaders to compile.
+    first_time: bool,
+    done: u64,
+    total: u64,
+    /// The user chose to carry on without waiting.
+    dismissed: bool,
+}
+
+impl Preparing {
+    fn showing(&self) -> bool {
+        !self.dismissed && (self.first_time || self.started.elapsed() > PREPARING_PAGE_AFTER)
+    }
+
+    /// How far along, from 0 to 1. Compiling reports nothing, so until tokens are counted this is an
+    /// estimate that keeps moving but slows down, and it never claims to be nearly done.
+    fn fraction(&self) -> f32 {
+        if self.done > 0 && self.total > 0 {
+            return ESTIMATED_SHARE + (1.0 - ESTIMATED_SHARE) * self.done as f32 / self.total as f32;
+        }
+        ESTIMATED_SHARE * (1.0 - (-self.started.elapsed().as_secs_f32() / 15.0).exp())
+    }
+}
+
 fn backend_from(settings: &Settings, local_only: bool, binaries: &std::path::Path, models: &std::path::Path) -> Backend {
     if settings.enabled && settings.is_complete() && !local_only {
         return Backend::Ready(Provider::Remote { base_url: settings.base_url.clone(), key: settings.api_key.clone(), model: settings.model.clone() });
     }
     match boardcast_models::current(models) {
-        Some(model) => Backend::ManagedLocal(Arc::new(LocalServer { binaries: binaries.to_path_buf(), model })),
+        Some(model) => Backend::ManagedLocal(Arc::new(LocalServer { binaries: binaries.to_path_buf(), model, shaders: Some(shader_dir(models)) })),
         None => Backend::NoModel,
     }
 }
@@ -902,7 +954,8 @@ fn read_image(path: &std::path::Path, binaries: &std::path::Path, model: &std::p
     let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
     let _ = tx.send(ImportUpdate::Progress(if english { "Starting the local model to read the image…".to_string() } else { "正在启动本地模型来读图…".to_string() }));
-    let server = VisionServer::start(binaries, model, projector)?;
+    let shaders = model.parent().map(shader_dir);
+    let server = VisionServer::start(binaries, model, projector, shaders.as_deref())?;
     let imported = boardcast_import::image::import_image(&bytes, english, cancel, &mut |png| server.read(png), &mut |done, total| {
         let _ = tx.send(ImportUpdate::Progress(if english { format!("Reading {name}: block {done}/{total}") } else { format!("正在读 {name}：{done}/{total} 块") }));
     })?;
@@ -987,7 +1040,7 @@ fn fingerprint_of(live: &Live) -> String {
     summary::fingerprint(&live.boards(), &Line::spoken(&live.lines))
 }
 
-fn line_note(line: &serde_json::Value) -> String {
+fn line_note(line: &serde_json::Value, model_loading: bool) -> String {
     let mut parts = vec![];
     if let Some(ms) = line["heard"]["asrMs"].as_u64() {
         parts.push(format!("{} {ms} ms", tr("Heard", "识别")));
@@ -995,7 +1048,7 @@ fn line_note(line: &serde_json::Value) -> String {
     if line["failed"].as_bool().unwrap_or(false) {
         parts.push(tr("Not drawn", "没有画上").to_string());
     } else if line["ms"].is_null() {
-        parts.push(tr("Drawing…", "正在画…").to_string());
+        parts.push(if model_loading { tr("Waiting for the model…", "等模型就绪后上板…") } else { tr("Drawing…", "正在画…") }.to_string());
     } else if let Some(ms) = line["ms"].as_u64().filter(|ms| *ms > 0) {
         parts.push(format!("{} {ms} ms", tr("Model", "模型")));
     }
@@ -1030,12 +1083,24 @@ impl Workbench {
         while let Ok(event) = self.pipeline.events.try_recv() {
             changed = true;
             match event {
-                Event::Agent(Update::Loading) => self.status = tr("Loading the board model…", "正在加载板书模型…").into(),
+                Event::Agent(Update::Loading) => {
+                    self.status = tr("Loading the board model…", "正在加载板书模型…").into();
+                    self.preparing = Some(Preparing { started: Instant::now(), first_time: !shader_dir(&self.models).join(SHADERS_READY).exists(), done: 0, total: 0, dismissed: false });
+                }
+                Event::Agent(Update::Preparing { done, total }) => {
+                    if let Some(preparing) = &mut self.preparing {
+                        (preparing.done, preparing.total) = (done, total);
+                    }
+                }
                 Event::Agent(Update::Ready) => {
+                    if self.preparing.take().is_some() {
+                        let _ = std::fs::write(shader_dir(&self.models).join(SHADERS_READY), "");
+                    }
                     self.status = tr("Board model ready", "板书模型就绪").into();
                     self.needs_model = false;
                 }
                 Event::Agent(Update::NoModel) => {
+                    self.preparing = None;
                     self.status = tr("Choose a board model to start", "请先选择板书模型").into();
                     self.needs_model = true;
                     self.panel = Panel::Settings;
@@ -1084,6 +1149,7 @@ impl Workbench {
                     self.notice = Some(format!("{}{message}", tr("The model did not answer: ", "模型没有回应：")));
                 }
                 Event::Agent(Update::Broken(message)) | Event::Failed(message) => {
+                    self.preparing = None;
                     eprintln!("failed: {message}");
                     self.notice = Some(message);
                 }
@@ -1109,6 +1175,8 @@ impl Workbench {
                 changed = true;
             }
         }
+        // The bar has to keep moving even while nothing is reported.
+        changed |= self.preparing.as_ref().is_some_and(Preparing::showing);
         self.pump_probe(&mut changed);
         self.pump_import(&mut changed);
         self.pump_replay(&mut changed, cx);
@@ -2147,6 +2215,13 @@ impl Workbench {
         cx.notify();
     }
 
+    fn retry_line(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some((speaker, text)) = self.live.retry_line(index) else { return };
+        let (meeting, renames) = (self.session().meeting(), self.session().renames_seen());
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text }, ended: Instant::now(), asr_ms: None, meeting, renames });
+        cx.notify();
+    }
+
     /// A speaker stands out while the pointer is on them, and on a touch screen, with no pointer, while
     /// they are chosen in the speakers panel.
     fn traced_speaker(&self) -> Option<&String> {
@@ -3083,7 +3158,7 @@ impl Render for Workbench {
             .flex_col()
             .children(self.live.lines[..shown_lines].iter().enumerate().rev().map(|(i, l)| {
                 let manual = l["manual"].as_bool().unwrap_or(false);
-                let note = line_note(l);
+                let note = line_note(l, self.preparing.is_some());
                 let jumped = self.jumped_line.is_some_and(|(line, _)| line == i);
                 div()
                     .flex()
@@ -3108,6 +3183,9 @@ impl Render for Workbench {
                     .child(div().text_sm().when(manual, |d| d.text_color(rgb(FAINT))).child(l["text"].as_str().unwrap_or_default().to_string()))
                     .when(!note.is_empty() && !manual, |d| {
                         d.child(div().text_xs().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { DANGER } else { FAINT })).child(note))
+                    })
+                    .when(l["failed"].as_bool().unwrap_or(false) && editable, |d| {
+                        d.child(div().mt_1().child(button(("retry-line", i), tr("Draw it again", "重新上板")).on_click(cx.listener(move |this, _, _, cx| this.retry_line(i, cx)))))
                     })
             }));
         let library = div().id("library-list").flex_1().overflow_y_scroll().p_2().flex().flex_col().gap_1().when(self.library.is_empty(), |d| {
@@ -3245,6 +3323,22 @@ impl Render for Workbench {
                 d.child(button("save-local", tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
             })
             .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
+            .when(self.panel == Panel::Settings, |d| {
+                let size = dir_size(&shader_dir(&self.models));
+                d.child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Graphics cache", "显卡缓存")))
+                    .child(div().text_xs().text_color(rgb(MUTED)).child(format!(
+                        "{} {:.1} MB. {}",
+                        tr("Shaders compiled for this computer take", "为这台电脑编译的着色器占用"),
+                        size as f64 / 1e6,
+                        tr("Deleting them is safe, and the next start compiles them again, which takes about half a minute.", "删除是安全的，下次启动模型时会重新编译，大约需要半分钟。"),
+                    )))
+                    .child(button("clear-shaders", tr("Delete", "删除")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
+                        if let Err(e) = std::fs::remove_dir_all(shader_dir(&this.models)) {
+                            this.form.note = Some(format!("{e:#}"));
+                        }
+                        cx.notify();
+                    })))
+            })
             .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Updates", "更新")))
             .child(div().text_xs().text_color(rgb(MUTED)).child(format!("{} {}", tr("Version", "版本"), boardcast_update::VERSION)))
             .child(match &self.update {
@@ -3354,6 +3448,44 @@ impl Render for Workbench {
             .when_some(import_panel, |d, panel| d.child(panel))
             .when_some(speakers_panel, |d, panel| d.child(panel))
             .when(self.panel == Panel::Settings, |d| d.child(settings));
+        let preparing_page = self.preparing.as_ref().filter(|p| p.showing()).map(|p| {
+            let fraction = p.fraction();
+            let (title, detail) = if p.first_time {
+                (
+                    tr("Getting ready for the first time", "第一次使用，正在做准备"),
+                    tr("The model is compiling for this computer's graphics card. This takes about half a minute, once. Next time it opens right away.", "正在为这台电脑的显卡编译着色器，大约需要半分钟，只需这一次，之后打开就不用等了。"),
+                )
+            } else {
+                (tr("Getting the model ready", "正在准备板书模型"), tr("This is taking longer than usual, but it is still working.", "比平时慢一些，但仍在进行中。"))
+            };
+            let stage = if p.done > 0 {
+                tr("Almost done", "马上就好")
+            } else if p.total > 0 && p.first_time {
+                tr("Compiling shaders", "正在编译着色器")
+            } else if p.total > 0 {
+                tr("Preparing", "正在准备")
+            } else {
+                tr("Loading the model", "正在加载模型")
+            };
+            div().id("preparing").occlude().absolute().size_full().flex().items_center().justify_center().bg(rgb(PAPER)).child(
+                div()
+                    .w(px(420.))
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(div().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(title))
+                    .child(div().text_sm().text_color(rgb(MUTED)).child(detail))
+                    .child(ProgressBar::new("preparing-progress").value(fraction * 100.0))
+                    .child(div().flex().justify_between().text_xs().text_color(rgb(FAINT)).child(stage).child(format!("{} {:.0}%", tr("about", "约"), fraction * 100.0)))
+                    .child(div().text_xs().text_color(rgb(FAINT)).child(tr("You can carry on meanwhile. What is said is kept and goes on the board once the model is ready.", "你可以先继续。这期间说的话会先记下，模型好了就上板。")))
+                    .child(div().flex().child(button("preparing-dismiss", tr("Carry on", "先继续")).on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(preparing) = &mut this.preparing {
+                            preparing.dismissed = true;
+                        }
+                        cx.notify();
+                    })))),
+            )
+        });
         // Over the board, where a message can't be missed, and never on top of the controls.
         let notices = (view_only.is_some() || banner.is_some()).then(|| {
             div()
@@ -3400,6 +3532,7 @@ impl Render for Workbench {
             )
             .when_some(notices, |d, notices| d.child(notices))
             .when(side_shown, |d| d.child(side))
+            .when_some(preparing_page, |d, page| d.child(page))
     }
 }
 
@@ -3624,6 +3757,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     speaker: None,
                     speaker_chosen: None,
                     speaker_name,
+                    preparing: None,
                     transcript_open: true,
                     speaker_hovered: None,
                     transcript_scroll: gpui_kit::ScrollHandle::new(),

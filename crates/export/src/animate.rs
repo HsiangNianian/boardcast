@@ -2,7 +2,7 @@
 //! order of the meeting, then left whole. CSS only, so a viewer without animation shows the whole board.
 
 use crate::ink::Composed;
-use boardcast_board::pen::{ink, outline, Rng};
+use boardcast_board::pen::{outline, Rng};
 use boardcast_board::compose::PAPER;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -197,7 +197,7 @@ pub fn animated_svg(board: &Composed, nodes: &[Value], steps: &[Value], title: &
                 .lines
                 .iter()
                 .map(|line| {
-                    let inked = ink(&line.points, line.width, line.wobble, &mut r);
+                    let inked = line.inked(&mut r);
                     Written { d: format!("{}Z", path(&outline(&inked, 1.0))), center: path(&inked.center), length: inked.length, width: inked.width }
                 })
                 .collect(),

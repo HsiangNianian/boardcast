@@ -5,7 +5,7 @@ use crate::board_layout::{Layout, Rect, Row, FONT, TITLE};
 use crate::glyphs::{Glyphs, Pt};
 use crate::graph::{Graph, Kind, Node};
 use crate::spans::{rotate_point, SpanBox};
-use crate::pen::{around, arrow, circle_mark, line, place, rough_box, strike, Rng};
+use crate::pen::{around, arrow, circle_mark, ink, line, marker, place, rough_box, strike, Inked, Rng};
 
 const WEIGHT: f32 = 0.65;
 const ENGLISH_WEIGHT: f32 = 1.0;
@@ -21,7 +21,8 @@ pub struct Style {
 const INK: u32 = 0x1e_1e_1e;
 const RED: u32 = 0xe0_31_31;
 const BLUE: u32 = 0x19_71_c2;
-const HIGHLIGHT: u32 = 0xff_ec_99;
+const HIGHLIGHT: u32 = 0xff_e0_66;
+const MARKER_ALPHA: f32 = 0.5;
 pub const PAPER: u32 = 0xfb_fb_f9;
 
 pub struct Line {
@@ -29,6 +30,18 @@ pub struct Line {
     pub width: f32,
     pub wobble: f32,
     pub style: Style,
+    /// Drawn with a highlighter rather than a pen.
+    pub flat: bool,
+}
+
+impl Line {
+    pub fn inked(&self, r: &mut Rng) -> Inked {
+        if self.flat {
+            marker(&self.points, self.width, self.wobble, r)
+        } else {
+            ink(&self.points, self.width, self.wobble, r)
+        }
+    }
 }
 
 /// One drawable thing. A key that survives a new layout keeps its ink on the board.
@@ -90,16 +103,16 @@ fn label_spot(points: &[Pt], label: &str, size: f32, blocks: &[Area], lines: &[V
     let mut cands: Vec<Pt> = prefer.to_vec();
     let mut segs: Vec<(Pt, Pt)> = points.windows(2).map(|s| (s[0], s[1])).collect();
     segs.sort_by(|s, t| (t.1[0] - t.0[0]).hypot(t.1[1] - t.0[1]).total_cmp(&(s.1[0] - s.0[0]).hypot(s.1[1] - s.0[1])));
-    for (a, b) in segs {
-        let flat = (b[1] - a[1]).abs() <= (b[0] - a[0]).abs();
-        for t in [0.5, 0.3, 0.7] {
-            let (mx, my) = (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t);
-            if flat {
-                cands.push([mx - w / 2.0, my - h - 8.0]);
-                cands.push([mx - w / 2.0, my + 8.0]);
-            } else {
-                cands.push([mx + 8.0, my - h / 2.0]);
-                cands.push([mx - w - 8.0, my - h / 2.0]);
+    // Close to the line first, then further out, as someone writing would look for room.
+    for gap in [8.0, 20.0, 34.0] {
+        for (a, b) in &segs {
+            let flat = (b[1] - a[1]).abs() <= (b[0] - a[0]).abs();
+            for t in [0.5, 0.3, 0.7, 0.15, 0.85] {
+                let (mx, my) = (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t);
+                let (above, below) = ([mx - w / 2.0, my - h - gap], [mx - w / 2.0, my + gap]);
+                let (right, left) = ([mx + gap, my - h / 2.0], [mx - w - gap, my - h / 2.0]);
+                // A slanting line has room off to either side as well.
+                cands.extend(if flat { [above, below, right, left] } else { [right, left, above, below] });
             }
         }
     }
@@ -135,12 +148,24 @@ impl Canvas<'_> {
         let style = Style { rgb, alpha: opacity, under };
         let lines: Vec<Line> = shapes
             .into_iter()
-            .map(|(points, latin)| Line { points, width: size * if latin { ENGLISH_WEIGHT } else { WEIGHT }, wobble: size * 0.12, style })
+            .map(|(points, latin)| Line { points, width: size * if latin { ENGLISH_WEIGHT } else { WEIGHT }, wobble: size * 0.12, style, flat: false })
             .collect();
         // The position is in the key: ink that has to move is redrawn in its new place.
         let at = lines.first().and_then(|l| l.points.first()).copied().unwrap_or([0.0, 0.0]);
         let full = format!("{key}@{:.0},{:.0}", at[0], at[1]);
         self.pieces.push(Piece { key: full, seed: key, lines });
+    }
+
+    /// One pass of a highlighter along a line of text, as tall as the letters and running a little past them.
+    fn marker(&mut self, key: String, x0: f32, x1: f32, y: f32, height: f32, opacity: f32) {
+        let mut r = Rng::new(&key);
+        let (start, end) = (x0 - 2.0 - r.next() * 3.0, x1 + 2.0 + r.next() * 4.0);
+        let drift = (r.next() - 0.5) * height * 0.12;
+        let points = line([start, y + height * 0.55 - drift], [end, y + height * 0.55 + drift], &mut r, 0.002);
+        let style = Style { rgb: HIGHLIGHT, alpha: MARKER_ALPHA * opacity, under: true };
+        let at = points[0];
+        let lines = vec![Line { points, width: height * 0.95, wobble: height * 0.012, style, flat: true }];
+        self.pieces.push(Piece { key: format!("{key}@{:.0},{:.0}", at[0], at[1]), seed: key, lines });
     }
 
     fn write(&mut self, text: &str, x: f32, y: f32, size: f32, seed: &str) -> Vec<(Vec<Pt>, bool)> {
@@ -165,10 +190,7 @@ impl Canvas<'_> {
         let key = format!("{id}|{s}");
         let opacity = opacity.unwrap_or_else(|| alpha(n));
         if n.is_some_and(|n| n.marks.iter().any(|m| m == "高亮")) {
-            let k = format!("{key}|h");
-            let mut r = Rng::new(&k);
-            let stroke = line([x - 2.0, y + size / 2.0], [x + w + 2.0, y + size / 2.0], &mut r, 0.004);
-            self.add(k, HIGHLIGHT, 0.45, true, vec![(stroke, false)], (size + 2.0) / WEIGHT);
+            self.marker(format!("{key}|h"), x, x + w, y, size, 1.0);
         }
         let shapes = self.write(s, x, y, size, &key);
         self.add(key.clone(), rgb, opacity, false, shapes, pen_for(size));
@@ -199,10 +221,9 @@ impl Canvas<'_> {
     }
 
     fn highlight(&mut self, key: String, boxes: &[[f32; 4]], opacity: f32) {
-        let mut r = Rng::new(&key);
-        let shapes: Vec<(Vec<Pt>, bool)> = boxes.iter().map(|b| (line([b[0] - 2.0, b[1] + b[3] / 2.0], [b[0] + b[2] + 2.0, b[1] + b[3] / 2.0], &mut r, 0.004), false)).collect();
-        let size = boxes.iter().map(|b| b[3]).fold(0.0, f32::max);
-        self.add(format!("{key}|h"), HIGHLIGHT, 0.45 * opacity, true, shapes, (size + 2.0) / WEIGHT);
+        for (i, b) in boxes.iter().enumerate() {
+            self.marker(format!("{key}|h{i}"), b[0], b[0] + b[2], b[1], b[3], opacity);
+        }
     }
 
     /// Imported text is on the page already, so only what was marked on it is drawn.
@@ -514,15 +535,10 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
             None => label_spot(&lb.route, &lb.text, size, &blocks, &lines, &lb.prefer),
         };
         blocks.push(spot);
-        // No clean spot: a paper-coloured backing keeps the text readable over the line.
-        if !clear {
-            if lb.fixed.is_none() {
-                unclear.push(lb.text.clone());
-            }
-            let mut r = Rng::new(&format!("{}bg", lb.key));
-            let cy = spot.y + spot.h / 2.0 + 1.0;
-            let backing = line([spot.x - 4.0, cy], [spot.x + spot.w + 4.0, cy], &mut r, 0.0);
-            c.add(format!("{}|bg", lb.key), PAPER, 0.92, false, vec![(backing, false)], (spot.h + 8.0) / WEIGHT);
+        // Nothing goes under the words, as a hand writes straight on the paper. A label with no clean spot
+        // crosses its line, and the check hears about it.
+        if !clear && lb.fixed.is_none() {
+            unclear.push(lb.text.clone());
         }
         c.text(None, &lb.key, &lb.text, spot.x, spot.y, size, INK, 0.0, Some(1.0));
     }
@@ -535,8 +551,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_label_finds_room_beside_a_slanting_line() {
+        let route = [[0.0, 0.0], [300.0, 200.0]];
+        let (_, clear) = label_spot(&route, "publishes first", 16.0, &[], &[route.to_vec()], &[]);
+        assert!(clear);
+    }
+
+    #[test]
     fn ink_is_traced_to_what_it_belongs_to() {
-        let piece = |seed: &str, points: Vec<Pt>| Piece { key: format!("{seed}@1,2"), seed: seed.into(), lines: vec![Line { points, width: 1.0, wobble: 0.0, style: Style { rgb: 0, alpha: 1.0, under: false } }] };
+        let piece = |seed: &str, points: Vec<Pt>| Piece { key: format!("{seed}@1,2"), seed: seed.into(), lines: vec![Line { points, width: 1.0, wobble: 0.0, style: Style { rgb: 0, alpha: 1.0, under: false }, flat: false }] };
         let boxes = ink_boxes(&[
             piece("n12|box", vec![[0.0, 0.0], [10.0, 20.0]]),
             piece("n1>n2", vec![[0.0, 0.0], [100.0, 100.0]]),

@@ -6,7 +6,7 @@ use boardcast_board::board_layout::StableLayout;
 use boardcast_board::compose::{compose, PAPER};
 use boardcast_board::glyphs::{Glyphs, Pt};
 use boardcast_board::graph::Graph;
-use boardcast_board::pen::{ink, outline, Rng};
+use boardcast_board::pen::{outline, Rng};
 use boardcast_board::steps::{apply_step, ink_only};
 use boardcast_board::sugiyama::first_diagram;
 use boardcast_meetings::PageImage;
@@ -74,7 +74,7 @@ fn board_data(page: &Page, glyphs: &mut Glyphs) -> Value {
                     .lines
                     .iter()
                     .map(|line| {
-                        let inked = ink(&line.points, line.width, line.wobble, &mut r);
+                        let inked = line.inked(&mut r);
                         json!([path(&outline(&inked, 1.0), true), path(&inked.center, false), (inked.length * 10.0).round() / 10.0, inked.width])
                     })
                     .collect();

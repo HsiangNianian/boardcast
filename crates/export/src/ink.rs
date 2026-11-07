@@ -5,7 +5,7 @@ use boardcast_board::board_layout::{Bounds, StableLayout};
 use boardcast_board::compose::{compose, Piece, Style, PAPER};
 use boardcast_board::glyphs::{Glyphs, Pt};
 use boardcast_board::graph::Graph;
-use boardcast_board::pen::{ink, outline, Rng};
+use boardcast_board::pen::{outline, Rng};
 use boardcast_board::sugiyama::first_diagram;
 use boardcast_meetings::PageImage;
 use serde_json::Value;
@@ -64,7 +64,7 @@ impl Composed {
             // The same seed in the same order gives the same wobble as on screen.
             let mut r = Rng::new(&piece.seed);
             for line in &piece.lines {
-                let inked = ink(&line.points, line.width, line.wobble, &mut r);
+                let inked = line.inked(&mut r);
                 strokes.push(Shape { outline: outline(&inked, 1.0), style: line.style });
             }
         }

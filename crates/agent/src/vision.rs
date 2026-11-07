@@ -90,6 +90,25 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
+    /// All of it: closing with some of it unread resets the connection, which on a Mac can reach the
+    /// client before the reply does.
+    fn read_request(stream: &mut std::net::TcpStream) {
+        let (mut seen, mut chunk) = (vec![], [0_u8; 1 << 16]);
+        loop {
+            let Ok(n) = stream.read(&mut chunk) else { return };
+            seen.extend_from_slice(&chunk[..n]);
+            let text = String::from_utf8_lossy(&seen).to_lowercase();
+            if let Some(end) = text.find("\r\n\r\n") {
+                let length = text.lines().find_map(|l| l.strip_prefix("content-length:")?.trim().parse::<usize>().ok()).unwrap_or(0);
+                if n == 0 || seen.len() >= end + 4 + length {
+                    return;
+                }
+            } else if n == 0 {
+                return;
+            }
+        }
+    }
+
     /// A server that gives this reply to everything, and counts what it was asked.
     fn answering(status_line: &'static str, headers: &'static str, body: &'static str) -> (String, Arc<AtomicUsize>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -100,8 +119,7 @@ mod tests {
             for stream in listener.incoming() {
                 let mut stream = stream.unwrap();
                 seen.fetch_add(1, Ordering::SeqCst);
-                let mut request = vec![0_u8; 1 << 16];
-                let _ = stream.read(&mut request);
+                read_request(&mut stream);
                 let _ = write!(stream, "HTTP/1.1 {status_line}\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
             }
         });

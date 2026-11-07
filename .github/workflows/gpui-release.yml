@@ -79,7 +79,7 @@ jobs:
   macos:
     # After the Linux job, which creates the release and refuses a version that isn't newer.
     needs: release
-    runs-on: macos-14
+    runs-on: macos-26
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:

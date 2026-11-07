@@ -95,7 +95,7 @@ jobs:
   macos:
     name: macos package
     # No Mac is at hand during development, so this is what tells whether it builds and starts at all.
-    runs-on: macos-14
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

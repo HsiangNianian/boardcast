@@ -332,6 +332,79 @@ struct Label {
 }
 
 /// The strokes for a board, and the edge labels that found no clear spot.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Owner {
+    Node(String),
+    Edge(String, String),
+}
+
+/// A patch of the board some ink lies in, and what that ink belongs to.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InkBox {
+    pub owner: Owner,
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    /// The words on a connection, rather than the line.
+    pub label: bool,
+}
+
+fn node_id(text: &str) -> Option<&str> {
+    let digits = text.strip_prefix('n')?.chars().take_while(char::is_ascii_digit).count();
+    (digits > 0).then(|| &text[..=digits])
+}
+
+/// Read what a piece of ink belongs to from its key, like `n1|box`, `n1>n2` or `n1~n2l`.
+fn owner_of(seed: &str) -> Option<(Owner, bool)> {
+    let from = node_id(seed)?;
+    let rest = &seed[from.len()..];
+    let Some(after) = rest.strip_prefix('>').or_else(|| rest.strip_prefix('~')) else {
+        return Some((Owner::Node(from.to_string()), false));
+    };
+    let to = node_id(after)?;
+    Some((Owner::Edge(from.to_string(), to.to_string()), after[to.len()..].starts_with('l')))
+}
+
+/// Where each thing's ink lies. A line is split along its length, as one box around a long diagonal
+/// would take in whatever it passes.
+pub fn ink_boxes(pieces: &[Piece]) -> Vec<InkBox> {
+    const STEP: f32 = 24.0;
+    const PAD: f32 = 5.0;
+    let mut out = vec![];
+    for piece in pieces {
+        let Some((owner, label)) = owner_of(&piece.seed) else { continue };
+        let mut add = |points: &[Pt]| {
+            let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+            for p in points {
+                (x0, y0, x1, y1) = (x0.min(p[0]), y0.min(p[1]), x1.max(p[0]), y1.max(p[1]));
+            }
+            if x0 <= x1 {
+                out.push(InkBox { owner: owner.clone(), x: x0 - PAD, y: y0 - PAD, w: x1 - x0 + PAD * 2.0, h: y1 - y0 + PAD * 2.0, label });
+            }
+        };
+        if matches!(owner, Owner::Edge(..)) && !label {
+            for line in &piece.lines {
+                for pair in line.points.windows(2) {
+                    let (a, b) = (pair[0], pair[1]);
+                    let parts = ((b[0] - a[0]).hypot(b[1] - a[1]) / STEP).ceil().max(1.0) as usize;
+                    let at = |i: usize| {
+                        let t = i as f32 / parts as f32;
+                        [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+                    };
+                    for i in 0..parts {
+                        add(&[at(i), at(i + 1)]);
+                    }
+                }
+            }
+        } else {
+            let points: Vec<Pt> = piece.lines.iter().flat_map(|line| line.points.iter().copied()).collect();
+            add(&points);
+        }
+    }
+    out
+}
+
 pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<String>) {
     let mut c = Canvas { glyphs, pieces: vec![] };
     let font = FONT as f32;
@@ -455,4 +528,28 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
     }
     c.pieces.retain(|p| !p.lines.is_empty());
     (c.pieces, unclear)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ink_is_traced_to_what_it_belongs_to() {
+        let piece = |seed: &str, points: Vec<Pt>| Piece { key: format!("{seed}@1,2"), seed: seed.into(), lines: vec![Line { points, width: 1.0, wobble: 0.0, style: Style { rgb: 0, alpha: 1.0, under: false } }] };
+        let boxes = ink_boxes(&[
+            piece("n12|box", vec![[0.0, 0.0], [10.0, 20.0]]),
+            piece("n1>n2", vec![[0.0, 0.0], [100.0, 100.0]]),
+            piece("n1~n2l", vec![[0.0, 0.0], [30.0, 10.0]]),
+            piece("g1", vec![[0.0, 0.0], [1.0, 1.0]]),
+        ]);
+        assert_eq!(boxes[0], InkBox { owner: Owner::Node("n12".into()), x: -5.0, y: -5.0, w: 20.0, h: 30.0, label: false });
+        // A long diagonal is covered in pieces, so it takes in little besides itself.
+        let line: Vec<&InkBox> = boxes.iter().filter(|b| b.owner == Owner::Edge("n1".into(), "n2".into()) && !b.label).collect();
+        assert!(line.len() >= 5);
+        assert!(line.iter().all(|b| b.w < 40.0 && b.h < 40.0));
+        let label = boxes.iter().find(|b| b.label).unwrap();
+        assert_eq!(label.owner, Owner::Edge("n1".into(), "n2".into()));
+        assert!(!boxes.iter().any(|b| matches!(&b.owner, Owner::Node(id) if id.starts_with('g'))), "a group belongs to nobody");
+    }
 }

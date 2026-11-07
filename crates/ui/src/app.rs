@@ -3,7 +3,7 @@
 use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
 use boardcast_board::board_layout::{target_at, Bounds as BoardBounds, Rect, StableLayout};
 use boardcast_board::check::check;
-use boardcast_board::compose::{compose, Style, PAPER};
+use boardcast_board::compose::{compose, ink_boxes, InkBox, Owner, Style, PAPER};
 use boardcast_board::graph::{parse_ops, Graph, Utterance};
 use boardcast_board::sugiyama::first_diagram;
 use boardcast_agent::settings::Settings;
@@ -22,7 +22,7 @@ use boardcast_agent::vision::VisionServer;
 use boardcast_export::Kind as ExportKind;
 use boardcast_import::pdf::NewPage;
 use boardcast_board::spans::{span_at, Unit};
-use boardcast_board::speakers::initial;
+use boardcast_board::speakers::{by_of_edge, by_of_node, first_seen, initial, said_at};
 use boardcast_board::steps::{clock, replay_to, Player};
 use gpui_kit::base::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::base::slider::{Slider, SliderEvent, SliderIndicator, SliderState, SliderThumb, SliderTrack};
@@ -55,7 +55,13 @@ enum MarkUnit {
 
 const TOOLBAR_W: f32 = 290.0;
 const TOOLBAR_W_WITH_UNITS: f32 = 520.0;
+const TOOLBAR_W_SPEAKER: f32 = 110.0;
 const TOOLBAR_H: f32 = 36.0;
+const JUMP_SHOWN: Duration = Duration::from_millis(2500);
+const JUMP_SCROLLING: Duration = Duration::from_millis(300);
+/// How far everything else fades while one speaker is traced.
+const TRACE_VEIL: f32 = 0.7;
+const TRACE_MARK: f32 = 0.5;
 /// A press that moves less than this is a click, not a pan.
 const CLICK_SLOP: f32 = 4.0;
 const MIN_ZOOM: f32 = 0.2;
@@ -161,6 +167,10 @@ struct Ink {
     next_tidy_batch: u64,
     /// What a click can land on, in board coordinates.
     targets: Vec<Rect>,
+    /// Where each thing's ink lies, in board coordinates.
+    ink_boxes: Vec<InkBox>,
+    /// Whose contributions stand out, and the color that marks them.
+    trace: Option<(String, u32)>,
     /// The thing whose mark toolbar is open.
     selected: Option<String>,
     /// Where the selection was clicked, in board coordinates, to find the word there.
@@ -249,6 +259,7 @@ impl Ink {
         }
         self.hints = report.hint();
         self.targets = layout.targets();
+        self.ink_boxes = ink_boxes(&pieces);
         if let Some(id) = &self.selected {
             if !graph.nodes.iter().any(|n| &n.id == id) {
                 self.selected = None;
@@ -305,6 +316,23 @@ impl Ink {
         self.update(&graph, batch);
     }
 
+    /// What to bring back out from under the veil when a speaker is traced: patches of ink, and what
+    /// to mark with their color, both in board coordinates.
+    fn traced_areas(&self, who: &str) -> (Vec<[f32; 4]>, Vec<[f32; 4]>) {
+        let Some(graph) = &self.graph else { return (vec![], vec![]) };
+        let nodes: HashSet<&str> = graph.nodes.iter().filter(|n| by_of_node(n) == Some(who)).map(|n| n.id.as_str()).collect();
+        let edges: HashSet<(&str, &str)> = graph.edges.iter().filter(|e| by_of_edge(e) == Some(who)).map(|e| (e.from.as_str(), e.to.as_str())).collect();
+        let area = |b: &InkBox| [b.x, b.y, b.w, b.h];
+        let raised = |b: &&InkBox| match &b.owner {
+            Owner::Node(id) => nodes.contains(id.as_str()),
+            Owner::Edge(from, to) => edges.contains(&(from.as_str(), to.as_str())),
+        };
+        let shown = self.ink_boxes.iter().filter(raised);
+        let marked = self.targets.iter().filter(|t| nodes.contains(t.id.as_str())).map(|t| [t.x as f32, t.y as f32, t.w as f32, t.h as f32]);
+        let labels = shown.clone().filter(|b| b.label).map(area);
+        (shown.map(area).collect(), marked.chain(labels).collect())
+    }
+
     /// A click rather than a drag: select what is under the pointer, or clear the selection.
     fn click(&mut self, at: Point<Pixels>) {
         let v = self.shown();
@@ -327,7 +355,8 @@ impl Ink {
         let y = if below + TOOLBAR_H > h { above } else { below };
         // Imported text also offers how much to mark, which makes the bar wider.
         let has_text = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| !n.rows().is_empty());
-        let width = if has_text { TOOLBAR_W_WITH_UNITS } else { TOOLBAR_W };
+        let raised = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| by_of_node(n).is_some());
+        let width = if has_text { TOOLBAR_W_WITH_UNITS } else { TOOLBAR_W } + if raised { TOOLBAR_W_SPEAKER } else { 0.0 };
         Some((x.clamp(8.0, (w - width - 8.0).max(8.0)), y.clamp(8.0, (h - TOOLBAR_H - 8.0).max(8.0))))
     }
 
@@ -776,6 +805,11 @@ struct Workbench {
     /// The speaker being looked at in the speakers panel, and the name being written for them.
     speaker_chosen: Option<String>,
     speaker_name: Entity<InputState>,
+    /// The speaker under the pointer, whose contributions stand out on the board.
+    speaker_hovered: Option<String>,
+    transcript_scroll: gpui_kit::ScrollHandle,
+    /// The line just jumped to, shown for a moment.
+    jumped_line: Option<(usize, Instant)>,
     pdfium: PathBuf,
     /// Where the stroke data is, for work that needs its own copy.
     hanzi: HanziSource,
@@ -1031,6 +1065,17 @@ impl Workbench {
                         self.exit_soon(cx);
                     }
                 }
+            }
+        }
+        if let Some((line, at)) = self.jumped_line {
+            if at.elapsed() > JUMP_SHOWN {
+                self.jumped_line = None;
+                changed = true;
+            } else if at.elapsed() < JUMP_SCROLLING {
+                // A list scrolls only once it has been laid out, which the transcript may not have
+                // been if another panel was showing. Newest first on screen.
+                self.transcript_scroll.scroll_to_item(self.live.lines.len().saturating_sub(line + 1));
+                changed = true;
             }
         }
         self.pump_probe(&mut changed);
@@ -1679,6 +1724,8 @@ impl Workbench {
         self.summary.reset();
         self.speaker = None;
         self.speaker_chosen = None;
+        self.speaker_hovered = None;
+        self.jumped_line = None;
         self.live = live;
         self.live.adopt_summary_source(&fingerprint_of(&self.live));
         self.show_page_image();
@@ -2069,6 +2116,38 @@ impl Workbench {
         cx.notify();
     }
 
+    /// A speaker stands out while the pointer is on them, and on a touch screen, with no pointer, while
+    /// they are chosen in the speakers panel.
+    fn traced_speaker(&self) -> Option<&String> {
+        self.speaker_hovered.as_ref().or(self.speaker_chosen.as_ref().filter(|_| self.panel == Panel::Speakers))
+    }
+
+    fn hover_speaker(&mut self, name: &str, hovered: bool, cx: &mut Context<Self>) {
+        if hovered {
+            self.speaker_hovered = Some(name.to_string());
+        } else if self.speaker_hovered.as_deref() == Some(name) {
+            self.speaker_hovered = None;
+        }
+        cx.notify();
+    }
+
+    /// Go to the line that put this node on the board.
+    fn jump_to_source(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some(node) = self.live.graph.nodes.iter().find(|n| n.id == id) else { return };
+        let Some(who) = by_of_node(node) else { return };
+        let mut names = vec![node.label.as_str()];
+        names.extend(node.aliases.iter().map(String::as_str));
+        let found = said_at(&self.live.lines, who, &names, self.live.page(), first_seen(&self.live.steps, id));
+        let Some(line) = found else {
+            self.notice = Some(tr("The line behind this isn't in the transcript.", "会议记录里找不到这条板书对应的话。").into());
+            cx.notify();
+            return;
+        };
+        self.panel = Panel::Transcript;
+        self.jumped_line = Some((line, Instant::now()));
+        cx.notify();
+    }
+
     /// A voice says who it is. A sentence too short to tell goes to whoever spoke last.
     fn who_spoke(&mut self, voiceprint: Option<&[f32]>) -> Option<String> {
         if let Some(print) = voiceprint.filter(|_| self.form.saved.diarize) {
@@ -2092,6 +2171,7 @@ impl Workbench {
         }
         self.session().rename_speaker(&from, &to);
         self.live.rename_speaker(&from, &to);
+        self.speaker_hovered = None;
         if self.speaker.as_deref() == Some(from.as_str()) {
             self.speaker = Some(to.clone());
         }
@@ -2103,9 +2183,10 @@ impl Workbench {
         let rows = names.iter().enumerate().map(|(i, name)| {
             let chosen = self.speaker_chosen.as_deref() == Some(name.as_str());
             let (lines, _, _) = self.live.speaker_impact(name);
-            let picked = name.clone();
+            let (picked, hovered) = (name.clone(), name.clone());
             div()
                 .id(("speaker-row", i))
+                .on_hover(cx.listener(move |this, over: &bool, _, cx| this.hover_speaker(&hovered, *over, cx)))
                 .flex()
                 .items_center()
                 .gap_2()
@@ -2494,6 +2575,12 @@ fn speaker_badge(speakers: &[String], name: &str) -> gpui_kit::Div {
     div().size(px(20.)).flex_shrink_0().flex().items_center().justify_center().rounded_full().text_xs().bg(rgb(background)).text_color(rgb(ink)).child(initial(name))
 }
 
+/// The highlighter that goes with a speaker's badge: the same hue, strong enough to show under ink.
+fn speaker_marker(speakers: &[String], name: &str) -> u32 {
+    const MARKERS: [u32; 6] = [0xf7_83_ac, 0x74_c0_fc, 0x69_db_7c, 0xff_a9_4d, 0xb1_97_fc, 0xad_b5_bd];
+    MARKERS[speakers.iter().position(|s| s == name).unwrap_or(0) % MARKERS.len()]
+}
+
 fn button(id: &'static str, label: impl Into<gpui_kit::SharedString>) -> gpui_kit::Stateful<gpui_kit::Div> {
     div().id(id).px_2().py_1().rounded_md().cursor_pointer().text_sm().border_1().border_color(rgb(0xdd_dd_d8)).child(label.into())
 }
@@ -2658,6 +2745,10 @@ impl Render for Workbench {
                         }
                         window.with_content_mask(Some(gpui_kit::ContentMask { bounds }), |window| {
                             let state = &mut *b;
+                            let trace = state.trace.clone().map(|(who, marker)| {
+                                let (shown, marked) = state.traced_areas(&who);
+                                (marker, shown, marked)
+                            });
                             // The detail tier replaces the base rather than overlaying it, or
                             // the two copies of each stroke would thicken and blur together.
                             let tier = match &mut state.detail {
@@ -2671,6 +2762,26 @@ impl Render for Workbench {
                             }
                             tier.under.paint(window, origin, v.k, Some(bounds));
                             tier.layer.paint(window, origin, v.k, Some(bounds));
+                            // Ink is already on textures, so tracing someone veils the board and paints
+                            // their parts again on top, which costs next to nothing to turn on and off.
+                            if let Some((marker, shown, marked)) = trace {
+                                let on_screen = |area: &[f32; 4]| Bounds::new(origin + point(px(area[0] * v.k), px(area[1] * v.k)), size(px(area[2] * v.k), px(area[3] * v.k)));
+                                let mut veil: Hsla = rgb(PAPER).into();
+                                veil.a = TRACE_VEIL;
+                                window.paint_quad(gpui_kit::fill(bounds, veil));
+                                let mut mark: Hsla = rgb(marker).into();
+                                mark.a = TRACE_MARK;
+                                for area in &marked {
+                                    window.paint_quad(gpui_kit::fill(on_screen(area), mark));
+                                }
+                                for area in &shown {
+                                    let patch = on_screen(area);
+                                    window.with_content_mask(Some(gpui_kit::ContentMask { bounds: patch }), |window| {
+                                        tier.under.paint(window, origin, v.k, Some(patch));
+                                        tier.layer.paint(window, origin, v.k, Some(patch));
+                                    });
+                                }
+                            }
                             if let Some(front) = b.queue.front().filter(|_| b.live > 0.0) {
                                 let shape = outline(&front.inked, b.live);
                                 let mut pb = fill_builder();
@@ -2692,12 +2803,15 @@ impl Render for Workbench {
                 )
                 .size_full(),
             );
+        let speakers = self.live.speakers();
+        self.ink.borrow_mut().trace = self.traced_speaker().map(|who| (who.clone(), speaker_marker(&speakers, who)));
         let toolbar = {
             let ink = self.ink.borrow();
             ink.toolbar_at().zip(ink.selected.clone())
         };
         if let Some(((x, y), id)) = toolbar.filter(|_| self.editable()) {
             let has_text = self.live.graph.nodes.iter().find(|n| n.id == id).is_some_and(|n| !n.rows().is_empty());
+            let raised = self.live.graph.nodes.iter().find(|n| n.id == id).and_then(|n| by_of_node(n)).map(str::to_string);
             let unit_now = self.ink.borrow().mark_unit;
             let active: Vec<String> = self
                 .ink
@@ -2723,6 +2837,23 @@ impl Render for Workbench {
                     .bg(rgb(0xff_fe_fa))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .when_some(raised.clone(), |d, who| {
+                        let (speakers, source) = (self.live.speakers(), id.clone());
+                        d.child(
+                            div()
+                                .id("raised-by")
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .px_1()
+                                .rounded_sm()
+                                .cursor_pointer()
+                                .text_xs()
+                                .child(speaker_badge(&speakers, &who))
+                                .child(div().max_w(px(70.)).overflow_hidden().whitespace_nowrap().child(who))
+                                .on_click(cx.listener(move |this, _, _, cx| this.jump_to_source(&source, cx))),
+                        )
+                    })
                     .when(has_text, |d| {
                         let units = [(MarkUnit::Word, "unit-word", tr("Word", "词")), (MarkUnit::Sentence, "unit-sentence", tr("Sentence", "句")), (MarkUnit::Block, "unit-block", tr("Block", "段"))];
                         d.children(units.into_iter().map(|(unit, name, label)| {
@@ -2883,9 +3014,9 @@ impl Render for Workbench {
         // During a replay the transcript has only reached that moment.
         let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&self.live.steps).min(self.live.lines.len()));
         let replay_bar = self.replay_bar(window, cx);
-        let speakers = self.live.speakers();
         let transcript = div()
             .id("transcript")
+            .track_scroll(&self.transcript_scroll)
             .flex_1()
             .overflow_y_scroll()
             .p_3()
@@ -2895,14 +3026,17 @@ impl Render for Workbench {
             .children(self.live.lines[..shown_lines].iter().enumerate().rev().map(|(i, l)| {
                 let manual = l["manual"].as_bool().unwrap_or(false);
                 let note = line_note(l);
+                let jumped = self.jumped_line.is_some_and(|(line, _)| line == i);
                 div()
                     .flex()
                     .flex_col()
+                    .when(jumped, |d| d.rounded_md().bg(rgb(0xff_f3_bf)))
                     .when_some(l["speaker"].as_str().filter(|s| !s.is_empty()).map(str::to_string), |d, name| {
-                        let picked = name.clone();
+                        let (picked, hovered) = (name.clone(), name.clone());
                         d.child(
                             div()
                                 .id(("line-speaker", i))
+                                .on_hover(cx.listener(move |this, over: &bool, _, cx| this.hover_speaker(&hovered, *over, cx)))
                                 .flex()
                                 .items_center()
                                 .gap_1()
@@ -3280,6 +3414,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             graph: None,
             next_tidy_batch: 0,
             targets: vec![],
+            ink_boxes: vec![],
+            trace: None,
             selected: None,
             selected_at: None,
             mark_unit: MarkUnit::Block,
@@ -3388,6 +3524,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     speaker: None,
                     speaker_chosen: None,
                     speaker_name,
+                    speaker_hovered: None,
+                    transcript_scroll: gpui_kit::ScrollHandle::new(),
+                    jumped_line: None,
                     pdfium,
                     hanzi,
                     exporting: None,

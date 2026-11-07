@@ -209,6 +209,31 @@ pub fn rename_by_in_steps(steps: &mut [Value], from: &str, to: &str) {
     }
 }
 
+/// How many transcript lines there were when this node first appeared in a replay record.
+pub fn first_seen(steps: &[Value], node: &str) -> Option<usize> {
+    let has = |step: &&Value| step.pointer("/d/nodes/set").and_then(Value::as_array).is_some_and(|set| set.iter().any(|n| n["id"] == node));
+    let step = steps.iter().find(has)?;
+    step["line"].as_u64().map(|line| line as usize)
+}
+
+/// Which line of the transcript this came from: what `who` said on this page most like its names,
+/// before `before` lines if that is known. Among equals the latest, which is what put it on the board.
+pub fn said_at(lines: &[Value], who: &str, names: &[&str], page: usize, before: Option<usize>) -> Option<usize> {
+    let mut best = None;
+    let mut top = 0;
+    for (i, line) in lines.iter().enumerate().take(before.unwrap_or(lines.len())) {
+        if line["manual"].as_bool().unwrap_or(false) || line["speaker"] != who || line["page"].as_u64().unwrap_or(0) as usize != page {
+            continue;
+        }
+        let score = overlap(line["text"].as_str().unwrap_or_default(), names);
+        if best.is_none() || score >= top {
+            top = score;
+            best = Some(i);
+        }
+    }
+    best
+}
+
 /// How many things on this board a speaker raised.
 pub fn raised_by(graph: &Graph, who: &str) -> usize {
     graph.nodes.iter().filter(|n| by_of_node(n) == Some(who)).count() + graph.edges.iter().filter(|e| by_of_edge(e) == Some(who)).count()
@@ -272,6 +297,20 @@ mod tests {
             assert_eq!(serde_json::to_value(&after).unwrap(), case["attributed"], "{}", case["name"]);
             rename_by(&mut after, "A", "甲");
             assert_eq!(serde_json::to_value(&after).unwrap(), case["renamed"], "{}", case["name"]);
+        }
+    }
+
+    #[test]
+    fn a_line_is_found_as_the_typescript_engine_finds_it() {
+        let g = goldens();
+        for case in g["sources"].as_array().unwrap() {
+            let (lines, steps) = (case["lines"].as_array().unwrap(), case["steps"].as_array().unwrap());
+            let seen = first_seen(steps, case["node"].as_str().unwrap());
+            assert_eq!(seen, case["seen"].as_u64().map(|n| n as usize), "{}", case["name"]);
+            let names = strings(&case["names"]);
+            let names: Vec<&str> = names.iter().map(String::as_str).collect();
+            let found = said_at(lines, case["who"].as_str().unwrap(), &names, case["page"].as_u64().unwrap() as usize, seen);
+            assert_eq!(found, case["found"].as_u64().map(|n| n as usize), "{}", case["name"]);
         }
     }
 

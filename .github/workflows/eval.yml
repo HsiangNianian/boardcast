@@ -174,7 +174,7 @@ jobs:
       - uses: actions/cache@v5
         with:
           path: |
-            src-tauri/voice
+            resources/voice
             eval/asr/.models
           key: asr-models-${{ matrix.model }}-${{ matrix.denoise }}-${{ hashFiles('eval/asr/models.json', 'scripts/fetch-voice.mjs') }}
       # Both commands verify cached files too. Missing/corrupt data must never silently skip inference.
@@ -184,7 +184,7 @@ jobs:
       - name: Check Apple Auto language routing with real audio
         if: matrix.model == 'sensevoice' && matrix.denoise == 'none' && matrix.vad == 'on' && matrix.policy == 'static' && env.ASR_SUITE != 'meetings'
         env:
-          BOARDCAST_AUTO_MODELS: ${{ github.workspace }}/src-tauri
+          BOARDCAST_AUTO_MODELS: ${{ github.workspace }}/resources
           BOARDCAST_AUTO_AUDIO: ${{ github.workspace }}/eval/asr/.data
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib voice::auto::tests::auto_language_real_audio -- --ignored --exact --nocapture
       - uses: astral-sh/setup-uv@v6

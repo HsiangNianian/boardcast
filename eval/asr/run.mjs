@@ -54,7 +54,7 @@ const sourceHashes = await Promise.all(sources.map((s) => sha256(join(root, 'src
 const scorerSha256 = await sha256(new URL('./score.mjs', import.meta.url))
 const adapterSha256 = candidate.backend ? await sha256(new URL('./ctc.py', import.meta.url)) : null
 writeFileSync(input, JSON.stringify({
-  models: resolve('src-tauri'), extra_models: extraModels, model: args.model, denoise: args.denoise, vad: args.vad, policy: args.policy,
+  models: resolve('resources'), extra_models: extraModels, model: args.model, denoise: args.denoise, vad: args.vad, policy: args.policy,
   recognizer: candidate.backend ? { family: 'sensevoice' } : candidate.config,
   external_model: candidate.backend ? join(extraModels, candidate.config.model) : undefined,
   samples: selected.map((s) => ({ id: s.id, path: join(directory, s.file), variant: s.variant })), output,
@@ -107,7 +107,7 @@ if (args.policy === 'dynamic') {
   if (args.suite !== 'meetings' && !args.only && !details.some((d) => d.comparison.attempts)) failures.push('Dynamic policy never ran a second pass')
 }
 const production = args.model === 'sensevoice' && args.denoise === 'none' && args.vad === 'on'
-for (const file of ['voice/sense-voice/model.int8.onnx', 'voice/sense-voice/tokens.txt', 'voice/silero_vad.onnx', 'voice/speaker/campplus_zh_en.onnx']) voiceHashes[file] = await sha256(join(root, 'src-tauri', file))
+for (const file of ['voice/sense-voice/model.int8.onnx', 'voice/sense-voice/tokens.txt', 'voice/silero_vad.onnx', 'voice/speaker/campplus_zh_en.onnx']) voiceHashes[file] = await sha256(join(root, 'resources', file))
 const report = { corpus: corpus.version, manifestSha256,
   commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   dirty: Boolean(execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { encoding: 'utf8' }).trim()),
@@ -115,7 +115,7 @@ const report = { corpus: corpus.version, manifestSha256,
   languageMode: candidate.languageMode, excluded, recognizer: candidate.config,
   timingScope: candidate.backend ? 'recognizer-only' : 'desktop-pipeline',
   modelBytes: candidate.package ? catalog[candidate.package].reduce((sum, f) => sum + f.bytes, 0)
-    : ['voice/sense-voice/model.int8.onnx', 'voice/sense-voice/tokens.txt'].reduce((sum, f) => sum + statSync(join(root, 'src-tauri', f)).size, 0),
+    : ['voice/sense-voice/model.int8.onnx', 'voice/sense-voice/tokens.txt'].reduce((sum, f) => sum + statSync(join(root, 'resources', f)).size, 0),
   models: { ...voiceHashes, ...Object.fromEntries(modelFiles.map((f) => [f.file, f.sha256])) },
   engineSha256: sourceHashes[0], policySha256: sourceHashes[1], harnessSha256: sourceHashes[2], scorerSha256, adapterSha256, loadMs: result.loadMs,
   checks: { enforced: production, passed: !failures.length, failures }, runtime: { passed: !runtimeFailures.length, failures: runtimeFailures }, aggregates, details }

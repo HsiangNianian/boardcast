@@ -1,4 +1,4 @@
-// 下载语音模型（SenseVoice int8 + tokens + Silero VAD + CAM++ 声纹 + Parakeet 英文，约 930 MB）到 resources/voice/，
+// 下载语音模型（SenseVoice int8 + tokens + Silero VAD + CAM++ 声纹 + Parakeet 英文 + ReazonSpeech 日文，约 1.1 GB）到 resources/voice/，
 // 打包时作为资源带进安装包，用户装完就能直接收音，不用再到「本地模型」里下载。
 //   node scripts/fetch-voice.mjs
 // 已经下好、sha256 也对得上的文件直接跳过。设置了 BOARDCAST_VOICE_DIR 且那里的文件校验通过时，直接从那里复制。
@@ -57,6 +57,27 @@ const FILES = [
     name: 'voice/parakeet-en/tokens.txt',
     sha256: 'dc0b4584ab2e4ddbf888425c076c61b736e7356a015250db7d307e6f1a8188ff',
     hf: 'csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/tokens.txt',
+  },
+  // ReazonSpeech k2 v2, about 155 MB: Japanese sentences are recognized again with it. Pinned to a revision.
+  {
+    name: 'voice/reazon-ja/encoder-epoch-99-avg-1.int8.onnx',
+    sha256: '2c7bd08a8a99f9ddd0d9e458456577b1f6279214e51426f114f9eced44c54e1d',
+    hf: 'reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407/encoder-epoch-99-avg-1.int8.onnx',
+  },
+  {
+    name: 'voice/reazon-ja/decoder-epoch-99-avg-1.int8.onnx',
+    sha256: '8f0bff94d38797b03b762634ed03211a8e303d06cc4603cdd0cf4199d6eb1485',
+    hf: 'reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407/decoder-epoch-99-avg-1.int8.onnx',
+  },
+  {
+    name: 'voice/reazon-ja/joiner-epoch-99-avg-1.int8.onnx',
+    sha256: '49cc7ea1d3d35a40a27442db5e89996da64bf0e683a903dce76e99e57a12e4de',
+    hf: 'reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407/joiner-epoch-99-avg-1.int8.onnx',
+  },
+  {
+    name: 'voice/reazon-ja/tokens.txt',
+    sha256: '2c3ac659818a48a0c04010e0593bbc4d7c8a24a054340b01131499c05fd52def',
+    hf: 'reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407/tokens.txt',
   },
 ]
 

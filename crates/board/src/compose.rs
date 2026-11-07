@@ -125,6 +125,75 @@ fn label_spot(points: &[Pt], label: &str, size: f32, blocks: &[Area], lines: &[V
     (Area { x: at[0], y: at[1], w, h }, hit.is_some())
 }
 
+/// Everything on the board that a connection shouldn't run over, with what it belongs to.
+fn text_areas(l: &Layout) -> Vec<(String, Area)> {
+    let mut out: Vec<(String, Area)> = l.targets().iter().map(|t| (t.id.clone(), area(t))).collect();
+    out.extend(l.regions.iter().filter_map(|r| {
+        let (id, title) = (r.head.as_ref()?, r.title.as_ref()?);
+        Some((id.clone(), Area { x: (r.rect.x + title.x) as f32, y: r.rect.y as f32, w: title.w as f32, h: TITLE as f32 + 14.0 }))
+    }));
+    out
+}
+
+/// A curved connection, with what its label is placed from.
+struct Bow {
+    curve: Vec<Pt>,
+    mid: Pt,
+    p0: Pt,
+    p1: Pt,
+}
+
+fn bow(p0: Pt, p1: Pt, bend: f32) -> Bow {
+    let len = (p1[0] - p0[0]).hypot(p1[1] - p0[1]).max(1.0);
+    let amount = bend.signum() * (len * bend.abs()).min(50.0 / 0.15 * bend.abs());
+    let mid = [(p0[0] + p1[0]) / 2.0 - (p1[1] - p0[1]) / len * amount, (p0[1] + p1[1]) / 2.0 + (p1[0] - p0[0]) / len * amount];
+    let curve = (0..=16)
+        .map(|i| {
+            let t = i as f32 / 16.0;
+            let u = 1.0 - t;
+            [u * u * p0[0] + 2.0 * u * t * mid[0] + t * t * p1[0], u * u * p0[1] + 2.0 * u * t * mid[1] + t * t * p1[1]]
+        })
+        .collect();
+    Bow { curve, mid, p0, p1 }
+}
+
+/// What a route costs: how much text it runs over, then how much of other lines it lies along.
+fn route_cost(curve: &[Pt], from: &str, to: &str, text: &[(String, Area)], lines: &[Vec<Pt>]) -> (usize, usize) {
+    let over_text = curve.windows(2).filter(|s| text.iter().any(|(id, a)| id != from && id != to && hits_segment(*a, s[0], s[1]))).count();
+    let along = curve.iter().filter(|p| lines.iter().flatten().any(|q| (p[0] - q[0]).hypot(p[1] - q[1]) < 8.0)).count();
+    (over_text, along)
+}
+
+/// A hand draws a connection around what is written: the plain bow if that is clear, which also keeps
+/// a board from rearranging itself, or otherwise the clearest of other sides and curves.
+fn clear_bow(a: &Rect, b: &Rect, from: &str, to: &str, text: &[(String, Area)], lines: &[Vec<Pt>]) -> Bow {
+    const BENDS: [f32; 6] = [0.15, -0.15, 0.3, -0.3, 0.5, -0.5];
+    let (a, b) = (area(a), area(b));
+    let (ca, cb) = ([a.x + a.w / 2.0, a.y + a.h / 2.0], [b.x + b.w / 2.0, b.y + b.h / 2.0]);
+    let plain = bow(edge_point(a, ca, cb), edge_point(b, cb, ca), BENDS[0]);
+    let mut best_cost = route_cost(&plain.curve, from, to, text, lines);
+    if best_cost == (0, 0) {
+        return plain;
+    }
+    let sides = |r: Area, c: Pt, toward: Pt| {
+        let (dx, dy) = (r.w / 2.0 + 12.0, r.h / 2.0 + 12.0);
+        [edge_point(r, c, toward), [c[0] + dx, c[1]], [c[0] - dx, c[1]], [c[0], c[1] - dy], [c[0], c[1] + dy]]
+    };
+    let mut best = plain;
+    for p0 in sides(a, ca, cb) {
+        for p1 in sides(b, cb, ca) {
+            for bend in BENDS {
+                let candidate = bow(p0, p1, bend);
+                let cost = route_cost(&candidate.curve, from, to, text, lines);
+                if cost < best_cost {
+                    (best, best_cost) = (candidate, cost);
+                }
+            }
+        }
+    }
+    best
+}
+
 fn edge_point(b: Area, c: Pt, p: Pt) -> Pt {
     let (hw, hh) = (b.w / 2.0 + 12.0, b.h / 2.0 + 12.0);
     let (dx, dy) = (p[0] - c[0], p[1] - c[1]);
@@ -482,6 +551,7 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
         }
     }
 
+    let text_areas = text_areas(l);
     for (from, to, route) in &l.links {
         let Some(e) = g.edges.iter().find(|e| &e.from == from && &e.to == to) else { continue };
         let (Some(a), Some(b)) = (l.anchors.get(from), l.anchors.get(to)) else { continue };
@@ -496,21 +566,8 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
             }
             continue;
         }
-        let (a, b) = (area(a), area(b));
-        let ca = [a.x + a.w / 2.0, a.y + a.h / 2.0];
-        let cb = [b.x + b.w / 2.0, b.y + b.h / 2.0];
-        let p0 = edge_point(a, ca, cb);
-        let p1 = edge_point(b, cb, ca);
+        let Bow { curve, mid, p0, p1 } = clear_bow(a, b, from, to, &text_areas, &lines);
         let len = (p1[0] - p0[0]).hypot(p1[1] - p0[1]).max(1.0);
-        let bend = (len * 0.15).min(50.0);
-        let mid = [(p0[0] + p1[0]) / 2.0 - (p1[1] - p0[1]) / len * bend, (p0[1] + p1[1]) / 2.0 + (p1[0] - p0[0]) / len * bend];
-        let curve: Vec<Pt> = (0..=16)
-            .map(|i| {
-                let t = i as f32 / 16.0;
-                let u = 1.0 - t;
-                [u * u * p0[0] + 2.0 * u * t * mid[0] + t * t * p1[0], u * u * p0[1] + 2.0 * u * t * mid[1] + t * t * p1[1]]
-            })
-            .collect();
         c.add(key.clone(), INK, 1.0, false, plain(arrow(&curve, &mut r)), pen_for(font) * 0.9);
         lines.push(curve.clone());
         if let Some(t) = &e.label {
@@ -574,5 +631,92 @@ mod tests {
         let label = boxes.iter().find(|b| b.label).unwrap();
         assert_eq!(label.owner, Owner::Edge("n1".into(), "n2".into()));
         assert!(!boxes.iter().any(|b| matches!(&b.owner, Owner::Node(id) if id.starts_with('g'))), "a group belongs to nobody");
+    }
+
+    /// A board as it grows, line by line, since that places things differently from laying it out whole.
+    fn grown(ops: &[&str]) -> Layout {
+        let (mut g, mut board) = (Graph::default(), crate::board_layout::StableLayout::default());
+        let mut l = board.layout(&g, &mut crate::sugiyama::first_diagram);
+        for line in ops {
+            g.apply(&crate::graph::parse_ops(line));
+            l = board.layout(&g, &mut crate::sugiyama::first_diagram);
+        }
+        l
+    }
+
+    /// How many connections run over text on this board: as drawn plainly, and as chosen now.
+    fn over_text(l: &Layout) -> (usize, usize) {
+        let text = text_areas(l);
+        let (mut plain, mut chosen, mut lines) = (0, 0, vec![]);
+        for (from, to, route) in &l.links {
+            if route.is_some() {
+                continue;
+            }
+            let (Some(a), Some(b)) = (l.anchors.get(from), l.anchors.get(to)) else { continue };
+            let (x, y) = (area(a), area(b));
+            let (cx, cy) = ([x.x + x.w / 2.0, x.y + x.h / 2.0], [y.x + y.w / 2.0, y.y + y.h / 2.0]);
+            let drawn = bow(edge_point(x, cx, cy), edge_point(y, cy, cx), 0.15);
+            plain += usize::from(route_cost(&drawn.curve, from, to, &text, &[]).0 > 0);
+            let picked = clear_bow(a, b, from, to, &text, &lines);
+            chosen += usize::from(route_cost(&picked.curve, from, to, &text, &[]).0 > 0);
+            lines.push(picked.curve);
+        }
+        (plain, chosen)
+    }
+
+    fn rect(id: &str, x: f64, y: f64, w: f64, h: f64) -> Rect {
+        Rect { id: id.into(), x, y, w, h }
+    }
+
+    /// From a report: a topic directly above another, so the plain bow runs through the first one's list.
+    #[test]
+    fn a_connection_goes_around_its_own_topics_list() {
+        let (top, below) = (rect("top", 100.0, 100.0, 200.0, 40.0), rect("below", 100.0, 300.0, 200.0, 40.0));
+        let text: Vec<(String, Area)> = [("top", &top), ("below", &below), ("row1", &rect("row1", 100.0, 150.0, 200.0, 30.0)), ("row2", &rect("row2", 100.0, 190.0, 200.0, 30.0))].iter().map(|(id, r)| ((*id).to_string(), area(r))).collect();
+        let (x, y) = (area(&top), area(&below));
+        let (cx, cy) = ([x.x + x.w / 2.0, x.y + x.h / 2.0], [y.x + y.w / 2.0, y.y + y.h / 2.0]);
+        let plain = bow(edge_point(x, cx, cy), edge_point(y, cy, cx), 0.15);
+        assert!(route_cost(&plain.curve, "top", "below", &text, &[]).0 > 0, "the case must start out crossing");
+
+        let chosen = clear_bow(&top, &below, "top", "below", &text, &[]);
+        assert_eq!(route_cost(&chosen.curve, "top", "below", &text, &[]).0, 0);
+
+        // The way back keeps off the first line rather than lying along it.
+        let back = clear_bow(&below, &top, "below", "top", &text, &[chosen.curve.clone()]);
+        assert_eq!(route_cost(&back.curve, "below", "top", &text, &[chosen.curve]), (0, 0));
+    }
+
+    #[test]
+    fn a_clear_connection_is_left_as_it_was_so_the_board_stays_put() {
+        let (left, right) = (rect("left", 0.0, 0.0, 100.0, 40.0), rect("right", 400.0, 0.0, 100.0, 40.0));
+        let (x, y) = (area(&left), area(&right));
+        let (cx, cy) = ([x.x + x.w / 2.0, x.y + x.h / 2.0], [y.x + y.w / 2.0, y.y + y.h / 2.0]);
+        assert_eq!(clear_bow(&left, &right, "left", "right", &[], &[]).curve, bow(edge_point(x, cx, cy), edge_point(y, cy, cx), 0.15).curve);
+    }
+
+    #[test]
+    fn recorded_boards_have_no_more_lines_over_text_than_before() {
+        let goldens: serde_json::Value = serde_json::from_str(include_str!("../fixtures/goldens.json")).unwrap();
+        let (mut boards, mut plain, mut chosen) = (0, 0, 0);
+        let mut count = |ops: &[String]| {
+            let l = grown(&ops.iter().map(String::as_str).collect::<Vec<_>>());
+            let (p, c) = over_text(&l);
+            (plain, chosen, boards) = (plain + p, chosen + c, boards + 1);
+        };
+        let (mut file, mut ops) = (String::new(), vec![]);
+        for step in goldens["steps"].as_array().unwrap() {
+            if step["file"].as_str() != Some(file.as_str()) {
+                count(&ops);
+                ops.clear();
+                file = step["file"].as_str().unwrap().to_string();
+            }
+            ops.push(step["ops"].as_str().unwrap().to_string());
+        }
+        count(&ops);
+        for case in goldens["stress"].as_array().unwrap() {
+            count(&case["ops"].as_str().unwrap().lines().map(str::to_string).collect::<Vec<_>>());
+        }
+        println!("{boards} boards: {plain} connections over text before, {chosen} now");
+        assert!(chosen <= plain);
     }
 }

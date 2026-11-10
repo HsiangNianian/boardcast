@@ -59,6 +59,8 @@ const MARKS: [(&str, &str); 5] = [("划掉", "Strike"), ("圈出", "Circle"), ("
 const LIBRARY_SEARCH_FROM: usize = 5;
 /// How much one press of a zoom key scales the board.
 const ZOOM_STEP: f32 = 1.25;
+/// How wide the loudness bar beside the microphone is.
+const METER_W: f32 = 64.0;
 const AUTOSAVE_AFTER: Duration = Duration::from_millis(500);
 const RETRY_SAVE_AFTER: Duration = Duration::from_secs(5);
 #[derive(Clone, Copy, PartialEq)]
@@ -3261,6 +3263,19 @@ impl Render for Workbench {
         self.ink.borrow_mut().set_insets([FLOAT_GAP, BAR_ROOM, right_inset, bottom_inset]);
         let recording = self.pipeline.listening();
         let recorded = self.recorded();
+        // Whether what was said has reached the board: the question to answer at a glance.
+        let spoken_lines = || self.live.lines.iter().enumerate().filter(|(_, l)| !l["manual"].as_bool().unwrap_or(false));
+        let waiting = spoken_lines().filter(|(_, l)| l["ms"].is_null() && !l["failed"].as_bool().unwrap_or(false)).count();
+        let not_drawn: Vec<usize> = spoken_lines().filter(|(_, l)| l["failed"].as_bool().unwrap_or(false)).map(|(i, _)| i).collect();
+        let board_state = match () {
+            _ if self.replay.is_some() || !editable => None,
+            _ if !not_drawn.is_empty() => Some((Tag::danger(), format!("{} {}", not_drawn.len(), tr("not drawn: show", "句没画上：查看")), not_drawn.last().copied())),
+            _ if self.needs_model => Some((Tag::warning(), tr("No board model yet", "还没有板书模型").to_string(), None)),
+            _ if waiting > 0 && self.preparing.is_some() => Some((Tag::warning(), format!("{} {}", waiting, tr("waiting for the model", "句等模型就绪")), None)),
+            _ if waiting > 1 => Some((Tag::info(), format!("{} · {} {}", tr("Drawing", "正在画"), waiting - 1, tr("waiting", "句排队")), None)),
+            _ if waiting == 1 => Some((Tag::info(), tr("Drawing", "正在画").to_string(), None)),
+            _ => None,
+        };
         // The window's own title bar: what the meeting is called, when it began and how long it has been recorded.
         let window_bar = TitleBar::new().bg(rgb(SURFACE)).border_color(rgb(LINE)).child(
             div()
@@ -3301,7 +3316,33 @@ impl Render for Workbench {
                             .child(format!("{} {}", tr("Recorded", "录音"), clock(recorded.as_secs_f64() * 1000.0))),
                     )
                 })
-                .when(!save_label.is_empty(), |d| d.child(div().text_xs().text_color(rgb(if matches!(self.save, SaveState::Failed(_)) { DANGER } else { FAINT })).whitespace_nowrap().child(save_label))),
+                .when_some(board_state, |d, (tag, text, line)| {
+                    d.child(
+                        div()
+                            .id("board-state")
+                            .when(line.is_some() || self.needs_model, |d| d.cursor_pointer())
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(line) = line {
+                                    this.panel = Panel::Transcript;
+                                    this.transcript_open = true;
+                                    this.jumped_line = Some((line, Instant::now()));
+                                } else if this.needs_model {
+                                    this.panel = Panel::Settings;
+                                }
+                                cx.notify();
+                            }))
+                            .child(tag.small().rounded_full().child(text)),
+                    )
+                })
+                .when(!save_label.is_empty(), |d| {
+                    let failed = matches!(self.save, SaveState::Failed(_));
+                    d.child(match failed {
+                        // A meeting that is not on disk is the one state here that must not go unseen.
+                        true => Tag::danger().small().rounded_full().child(save_label).into_any_element(),
+                        false => div().text_xs().text_color(rgb(FAINT)).whitespace_nowrap().child(save_label).into_any_element(),
+                    })
+                }),
         );
         let title_bar = floating_bar("title-bar")
             .child(icon_button("library", "folder-open", tr("Meetings", "会议")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
@@ -3358,7 +3399,7 @@ impl Render for Workbench {
                             cx.notify();
                         })),
                 )
-                .when(listening, |d| d.content(div().w(px(40.)).h(px(4.)).mx_1().rounded_sm().bg(rgb(TRACK)).child(div().h_full().rounded_sm().w(px(meter * 0.4)).bg(rgb(ACCENT)))))
+                .when(listening, |d| d.content(div().w(px(METER_W)).h(px(6.)).mx_1().rounded_sm().bg(rgb(TRACK)).child(div().h_full().rounded_sm().w(px(meter / 100.0 * METER_W)).bg(rgb(ACCENT)))))
                 .content(Separator::vertical().h(px(18.)).mx_1())
             })
             .child(icon_button("summary", "sparkles", tr("Summary", "摘要")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))

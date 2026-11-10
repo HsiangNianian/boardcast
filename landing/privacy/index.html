@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy — boardcast</title>
+    <meta name="description" content="What boardcast keeps, where, and the few times it uses the network." />
+    <meta name="theme-color" content="#000000" />
+    <link rel="icon" href="../favicon.png" />
+    <link rel="stylesheet" href="../pages.css" />
+  </head>
+  <body>
+<div class="frame" aria-hidden="true"></div>
+<header class="top wrap"><a class="brand" href="../">board<br>cast</a><nav><a href="../">home</a><a href="../demo/">web demo</a><a href="../faq/">faq</a><a href="../privacy/" class="on">privacy</a><a href="../terms/">terms</a></nav></header>
+<main class="doc wrap">
+  <h1>privacy,<br><em>kept local.</em></h1>
+  <aside><span class="label">in short</span><p>No account, no analytics, no telemetry. What you say, the transcript, the boards and your meetings stay on your computer.</p></aside>
+  <div>
+    <section>
+      <h2>what stays on your computer</h2>
+      <p>Audio is recognized on your computer and is not saved. Transcripts, boards, marks, summaries, voiceprints used to tell speakers apart, imported documents and settings are kept in the app's folder on your computer, and nowhere else. You can delete any of it at any time.</p>
+      <p>The developer receives none of it, and has no way to see it.</p>
+    </section>
+    <section>
+      <h2>when the app uses the network</h2>
+      <ul>
+        <li><strong>Downloading models.</strong> Board and vision models come from ModelScope, hf-mirror or Hugging Face. Those services see your IP address, as any download does.</li>
+        <li><strong>Checking for updates.</strong> The app reads a small file from this project's GitHub releases. GitHub sees your IP address.</li>
+        <li><strong>A remote model, if you set one up.</strong> Then the transcript text and the current board are sent to the provider you chose, under their own privacy policy. Nothing is sent unless you turn this on, and audio is never sent.</li>
+        <li><strong>Importing an arXiv paper.</strong> The paper is fetched from arxiv.org.</li>
+      </ul>
+      <p>Nothing else leaves your computer.</p>
+    </section>
+    <section>
+      <h2>this website</h2>
+      <p>The website is hosted on GitHub Pages. It sets no cookies, runs no analytics and loads nothing from other sites: its fonts and code are served from here. GitHub may keep server logs, including IP addresses, under the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub privacy statement</a>.</p>
+      <p>The web demo runs in your browser and sends nothing anywhere.</p>
+    </section>
+    <section>
+      <h2>changes and contact</h2>
+      <p>If this page changes, the date at the bottom changes with it, and the history is public in the <a href="https://github.com/HsiangNianian/boardcast">repository</a>. Questions about privacy: <a href="mailto:hsiangnianian@gmail.com">hsiangnianian@gmail.com</a>.</p>
+    </section>
+  </div>
+</main>
+<footer class="wrap label"><span>last updated 2026-11-10</span><nav><a href="../faq/">faq</a><a href="../privacy/" class="on">privacy</a><a href="../terms/">terms</a></nav></footer>
+  </body>
+</html>

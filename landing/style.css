@@ -72,6 +72,8 @@ nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 
 .nav-item span { display: block; margin-top: 12px; font-size: 15px; line-height: 1.4; color: var(--link); }
 .nav-item span em { display: block; font-style: normal; }
 .nav-item span em:hover { color: var(--fg); }
+.nav-item span a { display: block; color: var(--link); }
+.nav-item span a:hover { color: var(--fg); }
 .about { font-size: 11px; line-height: 1.6; }
 
 /* Pictograms: solid blocks and lines, which assemble as they come into view and grey on hover. */
@@ -321,7 +323,8 @@ section.block { padding-top: 140px; }
 .now .clock { font-size: clamp(90px, 16vw, 240px); font-weight: 200; letter-spacing: -.06em; line-height: 1; font-variant-numeric: tabular-nums; }
 .now .clock .sep { animation: blink 2s steps(2) infinite; }
 .now p { margin-top: 18px; font-size: 22px; color: var(--grey); }
-footer { display: flex; justify-content: space-between; gap: 16px; padding-top: 28px; padding-bottom: 56px; border-top: 1px solid var(--hair); }
+footer { display: flex; justify-content: flex-end; gap: 28px; padding-top: 28px; padding-bottom: 56px; border-top: 1px solid var(--hair); }
+footer a { color: var(--dim); }
 
 @media (max-width: 1080px) {
   nav.top { grid-template-columns: 1fr 1fr; } .about { display: none; }
@@ -357,7 +360,7 @@ footer { display: flex; justify-content: space-between; gap: 16px; padding-top: 
   .specs dl { grid-template-columns: 110px 1fr; }
   .dl a { padding: 28px 20px; }
   .now { padding-top: 96px; padding-bottom: 80px; } .now p { font-size: 17px; }
-  footer { flex-direction: column; }
+  footer { justify-content: flex-start; }
   .shots { grid-template-columns: 1fr; gap: 16px; } .shot figcaption span:last-child { display: none; }
   .try-head span { display: none; } .try iframe { height: 560px; }
 }

@@ -48,6 +48,12 @@ Reduced motion shows every drawing finished and turns off the autoplay.
 | `crates/site/src/pict.rs` | Pictograms made of blocks and lines, which assemble as they come into view |
 | `crates/site/src/meeting.rs` | The sample meeting: who said what, and when |
 
+## Other pages
+
+`demo/` is the web demo, built from `crates/demo`: the app's own board code replaying the sample meetings. `faq/`,
+`privacy/` and `terms/` are plain pages styled by `pages.css`. The Rust crates listed in the terms are generated:
+run `python3 scripts/site-licenses.py` after dependencies change.
+
 ## Fonts
 
 DM Sans and JetBrains Mono are the Latin and Latin Extended files from Fontsource, in `fonts/`. The board's

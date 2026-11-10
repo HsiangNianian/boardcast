@@ -208,7 +208,48 @@ mod tests {
         assert_eq!(suggested("好的我们继续", &d, 0), None);
     }
 
+    /// The deck and lines in eval/follow-cases.json, said with its first page in view. A wrong turn
+    /// interrupts a speaker, so none is allowed; a missed one leaves the board where it was, so a few are.
     #[test]
+    fn follow_cases() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!("../../../eval/follow-cases.json")).unwrap();
+        let boards: Vec<Graph> = cases["pages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| {
+                let blocks: Vec<&str> = p["blocks"].as_array().unwrap().iter().map(|b| b.as_str().unwrap()).collect();
+                page(p["no"].as_u64().unwrap() as u32, &blocks)
+            })
+            .collect();
+        let deck = pages(&boards);
+        let (mut wrong, mut missed, mut total) = (vec![], vec![], 0);
+        for line in cases["lines"].as_array().unwrap() {
+            let text = line["text"].as_str().unwrap();
+            total += 1;
+            let asked_now = asked(text, &deck, 0);
+            if let Some(want) = line.get("asked") {
+                if asked_now != want.as_u64().map(|b| b as usize) {
+                    wrong.push(format!("asked {text}: {asked_now:?}, want {want}"));
+                }
+                if want.is_u64() {
+                    continue;
+                }
+            }
+            let got = suggested(text, &deck, 0);
+            match (got, line["suggested"].as_u64().map(|b| b as usize)) {
+                (Some(g), Some(w)) if g == w => {}
+                (None, Some(w)) => missed.push(format!("{text}: none, want {w}")),
+                (Some(g), want) => wrong.push(format!("{text}: {g}, want {want:?}")),
+                (None, None) => {}
+            }
+        }
+        println!("{total} lines: {} wrong, {} missed {missed:?}", wrong.len(), missed.len());
+        assert!(wrong.is_empty(), "turned the wrong way: {wrong:#?}");
+        assert!(missed.len() <= 2, "missed too many: {missed:#?}");
+    }
+
+        #[test]
     fn a_board_without_a_document_still_has_a_title_and_number() {
         let mut g = Graph::default();
         g.apply(&crate::graph::parse_ops("T 「Release checklist」\nL 「Release checklist」 「Load testing」"));

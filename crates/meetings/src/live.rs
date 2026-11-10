@@ -6,6 +6,7 @@ use boardcast_board::graph::{Graph, Kind};
 use boardcast_board::speakers::{identify_sentence, raised_by, rename_by, rename_by_in_steps, rename_voice, Voice};
 use boardcast_board::steps::{diff, ink_only, replay};
 use serde_json::{json, Map, Value};
+use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const UNTITLED: &str = "Untitled meeting";
@@ -239,6 +240,50 @@ impl Live {
         self.undo = History::default();
         self.add_note(note);
         self.touch();
+    }
+
+    /// Carry a topic, with everything under it, over to a new board and show that board: the talk moved on
+    /// to it. On the board it leaves, its going can be undone and is replayed like any change.
+    pub fn split_topic(&mut self, topic: &str, note: &str) -> bool {
+        let mut moved: HashSet<String> = [topic.to_string()].into();
+        loop {
+            let more: Vec<String> = self.graph.nodes.iter().filter(|n| n.parent.as_ref().is_some_and(|p| moved.contains(p)) && !moved.contains(&n.id)).map(|n| n.id.clone()).collect();
+            if more.is_empty() {
+                break;
+            }
+            moved.extend(more);
+        }
+        if !self.graph.nodes.iter().any(|n| n.id == topic) || moved.len() == self.graph.nodes.len() {
+            return false;
+        }
+        let mut left = self.graph.clone();
+        left.nodes.retain(|n| !moved.contains(&n.id));
+        left.edges.retain(|e| !moved.contains(&e.from) && !moved.contains(&e.to));
+        let mut taken = self.graph.clone();
+        taken.nodes.retain(|n| moved.contains(&n.id));
+        taken.edges.retain(|e| moved.contains(&e.from) && moved.contains(&e.to));
+        taken.groups.clear();
+        taken.extra.remove("underlay");
+        let memory = self.memory.clone();
+        self.change_board(left, memory);
+        self.store_page();
+        if self.raw.get("pages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+            self.raw.insert("pages".into(), json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]));
+        }
+        let shown = ink_only(&taken);
+        let steps: Vec<Value> = diff(&Graph::default(), &shown).map(|d| json!({ "t": now_ms(), "line": self.lines.len(), "d": d })).into_iter().collect();
+        let pages = self.raw.get_mut("pages").and_then(Value::as_array_mut).expect("made above");
+        pages.push(json!({ "graph": taken, "layout": Value::Null, "steps": steps }));
+        let to = pages.len() - 1;
+        self.raw.insert("page".into(), json!(to));
+        self.recorded = shown;
+        self.graph = taken;
+        self.memory = Value::Null;
+        self.steps = steps;
+        self.undo = History::default();
+        self.add_note(note);
+        self.touch();
+        true
     }
 
     /// Add imported pages, each a board and how to find its picture, and show the first. They take the
@@ -665,7 +710,29 @@ mod tests {
         Live::from_loaded(Loaded { raw, origin, revision: 0 })
     }
 
-    #[test]
+#[test]
+    fn a_topic_moves_to_a_board_of_its_own() {
+        let mut live = Live::new();
+        let mut g = Graph::default();
+        g.apply(&boardcast_board::graph::parse_ops("T 「登录」\nL 「登录」 「短信验证」\nT 「支付」\nL 「支付」 「微信支付」\nL 「微信支付」 「回调」\nE 「短信验证」 -> 「微信支付」"));
+        live.change_board(g, Value::Null);
+        let pay = live.graph.nodes.iter().find(|n| n.label == "支付").unwrap().id.clone();
+        assert!(live.split_topic(&pay, "新话题"));
+        assert_eq!((live.pages(), live.page()), (2, 1));
+        let labels = |g: &Graph| g.nodes.iter().map(|n| n.label.clone()).collect::<Vec<_>>();
+        assert_eq!(labels(&live.graph), ["支付", "微信支付", "回调"]);
+        assert!(live.graph.edges.is_empty(), "a link to what stayed behind is not carried");
+        assert!(!live.steps.is_empty(), "the new board replays from its first stroke");
+        live.go_to_page(0);
+        assert_eq!(labels(&live.graph), ["登录", "短信验证"]);
+        assert!(live.graph.edges.is_empty());
+        // Nothing to split off, or everything.
+        let login = live.graph.nodes[0].id.clone();
+        assert!(!live.split_topic(&login, "x"));
+        assert!(!live.split_topic("n99", "x"));
+    }
+
+        #[test]
     fn a_summary_is_written_and_removed_as_the_older_app_does() {
         let mut live = Live::new();
         assert!(!live.has_content());

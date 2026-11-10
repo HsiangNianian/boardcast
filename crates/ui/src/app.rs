@@ -76,6 +76,10 @@ enum MarkUnit {
     Block,
 }
 
+/// A board with this many things on it is full enough that a new topic is offered a board of its own.
+const BUSY_BOARD: usize = 8;
+/// Replies an offer of a board for a new topic stays for, if nobody takes it.
+const TOPIC_HINT_REPLIES: u8 = 3;
 /// Lines after turning to another board during which no other one is offered.
 const QUIET_AFTER_TURNING: u8 = 3;
 const TOOLBAR_W: f32 = 290.0;
@@ -980,6 +984,12 @@ struct Workbench {
     page_hint: Option<(usize, u32, String)>,
     /// Lines left after turning to a board before another is offered, so the meeting does not bounce.
     page_quiet: u8,
+    /// A topic the talk moved on to while the board was already full, offered a board of its own.
+    topic_hint: Option<(String, String)>,
+    /// Topics offered a board once, never again.
+    topics_offered: std::collections::HashSet<String>,
+    /// Replies since the topic was offered; left alone, the offer goes.
+    topic_hint_age: u8,
     level: f32,
     next_batch: u64,
     exit_when_done: bool,
@@ -1321,6 +1331,7 @@ impl Workbench {
                     }
                     let memory = ink.board.snapshot();
                     drop(ink);
+                    self.offer_topic_board(&graph);
                     self.live.model_drew(&spoken(&lines), graph, memory, &ops, llm_ms);
                     self.status = String::new();
                 }
@@ -2079,6 +2090,43 @@ impl Workbench {
         }
     }
 
+    /// When the model starts a topic on a board that already holds a good deal, offer the topic a board of
+    /// its own. Each topic is offered once, and not just after a turn to another board.
+    fn offer_topic_board(&mut self, drawn: &Graph) {
+        if self.topic_hint.is_some() {
+            self.topic_hint_age += 1;
+            if self.topic_hint_age > TOPIC_HINT_REPLIES {
+                self.topic_hint = None;
+            }
+        }
+        let before = &self.live.graph;
+        if before.nodes.len() < BUSY_BOARD || self.page_quiet > 0 {
+            return;
+        }
+        let new = drawn.nodes.iter().find(|n| n.kind == Kind::Topic && !before.nodes.iter().any(|o| o.id == n.id) && !self.topics_offered.contains(&n.id));
+        if let Some(topic) = new {
+            self.topics_offered.insert(topic.id.clone());
+            self.topic_hint = Some((topic.id.clone(), topic.label.chars().take(24).collect()));
+            self.topic_hint_age = 0;
+        }
+    }
+
+    /// Give the offered topic its own board, and carry on there.
+    fn split_topic(&mut self, cx: &mut Context<Self>) {
+        let Some((id, label)) = self.topic_hint.take() else { return };
+        if self.replay.is_some() || !self.live.split_topic(&id, &tr("Moved “{t}” to a new board", "把「{t}」移到了新的一张板").replace("{t}", &label)) {
+            cx.notify();
+            return;
+        }
+        self.page_hint = None;
+        self.page_quiet = QUIET_AFTER_TURNING;
+        let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
+        self.session().open(self.live.graph.clone(), history);
+        self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
+        self.show_page_image();
+        cx.notify();
+    }
+
     /// Follow the material being talked about. A line asking for a board, or agreeing to the one offered,
     /// turns to it and is not drawn; it stays in the transcript. Otherwise a board the line is clearly
     /// about is offered. True when the line was such a request.
@@ -2121,6 +2169,7 @@ impl Workbench {
         }
         self.live.go_to_page(page);
         self.page_hint = None;
+        self.topic_hint = None;
         let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(self.live.graph.clone(), history);
         self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
@@ -3767,6 +3816,24 @@ impl Render for Workbench {
                         }))
                         .child(tr("→ page {n} · {title}", "→ 第 {n} 页 · {title}").replace("{n}", &number.to_string()).replace("{title}", &title)),
                 )
+            })
+            .when_some(self.topic_hint.clone().filter(|_| self.replay.is_none() && self.editable()), |d, (_, label)| {
+                d.child(
+                    div()
+                        .id("topic-hint")
+                        .occlude()
+                        .cursor_pointer()
+                        .ml_2()
+                        .px_2()
+                        .border_1()
+                        .border_color(rgb(pal().accent))
+                        .text_color(rgb(pal().accent))
+                        .hover(|d| d.text_color(rgb(pal().text)).border_color(rgb(pal().text)))
+                        .tooltip(|window, cx| Tooltip::new(tr("The talk moved on to a new topic. Click to give it a board of its own.", "讨论换到了新话题。点一下，把它移到新的一张板上。")).build(window, cx))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(cx.listener(|this, _, _, cx| this.split_topic(cx)))
+                        .child(tr("new topic “{t}” → new board", "新话题「{t}」→ 新开一张板").replace("{t}", &label)),
+                )
             });
         // With the transcript away, the latest line still shows that the room is being heard.
         let transcript_shown = self.panel == Panel::Transcript && self.transcript_open;
@@ -4731,6 +4798,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     heard: None,
                     page_hint: None,
                     page_quiet: 0,
+                    topic_hint: None,
+                    topics_offered: Default::default(),
+                    topic_hint_age: 0,
                     level: 0.0,
                     next_batch: 0,
                     exit_when_done,

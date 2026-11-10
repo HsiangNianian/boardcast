@@ -10,15 +10,11 @@ on:
   workflow_dispatch:
     inputs:
       meeting_asr:
-        description: Long multilingual meetings, six candidates + paired dynamic (ASR only)
+        description: Long multilingual meetings (ASR only)
         type: boolean
         default: false
       full_asr:
-        description: Full corpus, SenseVoice + Whisper base, raw + GTCRN, VAD on + off
-        type: boolean
-        default: false
-      asr_sweep:
-        description: Compare all ASR candidates by language (quick unless full_asr is also selected)
+        description: The full ASR corpus rather than the quick samples
         type: boolean
         default: false
       model_url:
@@ -55,14 +51,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
-      - name: Multilingual phonetic labels and commands
-        run: pnpm eval:phonetic
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: phonetic-eval
-          path: eval/reports/phonetic.*
-          if-no-files-found: ignore
 
   board:
     name: text to board
@@ -126,29 +114,19 @@ jobs:
             eval/reports/
             ~/llama-server.log
 
-  asr-plan:
-    runs-on: ubuntu-24.04
-    outputs:
-      matrix: ${{ steps.matrix.outputs.value }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          package-manager-cache: false
-      - id: matrix
-        env:
-          MODE: ${{ (inputs.meeting_asr == true || github.event.schedule == '30 2 * * 4') && 'meetings' || (github.event_name == 'schedule' || inputs.asr_sweep == true) && 'sweep' || inputs.full_asr == true && 'full' || 'quick' }}
-        run: echo "value=$(node eval/asr/matrix.mjs "$MODE")" >> "$GITHUB_OUTPUT"
-
   asr:
-    name: ASR · ${{ matrix.model }} · ${{ matrix.denoise }} · VAD ${{ matrix.vad }} · ${{ matrix.policy }}
-    needs: [check, asr-plan]
+    name: ASR · ${{ matrix.engine }} · VAD ${{ matrix.vad }}
+    needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ (inputs.meeting_asr == true || github.event.schedule == '30 2 * * 4') && 180 || 60 }}
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.asr-plan.outputs.matrix) }}
+      matrix:
+        include:
+          # The app's own hearing, whose speech checks fail the run; then SenseVoice alone, as controls.
+          - { engine: routed, vad: 'on' }
+          - { engine: sensevoice, vad: 'on' }
+          - { engine: sensevoice, vad: 'off' }
     env:
       ASR_SUITE: ${{ (inputs.meeting_asr == true || github.event.schedule == '30 2 * * 4') && 'meetings' || (github.event_name == 'schedule' || inputs.full_asr == true) && 'full' || 'quick' }}
     steps:
@@ -156,77 +134,60 @@ jobs:
       - name: Linux system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libasound2-dev ffmpeg
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
+          sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev ffmpeg
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
           key: asr-linux
-      - name: Refresh sherpa native libraries
-        run: |
-          rm -rf src-tauri/target/sherpa-onnx-prebuilt
-          cargo clean --manifest-path src-tauri/Cargo.toml -p sherpa-onnx-sys
-      - run: pnpm install --frozen-lockfile
+      - run: cargo build --release -p boardcast-asr-eval
       - uses: actions/cache@v5
         with:
           path: eval/asr/.data
           key: asr-audio-${{ env.ASR_SUITE }}-${{ hashFiles('eval/asr/corpus.json', 'eval/asr/meetings.json') }}
       - uses: actions/cache@v5
         with:
-          path: |
-            resources/voice
-            eval/asr/.models
-          key: asr-models-${{ matrix.model }}-${{ matrix.denoise }}-${{ hashFiles('eval/asr/models.json', 'scripts/fetch-voice.mjs') }}
-      # Both commands verify cached files too. Missing/corrupt data must never silently skip inference.
-      - name: Evaluate the desktop voice engine
-        if: ${{ !startsWith(matrix.model, 'wav2vec2-') }}
-        run: pnpm eval:asr --suite "$ASR_SUITE" --model "${{ matrix.model }}" --denoise "${{ matrix.denoise }}" --vad "${{ matrix.vad }}" --policy "${{ matrix.policy }}"
-      - name: Check Apple Auto language routing with real audio
-        if: matrix.model == 'sensevoice' && matrix.denoise == 'none' && matrix.vad == 'on' && matrix.policy == 'static' && env.ASR_SUITE != 'meetings'
-        env:
-          BOARDCAST_AUTO_MODELS: ${{ github.workspace }}/resources
-          BOARDCAST_AUTO_AUDIO: ${{ github.workspace }}/eval/asr/.data
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib voice::auto::tests::auto_language_real_audio -- --ignored --exact --nocapture
-      - uses: astral-sh/setup-uv@v6
-        if: startsWith(matrix.model, 'wav2vec2-')
+          path: resources/voice
+          key: asr-voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
+      # Fetches the speech models the packages carry; a Node script until #150 ports it.
+      - uses: actions/setup-node@v5
         with:
-          enable-cache: false
-      - name: Evaluate CTC on desktop VAD intervals
-        if: startsWith(matrix.model, 'wav2vec2-')
-        run: |
-          uv run --locked --script eval/asr/ctc.py --self-test
-          pnpm eval:asr --suite "$ASR_SUITE" --model "${{ matrix.model }}"
+          node-version: 24
+          package-manager-cache: false
+      - run: node scripts/fetch-voice.mjs
+      # Both steps check cached files too: missing or damaged audio must never quietly skip a recording.
+      - run: target/release/asr-eval download . --suite "$ASR_SUITE"
+      - run: target/release/asr-eval run . --suite "$ASR_SUITE" --engine "${{ matrix.engine }}" --vad "${{ matrix.vad }}" --output "eval/reports/asr/${{ matrix.engine }}-vad-${{ matrix.vad }}"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: asr-${{ matrix.model }}-${{ matrix.denoise }}-vad-${{ matrix.vad }}-${{ matrix.policy }}
+          name: asr-${{ matrix.engine }}-vad-${{ matrix.vad }}
           path: eval/reports/asr/
           if-no-files-found: warn
           retention-days: 30
 
   asr-comparison:
-    name: ASR language comparison
+    name: ASR comparison
     needs: asr
     if: always() && !cancelled()
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - name: Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libasound2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
         with:
-          node-version: 24
-          package-manager-cache: false
+          key: asr-linux
+      - run: cargo build --release -p boardcast-asr-eval
       - uses: actions/download-artifact@v7
         with:
           pattern: asr-*
           path: eval/reports/asr-ci
           merge-multiple: true
-      - name: Compare matching corpus results
-        run: node eval/asr/compare.mjs eval/reports/asr-ci > eval/reports/asr-ci/comparison.md
+      - name: Compare the runs
+        run: target/release/asr-eval compare eval/reports/asr-ci/*/report.json > eval/reports/asr-ci/comparison.md
       - uses: actions/upload-artifact@v6
         with:
           name: asr-comparison

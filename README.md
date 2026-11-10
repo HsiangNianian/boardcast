@@ -170,14 +170,13 @@ cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://1
 Speech recognition has its own suites:
 
 ```sh
-pnpm eval:audio                # download pinned WAVs, verify checksums and build an offline page
-pnpm eval:listen               # serve that page at http://127.0.0.1:4175
-pnpm eval:asr                  # fixed baseline through the desktop voice engine
-pnpm eval:asr --suite meetings # nine ~10-minute clips across industries; needs ffmpeg
-pnpm eval:asr:sweep            # compare ASR configurations by language
+cargo build --release -p boardcast-asr-eval
+target/release/asr-eval download . --suite quick   # fetch and verify the recordings, and write a listening page
+target/release/asr-eval run . --suite quick        # the app's own hearing, scored by language
+target/release/asr-eval run . --suite meetings     # nine ~10-minute clips across industries; needs ffmpeg
 ```
 
-See [speech evaluation](eval/asr/README.md) for model comparisons, reference quality and [dataset licenses](eval/asr/LICENSES.md). CI runs these in the [Eval](.github/workflows/eval.yml) workflow with Qwen3.5-4B. The model can omit content, connect the wrong items or misread emphasis, and recognition affects the result, so check important conclusions.
+See [speech evaluation](eval/asr/README.md) for the configurations, reference quality and [dataset licenses](eval/asr/LICENSES.md). CI runs these in the [Eval](.github/workflows/eval.yml) workflow with Qwen3.5-4B. The model can omit content, connect the wrong items or misread emphasis, and recognition affects the result, so check important conclusions.
 
 </details>
 

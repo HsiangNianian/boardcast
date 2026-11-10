@@ -715,6 +715,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "boardcast-asr-eval"
+version = "0.22.0"
+dependencies = [
+ "anyhow",
+ "boardcast-audio",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sherpa-onnx",
+ "unicode-normalization",
+ "ureq",
+]
+
+[[package]]
 name = "boardcast-audio"
 version = "0.22.0"
 dependencies = [

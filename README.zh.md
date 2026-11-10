@@ -170,14 +170,13 @@ cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://1
 语音识别有自己的评测：
 
 ```sh
-pnpm eval:audio                # 下载固定版本的 WAV，校验并生成离线页面
-pnpm eval:listen               # 在 http://127.0.0.1:4175 打开这个页面
-pnpm eval:asr                  # 用桌面版语音引擎跑固定基线
-pnpm eval:asr --suite meetings # 9 段约 10 分钟、跨行业的会议录音；需要 ffmpeg
-pnpm eval:asr:sweep            # 按语言比较多种 ASR 配置
+cargo build --release -p boardcast-asr-eval
+target/release/asr-eval download . --suite quick   # 下载并校验录音，生成试听页面
+target/release/asr-eval run . --suite quick        # 用新版自己的识别流程跑，按语言打分
+target/release/asr-eval run . --suite meetings     # 9 段约 10 分钟、跨行业的会议录音；需要 ffmpeg
 ```
 
-模型对比、参考文本质量和[数据集许可](eval/asr/LICENSES.md)见[语音评测](eval/asr/README.md)。CI 在 [Eval](.github/workflows/eval.yml) 工作流里用 Qwen3.5-4B 运行这些评测。模型可能漏掉内容、连错对象或看错重点，识别质量也会影响结果，重要结论请再核对。
+各配置、参考文本质量和[数据集许可](eval/asr/LICENSES.md)见[语音评测](eval/asr/README.md)。CI 在 [Eval](.github/workflows/eval.yml) 工作流里用 Qwen3.5-4B 运行这些评测。模型可能漏掉内容、连错对象或看错重点，识别质量也会影响结果，重要结论请再核对。
 
 </details>
 

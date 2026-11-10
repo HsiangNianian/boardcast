@@ -17,6 +17,7 @@ mod fetch;
 mod read_pdf;
 mod release;
 mod score;
+mod summary_eval;
 mod meetings;
 mod voice_files;
 
@@ -28,6 +29,7 @@ fn main() -> Result<()> {
     match args.next().as_deref() {
         Some("check") => check::run(args),
         Some("agent-eval") => agent_eval::run(args),
+        Some("summary-eval") => summary_eval::run(args),
         Some("meetings-check") => meetings::run(args),
         Some("export") => export::run(args),
         Some("read-pdf") => read_pdf::run(args),

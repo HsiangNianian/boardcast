@@ -447,6 +447,16 @@ impl Ink {
         Some((x.clamp(8.0, (w - width - 8.0).max(8.0)), y.clamp(8.0, (h - TOOLBAR_H - 8.0).max(8.0))))
     }
 
+    /// Draw what is on the board again, in the palette now in use.
+    fn redraw(&mut self) {
+        let level = self.base.level;
+        self.retired.extend(std::mem::replace(&mut self.base, Tier::new(level)).release());
+        self.retire_detail();
+        for stroke in self.finished.clone() {
+            self.base.fill(&stroke);
+        }
+    }
+
     /// Show another meeting: nothing of the old board remains, and the new one appears at once
     /// rather than being rewritten stroke by stroke.
     fn open(&mut self, graph: &Graph, memory: &serde_json::Value) {
@@ -2442,6 +2452,7 @@ impl Workbench {
             system_speech: self.form.saved.system_speech,
             speech_language: self.form.saved.speech_language.clone(),
             interface_language: self.form.saved.interface_language.clone(),
+            appearance: self.form.saved.appearance.clone(),
             input: self.form.saved.input.clone(),
         }
     }
@@ -2455,6 +2466,14 @@ impl Workbench {
         if self.pipeline.listening() {
             self.toggle_mic();
             self.toggle_mic();
+        }
+        cx.notify();
+    }
+
+    fn choose_appearance(&mut self, appearance: &str, cx: &mut Context<Self>) {
+        self.form.saved.appearance = appearance.to_string();
+        if let Err(e) = self.form.saved.save() {
+            self.form.note = Some(format!("{e:#}"));
         }
         cx.notify();
     }
@@ -3931,6 +3950,17 @@ impl Render for Workbench {
                 "The interface changes at once; a few hints in text fields change on the next start. The board and summary follow the meeting's own language.",
                 "界面立即切换；输入框里的少数提示文字下次启动后切换。板书和摘要跟随会议本身的语言。",
             )))
+            .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Appearance", "外观")))
+            .child({
+                let chosen = self.form.saved.appearance.clone();
+                let looks = [("auto", tr("Follow the system", "跟随系统")), ("dark", tr("Dark", "深色")), ("light", tr("Light", "浅色"))];
+                div().flex().flex_wrap().gap_2().children(looks.into_iter().map(|(id, label)| {
+                    button(gpui_kit::ElementId::Name(format!("appearance-{id}").into()), label)
+                        .when(chosen == id, |b| b.primary())
+                        .on_click(cx.listener(move |this, _, _, cx| this.choose_appearance(id, cx)))
+                }))
+            })
+            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Takes effect the next time boardcast starts.", "下次启动 boardcast 时生效。")))
             // Before there is a model, choosing one is the only thing to do here.
             .when(!self.needs_model, |d| {
                 d.child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Updates", "更新")))
@@ -4152,6 +4182,7 @@ impl Render for Workbench {
         div()
             .id("workbench")
             .track_focus(&self.focus)
+            .font_family(theme::SANS)
             .on_key_down(cx.listener(Self::on_key))
             .on_drop(cx.listener(|this, paths: &gpui_kit::ExternalPaths, _, cx| this.import_paths(paths.paths(), cx)))
             .size_full()
@@ -4186,6 +4217,8 @@ struct Prepared {
     state: Ink,
     live: Live,
     vram_mib: u64,
+    /// The palette the board was drawn in, which the system's appearance may yet change.
+    dark: bool,
 }
 
 /// The window from the moment it opens: the name being written, then the app.
@@ -4197,7 +4230,7 @@ struct Shell {
 
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().bg(rgb(pal().paper)).map(|d| match &self.workbench {
+        div().size_full().font_family(theme::SANS).bg(rgb(pal().paper)).map(|d| match &self.workbench {
             Some(workbench) => d.child(workbench.clone()).into_any_element(),
             // The bar is there from the start, so the window can be moved while the app gets ready.
             None => d.flex().flex_col().child(TitleBar::new().bg(rgb(pal().surface)).border_color(rgb(pal().line))).child(div().flex_1().min_h_0().child(crate::splash::splash(&self.word, self.started, window))).into_any_element(),
@@ -4216,7 +4249,9 @@ fn app_menu(cx: &mut App) {
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     // Before any text is made, so even the first words are in the chosen language.
-    crate::i18n::choose(&Settings::load().interface_language);
+    let chosen = Settings::load();
+    crate::i18n::choose(&chosen.interface_language);
+    theme::choose(&chosen.appearance);
     let mut root: Option<PathBuf> = None;
     let mut case = None;
     let mut wav = None;
@@ -4292,6 +4327,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let hanzi_source = resources.hanzi;
     std::thread::spawn(move || {
         let prepared = (|| -> Result<Prepared> {
+            let dark = theme::is_dark();
             let mut glyphs = Glyphs::load(hanzi_source)?;
             let _ = startup.send(Startup::Word(crate::splash::word_strokes(&mut glyphs)));
             let start_meeting = match (reads_meetings.then(|| Store::new(data)), reopen) {
@@ -4355,7 +4391,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 state.view = Some(View { k, x: e.x0 as f32 - 20.0 / k, y: e.y0 as f32 - 20.0 / k });
                 state.reading = true;
             }
-            Ok(Prepared { state, live, vram_mib })
+            Ok(Prepared { state, live, vram_mib, dark })
         })();
         let _ = startup.send(Startup::Ready(Box::new(prepared)));
     });
@@ -4381,7 +4417,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         })
         .detach();
         let build = move |prepared: Prepared, window: &mut Window, cx: &mut App| -> Entity<Workbench> {
-            let Prepared { state, live, vram_mib } = prepared;
+            let Prepared { state, live, vram_mib, .. } = prepared;
             let history: Vec<Utterance> = live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
             pipeline.session().open(live.graph.clone(), history);
             pipeline.start_script();
@@ -4554,7 +4590,11 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                             break;
                         }
                     }
-                    let prepared = ready.take().expect("checked above");
+                    let mut prepared = ready.take().expect("checked above");
+                    // The board was drawn before the window knew the system's appearance.
+                    if prepared.dark != theme::is_dark() {
+                        prepared.state.redraw();
+                    }
                     let build = build.take().expect("runs once");
                     let _ = this.update_in(cx, |shell: &mut Shell, window, cx| {
                         shell.workbench = Some(build(prepared, window, cx));

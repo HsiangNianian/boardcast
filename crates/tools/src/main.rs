@@ -1,6 +1,6 @@
 //! Board tooling with no window, for CI and model evaluation.
 //!   check <root> (--all-demos | --demo <name> | --ops <file>) [--tidy]
-//!   agent-eval <root> <output.json> [--deepseek] [--llm <url>] [--skill | --rules-only | --hints-only]
+//!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [--deepseek | --llm <url>] [--skill | --rules-only | --hints-only]
 //!              [--only-dev | --only-holdout] [--only <id>] [--workers <n>]
 //!   pack-glyphs <assets/hanzi> <glyphs.pack>
 //!   download-model <id> <dir>
@@ -11,6 +11,7 @@ mod agent_eval;
 mod check;
 mod export;
 mod read_pdf;
+mod score;
 mod meetings;
 
 use anyhow::{bail, Context, Result};

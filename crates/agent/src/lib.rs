@@ -25,7 +25,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-const CONTEXT_LINES: usize = 2;
+/// How many earlier lines the model hears with each new one.
+pub const CONTEXT_LINES: usize = 2;
 const LLAMA_PORT: u16 = 18_765;
 const ATTEMPTS: u32 = 4;
 const NO_MODEL: &str = "No board model is set up. Download one or add a remote model in Settings.";

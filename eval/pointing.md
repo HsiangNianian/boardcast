@@ -1,6 +1,6 @@
 # 圈选指代回归
 
-`node eval/run.ts --set pointing --label qwen3.5-4b-q4-k-m --repeat 3`
+`boardcast-tools agent-eval . board.json --set pointing --label qwen3.5-4b-q4-k-m --repeat 3`
 
 18 段合成开发用例，中英文各 9 段：圈一个划掉、圈两个划掉、明确保留、星标、明确名称覆盖圈选、在圈选话题下补要点、连续两句切换圈选，并用完全相同的话换圈另一个条目/话题做对照。初始板书固定，圈选 ID 因此不依赖模型上一轮的编号。每遍深拷贝初始板书，避免前一遍的修改污染下一遍。
 
@@ -36,9 +36,9 @@ src-tauri/llama/llama-server -m /tmp/Qwen3.5-4B-Q4_K_M.gguf --host 127.0.0.1 --p
 另一个终端：
 
 ```sh
-node eval/run.ts --base-url http://127.0.0.1:18081 --set dev --label qwen3.5-4b-q4-k-m
-node eval/run.ts --base-url http://127.0.0.1:18081 --set holdout --label qwen3.5-4b-q4-k-m
-node eval/run.ts --base-url http://127.0.0.1:18081 --set pointing --repeat 3 --label qwen3.5-4b-q4-k-m
+boardcast-tools agent-eval . board.json --llm http://127.0.0.1:18081 --set dev --label qwen3.5-4b-q4-k-m
+boardcast-tools agent-eval . board.json --llm http://127.0.0.1:18081 --set holdout --label qwen3.5-4b-q4-k-m
+boardcast-tools agent-eval . board.json --llm http://127.0.0.1:18081 --set pointing --repeat 3 --label qwen3.5-4b-q4-k-m
 ```
 
 CI 增加独立的 `--set pointing` 步骤，仍使用原来的默认 2B CPU 模型，不应把 CI 分数当作这里的 4B 实测结果。

@@ -1,5 +1,4 @@
-//! How a PDF reads, to compare with the older engine on a real file:
-//! `read-pdf <pdfium-dir> <file.pdf> <out.json>`, then `crates/import/fixtures/compare-with-typescript.mjs`.
+//! How a PDF reads, page by page, to inspect on a real file: `read-pdf <pdfium-dir> <file.pdf> <out.json>`.
 
 use anyhow::{Context, Result};
 use boardcast_import::paper::{analyze_page, PaperState};

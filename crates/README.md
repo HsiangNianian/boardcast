@@ -63,11 +63,13 @@ testing. To check a change to the file format against real data, work on a copy:
 ```sh
 cp -r ~/.local/share/games.mmstudio.boardcast/meetings /tmp/copy/
 cargo run --release -p boardcast-tools -- meetings-check /tmp/copy
-node crates/meetings/fixtures/verify-with-typescript.mjs . /tmp/copy
 ```
 
-A checkout runs with the resources in `resources/`, fetched by `boardcast-tools fetch llama` and `fetch voice`, and `assets/hanzi` from `fetch glyphs`. Regenerate the answer key and `crates/agent/prompts.json` with
-`node crates/board/fixtures/make-goldens.mjs <root> crates/board/fixtures/goldens.json`.
+A checkout runs with the resources in `resources/`, fetched by `boardcast-tools fetch llama` and `fetch voice`, and `assets/hanzi` from `fetch glyphs`.
+
+`crates/board/fixtures/goldens.json` is what the TypeScript engine did with real recorded model replies, frozen when
+that engine was removed: the board crate's tests hold the Rust engine to it. `crates/agent/prompts.json`, the system
+prompt and fixed examples first recorded from the same engine, is now edited by hand.
 
 Measured on Linux with niri at 100 Hz, on Intel Iris Xe and an RTX 3060, each forced with `VK_DRIVER_FILES`.
 

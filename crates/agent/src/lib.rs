@@ -34,7 +34,7 @@ const NO_MODEL: &str = "No board model is set up. Download one or add a remote m
 /// The layout skill's rules, short enough for a prompt. The full guidance is skills/board-layout/SKILL.md.
 pub const SKILL_RULES: &str = include_str!("../skills/board-layout/RULES.md");
 
-/// The fixed examples and system prompt, recorded from the TypeScript engine.
+/// The fixed examples and system prompt, first recorded from the TypeScript engine and now edited by hand.
 fn prompts() -> Value {
     serde_json::from_str(include_str!("../prompts.json")).expect("prompts.json is valid")
 }

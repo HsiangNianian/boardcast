@@ -100,7 +100,7 @@ impl Line {
 }
 
 /// What a summary was made from, to tell later whether the meeting has moved on. It must match
-/// src/engine/summary.ts, because meetings store it: JSON text, hashed over UTF-16 units.
+/// the earlier app's summary.ts, because meetings store it: JSON text, hashed over UTF-16 units.
 pub fn fingerprint(boards: &[Graph], lines: &[Line]) -> String {
     let rows: Vec<Value> = lines
         .iter()

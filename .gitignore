@@ -1,19 +1,14 @@
+# Left in checkouts from before the app was all Rust.
 node_modules/
 dist/
-src-tauri/target/
-src-tauri/gen/
 .claude/
 models/
 eval/reports/
 *.log
 .playwright-mcp/
 assets/hanzi/
-src-tauri/llama/
 resources/llama/
 resources/voice/
-src-tauri/voice/
-src-tauri/apple-speech/boardcast-speech-*
-public/player/
 eval/asr/.data/
 target/
 # The model downloader is code; only downloaded models are ignored above.

@@ -26,11 +26,11 @@
 
 保留的失败：开发集 `bs-pipeline` 把画像挂到了“情感打分”下，遗漏 graphRAG 话题，并把星标打到了话题而不是“监控任务”条目；`assign-shared` 没有正确表达共同负责人，要点 F1 为 0。留出集有一次不该出现的“售后服务 → 支付网关”连线，并漏掉了“回滚脚本没人维护”的强调。未据此调整提示词或留出标注。
 
-复现（Node 24+，先启动服务）：
+复现（先启动服务）：
 
 ```sh
 cargo run -p boardcast-tools -- fetch llama linux-x64
-src-tauri/llama/llama-server -m /tmp/Qwen3.5-4B-Q4_K_M.gguf --host 127.0.0.1 --port 18081 -c 4096 --jinja -np 1 -ngl auto --fit on -t 2
+resources/llama/llama-server -m /tmp/Qwen3.5-4B-Q4_K_M.gguf --host 127.0.0.1 --port 18081 -c 4096 --jinja -np 1 -ngl auto --fit on -t 2
 ```
 
 另一个终端：

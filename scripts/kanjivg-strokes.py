@@ -7,6 +7,7 @@ Convert kana and kanji absent from hanzi-writer-data to ordered centerlines.
 Generated data is committed;
 normal builds and offline playback need neither Python nor a download.
 """
+import base64
 import hashlib
 import gzip
 import io
@@ -27,6 +28,9 @@ ROOT = Path(__file__).resolve().parents[1]
 REV = "70a0b7ae0c18ceb5cb358274b029cce0234a43bc"
 SHA256 = "6131533e905365c1c0b0aa763eb24c53483e12874e15b654c94f07b7bfd36365"
 URL = f"https://codeload.github.com/KanjiVG/kanjivg/tar.gz/{REV}"
+# The characters hanzi-writer-data already has, from the same pinned package `boardcast-tools fetch glyphs` uses.
+HANZI = "https://registry.npmjs.org/hanzi-writer-data/-/hanzi-writer-data-2.0.1.tgz"
+HANZI_SHA512 = "nbQwM+MaryGoq7pBMIZLCd3lFq03nXuJuwku1+6UbjL58uU+9OULVcMkoNvNuJSoIV7f1bbPRfD4D/LQa5S7qg=="
 
 
 def centerline(d):
@@ -55,6 +59,10 @@ def centerline(d):
 
 archive = Path(sys.argv[1]).read_bytes() if len(sys.argv) > 1 else urllib.request.urlopen(URL, timeout=60).read()
 assert hashlib.sha256(archive).hexdigest() == SHA256, "Unexpected KanjiVG archive"
+hanzi_archive = urllib.request.urlopen(HANZI, timeout=60).read()
+assert base64.b64encode(hashlib.sha512(hanzi_archive).digest()).decode() == HANZI_SHA512, "Unexpected hanzi-writer-data archive"
+with tarfile.open(fileobj=io.BytesIO(hanzi_archive)) as hanzi:
+    chinese = {Path(n).stem for n in hanzi.getnames() if n.endswith(".json") and n != "package/package.json"}
 glyphs, kanji = {}, {}
 with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
     prefix = f"kanjivg-{REV}/"
@@ -66,7 +74,7 @@ with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         code = int(name[:-4], 16)
         ch = chr(code)
         is_kana = 0x3041 <= code <= 0x30FE
-        is_missing_kanji = unicodedata.name(ch, '').startswith('CJK ') and not (ROOT / 'node_modules/hanzi-writer-data' / f'{ch}.json').exists()
+        is_missing_kanji = unicodedata.name(ch, '').startswith('CJK ') and ch not in chinese
         if not (is_kana or is_missing_kanji):
             continue
         svg = ET.fromstring(tar.extractfile(path).read())

@@ -141,13 +141,7 @@ cargo test --workspace
 sh packaging/linux/package.sh           # target/package/boardcast-<version>-<arch>-linux.tar.gz
 ```
 
-官网和评测工具是 Node 项目。请使用 **Node.js 24+** 和仓库锁定的 **pnpm 11.13.1**：
-
-```sh
-pnpm install --frozen-lockfile
-pnpm site:dev                  # 官网 http://localhost:1430
-pnpm test                      # 引擎和 ASR 工具的单元测试，不需要模型
-```
+全部代码都是 Rust，官网也一样：用 [Trunk](https://trunkrs.dev) 构建（`cd landing && trunk serve`），见 [landing/README.md](landing/README.md)。
 
 <details>
 <summary><strong>评测</strong></summary>

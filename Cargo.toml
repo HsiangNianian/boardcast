@@ -1,8 +1,6 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-# The Tauri app stays buildable on its own until the GPUI app replaces it.
-exclude = ["src-tauri"]
 
 [workspace.package]
 version = "0.22.0"

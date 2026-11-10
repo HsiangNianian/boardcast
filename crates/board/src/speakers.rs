@@ -1,4 +1,4 @@
-//! Who said what, as in src/engine/voices.ts and attribute.ts. Each sentence's voiceprint is compared
+//! Who said what, ported from the earlier app's voices.ts and attribute.ts. Each sentence's voiceprint is compared
 //! with the voices this meeting has heard, and what a model puts on the board remembers who raised it.
 
 use crate::graph::{norm, Edge, Graph, Node, Utterance};

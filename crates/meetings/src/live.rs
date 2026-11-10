@@ -15,7 +15,7 @@ fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
 }
 
-/// The undo stacks, as in src/engine/edit.ts.
+/// The undo stacks, ported from the earlier app's edit.ts.
 pub struct History<T> {
     past: Vec<T>,
     future: Vec<T>,

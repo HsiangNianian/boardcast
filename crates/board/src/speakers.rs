@@ -102,6 +102,35 @@ pub fn rename_voice(voices: &mut Vec<Voice>, from: &str, to: &str) {
     voices.push(Voice { name: to.to_string(), centroid: unit(&sum), n: one.n + other.n });
 }
 
+/// Move one sentence from the voice it was given to onto another, as when a line was put down to the wrong
+/// person: its voiceprint leaves the first voice's average and joins the second's. A voice left with no
+/// sentences goes; a name not yet heard becomes a voice.
+pub fn move_sentence(voices: &mut Vec<Voice>, voiceprint: &[f64], from: &str, to: &str) {
+    if from == to {
+        return;
+    }
+    if let Some(i) = voices.iter().position(|v| v.name == from) {
+        if voices[i].n <= 1 {
+            voices.remove(i);
+        } else {
+            let voice = &mut voices[i];
+            let weight = f64::from(voice.n.min(MEMORY));
+            let left: Vec<f64> = voice.centroid.iter().enumerate().map(|(k, x)| x * weight - voiceprint.get(k).copied().unwrap_or(0.0)).collect();
+            voice.centroid = unit(&left);
+            voice.n -= 1;
+        }
+    }
+    match voices.iter_mut().find(|v| v.name == to) {
+        Some(voice) => {
+            let weight = f64::from(voice.n.min(MEMORY));
+            let joined: Vec<f64> = voice.centroid.iter().enumerate().map(|(k, x)| x * weight + voiceprint.get(k).copied().unwrap_or(0.0)).collect();
+            voice.centroid = unit(&joined);
+            voice.n += 1;
+        }
+        None => voices.push(Voice { name: to.to_string(), centroid: unit(voiceprint), n: 1 }),
+    }
+}
+
 /// The letter shown for a speaker: a Chinese surname (the second character after 小, 老 or 阿), a
 /// trailing number, or else the first letter.
 pub fn initial(name: &str) -> String {
@@ -293,6 +322,27 @@ mod tests {
                 assert_eq!(voices, wanted, "{}", case["name"]);
             }
         }
+    }
+
+    #[test]
+    fn a_sentence_moved_to_another_voice_takes_its_voiceprint_along() {
+        let (a, b) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
+        let mut voices = vec![];
+        for print in [&a, &a, &a, &b] {
+            identify(&mut voices, print, &[]);
+        }
+        // The fourth sentence was B's, but suppose it had been put down to A: moving it back leaves A as it was.
+        let wrong = [0.8, 0.6, 0.0];
+        identify_at(&mut voices, &wrong, &[], 0.5);
+        let a_before = voices[0].clone();
+        move_sentence(&mut voices, &wrong, "A", "B");
+        assert_eq!((voices[0].n, voices[1].n), (3, 2));
+        assert!(voices[0].centroid[1] < a_before.centroid[1], "A no longer leans towards B's voice");
+        assert!(dot(&voices[0].centroid, &a) > 0.999);
+        // A voice left with nothing goes; a name not heard yet becomes one.
+        move_sentence(&mut voices, &b, "B", "C");
+        move_sentence(&mut voices, &wrong, "B", "C");
+        assert_eq!(voices.iter().map(|v| (v.name.as_str(), v.n)).collect::<Vec<_>>(), [("A", 3), ("C", 2)]);
     }
 
     #[test]

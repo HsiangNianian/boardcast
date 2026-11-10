@@ -298,9 +298,9 @@ section.block { padding: 140px 0 0; }
 .specs dt, .specs dd { padding: 14px 0; border-bottom: 1px solid var(--hair); font-size: 15px; }
 .specs dt { font: 400 12px var(--mono); color: var(--dim); padding-top: 17px; }
 .specs dl + dl { padding-left: 40px; }
-.dl { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hair); border: 1px solid var(--hair); margin-top: 48px; }
+.dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--hair); border: 1px solid var(--hair); margin-top: 48px; }
 .dl a { background: var(--bg); padding: 40px 32px; display: grid; grid-template-columns: 1fr auto; align-items: end; }
-.dl b { font-size: 64px; font-weight: 200; letter-spacing: -.04em; line-height: 1; }
+.dl b { font-size: clamp(40px, 4.4vw, 64px); font-weight: 200; letter-spacing: -.04em; line-height: 1; }
 .dl span { display: block; margin-top: 14px; color: var(--link); font-size: 16px; }
 .dl em { font: 400 13px var(--mono); font-style: normal; }
 .dl a:hover { background: var(--fg); color: var(--bg); }

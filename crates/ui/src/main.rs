@@ -6,6 +6,9 @@
 //!             [--synthetic <chars>] [--zoom-test] [--zoom <k>]
 //!   boardcast bench <root> <stroke|merged:N|raster> <speed> <targets,..> [marks]
 
+// No console window behind the app on Windows; the command-line flags attach to the one they were run from.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod app;
 mod bench;
 mod i18n;
@@ -19,6 +22,11 @@ use anyhow::{bail, Result};
 
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1).peekable();
+    #[cfg(windows)]
+    if args.peek().is_some_and(|a| a.starts_with("--")) {
+        // SAFETY: a plain call; it fails harmlessly when there is no console to attach to.
+        unsafe { windows_sys::Win32::System::Console::AttachConsole(windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS) };
+    }
     match args.peek().map(String::as_str) {
         Some("--version") => {
             println!("boardcast {}", boardcast_update::VERSION);

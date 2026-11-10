@@ -1654,7 +1654,7 @@ impl Workbench {
             .collect();
         let frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images);
         let directory = self.export_dir.clone().unwrap_or_else(|| {
-            let home = std::env::var_os("HOME").map_or_else(|| self.data.clone(), PathBuf::from);
+            let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map_or_else(|| self.data.clone(), PathBuf::from);
             Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
         });
         let answer = cx.prompt_for_new_path(&directory, Some(&boardcast_export::file_name(kind)));

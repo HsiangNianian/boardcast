@@ -112,3 +112,28 @@ jobs:
           name: boardcast-${{ matrix.runner }}
           path: target/package/*.zip
           retention-days: 14
+
+  windows:
+    name: windows package
+    # No Windows machine is at hand either; this is the first sign of whether it builds and starts.
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache voice models
+        uses: actions/cache@v4
+        with:
+          path: resources/voice
+          key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      - run: sh packaging/windows/package.sh
+        env:
+          VARIANTS: all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boardcast-windows
+          path: target/package/*.zip
+          retention-days: 14

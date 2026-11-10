@@ -26,6 +26,7 @@ serde_json.workspace = true
 sha2 = "0.10"
 tar = "0.4"
 ureq = { version = "2", features = ["proxy-from-env"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 boardcast-update.workspace = true

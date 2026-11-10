@@ -73,7 +73,7 @@ impl Resources {
         };
         let checks: Vec<(&str, PathBuf)> = [
             ("glyphs", self.hanzi_path().to_path_buf()),
-            ("llama-server", self.binaries.join("llama-server")),
+            ("llama-server", self.binaries.join(boardcast_agent::LLAMA_SERVER)),
             ("voice activity model", self.voice.join("silero_vad.onnx")),
             ("speaker model", self.voice.join("speaker/campplus_zh_en.onnx")),
             ("PDF library", boardcast_import::pdf::library_file(&self.pdfium)),

@@ -1,8 +1,8 @@
 //! The look of the window, shared with the website: black and white, light type, one red for what is
 //! marked or recording, and square corners. The components come from the kit; this sets what they use.
 
-use gpui_kit::component::{Icon, Theme, ThemeMode};
 use boardcast_board::compose::PAPER;
+use gpui_kit::component::{Icon, Theme, ThemeMode};
 use gpui_kit::{px, rgb, App, AssetSource, Hsla, Result, SharedString, WindowAppearance};
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -100,7 +100,11 @@ pub fn is_dark() -> bool {
 
 /// The palette in use, chosen once the system's appearance is known.
 pub fn pal() -> &'static Palette {
-    if DARK_MODE.load(Ordering::Relaxed) { &DARK } else { &LIGHT }
+    if DARK_MODE.load(Ordering::Relaxed) {
+        &DARK
+    } else {
+        &LIGHT
+    }
 }
 
 impl Palette {
@@ -113,29 +117,71 @@ impl Palette {
     }
 }
 
-gpui_kit_assets::icon_assets!(ExtraIcons, [FileDown, FilePlus, Import, Lasso, Pencil, RotateCcw, Sparkles, Trash, Users, WandSparkles, X]);
+gpui_kit_assets::icon_assets!(
+    ExtraIcons,
+    [
+        FileDown,
+        FilePlus,
+        Import,
+        Lasso,
+        Pencil,
+        RotateCcw,
+        Sparkles,
+        Trash,
+        Users,
+        WandSparkles,
+        X
+    ]
+);
 
 /// The website's pictograms, built from blocks and lines, in place of the toolkit's icons of the same name.
 /// Holes are cut with even-odd fills, since an icon is drawn as one shape in the text's color.
 const PICTOGRAMS: [(&str, &str); 19] = [
-    ("icons/chevron-left.svg", include_str!("../icons/chevron-left.svg")),
-    ("icons/chevron-right.svg", include_str!("../icons/chevron-right.svg")),
-    ("icons/file-down.svg", include_str!("../icons/file-down.svg")),
-    ("icons/file-plus.svg", include_str!("../icons/file-plus.svg")),
-    ("icons/folder-open.svg", include_str!("../icons/folder-open.svg")),
+    (
+        "icons/chevron-left.svg",
+        include_str!("../icons/chevron-left.svg"),
+    ),
+    (
+        "icons/chevron-right.svg",
+        include_str!("../icons/chevron-right.svg"),
+    ),
+    (
+        "icons/file-down.svg",
+        include_str!("../icons/file-down.svg"),
+    ),
+    (
+        "icons/file-plus.svg",
+        include_str!("../icons/file-plus.svg"),
+    ),
+    (
+        "icons/folder-open.svg",
+        include_str!("../icons/folder-open.svg"),
+    ),
     ("icons/import.svg", include_str!("../icons/import.svg")),
     ("icons/lasso.svg", include_str!("../icons/lasso.svg")),
-    ("icons/panel-right-close.svg", include_str!("../icons/panel-right-close.svg")),
-    ("icons/panel-right-open.svg", include_str!("../icons/panel-right-open.svg")),
+    (
+        "icons/panel-right-close.svg",
+        include_str!("../icons/panel-right-close.svg"),
+    ),
+    (
+        "icons/panel-right-open.svg",
+        include_str!("../icons/panel-right-open.svg"),
+    ),
     ("icons/pencil.svg", include_str!("../icons/pencil.svg")),
     ("icons/redo-2.svg", include_str!("../icons/redo-2.svg")),
-    ("icons/rotate-ccw.svg", include_str!("../icons/rotate-ccw.svg")),
+    (
+        "icons/rotate-ccw.svg",
+        include_str!("../icons/rotate-ccw.svg"),
+    ),
     ("icons/settings.svg", include_str!("../icons/settings.svg")),
     ("icons/sparkles.svg", include_str!("../icons/sparkles.svg")),
     ("icons/trash.svg", include_str!("../icons/trash.svg")),
     ("icons/undo-2.svg", include_str!("../icons/undo-2.svg")),
     ("icons/users.svg", include_str!("../icons/users.svg")),
-    ("icons/wand-sparkles.svg", include_str!("../icons/wand-sparkles.svg")),
+    (
+        "icons/wand-sparkles.svg",
+        include_str!("../icons/wand-sparkles.svg"),
+    ),
     ("icons/x.svg", include_str!("../icons/x.svg")),
 ];
 
@@ -169,15 +215,32 @@ pub fn icon(name: &str) -> Icon {
 
 /// Settle light or dark, following the system unless Settings chose, and put that palette into the kit's theme.
 pub fn apply(cx: &mut App) {
-    let fonts = vec![Cow::Borrowed(&include_bytes!("../fonts/DMSans.ttf")[..]), Cow::Borrowed(&include_bytes!("../fonts/JetBrainsMono.ttf")[..])];
+    let fonts = vec![
+        Cow::Borrowed(&include_bytes!("../fonts/DMSans.ttf")[..]),
+        Cow::Borrowed(&include_bytes!("../fonts/JetBrainsMono.ttf")[..]),
+    ];
     if let Err(e) = cx.text_system().add_fonts(fonts) {
         eprintln!("fonts: {e:#}");
     }
     if FOLLOW_SYSTEM.load(Ordering::Relaxed) {
-        DARK_MODE.store(matches!(cx.window_appearance(), WindowAppearance::Dark | WindowAppearance::VibrantDark), Ordering::Relaxed);
+        DARK_MODE.store(
+            matches!(
+                cx.window_appearance(),
+                WindowAppearance::Dark | WindowAppearance::VibrantDark
+            ),
+            Ordering::Relaxed,
+        );
     }
     let dark = is_dark();
-    Theme::change(if dark { ThemeMode::Dark } else { ThemeMode::Light }, None, cx);
+    Theme::change(
+        if dark {
+            ThemeMode::Dark
+        } else {
+            ThemeMode::Light
+        },
+        None,
+        cx,
+    );
     let p = pal();
     let color = |value: u32| -> Hsla { rgb(value).into() };
     Theme::update(cx, |theme| {

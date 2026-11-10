@@ -5,7 +5,10 @@ use crate::i18n::tr;
 use crate::theme::pal;
 use boardcast_board::glyphs::{Glyphs, Pt};
 use boardcast_board::pen::{ink, line, outline, place, Inked, Rng};
-use gpui_kit::{canvas, div, point, prelude::*, px, rgb, Background, Bounds, Hsla, IntoElement, PathBuilder, Pixels, Window};
+use gpui_kit::{
+    canvas, div, point, prelude::*, px, rgb, Background, Bounds, Hsla, IntoElement, PathBuilder,
+    Pixels, Window,
+};
 use std::time::{Duration, Instant};
 
 const WORD: &str = "boardcast";
@@ -28,7 +31,12 @@ pub fn word_strokes(glyphs: &mut Glyphs) -> Vec<Inked> {
         }
         x += glyph.advance * SIZE;
     }
-    let under: Vec<Pt> = line([-width / 2.0 - 6.0, SIZE * 0.72], [width / 2.0 + 6.0, SIZE * 0.72], &mut r, 0.008);
+    let under: Vec<Pt> = line(
+        [-width / 2.0 - 6.0, SIZE * 0.72],
+        [width / 2.0 + 6.0, SIZE * 0.72],
+        &mut r,
+        0.008,
+    );
     strokes.push(ink(&under, SIZE * 0.07, SIZE * 0.012, &mut r));
     strokes
 }
@@ -73,6 +81,16 @@ pub fn splash(strokes: &[Inked], started: Instant, window: &mut Window) -> impl 
         )
         // If this runs long, say it is still going.
         .when(elapsed > SAY_MORE_AFTER, |d| {
-            d.child(div().absolute().bottom(px(48.)).w_full().flex().justify_center().text_sm().text_color(rgb(pal().faint)).child(tr("Getting things ready…", "正在做准备…")))
+            d.child(
+                div()
+                    .absolute()
+                    .bottom(px(48.))
+                    .w_full()
+                    .flex()
+                    .justify_center()
+                    .text_sm()
+                    .text_color(rgb(pal().faint))
+                    .child(tr("Getting things ready…", "正在做准备…")),
+            )
         })
 }

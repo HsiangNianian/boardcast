@@ -15,7 +15,8 @@ pub struct VoiceFile {
 }
 
 const PARAKEET: &str = "csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7";
-const REAZON: &str = "reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407";
+const REAZON: &str =
+    "reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407";
 
 pub fn files() -> Vec<VoiceFile> {
     let pinned = |repo: &str, file: &str| format!("{repo}/{file}");

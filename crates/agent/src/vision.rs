@@ -1,7 +1,9 @@
 //! Reading the text in a piece of an image with a local model. It runs on this machine only and goes
 //! away when done, so a meeting using a remote model never sends it an image.
 
-use crate::{is_discrete, list_gpus, pick_gpu, spawn_llama, wait_until_up, LocalServer, LLAMA_PORT};
+use crate::{
+    is_discrete, list_gpus, pick_gpu, spawn_llama, wait_until_up, LocalServer, LLAMA_PORT,
+};
 use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
@@ -12,7 +14,8 @@ use std::time::Duration;
 
 /// Beside the board model's port, as both may be up at once.
 const VISION_PORT: u16 = LLAMA_PORT + 1;
-const PROMPT: &str = "图里写的是什么字？原样输出这些字，不要解释，不要加引号。图里没有字就只输出：无";
+const PROMPT: &str =
+    "图里写的是什么字？原样输出这些字，不要解释，不要加引号。图里没有字就只输出：无";
 const NEEDS_PROJECTOR: [&str; 4] = ["image", "mmproj", "multimodal", "vision"];
 
 /// A model that can see, for as long as this value lives.
@@ -22,13 +25,28 @@ pub struct VisionServer {
 }
 
 impl VisionServer {
-    pub fn start(binaries: &Path, model: &Path, projector: &Path, shaders: Option<&Path>) -> Result<Self> {
-        let server = LocalServer { binaries: binaries.to_path_buf(), model: model.to_path_buf(), shaders: shaders.map(Path::to_path_buf) };
+    pub fn start(
+        binaries: &Path,
+        model: &Path,
+        projector: &Path,
+        shaders: Option<&Path>,
+    ) -> Result<Self> {
+        let server = LocalServer {
+            binaries: binaries.to_path_buf(),
+            model: model.to_path_buf(),
+            shaders: shaders.map(Path::to_path_buf),
+        };
         let base = format!("http://127.0.0.1:{VISION_PORT}");
         let health = format!("{base}/health");
         let gpus = list_gpus(binaries);
         let device = pick_gpu(&gpus);
-        let mut child = spawn_llama(&server, device.as_deref(), is_discrete(&gpus, device.as_deref()), VISION_PORT, Some(projector))?;
+        let mut child = spawn_llama(
+            &server,
+            device.as_deref(),
+            is_discrete(&gpus, device.as_deref()),
+            VISION_PORT,
+            Some(projector),
+        )?;
         if let Err(first) = wait_until_up(&health, &mut child) {
             let _ = child.kill();
             let _ = child.wait();
@@ -65,10 +83,18 @@ pub fn read_text(base: &str, png: &[u8]) -> Result<String> {
         "chat_template_kwargs": { "enable_thinking": false },
         "messages": [{ "role": "user", "content": [{ "type": "image_url", "image_url": { "url": url } }, { "type": "text", "text": PROMPT }] }],
     });
-    let agent = ureq::AgentBuilder::new().try_proxy_from_env(false).redirects(0).timeout(Duration::from_secs(180)).build();
-    let response = agent.post(&format!("{base}/v1/chat/completions")).send_json(&body);
+    let agent = ureq::AgentBuilder::new()
+        .try_proxy_from_env(false)
+        .redirects(0)
+        .timeout(Duration::from_secs(180))
+        .build();
+    let response = agent
+        .post(&format!("{base}/v1/chat/completions"))
+        .send_json(&body);
     let reply: Value = match response {
-        Ok(reply) if reply.status() == 200 => reply.into_json().context("reading the image model's reply")?,
+        Ok(reply) if reply.status() == 200 => reply
+            .into_json()
+            .context("reading the image model's reply")?,
         Ok(reply) => bail!("the image model answered with status {}", reply.status()),
         Err(ureq::Error::Status(code, reply)) => {
             let text = reply.into_string().unwrap_or_default().to_lowercase();
@@ -79,7 +105,10 @@ pub fn read_text(base: &str, png: &[u8]) -> Result<String> {
         }
         Err(e) => return Err(e).context("asking the image model"),
     };
-    Ok(reply["choices"][0]["message"]["content"].as_str().unwrap_or_default().to_string())
+    Ok(reply["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string())
 }
 
 #[cfg(test)]
@@ -95,11 +124,21 @@ mod tests {
     fn read_request(stream: &mut std::net::TcpStream) {
         let (mut seen, mut chunk) = (vec![], [0_u8; 1 << 16]);
         loop {
-            let Ok(n) = stream.read(&mut chunk) else { return };
+            let Ok(n) = stream.read(&mut chunk) else {
+                return;
+            };
             seen.extend_from_slice(&chunk[..n]);
             let text = String::from_utf8_lossy(&seen).to_lowercase();
             if let Some(end) = text.find("\r\n\r\n") {
-                let length = text.lines().find_map(|l| l.strip_prefix("content-length:")?.trim().parse::<usize>().ok()).unwrap_or(0);
+                let length = text
+                    .lines()
+                    .find_map(|l| {
+                        l.strip_prefix("content-length:")?
+                            .trim()
+                            .parse::<usize>()
+                            .ok()
+                    })
+                    .unwrap_or(0);
                 if n == 0 || seen.len() >= end + 4 + length {
                     return;
                 }
@@ -110,7 +149,11 @@ mod tests {
     }
 
     /// A server that gives this reply to everything, and counts what it was asked.
-    fn answering(status_line: &'static str, headers: &'static str, body: &'static str) -> (String, Arc<AtomicUsize>) {
+    fn answering(
+        status_line: &'static str,
+        headers: &'static str,
+        body: &'static str,
+    ) -> (String, Arc<AtomicUsize>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base = format!("http://{}", listener.local_addr().unwrap());
         let count = Arc::new(AtomicUsize::new(0));
@@ -128,16 +171,29 @@ mod tests {
 
     #[test]
     fn a_redirect_is_never_followed_with_the_image() {
-        let (base, count) = answering("307 Temporary Redirect", "Location: /somewhere-else\r\n", "");
+        let (base, count) = answering(
+            "307 Temporary Redirect",
+            "Location: /somewhere-else\r\n",
+            "",
+        );
         assert!(read_text(&base, b"picture").is_err());
         assert_eq!(count.load(Ordering::SeqCst), 1);
     }
 
     #[test]
     fn the_reply_is_read_and_a_model_that_cannot_see_says_so() {
-        let (base, _) = answering("200 OK", "Content-Type: application/json\r\n", r#"{"choices":[{"message":{"content":"订单服务"}}]}"#);
+        let (base, _) = answering(
+            "200 OK",
+            "Content-Type: application/json\r\n",
+            r#"{"choices":[{"message":{"content":"订单服务"}}]}"#,
+        );
         assert_eq!(read_text(&base, b"picture").unwrap(), "订单服务");
-        let (base, _) = answering("500 Internal Server Error", "", "image input is not supported, no mmproj");
-        assert!(format!("{:#}", read_text(&base, b"picture").unwrap_err()).contains("can't read images"));
+        let (base, _) = answering(
+            "500 Internal Server Error",
+            "",
+            "image input is not supported, no mmproj",
+        );
+        assert!(format!("{:#}", read_text(&base, b"picture").unwrap_err())
+            .contains("can't read images"));
     }
 }

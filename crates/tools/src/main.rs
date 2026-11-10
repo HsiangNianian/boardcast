@@ -14,10 +14,10 @@ mod agent_eval;
 mod check;
 mod export;
 mod fetch;
+mod meetings;
 mod read_pdf;
 mod release;
 mod score;
-mod meetings;
 mod voice_files;
 
 use anyhow::{bail, Context, Result};
@@ -49,7 +49,12 @@ fn pack_glyphs(mut args: impl Iterator<Item = String>) -> Result<()> {
         Some((flag, files)) if flag == "--only-from" => {
             let mut keep = std::collections::HashSet::new();
             for f in files {
-                keep.extend(std::fs::read_to_string(f).with_context(|| format!("reading {f}"))?.chars().filter(|c| *c as u32 >= 0x2E80));
+                keep.extend(
+                    std::fs::read_to_string(f)
+                        .with_context(|| format!("reading {f}"))?
+                        .chars()
+                        .filter(|c| *c as u32 >= 0x2E80),
+                );
             }
             Some(keep)
         }
@@ -64,14 +69,21 @@ fn pack_glyphs(mut args: impl Iterator<Item = String>) -> Result<()> {
 fn download_model(mut args: impl Iterator<Item = String>) -> Result<()> {
     let id = args.next().context("model id")?;
     let dir = PathBuf::from(args.next().context("folder")?);
-    let model = boardcast_models::catalog().into_iter().find(|m| m.id == id).with_context(|| format!("no model {id}"))?;
+    let model = boardcast_models::catalog()
+        .into_iter()
+        .find(|m| m.id == id)
+        .with_context(|| format!("no model {id}"))?;
     let cancel = std::sync::atomic::AtomicBool::new(false);
     let mut last = 0;
     let outcome = boardcast_models::download(&model, &dir, &cancel, &mut |p| {
         let percent = p.done * 100 / p.total.max(1);
         if percent != last {
             last = percent;
-            println!("{percent}% {} MB/s {}", p.speed / 1_000_000, p.source.unwrap_or_default());
+            println!(
+                "{percent}% {} MB/s {}",
+                p.speed / 1_000_000,
+                p.source.unwrap_or_default()
+            );
         }
     })?;
     println!("{outcome:?}");

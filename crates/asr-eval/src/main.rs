@@ -30,7 +30,14 @@ fn main() -> Result<()> {
         return run::compare(&args.map(PathBuf::from).collect::<Vec<_>>());
     }
     let root = PathBuf::from(args.next().context("the boardcast checkout")?);
-    let mut options = run::Options { suite: "quick".into(), engine: "routed".into(), vad: true, enhance: "none".into(), only: None, output: None };
+    let mut options = run::Options {
+        suite: "quick".into(),
+        engine: "routed".into(),
+        vad: true,
+        enhance: "none".into(),
+        only: None,
+        output: None,
+    };
     let mut reuse = false;
     while let Some(flag) = args.next() {
         let mut value = || args.next().with_context(|| format!("{flag} needs a value"));
@@ -54,7 +61,17 @@ fn main() -> Result<()> {
     match command.as_str() {
         "download" => corpus::prepare(&root, &corpus::load(&root, &options.suite)?),
         "run" => run::run(&root, &options),
-        "speakers" => speakers::run(&root, options.only.as_deref(), &options.output.clone().unwrap_or_else(|| root.join("eval/reports/speakers")), reuse),
-        _ => bail!("usage: asr-eval download|run <root> [flags] | asr-eval compare <report.json>..."),
+        "speakers" => speakers::run(
+            &root,
+            options.only.as_deref(),
+            &options
+                .output
+                .clone()
+                .unwrap_or_else(|| root.join("eval/reports/speakers")),
+            reuse,
+        ),
+        _ => {
+            bail!("usage: asr-eval download|run <root> [flags] | asr-eval compare <report.json>...")
+        }
     }
 }

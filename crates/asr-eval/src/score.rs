@@ -9,7 +9,13 @@ fn is_han(c: char) -> bool {
 
 /// The units text is scored in. Punctuation, symbols and spaces never count.
 pub fn tokens(text: &str, language: &str) -> Vec<String> {
-    let clean: String = text.nfkc().collect::<String>().to_lowercase().chars().filter(|c| !matches!(c, '’' | '\'' | '_')).collect();
+    let clean: String = text
+        .nfkc()
+        .collect::<String>()
+        .to_lowercase()
+        .chars()
+        .filter(|c| !matches!(c, '’' | '\'' | '_'))
+        .collect();
     let mut out = vec![];
     match language {
         "en" => {
@@ -44,7 +50,12 @@ pub fn tokens(text: &str, language: &str) -> Vec<String> {
                 out.push(latin);
             }
         }
-        _ => out.extend(clean.chars().filter(|c| c.is_alphanumeric()).map(|c| c.to_string())),
+        _ => out.extend(
+            clean
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .map(|c| c.to_string()),
+        ),
     }
     out
 }
@@ -63,12 +74,20 @@ pub fn error_rate(reference: &str, hypothesis: &str, language: &str) -> ErrorRat
     for (i, w) in want.iter().enumerate() {
         let mut next = vec![i + 1];
         for (j, g) in got.iter().enumerate() {
-            next.push((next[j] + 1).min(previous[j + 1] + 1).min(previous[j] + usize::from(w != g)));
+            next.push(
+                (next[j] + 1)
+                    .min(previous[j + 1] + 1)
+                    .min(previous[j] + usize::from(w != g)),
+            );
         }
         previous = next;
     }
     let errors = previous[got.len()];
-    ErrorRate { errors, units: want.len(), rate: (!want.is_empty()).then(|| errors as f64 / want.len() as f64) }
+    ErrorRate {
+        errors,
+        units: want.len(),
+        rate: (!want.is_empty()).then(|| errors as f64 / want.len() as f64),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
@@ -85,20 +104,33 @@ pub fn keyword_recall(keywords: &[String], hypothesis: &str, language: &str) -> 
         .iter()
         .filter(|word| {
             let want = tokens(word, language);
-            !want.is_empty() && (0..got.len()).any(|i| want.iter().enumerate().all(|(j, t)| got.get(i + j) == Some(t)))
+            !want.is_empty()
+                && (0..got.len()).any(|i| {
+                    want.iter()
+                        .enumerate()
+                        .all(|(j, t)| got.get(i + j) == Some(t))
+                })
         })
         .cloned()
         .collect();
-    Recall { total: keywords.len(), rate: (!keywords.is_empty()).then(|| hits.len() as f64 / keywords.len() as f64), hits }
+    Recall {
+        total: keywords.len(),
+        rate: (!keywords.is_empty()).then(|| hits.len() as f64 / keywords.len() as f64),
+        hits,
+    }
 }
 
 /// Recognition that went wrong whatever the error rate: nothing heard where someone spoke, or words where nobody did.
-pub fn recognition_failures<'a>(samples: impl Iterator<Item = (&'a str, &'a str, &'a str)>) -> Vec<String> {
+pub fn recognition_failures<'a>(
+    samples: impl Iterator<Item = (&'a str, &'a str, &'a str)>,
+) -> Vec<String> {
     samples
-        .filter_map(|(id, scoring, hypothesis)| match (scoring == "silence", hypothesis.trim().is_empty()) {
-            (true, false) => Some(format!("{id}: speech hallucinated on silence")),
-            (false, true) => Some(format!("{id}: no speech recognized")),
-            _ => None,
+        .filter_map(|(id, scoring, hypothesis)| {
+            match (scoring == "silence", hypothesis.trim().is_empty()) {
+                (true, false) => Some(format!("{id}: speech hallucinated on silence")),
+                (false, true) => Some(format!("{id}: no speech recognized")),
+                _ => None,
+            }
         })
         .collect()
 }
@@ -111,31 +143,62 @@ mod tests {
     fn units_follow_each_language() {
         assert_eq!(tokens("ＡＰＩ、更新。", "ja"), ["a", "p", "i", "更", "新"]);
         assert_eq!(tokens("Don't split P_H_D_", "en"), ["dont", "split", "phd"]);
-        assert_eq!(tokens("使用 Python 3。", "zh-en"), ["使", "用", "python", "3"]);
+        assert_eq!(
+            tokens("使用 Python 3。", "zh-en"),
+            ["使", "用", "python", "3"]
+        );
     }
 
     #[test]
     fn error_rates_count_edits_and_leave_an_empty_reference_unscored() {
         assert_eq!(error_rate("我们测试。", "我们测试", "zh").rate, Some(0.0));
-        assert_eq!(error_rate("one two three", "one four three", "en"), ErrorRate { errors: 1, units: 3, rate: Some(1.0 / 3.0) });
+        assert_eq!(
+            error_rate("one two three", "one four three", "en"),
+            ErrorRate {
+                errors: 1,
+                units: 3,
+                rate: Some(1.0 / 3.0)
+            }
+        );
         assert_eq!(error_rate("one two three", "one three", "en").errors, 1);
         assert_eq!(error_rate("one", "one two three", "en").rate, Some(2.0));
-        assert_eq!(error_rate("", "invented words", "en"), ErrorRate { errors: 2, units: 0, rate: None });
+        assert_eq!(
+            error_rate("", "invented words", "en"),
+            ErrorRate {
+                errors: 2,
+                units: 0,
+                rate: None
+            }
+        );
         assert_eq!(error_rate("日本語", "", "ja").rate, Some(1.0));
     }
 
     #[test]
     fn keywords_match_whole_token_runs() {
-        let r = keyword_recall(&["python".into(), "computer languages".into()], "Pythonic computer languages", "zh-en");
+        let r = keyword_recall(
+            &["python".into(), "computer languages".into()],
+            "Pythonic computer languages",
+            "zh-en",
+        );
         assert_eq!(r.hits, ["computer languages"]);
         assert_eq!(r.rate, Some(0.5));
     }
 
     #[test]
     fn one_missing_transcript_fails_even_when_others_are_heard() {
-        let rows = [("ok", "reference", "hello"), ("quiet", "reference", " "), ("silence", "silence", "")];
-        assert_eq!(recognition_failures(rows.into_iter()), ["quiet: no speech recognized"]);
+        let rows = [
+            ("ok", "reference", "hello"),
+            ("quiet", "reference", " "),
+            ("silence", "silence", ""),
+        ];
+        assert_eq!(
+            recognition_failures(rows.into_iter()),
+            ["quiet: no speech recognized"]
+        );
         let rows = [("silence", "silence", "hm")];
-        assert_eq!(recognition_failures(rows.into_iter()), ["silence: speech hallucinated on silence"]);
+        assert_eq!(
+            recognition_failures(rows.into_iter()),
+            ["silence: speech hallucinated on silence"]
+        );
     }
 }

@@ -1,7 +1,9 @@
 //! Pictograms built from solid blocks and lines. Each part flies in from its own offset and settles when it
 //! comes into view; hovering greys them, like pressing a button.
 
-use crate::util::{add_class, data, frame, qa, qa_in, reduced, remove_class, set_style, svg_el, svg_parts};
+use crate::util::{
+    add_class, data, frame, qa, qa_in, reduced, remove_class, set_style, svg_el, svg_parts,
+};
 use web_sys::Element;
 
 pub fn icon(name: &str) -> String {
@@ -59,14 +61,25 @@ pub fn init() {
             let from = data(&p, "from").unwrap_or_else(|| "0,0".into());
             let (x, y) = from.split_once(',').unwrap_or(("0", "0"));
             set_style(&p, "transform-origin", "32px 32px");
-            set_style(&p, "transform", &format!("translate({x}px, {y}px) scale({})", data(&p, "scale").unwrap_or_else(|| "1".into())));
+            set_style(
+                &p,
+                "transform",
+                &format!(
+                    "translate({x}px, {y}px) scale({})",
+                    data(&p, "scale").unwrap_or_else(|| "1".into())
+                ),
+            );
         }
         add_class(&svg, "parked");
         seen.observe(&svg);
     }
     // Small ones inside running text.
     for i in qa("[data-mini]") {
-        let svg = svg_el("svg", &[("class", "pict".into()), ("viewBox", "0 0 64 64".into())], None);
+        let svg = svg_el(
+            "svg",
+            &[("class", "pict".into()), ("viewBox", "0 0 64 64".into())],
+            None,
+        );
         fill(&svg, &data(&i, "mini").unwrap_or_default());
         i.set_text_content(None);
         let _ = i.append_child(&svg);

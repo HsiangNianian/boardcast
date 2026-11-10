@@ -1,7 +1,9 @@
 //! The drawing sheet around the page: rulers on two edges and a title block that follows the section in view.
 //! Also the large clock at the end, which shows the reader's own time.
 
-use crate::util::{append, append_text, clear, data, el, interval, q, qa, set_style, set_text, text, two};
+use crate::util::{
+    append, append_text, clear, data, el, interval, q, qa, set_style, set_text, text, two,
+};
 
 pub fn init() {
     let top = q("#ruler-top");
@@ -13,7 +15,11 @@ pub fn init() {
     let left = q("#ruler-left");
     for i in 0..8 {
         let s = el("span", "", &(i + 1).to_string());
-        set_style(&s, "top", &format!("{}%", (f64::from(i) + 0.5) / 8.0 * 100.0));
+        set_style(
+            &s,
+            "top",
+            &format!("{}%", (f64::from(i) + 0.5) / 8.0 * 100.0),
+        );
         append(&left, &s);
     }
 
@@ -23,7 +29,15 @@ pub fn init() {
     let base = f64::from(14 * 3600 + 2 * 60 + 4);
     interval(1000, move || {
         let s = base + ((js_sys::Date::now() - t0) / 1000.0).floor();
-        set_text(&time, &format!("{}:{}:{}", two(s / 3600.0), two((s / 60.0) % 60.0), two(s % 60.0)));
+        set_text(
+            &time,
+            &format!(
+                "{}:{}:{}",
+                two(s / 3600.0),
+                two((s / 60.0) % 60.0),
+                two(s % 60.0)
+            ),
+        );
     });
 
     let n = q("#tb-n");

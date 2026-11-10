@@ -29,14 +29,24 @@ fn dot(a: &[f64], b: &[f64]) -> f64 {
 fn unit(v: &[f64]) -> Vec<f64> {
     let len = dot(v, v).sqrt();
     let len = if len == 0.0 { 1.0 } else { len };
-    v.iter().map(|x| (x / len * 1e4 + 0.5).floor() / 1e4).collect()
+    v.iter()
+        .map(|x| (x / len * 1e4 + 0.5).floor() / 1e4)
+        .collect()
 }
 
 /// The next unused name: A to Z, then A2, B2 and so on.
 pub fn next_name<'a>(taken: impl IntoIterator<Item = &'a str>) -> String {
     let used: BTreeSet<&str> = taken.into_iter().collect();
     (1..)
-        .flat_map(|round: u32| ('A'..='Z').map(move |c| if round > 1 { format!("{c}{round}") } else { c.to_string() }))
+        .flat_map(|round: u32| {
+            ('A'..='Z').map(move |c| {
+                if round > 1 {
+                    format!("{c}{round}")
+                } else {
+                    c.to_string()
+                }
+            })
+        })
         .find(|name| !used.contains(name.as_str()))
         .expect("names never run out")
 }
@@ -48,7 +58,12 @@ pub fn identify(voices: &mut Vec<Voice>, voiceprint: &[f64], taken: &[&str]) -> 
 }
 
 /// As [`identify`], counting voices this alike as one person, for measuring other thresholds.
-pub fn identify_at(voices: &mut Vec<Voice>, voiceprint: &[f64], taken: &[&str], same: f64) -> String {
+pub fn identify_at(
+    voices: &mut Vec<Voice>,
+    voiceprint: &[f64],
+    taken: &[&str],
+    same: f64,
+) -> String {
     // The first of equals wins, as in the older app.
     let mut closest: Option<(usize, f64)> = None;
     for (i, voice) in voices.iter().enumerate() {
@@ -60,13 +75,27 @@ pub fn identify_at(voices: &mut Vec<Voice>, voiceprint: &[f64], taken: &[&str], 
     if let Some((i, _)) = closest.filter(|(_, score)| *score >= same) {
         let voice = &mut voices[i];
         let weight = f64::from(voice.n.min(MEMORY));
-        let merged: Vec<f64> = voice.centroid.iter().enumerate().map(|(k, x)| x * weight + voiceprint.get(k).copied().unwrap_or(0.0)).collect();
+        let merged: Vec<f64> = voice
+            .centroid
+            .iter()
+            .enumerate()
+            .map(|(k, x)| x * weight + voiceprint.get(k).copied().unwrap_or(0.0))
+            .collect();
         voice.centroid = unit(&merged);
         voice.n += 1;
         return voice.name.clone();
     }
-    let name = next_name(taken.iter().copied().chain(voices.iter().map(|v| v.name.as_str())));
-    voices.push(Voice { name: name.clone(), centroid: unit(voiceprint), n: 1 });
+    let name = next_name(
+        taken
+            .iter()
+            .copied()
+            .chain(voices.iter().map(|v| v.name.as_str())),
+    );
+    voices.push(Voice {
+        name: name.clone(),
+        centroid: unit(voiceprint),
+        n: 1,
+    });
     name
 }
 
@@ -76,13 +105,27 @@ const NEW_VOICE_SECONDS: f64 = 1.5;
 
 /// Who said this sentence, if its voice can tell. `None` means it is too short to name someone new, and
 /// belongs to whoever spoke last.
-pub fn identify_sentence(voices: &mut Vec<Voice>, voiceprint: &[f64], seconds: f64, taken: &[&str]) -> Option<String> {
+pub fn identify_sentence(
+    voices: &mut Vec<Voice>,
+    voiceprint: &[f64],
+    seconds: f64,
+    taken: &[&str],
+) -> Option<String> {
     identify_sentence_at(voices, voiceprint, seconds, taken, SAME, NEW_VOICE_SECONDS)
 }
 
 /// As [`identify_sentence`], with the threshold and the shortest new voice given, for measuring others.
-pub fn identify_sentence_at(voices: &mut Vec<Voice>, voiceprint: &[f64], seconds: f64, taken: &[&str], same: f64, new_voice: f64) -> Option<String> {
-    let known = voices.iter().any(|voice| dot(&voice.centroid, voiceprint) >= same);
+pub fn identify_sentence_at(
+    voices: &mut Vec<Voice>,
+    voiceprint: &[f64],
+    seconds: f64,
+    taken: &[&str],
+    same: f64,
+    new_voice: f64,
+) -> Option<String> {
+    let known = voices
+        .iter()
+        .any(|voice| dot(&voice.centroid, voiceprint) >= same);
     (known || seconds >= new_voice).then(|| identify_at(voices, voiceprint, taken, same))
 }
 
@@ -91,15 +134,28 @@ pub fn rename_voice(voices: &mut Vec<Voice>, from: &str, to: &str) {
     if from == to {
         return;
     }
-    let Some(a) = voices.iter().position(|v| v.name == from) else { return };
+    let Some(a) = voices.iter().position(|v| v.name == from) else {
+        return;
+    };
     let Some(b) = voices.iter().position(|v| v.name == to) else {
         voices[a].name = to.to_string();
         return;
     };
     let (one, other) = (voices[a].clone(), voices[b].clone());
-    let sum: Vec<f64> = other.centroid.iter().enumerate().map(|(k, x)| x * f64::from(other.n) + one.centroid.get(k).copied().unwrap_or(0.0) * f64::from(one.n)).collect();
+    let sum: Vec<f64> = other
+        .centroid
+        .iter()
+        .enumerate()
+        .map(|(k, x)| {
+            x * f64::from(other.n) + one.centroid.get(k).copied().unwrap_or(0.0) * f64::from(one.n)
+        })
+        .collect();
     voices.retain(|v| v.name != from && v.name != to);
-    voices.push(Voice { name: to.to_string(), centroid: unit(&sum), n: one.n + other.n });
+    voices.push(Voice {
+        name: to.to_string(),
+        centroid: unit(&sum),
+        n: one.n + other.n,
+    });
 }
 
 /// The letter shown for a speaker: a Chinese surname (the second character after 小, 老 or 阿), a
@@ -112,9 +168,17 @@ pub fn initial(name: &str) -> String {
     }
     let chars: Vec<char> = name.chars().collect();
     if chars.first().copied().is_some_and(is_han) {
-        return (if chars.len() > 1 && "小老阿".contains(chars[0]) { chars[1] } else { chars[0] }).to_string();
+        return (if chars.len() > 1 && "小老阿".contains(chars[0]) {
+            chars[1]
+        } else {
+            chars[0]
+        })
+        .to_string();
     }
-    chars.iter().find(|c| c.is_alphanumeric()).map_or("?".to_string(), |c| c.to_uppercase().collect())
+    chars
+        .iter()
+        .find(|c| c.is_alphanumeric())
+        .map_or("?".to_string(), |c| c.to_uppercase().collect())
 }
 
 fn is_han(c: char) -> bool {
@@ -133,7 +197,11 @@ fn grams(text: &str) -> BTreeSet<String> {
 /// How many pieces of these names appear in a sentence.
 fn overlap(text: &str, names: &[&str]) -> usize {
     let text = norm(text);
-    names.iter().flat_map(|name| grams(name)).filter(|gram| text.contains(gram.as_str())).count()
+    names
+        .iter()
+        .flat_map(|name| grams(name))
+        .filter(|gram| text.contains(gram.as_str()))
+        .count()
 }
 
 fn speaker_of(line: &Utterance) -> Option<&str> {
@@ -150,7 +218,9 @@ fn who_said<'a>(batch: &'a [Utterance], names: &[&str]) -> Option<&'a str> {
     let mut best = None;
     let mut top = 0;
     for line in batch {
-        let Some(speaker) = speaker_of(line) else { continue };
+        let Some(speaker) = speaker_of(line) else {
+            continue;
+        };
         let score = overlap(&line.text, names);
         if score > top {
             top = score;
@@ -175,8 +245,18 @@ fn is_set(by: Option<&str>) -> bool {
 /// What a model newly inked this turn remembers who raised it. What was there already stays as it was,
 /// even if someone later renamed, marked or moved it.
 pub fn attribute(before: &Graph, after: &mut Graph, batch: &[Utterance]) {
-    let inked: BTreeSet<&str> = before.nodes.iter().filter(|n| n.ink == "ink").map(|n| n.id.as_str()).collect();
-    let inked_edges: BTreeSet<(&str, &str)> = before.edges.iter().filter(|e| e.ink == "ink").map(|e| (e.from.as_str(), e.to.as_str())).collect();
+    let inked: BTreeSet<&str> = before
+        .nodes
+        .iter()
+        .filter(|n| n.ink == "ink")
+        .map(|n| n.id.as_str())
+        .collect();
+    let inked_edges: BTreeSet<(&str, &str)> = before
+        .edges
+        .iter()
+        .filter(|e| e.ink == "ink")
+        .map(|e| (e.from.as_str(), e.to.as_str()))
+        .collect();
     let mut raised = vec![];
     for (i, node) in after.nodes.iter().enumerate() {
         if node.ink == "ink" && !is_set(by_of_node(node)) && !inked.contains(node.id.as_str()) {
@@ -190,12 +270,28 @@ pub fn attribute(before: &Graph, after: &mut Graph, batch: &[Utterance]) {
             after.nodes[i].extra.insert("by".into(), Value::from(by));
         }
     }
-    let label = |id: &str| after.nodes.iter().find(|n| n.id == id).map_or(String::new(), |n| n.label.clone());
+    let label = |id: &str| {
+        after
+            .nodes
+            .iter()
+            .find(|n| n.id == id)
+            .map_or(String::new(), |n| n.label.clone())
+    };
     let mut raised = vec![];
     for (i, edge) in after.edges.iter().enumerate() {
-        if edge.ink == "ink" && !is_set(by_of_edge(edge)) && !inked_edges.contains(&(edge.from.as_str(), edge.to.as_str())) {
+        if edge.ink == "ink"
+            && !is_set(by_of_edge(edge))
+            && !inked_edges.contains(&(edge.from.as_str(), edge.to.as_str()))
+        {
             let (from, to) = (label(&edge.from), label(&edge.to));
-            raised.push((i, who_said(batch, &[&from, &to, edge.label.as_deref().unwrap_or_default()]).map(str::to_string)));
+            raised.push((
+                i,
+                who_said(
+                    batch,
+                    &[&from, &to, edge.label.as_deref().unwrap_or_default()],
+                )
+                .map(str::to_string),
+            ));
         }
     }
     for (i, by) in raised {
@@ -220,7 +316,12 @@ pub fn rename_by(graph: &mut Graph, from: &str, to: &str) {
 pub fn rename_by_in_steps(steps: &mut [Value], from: &str, to: &str) {
     for step in steps {
         for part in ["nodes", "edges"] {
-            let Some(set) = step.pointer_mut(&format!("/d/{part}/set")).and_then(Value::as_array_mut) else { continue };
+            let Some(set) = step
+                .pointer_mut(&format!("/d/{part}/set"))
+                .and_then(Value::as_array_mut)
+            else {
+                continue;
+            };
             for item in set {
                 if item.get("by").and_then(Value::as_str) == Some(from) {
                     item["by"] = Value::from(to);
@@ -232,18 +333,31 @@ pub fn rename_by_in_steps(steps: &mut [Value], from: &str, to: &str) {
 
 /// How many transcript lines there were when this node first appeared in a replay record.
 pub fn first_seen(steps: &[Value], node: &str) -> Option<usize> {
-    let has = |step: &&Value| step.pointer("/d/nodes/set").and_then(Value::as_array).is_some_and(|set| set.iter().any(|n| n["id"] == node));
+    let has = |step: &&Value| {
+        step.pointer("/d/nodes/set")
+            .and_then(Value::as_array)
+            .is_some_and(|set| set.iter().any(|n| n["id"] == node))
+    };
     let step = steps.iter().find(has)?;
     step["line"].as_u64().map(|line| line as usize)
 }
 
 /// Which line of the transcript this came from: what `who` said on this page most like its names,
 /// before `before` lines if that is known. Among equals the latest, which is what put it on the board.
-pub fn said_at(lines: &[Value], who: &str, names: &[&str], page: usize, before: Option<usize>) -> Option<usize> {
+pub fn said_at(
+    lines: &[Value],
+    who: &str,
+    names: &[&str],
+    page: usize,
+    before: Option<usize>,
+) -> Option<usize> {
     let mut best = None;
     let mut top = 0;
     for (i, line) in lines.iter().enumerate().take(before.unwrap_or(lines.len())) {
-        if line["manual"].as_bool().unwrap_or(false) || line["speaker"] != who || line["page"].as_u64().unwrap_or(0) as usize != page {
+        if line["manual"].as_bool().unwrap_or(false)
+            || line["speaker"] != who
+            || line["page"].as_u64().unwrap_or(0) as usize != page
+        {
             continue;
         }
         let score = overlap(line["text"].as_str().unwrap_or_default(), names);
@@ -257,7 +371,16 @@ pub fn said_at(lines: &[Value], who: &str, names: &[&str], page: usize, before: 
 
 /// How many things on this board a speaker raised.
 pub fn raised_by(graph: &Graph, who: &str) -> usize {
-    graph.nodes.iter().filter(|n| by_of_node(n) == Some(who)).count() + graph.edges.iter().filter(|e| by_of_edge(e) == Some(who)).count()
+    graph
+        .nodes
+        .iter()
+        .filter(|n| by_of_node(n) == Some(who))
+        .count()
+        + graph
+            .edges
+            .iter()
+            .filter(|e| by_of_edge(e) == Some(who))
+            .count()
 }
 
 #[cfg(test)]
@@ -288,7 +411,11 @@ mod tests {
                 assert_eq!(voices, wanted, "{}", case["name"]);
             }
             for rename in case["renames"].as_array().unwrap() {
-                rename_voice(&mut voices, rename["from"].as_str().unwrap(), rename["to"].as_str().unwrap());
+                rename_voice(
+                    &mut voices,
+                    rename["from"].as_str().unwrap(),
+                    rename["to"].as_str().unwrap(),
+                );
                 let wanted: Vec<Voice> = serde_json::from_value(rename["voices"].clone()).unwrap();
                 assert_eq!(voices, wanted, "{}", case["name"]);
             }
@@ -300,10 +427,18 @@ mod tests {
         let g = goldens();
         for case in g["names"].as_array().unwrap() {
             let taken = strings(&case["taken"]);
-            assert_eq!(next_name(taken.iter().map(String::as_str)), case["next"].as_str().unwrap());
+            assert_eq!(
+                next_name(taken.iter().map(String::as_str)),
+                case["next"].as_str().unwrap()
+            );
         }
         for case in g["initials"].as_array().unwrap() {
-            assert_eq!(initial(case["name"].as_str().unwrap()), case["initial"].as_str().unwrap(), "{}", case["name"]);
+            assert_eq!(
+                initial(case["name"].as_str().unwrap()),
+                case["initial"].as_str().unwrap(),
+                "{}",
+                case["name"]
+            );
         }
     }
 
@@ -315,9 +450,19 @@ mod tests {
             let mut after: Graph = serde_json::from_value(case["after"].clone()).unwrap();
             let batch: Vec<Utterance> = serde_json::from_value(case["batch"].clone()).unwrap();
             attribute(&before, &mut after, &batch);
-            assert_eq!(serde_json::to_value(&after).unwrap(), case["attributed"], "{}", case["name"]);
+            assert_eq!(
+                serde_json::to_value(&after).unwrap(),
+                case["attributed"],
+                "{}",
+                case["name"]
+            );
             rename_by(&mut after, "A", "甲");
-            assert_eq!(serde_json::to_value(&after).unwrap(), case["renamed"], "{}", case["name"]);
+            assert_eq!(
+                serde_json::to_value(&after).unwrap(),
+                case["renamed"],
+                "{}",
+                case["name"]
+            );
         }
     }
 
@@ -325,13 +470,32 @@ mod tests {
     fn a_line_is_found_as_the_typescript_engine_finds_it() {
         let g = goldens();
         for case in g["sources"].as_array().unwrap() {
-            let (lines, steps) = (case["lines"].as_array().unwrap(), case["steps"].as_array().unwrap());
+            let (lines, steps) = (
+                case["lines"].as_array().unwrap(),
+                case["steps"].as_array().unwrap(),
+            );
             let seen = first_seen(steps, case["node"].as_str().unwrap());
-            assert_eq!(seen, case["seen"].as_u64().map(|n| n as usize), "{}", case["name"]);
+            assert_eq!(
+                seen,
+                case["seen"].as_u64().map(|n| n as usize),
+                "{}",
+                case["name"]
+            );
             let names = strings(&case["names"]);
             let names: Vec<&str> = names.iter().map(String::as_str).collect();
-            let found = said_at(lines, case["who"].as_str().unwrap(), &names, case["page"].as_u64().unwrap() as usize, seen);
-            assert_eq!(found, case["found"].as_u64().map(|n| n as usize), "{}", case["name"]);
+            let found = said_at(
+                lines,
+                case["who"].as_str().unwrap(),
+                &names,
+                case["page"].as_u64().unwrap() as usize,
+                seen,
+            );
+            assert_eq!(
+                found,
+                case["found"].as_u64().map(|n| n as usize),
+                "{}",
+                case["name"]
+            );
         }
     }
 
@@ -341,16 +505,28 @@ mod tests {
         let (one, other) = ([1.0, 0.0], [0.0, 1.0]);
         assert_eq!(identify_sentence(&mut voices, &one, 1.0, &[]), None);
         assert!(voices.is_empty());
-        assert_eq!(identify_sentence(&mut voices, &one, 3.0, &[]).as_deref(), Some("A"));
-        assert_eq!(identify_sentence(&mut voices, &one, 1.0, &[]).as_deref(), Some("A"));
+        assert_eq!(
+            identify_sentence(&mut voices, &one, 3.0, &[]).as_deref(),
+            Some("A")
+        );
+        assert_eq!(
+            identify_sentence(&mut voices, &one, 1.0, &[]).as_deref(),
+            Some("A")
+        );
         assert_eq!(identify_sentence(&mut voices, &other, 1.0, &[]), None);
         assert_eq!(voices.len(), 1);
-        assert_eq!(identify_sentence(&mut voices, &other, 2.0, &[]).as_deref(), Some("B"));
+        assert_eq!(
+            identify_sentence(&mut voices, &other, 2.0, &[]).as_deref(),
+            Some("B")
+        );
     }
 
     #[test]
     fn a_replay_record_takes_the_new_name_too() {
-        let mut steps = vec![json!({ "t": 1, "line": 1, "d": { "nodes": { "set": [{ "id": "n1", "by": "A" }, { "id": "n2", "by": "B" }] }, "edges": { "set": [{ "from": "n1", "to": "n2", "by": "A" }] } } }), json!({ "t": 2, "d": {} })];
+        let mut steps = vec![
+            json!({ "t": 1, "line": 1, "d": { "nodes": { "set": [{ "id": "n1", "by": "A" }, { "id": "n2", "by": "B" }] }, "edges": { "set": [{ "from": "n1", "to": "n2", "by": "A" }] } } }),
+            json!({ "t": 2, "d": {} }),
+        ];
         rename_by_in_steps(&mut steps, "A", "甲");
         assert_eq!(steps[0]["d"]["nodes"]["set"][0]["by"], "甲");
         assert_eq!(steps[0]["d"]["nodes"]["set"][1]["by"], "B");

@@ -1,13 +1,28 @@
 //! The cards of "during the meeting": each one shows, small, what the app really does.
 
-use crate::util::{append, el, hand, interval, lasso_loop, q, qa, reduced, set_attr, set_style, set_text, to_d, toggle, wait};
+use crate::util::{
+    append, el, hand, interval, lasso_loop, q, qa, reduced, set_attr, set_style, set_text, to_d,
+    toggle, wait,
+};
 
 pub fn init() {
     // Circle two things, then link them, over and over.
     let (l1, l2, lk) = (q("#l1"), q("#l2"), q("#lk"));
-    set_attr(&l1, "d", to_d(&lasso_loop(160.0, 60.0, 120.0, 34.0, 5, 1.12)));
-    set_attr(&l2, "d", to_d(&lasso_loop(380.0, 118.0, 64.0, 30.0, 8, 1.12)));
-    set_attr(&lk, "d", to_d(&hand(&[(270.0, 82.0), (330.0, 106.0)], 3.0, 4)));
+    set_attr(
+        &l1,
+        "d",
+        to_d(&lasso_loop(160.0, 60.0, 120.0, 34.0, 5, 1.12)),
+    );
+    set_attr(
+        &l2,
+        "d",
+        to_d(&lasso_loop(380.0, 118.0, 64.0, 30.0, 8, 1.12)),
+    );
+    set_attr(
+        &lk,
+        "d",
+        to_d(&hand(&[(270.0, 82.0), (330.0, 106.0)], 3.0, 4)),
+    );
     if !reduced() {
         wasm_bindgen_futures::spawn_local(async move {
             loop {
@@ -42,7 +57,11 @@ pub fn init() {
     for w in qa(".voice .wave") {
         for i in 0..14 {
             let b = el("i", "", "");
-            set_style(&b, "animation-delay", &format!("{}s", (f64::from(i) * 0.11) % 0.7));
+            set_style(
+                &b,
+                "animation-delay",
+                &format!("{}s", (f64::from(i) * 0.11) % 0.7),
+            );
             append(&w, &b);
         }
     }
@@ -65,7 +84,14 @@ pub fn init() {
         .map(|i| {
             let f = f64::from(i);
             let b = el("i", "", "");
-            set_style(&b, "height", &format!("{}%", 16.0 + ((f * 1.7).sin() * 66.0 + (f * 0.6).cos() * 18.0).abs()));
+            set_style(
+                &b,
+                "height",
+                &format!(
+                    "{}%",
+                    16.0 + ((f * 1.7).sin() * 66.0 + (f * 0.6).cos() * 18.0).abs()
+                ),
+            );
             append(&bars, &b);
             b
         })

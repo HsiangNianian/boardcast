@@ -28,7 +28,8 @@ pub fn start() {
     dots::init();
     // Board words are measured, so they wait for the handwriting font.
     wasm_bindgen_futures::spawn_local(async {
-        let _ = wasm_bindgen_futures::JsFuture::from(util::doc().fonts().load("22px Excalifont")).await;
+        let _ =
+            wasm_bindgen_futures::JsFuture::from(util::doc().fonts().load("22px Excalifont")).await;
         hero::init();
         story::init();
     });

@@ -24,22 +24,101 @@ const PUNCT: &[(char, &[&[Pt]], f32)] = &[
     ('·', &[&[[0.24, 0.47], [0.26, 0.5]]], 0.5),
     ('–', &[&[[0.08, 0.55], [0.65, 0.54]]], 0.75),
     ('，', &[&[[0.22, 0.78], [0.26, 0.84], [0.2, 0.95]]], 0.5),
-    ('。', &[&[[0.22, 0.76], [0.3, 0.74], [0.34, 0.82], [0.27, 0.88], [0.2, 0.83], [0.22, 0.76]]], 0.5),
+    (
+        '。',
+        &[&[
+            [0.22, 0.76],
+            [0.3, 0.74],
+            [0.34, 0.82],
+            [0.27, 0.88],
+            [0.2, 0.83],
+            [0.22, 0.76],
+        ]],
+        0.5,
+    ),
     ('、', &[&[[0.18, 0.74], [0.3, 0.86]]], 0.5),
-    ('：', &[&[[0.25, 0.38], [0.26, 0.42]], &[[0.25, 0.74], [0.26, 0.78]]], 0.5),
-    ('；', &[&[[0.25, 0.38], [0.26, 0.42]], &[[0.27, 0.74], [0.22, 0.92]]], 0.5),
-    ('？', &[&[[0.28, 0.3], [0.4, 0.18], [0.58, 0.2], [0.62, 0.34], [0.45, 0.5], [0.44, 0.64]], &[[0.44, 0.8], [0.45, 0.84]]], 0.8),
-    ('！', &[&[[0.4, 0.18], [0.38, 0.64]], &[[0.38, 0.8], [0.39, 0.84]]], 0.6),
-    ('（', &[&[[0.5, 0.1], [0.32, 0.4], [0.32, 0.7], [0.5, 0.98]]], 0.6),
-    ('）', &[&[[0.2, 0.1], [0.38, 0.4], [0.38, 0.7], [0.2, 0.98]]], 0.6),
+    (
+        '：',
+        &[&[[0.25, 0.38], [0.26, 0.42]], &[[0.25, 0.74], [0.26, 0.78]]],
+        0.5,
+    ),
+    (
+        '；',
+        &[&[[0.25, 0.38], [0.26, 0.42]], &[[0.27, 0.74], [0.22, 0.92]]],
+        0.5,
+    ),
+    (
+        '？',
+        &[
+            &[
+                [0.28, 0.3],
+                [0.4, 0.18],
+                [0.58, 0.2],
+                [0.62, 0.34],
+                [0.45, 0.5],
+                [0.44, 0.64],
+            ],
+            &[[0.44, 0.8], [0.45, 0.84]],
+        ],
+        0.8,
+    ),
+    (
+        '！',
+        &[&[[0.4, 0.18], [0.38, 0.64]], &[[0.38, 0.8], [0.39, 0.84]]],
+        0.6,
+    ),
+    (
+        '（',
+        &[&[[0.5, 0.1], [0.32, 0.4], [0.32, 0.7], [0.5, 0.98]]],
+        0.6,
+    ),
+    (
+        '）',
+        &[&[[0.2, 0.1], [0.38, 0.4], [0.38, 0.7], [0.2, 0.98]]],
+        0.6,
+    ),
     ('「', &[&[[0.5, 0.12], [0.3, 0.12], [0.3, 0.6]]], 0.6),
     ('」', &[&[[0.3, 0.5], [0.3, 0.95], [0.1, 0.95]]], 0.6),
     ('—', &[&[[0.05, 0.55], [0.95, 0.53]]], 1.0),
-    ('→', &[&[[0.05, 0.55], [0.9, 0.55]], &[[0.68, 0.4], [0.92, 0.55], [0.68, 0.7]]], 1.0),
+    (
+        '→',
+        &[
+            &[[0.05, 0.55], [0.9, 0.55]],
+            &[[0.68, 0.4], [0.92, 0.55], [0.68, 0.7]],
+        ],
+        1.0,
+    ),
     ('−', &[&[[0.15, 0.55], [0.75, 0.55]]], 0.9),
-    ('×', &[&[[0.2, 0.35], [0.65, 0.78]], &[[0.65, 0.35], [0.2, 0.78]]], 0.85),
-    ('★', &[&[[0.5, 0.1], [0.62, 0.42], [0.95, 0.42], [0.68, 0.62], [0.78, 0.95], [0.5, 0.74], [0.22, 0.95], [0.32, 0.62], [0.05, 0.42], [0.38, 0.42], [0.5, 0.1]]], 1.0),
-    ('↳', &[&[[0.2, 0.2], [0.2, 0.7], [0.8, 0.7]], &[[0.62, 0.55], [0.82, 0.7], [0.62, 0.85]]], 0.9),
+    (
+        '×',
+        &[&[[0.2, 0.35], [0.65, 0.78]], &[[0.65, 0.35], [0.2, 0.78]]],
+        0.85,
+    ),
+    (
+        '★',
+        &[&[
+            [0.5, 0.1],
+            [0.62, 0.42],
+            [0.95, 0.42],
+            [0.68, 0.62],
+            [0.78, 0.95],
+            [0.5, 0.74],
+            [0.22, 0.95],
+            [0.32, 0.62],
+            [0.05, 0.42],
+            [0.38, 0.42],
+            [0.5, 0.1],
+        ]],
+        1.0,
+    ),
+    (
+        '↳',
+        &[
+            &[[0.2, 0.2], [0.2, 0.7], [0.8, 0.7]],
+            &[[0.62, 0.55], [0.82, 0.7], [0.62, 0.85]],
+        ],
+        0.9,
+    ),
 ];
 
 /// The stroke data for Chinese and Japanese characters.
@@ -69,23 +148,45 @@ pub struct Glyphs {
 impl Glyphs {
     /// Latin and kana data are built in; only the much larger Chinese data comes from `source`.
     pub fn load(source: HanziSource) -> Result<Self> {
-        let table: HashMap<String, Glyph> = serde_json::from_str(include_str!("../../../assets/glyphs/handwritten.json"))?;
+        let table: HashMap<String, Glyph> =
+            serde_json::from_str(include_str!("../../../assets/glyphs/handwritten.json"))?;
         let latin = table
             .into_iter()
             .filter_map(|(k, g)| Some((k.chars().next()?, Arc::new(Glyph { latin: true, ..g }))))
             .collect();
-        let table: HashMap<String, Glyph> = serde_json::from_str(include_str!("../../../assets/glyphs/kana.json"))?;
-        let kana = table.into_iter().filter_map(|(k, g)| Some((k.chars().next()?, Arc::new(g)))).collect();
+        let table: HashMap<String, Glyph> =
+            serde_json::from_str(include_str!("../../../assets/glyphs/kana.json"))?;
+        let kana = table
+            .into_iter()
+            .filter_map(|(k, g)| Some((k.chars().next()?, Arc::new(g))))
+            .collect();
         let punct = PUNCT
             .iter()
-            .map(|(c, strokes, advance)| (*c, Arc::new(Glyph { strokes: strokes.iter().map(|s| s.to_vec()).collect(), advance: *advance, latin: false })))
+            .map(|(c, strokes, advance)| {
+                (
+                    *c,
+                    Arc::new(Glyph {
+                        strokes: strokes.iter().map(|s| s.to_vec()).collect(),
+                        advance: *advance,
+                        latin: false,
+                    }),
+                )
+            })
             .collect();
         let source = match source {
             HanziSource::Pack(path) => Hanzi::Pack(Pack::read(&path)?),
             HanziSource::Directory(path) => Hanzi::Directory(path),
-            HanziSource::PackBytes(bytes) => Hanzi::Pack(Pack::parse(bytes).context("the glyph pack is damaged")?),
+            HanziSource::PackBytes(bytes) => {
+                Hanzi::Pack(Pack::parse(bytes).context("the glyph pack is damaged")?)
+            }
         };
-        Ok(Self { latin, punct, kana, source, hanzi: HashMap::new() })
+        Ok(Self {
+            latin,
+            punct,
+            kana,
+            source,
+            hanzi: HashMap::new(),
+        })
     }
 
     /// A boardcast checkout with `assets/hanzi` generated.
@@ -123,9 +224,17 @@ impl Glyphs {
 fn glyph_from(medians: Vec<Vec<[f32; 2]>>) -> Glyph {
     let strokes = medians
         .into_iter()
-        .map(|s| s.into_iter().map(|p| [p[0] / 1024.0, (900.0 - p[1]) / 1024.0]).collect())
+        .map(|s| {
+            s.into_iter()
+                .map(|p| [p[0] / 1024.0, (900.0 - p[1]) / 1024.0])
+                .collect()
+        })
         .collect();
-    Glyph { strokes, advance: 1.0, latin: false }
+    Glyph {
+        strokes,
+        advance: 1.0,
+        latin: false,
+    }
 }
 
 fn read_medians(dir: &Path, ch: char) -> Option<Vec<Vec<[f32; 2]>>> {
@@ -153,12 +262,26 @@ impl Pack {
         let count = u32::from_le_bytes(header[8..12].try_into()?) as usize;
         let table_end = 12 + count * 8;
         let table = bytes.get(12..table_end).context("index cut short")?;
-        let index = table.chunks_exact(8).map(|e| (u32::from_le_bytes([e[0], e[1], e[2], e[3]]), u32::from_le_bytes([e[4], e[5], e[6], e[7]]))).collect();
-        Ok(Self { index, data: bytes[table_end..].to_vec() })
+        let index = table
+            .chunks_exact(8)
+            .map(|e| {
+                (
+                    u32::from_le_bytes([e[0], e[1], e[2], e[3]]),
+                    u32::from_le_bytes([e[4], e[5], e[6], e[7]]),
+                )
+            })
+            .collect();
+        Ok(Self {
+            index,
+            data: bytes[table_end..].to_vec(),
+        })
     }
 
     fn get(&self, ch: char) -> Option<Vec<Vec<[f32; 2]>>> {
-        let at = self.index.binary_search_by_key(&(ch as u32), |e| e.0).ok()?;
+        let at = self
+            .index
+            .binary_search_by_key(&(ch as u32), |e| e.0)
+            .ok()?;
         let mut cursor = self.data.get(self.index[at].1 as usize..)?;
         let take_u16 = |c: &mut &[u8]| -> Option<u16> {
             let (head, rest) = c.split_first_chunk::<2>()?;
@@ -173,7 +296,10 @@ impl Pack {
             for _ in 0..points {
                 let (head, rest) = cursor.split_first_chunk::<8>()?;
                 cursor = rest;
-                stroke.push([f32::from_le_bytes([head[0], head[1], head[2], head[3]]), f32::from_le_bytes([head[4], head[5], head[6], head[7]])]);
+                stroke.push([
+                    f32::from_le_bytes([head[0], head[1], head[2], head[3]]),
+                    f32::from_le_bytes([head[4], head[5], head[6], head[7]]),
+                ]);
             }
             out.push(stroke);
         }
@@ -187,20 +313,30 @@ pub fn write_pack(dir: &Path, out: &Path) -> Result<usize> {
 }
 
 /// As [`write_pack`], keeping only the characters in `only` when given.
-pub fn write_pack_of(dir: &Path, out: &Path, only: Option<&std::collections::HashSet<char>>) -> Result<usize> {
+pub fn write_pack_of(
+    dir: &Path,
+    out: &Path,
+    only: Option<&std::collections::HashSet<char>>,
+) -> Result<usize> {
     let mut entries: Vec<(u32, Vec<Vec<[f32; 2]>>)> = vec![];
     for file in std::fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
         let path = file?.path();
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default();
         let mut chars = stem.chars();
-        let (Some(ch), None) = (chars.next(), chars.next()) else { continue };
+        let (Some(ch), None) = (chars.next(), chars.next()) else {
+            continue;
+        };
         if only.is_some_and(|keep| !keep.contains(&ch)) {
             continue;
         }
-        let medians: Vec<Vec<[f32; 2]>> = serde_json::from_slice(&std::fs::read(&path)?).with_context(|| format!("parsing {}", path.display()))?;
+        let medians: Vec<Vec<[f32; 2]>> = serde_json::from_slice(&std::fs::read(&path)?)
+            .with_context(|| format!("parsing {}", path.display()))?;
         entries.push((ch as u32, medians));
     }
     entries.sort_by_key(|e| e.0);

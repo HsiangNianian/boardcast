@@ -9,7 +9,10 @@ use std::path::Path;
 use std::time::Instant;
 
 fn rss_mb() -> u64 {
-    std::fs::read_to_string("/proc/self/statm").ok().and_then(|s| s.split_whitespace().nth(1)?.parse::<u64>().ok()).map_or(0, |pages| pages * 4096 / 1_000_000)
+    std::fs::read_to_string("/proc/self/statm")
+        .ok()
+        .and_then(|s| s.split_whitespace().nth(1)?.parse::<u64>().ok())
+        .map_or(0, |pages| pages * 4096 / 1_000_000)
 }
 
 fn percentile(sorted: &[f64], p: f64) -> f64 {
@@ -19,7 +22,13 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 fn report(name: &str, mut ms: Vec<f64>, audio_s: f64) {
     ms.sort_by(f64::total_cmp);
     let total: f64 = ms.iter().sum();
-    println!("{name:<22} p50 {:>6.0} ms   p95 {:>6.0} ms   max {:>6.0} ms   real-time factor {:.3}", percentile(&ms, 0.5), percentile(&ms, 0.95), ms[ms.len() - 1], total / 1000.0 / audio_s);
+    println!(
+        "{name:<22} p50 {:>6.0} ms   p95 {:>6.0} ms   max {:>6.0} ms   real-time factor {:.3}",
+        percentile(&ms, 0.5),
+        percentile(&ms, 0.95),
+        ms[ms.len() - 1],
+        total / 1000.0 / audio_s
+    );
 }
 
 fn main() -> anyhow::Result<()> {
@@ -32,13 +41,29 @@ fn main() -> anyhow::Result<()> {
     let sense_load = t.elapsed();
     let with_sense = rss_mb();
     let t = Instant::now();
-    let parakeet = load_parakeet(&models.join("parakeet-en")).ok_or_else(|| anyhow::anyhow!("no Parakeet"))?;
+    let parakeet =
+        load_parakeet(&models.join("parakeet-en")).ok_or_else(|| anyhow::anyhow!("no Parakeet"))?;
     let parakeet_load = t.elapsed();
     let with_both = rss_mb();
-    println!("loading: SenseVoice {:.1} s, +{} MB; Parakeet {:.1} s, +{} MB (resident {} MB)", sense_load.as_secs_f64(), with_sense - before, parakeet_load.as_secs_f64(), with_both - with_sense, with_both);
+    println!(
+        "loading: SenseVoice {:.1} s, +{} MB; Parakeet {:.1} s, +{} MB (resident {} MB)",
+        sense_load.as_secs_f64(),
+        with_sense - before,
+        parakeet_load.as_secs_f64(),
+        with_both - with_sense,
+        with_both
+    );
 
     let cases: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(cases)?)?;
-    let waves: Vec<(String, Vec<f32>)> = cases.iter().filter_map(|c| Some((c["language"].as_str()?.to_string(), Wave::read(c["wav"].as_str()?)?.samples().to_vec()))).collect();
+    let waves: Vec<(String, Vec<f32>)> = cases
+        .iter()
+        .filter_map(|c| {
+            Some((
+                c["language"].as_str()?.to_string(),
+                Wave::read(c["wav"].as_str()?)?.samples().to_vec(),
+            ))
+        })
+        .collect();
     let (_, first) = &waves[0];
     transcribe(&sense, first);
     transcribe(&parakeet, first);
@@ -69,22 +94,38 @@ fn main() -> anyhow::Result<()> {
             let _ = language;
         }
     }
-    println!("{} recordings x {rounds} rounds, {:.0} s of audio, {:.0} s of it routed to Parakeet", waves.len(), audio_s, english_audio_s);
+    println!(
+        "{} recordings x {rounds} rounds, {:.0} s of audio, {:.0} s of it routed to Parakeet",
+        waves.len(),
+        audio_s,
+        english_audio_s
+    );
     report("SenseVoice, each", s_ms, audio_s);
     report("Parakeet, English only", p_ms, english_audio_s);
     report("routed, each", routed_ms, audio_s);
     decide_ns.sort_by(f64::total_cmp);
-    println!("routing decision       p50 {:.0} ns   max {:.0} ns", percentile(&decide_ns, 0.5), decide_ns[decide_ns.len() - 1]);
+    println!(
+        "routing decision       p50 {:.0} ns   max {:.0} ns",
+        percentile(&decide_ns, 0.5),
+        decide_ns[decide_ns.len() - 1]
+    );
 
     // The decision alone, on many calls, to show it costs nothing next to recognition.
-    let samples = ["小程序把请求发给后端的异步 API，拿到一个 task ID。", "If the token has expired, we refresh it and retry once.", "Account 下面有 User API 和 Consumer API。"];
+    let samples = [
+        "小程序把请求发给后端的异步 API，拿到一个 task ID。",
+        "If the token has expired, we refresh it and retry once.",
+        "Account 下面有 User API 和 Consumer API。",
+    ];
     let n = 1_000_000;
     let t = Instant::now();
     let mut english = 0;
     for i in 0..n {
         english += usize::from(is_english(std::hint::black_box(samples[i % 3])));
     }
-    println!("routing decision, {n} calls: {:.0} ns each ({english} English)", t.elapsed().as_nanos() as f64 / f64::from(n as u32));
+    println!(
+        "routing decision, {n} calls: {:.0} ns each ({english} English)",
+        t.elapsed().as_nanos() as f64 / f64::from(n as u32)
+    );
     println!("resident after all: {} MB", rss_mb());
     Ok(())
 }

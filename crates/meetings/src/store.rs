@@ -3,9 +3,9 @@
 //! older app does. Writes are atomic and locked, and refuse to overwrite a change made elsewhere.
 
 use anyhow::{anyhow, bail, Context, Result};
-use serde_json::{json, Map, Value};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
+use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -20,20 +20,31 @@ pub fn default_dir() -> Result<PathBuf> {
         return Ok(PathBuf::from(dir));
     }
     #[cfg(target_os = "macos")]
-    return Ok(PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join("Library/Application Support/games.mmstudio.boardcast"));
+    return Ok(
+        PathBuf::from(std::env::var("HOME").context("HOME is not set")?)
+            .join("Library/Application Support/games.mmstudio.boardcast"),
+    );
     #[cfg(windows)]
-    return Ok(PathBuf::from(std::env::var("APPDATA").context("APPDATA is not set")?).join("games.mmstudio.boardcast"));
+    return Ok(
+        PathBuf::from(std::env::var("APPDATA").context("APPDATA is not set")?)
+            .join("games.mmstudio.boardcast"),
+    );
     #[cfg(not(any(target_os = "macos", windows)))]
     if let Ok(dir) = std::env::var("XDG_DATA_HOME") {
         return Ok(PathBuf::from(dir).join("games.mmstudio.boardcast"));
     }
     #[cfg(not(any(target_os = "macos", windows)))]
-    Ok(PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join(".local/share/games.mmstudio.boardcast"))
+    Ok(
+        PathBuf::from(std::env::var("HOME").context("HOME is not set")?)
+            .join(".local/share/games.mmstudio.boardcast"),
+    )
 }
 
 /// Time plus a little randomness, using only characters that are safe in a file name.
 pub fn new_id() -> String {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     let seconds = now.as_secs() as i64;
     let (days, rest) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
     // Civil date from a day count (Howard Hinnant's algorithm), in UTC.
@@ -53,11 +64,17 @@ pub fn new_id() -> String {
             char::from_digit((seed >> 16) % 36, 36).unwrap_or('0')
         })
         .collect();
-    format!("{year:04}{month:02}{day:02}-{:02}{:02}{:02}-{tail}", rest / 3600, rest % 3600 / 60, rest % 60)
+    format!(
+        "{year:04}{month:02}{day:02}-{:02}{:02}{:02}-{tail}",
+        rest / 3600,
+        rest % 3600 / 60,
+        rest % 60
+    )
 }
 
 fn valid(id: &str) -> Result<()> {
-    if !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+    if !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
         Ok(())
     } else {
         Err(anyhow!("invalid meeting id: {id}"))
@@ -80,10 +97,18 @@ pub struct Info {
 fn info(v: &Value) -> Option<Info> {
     Some(Info {
         id: v.get("id")?.as_str()?.to_string(),
-        title: v.get("title").and_then(Value::as_str).unwrap_or("Untitled meeting").to_string(),
+        title: v
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("Untitled meeting")
+            .to_string(),
         created_at: v.get("createdAt").and_then(Value::as_f64).unwrap_or(0.0),
         updated_at: v.get("updatedAt").and_then(Value::as_f64).unwrap_or(0.0),
-        lines: v["lines"].as_array().map_or(0, |ls| ls.iter().filter(|l| !l["manual"].as_bool().unwrap_or(false)).count()),
+        lines: v["lines"].as_array().map_or(0, |ls| {
+            ls.iter()
+                .filter(|l| !l["manual"].as_bool().unwrap_or(false))
+                .count()
+        }),
         pages: v["pages"].as_array().map_or(1, |p| p.len().max(1)),
         read_error: None,
     })
@@ -95,7 +120,9 @@ pub enum Origin {
     /// Not saved yet.
     New,
     /// A v1 file, with the hash of its text as `JSON.stringify` would produce it.
-    Legacy { source_hash: String },
+    Legacy {
+        source_hash: String,
+    },
     Current,
 }
 
@@ -132,23 +159,38 @@ fn mime_of(key: &str) -> Option<&'static str> {
 }
 
 fn valid_asset(key: &str) -> bool {
-    key.split_once('.').is_some_and(|(hash, _)| (16..=64).contains(&hash.len()) && hash.bytes().all(|b| b.is_ascii_hexdigit())) && mime_of(key).is_some()
+    key.split_once('.').is_some_and(|(hash, _)| {
+        (16..=64).contains(&hash.len()) && hash.bytes().all(|b| b.is_ascii_hexdigit())
+    }) && mime_of(key).is_some()
 }
 
 fn sha256_hex(text: &str) -> String {
-    Sha256::digest(text.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(text.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// As the older app names them: part of the hash of the whole data URL, not of the bytes.
 fn asset_key(mime: &str, bytes: &[u8]) -> Option<String> {
-    let extension = ["jpg", "png", "webp", "gif", "svg"].into_iter().find(|e| mime_of(&format!("x.{e}")) == Some(mime))?;
-    let url = PageImage { mime: mime.to_string(), bytes: bytes.to_vec() }.data_url();
+    let extension = ["jpg", "png", "webp", "gif", "svg"]
+        .into_iter()
+        .find(|e| mime_of(&format!("x.{e}")) == Some(mime))?;
+    let url = PageImage {
+        mime: mime.to_string(),
+        bytes: bytes.to_vec(),
+    }
+    .data_url();
     Some(format!("{}.{extension}", &sha256_hex(&url)[..32]))
 }
 
 fn check_asset(key: &str, bytes: &[u8]) -> Result<()> {
     let (hash, _) = key.split_once('.').context("no image type")?;
-    let url = PageImage { mime: mime_of(key).context("unknown image type")?.to_string(), bytes: bytes.to_vec() }.data_url();
+    let url = PageImage {
+        mime: mime_of(key).context("unknown image type")?.to_string(),
+        bytes: bytes.to_vec(),
+    }
+    .data_url();
     if !sha256_hex(&url).starts_with(&hash.to_ascii_lowercase()) {
         bail!("Image {key} does not match its name, so it may be damaged.");
     }
@@ -170,7 +212,9 @@ fn asset_keys(value: &Value, out: &mut Vec<String>) {
         Value::Object(fields) => {
             for (name, v) in fields {
                 match v.as_str().and_then(|s| s.strip_prefix(ASSET)) {
-                    Some(key) if ["underlay", "dataURL", "url"].contains(&name.as_str()) => out.push(key.to_string()),
+                    Some(key) if ["underlay", "dataURL", "url"].contains(&name.as_str()) => {
+                        out.push(key.to_string())
+                    }
                     _ => asset_keys(v, out),
                 }
             }
@@ -181,8 +225,14 @@ fn asset_keys(value: &Value, out: &mut Vec<String>) {
 
 /// An image carried inside a meeting rather than kept beside it.
 pub fn decode_data_url(url: &str) -> Result<PageImage> {
-    let (head, data) = url.strip_prefix("data:").and_then(|u| u.split_once(";base64,")).context("not an image")?;
-    Ok(PageImage { mime: head.to_string(), bytes: BASE64.decode(data).context("the image data is damaged")? })
+    let (head, data) = url
+        .strip_prefix("data:")
+        .and_then(|u| u.split_once(";base64,"))
+        .context("not an image")?;
+    Ok(PageImage {
+        mime: head.to_string(),
+        bytes: BASE64.decode(data).context("the image data is damaged")?,
+    })
 }
 
 #[derive(Clone, Debug)]
@@ -206,7 +256,10 @@ impl Store {
     /// The older app hashes `JSON.stringify(parsed)`, which for its own files is exactly their text.
     /// Hashing the text avoids any disagreement over how a number is written.
     pub fn source_hash(text: &str) -> String {
-        Sha256::digest(text.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+        Sha256::digest(text.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
     }
 
     fn deleted(dir: &Path, id: &str) -> bool {
@@ -224,22 +277,36 @@ impl Store {
             if path.extension().and_then(|x| x.to_str()) != Some("json") {
                 continue;
             }
-            let id = path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+            let id = path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
             if Self::deleted(dir, &id) || out.iter().any(|m| m.id == id) {
                 continue;
             }
             let read = fs::read_to_string(&path)
                 .map_err(|e| e.to_string())
                 .and_then(|text| serde_json::from_str::<Value>(&text).map_err(|e| e.to_string()))
-                .and_then(|v| info(&v).filter(|m| m.id == id).ok_or_else(|| "no matching meeting id".to_string()));
-            out.push(read.unwrap_or_else(|error| Info {
-                id: id.clone(),
-                title: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
-                created_at: 0.0,
-                updated_at: 0.0,
-                lines: 0,
-                pages: 0,
-                read_error: Some(error),
+                .and_then(|v| {
+                    info(&v)
+                        .filter(|m| m.id == id)
+                        .ok_or_else(|| "no matching meeting id".to_string())
+                });
+            out.push(read.unwrap_or_else(|error| {
+                Info {
+                    id: id.clone(),
+                    title: path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned(),
+                    created_at: 0.0,
+                    updated_at: 0.0,
+                    lines: 0,
+                    pages: 0,
+                    read_error: Some(error),
+                }
             }));
         }
         Ok(())
@@ -253,7 +320,11 @@ impl Store {
         let current = self.current_dir();
         let mut older = vec![];
         Self::scan(&self.legacy_dir(), &mut older)?;
-        out.extend(older.into_iter().filter(|m| !tombstoned.contains(&m.id) && !Self::deleted(&current, &m.id)));
+        out.extend(
+            older
+                .into_iter()
+                .filter(|m| !tombstoned.contains(&m.id) && !Self::deleted(&current, &m.id)),
+        );
         out.sort_by(|a, b| b.updated_at.total_cmp(&a.updated_at));
         Ok(out)
     }
@@ -266,33 +337,59 @@ impl Store {
         }
         let path = current.join(format!("{id}.json"));
         if path.is_file() {
-            let text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-            let value: Value = serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
+            let text =
+                fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+            let value: Value = serde_json::from_str(&text)
+                .with_context(|| format!("parsing {}", path.display()))?;
             let revision = value["storageRevision"].as_u64().unwrap_or(0);
-            let Value::Object(raw) = value else { bail!("{} is not a meeting", path.display()) };
-            return Ok(Some(Loaded { raw, origin: Origin::Current, revision }));
+            let Value::Object(raw) = value else {
+                bail!("{} is not a meeting", path.display())
+            };
+            return Ok(Some(Loaded {
+                raw,
+                origin: Origin::Current,
+                revision,
+            }));
         }
         let legacy = self.legacy_dir();
         let path = legacy.join(format!("{id}.json"));
         if !path.is_file() || Self::deleted(&legacy, id) {
             return Ok(None);
         }
-        let text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
-        let value: Value = serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
+        let text =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+        let value: Value =
+            serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
         let source_hash = Self::source_hash(&text);
-        let Value::Object(raw) = value else { bail!("{} is not a meeting", path.display()) };
-        Ok(Some(Loaded { raw, origin: Origin::Legacy { source_hash }, revision: 0 }))
+        let Value::Object(raw) = value else {
+            bail!("{} is not a meeting", path.display())
+        };
+        Ok(Some(Loaded {
+            raw,
+            origin: Origin::Legacy { source_hash },
+            revision: 0,
+        }))
     }
 
     fn lock(dir: &Path, id: &str) -> Result<File> {
-        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(format!("{id}.lock")))?;
+        let lock = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(dir.join(format!("{id}.lock")))?;
         lock.lock()?;
         Ok(lock)
     }
 
     /// Write a meeting and return its new revision. `expected` is the revision it was based on; a
     /// different one on disk means another window saved first, and nothing is written.
-    pub fn save(&self, id: &str, mut meeting: Map<String, Value>, origin: &Origin, expected: u64) -> Result<u64> {
+    pub fn save(
+        &self,
+        id: &str,
+        mut meeting: Map<String, Value>,
+        origin: &Origin,
+        expected: u64,
+    ) -> Result<u64> {
         valid(id)?;
         let dir = self.current_dir();
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
@@ -302,12 +399,22 @@ impl Store {
             bail!("This meeting has been deleted. Your current edits are still here.");
         }
         let path = dir.join(format!("{id}.json"));
-        let existing: Option<Value> = fs::read_to_string(&path).ok().and_then(|text| serde_json::from_str(&text).ok());
-        let on_disk = existing.as_ref().and_then(|v| v["storageRevision"].as_u64()).unwrap_or(0);
+        let existing: Option<Value> = fs::read_to_string(&path)
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok());
+        let on_disk = existing
+            .as_ref()
+            .and_then(|v| v["storageRevision"].as_u64())
+            .unwrap_or(0);
         if on_disk != expected {
             bail!("This meeting changed in another window. Reopen it before saving; current edits are preserved.");
         }
-        if existing.as_ref().and_then(|v| v["version"].as_u64()).unwrap_or(1) > MEETING_VERSION {
+        if existing
+            .as_ref()
+            .and_then(|v| v["version"].as_u64())
+            .unwrap_or(1)
+            > MEETING_VERSION
+        {
             bail!("Cannot overwrite a newer meeting format");
         }
         if let Origin::Legacy { source_hash } = origin {
@@ -325,7 +432,9 @@ impl Store {
             for key in keys {
                 self.bring_over(id, &key)?;
             }
-            meeting.entry("migration").or_insert_with(|| json!({ "sourceHash": source_hash }));
+            meeting
+                .entry("migration")
+                .or_insert_with(|| json!({ "sourceHash": source_hash }));
         }
         let revision = expected + 1;
         meeting.insert("version".into(), json!(MEETING_VERSION));
@@ -359,16 +468,24 @@ impl Store {
             return Ok(());
         }
         // One already lost stays referred to, so saving cannot erase what could still be recovered.
-        let Ok(bytes) = fs::read(self.asset_path(&self.legacy_dir(), id, key)?) else { return Ok(()) };
+        let Ok(bytes) = fs::read(self.asset_path(&self.legacy_dir(), id, key)?) else {
+            return Ok(());
+        };
         check_asset(key, &bytes)?;
         write_asset(&target, &bytes)
     }
 
     /// An imported page's image, from a meeting's reference to it, checked against its name.
     pub fn page_image(&self, id: &str, reference: &str) -> Result<PageImage> {
-        let Some(key) = reference.strip_prefix(ASSET) else { return decode_data_url(reference) };
+        let Some(key) = reference.strip_prefix(ASSET) else {
+            return decode_data_url(reference);
+        };
         let current = self.asset_path(&self.current_dir(), id, key)?;
-        let path = if current.is_file() { current } else { self.asset_path(&self.legacy_dir(), id, key)? };
+        let path = if current.is_file() {
+            current
+        } else {
+            self.asset_path(&self.legacy_dir(), id, key)?
+        };
         let bytes = fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
         check_asset(key, &bytes)?;
         let mime = mime_of(key).context("unknown image type")?.to_string();
@@ -377,7 +494,8 @@ impl Store {
 
     /// Keep an image for a meeting, and return how the meeting refers to it.
     pub fn put_image(&self, id: &str, mime: &str, bytes: &[u8]) -> Result<String> {
-        let key = asset_key(mime, bytes).with_context(|| format!("unsupported image type {mime}"))?;
+        let key =
+            asset_key(mime, bytes).with_context(|| format!("unsupported image type {mime}"))?;
         let dir = self.current_dir();
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
         let _lock = Self::lock(&dir, id)?;
@@ -393,7 +511,10 @@ impl Store {
 
     /// The meeting to reopen at startup.
     pub fn last_opened(&self) -> Option<String> {
-        fs::read_to_string(self.root.join("gpui-last-meeting")).ok().map(|s| s.trim().to_string()).filter(|s| valid(s).is_ok())
+        fs::read_to_string(self.root.join("gpui-last-meeting"))
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| valid(s).is_ok())
     }
 
     pub fn remember_opened(&self, id: &str) -> Result<()> {
@@ -408,7 +529,8 @@ mod image_tests {
     use super::*;
 
     fn temporary(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("boardcast-images-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("boardcast-images-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -417,7 +539,10 @@ mod image_tests {
     #[test]
     fn a_name_matches_the_older_apps() {
         // sha-256 of `data:image/png;base64,AQID`, cut as the older app cuts it.
-        assert_eq!(asset_key("image/png", &[1, 2, 3]).unwrap(), format!("{}.png", &sha256_hex("data:image/png;base64,AQID")[..32]));
+        assert_eq!(
+            asset_key("image/png", &[1, 2, 3]).unwrap(),
+            format!("{}.png", &sha256_hex("data:image/png;base64,AQID")[..32])
+        );
         assert_eq!(asset_key("text/plain", &[1]), None);
     }
 
@@ -427,11 +552,17 @@ mod image_tests {
         let store = Store::new(dir.clone());
         let reference = store.put_image("m1", "image/jpeg", b"bytes").unwrap();
         let image = store.page_image("m1", &reference).unwrap();
-        assert_eq!((image.mime.as_str(), image.bytes.as_slice()), ("image/jpeg", &b"bytes"[..]));
+        assert_eq!(
+            (image.mime.as_str(), image.bytes.as_slice()),
+            ("image/jpeg", &b"bytes"[..])
+        );
         let key = reference.strip_prefix(ASSET).unwrap();
         fs::write(store.current_dir().join("m1").join(key), b"changed").unwrap();
         assert!(store.page_image("m1", &reference).is_err());
-        assert!(store.page_image("m1", "asset:../../secret.jpg").is_err(), "names cannot leave the folder");
+        assert!(
+            store.page_image("m1", "asset:../../secret.jpg").is_err(),
+            "names cannot leave the folder"
+        );
         assert!(store.page_image("../x", &reference).is_err());
         fs::remove_dir_all(dir).unwrap();
     }
@@ -439,7 +570,10 @@ mod image_tests {
     #[test]
     fn an_image_in_a_meeting_is_read_directly() {
         let image = decode_data_url("data:image/png;base64,AQID").unwrap();
-        assert_eq!((image.mime.as_str(), image.bytes.as_slice()), ("image/png", &[1u8, 2, 3][..]));
+        assert_eq!(
+            (image.mime.as_str(), image.bytes.as_slice()),
+            ("image/png", &[1u8, 2, 3][..])
+        );
         assert_eq!(image.data_url(), "data:image/png;base64,AQID");
         assert!(decode_data_url("https://example.com/a.png").is_err());
     }
@@ -456,9 +590,18 @@ mod image_tests {
         let text = json!({ "id": "m2", "title": "asset:not-an-image", "pages": [{ "underlay": reference }, { "underlay": "asset:0123456789abcdef0123456789abcdef.jpg" }] }).to_string();
         fs::write(store.legacy_dir().join("m2.json"), &text).unwrap();
         let loaded = store.load("m2").unwrap().unwrap();
-        store.save("m2", loaded.raw, &loaded.origin, loaded.revision).unwrap();
-        assert_eq!(fs::read(store.current_dir().join("m2").join(&key)).unwrap(), b"page");
-        assert_eq!(fs::read(folder.join(&key)).unwrap(), b"page", "the original stays");
+        store
+            .save("m2", loaded.raw, &loaded.origin, loaded.revision)
+            .unwrap();
+        assert_eq!(
+            fs::read(store.current_dir().join("m2").join(&key)).unwrap(),
+            b"page"
+        );
+        assert_eq!(
+            fs::read(folder.join(&key)).unwrap(),
+            b"page",
+            "the original stays"
+        );
         assert_eq!(store.page_image("m2", &reference).unwrap().bytes, b"page");
         fs::remove_dir_all(dir).unwrap();
     }
@@ -475,7 +618,11 @@ mod tests {
 
     impl Dir {
         fn new() -> Self {
-            let path = std::env::temp_dir().join(format!("boardcast-store-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            let path = std::env::temp_dir().join(format!(
+                "boardcast-store-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
             fs::create_dir_all(&path).unwrap();
             Self(path)
         }
@@ -488,7 +635,10 @@ mod tests {
     }
 
     fn meeting(id: &str) -> Map<String, Value> {
-        let Value::Object(m) = json!({ "id": id, "title": "会", "createdAt": 1, "updatedAt": 2, "lines": [], "future": { "kept": true } }) else { unreachable!() };
+        let Value::Object(m) = json!({ "id": id, "title": "会", "createdAt": 1, "updatedAt": 2, "lines": [], "future": { "kept": true } })
+        else {
+            unreachable!()
+        };
         m
     }
 
@@ -496,13 +646,19 @@ mod tests {
     fn saving_and_loading_keeps_unknown_fields_and_counts_revisions() {
         let dir = Dir::new();
         let store = Store::new(dir.0.clone());
-        assert_eq!(store.save("a-1", meeting("a-1"), &Origin::New, 0).unwrap(), 1);
+        assert_eq!(
+            store.save("a-1", meeting("a-1"), &Origin::New, 0).unwrap(),
+            1
+        );
         let loaded = store.load("a-1").unwrap().unwrap();
         assert_eq!(loaded.origin, Origin::Current);
         assert_eq!(loaded.revision, 1);
         assert_eq!(loaded.raw["future"]["kept"], true);
         assert_eq!(loaded.raw["version"], 2);
-        assert_eq!(store.save("a-1", loaded.raw, &Origin::Current, 1).unwrap(), 2);
+        assert_eq!(
+            store.save("a-1", loaded.raw, &Origin::Current, 1).unwrap(),
+            2
+        );
     }
 
     #[test]
@@ -513,7 +669,9 @@ mod tests {
         let mut newer = meeting("a-1");
         newer.insert("title".into(), json!("新"));
         store.save("a-1", newer, &Origin::Current, 1).unwrap();
-        let error = store.save("a-1", meeting("a-1"), &Origin::Current, 1).unwrap_err();
+        let error = store
+            .save("a-1", meeting("a-1"), &Origin::Current, 1)
+            .unwrap_err();
         assert!(error.to_string().contains("another window"), "{error}");
         assert_eq!(store.load("a-1").unwrap().unwrap().raw["title"], "新");
     }
@@ -523,8 +681,14 @@ mod tests {
         let dir = Dir::new();
         let store = Store::new(dir.0.clone());
         fs::create_dir_all(store.current_dir()).unwrap();
-        fs::write(store.current_dir().join("a-1.json"), r#"{"id":"a-1","version":3,"storageRevision":4}"#).unwrap();
-        assert!(store.save("a-1", meeting("a-1"), &Origin::Current, 4).is_err());
+        fs::write(
+            store.current_dir().join("a-1.json"),
+            r#"{"id":"a-1","version":3,"storageRevision":4}"#,
+        )
+        .unwrap();
+        assert!(store
+            .save("a-1", meeting("a-1"), &Origin::Current, 4)
+            .is_err());
         assert_eq!(store.load("a-1").unwrap().unwrap().raw["version"], 3);
         fs::write(store.current_dir().join("b-1.deleted"), "").unwrap();
         assert!(store.save("b-1", meeting("b-1"), &Origin::New, 0).is_err());
@@ -539,9 +703,19 @@ mod tests {
         let text = r#"{"version":1,"id":"old-1","title":"旧","updatedAt":5.5,"lines":[{"text":"甲","ms":3}]}"#;
         fs::write(store.legacy_dir().join("old-1.json"), text).unwrap();
         let loaded = store.load("old-1").unwrap().unwrap();
-        let Origin::Legacy { source_hash } = &loaded.origin else { panic!("expected legacy") };
-        assert_eq!(store.save("old-1", loaded.raw.clone(), &loaded.origin, 0).unwrap(), 1);
-        assert_eq!(fs::read_to_string(store.legacy_dir().join("old-1.json")).unwrap(), text);
+        let Origin::Legacy { source_hash } = &loaded.origin else {
+            panic!("expected legacy")
+        };
+        assert_eq!(
+            store
+                .save("old-1", loaded.raw.clone(), &loaded.origin, 0)
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            fs::read_to_string(store.legacy_dir().join("old-1.json")).unwrap(),
+            text
+        );
         let saved = store.load("old-1").unwrap().unwrap();
         assert_eq!(saved.origin, Origin::Current);
         assert_eq!(saved.raw["migration"]["sourceHash"], source_hash.as_str());
@@ -554,9 +728,17 @@ mod tests {
         let dir = Dir::new();
         let store = Store::new(dir.0.clone());
         fs::create_dir_all(store.legacy_dir()).unwrap();
-        fs::write(store.legacy_dir().join("old-1.json"), r#"{"id":"old-1","title":"旧"}"#).unwrap();
+        fs::write(
+            store.legacy_dir().join("old-1.json"),
+            r#"{"id":"old-1","title":"旧"}"#,
+        )
+        .unwrap();
         let loaded = store.load("old-1").unwrap().unwrap();
-        fs::write(store.legacy_dir().join("old-1.json"), r#"{"id":"old-1","title":"别处改过"}"#).unwrap();
+        fs::write(
+            store.legacy_dir().join("old-1.json"),
+            r#"{"id":"old-1","title":"别处改过"}"#,
+        )
+        .unwrap();
         assert!(store.save("old-1", loaded.raw, &loaded.origin, 0).is_err());
     }
 

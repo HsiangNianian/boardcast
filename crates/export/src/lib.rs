@@ -77,7 +77,10 @@ impl Said {
         lines
             .iter()
             .map(|l| Self {
-                speaker: l["speaker"].as_str().filter(|s| !s.is_empty()).map(str::to_string),
+                speaker: l["speaker"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string),
                 text: l["text"].as_str().unwrap_or_default().to_string(),
                 page: l["page"].as_u64().unwrap_or(0),
                 manual: l["manual"].as_bool().unwrap_or(false),
@@ -129,20 +132,42 @@ fn stamp(when: chrono::DateTime<chrono::Local>) -> String {
 
 /// Laying out needs the glyphs, which the caller keeps; the slow drawing waits for `render`.
 /// `images` are each board's page image, in the order of `Live::board_images`.
-pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSource, images: &[Option<PageImage>]) -> Frozen {
+pub fn freeze(
+    live: &Live,
+    english: bool,
+    glyphs: &mut Glyphs,
+    hanzi: HanziSource,
+    images: &[Option<PageImage>],
+) -> Frozen {
     let boards = live.board_pages();
     let image_of = |i: usize| images.get(i).and_then(Option::as_ref);
-    let began = live.created_at().and_then(|ms| chrono::Local.timestamp_millis_opt(ms as i64).single()).unwrap_or_else(chrono::Local::now);
-    let pages = boards.iter().enumerate().map(|(i, (graph, memory))| ink::compose_board(graph, memory, image_of(i), glyphs)).collect();
+    let began = live
+        .created_at()
+        .and_then(|ms| chrono::Local.timestamp_millis_opt(ms as i64).single())
+        .unwrap_or_else(chrono::Local::now);
+    let pages = boards
+        .iter()
+        .enumerate()
+        .map(|(i, (graph, memory))| ink::compose_board(graph, memory, image_of(i), glyphs))
+        .collect();
     let settled_graph = ink_only(&live.graph);
     let settled = ink::compose_board(&settled_graph, &live.memory, image_of(live.page()), glyphs);
     let replay_pages = boards
         .iter()
         .zip(live.board_steps())
         .enumerate()
-        .map(|(i, ((graph, memory), steps))| replay_page::Page { graph: graph.clone(), memory: memory.clone(), steps, image: image_of(i).cloned() })
+        .map(|(i, ((graph, memory), steps))| replay_page::Page {
+            graph: graph.clone(),
+            memory: memory.clone(),
+            steps,
+            image: image_of(i).cloned(),
+        })
         .collect();
-    let settled_nodes = settled_graph.nodes.iter().filter_map(|n| serde_json::to_value(n).ok()).collect();
+    let settled_nodes = settled_graph
+        .nodes
+        .iter()
+        .filter_map(|n| serde_json::to_value(n).ok())
+        .collect();
     Frozen {
         doc: Doc {
             title: live.title().to_string(),
@@ -166,8 +191,20 @@ pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSourc
 
 impl Frozen {
     pub fn render(self, kind: Kind) -> Result<Output> {
-        let Self { doc, pages, current, steps, settled, settled_nodes, replay_pages, hanzi } = self;
-        let text_only = |bytes: Vec<u8>| Output { bytes, text_left_out: false };
+        let Self {
+            doc,
+            pages,
+            current,
+            steps,
+            settled,
+            settled_nodes,
+            replay_pages,
+            hanzi,
+        } = self;
+        let text_only = |bytes: Vec<u8>| Output {
+            bytes,
+            text_left_out: false,
+        };
         match kind {
             Kind::Markdown => Ok(text_only(markdown::markdown(&doc, current).into_bytes())),
             Kind::Pdf => {
@@ -176,13 +213,18 @@ impl Frozen {
             }
             Kind::ReplayPage => {
                 let mut glyphs = Glyphs::load(hanzi)?;
-                Ok(text_only(replay_page::replay_page(&doc, &replay_pages, &mut glyphs).into_bytes()))
+                Ok(text_only(
+                    replay_page::replay_page(&doc, &replay_pages, &mut glyphs).into_bytes(),
+                ))
             }
             Kind::AnimatedSvg => {
                 if settled.pieces.is_empty() && settled.page.is_none() {
                     bail!("The board is empty.");
                 }
-                Ok(text_only(animate::animated_svg(&settled, &settled_nodes, &steps, &doc.title).into_bytes()))
+                Ok(text_only(
+                    animate::animated_svg(&settled, &settled_nodes, &steps, &doc.title)
+                        .into_bytes(),
+                ))
             }
             Kind::Gif => {
                 if settled.pieces.is_empty() && settled.page.is_none() {
@@ -191,12 +233,19 @@ impl Frozen {
                 Ok(text_only(animate::gif(&settled, &settled_nodes, &steps)?))
             }
             Kind::Png | Kind::Svg => {
-                let page = pages.into_iter().nth(current).context("no board to export")?;
+                let page = pages
+                    .into_iter()
+                    .nth(current)
+                    .context("no board to export")?;
                 let drawn = page.draw();
                 if drawn.strokes.is_empty() && drawn.page.is_none() {
                     bail!("The board is empty.");
                 }
-                Ok(text_only(if kind == Kind::Png { ink::png(&drawn)? } else { ink::svg(&drawn, &doc.title).into_bytes() }))
+                Ok(text_only(if kind == Kind::Png {
+                    ink::png(&drawn)?
+                } else {
+                    ink::svg(&drawn, &doc.title).into_bytes()
+                }))
             }
         }
     }
@@ -204,7 +253,11 @@ impl Frozen {
 
 /// `boardcast-20260102-0304.md`, as the older app names them.
 pub fn file_name(kind: Kind) -> String {
-    format!("boardcast-{}.{}", chrono::Local::now().format("%Y%m%d-%H%M"), kind.extension())
+    format!(
+        "boardcast-{}.{}",
+        chrono::Local::now().format("%Y%m%d-%H%M"),
+        kind.extension()
+    )
 }
 
 /// A picker may hand back the name without the extension that was suggested.
@@ -221,7 +274,10 @@ pub fn with_extension(path: PathBuf, kind: Kind) -> PathBuf {
 
 /// Written beside the target and moved into place, so a failure never leaves half a file behind.
 pub fn write_file(path: &Path, bytes: &[u8]) -> Result<()> {
-    let name = path.file_name().context("the path has no file name")?.to_string_lossy();
+    let name = path
+        .file_name()
+        .context("the path has no file name")?
+        .to_string_lossy();
     let temporary = path.with_file_name(format!(".{name}.part"));
     std::fs::write(&temporary, bytes).with_context(|| format!("writing {}", path.display()))?;
     std::fs::rename(&temporary, path).inspect_err(|_| {
@@ -236,11 +292,26 @@ mod tests {
 
     #[test]
     fn a_missing_extension_is_added_and_a_right_one_kept() {
-        assert_eq!(with_extension("/a/notes".into(), Kind::Pdf), PathBuf::from("/a/notes.pdf"));
-        assert_eq!(with_extension("/a/notes.PDF".into(), Kind::Pdf), PathBuf::from("/a/notes.PDF"));
-        assert_eq!(with_extension("/a/v1.2".into(), Kind::Svg), PathBuf::from("/a/v1.2.svg"));
-        assert_eq!(with_extension("/a/notes".into(), Kind::AnimatedSvg), PathBuf::from("/a/notes.anim.svg"));
-        assert_eq!(with_extension("/a/notes.anim.svg".into(), Kind::AnimatedSvg), PathBuf::from("/a/notes.anim.svg"));
+        assert_eq!(
+            with_extension("/a/notes".into(), Kind::Pdf),
+            PathBuf::from("/a/notes.pdf")
+        );
+        assert_eq!(
+            with_extension("/a/notes.PDF".into(), Kind::Pdf),
+            PathBuf::from("/a/notes.PDF")
+        );
+        assert_eq!(
+            with_extension("/a/v1.2".into(), Kind::Svg),
+            PathBuf::from("/a/v1.2.svg")
+        );
+        assert_eq!(
+            with_extension("/a/notes".into(), Kind::AnimatedSvg),
+            PathBuf::from("/a/notes.anim.svg")
+        );
+        assert_eq!(
+            with_extension("/a/notes.anim.svg".into(), Kind::AnimatedSvg),
+            PathBuf::from("/a/notes.anim.svg")
+        );
         assert_eq!(Kind::from_path(Path::new("/a/notes.svg")), Some(Kind::Svg));
     }
 
@@ -258,8 +329,19 @@ mod tests {
 
     #[test]
     fn stored_lines_keep_their_board_and_notes_stay_marked() {
-        let lines = Said::from_stored(&[serde_json::json!({ "text": "a", "speaker": "A", "page": 1 }), serde_json::json!({ "text": "b", "manual": true })]);
-        assert_eq!(lines[0], Said { speaker: Some("A".into()), text: "a".into(), page: 1, manual: false });
+        let lines = Said::from_stored(&[
+            serde_json::json!({ "text": "a", "speaker": "A", "page": 1 }),
+            serde_json::json!({ "text": "b", "manual": true }),
+        ]);
+        assert_eq!(
+            lines[0],
+            Said {
+                speaker: Some("A".into()),
+                text: "a".into(),
+                page: 1,
+                manual: false
+            }
+        );
         assert!(lines[1].manual);
     }
 }

@@ -69,7 +69,10 @@ pub fn place(strokes: &[Stroke], x: f32, y: f32, s: f32, r: &mut Rng) -> Vec<Str
                 .map(|[u, v]| {
                     let px = (u - 0.5 + (0.5 - v) * slant) * k;
                     let py = (v - 0.5) * k;
-                    [x + s * 0.5 + px * cos - py * sin, y + s * 0.5 + dy + px * sin + py * cos]
+                    [
+                        x + s * 0.5 + px * cos - py * sin,
+                        y + s * 0.5 + dy + px * sin + py * cos,
+                    ]
                 })
                 .collect()
         })
@@ -89,13 +92,24 @@ pub struct Inked {
 pub fn ink(points: &[Pt], width: f32, wobble_amp: f32, r: &mut Rng) -> Inked {
     let mut center = densify(points, width * 0.3);
     wobble(&mut center, wobble_amp, r);
-    let length = center.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum();
-    Inked { center, width, length, flat: false }
+    let length = center
+        .windows(2)
+        .map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]))
+        .sum();
+    Inked {
+        center,
+        width,
+        length,
+        flat: false,
+    }
 }
 
 /// A pass of a highlighter along these points.
 pub fn marker(points: &[Pt], width: f32, wobble_amp: f32, r: &mut Rng) -> Inked {
-    Inked { flat: true, ..ink(points, width, wobble_amp, r) }
+    Inked {
+        flat: true,
+        ..ink(points, width, wobble_amp, r)
+    }
 }
 
 const THINNING: f32 = 0.32;
@@ -129,7 +143,11 @@ pub fn outline(s: &Inked, upto: f32) -> Vec<Pt> {
         return flat_outline(&pts, s.width * 0.5);
     }
 
-    let taper = if s.length > s.width * 5.0 { (s.width * 2.0).min(s.length * 0.2) } else { 0.0 };
+    let taper = if s.length > s.width * 5.0 {
+        (s.width * 2.0).min(s.length * 0.2)
+    } else {
+        0.0
+    };
     let mut pressure = 0.25_f32;
     let mut left = Vec::with_capacity(pts.len() + CAP_STEPS);
     let mut right = Vec::with_capacity(pts.len() + CAP_STEPS);
@@ -140,7 +158,11 @@ pub fn outline(s: &Inked, upto: f32) -> Vec<Pt> {
         let p = pts[i];
         let a = pts[i.saturating_sub(1)];
         let b = pts[(i + 1).min(pts.len() - 1)];
-        let step = if i > 0 { (p[0] - a[0]).hypot(p[1] - a[1]) } else { 0.0 };
+        let step = if i > 0 {
+            (p[0] - a[0]).hypot(p[1] - a[1])
+        } else {
+            0.0
+        };
         along += step;
         // Faster movement (a longer step) lowers the simulated pressure, which thins the line.
         let speed = (step / s.width).min(1.0);
@@ -162,7 +184,12 @@ pub fn outline(s: &Inked, upto: f32) -> Vec<Pt> {
     out.extend_from_slice(&left);
     cap(&mut out, pts[pts.len() - 1], radius, heading);
     out.extend(right.iter().rev());
-    cap(&mut out, pts[0], start_radius.min(s.width * 0.5), start_heading + std::f32::consts::PI);
+    cap(
+        &mut out,
+        pts[0],
+        start_radius.min(s.width * 0.5),
+        start_heading + std::f32::consts::PI,
+    );
     out
 }
 
@@ -179,7 +206,8 @@ fn flat_outline(pts: &[Pt], radius: f32) -> Vec<Pt> {
         along += (p[0] - a[0]).hypot(p[1] - a[1]);
         let (ny, nx) = (b[1] - a[1]).atan2(b[0] - a[0]).sin_cos();
         let up = radius * (1.0 + 0.05 * (along * 0.031).sin() + 0.03 * (along * 0.083 + 1.0).sin());
-        let down = radius * (1.0 + 0.05 * (along * 0.023 + 2.0).sin() + 0.03 * (along * 0.071).sin());
+        let down =
+            radius * (1.0 + 0.05 * (along * 0.023 + 2.0).sin() + 0.03 * (along * 0.071).sin());
         left.push([p[0] + ny * up + nx * slant, p[1] - nx * up + ny * slant]);
         right.push([p[0] - ny * down - nx * slant, p[1] + nx * down - ny * slant]);
     }
@@ -190,7 +218,8 @@ fn flat_outline(pts: &[Pt], radius: f32) -> Vec<Pt> {
 /// A half circle around `c`, swept from the left of `heading` to its right.
 fn cap(out: &mut Vec<Pt>, c: Pt, radius: f32, heading: f32) {
     for i in 1..CAP_STEPS {
-        let a = heading - std::f32::consts::FRAC_PI_2 + std::f32::consts::PI * i as f32 / CAP_STEPS as f32;
+        let a = heading - std::f32::consts::FRAC_PI_2
+            + std::f32::consts::PI * i as f32 / CAP_STEPS as f32;
         out.push([c[0] + a.cos() * radius, c[1] + a.sin() * radius]);
     }
 }
@@ -210,7 +239,14 @@ pub fn line(a: Pt, b: Pt, r: &mut Rng, sag: f32) -> Stroke {
     let len = (b[0] - a[0]).hypot(b[1] - a[1]).max(0.001);
     let (nx, ny) = (-(b[1] - a[1]) / len, (b[0] - a[0]) / len);
     let bow = (r.next() - 0.5) * 2.0 * sag * len;
-    vec![a, [(a[0] + b[0]) / 2.0 + nx * bow, (a[1] + b[1]) / 2.0 + ny * bow], b]
+    vec![
+        a,
+        [
+            (a[0] + b[0]) / 2.0 + nx * bow,
+            (a[1] + b[1]) / 2.0 + ny * bow,
+        ],
+        b,
+    ]
 }
 
 /// A circle a little over one turn, with start and end apart like a quick hand loop.
@@ -264,16 +300,31 @@ pub fn around(boxes: &[[f32; 4]], pad: f32, r: &mut Rng) -> Stroke {
     let mut corners = right;
     corners.extend(left);
     corners.push(corners[0]);
-    corners.windows(2).flat_map(|w| line(w[0], w[1], r, 0.008)).collect()
+    corners
+        .windows(2)
+        .flat_map(|w| line(w[0], w[1], r, 0.008))
+        .collect()
 }
 
 pub fn arrow(points: &[Pt], r: &mut Rng) -> Vec<Stroke> {
-    let shaft = if points.len() == 2 { line(points[0], points[1], r, 0.04) } else { points.to_vec() };
+    let shaft = if points.len() == 2 {
+        line(points[0], points[1], r, 0.04)
+    } else {
+        points.to_vec()
+    };
     let end = shaft[shaft.len() - 1];
     let prev = shaft[shaft.len().saturating_sub(2)];
     let angle = (end[1] - prev[1]).atan2(end[0] - prev[0]);
     let spread = 0.45 + r.next() * 0.15;
-    let head = |s: f32| vec![[end[0] - (angle + s).cos() * 14.0, end[1] - (angle + s).sin() * 14.0], end];
+    let head = |s: f32| {
+        vec![
+            [
+                end[0] - (angle + s).cos() * 14.0,
+                end[1] - (angle + s).sin() * 14.0,
+            ],
+            end,
+        ]
+    };
     vec![shaft.clone(), head(spread), head(-spread)]
 }
 

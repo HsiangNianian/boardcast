@@ -37,7 +37,16 @@ const INK: u32 = 0x1e_1e_1e;
 const MUTED: u32 = 0x6b_6b_6b;
 
 /// Tried in order; a character none of them has is looked for in every other installed font.
-const FAMILIES: [&str; 8] = ["PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans CN", "WenQuanYi Micro Hei", "Hiragino Sans GB"];
+const FAMILIES: [&str; 8] = [
+    "PingFang SC",
+    "Noto Sans CJK SC",
+    "Source Han Sans SC",
+    "Microsoft YaHei",
+    "Noto Sans SC",
+    "Source Han Sans CN",
+    "WenQuanYi Micro Hei",
+    "Hiragino Sans GB",
+];
 
 struct Face {
     font: Font,
@@ -67,13 +76,31 @@ impl Fonts {
     fn system() -> Self {
         let mut db = Database::new();
         db.load_system_fonts();
-        let mut fonts = Self { db, faces: vec![], regular: vec![], bold: vec![], known: HashMap::new() };
-        let names: Vec<Family> = FAMILIES.iter().map(|n| Family::Name(n)).chain([Family::SansSerif]).collect();
+        let mut fonts = Self {
+            db,
+            faces: vec![],
+            regular: vec![],
+            bold: vec![],
+            known: HashMap::new(),
+        };
+        let names: Vec<Family> = FAMILIES
+            .iter()
+            .map(|n| Family::Name(n))
+            .chain([Family::SansSerif])
+            .collect();
         for family in names {
             for (weight, bold) in [(Weight::NORMAL, false), (Weight::BOLD, true)] {
-                let found = fonts.db.query(&Query { families: &[family], weight, ..Query::default() });
+                let found = fonts.db.query(&Query {
+                    families: &[family],
+                    weight,
+                    ..Query::default()
+                });
                 if let Some(index) = found.and_then(|id| fonts.load(id)) {
-                    let list = if bold { &mut fonts.bold } else { &mut fonts.regular };
+                    let list = if bold {
+                        &mut fonts.bold
+                    } else {
+                        &mut fonts.regular
+                    };
                     if !list.contains(&index) {
                         list.push(index);
                     }
@@ -84,8 +111,14 @@ impl Fonts {
     }
 
     fn load(&mut self, id: fontdb::ID) -> Option<usize> {
-        let (data, index) = self.db.with_face_data(id, |data, index| (Arc::new(data.to_vec()), index))?;
-        if let Some(known) = self.faces.iter().position(|f| f.index == index && f.data == data) {
+        let (data, index) = self
+            .db
+            .with_face_data(id, |data, index| (Arc::new(data.to_vec()), index))?;
+        if let Some(known) = self
+            .faces
+            .iter()
+            .position(|f| f.index == index && f.data == data)
+        {
             return Some(known);
         }
         let font = Font::new(data.clone().into(), index)?;
@@ -101,8 +134,14 @@ impl Fonts {
         if let Some(known) = self.known.get(&(c, bold)) {
             return *known;
         }
-        let order = if bold { self.bold.iter().chain(&self.regular) } else { self.regular.iter().chain(&self.bold) };
-        let mut found = order.copied().find_map(|i| self.faces[i].advance(c).map(|a| (i, a)));
+        let order = if bold {
+            self.bold.iter().chain(&self.regular)
+        } else {
+            self.regular.iter().chain(&self.bold)
+        };
+        let mut found = order
+            .copied()
+            .find_map(|i| self.faces[i].advance(c).map(|a| (i, a)));
         if found.is_none() && !c.is_whitespace() {
             found = self.search_everything(c);
         }
@@ -112,9 +151,19 @@ impl Fonts {
 
     /// The slow way, once per unusual character. Colour emoji fonts are skipped, as they have no outlines.
     fn search_everything(&mut self, c: char) -> Option<(usize, f32)> {
-        let ids: Vec<fontdb::ID> = self.db.faces().filter(|f| !f.post_script_name.contains("Color")).map(|f| f.id).collect();
+        let ids: Vec<fontdb::ID> = self
+            .db
+            .faces()
+            .filter(|f| !f.post_script_name.contains("Color"))
+            .map(|f| f.id)
+            .collect();
         for id in ids {
-            let has = self.db.with_face_data(id, |data, index| ttf_parser::Face::parse(data, index).ok().and_then(|f| f.glyph_index(c)).is_some_and(|g| g.0 != 0));
+            let has = self.db.with_face_data(id, |data, index| {
+                ttf_parser::Face::parse(data, index)
+                    .ok()
+                    .and_then(|f| f.glyph_index(c))
+                    .is_some_and(|g| g.0 != 0)
+            });
             if has == Some(true) {
                 let index = self.load(id)?;
                 return self.faces[index].advance(c).map(|a| (index, a));
@@ -124,17 +173,32 @@ impl Fonts {
     }
 
     fn width(&mut self, text: &str, size: f32, bold: bool) -> f32 {
-        text.chars().map(|c| self.pick(c, bold).map_or(0.5, |(_, a)| a) * size).sum()
+        text.chars()
+            .map(|c| self.pick(c, bold).map_or(0.5, |(_, a)| a) * size)
+            .sum()
     }
 }
 
 fn fill(rgb_value: u32, alpha: f32) -> Fill {
     let [_, r, g, b] = rgb_value.to_be_bytes();
-    Fill { paint: rgb::Color::new(r, g, b).into(), opacity: NormalizedF32::new(alpha.clamp(0.0, 1.0)).unwrap_or(NormalizedF32::ONE), rule: FillRule::NonZero }
+    Fill {
+        paint: rgb::Color::new(r, g, b).into(),
+        opacity: NormalizedF32::new(alpha.clamp(0.0, 1.0)).unwrap_or(NormalizedF32::ONE),
+        rule: FillRule::NonZero,
+    }
 }
 
 /// Draw a line of text in runs: a font at a time, and Latin apart from Chinese, which keeps shaping simple.
-fn draw(surface: &mut Surface, fonts: &mut Fonts, text: &str, x: f32, y: f32, size: f32, bold: bool, color: u32) {
+fn draw(
+    surface: &mut Surface,
+    fonts: &mut Fonts,
+    text: &str,
+    x: f32,
+    y: f32,
+    size: f32,
+    bold: bool,
+    color: u32,
+) {
     surface.set_fill(Some(fill(color, 1.0)));
     let mut runs: Vec<(Option<usize>, bool, String, f32)> = vec![];
     for c in text.chars() {
@@ -142,7 +206,9 @@ fn draw(surface: &mut Surface, fonts: &mut Fonts, text: &str, x: f32, y: f32, si
         let (face, advance) = picked.map_or((None, 0.5), |(i, a)| (Some(i), a));
         match runs.last_mut() {
             // A space joins the run it is in, whatever the font says about it.
-            Some(run) if (run.0 == face && run.1 == c.is_ascii()) || (c == ' ' && run.0.is_some()) => {
+            Some(run)
+                if (run.0 == face && run.1 == c.is_ascii()) || (c == ' ' && run.0.is_some()) =>
+            {
                 run.2.push(c);
                 run.3 += advance;
             }
@@ -152,7 +218,14 @@ fn draw(surface: &mut Surface, fonts: &mut Fonts, text: &str, x: f32, y: f32, si
     let mut at = x;
     for (face, _, run, advance) in runs {
         if let Some(face) = face {
-            surface.draw_text(Point::from_xy(at, y), fonts.faces[face].font.clone(), size, &run, false, TextDirection::Auto);
+            surface.draw_text(
+                Point::from_xy(at, y),
+                fonts.faces[face].font.clone(),
+                size,
+                &run,
+                false,
+                TextDirection::Auto,
+            );
         }
         at += advance * size;
     }
@@ -167,7 +240,13 @@ fn wrap(fonts: &mut Fonts, text: &str, max: f32, size: f32, bold: bool) -> Vec<S
         let advance = fonts.pick(c, bold).map_or(0.5, |(_, a)| a) * size;
         if !row.is_empty() && width + advance > max {
             // Take a whole word down with it, unless it is the only thing here.
-            let word_start = if c.is_ascii_alphanumeric() { row.rfind(' ').map(|i| i + 1).filter(|i| row[*i..].chars().all(|c| c.is_ascii_graphic())) } else { None };
+            let word_start = if c.is_ascii_alphanumeric() {
+                row.rfind(' ')
+                    .map(|i| i + 1)
+                    .filter(|i| row[*i..].chars().all(|c| c.is_ascii_graphic()))
+            } else {
+                None
+            };
             let carried = word_start.map_or(String::new(), |i| row.split_off(i));
             rows.push(row.trim_end().to_string());
             width = fonts.width(&carried, size, bold);
@@ -205,28 +284,67 @@ struct Row {
 
 impl Row {
     fn new(text: impl Into<String>, size: f32) -> Self {
-        Self { text: text.into(), size, bold: false, color: INK, gap: 0.0, indent: 0.0, lead: Lead::Nothing }
+        Self {
+            text: text.into(),
+            size,
+            bold: false,
+            color: INK,
+            gap: 0.0,
+            indent: 0.0,
+            lead: Lead::Nothing,
+        }
     }
 }
 
 fn clean(text: &str) -> String {
-    text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
+    text.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect()
 }
 
 /// The summary and transcript as rows of text.
 fn rows_of(doc: &Doc) -> Vec<Row> {
-    let (summary, transcript, note_prefix, colon) = if doc.english { ("Summary", "Transcript", "Edited: ", ": ") } else { ("摘要", "会议记录", "手动修改：", "：") };
-    let board_name = |n: u64| if doc.english { format!("Board {n}") } else { format!("第 {n} 张板") };
-    let mut out = vec![Row { bold: true, ..Row::new(clean(&doc.title), 18.2) }, Row { color: MUTED, gap: 2.8, ..Row::new(format!("{} · boardcast", doc.began), 9.1) }];
+    let (summary, transcript, note_prefix, colon) = if doc.english {
+        ("Summary", "Transcript", "Edited: ", ": ")
+    } else {
+        ("摘要", "会议记录", "手动修改：", "：")
+    };
+    let board_name = |n: u64| {
+        if doc.english {
+            format!("Board {n}")
+        } else {
+            format!("第 {n} 张板")
+        }
+    };
+    let mut out = vec![
+        Row {
+            bold: true,
+            ..Row::new(clean(&doc.title), 18.2)
+        },
+        Row {
+            color: MUTED,
+            gap: 2.8,
+            ..Row::new(format!("{} · boardcast", doc.began), 9.1)
+        },
+    ];
     if !doc.summary.trim().is_empty() {
-        out.push(Row { bold: true, gap: 17.5, ..Row::new(summary, 13.3) });
+        out.push(Row {
+            bold: true,
+            gap: 17.5,
+            ..Row::new(summary, 13.3)
+        });
         for raw in doc.summary.lines() {
             let line = raw.trim().replace("**", "");
             if line.is_empty() {
                 continue;
             }
             if line.starts_with('#') {
-                out.push(Row { bold: true, color: MUTED, gap: 7.7, ..Row::new(clean(line.trim_start_matches('#').trim()), 10.5) });
+                out.push(Row {
+                    bold: true,
+                    color: MUTED,
+                    gap: 7.7,
+                    ..Row::new(clean(line.trim_start_matches('#').trim()), 10.5)
+                });
                 continue;
             }
             let (lead, rest) = match line.get(..2) {
@@ -240,26 +358,45 @@ fn rows_of(doc: &Doc) -> Vec<Row> {
                 }
                 _ => (Lead::Nothing, line.as_str()),
             };
-            out.push(Row { indent: 7.0, lead, ..Row::new(clean(rest), BODY) });
+            out.push(Row {
+                indent: 7.0,
+                lead,
+                ..Row::new(clean(rest), BODY)
+            });
         }
     }
     if !doc.lines.is_empty() {
-        out.push(Row { bold: true, gap: 17.5, ..Row::new(transcript, 13.3) });
+        out.push(Row {
+            bold: true,
+            gap: 17.5,
+            ..Row::new(transcript, 13.3)
+        });
         let many = doc.boards.len() > 1;
         let mut page = None;
         for l in &doc.lines {
             if many && page != Some(l.page) {
                 page = Some(l.page);
-                out.push(Row { color: MUTED, gap: 6.3, ..Row::new(board_name(l.page + 1), 9.1) });
+                out.push(Row {
+                    color: MUTED,
+                    gap: 6.3,
+                    ..Row::new(board_name(l.page + 1), 9.1)
+                });
             }
             if l.manual {
-                out.push(Row { color: MUTED, indent: 7.0, ..Row::new(clean(&format!("{note_prefix}{}", l.text)), 9.1) });
+                out.push(Row {
+                    color: MUTED,
+                    indent: 7.0,
+                    ..Row::new(clean(&format!("{note_prefix}{}", l.text)), 9.1)
+                });
             } else {
                 let said = match &l.speaker {
                     Some(speaker) => format!("{speaker}{colon}{}", l.text),
                     None => l.text.clone(),
                 };
-                out.push(Row { indent: 7.0, ..Row::new(clean(&said), BODY) });
+                out.push(Row {
+                    indent: 7.0,
+                    ..Row::new(clean(&said), BODY)
+                });
             }
         }
     }
@@ -282,8 +419,26 @@ fn header(surface: &mut Surface, fonts: &mut Fonts, title: &str, right: &str) {
         }
         shown.push(c);
     }
-    draw(surface, fonts, &shown, MARGIN, HEADER_Y, HEADER_SIZE, false, MUTED);
-    draw(surface, fonts, right, WIDTH - MARGIN - right_width, HEADER_Y, HEADER_SIZE, false, MUTED);
+    draw(
+        surface,
+        fonts,
+        &shown,
+        MARGIN,
+        HEADER_Y,
+        HEADER_SIZE,
+        false,
+        MUTED,
+    );
+    draw(
+        surface,
+        fonts,
+        right,
+        WIDTH - MARGIN - right_width,
+        HEADER_Y,
+        HEADER_SIZE,
+        false,
+        MUTED,
+    );
 }
 
 fn paper(surface: &mut Surface) {
@@ -305,11 +460,15 @@ fn draw_page(surface: &mut Surface, page: &Page) {
     let image = match page.image.mime.as_str() {
         "image/jpeg" => Image::from_jpeg(data(page.image.bytes.clone()), true),
         "image/png" => Image::from_png(data(page.image.bytes.clone()), true),
-        _ => image::load_from_memory(&page.image.bytes).map_err(|e| e.to_string()).and_then(|picture| {
-            let mut png = std::io::Cursor::new(vec![]);
-            picture.write_to(&mut png, image::ImageFormat::Png).map_err(|e| e.to_string())?;
-            Image::from_png(data(png.into_inner()), true)
-        }),
+        _ => image::load_from_memory(&page.image.bytes)
+            .map_err(|e| e.to_string())
+            .and_then(|picture| {
+                let mut png = std::io::Cursor::new(vec![]);
+                picture
+                    .write_to(&mut png, image::ImageFormat::Png)
+                    .map_err(|e| e.to_string())?;
+                Image::from_png(data(png.into_inner()), true)
+            }),
     };
     // A page that cannot be read costs the file its picture, not the marks on it.
     let Ok(image) = image else { return };
@@ -325,10 +484,19 @@ fn draw_board(surface: &mut Surface, board: &Drawn) {
     let k = (w_room / w as f32).min(h_room / h as f32);
     let left = (WIDTH - w as f32 * k) / 2.0;
     let top = BOARD_TOP + (h_room - h as f32 * k) / 2.0;
-    surface.push_transform(&Transform::from_row(k, 0.0, 0.0, k, left - x as f32 * k, top - y as f32 * k));
+    surface.push_transform(&Transform::from_row(
+        k,
+        0.0,
+        0.0,
+        k,
+        left - x as f32 * k,
+        top - y as f32 * k,
+    ));
     let paint = |surface: &mut Surface, under: bool| {
         for stroke in board.strokes.iter().filter(|s| s.style.under == under) {
-            let Some((first, rest)) = stroke.outline.split_first() else { continue };
+            let Some((first, rest)) = stroke.outline.split_first() else {
+                continue;
+            };
             let mut path = PathBuilder::new();
             path.move_to(first[0], first[1]);
             for p in rest {
@@ -351,7 +519,14 @@ fn draw_board(surface: &mut Surface, board: &Drawn) {
     surface.pop();
 }
 
-fn draw_lead(surface: &mut Surface, fonts: &mut Fonts, lead: Lead, x: f32, baseline: f32, size: f32) {
+fn draw_lead(
+    surface: &mut Surface,
+    fonts: &mut Fonts,
+    lead: Lead,
+    x: f32,
+    baseline: f32,
+    size: f32,
+) {
     match lead {
         Lead::Nothing => {}
         Lead::Bullet => draw(surface, fonts, "•", x, baseline, size, false, INK),
@@ -401,9 +576,17 @@ fn draw_lead(surface: &mut Surface, fonts: &mut Fonts, lead: Lead, x: f32, basel
 pub fn pdf(doc: &Doc, boards: &[Drawn]) -> Result<Output> {
     let mut fonts = Fonts::system();
     let mut document = Document::new();
-    document.set_metadata(Metadata::new().title(doc.title.clone()).creator("boardcast".to_string()));
+    document.set_metadata(
+        Metadata::new()
+            .title(doc.title.clone())
+            .creator("boardcast".to_string()),
+    );
     let settings = || PageSettings::from_wh(WIDTH, HEIGHT).ok_or_else(|| anyhow!("bad page size"));
-    let shown: Vec<(usize, &Drawn)> = boards.iter().enumerate().filter(|(_, b)| !b.strokes.is_empty() || b.page.is_some()).collect();
+    let shown: Vec<(usize, &Drawn)> = boards
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| !b.strokes.is_empty() || b.page.is_some())
+        .collect();
     for (index, board) in &shown {
         let mut page = document.start_page_with(settings()?);
         let mut surface = page.surface();
@@ -424,14 +607,27 @@ pub fn pdf(doc: &Doc, boards: &[Drawn]) -> Result<Output> {
     let text_left_out = has_text && fonts.is_empty();
     if has_text && !fonts.is_empty() {
         let rows = rows_of(doc);
-        let continued = |n: u32| if doc.english { format!("Transcript {n}") } else { format!("会议记录 {n}") };
+        let continued = |n: u32| {
+            if doc.english {
+                format!("Transcript {n}")
+            } else {
+                format!("会议记录 {n}")
+            }
+        };
         let mut number = 1;
         let mut page = document.start_page_with(settings()?);
         let mut surface = page.surface();
         paper(&mut surface);
         let mut y = MARGIN;
         for row in rows {
-            let room = WIDTH - 2.0 * MARGIN - row.indent - if row.lead == Lead::Nothing { 0.0 } else { row.size * 1.2 };
+            let room = WIDTH
+                - 2.0 * MARGIN
+                - row.indent
+                - if row.lead == Lead::Nothing {
+                    0.0
+                } else {
+                    row.size * 1.2
+                };
             let wrapped = wrap(&mut fonts, &row.text, room, row.size, row.bold);
             y += row.gap;
             for (i, text) in wrapped.iter().enumerate() {
@@ -451,16 +647,35 @@ pub fn pdf(doc: &Doc, boards: &[Drawn]) -> Result<Output> {
                 if i == 0 {
                     draw_lead(&mut surface, &mut fonts, row.lead, left, baseline, row.size);
                 }
-                let text_x = left + if row.lead == Lead::Nothing { 0.0 } else { row.size * 1.2 };
-                draw(&mut surface, &mut fonts, text, text_x, baseline, row.size, row.bold, row.color);
+                let text_x = left
+                    + if row.lead == Lead::Nothing {
+                        0.0
+                    } else {
+                        row.size * 1.2
+                    };
+                draw(
+                    &mut surface,
+                    &mut fonts,
+                    text,
+                    text_x,
+                    baseline,
+                    row.size,
+                    row.bold,
+                    row.color,
+                );
                 y += height;
             }
         }
         surface.finish();
         page.finish();
     }
-    let bytes = document.finish().map_err(|e| anyhow!("could not write the PDF: {e:?}"))?;
-    Ok(Output { bytes, text_left_out })
+    let bytes = document
+        .finish()
+        .map_err(|e| anyhow!("could not write the PDF: {e:?}"))?;
+    Ok(Output {
+        bytes,
+        text_left_out,
+    })
 }
 
 #[cfg(test)]
@@ -477,7 +692,14 @@ mod tests {
             began: "2026-01-02 03:04".into(),
             summary: "### 待办\n- [ ] 写接口\n- [x] 定方案\n- 普通".into(),
             boards: vec![Graph::default()],
-            lines: (0..lines).map(|i| Said { speaker: Some("A".into()), text: format!("第 {i} 句 mixed with English"), page: 0, manual: i == 1 }).collect(),
+            lines: (0..lines)
+                .map(|i| Said {
+                    speaker: Some("A".into()),
+                    text: format!("第 {i} 句 mixed with English"),
+                    page: 0,
+                    manual: i == 1,
+                })
+                .collect(),
             english: false,
             omits_visuals: false,
         }

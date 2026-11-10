@@ -621,4 +621,3 @@ mod tests {
         assert_eq!(*calls.lock().unwrap(), 0);
     }
 }
-

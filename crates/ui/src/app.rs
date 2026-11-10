@@ -34,6 +34,7 @@ use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::toolbar::Toolbar;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::{Disableable, Selectable, Sizable};
 use gpui_kit::{
@@ -56,6 +57,8 @@ const INK_RGB: u32 = 0x1e_1e_1e;
 const MARKS: [(&str, &str); 5] = [("划掉", "Strike"), ("圈出", "Circle"), ("下划线", "Underline"), ("星标", "Star"), ("高亮", "Highlight")];
 /// More meetings than this, and the list gets a search box.
 const LIBRARY_SEARCH_FROM: usize = 5;
+/// How much one press of a zoom key scales the board.
+const ZOOM_STEP: f32 = 1.25;
 const AUTOSAVE_AFTER: Duration = Duration::from_millis(500);
 const RETRY_SAVE_AFTER: Duration = Duration::from_secs(5);
 #[derive(Clone, Copy, PartialEq)]
@@ -2240,9 +2243,53 @@ impl Workbench {
                 "z" if keys.modifiers.shift => self.step(true, cx),
                 "z" => self.step(false, cx),
                 "y" => self.step(true, cx),
+                "=" | "+" => self.zoom_by(ZOOM_STEP, cx),
+                "-" => self.zoom_by(1.0 / ZOOM_STEP, cx),
+                "0" => self.fit_board(cx),
                 _ => {}
             }
+            return;
         }
+        if keys.modifiers.alt || keys.modifiers.shift {
+            return;
+        }
+        match keys.key.as_str() {
+            // Closes the nearest thing first: the selection, then a panel.
+            "escape" => {
+                let deselected = self.ink.borrow_mut().selected.take().is_some();
+                if !deselected && self.panel != Panel::Transcript {
+                    self.panel = Panel::Transcript;
+                }
+                cx.notify();
+            }
+            "space" if self.editable() => {
+                self.toggle_mic();
+                cx.notify();
+            }
+            "/" if self.editable() => self.focus_input(window, cx),
+            _ => {}
+        }
+    }
+
+    /// Zoom around the middle of the board.
+    fn zoom_by(&mut self, factor: f32, cx: &mut Context<Self>) {
+        let mut ink = self.ink.borrow_mut();
+        let middle = ink.canvas.center();
+        ink.zoom_at(middle, factor);
+        cx.notify();
+    }
+
+    fn fit_board(&mut self, cx: &mut Context<Self>) {
+        self.ink.borrow_mut().show_latest();
+        cx.notify();
+    }
+
+    /// Bring out the transcript and its input, ready to type a line.
+    fn focus_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.panel = Panel::Transcript;
+        self.transcript_open = true;
+        self.input.update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
     }
 
     fn toggle_panel(&mut self, panel: Panel, cx: &mut Context<Self>) {
@@ -3229,6 +3276,7 @@ impl Render for Workbench {
                         .small()
                         .icon(icon(if listening { "square" } else { "mic" }))
                         .label(if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") })
+                        .tooltip(tr("Space", "空格键"))
                         .when(listening, |b| b.danger())
                         .when(!listening, |b| b.primary())
                         .on_click(cx.listener(|this, _, _, cx| {
@@ -3243,7 +3291,11 @@ impl Render for Workbench {
             .child(icon_button("import", "import", tr("Import", "导入")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))))
             .child(icon_button("export", "file-down", tr("Export", "导出")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
             .child(
-                icon_button("replay", "rotate-ccw", if self.replay.is_some() { tr("Exit replay", "退出回放") } else { tr("Replay", "回放") })
+                icon_button("replay", "rotate-ccw", match (self.replay.is_some(), cfg!(target_os = "macos")) {
+                    (true, _) => tr("Exit replay (Esc)", "退出回放（Esc）"),
+                    (false, true) => tr("Replay (⇧⌘R)", "回放（⇧⌘R）"),
+                    (false, false) => tr("Replay (Ctrl+Shift+R)", "回放（Ctrl+Shift+R）"),
+                })
                     .selected(self.replay.is_some())
                     .disabled(self.live.steps.is_empty())
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -3256,8 +3308,8 @@ impl Render for Workbench {
             )
             .when(editable, |d| {
                 d.content(Separator::vertical().h(px(18.)).mx_1())
-                    .child(icon_button("undo", "undo-2", tr("Undo", "撤销")).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
-                    .child(icon_button("redo", "redo-2", tr("Redo", "重做")).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
+                    .child(icon_button("undo", "undo-2", if cfg!(target_os = "macos") { tr("Undo (⌘Z)", "撤销（⌘Z）") } else { tr("Undo (Ctrl+Z)", "撤销（Ctrl+Z）") }).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
+                    .child(icon_button("redo", "redo-2", if cfg!(target_os = "macos") { tr("Redo (⇧⌘Z)", "重做（⇧⌘Z）") } else { tr("Redo (Ctrl+Shift+Z)", "重做（Ctrl+Shift+Z）") }).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
                     .child(icon_button("tidy", "wand-sparkles", tr("Tidy", "整理排版")).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
             });
         let status = div()
@@ -3272,7 +3324,19 @@ impl Render for Workbench {
             .text_color(rgb(FAINT))
             .whitespace_nowrap()
             .overflow_hidden()
-            .child(format!("{:.0}%", zoom * 100.0))
+            .child(
+                div()
+                    .id("zoom")
+                    .occlude()
+                    .px_1()
+                    .rounded_sm()
+                    .cursor_pointer()
+                    .hover(|d| d.bg(rgb(SELECTED)))
+                    .tooltip(|window, cx| Tooltip::new(if cfg!(target_os = "macos") { tr("Fit the board (⌘0). Zoom with ⌘+ and ⌘−", "适应屏幕（⌘0），⌘+ / ⌘− 缩放") } else { tr("Fit the board (Ctrl+0). Zoom with Ctrl+ and Ctrl−", "适应屏幕（Ctrl+0），Ctrl+ / Ctrl− 缩放") }).build(window, cx))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(cx.listener(|this, _, _, cx| this.fit_board(cx)))
+                    .child(format!("{:.0}%", zoom * 100.0)),
+            )
             .child(self.status.clone());
         // With the transcript away, the latest line still shows that the room is being heard.
         let caption = self.live.lines.iter().rev().find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !side_shown && self.replay.is_none());

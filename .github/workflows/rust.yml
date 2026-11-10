@@ -32,7 +32,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # The window and audio crates need system libraries and native downloads, and have no tests yet.
-      - run: node scripts/fetch-pdfium.mjs
+      - run: cargo run -q -p boardcast-tools -- fetch pdfium
       - run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-export -p boardcast-import -p boardcast-update -p boardcast-tools
       - name: Check the recorded boards for layout defects
         run: cargo run --release -p boardcast-tools -- check . --all-demos --tidy
@@ -59,17 +59,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends pkg-config libxkbcommon-dev libxkbcommon-x11-dev \
             libwayland-dev libx11-xcb-dev libxcb1-dev libvulkan-dev libasound2-dev libssl-dev libzstd-dev libfontconfig-dev libfreetype-dev
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
       - name: Cache voice models
         uses: actions/cache@v4
         with:
           path: resources/voice
-          key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
+          key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
       # The script ends by running each packaged app's self-check. A second variant checks the model selection.
       - run: sh packaging/linux/package.sh
         env:
@@ -102,17 +96,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
       - name: Cache voice models
         uses: actions/cache@v4
         with:
           path: resources/voice
-          key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
+          key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
       # The script ends by running each packaged app's self-check, and builds and self-tests the Apple speech helper.
       - run: sh packaging/macos/package.sh
         env:

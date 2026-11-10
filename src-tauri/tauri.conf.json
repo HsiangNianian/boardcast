@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "node scripts/fetch-llama.mjs && node scripts/fetch-voice.mjs && pnpm build",
+    "beforeBuildCommand": "cargo run -q -p boardcast-tools -- fetch llama && cargo run -q -p boardcast-tools -- fetch voice && pnpm build",
     "frontendDist": "../dist"
   },
   "app": {

@@ -47,7 +47,7 @@ const PUNCT: &[(char, &[&[Pt]], f32)] = &[
 pub enum HanziSource {
     /// One file holding them all, as an install ships them.
     Pack(PathBuf),
-    /// One JSON file per character, as `scripts/glyphs.mjs` generates them in a checkout.
+    /// One JSON file per character, as `boardcast-tools fetch glyphs` generates them in a checkout.
     Directory(PathBuf),
 }
 
@@ -178,7 +178,7 @@ impl Pack {
     }
 }
 
-/// Build a pack from the folder `scripts/glyphs.mjs` generates. Returns how many characters it holds.
+/// Build a pack from the folder `boardcast-tools fetch glyphs` generates. Returns how many characters it holds.
 pub fn write_pack(dir: &Path, out: &Path) -> Result<usize> {
     let mut entries: Vec<(u32, Vec<Vec<[f32; 2]>>)> = vec![];
     for file in std::fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {

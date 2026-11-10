@@ -2,17 +2,23 @@
 //!   check <root> (--all-demos | --demo <name> | --ops <file>) [--tidy]
 //!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [--deepseek | --llm <url>] [--skill | --rules-only | --hints-only]
 //!              [--only-dev | --only-holdout] [--only <id>] [--workers <n>]
+//!   fetch voice | pdfium [platform] | llama [platform] | glyphs
 //!   pack-glyphs <assets/hanzi> <glyphs.pack>
 //!   download-model <id> <dir>
+//!   sign <file>...              Writes <file>.sig with the update key; see release.rs.
+//!   release-manifest <packages> <tag>
 //!   version-newer <new> <old>   Fails unless <new> is a later version than <old>.
 //!   meetings-check <data-dir>   Rewrites every meeting into <data-dir>'s v2 folder; use on a copy.
 
 mod agent_eval;
 mod check;
 mod export;
+mod fetch;
 mod read_pdf;
+mod release;
 mod score;
 mod meetings;
+mod voice_files;
 
 use anyhow::{bail, Context, Result};
 use std::path::PathBuf;
@@ -25,6 +31,9 @@ fn main() -> Result<()> {
         Some("meetings-check") => meetings::run(args),
         Some("export") => export::run(args),
         Some("read-pdf") => read_pdf::run(args),
+        Some("fetch") => fetch::run(args),
+        Some("sign") => release::sign(args),
+        Some("release-manifest") => release::manifest(args),
         Some("pack-glyphs") => pack_glyphs(args),
         Some("download-model") => download_model(args),
         Some("version-newer") => version_newer(args),

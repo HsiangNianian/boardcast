@@ -4,7 +4,7 @@
 # and recognizes with Apple's own SpeechAnalyzer, or SFSpeechRecognizer before macOS 26.
 # They are signed only ad hoc, which Apple silicon requires to run at all, so a downloaded copy has to
 # be opened with Control-click the first time.
-# Needs Rust, Xcode, Node with `pnpm install` done, and network access the first time for models and llama-server.
+# Needs Rust, Xcode, and network access the first time for models and llama-server.
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -12,11 +12,11 @@ cd "$root"
 . packaging/models.sh
 variants="${VARIANTS:-full}"
 
-node scripts/glyphs.mjs
-node scripts/fetch-llama.mjs
-node scripts/fetch-voice.mjs
-node scripts/fetch-pdfium.mjs
-cargo build --release -p boardcast-ui -p boardcast-tools
+cargo build --release -p boardcast-tools
+for what in glyphs "llama" voice pdfium; do
+  target/release/boardcast-tools fetch $what
+done
+cargo build --release -p boardcast-ui
 
 version=$(target/release/boardcast --version | cut -d' ' -f2)
 mkdir -p target/package

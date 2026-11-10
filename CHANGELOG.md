@@ -1,6 +1,7 @@
 # Changelog
 
-All notable changes to boardcast. Generated from Conventional Commits by `pnpm release`.
+Changes to the older app, up to 0.21.0, generated from Conventional Commits by its release script. Later releases
+are described on their GitHub release pages.
 
 ## 0.21.0 - 2026-11-02
 

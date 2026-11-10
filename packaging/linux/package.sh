@@ -2,7 +2,7 @@
 # Build the Linux packages: target/package/boardcast-<version>-<arch>-linux[-<variant>].tar.gz, one per
 # variant in VARIANTS (default "full"; see packaging/models.sh). Each unpacks into a working app, and
 # install.sh inside puts it on the system.
-# Needs Rust, Node with `pnpm install` done, and network access the first time for models and llama-server.
+# Needs Rust, and network access the first time for models and llama-server.
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -10,11 +10,11 @@ cd "$root"
 . packaging/models.sh
 variants="${VARIANTS:-full}"
 
-node scripts/glyphs.mjs
-node scripts/fetch-llama.mjs linux-x64
-node scripts/fetch-voice.mjs
-node scripts/fetch-pdfium.mjs
-cargo build --release -p boardcast-ui -p boardcast-tools
+cargo build --release -p boardcast-tools
+for what in glyphs "llama linux-x64" voice pdfium; do
+  target/release/boardcast-tools fetch $what
+done
+cargo build --release -p boardcast-ui
 
 version=$(target/release/boardcast --version | cut -d' ' -f2)
 glyphs=target/package/glyphs.pack

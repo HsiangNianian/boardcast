@@ -29,7 +29,7 @@
 复现（Node 24+，先启动服务）：
 
 ```sh
-node scripts/fetch-llama.mjs linux-x64
+cargo run -p boardcast-tools -- fetch llama linux-x64
 src-tauri/llama/llama-server -m /tmp/Qwen3.5-4B-Q4_K_M.gguf --host 127.0.0.1 --port 18081 -c 4096 --jinja -np 1 -ngl auto --fit on -t 2
 ```
 

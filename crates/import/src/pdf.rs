@@ -310,7 +310,7 @@ mod tests {
         let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/pdfium"));
         let found = Pdfium::pdfium_platform_library_name_at_path(&dir).is_file();
         // CI fetches it, so there a missing library is a failure rather than a skipped test.
-        assert!(found || std::env::var_os("CI").is_none(), "run scripts/fetch-pdfium.mjs first");
+        assert!(found || std::env::var_os("CI").is_none(), "run `boardcast-tools fetch pdfium` first");
         found.then_some(dir)
     }
 

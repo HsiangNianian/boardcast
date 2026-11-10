@@ -11,7 +11,7 @@ All four full-corpus combinations completed locally (30 samples each, 120 sample
 
 - Corpus: `asr-fixtures-v1`; manifest SHA-256 `8dd4f34612c1a0e441d163176ad06b09d3aa5e94d1df728d408574fb5131b493`.
 - Runtime: sherpa-onnx 2.0.1; recognizer threads = 2; automatic language detection; the application's Silero VAD, pre-roll and soft sentence breaks are retained.
-- Model checksums are pinned in `scripts/fetch-voice.mjs` and `eval/asr/models.json`. Whisper is **base int8**, not large-v3/turbo. It is a lightweight comparison, not a proxy for stronger Whisper models or Qwen3-ASR.
+- Model checksums are pinned in `crates/tools/src/voice_files.rs` and `eval/asr/models.json`. Whisper is **base int8**, not large-v3/turbo. It is a lightweight comparison, not a proxy for stronger Whisper models or Qwen3-ASR.
 - Counts: Japanese 558 reference characters; English 126 words; mixed speech 53 mixed units. Micro-averaged within each language; no combined multilingual average.
 - Chinese provisional references and both long overlapping meetings are excluded from these aggregate rates. One of the two very quiet Chinese short turns produced no final transcript in the raw SenseVoice run; it remains in the fixture rather than being removed as an inconvenient case.
 - The silence control produced no final text in all four combinations.

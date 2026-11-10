@@ -144,7 +144,8 @@ body.drawing-lasso { user-select: none; cursor: crosshair; }
 .replay-open:hover { color: var(--fg); }
 
 /* ———————————————— signals: one meeting, four lines ———————————————— */
-section.block { padding: 140px 0 0; }
+/* Top only: the sides are .wrap's padding. */
+section.block { padding-top: 140px; }
 .head { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: end; padding-bottom: 28px; }
 .head h2 { font-size: clamp(44px, 5.6vw, 88px); font-weight: 200; letter-spacing: -.04em; line-height: .96; }
 .head h2 em { font-style: normal; color: var(--dim); }
@@ -305,11 +306,11 @@ section.block { padding: 140px 0 0; }
 .dl em { font: 400 13px var(--mono); font-style: normal; }
 .dl a:hover { background: var(--fg); color: var(--bg); }
 .dl a:hover span { color: var(--bg); }
-.now { padding: 160px 0 120px; text-align: center; }
+.now { padding-top: 160px; padding-bottom: 120px; text-align: center; }
 .now .clock { font-size: clamp(90px, 16vw, 240px); font-weight: 200; letter-spacing: -.06em; line-height: 1; font-variant-numeric: tabular-nums; }
 .now .clock .sep { animation: blink 2s steps(2) infinite; }
 .now p { margin-top: 18px; font-size: 22px; color: var(--grey); }
-footer { display: flex; justify-content: space-between; padding: 28px 0 56px; border-top: 1px solid var(--hair); }
+footer { display: flex; justify-content: space-between; gap: 16px; padding-top: 28px; padding-bottom: 56px; border-top: 1px solid var(--hair); }
 
 @media (max-width: 1080px) {
   nav.top { grid-template-columns: 1fr 1fr; } .about { display: none; }
@@ -322,6 +323,30 @@ footer { display: flex; justify-content: space-between; padding: 28px 0 56px; bo
   .row { grid-template-columns: 110px 1fr; } .caption { grid-template-columns: 110px 1fr; } .row .name { font-size: 16px; }
   .dock button:not(.mic) span { display: none; }
 }
-@media (max-width: 600px) { .wrap { padding: 0 16px; } nav.top { grid-template-columns: 1fr; } .nav-item { display: none; } .dots, .dl { grid-template-columns: 1fr; } .app-title > span:not(.rec):not(.name) { display: none; } }
+@media (max-width: 600px) {
+  .wrap { padding: 0 16px; } nav.top { grid-template-columns: 1fr; padding-top: 24px; } .nav-item { display: none; } .dots, .dl { grid-template-columns: 1fr; } .app-title > span:not(.rec):not(.name) { display: none; }
+  /* The sheet's furniture stays out of the way of a narrow screen. */
+  .titleblock, .ruler span { display: none; }
+  .frame { inset: 6px; }
+  .hero { min-height: 640px; }
+  .said { margin-top: 24px; align-items: flex-start; font-size: 12px; } .said #said-time { display: none; }
+  .hero-foot { gap: 24px; padding-bottom: 24px; } .hero-foot h1 { font-size: 34px; }
+  .cta { flex-direction: column; align-items: stretch; } .cta a { width: auto; }
+  .hero-rail .chapters, .hero-rail > span { display: none; }
+  section.block { padding-top: 96px; }
+  .head { gap: 16px; } .head h2 { font-size: 40px; }
+  .row { grid-template-columns: 64px 1fr; height: 72px; } .row svg { height: 72px; } .row .name { font-size: 14px; } .row .name small { display: none; }
+  .caption { grid-template-columns: 64px 1fr; } .caption p { font-size: 17px; }
+  .pin .wrap { gap: 12px; } .chapter { height: 112px; } .chapter h3 { font-size: 28px; margin-top: 10px; }
+  .app-title { gap: 12px; padding: 0 12px; } .app-body { height: min(440px, 56vh); }
+  .canvas svg.board { left: 12px; top: 28px; width: calc(100% - 24px); }
+  .dock .meter, .dock .mic small { display: none; } .dock button { padding: 10px; } .dock .mic { grid-template-columns: 24px auto; }
+  .tabs { bottom: 14px; } .tabs .wrap { gap: 12px; overflow: hidden; } .tabs span { font-size: 10px; white-space: nowrap; } .tabs .auto { display: none; }
+  .bento { grid-auto-rows: 300px; } .card h4 { font-size: 26px; }
+  .specs dl { grid-template-columns: 110px 1fr; }
+  .dl a { padding: 28px 20px; }
+  .now { padding-top: 96px; padding-bottom: 80px; } .now p { font-size: 17px; }
+  footer { flex-direction: column; }
+}
 
 footer a:hover { color: var(--fg); }

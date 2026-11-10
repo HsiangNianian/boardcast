@@ -131,6 +131,39 @@ pub trait Recognizer: Send {
     fn recognize(&mut self, samples: &[f32]) -> Result<String>;
 }
 
+/// Text this short might have been made up from noise, so its sound is checked for a voice.
+const NOISE_WORDS: usize = 12;
+/// Real sentences measured 0.2 or more voiced on the ASR corpus; keyboard clicks, coughs and hiss 0.
+const MIN_VOICED: f32 = 0.05;
+
+/// The share of 30 ms frames that are voiced: loud enough, and periodic at a pitch a voice can have.
+/// Speech is full of them; clicks, breath and hum are not.
+pub fn voiced_share(samples: &[f32]) -> f32 {
+    const FRAME: usize = 480;
+    const LAGS: std::ops::RangeInclusive<usize> = 40..=200; // 400 Hz down to 80 Hz
+    let frames: Vec<&[f32]> = samples.chunks_exact(FRAME).collect();
+    if frames.is_empty() {
+        return 0.0;
+    }
+    let loudest = frames.iter().map(|f| rms(f)).fold(0.0_f32, f32::max);
+    let voiced = frames
+        .iter()
+        .filter(|f| {
+            let energy: f32 = f.iter().map(|x| x * x).sum();
+            if energy <= 0.0 || rms(f) < loudest * 0.1 {
+                return false;
+            }
+            LAGS.clone().any(|lag| {
+                let (a, b) = (&f[..FRAME - lag], &f[lag..]);
+                let num: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+                let den = (a.iter().map(|x| x * x).sum::<f32>() * b.iter().map(|x| x * x).sum::<f32>()).sqrt();
+                den > 0.0 && num / den > 0.6
+            })
+        })
+        .count();
+    voiced as f32 / frames.len() as f32
+}
+
 /// Whether recognized text is Korean: it has Hangul. Nobody here speaks Korean, so SenseVoice heard
 /// a short Chinese word that way, as with 哦 written 어.
 pub fn is_korean(text: &str) -> bool {
@@ -431,6 +464,11 @@ impl Ear {
         }
         let ended = Instant::now();
         let (text, engine) = self.asr.hear(samples);
+        // A word or two out of clicks, breath or hum: the recognizers find words in anything, but
+        // speech is voiced, and these are not.
+        if text.chars().count() <= NOISE_WORDS && voiced_share(samples) < MIN_VOICED {
+            return;
+        }
         if !text.is_empty() {
             let asr_ms = ended.elapsed().as_millis();
             heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine });
@@ -717,6 +755,42 @@ mod tests {
         said
     }
 
+    fn clicks(amplitude: f32) -> Vec<f32> {
+        let mut seed = 11_u32;
+        let mut noise = || {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            (f64::from(seed) / f64::from(u32::MAX) * 2.0 - 1.0) as f32
+        };
+        let mut v = vec![0.0; SAMPLE_RATE as usize * 4];
+        let mut at = 1000;
+        while at + 400 < v.len() {
+            for k in 0..300 {
+                v[at + k] += noise() * amplitude * (-(k as f32) / 40.0).exp();
+            }
+            at += 2000 + (noise().abs() * 2000.0) as usize;
+        }
+        v
+    }
+
+    #[test]
+    fn a_voice_is_voiced_and_clicks_are_not() {
+        let voice: Vec<f32> = (0..SAMPLE_RATE as usize)
+            .map(|i| (1..=5).map(|h| (i as f32 * std::f32::consts::TAU * 150.0 * h as f32 / SAMPLE_RATE as f32).sin() / h as f32).sum::<f32>() * 0.2)
+            .collect();
+        assert!(voiced_share(&voice) > 0.9);
+        assert!(voiced_share(&clicks(0.5)) < MIN_VOICED);
+        assert_eq!(voiced_share(&[]), 0.0);
+    }
+
+    #[test]
+    fn typing_on_a_keyboard_writes_nothing() {
+        let Some(dir) = models() else { return };
+        for amplitude in [0.05, 0.5] {
+            let mut ear = Ear::load(&dir).unwrap();
+            assert_eq!(hear_all(&mut ear, &clicks(amplitude)), Vec::<String>::new(), "clicks at {amplitude}");
+        }
+    }
+
     #[test]
     fn silence_and_noise_produce_nothing() {
         let Some(dir) = models() else { return };
@@ -738,3 +812,4 @@ mod tests {
         }
     }
 }
+

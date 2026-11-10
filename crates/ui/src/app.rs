@@ -2566,7 +2566,6 @@ impl Workbench {
             .flex()
             .flex_col()
             .gap_2()
-            .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Speakers", "说话人")))
             .when(names.is_empty(), |d| d.child(div().text_sm().text_color(rgb(FAINT)).child(tr("Nobody has spoken yet.", "还没有人说话。"))))
             .children(rows)
             .when_some(editing, |d, editing| d.child(editing))
@@ -3454,7 +3453,8 @@ impl Render for Workbench {
             )
             .child(self.status.clone());
         // With the transcript away, the latest line still shows that the room is being heard.
-        let caption = self.live.lines.iter().rev().find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !side_shown && self.replay.is_none());
+        let transcript_shown = self.panel == Panel::Transcript && self.transcript_open;
+        let caption = self.live.lines.iter().rev().find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !transcript_shown && self.replay.is_none());
         let banner = self.notice.clone().or_else(|| match &self.save {
             SaveState::Failed(error) => Some(format!("{}{error}", tr("Your meeting is still open here, but it was not saved: ", "这场会还在这里，但没有保存成功："))),
             _ => None,
@@ -3793,6 +3793,36 @@ impl Render for Workbench {
             .border_1()
             .border_color(rgb(LINE))
             .shadow_md()
+            // Every panel says what it is and closes the same way.
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .pl_3()
+                    .pr_1()
+                    .h(px(36.))
+                    .flex_none()
+                    .border_b_1()
+                    .border_color(rgb(LINE))
+                    .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(match self.panel {
+                        Panel::Transcript => tr("Transcript", "转写"),
+                        Panel::Library => tr("Meetings", "会议"),
+                        Panel::Summary => tr("Summary", "摘要"),
+                        Panel::Export => tr("Export", "导出"),
+                        Panel::Import => tr("Import", "导入"),
+                        Panel::Speakers => tr("Speakers", "说话人"),
+                        Panel::Settings => tr("Settings", "设置"),
+                    }))
+                    .child(icon_button("close-panel", "x", if self.panel == Panel::Transcript { tr("Hide the transcript", "收起转写") } else { tr("Back to the transcript (Esc)", "回到转写（Esc）") }).on_click(cx.listener(|this, _, _, cx| {
+                        if this.panel == Panel::Transcript {
+                            this.transcript_open = false;
+                        } else {
+                            this.panel = Panel::Transcript;
+                        }
+                        cx.notify();
+                    }))),
+            )
             .when(self.panel == Panel::Transcript, |d| {
                 d.child(transcript).when(editable, |d| {
                     d.child(

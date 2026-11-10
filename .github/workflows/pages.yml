@@ -1,11 +1,18 @@
 name: Website
 
-# Publishes the website at the Pages root. The earlier app's web demo under /demo/ is no longer built (#150).
+# Publishes the website, built from crates/site and landing/ with Trunk, at the Pages root. The earlier app's web demo under /demo/ is no longer built (#150).
 # Requires Settings → Pages → Source: GitHub Actions.
 
 on:
   push:
     branches: [main]
+  # Pull requests only build it, so a broken site never reaches main.
+  pull_request:
+    paths:
+      - 'landing/**'
+      - 'crates/site/**'
+      - 'Cargo.lock'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -14,7 +21,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -22,21 +29,23 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # Trunk fetches the wasm-bindgen that matches Cargo.lock.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
       - name: Build the website
-        run: |
-          pnpm site:build
-          pnpm exec tsc -p landing/tsconfig.json --noUnusedLocals --noUnusedParameters
+        working-directory: landing
+        run: trunk build --release
       - uses: actions/upload-pages-artifact@v4
         with:
           path: landing/dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-24.04
     environment:

@@ -9,6 +9,12 @@
     <meta property="og:description" content="A whiteboard that writes down your meeting, stroke by stroke, on your own computer." />
     <meta name="theme-color" content="#000000" />
     <link rel="icon" href="./favicon.png" />
+    <!-- Trunk builds the Rust crate in crates/site and copies the rest. -->
+    <link data-trunk rel="rust" href="../crates/site/Cargo.toml" />
+    <link data-trunk rel="css" href="style.css" />
+    <link data-trunk rel="copy-dir" href="fonts" />
+    <link data-trunk rel="copy-dir" href="public/licenses" />
+    <link data-trunk rel="copy-file" href="public/favicon.png" />
   </head>
   <body>
 <div class="frame" aria-hidden="true"><div class="ruler top" id="ruler-top"></div><div class="ruler left" id="ruler-left"></div></div>
@@ -164,8 +170,6 @@
   <div class="clock" id="now">--<span class="sep">:</span>--</div>
   <p>your next meeting. let the board draw itself.</p>
 </section>
-<footer class="wrap label"><span>boardcast · <a href="https://github.com/HsiangNianian/boardcast/blob/main/LICENSE">mit</a> · fonts: <a href="./licenses/excalifont-OFL.txt">excalifont</a>, <a href="./licenses/ems-tech-OFL.txt">ems tech</a></span><a href="https://github.com/HsiangNianian/boardcast">github.com/hsiangnianian/boardcast</a></footer>
-
-    <script type="module" src="./src/main.ts"></script>
+<footer class="wrap label"><span>boardcast · <a href="https://github.com/HsiangNianian/boardcast/blob/main/LICENSE">mit</a> · fonts: <a href="./licenses/excalifont-OFL.txt">excalifont</a>, <a href="./licenses/ems-tech-OFL.txt">ems tech</a>, <a href="./licenses/dm-sans-OFL.txt">dm sans</a>, <a href="./licenses/jetbrains-mono-OFL.txt">jetbrains mono</a></span><a href="https://github.com/HsiangNianian/boardcast">github.com/hsiangnianian/boardcast</a></footer>
   </body>
 </html>

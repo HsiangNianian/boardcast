@@ -1,0 +1,9 @@
+# The website. `trunk serve` from this folder for a local server, `trunk build --release` for dist/.
+[build]
+target = "index.html"
+dist = "dist"
+# Relative paths, so the page opens under any subpath.
+public_url = "./"
+
+[serve]
+port = 1430

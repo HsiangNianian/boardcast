@@ -34,3 +34,7 @@ opt-level = 2
 [profile.release]
 lto = "thin"
 codegen-units = 4
+
+# The website is downloaded by every visitor, so it is built for size.
+[profile.release.package.boardcast-site]
+opt-level = "s"

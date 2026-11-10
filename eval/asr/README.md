@@ -116,7 +116,7 @@ Dynamic quick evaluation adds 13 derived cases to the 17 originals: quiet (0.15Ã
 
 ```sh
 pnpm eval:asr --policy dynamic --suite full
-pnpm eval --set revisions --repeat 3 --label my-model
+# The revisions set ran on the earlier app; the GPUI app has no transcript revisions yet (#150).
 ```
 
 See the [first dynamic run](dynamic.md) for measured results and explicit limits.

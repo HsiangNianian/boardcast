@@ -157,14 +157,14 @@ pnpm test                      # 引擎和 ASR 工具的单元测试，不需要
 | [`eval/cases.json`](eval/cases.json) | 28 场会 | 开发与回归，包含英文和一场真实会议的回归 |
 | [`eval/holdout.json`](eval/holdout.json) | 27 场会 | 不参与提示词调整的留出集 |
 | [`eval/pointing.json`](eval/pointing.json) | 18 个用例 | 中英文圈着说，起始板固定 |
-| [`eval/revisions.json`](eval/revisions.json) | 3 个用例 | 转写修订，必须保留节点身份和无关内容 |
+| [`eval/revisions.json`](eval/revisions.json) | 3 个用例 | 转写修订，必须保留节点身份和无关内容；等 GPUI 版支持转写修订后再跑 |
 
 先启动可用的 llama-server，然后运行：
 
 ```sh
-pnpm eval --set dev --label my-model
-pnpm eval --set holdout --label my-model
-pnpm eval --set pointing --repeat 3 --label my-model
+cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set dev --label my-model
+cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set holdout --label my-model
+cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
 ```
 
 语音识别有自己的评测：

@@ -157,14 +157,14 @@ pnpm test                      # engine and ASR tooling unit tests; no model nee
 | [`eval/cases.json`](eval/cases.json) | 28 meetings | Development and regression, including English and a real-meeting regression |
 | [`eval/holdout.json`](eval/holdout.json) | 27 meetings | Held out from prompt tuning |
 | [`eval/pointing.json`](eval/pointing.json) | 18 cases | Chinese and English pointing cases with fixed starting boards |
-| [`eval/revisions.json`](eval/revisions.json) | 3 cases | Transcription revisions that must keep node identity and unrelated content |
+| [`eval/revisions.json`](eval/revisions.json) | 3 cases | Transcription revisions that must keep node identity and unrelated content; not run until the GPUI app revises transcripts |
 
 Start a working llama-server, then run:
 
 ```sh
-pnpm eval --set dev --label my-model
-pnpm eval --set holdout --label my-model
-pnpm eval --set pointing --repeat 3 --label my-model
+cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set dev --label my-model
+cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set holdout --label my-model
+cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
 ```
 
 Speech recognition has its own suites:

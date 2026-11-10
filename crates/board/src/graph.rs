@@ -175,7 +175,7 @@ impl Default for Graph {
 }
 
 /// Names compare without case, spaces or common punctuation.
-pub(crate) fn norm(s: &str) -> String {
+pub fn norm(s: &str) -> String {
     s.to_lowercase()
         .chars()
         .filter(|c| !c.is_whitespace() && !"·・,，。.、\"“”'‘’「」『』()（）?？!！".contains(*c))
@@ -689,7 +689,7 @@ impl Utterance {
     }
 }
 
-fn is_han(c: char) -> bool {
+pub fn is_han(c: char) -> bool {
     matches!(c as u32,
         0x2E80..=0x2E99 | 0x2E9B..=0x2EF3 | 0x2F00..=0x2FD5 | 0x3005 | 0x3007 | 0x3021..=0x3029
         | 0x3038..=0x303B | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFA6D | 0xFA70..=0xFAD9

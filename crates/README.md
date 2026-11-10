@@ -51,7 +51,7 @@ cargo run --release -p boardcast-ui -- --synthetic 5000 --zoom-test --llm http:/
 cargo run --release -p boardcast-ui -- --self-check         # what was found, and which graphics devices
 cargo run --release -p boardcast-tools -- check <root> --all-demos --tidy
 cargo run --release -p boardcast-tools -- export <root> meeting.json out.md out.png out.svg out.pdf
-cargo run --release -p boardcast-tools -- agent-eval <root> out.json --deepseek --only-dev --workers 6 --rules-only
+cargo run --release -p boardcast-tools -- agent-eval <root> out.json --deepseek --set dev --workers 6 --rules-only
 node scripts/fetch-pdfium.mjs   # the PDF library, into target/pdfium
 cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-export -p boardcast-import
 ```

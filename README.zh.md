@@ -24,7 +24,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
 默认在本机完成语音识别和板书模型推理。模型下载好后可以离线开会；需要更大的模型时，也能连接 OpenAI 兼容接口。
 
-桌面版是用 Rust 和 [GPUI](crates/README.md) 重写的原生应用。之前的 Tauri 版已经不再发布。官网上的[网页演示](https://hsiangnianian.github.io/boardcast/demo/)仍然是旧版，所以里面有几样东西[现在的应用还没有](#现在的应用还没有)。
+桌面版是用 Rust 和 [GPUI](crates/README.md) 重写的原生应用。之前的 Tauri 版已经不再发布，它的一些功能[现在的应用还没有](#现在的应用还没有)。
 
 [开始使用](#开始使用) · [能做什么](#能做什么) · [快捷键](#快捷键) · [模型与隐私](#模型与隐私) · [开发](#开发与评测)
 
@@ -91,7 +91,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
 ### 现在的应用还没有
 
-下面这些旧版有（所以网页演示里也有），还没有在新版里重做：用 Excalidraw 自由编辑和导出、术语表与读音纠错（[#117](https://github.com/HsiangNianian/boardcast/issues/117)）、同时收麦克风和系统声音、macOS 的系统声音（[#34](https://github.com/HsiangNianian/boardcast/issues/34)）、Windows 安装包、全局收音快捷键和诊断包。
+下面这些旧版有，还没有在新版里重做：用 Excalidraw 自由编辑和导出、术语表与读音纠错（[#117](https://github.com/HsiangNianian/boardcast/issues/117)）、同时收麦克风和系统声音、macOS 的系统声音（[#34](https://github.com/HsiangNianian/boardcast/issues/34)）、Windows 安装包、全局收音快捷键和诊断包。
 
 ## 快捷键
 
@@ -141,12 +141,11 @@ cargo test --workspace
 sh packaging/linux/package.sh           # target/package/boardcast-<version>-<arch>-linux.tar.gz
 ```
 
-官网、网页演示和评测工具仍是 Node 项目。请使用 **Node.js 24+** 和仓库锁定的 **pnpm 11.13.1**：
+官网和评测工具是 Node 项目。请使用 **Node.js 24+** 和仓库锁定的 **pnpm 11.13.1**：
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm site:dev                  # 官网 http://localhost:1430
-pnpm dev                       # 旧版的网页演示 http://localhost:1420
 pnpm test                      # 引擎和 ASR 工具的单元测试，不需要模型
 ```
 

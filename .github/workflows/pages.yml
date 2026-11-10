@@ -1,7 +1,6 @@
-name: Web demo
+name: Website
 
-# Publishes the website at the Pages root and the interactive web demo under /demo/.
-# The website embeds the demo at the end of the page.
+# Publishes the website at the Pages root. The earlier app's web demo under /demo/ is no longer built (#150).
 # Requires Settings → Pages → Source: GitHub Actions.
 
 on:
@@ -29,14 +28,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-        env:
-          BOARDCAST_BASE: /${{ github.event.repository.name }}/demo/
-      - name: Build website and include the demo
+      - name: Build the website
         run: |
           pnpm site:build
           pnpm exec tsc -p landing/tsconfig.json --noUnusedLocals --noUnusedParameters
-          cp -R dist landing/dist/demo
       - uses: actions/upload-pages-artifact@v4
         with:
           path: landing/dist

@@ -1,7 +1,7 @@
 # boardcast on GPUI
 
 The native rewrite of boardcast. Its core is producing the board from speech and marking on it. Excalidraw free
-editing is dropped. The Tauri app in `src-tauri/` and `src/` is no longer released, and stays only while other work still reads it: the answer key, the web demo and the speech evaluation.
+editing is dropped. The Tauri app in `src-tauri/` and `src/` is no longer released, and stays only while other work still reads it: the answer key and the evaluations. Its removal is tracked in #150.
 
 | Crate | Owns | Must not depend on |
 | --- | --- | --- |

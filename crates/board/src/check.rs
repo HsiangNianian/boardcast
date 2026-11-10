@@ -51,10 +51,7 @@ fn runs_through(points: &[P], b: &Rect) -> bool {
     points.windows(2).any(|s| {
         (0..=40).any(|k| {
             let t = f64::from(k) / 40.0;
-            let (x, y) = (
-                s[0][0] + (s[1][0] - s[0][0]) * t,
-                s[0][1] + (s[1][1] - s[0][1]) * t,
-            );
+            let (x, y) = (s[0][0] + (s[1][0] - s[0][0]) * t, s[0][1] + (s[1][1] - s[0][1]) * t);
             x > b.x + 4.0 && x < b.x + b.w - 4.0 && y > b.y + 4.0 && y < b.y + b.h - 4.0
         })
     })
@@ -62,12 +59,7 @@ fn runs_through(points: &[P], b: &Rect) -> bool {
 
 pub fn check(g: &Graph, l: &Layout, unclear: &[String]) -> Report {
     let mut r = Report::default();
-    let name = |id: &str| {
-        g.nodes
-            .iter()
-            .find(|n| n.id == id)
-            .map_or_else(|| id.to_string(), |n| n.label.clone())
-    };
+    let name = |id: &str| g.nodes.iter().find(|n| n.id == id).map_or_else(|| id.to_string(), |n| n.label.clone());
 
     // Imported pages are preserved but not laid out yet, and nothing here can repair them.
     let imported = |id: &str| -> bool {
@@ -76,19 +68,13 @@ pub fn check(g: &Graph, l: &Layout, unclear: &[String]) -> Report {
             if n.kind == Kind::Region {
                 return true;
             }
-            at = n
-                .parent
-                .as_deref()
-                .and_then(|p| g.nodes.iter().find(|o| o.id == p));
+            at = n.parent.as_deref().and_then(|p| g.nodes.iter().find(|o| o.id == p));
         }
         false
     };
     for n in g.nodes.iter().filter(|n| !imported(&n.id)) {
         if !l.anchors.contains_key(&n.id) {
-            r.hard.push(Issue {
-                code: "unplaced_node",
-                detail: n.label.clone(),
-            });
+            r.hard.push(Issue { code: "unplaced_node", detail: n.label.clone() });
         }
     }
     let mut areas: Vec<&Rect> = l.regions.iter().map(|x| &x.rect).collect();
@@ -98,10 +84,7 @@ pub fn check(g: &Graph, l: &Layout, unclear: &[String]) -> Report {
     for (i, a) in areas.iter().enumerate() {
         for b in &areas[i + 1..] {
             if overlaps(a, b, 0.0) {
-                r.hard.push(Issue {
-                    code: "region_overlap",
-                    detail: format!("{} / {}", a.id, b.id),
-                });
+                r.hard.push(Issue { code: "region_overlap", detail: format!("{} / {}", a.id, b.id) });
             }
         }
     }
@@ -109,34 +92,22 @@ pub fn check(g: &Graph, l: &Layout, unclear: &[String]) -> Report {
         for (i, a) in d.nodes.iter().enumerate() {
             for b in &d.nodes[i + 1..] {
                 if overlaps(a, b, 0.0) {
-                    r.hard.push(Issue {
-                        code: "node_overlap",
-                        detail: format!("{} / {}", name(&a.id), name(&b.id)),
-                    });
+                    r.hard.push(Issue { code: "node_overlap", detail: format!("{} / {}", name(&a.id), name(&b.id)) });
                 }
             }
         }
         for e in &d.edges {
             for b in d.nodes.iter().filter(|b| b.id != e.from && b.id != e.to) {
                 if runs_through(&e.points, b) {
-                    r.hard.push(Issue {
-                        code: "edge_through_node",
-                        detail: format!("{} -> {} / {}", name(&e.from), name(&e.to), name(&b.id)),
-                    });
+                    r.hard.push(Issue { code: "edge_through_node", detail: format!("{} -> {} / {}", name(&e.from), name(&e.to), name(&b.id)) });
                 }
             }
         }
         for (frame, label) in &d.groups {
             for n in &d.nodes {
-                let member = g
-                    .nodes
-                    .iter()
-                    .any(|o| o.id == n.id && o.group.as_deref() == Some(frame.id.as_str()));
+                let member = g.nodes.iter().any(|o| o.id == n.id && o.group.as_deref() == Some(frame.id.as_str()));
                 if !member && overlaps(n, frame, 0.0) {
-                    r.hard.push(Issue {
-                        code: "frame_stranger",
-                        detail: format!("{} / {label}", name(&n.id)),
-                    });
+                    r.hard.push(Issue { code: "frame_stranger", detail: format!("{} / {label}", name(&n.id)) });
                 }
             }
         }
@@ -145,73 +116,40 @@ pub fn check(g: &Graph, l: &Layout, unclear: &[String]) -> Report {
     for reg in &l.regions {
         if reg.rows.len() > MAX_ROWS && reg.head.is_some() {
             let head = reg.head.as_deref().map(&name).unwrap_or_default();
-            r.soft.push(Issue {
-                code: "crowded_topic",
-                detail: format!("{head} 有 {} 条", reg.rows.len()),
-            });
+            r.soft.push(Issue { code: "crowded_topic", detail: format!("{head} 有 {} 条", reg.rows.len()) });
         }
-        if reg.head.is_some()
-            && reg.rows.is_empty()
-            && !g
-                .edges
-                .iter()
-                .any(|e| Some(&e.from) == reg.head.as_ref() || Some(&e.to) == reg.head.as_ref())
-        {
-            r.soft.push(Issue {
-                code: "empty_topic",
-                detail: reg.head.as_deref().map(&name).unwrap_or_default(),
-            });
+        if reg.head.is_some() && reg.rows.is_empty() && !g.edges.iter().any(|e| Some(&e.from) == reg.head.as_ref() || Some(&e.to) == reg.head.as_ref()) {
+            r.soft.push(Issue { code: "empty_topic", detail: reg.head.as_deref().map(&name).unwrap_or_default() });
         }
     }
     for n in &g.nodes {
         if crate::board_layout::text_width(&n.label, crate::board_layout::FONT) > MAX_LABEL_WIDTH {
-            r.soft.push(Issue {
-                code: "long_label",
-                detail: n.label.clone(),
-            });
+            r.soft.push(Issue { code: "long_label", detail: n.label.clone() });
         }
     }
     let is_topic = |id: &str| g.nodes.iter().any(|n| n.id == id && n.kind == Kind::Topic);
     for e in &g.edges {
         if is_topic(&e.from) || is_topic(&e.to) {
-            r.soft.push(Issue {
-                code: "topic_in_flow",
-                detail: format!("{} -> {}", name(&e.from), name(&e.to)),
-            });
+            r.soft.push(Issue { code: "topic_in_flow", detail: format!("{} -> {}", name(&e.from), name(&e.to)) });
         }
         if e.from < e.to && g.edges.iter().any(|o| o.from == e.to && o.to == e.from) {
-            r.soft.push(Issue {
-                code: "two_way",
-                detail: format!("{} <-> {}", name(&e.from), name(&e.to)),
-            });
+            r.soft.push(Issue { code: "two_way", detail: format!("{} <-> {}", name(&e.from), name(&e.to)) });
         }
     }
     for label in unclear {
-        r.soft.push(Issue {
-            code: "label_no_clear_spot",
-            detail: label.clone(),
-        });
+        r.soft.push(Issue { code: "label_no_clear_spot", detail: label.clone() });
     }
     let (w, h) = TYPICAL_CANVAS;
     let b = &l.bounds;
-    r.fit_zoom = (w / (b.x1 - b.x0 + 120.0))
-        .min(h / (b.y1 - b.y0 + 120.0))
-        .min(1.0);
+    r.fit_zoom = (w / (b.x1 - b.x0 + 120.0)).min(h / (b.y1 - b.y0 + 120.0)).min(1.0);
     if r.fit_zoom < MIN_FIT_ZOOM {
-        r.soft.push(Issue {
-            code: "board_too_large",
-            detail: format!("适配缩放 {:.0}%", r.fit_zoom * 100.0),
-        });
+        r.soft.push(Issue { code: "board_too_large", detail: format!("适配缩放 {:.0}%", r.fit_zoom * 100.0) });
     }
     r
 }
 
 /// Check a board and, on a hard defect, lay it out again from scratch. Returns both reports.
-pub fn check_and_repair(
-    g: &Graph,
-    board: &mut StableLayout,
-    glyphs: &mut Glyphs,
-) -> (Report, Option<Report>) {
+pub fn check_and_repair(g: &Graph, board: &mut StableLayout, glyphs: &mut Glyphs) -> (Report, Option<Report>) {
     let l = board.layout(g, &mut first_diagram);
     let (_, unclear) = compose(g, &l, glyphs);
     let report = check(g, &l, &unclear);
@@ -243,9 +181,7 @@ mod tests {
 
     #[test]
     fn a_clean_board_has_nothing_to_report() {
-        let r = report(
-            "E 「用户」 -> 「网关」\nE 「网关」 -> 「登录」\nT 「待办」\nL 「待办」 「压测」",
-        );
+        let r = report("E 「用户」 -> 「网关」\nE 「网关」 -> 「登录」\nT 「待办」\nL 「待办」 「压测」");
         assert!(r.hard.is_empty(), "{r:?}");
         assert!(r.soft.is_empty(), "{r:?}");
     }
@@ -257,22 +193,16 @@ mod tests {
         assert!(topic.hint().unwrap().starts_with("排版提示"));
         assert!(codes(&report("E 「甲」 -> 「乙」\nE 「乙」 -> 「甲」").soft).contains(&"two_way"));
         assert!(codes(&report("T 「空」").soft).contains(&"empty_topic"));
-        let many: String = (0..9)
-            .map(|i| format!("L 「待办」 「事项{i}」\n"))
-            .collect();
+        let many: String = (0..9).map(|i| format!("L 「待办」 「事项{i}」\n")).collect();
         assert!(codes(&report(&format!("T 「待办」\n{many}")).soft).contains(&"crowded_topic"));
-        assert!(
-            codes(&report("T 「这是一个特别特别特别特别特别长的名字」").soft)
-                .contains(&"long_label")
-        );
+        assert!(codes(&report("T 「这是一个特别特别特别特别特别长的名字」").soft).contains(&"long_label"));
     }
 
     /// Random boards built one line at a time are the hardest case for incremental layout. Whatever
     /// it gets wrong must be caught, and laying the board out again must fix it.
     #[test]
     fn repair_clears_every_defect_the_incremental_layout_causes() {
-        let goldens: serde_json::Value =
-            serde_json::from_str(include_str!("../fixtures/goldens.json")).unwrap();
+        let goldens: serde_json::Value = serde_json::from_str(include_str!("../fixtures/goldens.json")).unwrap();
         let (mut steps, mut defective, mut left) = (0, 0, 0);
         let mut codes_seen = std::collections::BTreeMap::new();
         for case in goldens["stress"].as_array().unwrap() {
@@ -297,10 +227,7 @@ mod tests {
         }
         println!("REPAIR steps {steps}, defective {defective}, codes {codes_seen:?}, left after repair {left}");
         assert_eq!(left, 0, "defects survive a full layout");
-        assert!(
-            defective > 0,
-            "the incremental layout was never stressed, so this proves nothing"
-        );
+        assert!(defective > 0, "the incremental layout was never stressed, so this proves nothing");
     }
 
     #[test]
@@ -308,58 +235,22 @@ mod tests {
         use crate::board_layout::{Bounds, Diagram, Route};
         let mut g = Graph::default();
         g.apply(&parse_ops("E 「甲」 -> 「乙」\nN 「丙」\nG 「组」 「甲」"));
-        let rect = |id: &str, x, y| Rect {
-            id: id.to_string(),
-            x,
-            y,
-            w: 100.0,
-            h: 60.0,
-        };
-        let id = |label: &str| {
-            g.nodes
-                .iter()
-                .find(|n| n.label == label)
-                .unwrap()
-                .id
-                .clone()
-        };
+        let rect = |id: &str, x, y| Rect { id: id.to_string(), x, y, w: 100.0, h: 60.0 };
+        let id = |label: &str| g.nodes.iter().find(|n| n.label == label).unwrap().id.clone();
         let (a, b, c) = (id("甲"), id("乙"), id("丙"));
-        let nodes = vec![
-            rect(&a, 0.0, 0.0),
-            rect(&b, 400.0, 0.0),
-            rect(&c, 200.0, 0.0),
-        ];
+        let nodes = vec![rect(&a, 0.0, 0.0), rect(&b, 400.0, 0.0), rect(&c, 200.0, 0.0)];
         let l = Layout {
             diagram: Some((
                 rect("__diagram", 0.0, 0.0),
                 Diagram {
                     nodes: nodes.clone(),
-                    edges: vec![Route {
-                        from: a.clone(),
-                        to: b,
-                        points: vec![[100.0, 30.0], [400.0, 30.0]],
-                        label_box: None,
-                    }],
-                    groups: vec![(
-                        Rect {
-                            id: g.groups[0].id.clone(),
-                            x: 0.0,
-                            y: 0.0,
-                            w: 250.0,
-                            h: 60.0,
-                        },
-                        "组".into(),
-                    )],
+                    edges: vec![Route { from: a.clone(), to: b, points: vec![[100.0, 30.0], [400.0, 30.0]], label_box: None }],
+                    groups: vec![(Rect { id: g.groups[0].id.clone(), x: 0.0, y: 0.0, w: 250.0, h: 60.0 }, "组".into())],
                     ..Diagram::default()
                 },
             )),
             anchors: nodes.iter().map(|n| (n.id.clone(), n.clone())).collect(),
-            bounds: Bounds {
-                x0: 0.0,
-                y0: 0.0,
-                x1: 500.0,
-                y1: 60.0,
-            },
+            bounds: Bounds { x0: 0.0, y0: 0.0, x1: 500.0, y1: 60.0 },
             ..Layout::default()
         };
         let found = codes(&check(&g, &l, &[]).hard);

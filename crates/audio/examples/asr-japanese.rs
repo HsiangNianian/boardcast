@@ -6,10 +6,7 @@
 
 use boardcast_audio::{load_sense_voice, transcribe, SAMPLE_RATE};
 use serde_json::Value;
-use sherpa_onnx::{
-    OfflineRecognizer, OfflineRecognizerConfig, OfflineTransducerModelConfig, SileroVadModelConfig,
-    VadModelConfig, VoiceActivityDetector, Wave,
-};
+use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineTransducerModelConfig, SileroVadModelConfig, VadModelConfig, VoiceActivityDetector, Wave};
 use std::path::Path;
 use std::time::Instant;
 
@@ -63,10 +60,7 @@ fn sentences(models: &Path, samples: &[f32]) -> Vec<Vec<f32>> {
 }
 
 fn chars(text: &str) -> Vec<char> {
-    text.to_lowercase()
-        .chars()
-        .filter(|c| c.is_alphanumeric())
-        .collect()
+    text.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect()
 }
 
 fn edits(a: &[char], b: &[char]) -> usize {
@@ -90,20 +84,10 @@ fn main() -> anyhow::Result<()> {
     let reazon = reazon(reazon_dir)?;
     let cases: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(cases)?)?;
     for long in [false, true] {
-        let (mut errors, mut units, mut times, mut pieces, mut short) =
-            ([0_usize; 2], 0, [0.0_f64; 2], 0, 0);
-        for case in cases
-            .iter()
-            .filter(|c| c["long"].as_bool().unwrap_or(false) == long)
-        {
-            let Some(wave) = Wave::read(case["wav"].as_str().unwrap_or_default()) else {
-                continue;
-            };
-            let parts = if long {
-                sentences(models, wave.samples())
-            } else {
-                vec![wave.samples().to_vec()]
-            };
+        let (mut errors, mut units, mut times, mut pieces, mut short) = ([0_usize; 2], 0, [0.0_f64; 2], 0, 0);
+        for case in cases.iter().filter(|c| c["long"].as_bool().unwrap_or(false) == long) {
+            let Some(wave) = Wave::read(case["wav"].as_str().unwrap_or_default()) else { continue };
+            let parts = if long { sentences(models, wave.samples()) } else { vec![wave.samples().to_vec()] };
             let mut said = [String::new(), String::new()];
             for part in &parts {
                 pieces += 1;
@@ -128,33 +112,15 @@ fn main() -> anyhow::Result<()> {
             }
             units += reference.len();
             if !long {
-                println!(
-                    "{}\n  ref    {}\n  sense  {}\n  reazon {}",
-                    case["id"].as_str().unwrap_or("?"),
-                    case["text"].as_str().unwrap_or_default(),
-                    said[0],
-                    said[1]
-                );
+                println!("{}\n  ref    {}\n  sense  {}\n  reazon {}", case["id"].as_str().unwrap_or("?"), case["text"].as_str().unwrap_or_default(), said[0], said[1]);
             }
         }
         if units == 0 {
             continue;
         }
-        println!(
-            "\n{} ({pieces} pieces, {short} under {MIN_SECONDS} s left to SenseVoice):",
-            if long {
-                "long recordings"
-            } else {
-                "short clips"
-            }
-        );
+        println!("\n{} ({pieces} pieces, {short} under {MIN_SECONDS} s left to SenseVoice):", if long { "long recordings" } else { "short clips" });
         for (i, name) in ["SenseVoice", "ReazonSpeech"].iter().enumerate() {
-            println!(
-                "  {name:<13} CER {:>6.2}%  ({}/{units})  recognizing {:.1} s",
-                100.0 * errors[i] as f64 / units as f64,
-                errors[i],
-                times[i]
-            );
+            println!("  {name:<13} CER {:>6.2}%  ({}/{units})  recognizing {:.1} s", 100.0 * errors[i] as f64 / units as f64, errors[i], times[i]);
         }
     }
     Ok(())

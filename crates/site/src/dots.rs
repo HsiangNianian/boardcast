@@ -38,20 +38,10 @@ impl Card {
         self.ctx.clear_rect(0.0, 0.0, w, h);
         self.ctx.set_fill_style_str("#f2f2f2");
         for d in self.dots.borrow().iter() {
-            let pulse = if reduced() {
-                1.0
-            } else {
-                0.55 + 0.45 * (t / 600.0 + d.ph).sin()
-            };
+            let pulse = if reduced() { 1.0 } else { 0.55 + 0.45 * (t / 600.0 + d.ph).sin() };
             self.ctx.set_global_alpha((1.0 - s * 0.6) * pulse);
             self.ctx.begin_path();
-            let _ = self.ctx.arc(
-                d.x + d.sx * e,
-                d.y + d.sy * e,
-                1.7,
-                0.0,
-                std::f64::consts::TAU,
-            );
+            let _ = self.ctx.arc(d.x + d.sx * e, d.y + d.sy * e, 1.7, 0.0, std::f64::consts::TAU);
             self.ctx.fill();
         }
     }
@@ -67,25 +57,13 @@ impl Card {
 }
 
 fn context(canvas: &HtmlCanvasElement) -> CanvasRenderingContext2d {
-    canvas
-        .get_context("2d")
-        .ok()
-        .flatten()
-        .expect("a 2D canvas")
-        .unchecked_into()
+    canvas.get_context("2d").ok().flatten().expect("a 2D canvas").unchecked_into()
 }
 
 pub fn init() {
     for cv in qa(".dot-card canvas") {
         let canvas: HtmlCanvasElement = cv.clone().unchecked_into();
-        let card = Rc::new(Card {
-            ctx: context(&canvas),
-            dots: RefCell::default(),
-            size: Cell::new((0.0, 0.0)),
-            scatter: Cell::new(0.0),
-            aim: Cell::new(0.0),
-            visible: Cell::new(false),
-        });
+        let card = Rc::new(Card { ctx: context(&canvas), dots: RefCell::default(), size: Cell::new((0.0, 0.0)), scatter: Cell::new(0.0), aim: Cell::new(0.0), visible: Cell::new(false) });
         let svg = format!(
             r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="{GRID}" height="{GRID}"><style>.f{{fill:#fff}}.s{{fill:none;stroke:#fff}}.h{{fill:#000}}.r{{fill:#fff}}</style><rect width="64" height="64" fill="#000"/>{}</svg>"##,
             icon(&data(&cv, "icon").unwrap_or_default())
@@ -98,31 +76,19 @@ pub fn init() {
                     d if d > 0.0 => d.min(2.0),
                     _ => 1.0,
                 };
-                let (w, h) = (
-                    f64::from(canvas.client_width()),
-                    f64::from(canvas.client_height()),
-                );
+                let (w, h) = (f64::from(canvas.client_width()), f64::from(canvas.client_height()));
                 card.size.set((w, h));
                 canvas.set_width((w * dpr) as u32);
                 canvas.set_height((h * dpr) as u32);
                 let _ = card.ctx.set_transform(dpr, 0.0, 0.0, dpr, 0.0, 0.0);
-                let off: HtmlCanvasElement = doc()
-                    .create_element("canvas")
-                    .expect("a canvas")
-                    .unchecked_into();
+                let off: HtmlCanvasElement = doc().create_element("canvas").expect("a canvas").unchecked_into();
                 off.set_width(GRID);
                 off.set_height(GRID);
                 let o = context(&off);
                 let _ = o.draw_image_with_html_image_element(&img, 0.0, 0.0);
-                let Ok(pixels) = o.get_image_data(0.0, 0.0, f64::from(GRID), f64::from(GRID))
-                else {
-                    return;
-                };
+                let Ok(pixels) = o.get_image_data(0.0, 0.0, f64::from(GRID), f64::from(GRID)) else { return };
                 let pixels = pixels.data();
-                let (ox, oy) = (
-                    w / 2.0 - f64::from(GRID) / 2.0,
-                    h / 2.0 - f64::from(GRID) / 2.0 + 4.0,
-                );
+                let (ox, oy) = (w / 2.0 - f64::from(GRID) / 2.0, h / 2.0 - f64::from(GRID) / 2.0 + 4.0);
                 let grid = GRID as usize;
                 let mut dots = card.dots.borrow_mut();
                 for y in (0..grid).step_by(STEP) {
@@ -132,13 +98,7 @@ pub fn init() {
                         }
                         let a = random() * std::f64::consts::TAU;
                         let r = 60.0 + random() * 140.0;
-                        dots.push(Dot {
-                            x: ox + x as f64,
-                            y: oy + y as f64,
-                            sx: a.cos() * r,
-                            sy: a.sin() * r,
-                            ph: random() * std::f64::consts::TAU,
-                        });
+                        dots.push(Dot { x: ox + x as f64, y: oy + y as f64, sx: a.cos() * r, sy: a.sin() * r, ph: random() * std::f64::consts::TAU });
                     }
                 }
                 drop(dots);
@@ -146,10 +106,7 @@ pub fn init() {
             })
         };
         img.set_onload(Some(onload.unchecked_ref()));
-        img.set_src(&format!(
-            "data:image/svg+xml;utf8,{}",
-            String::from(js_sys::encode_uri_component(&svg))
-        ));
+        img.set_src(&format!("data:image/svg+xml;utf8,{}", String::from(js_sys::encode_uri_component(&svg))));
         let holder = cv.closest(".dot-card").ok().flatten().expect("a dot card");
         {
             let card = card.clone();

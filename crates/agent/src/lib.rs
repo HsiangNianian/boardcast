@@ -12,9 +12,7 @@ pub mod summary;
 pub mod vision;
 
 use anyhow::{anyhow, bail, Context, Result};
-use boardcast_board::graph::{
-    board_is_english, grammar, parse_ops, user_message, Graph, Utterance,
-};
+use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, Graph, Utterance};
 use boardcast_board::speakers::{attribute, rename_by};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};
@@ -22,8 +20,8 @@ use std::io::{BufRead, BufReader};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -47,11 +45,7 @@ pub enum Provider {
     /// A llama-server: output is constrained by a grammar built from the current board.
     Local { base: String },
     /// An OpenAI-compatible service. The key is held in memory and in `remote.json` only.
-    Remote {
-        base_url: String,
-        key: String,
-        model: String,
-    },
+    Remote { base_url: String, key: String, model: String },
     /// A scripted reply, for testing what happens around a model turn.
     #[cfg(test)]
     Scripted(Arc<dyn Fn(&str) -> Result<String> + Send + Sync>),
@@ -60,18 +54,12 @@ pub enum Provider {
 /// `<base>/chat/completions`, unless the setting already names the full path.
 fn chat_url(base: &str) -> String {
     let base = base.trim().trim_end_matches('/');
-    if base.ends_with("/chat/completions") {
-        base.to_string()
-    } else {
-        format!("{base}/chat/completions")
-    }
+    if base.ends_with("/chat/completions") { base.to_string() } else { format!("{base}/chat/completions") }
 }
 
 /// Reasoning models may write their thinking into the reply; only what follows it is the answer.
 fn strip_thinking(text: &str) -> &str {
-    text.rfind("</think>")
-        .map_or(text, |at| &text[at + "</think>".len()..])
-        .trim()
+    text.rfind("</think>").map_or(text, |at| &text[at + "</think>".len()..]).trim()
 }
 
 impl Provider {
@@ -89,10 +77,7 @@ impl Provider {
     }
 
     pub fn default_guidance(&self) -> Guidance {
-        Guidance {
-            rules: self.is_deepseek(),
-            hint: false,
-        }
+        Guidance { rules: self.is_deepseek(), hint: false }
     }
 
     /// An ordinary question with no grammar, as a summary needs.
@@ -107,16 +92,10 @@ impl Provider {
                 body
             }
             // Left to itself a small model can fall into repeating the same few lines until it runs out of room.
-            Self::Local { .. } => {
-                json!({ "model": "local", "messages": messages, "temperature": 0.2, "repeat_penalty": 1.15, "repeat_last_n": 256, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": false } })
-            }
+            Self::Local { .. } => json!({ "model": "local", "messages": messages, "temperature": 0.2, "repeat_penalty": 1.15, "repeat_last_n": 256, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": false } }),
             #[cfg(test)]
             Self::Scripted(reply) => {
-                let said = messages
-                    .last()
-                    .and_then(|m| m["content"].as_str())
-                    .unwrap_or_default()
-                    .to_string();
+                let said = messages.last().and_then(|m| m["content"].as_str()).unwrap_or_default().to_string();
                 return reply(&said);
             }
         };
@@ -135,9 +114,7 @@ impl Provider {
 
     fn call(&self, messages: Vec<Value>, graph: &Graph, english: bool) -> Result<Value> {
         let (url, body) = match self {
-            Self::Remote {
-                base_url, model, ..
-            } => {
+            Self::Remote { base_url, model, .. } => {
                 let mut body = json!({ "model": model, "messages": messages, "temperature": 0, "max_tokens": 4096, "stream": false });
                 if self.is_deepseek() {
                     body["thinking"] = json!({ "type": "enabled" });
@@ -151,11 +128,7 @@ impl Provider {
             ),
             #[cfg(test)]
             Self::Scripted(reply) => {
-                let said = messages
-                    .last()
-                    .and_then(|m| m["content"].as_str())
-                    .unwrap_or_default()
-                    .to_string();
+                let said = messages.last().and_then(|m| m["content"].as_str()).unwrap_or_default().to_string();
                 return Ok(json!({ "choices": [{ "message": { "content": reply(&said)? } }] }));
             }
         };
@@ -182,20 +155,12 @@ impl Provider {
                             });
                         }
                         // The connection broke mid-reply; another attempt may get all of it.
-                        Err(e) => {
-                            last = anyhow!(
-                                "the model's reply broke off after {} ms: {e}",
-                                started.elapsed().as_millis()
-                            )
-                        }
+                        Err(e) => last = anyhow!("the model's reply broke off after {} ms: {e}", started.elapsed().as_millis()),
                     }
                 }
                 // A rejected request will not improve by retrying, and its body names the reason.
                 Err(ureq::Error::Status(code, reply)) if code != 429 && code < 500 => {
-                    return Err(anyhow!(
-                        "model answered {code}: {}",
-                        self.excerpt(&reply.into_string().unwrap_or_default())
-                    ));
+                    return Err(anyhow!("model answered {code}: {}", self.excerpt(&reply.into_string().unwrap_or_default())));
                 }
                 Err(e) => last = anyhow!("model request failed: {e}"),
             }
@@ -215,11 +180,7 @@ impl Provider {
             _ => text.to_string(),
         };
         let short: String = text.chars().take(EXCERPT).collect();
-        if short.len() < text.len() {
-            format!("{short}…")
-        } else {
-            short
-        }
+        if short.len() < text.len() { format!("{short}…") } else { short }
     }
 }
 
@@ -228,12 +189,10 @@ const EXCERPT: usize = 240;
 
 /// The words of a chat reply. One without a message is a failure, not an empty answer.
 fn message(reply: &Value) -> Result<&str> {
-    reply["choices"][0]["message"]["content"]
-        .as_str()
-        .ok_or_else(|| {
-            let shown: String = reply.to_string().chars().take(EXCERPT).collect();
-            anyhow!("the model's reply has no message: {shown}")
-        })
+    reply["choices"][0]["message"]["content"].as_str().ok_or_else(|| {
+        let shown: String = reply.to_string().chars().take(EXCERPT).collect();
+        anyhow!("the model's reply has no message: {shown}")
+    })
 }
 
 /// What to add to the prompt beyond the fixed instructions.
@@ -256,44 +215,16 @@ pub struct Reply {
 }
 
 /// One model turn for one line of speech.
-pub fn propose(
-    provider: &Provider,
-    graph: &Graph,
-    recent: &[Utterance],
-    next: &Utterance,
-    guidance: Guidance,
-    hint: Option<&str>,
-) -> Result<Reply> {
-    propose_with(
-        provider,
-        graph,
-        recent,
-        next,
-        guidance,
-        hint,
-        &sound::Glossary::default(),
-        &[],
-    )
+pub fn propose(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &Utterance, guidance: Guidance, hint: Option<&str>) -> Result<Reply> {
+    propose_with(provider, graph, recent, next, guidance, hint, &sound::Glossary::default(), &[])
 }
 
 /// As [`propose`], telling the model how the glossary writes names and which words in the line may be the
 /// board's labels heard in other characters.
-pub fn propose_with(
-    provider: &Provider,
-    graph: &Graph,
-    recent: &[Utterance],
-    next: &Utterance,
-    guidance: Guidance,
-    hint: Option<&str>,
-    glossary: &sound::Glossary,
-    references: &[(u32, String)],
-) -> Result<Reply> {
+pub fn propose_with(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &Utterance, guidance: Guidance, hint: Option<&str>, glossary: &sound::Glossary, references: &[(u32, String)]) -> Result<Reply> {
     let english = board_is_english(recent, next);
     let all = prompts();
-    let mut messages: Vec<Value> = all[if english { "en" } else { "zh" }]
-        .as_array()
-        .cloned()
-        .context("prompts")?;
+    let mut messages: Vec<Value> = all[if english { "en" } else { "zh" }].as_array().cloned().context("prompts")?;
     if guidance.rules {
         // Appended to the system prompt, which never changes, so prefix caching still applies.
         let text = messages[0]["content"].as_str().unwrap_or("").to_string();
@@ -335,27 +266,12 @@ pub struct Said {
 pub enum Update {
     Loading,
     /// The model is up and working through the fixed part of the prompt, this many tokens of that many.
-    Preparing {
-        done: u64,
-        total: u64,
-    },
+    Preparing { done: u64, total: u64 },
     Ready,
     /// Nothing is installed and no remote model is set up, so the user has to choose.
     NoModel,
-    Drawn {
-        meeting: u64,
-        graph: Graph,
-        ops: String,
-        lines: Vec<Utterance>,
-        asr_ms: Option<u128>,
-        llm_ms: u128,
-        ended: Instant,
-    },
-    Failed {
-        meeting: u64,
-        message: String,
-        lines: Vec<Utterance>,
-    },
+    Drawn { meeting: u64, graph: Graph, ops: String, lines: Vec<Utterance>, asr_ms: Option<u128>, llm_ms: u128, ended: Instant },
+    Failed { meeting: u64, message: String, lines: Vec<Utterance> },
     /// Something went wrong outside any line, like the local model failing to start.
     Broken(String),
 }
@@ -379,14 +295,7 @@ pub struct Gpu {
 
 /// Parse `--list-devices`, whose rows look like `Vulkan1: NVIDIA GeForce RTX 3060 (6144 MiB, 5822 MiB free)`.
 fn parse_devices(text: &str) -> Vec<Gpu> {
-    const DISCRETE: [&str; 6] = [
-        "nvidia",
-        "geforce",
-        "radeon rx",
-        "radeon pro",
-        " arc",
-        "adreno",
-    ];
+    const DISCRETE: [&str; 6] = ["nvidia", "geforce", "radeon rx", "radeon pro", " arc", "adreno"];
     text.lines()
         .filter_map(|line| {
             let (id, rest) = line.trim().split_once(": ")?;
@@ -397,22 +306,13 @@ fn parse_devices(text: &str) -> Vec<Gpu> {
             let (name, memory) = rest.rsplit_once(" (")?;
             let total_mib = memory.split_once(" MiB")?.0.trim().parse().ok()?;
             let lower = name.to_lowercase();
-            Some(Gpu {
-                id: id.to_string(),
-                name: name.to_string(),
-                total_mib,
-                discrete: DISCRETE.iter().any(|k| lower.contains(k)),
-            })
+            Some(Gpu { id: id.to_string(), name: name.to_string(), total_mib, discrete: DISCRETE.iter().any(|k| lower.contains(k)) })
         })
         .collect()
 }
 
 /// The server's file name in the folder it ships in.
-pub const LLAMA_SERVER: &str = if cfg!(windows) {
-    "llama-server.exe"
-} else {
-    "llama-server"
-};
+pub const LLAMA_SERVER: &str = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
 
 fn server_command(binaries: &std::path::Path) -> Command {
     let mut cmd = Command::new(binaries.join(LLAMA_SERVER));
@@ -432,12 +332,8 @@ fn server_command(binaries: &std::path::Path) -> Command {
 
 /// The graphics devices on this machine; empty if there are none or the server cannot run.
 pub fn list_gpus(binaries: &std::path::Path) -> Vec<Gpu> {
-    let Ok(out) = server_command(binaries).arg("--list-devices").output() else {
-        return vec![];
-    };
-    parse_devices(
-        &(String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr)),
-    )
+    let Ok(out) = server_command(binaries).arg("--list-devices").output() else { return vec![] };
+    parse_devices(&(String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr)))
 }
 
 /// The discrete card with the most memory, else any device. Numbering differs per machine, so it
@@ -446,33 +342,20 @@ fn pick_gpu(gpus: &[Gpu]) -> Option<String> {
     if let Ok(device) = std::env::var("LLAMA_DEVICE") {
         return Some(device);
     }
-    gpus.iter()
-        .filter(|g| g.discrete)
-        .max_by_key(|g| g.total_mib)
-        .or_else(|| gpus.first())
-        .map(|g| g.id.clone())
+    gpus.iter().filter(|g| g.discrete).max_by_key(|g| g.total_mib).or_else(|| gpus.first()).map(|g| g.id.clone())
 }
 
 fn is_discrete(gpus: &[Gpu], device: Option<&str>) -> bool {
-    gpus.iter()
-        .any(|g| g.discrete && Some(g.id.as_str()) == device)
+    gpus.iter().any(|g| g.discrete && Some(g.id.as_str()) == device)
 }
 
 /// The same launch arguments as the older app.
-fn llama_command(
-    server: &LocalServer,
-    device: Option<&str>,
-    discrete: bool,
-    port: u16,
-    projector: Option<&std::path::Path>,
-) -> Command {
+fn llama_command(server: &LocalServer, device: Option<&str>, discrete: bool, port: u16, projector: Option<&std::path::Path>) -> Command {
     let mut cmd = server_command(&server.binaries);
     if let Some(dir) = &server.shaders {
         let _ = std::fs::create_dir_all(dir);
         // NVIDIA and Mesa each have their own setting. Without the second, NVIDIA trims its cache by age.
-        cmd.env("__GL_SHADER_DISK_CACHE_PATH", dir)
-            .env("__GL_SHADER_DISK_CACHE_SKIP_CLEANUP", "1")
-            .env("MESA_SHADER_CACHE_DIR", dir);
+        cmd.env("__GL_SHADER_DISK_CACHE_PATH", dir).env("__GL_SHADER_DISK_CACHE_SKIP_CLEANUP", "1").env("MESA_SHADER_CACHE_DIR", dir);
     }
     if discrete {
         // Without this the CPU copies the model into graphics memory across the bus itself, which took 80 s
@@ -490,22 +373,14 @@ fn llama_command(
         .stderr(Stdio::null());
     match device {
         // Not a fixed layer count: if the model does not fit in VRAM, as many layers as fit go there.
-        Some(device) => cmd.args([
-            "--device", device, "-ngl", "auto", "--fit", "on", "-fa", "auto",
-        ]),
+        Some(device) => cmd.args(["--device", device, "-ngl", "auto", "--fit", "on", "-fa", "auto"]),
         None => cmd.args(["--device", "none", "-ngl", "0"]),
     };
     cmd
 }
 
 /// The child dies with the thread that started it on Linux, and with this process elsewhere.
-fn spawn_llama(
-    server: &LocalServer,
-    device: Option<&str>,
-    discrete: bool,
-    port: u16,
-    projector: Option<&std::path::Path>,
-) -> Result<Child> {
+fn spawn_llama(server: &LocalServer, device: Option<&str>, discrete: bool, port: u16, projector: Option<&std::path::Path>) -> Result<Child> {
     let mut cmd = llama_command(server, device, discrete, port, projector);
     #[cfg(target_os = "linux")]
     // SAFETY: prctl is async-signal-safe and touches no parent state between fork and exec.
@@ -515,9 +390,7 @@ fn spawn_llama(
             Ok(())
         });
     }
-    let child = cmd
-        .spawn()
-        .with_context(|| format!("starting {}", server.binaries.join(LLAMA_SERVER).display()))?;
+    let child = cmd.spawn().with_context(|| format!("starting {}", server.binaries.join(LLAMA_SERVER).display()))?;
     #[cfg(target_os = "macos")]
     end_with_this_process(child.id());
     #[cfg(windows)]
@@ -540,21 +413,13 @@ fn end_with_this_process(child: &Child) {
             let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
             limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
             let size = std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32;
-            SetInformationJobObject(
-                job,
-                JobObjectExtendedLimitInformation,
-                (&raw const limits).cast(),
-                size,
-            );
+            SetInformationJobObject(job, JobObjectExtendedLimitInformation, (&raw const limits).cast(), size);
             job as usize
         }
     });
     // SAFETY: both handles are live: the job's for good, the child's while `child` is borrowed.
     if unsafe { AssignProcessToJobObject(job as _, child.as_raw_handle() as _) } == 0 {
-        eprintln!(
-            "could not tie the model to this process: {}",
-            std::io::Error::last_os_error()
-        );
+        eprintln!("could not tie the model to this process: {}", std::io::Error::last_os_error());
     }
 }
 
@@ -563,13 +428,7 @@ fn end_with_this_process(child: &Child) {
 #[cfg(target_os = "macos")]
 fn end_with_this_process(child: u32) {
     let script = format!("while kill -0 {parent} 2>/dev/null && kill -0 {child} 2>/dev/null; do sleep 1; done; kill {child} 2>/dev/null", parent = std::process::id());
-    if let Err(e) = Command::new("/bin/sh")
-        .args(["-c", &script])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
+    if let Err(e) = Command::new("/bin/sh").args(["-c", &script]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
         eprintln!("could not tie the model to this process: {e}");
     }
 }
@@ -580,13 +439,7 @@ fn start_llama(server: &LocalServer) -> Result<(Child, String)> {
     let health = format!("{base}/health");
     let gpus = list_gpus(&server.binaries);
     let device = pick_gpu(&gpus);
-    let mut child = spawn_llama(
-        server,
-        device.as_deref(),
-        is_discrete(&gpus, device.as_deref()),
-        LLAMA_PORT,
-        None,
-    )?;
+    let mut child = spawn_llama(server, device.as_deref(), is_discrete(&gpus, device.as_deref()), LLAMA_PORT, None)?;
     match wait_until_up(&health, &mut child) {
         Ok(()) => Ok((child, base)),
         Err(first) if device.is_some() => {
@@ -613,9 +466,7 @@ fn prompt_progress(line: &str) -> Option<(u64, u64)> {
 /// Chinese, as the two languages share about half of it and English then only costs a moment more. It
 /// is only a head start, so a failure here is left for the first real line to report.
 fn prepare_prompt(base: &str, updates: &Sender<Update>) {
-    let Some(mut messages) = prompts()["zh"].as_array().cloned() else {
-        return;
-    };
+    let Some(mut messages) = prompts()["zh"].as_array().cloned() else { return };
     messages.push(json!({ "role": "user", "content": "你好" }));
     let body = json!({ "model": "local", "messages": messages, "temperature": 0, "max_tokens": 1, "cache_prompt": true, "stream": true, "return_progress": true, "chat_template_kwargs": { "enable_thinking": false } });
     let response = match http().post(&chat_url(base)).send_json(&body) {
@@ -625,10 +476,7 @@ fn prepare_prompt(base: &str, updates: &Sender<Update>) {
             return;
         }
     };
-    for line in BufReader::new(response.into_reader())
-        .lines()
-        .map_while(std::result::Result::ok)
-    {
+    for line in BufReader::new(response.into_reader()).lines().map_while(std::result::Result::ok) {
         if let Some((done, total)) = prompt_progress(&line) {
             let _ = updates.send(Update::Preparing { done, total });
         }
@@ -642,12 +490,7 @@ fn wait_until_up(url: &str, child: &mut Child) -> Result<()> {
         if let Some(status) = child.try_wait()? {
             bail!("llama-server exited during startup ({status})");
         }
-        if http()
-            .get(url)
-            .timeout(Duration::from_secs(2))
-            .call()
-            .is_ok()
-        {
+        if http().get(url).timeout(Duration::from_secs(2)).call().is_ok() {
             return Ok(());
         }
         thread::sleep(Duration::from_millis(250));
@@ -659,9 +502,7 @@ fn wait_until_up(url: &str, child: &mut Child) -> Result<()> {
 /// One client for every request, so connections are kept and reused rather than opened each time.
 fn http() -> ureq::Agent {
     static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
-    AGENT
-        .get_or_init(|| ureq::AgentBuilder::new().try_proxy_from_env(true).build())
-        .clone()
+    AGENT.get_or_init(|| ureq::AgentBuilder::new().try_proxy_from_env(true).build()).clone()
 }
 
 /// Which model answers the next line. It can change at any time from the settings.
@@ -704,14 +545,7 @@ fn rename_line(line: &mut Utterance, renames: &[(String, String)]) {
 }
 
 impl Session {
-    pub fn start(
-        backend: Backend,
-        guidance: Option<Guidance>,
-        said: Receiver<Said>,
-        ready: Sender<()>,
-        drained: Sender<()>,
-        updates: Sender<Update>,
-    ) -> Self {
+    pub fn start(backend: Backend, guidance: Option<Guidance>, said: Receiver<Said>, ready: Sender<()>, drained: Sender<()>, updates: Sender<Update>) -> Self {
         let session = Self {
             graph: Arc::new(Mutex::new(Graph::default())),
             history: Arc::new(Mutex::new(vec![])),
@@ -724,14 +558,8 @@ impl Session {
             local_base: Arc::new(Mutex::new(None)),
             renames: Arc::new(Mutex::new(vec![])),
         };
-        let (graph, history, hint, backend, guidance, meeting) = (
-            session.graph.clone(),
-            session.history.clone(),
-            session.hint.clone(),
-            session.backend.clone(),
-            session.guidance.clone(),
-            session.meeting.clone(),
-        );
+        let (graph, history, hint, backend, guidance, meeting) =
+            (session.graph.clone(), session.history.clone(), session.hint.clone(), session.backend.clone(), session.guidance.clone(), session.meeting.clone());
         let glossary = session.glossary.clone();
         let references = session.references.clone();
         let local_base = session.local_base.clone();
@@ -746,10 +574,7 @@ impl Session {
                     Backend::NoModel => bail!("{NO_MODEL}"),
                     Backend::ManagedLocal(local) => {
                         // Another model was chosen: the running server cannot switch.
-                        if server
-                            .as_ref()
-                            .is_some_and(|(_, _, model)| model != &local.model)
-                        {
+                        if server.as_ref().is_some_and(|(_, _, model)| model != &local.model) {
                             *local_base.lock().expect("base lock") = None;
                             if let Some((mut child, _, _)) = server.take() {
                                 let _ = child.kill();
@@ -764,12 +589,7 @@ impl Session {
                             *local_base.lock().expect("base lock") = Some(base.clone());
                             server = Some((child, base, local.model.clone()));
                         }
-                        Ok(Provider::Local {
-                            base: server
-                                .as_ref()
-                                .map(|(_, b, _)| b.clone())
-                                .expect("just set"),
-                        })
+                        Ok(Provider::Local { base: server.as_ref().map(|(_, b, _)| b.clone()).expect("just set") })
                     }
                 }
             };
@@ -801,10 +621,7 @@ impl Session {
                 let renames_seen = {
                     let renames = renames.lock().expect("renames lock");
                     for said in &mut batch {
-                        rename_line(
-                            &mut said.line,
-                            renames.get(said.renames..).unwrap_or_default(),
-                        );
+                        rename_line(&mut said.line, renames.get(said.renames..).unwrap_or_default());
                     }
                     renames.len()
                 };
@@ -813,12 +630,7 @@ impl Session {
                 } else {
                     let text: Vec<String> = batch
                         .iter()
-                        .map(|s| {
-                            s.line.speaker.as_ref().map_or_else(
-                                || s.line.text.clone(),
-                                |n| format!("{n}：{}", s.line.text),
-                            )
-                        })
+                        .map(|s| s.line.speaker.as_ref().map_or_else(|| s.line.text.clone(), |n| format!("{n}：{}", s.line.text)))
                         .collect();
                     // Everything circled across the merged lines still counts, in the order it was circled.
                     let mut pointing: Vec<String> = vec![];
@@ -827,11 +639,7 @@ impl Session {
                             pointing.push(id.clone());
                         }
                     }
-                    Utterance {
-                        speaker: None,
-                        text: text.join(" "),
-                        pointing,
-                    }
+                    Utterance { speaker: None, text: text.join(" "), pointing }
                 };
                 let recent: Vec<Utterance> = {
                     let all = history.lock().expect("history lock");
@@ -840,22 +648,10 @@ impl Session {
                 let seen = graph.lock().expect("graph lock").clone();
                 let note = hint.lock().expect("hint lock").take();
                 let result = provider_now(&updates).and_then(|provider| {
-                    let chosen = guidance
-                        .lock()
-                        .expect("guidance lock")
-                        .unwrap_or_else(|| provider.default_guidance());
+                    let chosen = guidance.lock().expect("guidance lock").unwrap_or_else(|| provider.default_guidance());
                     let terms = glossary.lock().expect("glossary lock").clone();
                     let cited = references.lock().expect("references lock").clone();
-                    propose_with(
-                        &provider,
-                        &seen,
-                        &recent,
-                        &next,
-                        chosen,
-                        note.as_deref(),
-                        &terms,
-                        &cited,
-                    )
+                    propose_with(&provider, &seen, &recent, &next, chosen, note.as_deref(), &terms, &cited)
                 });
                 // The lock is held across the check, so a meeting cannot open between it and the write.
                 let mut board = graph.lock().expect("graph lock");
@@ -867,40 +663,18 @@ impl Session {
                 // A rename also holds the board's lock, so none can come between this and the write.
                 let mut lines: Vec<Utterance> = batch.iter().map(|s| s.line.clone()).collect();
                 for line in &mut lines {
-                    rename_line(
-                        line,
-                        renames
-                            .lock()
-                            .expect("renames lock")
-                            .get(renames_seen..)
-                            .unwrap_or_default(),
-                    );
+                    rename_line(line, renames.lock().expect("renames lock").get(renames_seen..).unwrap_or_default());
                 }
-                history
-                    .lock()
-                    .expect("history lock")
-                    .extend(lines.iter().cloned());
+                history.lock().expect("history lock").extend(lines.iter().cloned());
                 let tail = &batch[batch.len() - 1];
                 let update = match result {
                     Ok(reply) => {
                         let before = board.clone();
                         board.apply(&parse_ops(&reply.ops));
                         attribute(&before, &mut board, &lines);
-                        Update::Drawn {
-                            meeting: current,
-                            graph: board.clone(),
-                            ops: reply.ops,
-                            lines,
-                            asr_ms: tail.asr_ms,
-                            llm_ms: reply.ms,
-                            ended: batch[0].ended,
-                        }
+                        Update::Drawn { meeting: current, graph: board.clone(), ops: reply.ops, lines, asr_ms: tail.asr_ms, llm_ms: reply.ms, ended: batch[0].ended }
                     }
-                    Err(e) => Update::Failed {
-                        meeting: current,
-                        message: format!("{e:#}"),
-                        lines,
-                    },
+                    Err(e) => Update::Failed { meeting: current, message: format!("{e:#}"), lines },
                 };
                 drop(board);
                 let _ = updates.send(update);
@@ -939,10 +713,7 @@ impl Session {
                 line.speaker = Some(to.to_string());
             }
         }
-        self.renames
-            .lock()
-            .expect("renames lock")
-            .push((from.to_string(), to.to_string()));
+        self.renames.lock().expect("renames lock").push((from.to_string(), to.to_string()));
     }
 
     /// To go in a line being sent now.
@@ -1002,8 +773,7 @@ impl Session {
             Backend::NoModel => bail!("{NO_MODEL}"),
             Backend::ManagedLocal(_) => {
                 let base = self.local_base.lock().expect("base lock").clone();
-                base.map(|base| Provider::Local { base })
-                    .context("The local model is still loading. Try again in a moment.")
+                base.map(|base| Provider::Local { base }).context("The local model is still loading. Try again in a moment.")
             }
         }
     }
@@ -1017,8 +787,7 @@ impl Session {
 mod tests {
     #[test]
     fn shipped_prompts_match_the_typescript_engine() {
-        let goldens: serde_json::Value =
-            serde_json::from_str(include_str!("../../board/fixtures/goldens.json")).unwrap();
+        let goldens: serde_json::Value = serde_json::from_str(include_str!("../../board/fixtures/goldens.json")).unwrap();
         assert_eq!(super::prompts(), goldens["prompts"]);
     }
 
@@ -1027,23 +796,10 @@ mod tests {
 
     #[test]
     fn rules_follow_the_eval_results_for_each_provider() {
-        assert!(
-            !Provider::Local {
-                base: String::new()
-            }
-            .default_guidance()
-            .rules
-        );
-        let remote = |url: &str| Provider::Remote {
-            base_url: url.into(),
-            key: String::new(),
-            model: String::new(),
-        };
+        assert!(!Provider::Local { base: String::new() }.default_guidance().rules);
+        let remote = |url: &str| Provider::Remote { base_url: url.into(), key: String::new(), model: String::new() };
         assert!(remote("https://api.deepseek.com").default_guidance().rules);
-        assert!(
-            !remote("https://example.com/v1").default_guidance().rules,
-            "only measured on DeepSeek"
-        );
+        assert!(!remote("https://example.com/v1").default_guidance().rules, "only measured on DeepSeek");
         assert!(!remote("https://api.deepseek.com").default_guidance().hint);
     }
 
@@ -1054,15 +810,8 @@ mod tests {
         assert_eq!(gpus.len(), 2, "{gpus:?}");
         assert_eq!(gpus[0].name, "Intel(R) Iris(R) Xe Graphics (ADL GT2)");
         assert_eq!((gpus[0].total_mib, gpus[0].discrete), (23827, false));
-        assert_eq!(
-            (gpus[1].id.as_str(), gpus[1].total_mib, gpus[1].discrete),
-            ("Vulkan1", 6144, true)
-        );
-        assert_eq!(
-            pick_gpu(&gpus).as_deref(),
-            Some("Vulkan1"),
-            "a discrete card wins over a larger shared memory"
-        );
+        assert_eq!((gpus[1].id.as_str(), gpus[1].total_mib, gpus[1].discrete), ("Vulkan1", 6144, true));
+        assert_eq!(pick_gpu(&gpus).as_deref(), Some("Vulkan1"), "a discrete card wins over a larger shared memory");
         assert_eq!(pick_gpu(&gpus[..1]).as_deref(), Some("Vulkan0"));
         assert_eq!(pick_gpu(&[]), None, "no graphics device means the CPU");
         assert!(parse_devices("Available devices:\n").is_empty());
@@ -1070,35 +819,12 @@ mod tests {
 
     #[test]
     fn a_discrete_card_fetches_the_model_itself() {
-        let server = LocalServer {
-            binaries: "bin".into(),
-            model: "m.gguf".into(),
-            shaders: Some(std::env::temp_dir().join("boardcast-agent-shaders")),
-        };
-        assert!(llama_command(&server, None, false, 1, None)
-            .get_envs()
-            .any(|(k, v)| k == "__GL_SHADER_DISK_CACHE_PATH" && v.is_some()));
-        let asks = |discrete| {
-            llama_command(&server, Some("Vulkan1"), discrete, 1, None)
-                .get_envs()
-                .any(|(k, _)| k == "GGML_VK_DISABLE_HOST_VISIBLE_VIDMEM")
-        };
+        let server = LocalServer { binaries: "bin".into(), model: "m.gguf".into(), shaders: Some(std::env::temp_dir().join("boardcast-agent-shaders")) };
+        assert!(llama_command(&server, None, false, 1, None).get_envs().any(|(k, v)| k == "__GL_SHADER_DISK_CACHE_PATH" && v.is_some()));
+        let asks = |discrete| llama_command(&server, Some("Vulkan1"), discrete, 1, None).get_envs().any(|(k, _)| k == "GGML_VK_DISABLE_HOST_VISIBLE_VIDMEM");
         assert!(asks(true));
         assert!(!asks(false));
-        let gpus = [
-            Gpu {
-                id: "Vulkan0".into(),
-                name: "Intel".into(),
-                total_mib: 8000,
-                discrete: false,
-            },
-            Gpu {
-                id: "Vulkan1".into(),
-                name: "NVIDIA".into(),
-                total_mib: 6000,
-                discrete: true,
-            },
-        ];
+        let gpus = [Gpu { id: "Vulkan0".into(), name: "Intel".into(), total_mib: 8000, discrete: false }, Gpu { id: "Vulkan1".into(), name: "NVIDIA".into(), total_mib: 6000, discrete: true }];
         assert!(is_discrete(&gpus, Some("Vulkan1")));
         assert!(!is_discrete(&gpus, Some("Vulkan0")));
         assert!(!is_discrete(&gpus, None));
@@ -1106,34 +832,17 @@ mod tests {
 
     #[test]
     fn the_prompt_reports_how_far_it_has_got() {
-        assert_eq!(
-            prompt_progress(
-                r#"data: {"choices":[],"prompt_progress":{"total":2151,"cache":0,"processed":1118,"time_ms":1}}"#
-            ),
-            Some((1118, 2151))
-        );
-        assert_eq!(
-            prompt_progress(r#"data: {"choices":[{"delta":{"content":"N"}}]}"#),
-            None
-        );
+        assert_eq!(prompt_progress(r#"data: {"choices":[],"prompt_progress":{"total":2151,"cache":0,"processed":1118,"time_ms":1}}"#), Some((1118, 2151)));
+        assert_eq!(prompt_progress(r#"data: {"choices":[{"delta":{"content":"N"}}]}"#), None);
         assert_eq!(prompt_progress("data: [DONE]"), None);
         assert_eq!(prompt_progress(""), None);
     }
 
     #[test]
     fn urls_and_thinking_are_normalized() {
-        assert_eq!(
-            chat_url("https://x.com/v1/"),
-            "https://x.com/v1/chat/completions"
-        );
-        assert_eq!(
-            chat_url(" https://x.com/v1/chat/completions "),
-            "https://x.com/v1/chat/completions"
-        );
-        assert_eq!(
-            strip_thinking("<think>嗯</think>\nE 「甲」 -> 「乙」"),
-            "E 「甲」 -> 「乙」"
-        );
+        assert_eq!(chat_url("https://x.com/v1/"), "https://x.com/v1/chat/completions");
+        assert_eq!(chat_url(" https://x.com/v1/chat/completions "), "https://x.com/v1/chat/completions");
+        assert_eq!(strip_thinking("<think>嗯</think>\nE 「甲」 -> 「乙」"), "E 「甲」 -> 「乙」");
         assert_eq!(strip_thinking(" T 「甲」 "), "T 「甲」");
     }
 
@@ -1144,7 +853,7 @@ mod tests {
         drained: Receiver<()>,
     }
 
-    /// A server that answers every request with this status, type and body.
+/// A server that answers every request with this status, type and body.
     fn serve(status: &'static str, kind: &'static str, body: &'static str) -> String {
         use std::io::{Read, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1161,11 +870,7 @@ mod tests {
     }
 
     fn remote(base: String) -> Provider {
-        Provider::Remote {
-            base_url: base,
-            key: "sk-secret-123".into(),
-            model: "m".into(),
-        }
+        Provider::Remote { base_url: base, key: "sk-secret-123".into(), model: "m".into() }
     }
 
     #[test]
@@ -1177,149 +882,49 @@ mod tests {
             Ok(String::new())
         }));
         let mut g = Graph::default();
-        g.apply(&boardcast_board::graph::parse_ops(
-            "T 「登录」\nL 「登录」 「鉴权」",
-        ));
-        let line = Utterance {
-            speaker: None,
-            text: "把健全圈起来".into(),
-            pointing: vec![],
-        };
-        propose_with(
-            &provider,
-            &g,
-            &[],
-            &line,
-            Guidance::default(),
-            None,
-            &sound::Glossary::parse("OpenAI; API = A P I"),
-            &[],
-        )
-        .unwrap();
+        g.apply(&boardcast_board::graph::parse_ops("T 「登录」\nL 「登录」 「鉴权」"));
+        let line = Utterance { speaker: None, text: "把健全圈起来".into(), pointing: vec![] };
+        propose_with(&provider, &g, &[], &line, Guidance::default(), None, &sound::Glossary::parse("OpenAI; API = A P I"), &[]).unwrap();
         let said = seen.lock().unwrap().clone();
         assert!(said.contains("术语表，名字照这样写：OpenAI、API"), "{said}");
         assert!(said.contains("「健全」可能是板上的「鉴权」"), "{said}");
-        propose(
-            &provider,
-            &g,
-            &[],
-            &Utterance {
-                speaker: None,
-                text: "加一个支付服务".into(),
-                pointing: vec![],
-            },
-            Guidance::default(),
-            None,
-        )
-        .unwrap();
-        assert!(
-            !seen.lock().unwrap().contains("术语表"),
-            "nothing added without a glossary or a likely label"
-        );
+        propose(&provider, &g, &[], &Utterance { speaker: None, text: "加一个支付服务".into(), pointing: vec![] }, Guidance::default(), None).unwrap();
+        assert!(!seen.lock().unwrap().contains("术语表"), "nothing added without a glossary or a likely label");
     }
 
-    #[test]
+        #[test]
     fn an_unusable_reply_says_what_came_back() {
-        let page = remote(serve(
-            "200 OK",
-            "text/html",
-            "<html>Bad gateway, try later</html>",
-        ))
-        .call(
-            vec![json!({ "role": "user", "content": "hi" })],
-            &Graph::default(),
-            true,
-        );
+        let page = remote(serve("200 OK", "text/html", "<html>Bad gateway, try later</html>")).call(vec![json!({ "role": "user", "content": "hi" })], &Graph::default(), true);
         let e = format!("{:#}", page.unwrap_err());
-        assert!(
-            e.contains("not JSON") && e.contains("text/html") && e.contains("Bad gateway"),
-            "{e}"
-        );
+        assert!(e.contains("not JSON") && e.contains("text/html") && e.contains("Bad gateway"), "{e}");
 
-        let empty = remote(serve(
-            "200 OK",
-            "application/json",
-            r#"{"error":"overloaded"}"#,
-        ))
-        .call(
-            vec![json!({ "role": "user", "content": "hi" })],
-            &Graph::default(),
-            true,
-        );
+        let empty = remote(serve("200 OK", "application/json", r#"{"error":"overloaded"}"#)).call(vec![json!({ "role": "user", "content": "hi" })], &Graph::default(), true);
         let reply = empty.unwrap();
         let e = format!("{:#}", message(&reply).unwrap_err());
         assert!(e.contains("no message") && e.contains("overloaded"), "{e}");
 
-        let refused = remote(serve(
-            "401 Unauthorized",
-            "application/json",
-            r#"{"error":"bad key sk-secret-123"}"#,
-        ))
-        .call(
-            vec![json!({ "role": "user", "content": "hi" })],
-            &Graph::default(),
-            true,
-        );
+        let refused = remote(serve("401 Unauthorized", "application/json", r#"{"error":"bad key sk-secret-123"}"#)).call(vec![json!({ "role": "user", "content": "hi" })], &Graph::default(), true);
         let e = format!("{:#}", refused.unwrap_err());
-        assert!(
-            e.contains("401") && !e.contains("sk-secret-123"),
-            "the key never shows: {e}"
-        );
+        assert!(e.contains("401") && !e.contains("sk-secret-123"), "the key never shows: {e}");
 
-        let fine = remote(serve(
-            "200 OK",
-            "application/json",
-            r#"{"choices":[{"message":{"content":"T 「x」"}}]}"#,
-        ))
-        .call(
-            vec![json!({ "role": "user", "content": "hi" })],
-            &Graph::default(),
-            true,
-        );
+        let fine = remote(serve("200 OK", "application/json", r#"{"choices":[{"message":{"content":"T 「x」"}}]}"#)).call(vec![json!({ "role": "user", "content": "hi" })], &Graph::default(), true);
         assert_eq!(message(&fine.unwrap()).unwrap(), "T 「x」");
     }
 
-    fn harness(reply: impl Fn(&str) -> Result<String> + Send + Sync + 'static) -> Harness {
+        fn harness(reply: impl Fn(&str) -> Result<String> + Send + Sync + 'static) -> Harness {
         let (said, said_rx) = channel();
         let (ready_tx, ready_rx) = channel();
         let (drained_tx, drained) = channel();
         let (updates_tx, updates) = channel();
-        let session = Session::start(
-            Backend::Ready(Provider::Scripted(Arc::new(reply))),
-            None,
-            said_rx,
-            ready_tx,
-            drained_tx,
-            updates_tx,
-        );
+        let session = Session::start(Backend::Ready(Provider::Scripted(Arc::new(reply))), None, said_rx, ready_tx, drained_tx, updates_tx);
         ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-        assert!(matches!(
-            updates.recv_timeout(Duration::from_secs(5)).unwrap(),
-            Update::Ready
-        ));
-        Harness {
-            session,
-            said,
-            updates,
-            drained,
-        }
+        assert!(matches!(updates.recv_timeout(Duration::from_secs(5)).unwrap(), Update::Ready));
+        Harness { session, said, updates, drained }
     }
 
     impl Harness {
         fn say(&self, text: &str) {
-            self.said
-                .send(Said {
-                    line: Utterance {
-                        speaker: None,
-                        text: text.into(),
-                        pointing: vec![],
-                    },
-                    ended: Instant::now(),
-                    asr_ms: None,
-                    meeting: self.session.meeting(),
-                    renames: 0,
-                })
-                .unwrap();
+            self.said.send(Said { line: Utterance { speaker: None, text: text.into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: self.session.meeting(), renames: 0 }).unwrap();
         }
 
         fn wait(&self) {
@@ -1332,11 +937,7 @@ mod tests {
         let h = harness(|_| Ok("E 「甲」 -> 「乙」".into()));
         h.say("甲调乙");
         h.wait();
-        let Update::Drawn { graph, lines, .. } =
-            h.updates.recv_timeout(Duration::from_secs(5)).unwrap()
-        else {
-            panic!("expected a drawing")
-        };
+        let Update::Drawn { graph, lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("expected a drawing") };
         assert_eq!(graph.nodes.len(), 2);
         assert_eq!(lines[0].text, "甲调乙");
         assert_eq!(h.session.board().nodes.len(), 2);
@@ -1351,11 +952,7 @@ mod tests {
         let release = Mutex::new(release);
         let h = harness(move |_| {
             started_tx.send(()).unwrap();
-            release
-                .lock()
-                .unwrap()
-                .recv_timeout(Duration::from_secs(5))
-                .map_err(|e| anyhow!("{e}"))?;
+            release.lock().unwrap().recv_timeout(Duration::from_secs(5)).map_err(|e| anyhow!("{e}"))?;
             Ok("E 「旧会议」 -> 「不该出现」".into())
         });
         h.say("上一场会说的话");
@@ -1363,21 +960,9 @@ mod tests {
         h.session.open(Graph::default(), vec![]);
         release_tx.send(()).unwrap();
         h.wait();
-        assert!(
-            h.session.board().nodes.is_empty(),
-            "the old reply reached the new board"
-        );
-        assert!(
-            h.session.history.lock().unwrap().is_empty(),
-            "the old line reached the new context"
-        );
-        assert!(
-            matches!(
-                h.updates.recv_timeout(Duration::from_millis(100)),
-                Err(RecvTimeoutError::Timeout)
-            ),
-            "the UI heard about it"
-        );
+        assert!(h.session.board().nodes.is_empty(), "the old reply reached the new board");
+        assert!(h.session.history.lock().unwrap().is_empty(), "the old line reached the new context");
+        assert!(matches!(h.updates.recv_timeout(Duration::from_millis(100)), Err(RecvTimeoutError::Timeout)), "the UI heard about it");
     }
 
     #[test]
@@ -1395,10 +980,7 @@ mod tests {
         h.session.open(Graph::default(), vec![]);
         release_tx.send(()).unwrap();
         h.wait();
-        assert!(matches!(
-            h.updates.recv_timeout(Duration::from_millis(100)),
-            Err(RecvTimeoutError::Timeout)
-        ));
+        assert!(matches!(h.updates.recv_timeout(Duration::from_millis(100)), Err(RecvTimeoutError::Timeout)));
         assert!(h.session.history.lock().unwrap().is_empty());
     }
 
@@ -1412,19 +994,7 @@ mod tests {
         });
         let stale = h.session.meeting();
         h.session.open(Graph::default(), vec![]);
-        h.said
-            .send(Said {
-                line: Utterance {
-                    speaker: None,
-                    text: "排队的旧话".into(),
-                    pointing: vec![],
-                },
-                ended: Instant::now(),
-                asr_ms: None,
-                meeting: stale,
-                renames: 0,
-            })
-            .unwrap();
+        h.said.send(Said { line: Utterance { speaker: None, text: "排队的旧话".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: stale, renames: 0 }).unwrap();
         h.wait();
         h.say("新会议的话");
         h.wait();
@@ -1443,55 +1013,22 @@ mod tests {
             release_rx.lock().unwrap().recv().unwrap();
             Ok("N n1 「网关」".into())
         });
-        let line = |renames| Said {
-            line: Utterance {
-                speaker: Some("B".into()),
-                text: "网关".into(),
-                pointing: vec![],
-            },
-            ended: Instant::now(),
-            asr_ms: None,
-            meeting: h.session.meeting(),
-            renames,
-        };
+        let line = |renames| Said { line: Utterance { speaker: Some("B".into()), text: "网关".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: h.session.meeting(), renames };
         h.said.send(line(0)).unwrap();
         entered.recv_timeout(Duration::from_secs(5)).unwrap();
         // Renamed while the model is answering, with the name then given to someone else's next line.
         h.session.rename_speaker("B", "李工");
         h.session.rename_speaker("C", "B");
-        h.said
-            .send(Said {
-                line: Utterance {
-                    speaker: Some("B".into()),
-                    text: "日志".into(),
-                    pointing: vec![],
-                },
-                ..line(h.session.renames_seen())
-            })
-            .unwrap();
+        h.said.send(Said { line: Utterance { speaker: Some("B".into()), text: "日志".into(), pointing: vec![] }, ..line(h.session.renames_seen()) }).unwrap();
         release.send(()).unwrap();
         h.wait();
-        let Update::Drawn { graph, lines, .. } =
-            h.updates.recv_timeout(Duration::from_secs(5)).unwrap()
-        else {
-            panic!("not drawn")
-        };
+        let Update::Drawn { graph, lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("not drawn") };
         assert_eq!(lines[0].speaker.as_deref(), Some("李工"));
-        assert_eq!(
-            boardcast_board::speakers::by_of_node(&graph.nodes[0]),
-            Some("李工")
-        );
+        assert_eq!(boardcast_board::speakers::by_of_node(&graph.nodes[0]), Some("李工"));
         release.send(()).unwrap();
         h.wait();
-        let Update::Drawn { lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap()
-        else {
-            panic!("not drawn")
-        };
-        assert_eq!(
-            lines[0].speaker.as_deref(),
-            Some("B"),
-            "the name now belongs to the next speaker"
-        );
+        let Update::Drawn { lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("not drawn") };
+        assert_eq!(lines[0].speaker.as_deref(), Some("B"), "the name now belongs to the next speaker");
     }
 
     #[test]
@@ -1501,11 +1038,7 @@ mod tests {
         let release = Mutex::new(release);
         let h = harness(move |_| {
             started_tx.send(()).unwrap();
-            release
-                .lock()
-                .unwrap()
-                .recv_timeout(Duration::from_secs(5))
-                .map_err(|e| anyhow!("{e}"))?;
+            release.lock().unwrap().recv_timeout(Duration::from_secs(5)).map_err(|e| anyhow!("{e}"))?;
             Ok("T 「新话题」".into())
         });
         let mut board = Graph::default();
@@ -1528,58 +1061,17 @@ mod tests {
         let (ready_tx, ready_rx) = channel();
         let (drained_tx, drained) = channel();
         let (updates_tx, updates) = channel();
-        let session = Session::start(
-            Backend::NoModel,
-            None,
-            said_rx,
-            ready_tx,
-            drained_tx,
-            updates_tx,
-        );
+        let session = Session::start(Backend::NoModel, None, said_rx, ready_tx, drained_tx, updates_tx);
         ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-        assert!(matches!(
-            updates.recv_timeout(Duration::from_secs(5)).unwrap(),
-            Update::NoModel
-        ));
-        said.send(Said {
-            line: Utterance {
-                speaker: None,
-                text: "这句没有模型".into(),
-                pointing: vec![],
-            },
-            ended: Instant::now(),
-            asr_ms: None,
-            meeting: session.meeting(),
-            renames: 0,
-        })
-        .unwrap();
+        assert!(matches!(updates.recv_timeout(Duration::from_secs(5)).unwrap(), Update::NoModel));
+        said.send(Said { line: Utterance { speaker: None, text: "这句没有模型".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
         drained.recv_timeout(Duration::from_secs(5)).unwrap();
-        let Update::Failed { lines, .. } = updates.recv_timeout(Duration::from_secs(5)).unwrap()
-        else {
-            panic!("expected a failure")
-        };
+        let Update::Failed { lines, .. } = updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("expected a failure") };
         assert_eq!(lines[0].text, "这句没有模型");
-        session.set_backend(Backend::Ready(Provider::Scripted(Arc::new(|_| {
-            Ok("T 「现在有了」".into())
-        }))));
-        said.send(Said {
-            line: Utterance {
-                speaker: None,
-                text: "再试".into(),
-                pointing: vec![],
-            },
-            ended: Instant::now(),
-            asr_ms: None,
-            meeting: session.meeting(),
-            renames: 0,
-        })
-        .unwrap();
+        session.set_backend(Backend::Ready(Provider::Scripted(Arc::new(|_| Ok("T 「现在有了」".into())))));
+        said.send(Said { line: Utterance { speaker: None, text: "再试".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
         drained.recv_timeout(Duration::from_secs(5)).unwrap();
-        assert_eq!(
-            session.board().nodes.len(),
-            1,
-            "a model added later takes effect"
-        );
+        assert_eq!(session.board().nodes.len(), 1, "a model added later takes effect");
     }
 
     #[test]
@@ -1587,11 +1079,7 @@ mod tests {
         let h = harness(|_| Err(anyhow!("offline")));
         h.say("这句没画上");
         h.wait();
-        let Update::Failed { lines, message, .. } =
-            h.updates.recv_timeout(Duration::from_secs(5)).unwrap()
-        else {
-            panic!("expected a failure")
-        };
+        let Update::Failed { lines, message, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("expected a failure") };
         assert_eq!(lines[0].text, "这句没画上");
         assert!(message.contains("offline"));
         assert!(h.session.board().nodes.is_empty());

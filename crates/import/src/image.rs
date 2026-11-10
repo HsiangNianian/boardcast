@@ -34,28 +34,17 @@ pub struct ImageImport {
 
 /// Tidy what the model said: no thinking, quotes or fences, and its ways of saying "nothing here" are empty.
 pub fn clean_read(text: &str) -> String {
-    static THINKING: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"<think>[\s\S]*?(</think>|$)").expect("valid"));
-    static FENCE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?i)```[a-z]*\n?").expect("valid"));
-    static OPENING: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r#"^[「“"'『]+"#).expect("valid"));
-    static CLOSING: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r#"[」”"'』]+$"#).expect("valid"));
-    static NOTHING: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)^(无|没有|空|没有文字|图里没有字|（无）|\(无\)|none|n/a)[。.]?$")
-            .expect("valid")
-    });
+    static THINKING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<think>[\s\S]*?(</think>|$)").expect("valid"));
+    static FENCE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)```[a-z]*\n?").expect("valid"));
+    static OPENING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"^[「“"'『]+"#).expect("valid"));
+    static CLOSING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"[」”"'』]+$"#).expect("valid"));
+    static NOTHING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^(无|没有|空|没有文字|图里没有字|（无）|\(无\)|none|n/a)[。.]?$").expect("valid"));
     let t = THINKING.replace_all(text, "");
     let t = FENCE.replace_all(&t, "");
     let t = OPENING.replace(&t, "");
     let t = CLOSING.replace(&t, "");
     // Some models read the text and then add a line saying "nothing", so each line is judged alone.
-    t.lines()
-        .filter(|line| !NOTHING.is_match(line.trim()))
-        .flat_map(str::split_whitespace)
-        .collect::<Vec<_>>()
-        .join(" ")
+    t.lines().filter(|line| !NOTHING.is_match(line.trim())).flat_map(str::split_whitespace).collect::<Vec<_>>().join(" ")
 }
 
 /// Whether it reads as text: arrowheads often come back as "1>1" or "->".
@@ -85,10 +74,7 @@ pub fn segment(width: usize, height: usize, rgba: &[u8]) -> Vec<Rect> {
         let p = &rgba[i * 4..i * 4 + 4];
         let a = f64::from(p[3]) / 255.0;
         // Where it is transparent counts as white.
-        let v = js_round(
-            (0.299 * f64::from(p[0]) + 0.587 * f64::from(p[1]) + 0.114 * f64::from(p[2])) * a
-                + 255.0 * (1.0 - a),
-        );
+        let v = js_round((0.299 * f64::from(p[0]) + 0.587 * f64::from(p[1]) + 0.114 * f64::from(p[2])) * a + 255.0 * (1.0 - a));
         lum[i] = v as u8;
         hist[usize::from(lum[i])] += 1;
     }
@@ -98,10 +84,7 @@ pub fn segment(width: usize, height: usize, rgba: &[u8]) -> Vec<Rect> {
             bg = v;
         }
     }
-    let mut ink: Vec<bool> = lum
-        .iter()
-        .map(|v| (i32::from(*v) - bg as i32).abs() > 48)
-        .collect();
+    let mut ink: Vec<bool> = lum.iter().map(|v| (i32::from(*v) - bg as i32).abs() > 48).collect();
 
     // A hand-drawn line wobbles, so it counts as joined when within a couple of pixels either way.
     let long = 40.max(js_round(w.min(h) as f64 * 0.08) as usize);
@@ -109,11 +92,7 @@ pub fn segment(width: usize, height: usize, rgba: &[u8]) -> Vec<Rect> {
     let near = |ink: &[bool], x: usize, y: usize, dx: i64, dy: i64| {
         (-WOBBLE..=WOBBLE).any(|k| {
             let (xx, yy) = (x as i64 + dx * k, y as i64 + dy * k);
-            xx >= 0
-                && xx < w as i64
-                && yy >= 0
-                && yy < h as i64
-                && ink[yy as usize * w + xx as usize]
+            xx >= 0 && xx < w as i64 && yy >= 0 && yy < h as i64 && ink[yy as usize * w + xx as usize]
         })
     };
     let mut line = vec![false; w * h];
@@ -157,18 +136,12 @@ pub fn segment(width: usize, height: usize, rgba: &[u8]) -> Vec<Rect> {
         let n = (-(WOBBLE + 4)..=WOBBLE + 4)
             .filter(|k| {
                 let (xx, yy) = (x + dx * k, y + dy * k);
-                xx >= 0
-                    && xx < w as i64
-                    && yy >= 0
-                    && yy < h as i64
-                    && ink[yy as usize * w + xx as usize]
+                xx >= 0 && xx < w as i64 && yy >= 0 && yy < h as i64 && ink[yy as usize * w + xx as usize]
             })
             .count() as i64;
         n <= WOBBLE * 2 + 3
     };
-    let erase: Vec<usize> = (0..w * h)
-        .filter(|i| line[*i] && ink[*i] && (thin(&ink, *i, 0, 1) || thin(&ink, *i, 1, 0)))
-        .collect();
+    let erase: Vec<usize> = (0..w * h).filter(|i| line[*i] && ink[*i] && (thin(&ink, *i, 0, 1) || thin(&ink, *i, 1, 0))).collect();
     for i in erase {
         ink[i] = false;
     }
@@ -242,43 +215,22 @@ pub fn segment(width: usize, height: usize, rgba: &[u8]) -> Vec<Rect> {
         let (lw, lh) = ((x1 - x0 + 1) * CELL, (y1 - y0 + 1) * CELL);
         // Too small or thin is noise, a speck of punctuation, or the stub of a line.
         if lh >= CELL * 2 && lw > CELL * 2 && n >= 3 {
-            lines.push(Rect {
-                x: lx as f64,
-                y: ly as f64,
-                w: lw.min(w - lx) as f64,
-                h: lh.min(h - ly) as f64,
-            });
+            lines.push(Rect { x: lx as f64, y: ly as f64, w: lw.min(w - lx) as f64, h: lh.min(h - ly) as f64 });
         }
     }
     let out = blocks(lines);
     // A block wholly inside another is one stroke of a character, cut off on its own.
-    let within = |a: &Rect, b: &Rect| {
-        a.x >= b.x - 2.0
-            && a.y >= b.y - 2.0
-            && a.x + a.w <= b.x + b.w + 2.0
-            && a.y + a.h <= b.y + b.h + 2.0
-    };
-    out.iter()
-        .enumerate()
-        .filter(|(i, a)| !out.iter().enumerate().any(|(j, b)| j != *i && within(a, b)))
-        .map(|(_, a)| *a)
-        .collect()
+    let within = |a: &Rect, b: &Rect| a.x >= b.x - 2.0 && a.y >= b.y - 2.0 && a.x + a.w <= b.x + b.w + 2.0 && a.y + a.h <= b.y + b.h + 2.0;
+    out.iter().enumerate().filter(|(i, a)| !out.iter().enumerate().any(|(j, b)| j != *i && within(a, b))).map(|(_, a)| *a).collect()
 }
 
 /// Join lines side by side, then lines stacked closely, overlapping and of similar size, into paragraphs.
 fn blocks(pieces: Vec<Rect>) -> Vec<Rect> {
-    let mut ps: Vec<Rect> = pieces
-        .into_iter()
-        .filter(|p| p.w > 0.0 && p.h > 0.0)
-        .collect();
+    let mut ps: Vec<Rect> = pieces.into_iter().filter(|p| p.w > 0.0 && p.h > 0.0).collect();
     ps.sort_by(|a, b| a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x)));
     let mut lines: Vec<Rect> = vec![];
     for p in ps {
-        let hit = lines.iter_mut().find(|l| {
-            (l.y + l.h / 2.0 - (p.y + p.h / 2.0)).abs() < l.h.min(p.h) * 0.5
-                && p.x >= l.x - 1.0
-                && p.x - (l.x + l.w) < l.h.max(p.h) * 1.5
-        });
+        let hit = lines.iter_mut().find(|l| (l.y + l.h / 2.0 - (p.y + p.h / 2.0)).abs() < l.h.min(p.h) * 0.5 && p.x >= l.x - 1.0 && p.x - (l.x + l.w) < l.h.max(p.h) * 1.5);
         match hit {
             Some(l) => {
                 let x1 = (l.x + l.w).max(p.x + p.w);
@@ -294,11 +246,7 @@ fn blocks(pieces: Vec<Rect>) -> Vec<Rect> {
     let mut out: Vec<(Rect, f64)> = vec![];
     for l in lines {
         let hit = out.iter_mut().find(|(b, lh)| {
-            l.y - (b.y + b.h) < lh.max(l.h) * 0.9
-                && l.y >= b.y + b.h - *lh * 0.5
-                && l.x < b.x + b.w
-                && l.x + l.w > b.x
-                && lh.max(l.h) / lh.min(l.h) < 1.3
+            l.y - (b.y + b.h) < lh.max(l.h) * 0.9 && l.y >= b.y + b.h - *lh * 0.5 && l.x < b.x + b.w && l.x + l.w > b.x && lh.max(l.h) / lh.min(l.h) < 1.3
         });
         match hit {
             Some((b, _)) => {
@@ -313,36 +261,15 @@ fn blocks(pieces: Vec<Rect>) -> Vec<Rect> {
     out.into_iter().map(|(b, _)| b).collect()
 }
 
-pub fn import_image(
-    bytes: &[u8],
-    english: bool,
-    cancel: &AtomicBool,
-    read: &mut dyn FnMut(&[u8]) -> Result<String>,
-    progress: &mut dyn FnMut(usize, usize),
-) -> Result<ImageImport> {
-    let broken = || {
-        if english {
-            "Can't open the image (PNG, JPEG, WebP and GIF are supported)"
-        } else {
-            "图片打不开（支持 PNG、JPEG、WebP、GIF）"
-        }
-    };
-    let picture = image::load_from_memory(bytes)
-        .map_err(|_| anyhow!(broken()))?
-        .to_rgba8();
+pub fn import_image(bytes: &[u8], english: bool, cancel: &AtomicBool, read: &mut dyn FnMut(&[u8]) -> Result<String>, progress: &mut dyn FnMut(usize, usize)) -> Result<ImageImport> {
+    let broken = || if english { "Can't open the image (PNG, JPEG, WebP and GIF are supported)" } else { "图片打不开（支持 PNG、JPEG、WebP、GIF）" };
+    let picture = image::load_from_memory(bytes).map_err(|_| anyhow!(broken()))?.to_rgba8();
     if picture.width() == 0 || picture.height() == 0 {
         bail!(broken());
     }
     let k = (f64::from(WORK) / f64::from(picture.width())).min(1.0);
-    let (w, h) = (
-        js_round(f64::from(picture.width()) * k).max(1.0) as u32,
-        js_round(f64::from(picture.height()) * k).max(1.0) as u32,
-    );
-    let sized = if k < 1.0 {
-        resize(&picture, w, h, FilterType::Triangle)
-    } else {
-        picture
-    };
+    let (w, h) = (js_round(f64::from(picture.width()) * k).max(1.0) as u32, js_round(f64::from(picture.height()) * k).max(1.0) as u32);
+    let sized = if k < 1.0 { resize(&picture, w, h, FilterType::Triangle) } else { picture };
     // Transparent parts get a white ground, as the picture on the board will show them.
     let mut work = RgbaImage::from_pixel(w, h, Rgba([255, 255, 255, 255]));
     image::imageops::overlay(&mut work, &sized, 0, 0);
@@ -365,54 +292,23 @@ pub fn import_image(
         let ch = (f64::from(h) - y).min(a.h + PAD * 2.0);
         let up = (48.0 / ch).clamp(1.0, 3.0);
         let piece = crop_imm(&work, x as u32, y as u32, cw as u32, ch as u32).to_image();
-        let piece = resize(
-            &piece,
-            js_round(cw * up).max(1.0) as u32,
-            js_round(ch * up).max(1.0) as u32,
-            FilterType::Triangle,
-        );
+        let piece = resize(&piece, js_round(cw * up).max(1.0) as u32, js_round(ch * up).max(1.0) as u32, FilterType::Triangle);
         let mut png = vec![];
-        PngEncoder::new(&mut png)
-            .write_image(
-                piece.as_raw(),
-                piece.width(),
-                piece.height(),
-                image::ExtendedColorType::Rgba8,
-            )
-            .context("encoding part of the image")?;
+        PngEncoder::new(&mut png).write_image(piece.as_raw(), piece.width(), piece.height(), image::ExtendedColorType::Rgba8).context("encoding part of the image")?;
         let text = clean_read(&read(&png)?);
         if cancel.load(Ordering::Relaxed) {
             bail!("cancelled");
         }
         if meaningful(&text) {
-            found.push(Area {
-                text,
-                name: None,
-                x: a.x * to_board,
-                y: a.y * to_board,
-                w: a.w * to_board,
-                h: a.h * to_board,
-                rows: None,
-            });
+            found.push(Area { text, name: None, x: a.x * to_board, y: a.y * to_board, w: a.w * to_board, h: a.h * to_board, rows: None });
         }
     }
     progress(chosen.len(), chosen.len());
-    let rgb: Vec<u8> = work
-        .as_raw()
-        .chunks_exact(4)
-        .flat_map(|p| [p[0], p[1], p[2]])
-        .collect();
+    let rgb: Vec<u8> = work.as_raw().chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
     let mut jpeg = vec![];
-    JpegEncoder::new_with_quality(&mut jpeg, JPEG_QUALITY)
-        .encode(&rgb, w, h, image::ExtendedColorType::Rgb8)
-        .context("encoding the image")?;
+    JpegEncoder::new_with_quality(&mut jpeg, JPEG_QUALITY).encode(&rgb, w, h, image::ExtendedColorType::Rgb8).context("encoding the image")?;
     let graph = page_graph(WIDTH, f64::from(h) * to_board, None, &found);
-    Ok(ImageImport {
-        page: NewPage { graph, jpeg },
-        found: chosen.len(),
-        read: found.len(),
-        capped,
-    })
+    Ok(ImageImport { page: NewPage { graph, jpeg }, found: chosen.len(), read: found.len(), capped })
 }
 
 #[cfg(test)]
@@ -448,18 +344,9 @@ mod tests {
         let cases = g["segments"].as_array().unwrap();
         assert!(cases.len() >= 6);
         for case in cases {
-            let (w, h) = (
-                case["w"].as_u64().unwrap() as usize,
-                case["h"].as_u64().unwrap() as usize,
-            );
+            let (w, h) = (case["w"].as_u64().unwrap() as usize, case["h"].as_u64().unwrap() as usize);
             let rects: Vec<[usize; 4]> = serde_json::from_value(case["rects"].clone()).unwrap();
-            let mut data = canvas(
-                w,
-                h,
-                case["paper"].as_u64().unwrap() as u8,
-                case["ink"].as_u64().unwrap() as u8,
-                &rects,
-            );
+            let mut data = canvas(w, h, case["paper"].as_u64().unwrap() as u8, case["ink"].as_u64().unwrap() as u8, &rects);
             if case["clear"].as_bool().unwrap_or(false) {
                 for p in data.chunks_exact_mut(4) {
                     if p[0] == 255 {
@@ -467,10 +354,7 @@ mod tests {
                     }
                 }
             }
-            let got: Vec<[f64; 4]> = segment(w, h, &data)
-                .iter()
-                .map(|r| [r.x, r.y, r.w, r.h])
-                .collect();
+            let got: Vec<[f64; 4]> = segment(w, h, &data).iter().map(|r| [r.x, r.y, r.w, r.h]).collect();
             let wanted: Vec<[f64; 4]> = serde_json::from_value(case["blocks"].clone()).unwrap();
             assert_eq!(got, wanted, "{}", case["name"]);
         }
@@ -481,16 +365,8 @@ mod tests {
         let g = goldens();
         for case in g["reads"].as_array().unwrap() {
             let input = case["input"].as_str().unwrap();
-            assert_eq!(
-                clean_read(input),
-                case["clean"].as_str().unwrap(),
-                "{input}"
-            );
-            assert_eq!(
-                meaningful(input),
-                case["meaningful"].as_bool().unwrap(),
-                "{input}"
-            );
+            assert_eq!(clean_read(input), case["clean"].as_str().unwrap(), "{input}");
+            assert_eq!(meaningful(input), case["meaningful"].as_bool().unwrap(), "{input}");
         }
     }
 
@@ -504,9 +380,7 @@ mod tests {
     fn png_with_blocks(rects: &[[usize; 4]], width: u32, height: u32) -> Vec<u8> {
         let data = canvas(width as usize, height as usize, 255, 20, rects);
         let mut png = vec![];
-        PngEncoder::new(&mut png)
-            .write_image(&data, width, height, image::ExtendedColorType::Rgba8)
-            .unwrap();
+        PngEncoder::new(&mut png).write_image(&data, width, height, image::ExtendedColorType::Rgba8).unwrap();
         png
     }
 
@@ -520,32 +394,17 @@ mod tests {
         rects.extend(word(20, 200));
         let mut answers = vec!["订单服务".to_string(), "->".to_string()].into_iter();
         let mut asked = vec![];
-        let imported = import_image(
-            &png_with_blocks(&rects, 400, 300),
-            false,
-            &AtomicBool::new(false),
-            &mut |png| {
-                asked.push(png.to_vec());
-                Ok(answers.next().unwrap())
-            },
-            &mut |_, _| {},
-        )
+        let imported = import_image(&png_with_blocks(&rects, 400, 300), false, &AtomicBool::new(false), &mut |png| {
+            asked.push(png.to_vec());
+            Ok(answers.next().unwrap())
+        }, &mut |_, _| {})
         .unwrap();
-        assert_eq!(
-            (imported.found, imported.read, imported.capped),
-            (2, 1, false)
-        );
+        assert_eq!((imported.found, imported.read, imported.capped), (2, 1, false));
         let block = &imported.page.graph.nodes[0];
-        assert_eq!(
-            (block.label.as_str(), block.kind),
-            ("订单服务", Kind::Region)
-        );
+        assert_eq!((block.label.as_str(), block.kind), ("订单服务", Kind::Region));
         // Board coordinates: this picture is shown at 900 wide.
         let at = block.at().unwrap();
-        assert!(
-            (at[0] - 20.0 * 2.25).abs() < 8.0 && (at[1] - 20.0 * 2.25).abs() < 8.0,
-            "{at:?}"
-        );
+        assert!((at[0] - 20.0 * 2.25).abs() < 8.0 && (at[1] - 20.0 * 2.25).abs() < 8.0, "{at:?}");
         assert_eq!(imported.page.graph.underlay(), Some((900.0, 675.0)));
         // Small text is enlarged for the model.
         let piece = image::load_from_memory(&asked[0]).unwrap();
@@ -554,20 +413,12 @@ mod tests {
 
     #[test]
     fn too_many_blocks_stop_at_the_limit_and_say_so() {
-        let rects: Vec<[usize; 4]> = (0..MAX_AREAS + 5)
-            .flat_map(|i| word(20 + (i % 3) * 200, 20 + (i / 3) * 40))
-            .collect();
+        let rects: Vec<[usize; 4]> = (0..MAX_AREAS + 5).flat_map(|i| word(20 + (i % 3) * 200, 20 + (i / 3) * 40)).collect();
         let mut asked = 0;
-        let imported = import_image(
-            &png_with_blocks(&rects, 800, 1000),
-            true,
-            &AtomicBool::new(false),
-            &mut |_| {
-                asked += 1;
-                Ok("text".to_string())
-            },
-            &mut |_, _| {},
-        )
+        let imported = import_image(&png_with_blocks(&rects, 800, 1000), true, &AtomicBool::new(false), &mut |_| {
+            asked += 1;
+            Ok("text".to_string())
+        }, &mut |_, _| {})
         .unwrap();
         assert!(imported.capped);
         assert_eq!(asked, MAX_AREAS);
@@ -575,45 +426,14 @@ mod tests {
 
     #[test]
     fn a_large_image_is_scaled_and_a_damaged_one_says_so_and_a_stop_stops() {
-        let big = import_image(
-            &png_with_blocks(&[], 3600, 200),
-            true,
-            &AtomicBool::new(false),
-            &mut |_| Ok(String::new()),
-            &mut |_, _| {},
-        )
-        .unwrap();
-        assert_eq!(
-            image::load_from_memory(&big.page.jpeg).unwrap().width(),
-            WORK
-        );
-        assert!(
-            big.page.graph.nodes.is_empty(),
-            "a picture with no text is still a page"
-        );
-        let Err(error) = import_image(
-            b"not an image",
-            true,
-            &AtomicBool::new(false),
-            &mut |_| Ok(String::new()),
-            &mut |_, _| {},
-        ) else {
-            panic!("should fail")
-        };
+        let big = import_image(&png_with_blocks(&[], 3600, 200), true, &AtomicBool::new(false), &mut |_| Ok(String::new()), &mut |_, _| {}).unwrap();
+        assert_eq!(image::load_from_memory(&big.page.jpeg).unwrap().width(), WORK);
+        assert!(big.page.graph.nodes.is_empty(), "a picture with no text is still a page");
+        let Err(error) = import_image(b"not an image", true, &AtomicBool::new(false), &mut |_| Ok(String::new()), &mut |_, _| {}) else { panic!("should fail") };
         assert!(format!("{error}").starts_with("Can't open the image"));
         let stop = AtomicBool::new(true);
         let mut asked = 0;
-        assert!(import_image(
-            &png_with_blocks(&word(20, 20), 400, 300),
-            true,
-            &stop,
-            &mut |_| {
-                asked += 1;
-                Ok(String::new())
-            },
-            &mut |_, _| {}
-        )
-        .is_err());
+        assert!(import_image(&png_with_blocks(&word(20, 20), 400, 300), true, &stop, &mut |_| { asked += 1; Ok(String::new()) }, &mut |_, _| {}).is_err());
         assert_eq!(asked, 0);
     }
 }

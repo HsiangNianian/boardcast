@@ -53,19 +53,9 @@ fn good(path: &Path, sha256: &str) -> bool {
 /// A whole download, through the system proxy if there is one.
 fn get(url: &str) -> Result<Vec<u8>> {
     println!("fetch: {url}");
-    let agent = ureq::AgentBuilder::new()
-        .try_proxy_from_env(true)
-        .timeout_connect(Duration::from_secs(20))
-        .timeout_read(Duration::from_secs(60))
-        .build();
+    let agent = ureq::AgentBuilder::new().try_proxy_from_env(true).timeout_connect(Duration::from_secs(20)).timeout_read(Duration::from_secs(60)).build();
     let mut bytes = vec![];
-    agent
-        .get(url)
-        .call()
-        .with_context(|| url.to_string())?
-        .into_reader()
-        .read_to_end(&mut bytes)
-        .with_context(|| url.to_string())?;
+    agent.get(url).call().with_context(|| url.to_string())?.into_reader().read_to_end(&mut bytes).with_context(|| url.to_string())?;
     Ok(bytes)
 }
 
@@ -77,10 +67,7 @@ fn cached(url: &str, name: &str, sha256: &str) -> Result<PathBuf> {
     }
     let bytes = get(url)?;
     let actual = hex(&Sha256::digest(&bytes));
-    ensure!(
-        actual == sha256,
-        "{url} does not match its checksum: {actual}"
-    );
+    ensure!(actual == sha256, "{url} does not match its checksum: {actual}");
     fs::write(&path, bytes)?;
     Ok(path)
 }
@@ -88,18 +75,14 @@ fn cached(url: &str, name: &str, sha256: &str) -> Result<PathBuf> {
 fn unpack(archive: &Path, into: &Path) -> Result<()> {
     let _ = fs::remove_dir_all(into);
     fs::create_dir_all(into)?;
-    tar::Archive::new(flate2::read::GzDecoder::new(File::open(archive)?))
-        .unpack(into)
-        .with_context(|| format!("unpacking {}", archive.display()))
+    tar::Archive::new(flate2::read::GzDecoder::new(File::open(archive)?)).unpack(into).with_context(|| format!("unpacking {}", archive.display()))
 }
 
 /// This machine as a download names it: the Mac and Windows are called differently by different projects.
 fn unzip(archive: &Path, into: &Path) -> Result<()> {
     let _ = fs::remove_dir_all(into);
     fs::create_dir_all(into)?;
-    zip::ZipArchive::new(File::open(archive)?)?
-        .extract(into)
-        .with_context(|| format!("unpacking {}", archive.display()))
+    zip::ZipArchive::new(File::open(archive)?)?.extract(into).with_context(|| format!("unpacking {}", archive.display()))
 }
 
 fn host(mac: &str, windows: &str) -> Result<String> {
@@ -130,47 +113,24 @@ fn voice() -> Result<()> {
         fs::create_dir_all(dir)?;
         let _ = fs::remove_file(&dest);
         fetched += 1;
-        if let Some(copy) = local
-            .as_ref()
-            .map(|dir| dir.join(file.name))
-            .filter(|copy| good(copy, file.sha256))
-        {
+        if let Some(copy) = local.as_ref().map(|dir| dir.join(file.name)).filter(|copy| good(copy, file.sha256)) {
             fs::copy(copy, &dest)?;
             continue;
         }
         let mut sources = vec![];
         if let Some(path) = file.modelscope {
-            sources.push(boardcast_models::Source {
-                name: "ModelScope".into(),
-                url: format!("https://modelscope.cn/models/{path}"),
-                direct: true,
-            });
+            sources.push(boardcast_models::Source { name: "ModelScope".into(), url: format!("https://modelscope.cn/models/{path}"), direct: true });
         }
-        for (name, host) in [
-            ("hf-mirror", "https://hf-mirror.com"),
-            ("Hugging Face", "https://huggingface.co"),
-        ] {
-            sources.push(boardcast_models::Source {
-                name: name.into(),
-                url: format!("{host}/{}", file.huggingface),
-                direct: false,
-            });
+        for (name, host) in [("hf-mirror", "https://hf-mirror.com"), ("Hugging Face", "https://huggingface.co")] {
+            sources.push(boardcast_models::Source { name: name.into(), url: format!("{host}/{}", file.huggingface), direct: false });
         }
         if let Some(url) = file.github {
-            sources.push(boardcast_models::Source {
-                name: "GitHub".into(),
-                url: url.into(),
-                direct: false,
-            });
+            sources.push(boardcast_models::Source { name: "GitHub".into(), url: url.into(), direct: false });
         }
         let model = boardcast_models::Model {
             id: file.name,
             label: file.name,
-            file: dest
-                .file_name()
-                .context("voice file name")?
-                .to_string_lossy()
-                .into_owned(),
+            file: dest.file_name().context("voice file name")?.to_string_lossy().into_owned(),
             size: file.size,
             sha256: file.sha256.into(),
             vram_mib: 0,
@@ -212,15 +172,8 @@ fn pdfium(platform: Option<&str>) -> Result<()> {
     if fs::read_to_string(&marker).is_ok_and(|v| v.trim() == wanted) {
         return Ok(());
     }
-    let url = format!(
-        "https://github.com/bblanchon/pdfium-binaries/releases/download/{}/pdfium-{platform}.tgz",
-        PDFIUM_BUILD.replace('/', "%2F")
-    );
-    let archive = cached(
-        &url,
-        &format!("pdfium-{}-{platform}.tgz", PDFIUM_BUILD.replace('/', "-")),
-        sha256,
-    )?;
+    let url = format!("https://github.com/bblanchon/pdfium-binaries/releases/download/{}/pdfium-{platform}.tgz", PDFIUM_BUILD.replace('/', "%2F"));
+    let archive = cached(&url, &format!("pdfium-{}-{platform}.tgz", PDFIUM_BUILD.replace('/', "-")), sha256)?;
     let work = cache()?.join(format!("pdfium-{platform}"));
     unpack(&archive, &work)?;
     let _ = fs::remove_dir_all(&out);
@@ -230,10 +183,7 @@ fn pdfium(platform: Option<&str>) -> Result<()> {
         "win" => "bin/pdfium.dll",
         _ => "lib/libpdfium.so",
     };
-    fs::copy(
-        work.join(library),
-        out.join(Path::new(library).file_name().context("library name")?),
-    )?;
+    fs::copy(work.join(library), out.join(Path::new(library).file_name().context("library name")?))?;
     fs::copy(work.join("LICENSE"), out.join("LICENSE"))?;
     fs::write(marker, wanted)?;
     fs::remove_dir_all(work)?;
@@ -261,9 +211,7 @@ fn llama(platform: Option<&str>) -> Result<()> {
     }
     let archive = cache()?.join(&asset);
     if !archive.is_file() {
-        let bytes = get(&format!(
-            "https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_BUILD}/{asset}"
-        ))?;
+        let bytes = get(&format!("https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_BUILD}/{asset}"))?;
         fs::write(&archive, bytes)?;
     }
     let work = cache()?.join(format!("llama-{platform}"));
@@ -273,45 +221,23 @@ fn llama(platform: Option<&str>) -> Result<()> {
         unpack(&archive, &work)?;
     }
     // The archive may hold one folder.
-    let top: Vec<PathBuf> = fs::read_dir(&work)?
-        .map(|e| e.map(|e| e.path()))
-        .collect::<io::Result<_>>()?;
-    let src = if let [only] = top.as_slice() {
-        if only.is_dir() {
-            only.clone()
-        } else {
-            work.clone()
-        }
-    } else {
-        work.clone()
-    };
-    let names: Vec<String> = fs::read_dir(&src)?
-        .map(|e| e.map(|e| e.file_name().to_string_lossy().into_owned()))
-        .collect::<io::Result<_>>()?;
+    let top: Vec<PathBuf> = fs::read_dir(&work)?.map(|e| e.map(|e| e.path())).collect::<io::Result<_>>()?;
+    let src = if let [only] = top.as_slice() { if only.is_dir() { only.clone() } else { work.clone() } } else { work.clone() };
+    let names: Vec<String> = fs::read_dir(&src)?.map(|e| e.map(|e| e.file_name().to_string_lossy().into_owned())).collect::<io::Result<_>>()?;
 
     let _ = fs::remove_dir_all(&out);
     fs::create_dir_all(&out)?;
     let (mut kept, mut bytes) = (0, 0);
-    for name in names
-        .iter()
-        .filter(|name| keep_for_llama(name, &names, platform.starts_with("macos")))
-    {
+    for name in names.iter().filter(|name| keep_for_llama(name, &names, platform.starts_with("macos"))) {
         // Copying follows links, so the package holds real files: packaging tools handle links poorly.
         bytes += fs::copy(src.join(name), out.join(name))?;
         kept += 1;
     }
-    let server = if platform.starts_with("windows") {
-        "llama-server.exe"
-    } else {
-        "llama-server"
-    };
+    let server = if platform.starts_with("windows") { "llama-server.exe" } else { "llama-server" };
     ensure!(out.join(server).is_file(), "{asset} has no {server}");
     fs::write(marker, format!("{wanted}\n"))?;
     fs::remove_dir_all(work)?;
-    println!(
-        "fetch: {platform} llama-server into resources/llama ({kept} files, {:.1} MB)",
-        bytes as f64 / 1e6
-    );
+    println!("fetch: {platform} llama-server into resources/llama ({kept} files, {:.1} MB)", bytes as f64 / 1e6);
     Ok(())
 }
 
@@ -322,19 +248,10 @@ fn keep_for_llama(name: &str, names: &[String], mac: bool) -> bool {
     }
     // Windows: the libraries are DLLs with one name each.
     if let Some(stem) = name.strip_suffix(".dll") {
-        return !(stem.contains("ggml-rpc")
-            || (stem.contains("llama-")
-                && stem.ends_with("-impl")
-                && !stem.contains("llama-server-impl")));
+        return !(stem.contains("ggml-rpc") || (stem.contains("llama-") && stem.ends_with("-impl") && !stem.contains("llama-server-impl")));
     }
-    let numbered = |s: &str| {
-        !s.is_empty()
-            && s.split('.')
-                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
-    };
-    let library = name.ends_with(".so")
-        || name.ends_with(".dylib")
-        || name.split_once(".so.").is_some_and(|(_, v)| numbered(v));
+    let numbered = |s: &str| !s.is_empty() && s.split('.').all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
+    let library = name.ends_with(".so") || name.ends_with(".dylib") || name.split_once(".so.").is_some_and(|(_, v)| numbered(v));
     if !library {
         return false;
     }
@@ -348,10 +265,7 @@ fn keep_for_llama(name: &str, names: &[String], mac: bool) -> bool {
     }
     // Programs load libX.so.0 by its SONAME; libX.so.x.y.z is the same file and libX.so is for linking. Backends
     // without a SONAME version are loaded by the bare name, so that one stays.
-    if name
-        .split_once(".so.")
-        .is_some_and(|(_, v)| v.split('.').count() == 3)
-    {
+    if name.split_once(".so.").is_some_and(|(_, v)| v.split('.').count() == 3) {
         return false;
     }
     if name.ends_with(".so") && names.iter().any(|n| *n == format!("{name}.0")) {
@@ -372,8 +286,7 @@ fn keep_for_llama(name: &str, names: &[String], mac: bool) -> bool {
 }
 
 const HANZI_WRITER_DATA: &str = "2.0.1";
-const HANZI_WRITER_SHA256: &str =
-    "72baf3d82b114e60d6e40ea05f24d2262a05cd39d544e2f322ba2fceb7beff15";
+const HANZI_WRITER_SHA256: &str = "72baf3d82b114e60d6e40ea05f24d2262a05cd39d544e2f322ba2fceb7beff15";
 
 /// One file per character holding only its stroke medians in order, from hanzi-writer-data (Arphic Public
 /// License), then the Japanese kanji it lacks from KanjiVG, leaving its Chinese shapes as they are.
@@ -394,34 +307,18 @@ fn glyphs() -> Result<()> {
     for entry in tarball.entries()? {
         let mut entry = entry?;
         let path = entry.path()?.into_owned();
-        let Some(name) = path
-            .strip_prefix("package")
-            .ok()
-            .and_then(|p| p.to_str())
-            .map(str::to_string)
-        else {
-            continue;
-        };
+        let Some(name) = path.strip_prefix("package").ok().and_then(|p| p.to_str()).map(str::to_string) else { continue };
         if name == "ARPHICPL.TXT" && write {
             entry.unpack(out.join(&name))?;
         }
-        let Some(character) = name
-            .strip_suffix(".json")
-            .filter(|_| name != "package.json")
-        else {
-            continue;
-        };
+        let Some(character) = name.strip_suffix(".json").filter(|_| name != "package.json") else { continue };
         chinese.insert(character.to_string());
         if write {
             let mut text = String::new();
             entry.read_to_string(&mut text)?;
-            let data: serde_json::Value =
-                serde_json::from_str(&text).with_context(|| name.clone())?;
+            let data: serde_json::Value = serde_json::from_str(&text).with_context(|| name.clone())?;
             if let Some(medians) = data.get("medians") {
-                fs::write(
-                    out.join(&name),
-                    serde_json::to_string(&as_javascript(medians))?,
-                )?;
+                fs::write(out.join(&name), serde_json::to_string(&as_javascript(medians))?)?;
                 written += 1;
             }
         }
@@ -431,9 +328,8 @@ fn glyphs() -> Result<()> {
         println!("fetch: {written} characters into assets/hanzi");
     }
 
-    let kanji: serde_json::Map<String, serde_json::Value> = serde_json::from_reader(
-        flate2::read::GzDecoder::new(File::open(root.join("assets/glyphs/kanji.json.gz"))?),
-    )?;
+    let kanji: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_reader(flate2::read::GzDecoder::new(File::open(root.join("assets/glyphs/kanji.json.gz"))?))?;
     for (character, medians) in kanji.iter().filter(|(c, _)| !chinese.contains(*c)) {
         let file = out.join(format!("{character}.json"));
         let data = serde_json::to_string(&as_javascript(medians))?;
@@ -441,10 +337,7 @@ fn glyphs() -> Result<()> {
             fs::write(file, data)?;
         }
     }
-    fs::copy(
-        root.join("assets/licenses/kanjivg-CC-BY-SA-3.0.txt"),
-        out.join("KANJIVG-LICENSE.txt"),
-    )?;
+    fs::copy(root.join("assets/licenses/kanjivg-CC-BY-SA-3.0.txt"), out.join("KANJIVG-LICENSE.txt"))?;
     Ok(())
 }
 
@@ -468,94 +361,26 @@ mod tests {
     #[test]
     fn whole_numbers_drop_their_point() {
         let value: serde_json::Value = serde_json::from_str("[[333.0, 1.5], [-2.0, 7]]").unwrap();
-        assert_eq!(
-            serde_json::to_string(&as_javascript(&value)).unwrap(),
-            "[[333,1.5],[-2,7]]"
-        );
+        assert_eq!(serde_json::to_string(&as_javascript(&value)).unwrap(), "[[333,1.5],[-2,7]]");
     }
 
     #[test]
     fn llama_keeps_the_server_and_the_names_it_loads() {
         let linux: Vec<String> = [
-            "llama-server",
-            "llama-cli",
-            "LICENSE",
-            "libllama.so",
-            "libllama.so.0",
-            "libllama.so.0.0.1",
-            "libggml-vulkan.so",
-            "libggml-rpc.so",
-            "libllama-cli-impl.so",
-            "libllama-server-impl.so",
-            "README.md",
+            "llama-server", "llama-cli", "LICENSE", "libllama.so", "libllama.so.0", "libllama.so.0.0.1", "libggml-vulkan.so",
+            "libggml-rpc.so", "libllama-cli-impl.so", "libllama-server-impl.so", "README.md",
         ]
         .map(String::from)
         .into();
-        let kept: Vec<&str> = linux
-            .iter()
-            .filter(|n| keep_for_llama(n, &linux, false))
-            .map(String::as_str)
-            .collect();
-        assert_eq!(
-            kept,
-            [
-                "llama-server",
-                "LICENSE",
-                "libllama.so.0",
-                "libggml-vulkan.so",
-                "libllama-server-impl.so"
-            ]
-        );
+        let kept: Vec<&str> = linux.iter().filter(|n| keep_for_llama(n, &linux, false)).map(String::as_str).collect();
+        assert_eq!(kept, ["llama-server", "LICENSE", "libllama.so.0", "libggml-vulkan.so", "libllama-server-impl.so"]);
 
-        let windows: Vec<String> = [
-            "llama-server.exe",
-            "llama-cli.exe",
-            "llama.dll",
-            "ggml-vulkan.dll",
-            "ggml-rpc.dll",
-            "llama-cli-impl.dll",
-            "llama-server-impl.dll",
-        ]
-        .map(String::from)
-        .into();
-        let kept: Vec<&str> = windows
-            .iter()
-            .filter(|n| keep_for_llama(n, &windows, false))
-            .map(String::as_str)
-            .collect();
-        assert_eq!(
-            kept,
-            [
-                "llama-server.exe",
-                "llama.dll",
-                "ggml-vulkan.dll",
-                "llama-server-impl.dll"
-            ]
-        );
+        let windows: Vec<String> = ["llama-server.exe", "llama-cli.exe", "llama.dll", "ggml-vulkan.dll", "ggml-rpc.dll", "llama-cli-impl.dll", "llama-server-impl.dll"].map(String::from).into();
+        let kept: Vec<&str> = windows.iter().filter(|n| keep_for_llama(n, &windows, false)).map(String::as_str).collect();
+        assert_eq!(kept, ["llama-server.exe", "llama.dll", "ggml-vulkan.dll", "llama-server-impl.dll"]);
 
-        let mac: Vec<String> = [
-            "llama-server",
-            "libllama.dylib",
-            "libllama.0.dylib",
-            "libllama.0.27.0.dylib",
-            "libggml-rpc.dylib",
-            "libggml-metal.dylib",
-        ]
-        .map(String::from)
-        .into();
-        let kept: Vec<&str> = mac
-            .iter()
-            .filter(|n| keep_for_llama(n, &mac, true))
-            .map(String::as_str)
-            .collect();
-        assert_eq!(
-            kept,
-            [
-                "llama-server",
-                "libllama.0.dylib",
-                "libggml-rpc.dylib",
-                "libggml-metal.dylib"
-            ]
-        );
+        let mac: Vec<String> = ["llama-server", "libllama.dylib", "libllama.0.dylib", "libllama.0.27.0.dylib", "libggml-rpc.dylib", "libggml-metal.dylib"].map(String::from).into();
+        let kept: Vec<&str> = mac.iter().filter(|n| keep_for_llama(n, &mac, true)).map(String::as_str).collect();
+        assert_eq!(kept, ["llama-server", "libllama.0.dylib", "libggml-rpc.dylib", "libggml-metal.dylib"]);
     }
 }

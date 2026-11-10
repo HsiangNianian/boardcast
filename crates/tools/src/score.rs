@@ -67,20 +67,12 @@ pub struct Score {
 }
 
 pub fn f1(p: f64, r: f64) -> f64 {
-    if p + r == 0.0 {
-        0.0
-    } else {
-        2.0 * p * r / (p + r)
-    }
+    if p + r == 0.0 { 0.0 } else { 2.0 * p * r / (p + r) }
 }
 
 /// Lower-case words of a label with no Han in it; anything but letters and digits splits words.
 fn words(s: &str) -> Vec<String> {
-    s.to_lowercase()
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(str::to_string)
-        .collect()
+    s.to_lowercase().split(|c: char| !c.is_ascii_alphanumeric()).filter(|w| !w.is_empty()).map(str::to_string).collect()
 }
 
 /// English labels match word by word: "Auth-service" equals "Auth service", "ClickHouse" equals "Click
@@ -94,13 +86,8 @@ fn same_words(a: &str, b: &str) -> u8 {
     if x.concat() == y.concat() {
         return 2;
     }
-    let (s, l) = if x.len() <= y.len() {
-        (&x, &y)
-    } else {
-        (&y, &x)
-    };
-    let contained =
-        (0..=l.len() - s.len()).any(|i| s.iter().enumerate().all(|(j, w)| &l[i + j] == w));
+    let (s, l) = if x.len() <= y.len() { (&x, &y) } else { (&y, &x) };
+    let contained = (0..=l.len() - s.len()).any(|i| s.iter().enumerate().all(|(j, w)| &l[i + j] == w));
     u8::from(contained)
 }
 
@@ -116,33 +103,20 @@ fn same(a: &str, b: &str) -> u8 {
     if x == y {
         return 2;
     }
-    let (s, l) = if x.chars().count() <= y.chars().count() {
-        (&x, &y)
-    } else {
-        (&y, &x)
-    };
+    let (s, l) = if x.chars().count() <= y.chars().count() { (&x, &y) } else { (&y, &x) };
     u8::from(s.chars().count() >= 2 && l.contains(s.as_str()))
 }
 
 fn names(n: &Node) -> Vec<&str> {
-    std::iter::once(n.label.as_str())
-        .chain(n.aliases.iter().map(String::as_str))
-        .collect()
+    std::iter::once(n.label.as_str()).chain(n.aliases.iter().map(String::as_str)).collect()
 }
 
 fn best(pred: &[&str], gold: &[String]) -> u8 {
-    pred.iter()
-        .flat_map(|p| gold.iter().map(move |g| same(p, g)))
-        .max()
-        .unwrap_or(0)
+    pred.iter().flat_map(|p| gold.iter().map(move |g| same(p, g))).max().unwrap_or(0)
 }
 
 fn ratio(a: usize, b: usize) -> f64 {
-    if b == 0 {
-        1.0
-    } else {
-        a as f64 / b as f64
-    }
+    if b == 0 { 1.0 } else { a as f64 / b as f64 }
 }
 
 const STRIKE: &str = "划掉";
@@ -166,36 +140,16 @@ struct Entity<'a> {
 pub fn score(g: &Graph, gold: &Gold) -> Score {
     let mut entities: Vec<Entity> = vec![];
     for n in gold.nodes.iter().flatten() {
-        entities.push(Entity {
-            key: &n[0],
-            names: n,
-            kind: Type::Node,
-            topic: None,
-        });
+        entities.push(Entity { key: &n[0], names: n, kind: Type::Node, topic: None });
     }
     for t in gold.topics.iter().flatten() {
-        entities.push(Entity {
-            key: &t.title[0],
-            names: &t.title,
-            kind: Type::Topic,
-            topic: None,
-        });
+        entities.push(Entity { key: &t.title[0], names: &t.title, kind: Type::Topic, topic: None });
         for it in &t.items {
-            entities.push(Entity {
-                key: &it[0],
-                names: it,
-                kind: Type::Item,
-                topic: Some(&t.title[0]),
-            });
+            entities.push(Entity { key: &it[0], names: it, kind: Type::Item, topic: Some(&t.title[0]) });
         }
     }
     for o in gold.optional_nodes.iter().flatten() {
-        entities.push(Entity {
-            key: &o[0],
-            names: o,
-            kind: Type::Optional,
-            topic: None,
-        });
+        entities.push(Entity { key: &o[0], names: o, kind: Type::Optional, topic: None });
     }
 
     // Exact matches first, then containment. Questions, formulas and notes take no part.
@@ -207,22 +161,13 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
             if taken.contains(ent.key) {
                 continue;
             }
-            if let Some(hit) = g.nodes.iter().find(|n| {
-                !attach(n)
-                    && !map.contains_key(n.id.as_str())
-                    && best(&names(n), ent.names) >= level
-            }) {
+            if let Some(hit) = g.nodes.iter().find(|n| !attach(n) && !map.contains_key(n.id.as_str()) && best(&names(n), ent.names) >= level) {
                 map.insert(&hit.id, e);
                 taken.insert(ent.key);
             }
         }
     }
-    let struck: HashSet<&str> = g
-        .nodes
-        .iter()
-        .filter(|n| n.marks.iter().any(|m| m == STRIKE))
-        .map(|n| n.id.as_str())
-        .collect();
+    let struck: HashSet<&str> = g.nodes.iter().filter(|n| n.marks.iter().any(|m| m == STRIKE)).map(|n| n.id.as_str()).collect();
 
     let mut violations = vec![];
     for n in &g.nodes {
@@ -236,27 +181,13 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
 
     let gold_nodes: Vec<&Entity> = entities.iter().filter(|e| e.kind == Type::Node).collect();
     let node_tp = gold_nodes.iter().filter(|e| taken.contains(e.key)).count();
-    let pred_nodes: Vec<&Node> = g
-        .nodes
-        .iter()
-        .filter(|n| n.kind == Kind::Node && !struck.contains(n.id.as_str()))
-        .collect();
-    let pred_node_hit = pred_nodes
-        .iter()
-        .filter(|n| {
-            map.get(n.id.as_str())
-                .is_some_and(|&e| entities[e].kind == Type::Node)
-        })
-        .count();
+    let pred_nodes: Vec<&Node> = g.nodes.iter().filter(|n| n.kind == Kind::Node && !struck.contains(n.id.as_str())).collect();
+    let pred_node_hit = pred_nodes.iter().filter(|n| map.get(n.id.as_str()).is_some_and(|&e| entities[e].kind == Type::Node)).count();
 
     // Topics and items: an item counts only under the right topic, at any depth.
     let topics: Vec<&Entity> = entities.iter().filter(|e| e.kind == Type::Topic).collect();
     let items: Vec<&Entity> = entities.iter().filter(|e| e.kind == Type::Item).collect();
-    let id_of = |key: &str| {
-        map.iter()
-            .find(|(_, &e)| entities[e].key == key)
-            .map(|(id, _)| *id)
-    };
+    let id_of = |key: &str| map.iter().find(|(_, &e)| entities[e].key == key).map(|(id, _)| *id);
     let ancestors = |id: &str| {
         let mut out: HashSet<&str> = HashSet::new();
         let mut cur = g.nodes.iter().find(|n| n.id == id);
@@ -280,21 +211,14 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
 
     // Strikes on their own, one to one, so repeated or mistaken strikes count against.
     let strike_gold = gold.struck.clone().unwrap_or_default();
-    let strike_pred: Vec<&Node> = g
-        .nodes
-        .iter()
-        .filter(|n| struck.contains(n.id.as_str()))
-        .collect();
+    let strike_pred: Vec<&Node> = g.nodes.iter().filter(|n| struck.contains(n.id.as_str())).collect();
     let (mut gold_hit, mut pred_hit, mut strike_tp) = (HashSet::new(), HashSet::new(), 0);
     for level in [2, 1] {
         for (i, want) in strike_gold.iter().enumerate() {
             if gold_hit.contains(&i) {
                 continue;
             }
-            if let Some(hit) = strike_pred
-                .iter()
-                .find(|n| !pred_hit.contains(n.id.as_str()) && best(&names(n), want) >= level)
-            {
+            if let Some(hit) = strike_pred.iter().find(|n| !pred_hit.contains(n.id.as_str()) && best(&names(n), want) >= level) {
                 gold_hit.insert(i);
                 pred_hit.insert(hit.id.as_str());
                 strike_tp += 1;
@@ -322,25 +246,14 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
         has(s, &emphasized, "not emphasized");
     }
     for q in gold.questions.iter().flatten() {
-        has(
-            q,
-            &|n: &Node| n.kind == Kind::Question,
-            "not kept as a question",
-        );
+        has(q, &|n: &Node| n.kind == Kind::Question, "not kept as a question");
     }
     for f in gold.formulas.iter().flatten() {
-        has(
-            f,
-            &|n: &Node| n.kind == Kind::Formula,
-            "not kept as a formula",
-        );
+        has(f, &|n: &Node| n.kind == Kind::Formula, "not kept as a formula");
     }
     for s in gold.not_struck.iter().flatten() {
         mark_all += 1;
-        if g.nodes
-            .iter()
-            .any(|n| is_struck(n) && best(&names(n), s) >= 1)
-        {
+        if g.nodes.iter().any(|n| is_struck(n) && best(&names(n), s) >= 1) {
             mark_miss.push(format!("struck by mistake: {}", s[0]));
         } else {
             mark_hit += 1;
@@ -348,10 +261,7 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
     }
     for s in gold.not_emphasized.iter().flatten() {
         mark_all += 1;
-        if g.nodes
-            .iter()
-            .any(|n| emphasized(n) && best(&names(n), s) >= 1)
-        {
+        if g.nodes.iter().any(|n| emphasized(n) && best(&names(n), s) >= 1) {
             mark_miss.push(format!("emphasis in the wrong place: {}", s[0]));
         } else {
             mark_hit += 1;
@@ -365,42 +275,18 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
                 return format!("{}>{}", grp[0].0, grp[0].1);
             }
         }
-        if let Some((x, y)) = gold
-            .either_direction
-            .iter()
-            .flatten()
-            .find(|(x, y)| (x == a && y == b) || (x == b && y == a))
-        {
+        if let Some((x, y)) = gold.either_direction.iter().flatten().find(|(x, y)| (x == a && y == b) || (x == b && y == a)) {
             return format!("{x}>{y}");
         }
         format!("{a}>{b}")
     };
-    let gold_edges: BTreeSet<String> = gold
-        .edges
-        .iter()
-        .flatten()
-        .map(|(a, b)| canon(a, b))
-        .collect();
-    let optional: HashSet<String> = gold
-        .optional_edges
-        .iter()
-        .flatten()
-        .map(|(a, b)| format!("{a}>{b}"))
-        .collect();
-    let forbidden: HashSet<String> = gold
-        .forbidden_edges
-        .iter()
-        .flatten()
-        .map(|(a, b)| format!("{a}>{b}"))
-        .collect();
+    let gold_edges: BTreeSet<String> = gold.edges.iter().flatten().map(|(a, b)| canon(a, b)).collect();
+    let optional: HashSet<String> = gold.optional_edges.iter().flatten().map(|(a, b)| format!("{a}>{b}")).collect();
+    let forbidden: HashSet<String> = gold.forbidden_edges.iter().flatten().map(|(a, b)| format!("{a}>{b}")).collect();
     let label_of = |id: &str| -> String {
         match map.get(id) {
             Some(&e) => entities[e].key.to_string(),
-            None => g
-                .nodes
-                .iter()
-                .find(|n| n.id == id)
-                .map_or_else(|| id.to_string(), |n| n.label.clone()),
+            None => g.nodes.iter().find(|n| n.id == id).map_or_else(|| id.to_string(), |n| n.label.clone()),
         }
     };
     let mut pred_edges: BTreeSet<String> = BTreeSet::new();
@@ -418,98 +304,42 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
         }
         pred_edges.insert(canon(&a, &b));
     }
-    let edge_tp = pred_edges
-        .iter()
-        .filter(|e| gold_edges.contains(*e))
-        .count();
+    let edge_tp = pred_edges.iter().filter(|e| gold_edges.contains(*e)).count();
 
     // Groups: whether each set of answer members landed in one group.
-    let group_acc = gold
-        .groups
-        .as_ref()
-        .filter(|gs| !gs.is_empty())
-        .map(|groups| {
-            let ok = groups
-                .iter()
-                .filter(|members| {
-                    let gs: Vec<Option<&String>> = members
-                        .iter()
-                        .map(|m| {
-                            g.nodes
-                                .iter()
-                                .find(|n| {
-                                    map.get(n.id.as_str())
-                                        .is_some_and(|&e| entities[e].key == m)
-                                })
-                                .and_then(|n| n.group.as_ref())
-                        })
-                        .collect();
-                    gs.iter().all(|x| x.is_some() && *x == gs[0])
-                })
-                .count();
-            ok as f64 / groups.len() as f64
-        });
+    let group_acc = gold.groups.as_ref().filter(|gs| !gs.is_empty()).map(|groups| {
+        let ok = groups
+            .iter()
+            .filter(|members| {
+                let gs: Vec<Option<&String>> = members
+                    .iter()
+                    .map(|m| g.nodes.iter().find(|n| map.get(n.id.as_str()).is_some_and(|&e| entities[e].key == m)).and_then(|n| n.group.as_ref()))
+                    .collect();
+                gs.iter().all(|x| x.is_some() && *x == gs[0])
+            })
+            .count();
+        ok as f64 / groups.len() as f64
+    });
 
     let arrow = |s: &str| s.replacen('>', " → ", 1);
     let mut missing: Vec<String> = vec![];
-    missing.extend(
-        gold_nodes
-            .iter()
-            .filter(|e| !taken.contains(e.key))
-            .map(|e| format!("node {}", e.key)),
-    );
-    missing.extend(
-        topics
-            .iter()
-            .filter(|e| !taken.contains(e.key))
-            .map(|e| format!("topic {}", e.key)),
-    );
-    missing.extend(
-        items
-            .iter()
-            .filter(|e| !taken.contains(e.key))
-            .map(|e| format!("item {}", e.key)),
-    );
-    missing.extend(
-        misplaced
-            .iter()
-            .map(|k| format!("item in the wrong place {k}")),
-    );
-    missing.extend(
-        gold_edges
-            .iter()
-            .filter(|e| !pred_edges.contains(*e))
-            .map(|e| format!("edge {}", arrow(e))),
-    );
+    missing.extend(gold_nodes.iter().filter(|e| !taken.contains(e.key)).map(|e| format!("node {}", e.key)));
+    missing.extend(topics.iter().filter(|e| !taken.contains(e.key)).map(|e| format!("topic {}", e.key)));
+    missing.extend(items.iter().filter(|e| !taken.contains(e.key)).map(|e| format!("item {}", e.key)));
+    missing.extend(misplaced.iter().map(|k| format!("item in the wrong place {k}")));
+    missing.extend(gold_edges.iter().filter(|e| !pred_edges.contains(*e)).map(|e| format!("edge {}", arrow(e))));
     missing.extend(mark_miss);
     let mut extra: Vec<String> = vec![];
-    extra.extend(
-        pred_nodes
-            .iter()
-            .filter(|n| !map.contains_key(n.id.as_str()))
-            .map(|n| format!("node {}", n.label)),
-    );
-    extra.extend(
-        pred_items
-            .iter()
-            .filter(|n| !map.contains_key(n.id.as_str()))
-            .map(|n| format!("item {}", n.label)),
-    );
-    extra.extend(
-        pred_edges
-            .iter()
-            .filter(|e| !gold_edges.contains(*e))
-            .map(|e| format!("edge {}", arrow(e))),
-    );
+    extra.extend(pred_nodes.iter().filter(|n| !map.contains_key(n.id.as_str())).map(|n| format!("node {}", n.label)));
+    extra.extend(pred_items.iter().filter(|n| !map.contains_key(n.id.as_str())).map(|n| format!("item {}", n.label)));
+    extra.extend(pred_edges.iter().filter(|e| !gold_edges.contains(*e)).map(|e| format!("edge {}", arrow(e))));
 
     Score {
         node_p: ratio(pred_node_hit, pred_nodes.len()),
         node_r: ratio(node_tp, gold_nodes.len()),
         edge_p: ratio(edge_tp, pred_edges.len()),
         edge_r: ratio(edge_tp, gold_edges.len()),
-        topic_r: (!topics.is_empty()).then(|| {
-            topics.iter().filter(|t| taken.contains(t.key)).count() as f64 / topics.len() as f64
-        }),
+        topic_r: (!topics.is_empty()).then(|| topics.iter().filter(|t| taken.contains(t.key)).count() as f64 / topics.len() as f64),
         item_p: (!items.is_empty()).then(|| ratio(item_tp, pred_items.len())),
         item_r: (!items.is_empty()).then(|| item_tp as f64 / items.len() as f64),
         strike_p: score_strike.then(|| ratio(strike_tp, strike_pred.len())),
@@ -531,66 +361,30 @@ mod tests {
     #[test]
     fn scores_match_the_typescript_scorer() {
         let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
-        let expected: serde_json::Map<String, Value> =
-            serde_json::from_str(include_str!("../fixtures/score-goldens.json")).unwrap();
+        let expected: serde_json::Map<String, Value> = serde_json::from_str(include_str!("../fixtures/score-goldens.json")).unwrap();
         let mut cases: Vec<Value> = vec![];
         for set in ["cases.json", "holdout.json", "pointing.json"] {
-            cases.extend(
-                serde_json::from_slice::<Vec<Value>>(
-                    &std::fs::read(format!("{root}/eval/{set}")).unwrap(),
-                )
-                .unwrap(),
-            );
+            cases.extend(serde_json::from_slice::<Vec<Value>>(&std::fs::read(format!("{root}/eval/{set}")).unwrap()).unwrap());
         }
         assert!(expected.len() >= 20);
         for (id, want) in &expected {
-            let demo: Value = serde_json::from_slice(
-                &std::fs::read(format!("{root}/assets/demos/{id}.json")).unwrap(),
-            )
-            .unwrap();
+            let demo: Value = serde_json::from_slice(&std::fs::read(format!("{root}/assets/demos/{id}.json")).unwrap()).unwrap();
             let graph: Graph = serde_json::from_value(demo["graph"].clone()).unwrap();
             let case = cases.iter().find(|c| c["id"] == id.as_str()).unwrap();
             let gold: Gold = serde_json::from_value(case["gold"].clone()).unwrap();
             let s = score(&graph, &gold);
             let close = |got: Option<f64>, key: &str| {
                 let want = want[key].as_f64();
-                assert!(
-                    got.zip(want)
-                        .map_or(got.is_none() && want.is_none(), |(a, b)| (a - b).abs()
-                            < 1e-9),
-                    "{id} {key}: {got:?} vs {want:?}"
-                );
+                assert!(got.zip(want).map_or(got.is_none() && want.is_none(), |(a, b)| (a - b).abs() < 1e-9), "{id} {key}: {got:?} vs {want:?}");
             };
-            for (key, got) in [
-                ("node_p", s.node_p),
-                ("node_r", s.node_r),
-                ("edge_p", s.edge_p),
-                ("edge_r", s.edge_r),
-            ] {
+            for (key, got) in [("node_p", s.node_p), ("node_r", s.node_r), ("edge_p", s.edge_p), ("edge_r", s.edge_r)] {
                 close(Some(got), key);
             }
-            for (key, got) in [
-                ("topic_r", s.topic_r),
-                ("item_p", s.item_p),
-                ("item_r", s.item_r),
-                ("strike_p", s.strike_p),
-                ("strike_r", s.strike_r),
-                ("mark_acc", s.mark_acc),
-                ("group_acc", s.group_acc),
-            ] {
+            for (key, got) in [("topic_r", s.topic_r), ("item_p", s.item_p), ("item_r", s.item_r), ("strike_p", s.strike_p), ("strike_r", s.strike_r), ("mark_acc", s.mark_acc), ("group_acc", s.group_acc)] {
                 close(got, key);
             }
-            for (key, got) in [
-                ("violations", s.violations.len()),
-                ("missing", s.missing.len()),
-                ("extra", s.extra.len()),
-            ] {
-                assert_eq!(
-                    got as u64,
-                    want[key].as_u64().unwrap(),
-                    "{id} {key}: {:?}",
-                    (&s.violations, &s.missing, &s.extra)
-                );
+            for (key, got) in [("violations", s.violations.len()), ("missing", s.missing.len()), ("extra", s.extra.len())] {
+                assert_eq!(got as u64, want[key].as_u64().unwrap(), "{id} {key}: {:?}", (&s.violations, &s.missing, &s.extra));
             }
         }
     }

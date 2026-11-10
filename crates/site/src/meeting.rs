@@ -11,36 +11,12 @@ pub struct Said {
 }
 
 pub const LINES: [Said; 6] = [
-    Said {
-        t: 30.0,
-        who: "A",
-        say: "Let’s list what this release needs.",
-    },
-    Said {
-        t: 108.0,
-        who: "A",
-        say: "Run the regression tests, ship on Friday.",
-    },
-    Said {
-        t: 192.0,
-        who: "B",
-        say: "Canary at 10%, then 50% if it holds.",
-    },
-    Said {
-        t: 336.0,
-        who: "C",
-        say: "Not Friday. Make it next Tuesday.",
-    },
-    Said {
-        t: 474.0,
-        who: "B",
-        say: "Star this one.",
-    },
-    Said {
-        t: 624.0,
-        who: "C",
-        say: "Who owns the rollback plan?",
-    },
+    Said { t: 30.0, who: "A", say: "Let’s list what this release needs." },
+    Said { t: 108.0, who: "A", say: "Run the regression tests, ship on Friday." },
+    Said { t: 192.0, who: "B", say: "Canary at 10%, then 50% if it holds." },
+    Said { t: 336.0, who: "C", say: "Not Friday. Make it next Tuesday." },
+    Said { t: 474.0, who: "B", say: "Star this one." },
+    Said { t: 624.0, who: "C", say: "Who owns the rollback plan?" },
 ];
 
 /// A moment of the meeting as a clock time; it started at 14:02.

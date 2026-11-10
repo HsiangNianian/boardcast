@@ -1,16 +1,14 @@
 //! Spike: can GPUI draw boardcast's handwriting? It writes a growing board and reports frame
 //! timing as JSON lines, so the limit comes from measurement rather than opinion.
 
-use crate::raster::Layer;
 use anyhow::{Context as _, Result};
 use boardcast_board::glyphs::{Glyphs, Pt};
-use boardcast_board::pen::{
-    arrow, circle_mark, ink, line, outline, place, rough_box, star, strike, Inked, Rng,
-};
 use gpui_kit::{
     canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, FillOptions,
     Hsla, Path, PathBuilder, PathStyle, Pixels, Render, Window, WindowBounds, WindowOptions,
 };
+use boardcast_board::pen::{arrow, circle_mark, ink, line, outline, place, rough_box, star, strike, Inked, Rng};
+use crate::raster::Layer;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -44,21 +42,9 @@ struct Style {
     under: bool,
 }
 
-const INK_STYLE: Style = Style {
-    rgb: INK,
-    alpha: 1.0,
-    under: false,
-};
-const RED: Style = Style {
-    rgb: 0xe0_31_31,
-    alpha: 1.0,
-    under: false,
-};
-const HIGHLIGHT: Style = Style {
-    rgb: 0xff_ec_99,
-    alpha: 0.75,
-    under: true,
-};
+const INK_STYLE: Style = Style { rgb: INK, alpha: 1.0, under: false };
+const RED: Style = Style { rgb: 0xe0_31_31, alpha: 1.0, under: false };
+const HIGHLIGHT: Style = Style { rgb: 0xff_ec_99, alpha: 0.75, under: true };
 /// Characters per label; each finished label receives the next mark in turn.
 const LABEL: usize = 6;
 
@@ -191,15 +177,8 @@ impl Board {
         let mut r = Rng::new(&format!("{ch}{}", self.chars));
         let width = pen_for(FONT) * 0.65;
         let placed = place(&g.strokes, self.x, self.y, FONT, &mut r);
-        let strokes = placed
-            .iter()
-            .map(|s| (ink(s, width, pen_for(FONT) * 0.12, &mut r), INK_STYLE))
-            .collect();
-        self.pending = Some(Pending {
-            strokes,
-            index: 0,
-            drawn: 0.0,
-        });
+        let strokes = placed.iter().map(|s| (ink(s, width, pen_for(FONT) * 0.12, &mut r), INK_STYLE)).collect();
+        self.pending = Some(Pending { strokes, index: 0, drawn: 0.0 });
         self.x += FONT * g.advance;
         self.chars += 1;
         self.label.2 += 1;
@@ -215,62 +194,19 @@ impl Board {
         let mut r = Rng::new(&format!("mark{}", self.next_mark));
         let (shapes, style, width) = match kind {
             0 => (strike(x, y + FONT * 0.5, w, &mut r), INK_STYLE, 1.0),
-            1 => (
-                vec![line(
-                    [x - 2.0, y + FONT + 5.0],
-                    [x + w + 2.0, y + FONT + 3.0],
-                    &mut r,
-                    0.02,
-                )],
-                RED,
-                1.0,
-            ),
-            2 => (
-                vec![circle_mark(
-                    x + w / 2.0,
-                    y + FONT / 2.0,
-                    w / 2.0 + 8.0,
-                    FONT * 0.72,
-                    &mut r,
-                )],
-                RED,
-                1.0,
-            ),
+            1 => (vec![line([x - 2.0, y + FONT + 5.0], [x + w + 2.0, y + FONT + 3.0], &mut r, 0.02)], RED, 1.0),
+            2 => (vec![circle_mark(x + w / 2.0, y + FONT / 2.0, w / 2.0 + 8.0, FONT * 0.72, &mut r)], RED, 1.0),
             3 => (vec![star(x + w + 12.0, y + FONT * 0.45, 10.0)], RED, 1.0),
-            4 => (
-                vec![line(
-                    [x - 2.0, y + FONT / 2.0],
-                    [x + w + 2.0, y + FONT / 2.0],
-                    &mut r,
-                    0.004,
-                )],
-                HIGHLIGHT,
-                10.0,
-            ),
-            5 => (
-                rough_box(x - 6.0, y - 5.0, w + 12.0, FONT + 10.0, &mut r),
-                INK_STYLE,
-                1.0,
-            ),
+            4 => (vec![line([x - 2.0, y + FONT / 2.0], [x + w + 2.0, y + FONT / 2.0], &mut r, 0.004)], HIGHLIGHT, 10.0),
+            5 => (rough_box(x - 6.0, y - 5.0, w + 12.0, FONT + 10.0, &mut r), INK_STYLE, 1.0),
             _ => match self.previous {
-                Some(from) => (
-                    arrow(&[from, [x - 3.0, y + FONT / 2.0]], &mut r),
-                    INK_STYLE,
-                    1.0,
-                ),
+                Some(from) => (arrow(&[from, [x - 3.0, y + FONT / 2.0]], &mut r), INK_STYLE, 1.0),
                 None => (Vec::new(), INK_STYLE, 1.0),
             },
         };
         let pen = pen_for(FONT) * 0.65 * width;
-        let strokes = shapes
-            .iter()
-            .map(|s| (ink(s, pen, pen_for(FONT) * 0.12, &mut r), style))
-            .collect();
-        self.pending = Some(Pending {
-            strokes,
-            index: 0,
-            drawn: 0.0,
-        });
+        let strokes = shapes.iter().map(|s| (ink(s, pen, pen_for(FONT) * 0.12, &mut r), style)).collect();
+        self.pending = Some(Pending { strokes, index: 0, drawn: 0.0 });
         self.previous = Some([x + w + 3.0, y + FONT / 2.0]);
         self.label = (self.x + 8.0, self.y, 0);
         self.x += 8.0;
@@ -281,11 +217,7 @@ impl Board {
         match self.batch {
             Batch::Raster => {
                 let [_, r, g, b] = style.rgb.to_be_bytes();
-                let layer = if style.under {
-                    &mut self.under
-                } else {
-                    &mut self.layer
-                };
+                let layer = if style.under { &mut self.under } else { &mut self.layer };
                 layer.fill(shape, [r, g, b], (style.alpha * 255.0) as u8);
             }
             Batch::Stroke => {
@@ -366,11 +298,7 @@ fn report(b: &mut Board, paint: Duration) {
     let (write_p50, write_p95, write_max) = if writing.is_empty() {
         (0.0, 0.0, 0.0)
     } else {
-        (
-            percentile(&writing, 0.5),
-            percentile(&writing, 0.95),
-            writing[writing.len() - 1],
-        )
+        (percentile(&writing, 0.5), percentile(&writing, 0.95), writing[writing.len() - 1])
     };
     println!(
         "{{\"batch\":\"{:?}\",\"chars\":{},\"marks\":{},\"strokes\":{},\"paths\":{},\"vertices\":{},\"frame_p50\":{:.2},\"frame_p95\":{:.2},\"frame_p99\":{:.2},\"paint_p50\":{:.2},\"paint_p95\":{:.2},\"write_p50\":{:.2},\"write_p95\":{:.2},\"write_max\":{:.1},\"tiles\":{},\"uploads\":{},\"rss_mb\":{},\"elapsed_s\":{:.1}}}",
@@ -423,10 +351,7 @@ impl Render for View {
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let root = PathBuf::from(
-        args.next()
-            .context("usage: spike <boardcast-root> <stroke|merged:N> <speed> <targets,..>")?,
-    );
+    let root = PathBuf::from(args.next().context("usage: spike <boardcast-root> <stroke|merged:N> <speed> <targets,..>")?);
     let batch = match args.next().as_deref() {
         Some("stroke") | None => Batch::Stroke,
         Some("raster") => Batch::Raster,
@@ -484,8 +409,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             ..Default::default()
         };
         let board = Rc::new(RefCell::new(board));
-        cx.open_window(options, |_, cx| cx.new(|_| View { board }))
-            .expect("open window");
+        cx.open_window(options, |_, cx| cx.new(|_| View { board })).expect("open window");
     });
     Ok(())
 }

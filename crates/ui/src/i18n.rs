@@ -14,9 +14,7 @@ static CHOICE: AtomicU8 = AtomicU8::new(SYSTEM);
 /// platform rather than the environment.
 fn system_chinese() -> bool {
     static CHINESE_SYSTEM: OnceLock<bool> = OnceLock::new();
-    *CHINESE_SYSTEM.get_or_init(|| {
-        sys_locale::get_locale().is_some_and(|l| l.to_ascii_lowercase().starts_with("zh"))
-    })
+    *CHINESE_SYSTEM.get_or_init(|| sys_locale::get_locale().is_some_and(|l| l.to_ascii_lowercase().starts_with("zh")))
 }
 
 fn chinese() -> bool {
@@ -39,9 +37,5 @@ pub fn choose(language: &str) {
 
 /// The text for the current language.
 pub fn tr(en: &'static str, zh: &'static str) -> &'static str {
-    if chinese() {
-        zh
-    } else {
-        en
-    }
+    if chinese() { zh } else { en }
 }

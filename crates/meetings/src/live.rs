@@ -3,9 +3,7 @@
 
 use crate::store::{new_id, Loaded, Origin};
 use boardcast_board::graph::{Graph, Kind};
-use boardcast_board::speakers::{
-    identify_sentence, raised_by, rename_by, rename_by_in_steps, rename_voice, Voice,
-};
+use boardcast_board::speakers::{identify_sentence, raised_by, rename_by, rename_by_in_steps, rename_voice, Voice};
 use boardcast_board::steps::{diff, ink_only, replay};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
@@ -15,10 +13,7 @@ pub const UNTITLED: &str = "Untitled meeting";
 const UNDO_LIMIT: usize = 100;
 
 fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
 }
 
 /// The undo stacks, ported from the earlier app's edit.ts.
@@ -29,10 +24,7 @@ pub struct History<T> {
 
 impl<T> Default for History<T> {
     fn default() -> Self {
-        Self {
-            past: vec![],
-            future: vec![],
-        }
+        Self { past: vec![], future: vec![] }
     }
 }
 
@@ -67,10 +59,7 @@ impl<T> History<T> {
     }
 
     fn each_mut(&mut self, mut change: impl FnMut(&mut T)) {
-        self.past
-            .iter_mut()
-            .chain(&mut self.future)
-            .for_each(&mut change);
+        self.past.iter_mut().chain(&mut self.future).for_each(&mut change);
     }
 }
 
@@ -114,10 +103,7 @@ pub struct Live {
 }
 
 fn array(raw: &Map<String, Value>, key: &str) -> Vec<Value> {
-    raw.get(key)
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default()
+    raw.get(key).and_then(Value::as_array).cloned().unwrap_or_default()
 }
 
 fn scene_has_content(scene: Option<&Value>) -> bool {
@@ -127,8 +113,7 @@ fn scene_has_content(scene: Option<&Value>) -> bool {
 impl Live {
     pub fn new() -> Self {
         let now = now_ms();
-        let Value::Object(raw) = json!({ "version": 2, "id": new_id(), "title": UNTITLED, "createdAt": now, "updatedAt": now })
-        else {
+        let Value::Object(raw) = json!({ "version": 2, "id": new_id(), "title": UNTITLED, "createdAt": now, "updatedAt": now }) else {
             unreachable!("literal object")
         };
         Self::build(raw, Origin::New, 0)
@@ -139,10 +124,7 @@ impl Live {
     }
 
     fn build(raw: Map<String, Value>, origin: Origin, revision: u64) -> Self {
-        let graph: Result<Graph, _> = raw.get("graph").map_or_else(
-            || Ok(Graph::default()),
-            |g| serde_json::from_value(g.clone()),
-        );
+        let graph: Result<Graph, _> = raw.get("graph").map_or_else(|| Ok(Graph::default()), |g| serde_json::from_value(g.clone()));
         let unreadable = graph.is_err();
         let graph = graph.unwrap_or_default();
         let mut lines = array(&raw, "lines");
@@ -164,14 +146,10 @@ impl Live {
         }
         let recorded = replay(&steps);
         let pages = raw.get("pages").and_then(Value::as_array);
-        let imported = pages
-            .is_some_and(|p| p.iter().any(|page| scene_has_content(page.get("scene"))))
-            || scene_has_content(raw.get("scene"));
+        let imported = pages.is_some_and(|p| p.iter().any(|page| scene_has_content(page.get("scene")))) || scene_has_content(raw.get("scene"));
         let read_only = if unreadable {
             Some(ViewOnly::Unreadable)
-        } else if raw.get("version").and_then(Value::as_u64).unwrap_or(1)
-            > crate::store::MEETING_VERSION
-        {
+        } else if raw.get("version").and_then(Value::as_u64).unwrap_or(1) > crate::store::MEETING_VERSION {
             Some(ViewOnly::NewerFormat)
         } else if imported {
             Some(ViewOnly::ImportedContent)
@@ -179,10 +157,7 @@ impl Live {
             None
         };
         Self {
-            voices: raw
-                .get("voices")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or_default(),
+            voices: raw.get("voices").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
             voices_changed: false,
             memory: raw.get("layout").cloned().unwrap_or(Value::Null),
             history: array(&raw, "history"),
@@ -204,10 +179,7 @@ impl Live {
     }
 
     pub fn title(&self) -> &str {
-        self.raw
-            .get("title")
-            .and_then(Value::as_str)
-            .unwrap_or(UNTITLED)
+        self.raw.get("title").and_then(Value::as_str).unwrap_or(UNTITLED)
     }
 
     pub fn has_content(&self) -> bool {
@@ -216,17 +188,11 @@ impl Live {
 
     /// This meeting must not leave the machine, so it only uses the local model.
     pub fn local_only(&self) -> bool {
-        self.raw
-            .get("localOnly")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
+        self.raw.get("localOnly").and_then(Value::as_bool).unwrap_or(false)
     }
 
     pub fn pages(&self) -> usize {
-        self.raw
-            .get("pages")
-            .and_then(Value::as_array)
-            .map_or(1, |p| p.len().max(1))
+        self.raw.get("pages").and_then(Value::as_array).map_or(1, |p| p.len().max(1))
     }
 
     pub fn page(&self) -> usize {
@@ -252,25 +218,13 @@ impl Live {
     pub fn fork_page(&mut self, at: usize, memory: Value, note: &str) {
         self.store_page();
         let at = at.min(self.steps.len());
-        if self
-            .raw
-            .get("pages")
-            .and_then(Value::as_array)
-            .is_none_or(Vec::is_empty)
-        {
-            self.raw.insert(
-                "pages".into(),
-                json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]),
-            );
+        if self.raw.get("pages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+            self.raw.insert("pages".into(), json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]));
         }
         let steps: Vec<Value> = self.steps[..at].to_vec();
         let graph = replay(&steps);
         let from = self.page();
-        let pages = self
-            .raw
-            .get_mut("pages")
-            .and_then(Value::as_array_mut)
-            .expect("made above");
+        let pages = self.raw.get_mut("pages").and_then(Value::as_array_mut).expect("made above");
         let underlay = pages.get(from).and_then(|p| p.get("underlay")).cloned();
         let mut entry = json!({ "graph": graph, "layout": memory, "steps": steps });
         if let Some(underlay) = underlay {
@@ -293,59 +247,32 @@ impl Live {
     pub fn split_topic(&mut self, topic: &str, note: &str) -> bool {
         let mut moved: HashSet<String> = [topic.to_string()].into();
         loop {
-            let more: Vec<String> = self
-                .graph
-                .nodes
-                .iter()
-                .filter(|n| {
-                    n.parent.as_ref().is_some_and(|p| moved.contains(p)) && !moved.contains(&n.id)
-                })
-                .map(|n| n.id.clone())
-                .collect();
+            let more: Vec<String> = self.graph.nodes.iter().filter(|n| n.parent.as_ref().is_some_and(|p| moved.contains(p)) && !moved.contains(&n.id)).map(|n| n.id.clone()).collect();
             if more.is_empty() {
                 break;
             }
             moved.extend(more);
         }
-        if !self.graph.nodes.iter().any(|n| n.id == topic) || moved.len() == self.graph.nodes.len()
-        {
+        if !self.graph.nodes.iter().any(|n| n.id == topic) || moved.len() == self.graph.nodes.len() {
             return false;
         }
         let mut left = self.graph.clone();
         left.nodes.retain(|n| !moved.contains(&n.id));
-        left.edges
-            .retain(|e| !moved.contains(&e.from) && !moved.contains(&e.to));
+        left.edges.retain(|e| !moved.contains(&e.from) && !moved.contains(&e.to));
         let mut taken = self.graph.clone();
         taken.nodes.retain(|n| moved.contains(&n.id));
-        taken
-            .edges
-            .retain(|e| moved.contains(&e.from) && moved.contains(&e.to));
+        taken.edges.retain(|e| moved.contains(&e.from) && moved.contains(&e.to));
         taken.groups.clear();
         taken.extra.remove("underlay");
         let memory = self.memory.clone();
         self.change_board(left, memory);
         self.store_page();
-        if self
-            .raw
-            .get("pages")
-            .and_then(Value::as_array)
-            .is_none_or(Vec::is_empty)
-        {
-            self.raw.insert(
-                "pages".into(),
-                json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]),
-            );
+        if self.raw.get("pages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+            self.raw.insert("pages".into(), json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]));
         }
         let shown = ink_only(&taken);
-        let steps: Vec<Value> = diff(&Graph::default(), &shown)
-            .map(|d| json!({ "t": now_ms(), "line": self.lines.len(), "d": d }))
-            .into_iter()
-            .collect();
-        let pages = self
-            .raw
-            .get_mut("pages")
-            .and_then(Value::as_array_mut)
-            .expect("made above");
+        let steps: Vec<Value> = diff(&Graph::default(), &shown).map(|d| json!({ "t": now_ms(), "line": self.lines.len(), "d": d })).into_iter().collect();
+        let pages = self.raw.get_mut("pages").and_then(Value::as_array_mut).expect("made above");
         pages.push(json!({ "graph": taken, "layout": Value::Null, "steps": steps }));
         let to = pages.len() - 1;
         self.raw.insert("page".into(), json!(to));
@@ -366,33 +293,18 @@ impl Live {
             return;
         }
         self.store_page();
-        if self
-            .raw
-            .get("pages")
-            .and_then(Value::as_array)
-            .is_none_or(Vec::is_empty)
-        {
-            self.raw.insert(
-                "pages".into(),
-                json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]),
-            );
+        if self.raw.get("pages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+            self.raw.insert("pages".into(), json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]));
         }
         let current = self.page();
-        let blank =
-            self.graph.underlay().is_none() && !self.graph.nodes.iter().any(|n| n.ink == "ink");
-        let pages = self
-            .raw
-            .get_mut("pages")
-            .and_then(Value::as_array_mut)
-            .expect("made above");
+        let blank = self.graph.underlay().is_none() && !self.graph.nodes.iter().any(|n| n.ink == "ink");
+        let pages = self.raw.get_mut("pages").and_then(Value::as_array_mut).expect("made above");
         let at = if blank { current } else { pages.len() };
         if blank {
             pages.remove(current);
         }
         let first = added[0].0.clone();
-        let entries = added
-            .into_iter()
-            .map(|(graph, underlay)| json!({ "graph": graph, "underlay": underlay }));
+        let entries = added.into_iter().map(|(graph, underlay)| json!({ "graph": graph, "underlay": underlay }));
         pages.splice(at..at, entries);
         self.raw.insert("page".into(), json!(at));
         self.graph = first;
@@ -419,12 +331,7 @@ impl Live {
     fn store_page(&mut self) {
         let page = self.page();
         let (graph, memory, steps) = (json!(self.graph), self.memory.clone(), json!(self.steps));
-        if let Some(entry) = self
-            .raw
-            .get_mut("pages")
-            .and_then(|p| p.get_mut(page))
-            .and_then(Value::as_object_mut)
-        {
+        if let Some(entry) = self.raw.get_mut("pages").and_then(|p| p.get_mut(page)).and_then(Value::as_object_mut) {
             entry.insert("graph".into(), graph);
             entry.insert("layout".into(), memory);
             entry.insert("steps".into(), steps);
@@ -458,11 +365,7 @@ impl Live {
     /// the sentence is too short to name someone new.
     pub fn identify_voice(&mut self, voiceprint: &[f32], seconds: f64) -> Option<String> {
         let print: Vec<f64> = voiceprint.iter().map(|x| f64::from(*x)).collect();
-        let taken: Vec<&str> = self
-            .lines
-            .iter()
-            .filter_map(|l| l["speaker"].as_str())
-            .collect();
+        let taken: Vec<&str> = self.lines.iter().filter_map(|l| l["speaker"].as_str()).collect();
         let name = identify_sentence(&mut self.voices, &print, seconds, &taken)?;
         self.voices_changed = true;
         self.touch();
@@ -484,16 +387,8 @@ impl Live {
     /// What renaming a speaker touches: lines of the transcript, things on boards, and how many boards.
     pub fn speaker_impact(&self, who: &str) -> (usize, usize, usize) {
         let lines = self.lines.iter().filter(|l| l["speaker"] == who).count();
-        let raised: Vec<usize> = self
-            .boards()
-            .iter()
-            .map(|graph| raised_by(graph, who))
-            .collect();
-        (
-            lines,
-            raised.iter().sum(),
-            raised.iter().filter(|n| **n > 0).count(),
-        )
+        let raised: Vec<usize> = self.boards().iter().map(|graph| raised_by(graph, who)).collect();
+        (lines, raised.iter().sum(), raised.iter().filter(|n| **n > 0).count())
     }
 
     /// Give a speaker a new name everywhere it is written. Taking a name someone has joins the two.
@@ -511,20 +406,13 @@ impl Live {
         rename_by(&mut self.graph, from, to);
         rename_by(&mut self.recorded, from, to);
         rename_by_in_steps(&mut self.steps, from, to);
-        self.undo
-            .each_mut(|snap| rename_by(&mut snap.graph, from, to));
+        self.undo.each_mut(|snap| rename_by(&mut snap.graph, from, to));
         // The boards not on screen stay in the file's own form until they are opened.
         if let Some(pages) = self.raw.get_mut("pages").and_then(Value::as_array_mut) {
             for page in pages {
                 for board in ["graph", "base"] {
                     for part in ["nodes", "edges"] {
-                        let Some(items) = page
-                            .get_mut(board)
-                            .and_then(|b| b.get_mut(part))
-                            .and_then(Value::as_array_mut)
-                        else {
-                            continue;
-                        };
+                        let Some(items) = page.get_mut(board).and_then(|b| b.get_mut(part)).and_then(Value::as_array_mut) else { continue };
                         for item in items.iter_mut().filter(|item| item["by"] == from) {
                             item["by"] = json!(to);
                         }
@@ -541,10 +429,7 @@ impl Live {
     /// Try a line the model never drew again: it goes back to waiting, and out of the context it was
     /// added to when it failed. Gives back who said what, to send on.
     pub fn retry_line(&mut self, index: usize) -> Option<(Option<String>, String)> {
-        let line = self
-            .lines
-            .get_mut(index)
-            .filter(|l| l["failed"].as_bool().unwrap_or(false))?;
+        let line = self.lines.get_mut(index).filter(|l| l["failed"].as_bool().unwrap_or(false))?;
         let was_remembered = line["boardFailure"] == "request";
         let fields = line.as_object_mut()?;
         for field in ["ms", "failed", "boardFailure", "ops"] {
@@ -553,11 +438,7 @@ impl Live {
         let text = line["text"].as_str()?.to_string();
         let speaker = line["speaker"].as_str().map(str::to_string);
         if was_remembered {
-            if let Some(at) = self
-                .history
-                .iter()
-                .rposition(|said| said["text"] == text.as_str())
-            {
+            if let Some(at) = self.history.iter().rposition(|said| said["text"] == text.as_str()) {
                 self.history.remove(at);
             }
         }
@@ -567,30 +448,18 @@ impl Live {
 
     /// A note about a hand-made change. Marked manual, so it is never read as something said.
     pub fn add_note(&mut self, text: &str) {
-        self.lines
-            .push(json!({ "text": text, "manual": true, "ms": 0, "page": self.page() }));
+        self.lines.push(json!({ "text": text, "manual": true, "ms": 0, "page": self.page() }));
     }
 
     fn settle(&mut self, text: &str, update: impl Fn(&mut Value)) {
         // The earliest waiting line with this text: lines finish in the order they were said.
-        if let Some(line) = self
-            .lines
-            .iter_mut()
-            .find(|l| l["ms"].is_null() && l["text"] == text)
-        {
+        if let Some(line) = self.lines.iter_mut().find(|l| l["ms"].is_null() && l["text"] == text) {
             update(line);
         }
     }
 
     /// The model finished this batch of lines and the board became `graph`.
-    pub fn model_drew(
-        &mut self,
-        spoken: &[(Option<String>, String)],
-        graph: Graph,
-        memory: Value,
-        ops: &str,
-        llm_ms: u128,
-    ) {
+    pub fn model_drew(&mut self, spoken: &[(Option<String>, String)], graph: Graph, memory: Value, ops: &str, llm_ms: u128) {
         for (i, (speaker, text)) in spoken.iter().enumerate() {
             // A merged batch produced one set of operations, shown on its last line.
             let shown = if i + 1 == spoken.len() { ops } else { "" };
@@ -632,10 +501,7 @@ impl Live {
             self.touch();
             return;
         }
-        let before = Snap {
-            graph: std::mem::replace(&mut self.graph, graph),
-            memory: std::mem::replace(&mut self.memory, memory),
-        };
+        let before = Snap { graph: std::mem::replace(&mut self.graph, graph), memory: std::mem::replace(&mut self.memory, memory) };
         self.undo.record(before);
         self.record_step();
         self.refresh_title();
@@ -645,8 +511,7 @@ impl Live {
     fn record_step(&mut self) {
         let shown = ink_only(&self.graph);
         if let Some(d) = diff(&self.recorded, &shown) {
-            self.steps
-                .push(json!({ "t": now_ms(), "line": self.lines.len(), "d": d }));
+            self.steps.push(json!({ "t": now_ms(), "line": self.lines.len(), "d": d }));
             self.recorded = shown;
         }
     }
@@ -660,10 +525,7 @@ impl Live {
     }
 
     fn current(&self) -> Snap {
-        Snap {
-            graph: self.graph.clone(),
-            memory: self.memory.clone(),
-        }
+        Snap { graph: self.graph.clone(), memory: self.memory.clone() }
     }
 
     fn step_to(&mut self, snap: Snap) -> Snap {
@@ -688,20 +550,12 @@ impl Live {
 
     /// Every board of the meeting, with the one on screen as it is now.
     pub fn boards(&self) -> Vec<Graph> {
-        self.board_pages()
-            .into_iter()
-            .map(|(graph, _)| graph)
-            .collect()
+        self.board_pages().into_iter().map(|(graph, _)| graph).collect()
     }
 
     /// Every board with where its things were placed.
     pub fn board_pages(&self) -> Vec<(Graph, Value)> {
-        let Some(pages) = self
-            .raw
-            .get("pages")
-            .and_then(Value::as_array)
-            .filter(|p| !p.is_empty())
-        else {
+        let Some(pages) = self.raw.get("pages").and_then(Value::as_array).filter(|p| !p.is_empty()) else {
             return vec![(self.graph.clone(), self.memory.clone())];
         };
         let at = self.page();
@@ -712,10 +566,7 @@ impl Live {
                 if i == at {
                     (self.graph.clone(), self.memory.clone())
                 } else {
-                    (
-                        serde_json::from_value(p["graph"].clone()).unwrap_or_default(),
-                        p.get("layout").cloned().unwrap_or(Value::Null),
-                    )
+                    (serde_json::from_value(p["graph"].clone()).unwrap_or_default(), p.get("layout").cloned().unwrap_or(Value::Null))
                 }
             })
             .collect()
@@ -723,42 +574,19 @@ impl Live {
 
     /// The record of every board, in the order of `board_pages`.
     pub fn board_steps(&self) -> Vec<Vec<Value>> {
-        let Some(pages) = self
-            .raw
-            .get("pages")
-            .and_then(Value::as_array)
-            .filter(|p| !p.is_empty())
-        else {
+        let Some(pages) = self.raw.get("pages").and_then(Value::as_array).filter(|p| !p.is_empty()) else {
             return vec![self.steps.clone()];
         };
         let at = self.page();
-        pages
-            .iter()
-            .enumerate()
-            .map(|(i, p)| {
-                if i == at {
-                    self.steps.clone()
-                } else {
-                    array(p.as_object().unwrap_or(&Map::new()), "steps")
-                }
-            })
-            .collect()
+        pages.iter().enumerate().map(|(i, p)| if i == at { self.steps.clone() } else { array(p.as_object().unwrap_or(&Map::new()), "steps") }).collect()
     }
 
     /// How each board refers to its imported page's image, in the order of `board_pages`.
     pub fn board_images(&self) -> Vec<Option<String>> {
-        let Some(pages) = self
-            .raw
-            .get("pages")
-            .and_then(Value::as_array)
-            .filter(|p| !p.is_empty())
-        else {
+        let Some(pages) = self.raw.get("pages").and_then(Value::as_array).filter(|p| !p.is_empty()) else {
             return vec![None];
         };
-        pages
-            .iter()
-            .map(|p| p["underlay"].as_str().map(str::to_string))
-            .collect()
+        pages.iter().map(|p| p["underlay"].as_str().map(str::to_string)).collect()
     }
 
     /// When the meeting began, in milliseconds.
@@ -768,10 +596,7 @@ impl Live {
 
     /// How long the microphone has been on for this meeting, in milliseconds.
     pub fn recorded_ms(&self) -> f64 {
-        self.raw
-            .get("recordedMs")
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0)
+        self.raw.get("recordedMs").and_then(Value::as_f64).unwrap_or(0.0)
     }
 
     /// Count another stretch of listening towards the meeting.
@@ -782,10 +607,7 @@ impl Live {
     }
 
     pub fn summary(&self) -> &str {
-        self.raw
-            .get("summary")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
+        self.raw.get("summary").and_then(Value::as_str).unwrap_or_default()
     }
 
     /// The fingerprint of what the summary was made from.
@@ -817,12 +639,7 @@ impl Live {
 
     /// An unnamed meeting takes its title from the board: first topic, then first node, then first line.
     fn refresh_title(&mut self) {
-        if self
-            .raw
-            .get("titled")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
+        if self.raw.get("titled").and_then(Value::as_bool).unwrap_or(false) {
             return;
         }
         let name = self
@@ -832,12 +649,7 @@ impl Live {
             .find(|n| n.kind == Kind::Topic)
             .or_else(|| self.graph.nodes.first())
             .map(|n| n.label.clone())
-            .or_else(|| {
-                self.lines
-                    .first()
-                    .and_then(|l| l["text"].as_str())
-                    .map(|t| t.chars().take(20).collect())
-            });
+            .or_else(|| self.lines.first().and_then(|l| l["text"].as_str()).map(|t| t.chars().take(20).collect()));
         if let Some(name) = name {
             self.raw.insert("title".into(), json!(name));
         }
@@ -867,9 +679,7 @@ impl Live {
     pub fn saved(&mut self, revision: u64) {
         // The store records this on the first save, and every later save must keep it.
         if let Origin::Legacy { source_hash } = &self.origin {
-            self.raw
-                .entry("migration")
-                .or_insert_with(|| json!({ "sourceHash": source_hash }));
+            self.raw.entry("migration").or_insert_with(|| json!({ "sourceHash": source_hash }));
         }
         self.revision = revision;
         self.origin = Origin::Current;
@@ -896,42 +706,23 @@ mod tests {
     }
 
     fn loaded(value: Value, origin: Origin) -> Live {
-        let Value::Object(raw) = value else {
-            panic!("object")
-        };
-        Live::from_loaded(Loaded {
-            raw,
-            origin,
-            revision: 0,
-        })
+        let Value::Object(raw) = value else { panic!("object") };
+        Live::from_loaded(Loaded { raw, origin, revision: 0 })
     }
 
-    #[test]
+#[test]
     fn a_topic_moves_to_a_board_of_its_own() {
         let mut live = Live::new();
         let mut g = Graph::default();
         g.apply(&boardcast_board::graph::parse_ops("T 「登录」\nL 「登录」 「短信验证」\nT 「支付」\nL 「支付」 「微信支付」\nL 「微信支付」 「回调」\nE 「短信验证」 -> 「微信支付」"));
         live.change_board(g, Value::Null);
-        let pay = live
-            .graph
-            .nodes
-            .iter()
-            .find(|n| n.label == "支付")
-            .unwrap()
-            .id
-            .clone();
+        let pay = live.graph.nodes.iter().find(|n| n.label == "支付").unwrap().id.clone();
         assert!(live.split_topic(&pay, "新话题"));
         assert_eq!((live.pages(), live.page()), (2, 1));
         let labels = |g: &Graph| g.nodes.iter().map(|n| n.label.clone()).collect::<Vec<_>>();
         assert_eq!(labels(&live.graph), ["支付", "微信支付", "回调"]);
-        assert!(
-            live.graph.edges.is_empty(),
-            "a link to what stayed behind is not carried"
-        );
-        assert!(
-            !live.steps.is_empty(),
-            "the new board replays from its first stroke"
-        );
+        assert!(live.graph.edges.is_empty(), "a link to what stayed behind is not carried");
+        assert!(!live.steps.is_empty(), "the new board replays from its first stroke");
         live.go_to_page(0);
         assert_eq!(labels(&live.graph), ["登录", "短信验证"]);
         assert!(live.graph.edges.is_empty());
@@ -941,7 +732,7 @@ mod tests {
         assert!(!live.split_topic("n99", "x"));
     }
 
-    #[test]
+        #[test]
     fn a_summary_is_written_and_removed_as_the_older_app_does() {
         let mut live = Live::new();
         assert!(!live.has_content());
@@ -1002,17 +793,11 @@ mod tests {
     #[test]
     fn imported_pages_can_be_edited_and_free_edit_scenes_cannot() {
         let page = json!({ "nodes": [{ "id": "n1", "label": "原文", "aliases": [], "kind": "region", "marks": [], "ink": "ink", "at": { "x": 1, "y": 2, "w": 3, "h": 4 } }], "edges": [], "groups": [], "nextNode": 2, "nextGroup": 1, "underlay": { "w": 900, "h": 1200 } });
-        let imported = loaded(
-            json!({ "id": "m", "graph": page, "page": 0, "pages": [{ "graph": page, "underlay": "asset:abc.jpg" }] }),
-            Origin::Current,
-        );
+        let imported = loaded(json!({ "id": "m", "graph": page, "page": 0, "pages": [{ "graph": page, "underlay": "asset:abc.jpg" }] }), Origin::Current);
         assert_eq!(imported.read_only, None);
         assert_eq!(imported.board_images(), [Some("asset:abc.jpg".to_string())]);
         let scene = json!({ "elements": [{ "id": "a" }], "files": {} });
-        let free = loaded(
-            json!({ "id": "m", "graph": page, "page": 0, "pages": [{ "graph": page, "scene": scene }] }),
-            Origin::Current,
-        );
+        let free = loaded(json!({ "id": "m", "graph": page, "page": 0, "pages": [{ "graph": page, "scene": scene }] }), Origin::Current);
         assert_eq!(free.read_only, Some(ViewOnly::ImportedContent));
     }
 
@@ -1026,18 +811,10 @@ mod tests {
         let store = Store::new(dir.clone());
         let mut live = Live::from_loaded(store.load("m1").unwrap().unwrap());
         for _ in 0..3 {
-            let revision = store
-                .save("m1", live.snapshot(), &live.origin.clone(), live.revision)
-                .unwrap();
+            let revision = store.save("m1", live.snapshot(), &live.origin.clone(), live.revision).unwrap();
             live.saved(revision);
-            let on_disk: Value = serde_json::from_str(
-                &std::fs::read_to_string(dir.join("meetings/v2/m1.json")).unwrap(),
-            )
-            .unwrap();
-            assert_eq!(
-                on_disk["migration"]["sourceHash"],
-                Store::source_hash(&text)
-            );
+            let on_disk: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("meetings/v2/m1.json")).unwrap()).unwrap();
+            assert_eq!(on_disk["migration"]["sourceHash"], Store::source_hash(&text));
         }
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -1049,22 +826,10 @@ mod tests {
     #[test]
     fn imported_pages_replace_an_empty_board() {
         let mut live = Live::new();
-        live.add_pages(
-            vec![
-                (page_board(1), "asset:a.jpg".into()),
-                (page_board(2), "asset:b.jpg".into()),
-            ],
-            "导入了",
-        );
+        live.add_pages(vec![(page_board(1), "asset:a.jpg".into()), (page_board(2), "asset:b.jpg".into())], "导入了");
         assert_eq!((live.pages(), live.page()), (2, 0));
         assert_eq!(live.graph.nodes[0].label, "第 1 页");
-        assert_eq!(
-            live.board_images(),
-            [
-                Some("asset:a.jpg".to_string()),
-                Some("asset:b.jpg".to_string())
-            ]
-        );
+        assert_eq!(live.board_images(), [Some("asset:a.jpg".to_string()), Some("asset:b.jpg".to_string())]);
         assert_eq!(live.lines[0]["manual"], true);
         assert_eq!(live.title(), "第 1 页");
         assert!(live.has_content());
@@ -1082,10 +847,7 @@ mod tests {
         live.add_pages(vec![(page_board(1), "asset:a.jpg".into())], "导入了");
         assert_eq!((live.pages(), live.page()), (2, 1));
         assert_eq!(live.lines.last().unwrap()["page"], 1);
-        assert!(
-            !live.can_undo(),
-            "an import is not undone with the board's edits"
-        );
+        assert!(!live.can_undo(), "an import is not undone with the board's edits");
         assert!(live.steps.is_empty());
         let boards = live.board_pages();
         assert_eq!(boards[0].0.nodes, drawn.nodes);
@@ -1101,11 +863,7 @@ mod tests {
     }
 
     fn said_by(graph: &Graph) -> Vec<Option<&str>> {
-        graph
-            .nodes
-            .iter()
-            .map(|n| boardcast_board::speakers::by_of_node(n))
-            .collect()
+        graph.nodes.iter().map(|n| boardcast_board::speakers::by_of_node(n)).collect()
     }
 
     fn board_by(who: &str) -> Graph {
@@ -1132,13 +890,7 @@ mod tests {
         let print = [1.0, 0.0];
         let name = live.identify_voice(&print, 3.0).unwrap();
         live.add_line(Some(&name), "网关", None);
-        live.model_drew(
-            &[(Some(name.clone()), "网关".into())],
-            board_by(&name),
-            Value::Null,
-            "",
-            1,
-        );
+        live.model_drew(&[(Some(name.clone()), "网关".into())], board_by(&name), Value::Null, "", 1);
         live.add_pages(vec![(board_by("别人"), "asset:a.jpg".into())], "导入了");
         // On this page the old name is only in the replay record and the undo stack.
         live.change_board(board_by(&name), Value::Null);
@@ -1153,10 +905,7 @@ mod tests {
         assert_eq!(live.speaker_impact("李工"), (1, 1, 1));
         assert_eq!(live.speaker_impact(&name), (0, 0, 0));
         let written = serde_json::to_string(&live.snapshot()).unwrap();
-        assert!(
-            !written.contains(&format!("\"by\":\"{name}\"")),
-            "{written}"
-        );
+        assert!(!written.contains(&format!("\"by\":\"{name}\"")), "{written}");
         assert!(written.contains("\"by\":\"别人\""));
         let snap = live.undo().unwrap();
         assert_eq!(said_by(&snap.graph), [Some("李工")]);
@@ -1169,10 +918,7 @@ mod tests {
     #[test]
     fn taking_a_name_in_use_joins_the_two_voices() {
         let mut live = Live::new();
-        let (a, b) = (
-            live.identify_voice(&[1.0, 0.0], 3.0).unwrap(),
-            live.identify_voice(&[0.0, 1.0], 3.0).unwrap(),
-        );
+        let (a, b) = (live.identify_voice(&[1.0, 0.0], 3.0).unwrap(), live.identify_voice(&[0.0, 1.0], 3.0).unwrap());
         live.add_line(Some(&a), "一", None);
         live.add_line(Some(&b), "二", None);
         live.rename_speaker(&a, &b);
@@ -1189,15 +935,7 @@ mod tests {
         assert_eq!(written["voices"][0]["name"], "A");
         let mut again = Live::build(written, Origin::Current, 1);
         assert_eq!(again.identify_voice(&[1.0, 0.0], 3.0).unwrap(), "A");
-        let strange = Live::build(
-            json!({ "id": "x", "voices": [1] })
-                .as_object()
-                .unwrap()
-                .clone(),
-            Origin::Current,
-            1,
-        )
-        .snapshot();
+        let strange = Live::build(json!({ "id": "x", "voices": [1] }).as_object().unwrap().clone(), Origin::Current, 1).snapshot();
         assert_eq!(strange["voices"], json!([1]));
     }
 
@@ -1213,13 +951,7 @@ mod tests {
         assert!(live.lines[0]["ms"].is_null() && live.lines[0]["failed"].is_null());
         assert!(live.history.is_empty());
         // Back to waiting, so the reply settles it as usual.
-        live.model_drew(
-            &[(Some("A".into()), "网关".into())],
-            Graph::default(),
-            Value::Null,
-            "",
-            5,
-        );
+        live.model_drew(&[(Some("A".into()), "网关".into())], Graph::default(), Value::Null, "", 5);
         assert_eq!(live.lines[0]["ms"], 5);
         assert_eq!(live.history.len(), 1);
     }
@@ -1254,30 +986,18 @@ mod tests {
     #[test]
     fn a_fork_keeps_the_page_it_was_drawn_on() {
         let page = with(&Graph::default(), "T 「一」");
-        let mut live = loaded(
-            json!({ "id": "m", "graph": page, "page": 0, "pages": [{ "graph": page, "underlay": "asset:abc.jpg" }] }),
-            Origin::Current,
-        );
+        let mut live = loaded(json!({ "id": "m", "graph": page, "page": 0, "pages": [{ "graph": page, "underlay": "asset:abc.jpg" }] }), Origin::Current);
         let two = with(&page, "T 「二」");
         live.change_board(two, Value::Null);
         live.fork_page(1, Value::Null, "另起");
-        assert_eq!(
-            live.board_images(),
-            [
-                Some("asset:abc.jpg".to_string()),
-                Some("asset:abc.jpg".to_string())
-            ]
-        );
+        assert_eq!(live.board_images(), [Some("asset:abc.jpg".to_string()), Some("asset:abc.jpg".to_string())]);
     }
 
     #[test]
     fn boards_cover_every_page_with_the_current_one_live() {
         let one = with(&Graph::default(), "T 「一」");
         let two = with(&Graph::default(), "T 「二」");
-        let mut live = loaded(
-            json!({ "id": "m", "graph": one, "page": 0, "pages": [{ "graph": one }, { "graph": two }] }),
-            Origin::Current,
-        );
+        let mut live = loaded(json!({ "id": "m", "graph": one, "page": 0, "pages": [{ "graph": one }, { "graph": two }] }), Origin::Current);
         assert_eq!(live.boards().len(), 2);
         let changed = with(&one, "T 「三」");
         live.change_board(changed.clone(), Value::Null);
@@ -1292,13 +1012,7 @@ mod tests {
         live.add_line(Some("A"), "用户调网关", None);
         assert!(live.lines[0]["ms"].is_null());
         let g = with(&live.graph, "E 「用户」 -> 「网关」");
-        live.model_drew(
-            &[(Some("A".into()), "用户调网关".into())],
-            g,
-            json!({ "regionAt": [] }),
-            "E 「用户」 -> 「网关」",
-            12,
-        );
+        live.model_drew(&[(Some("A".into()), "用户调网关".into())], g, json!({ "regionAt": [] }), "E 「用户」 -> 「网关」", 12);
         assert_eq!(live.lines[0]["ms"], 12);
         assert_eq!(live.history[0]["speaker"], "A");
         assert_eq!(live.title(), "用户");
@@ -1336,9 +1050,7 @@ mod tests {
             json!({ "version": 1, "id": "a-1", "title": "旧", "titled": true, "summary": "摘要", "voices": [1], "future": { "x": 1 },
                     "graph": { "nodes": [{ "id": "n1", "label": "甲", "kind": "topic", "ink": "ink", "by": "A", "aliases": [], "marks": [] }], "edges": [], "groups": [], "nextNode": 2, "nextGroup": 1 },
                     "lines": [{ "text": "甲", "ms": 3, "via": "远程", "audio": { "start": 1 } }], "history": [{ "id": "x", "text": "甲" }] }),
-            Origin::Legacy {
-                source_hash: "h".into(),
-            },
+            Origin::Legacy { source_hash: "h".into() },
         );
         assert!(live.read_only.is_none());
         let raw = live.snapshot();
@@ -1353,10 +1065,7 @@ mod tests {
 
     #[test]
     fn lines_left_waiting_are_marked_when_reopened() {
-        let live = loaded(
-            json!({ "id": "a-1", "lines": [{ "text": "没画完" }, { "text": "手动", "manual": true }] }),
-            Origin::Current,
-        );
+        let live = loaded(json!({ "id": "a-1", "lines": [{ "text": "没画完" }, { "text": "手动", "manual": true }] }), Origin::Current);
         assert_eq!(live.lines[0]["failed"], true);
         assert_eq!(live.lines[0]["boardFailure"], "cancelled");
         assert!(live.lines[1].get("failed").is_none());
@@ -1381,17 +1090,9 @@ mod tests {
             json!({ "id": "a", "graph": { "nodes": [{ "id": 7 }] } }),
         ];
         for case in cases {
-            assert!(
-                loaded(case.clone(), Origin::Current).read_only.is_some(),
-                "{case}"
-            );
+            assert!(loaded(case.clone(), Origin::Current).read_only.is_some(), "{case}");
         }
-        assert!(loaded(
-            json!({ "id": "a", "graph": g, "scene": { "elements": [] } }),
-            Origin::Current
-        )
-        .read_only
-        .is_none());
+        assert!(loaded(json!({ "id": "a", "graph": g, "scene": { "elements": [] } }), Origin::Current).read_only.is_none());
     }
 
     #[test]
@@ -1409,11 +1110,7 @@ mod tests {
         let raw = live.snapshot();
         assert_eq!(raw["page"], 1);
         assert_eq!(raw["graph"]["nodes"][0]["label"], "二");
-        assert_eq!(
-            raw["pages"][0]["graph"]["nodes"].as_array().unwrap().len(),
-            2,
-            "the first board keeps its edit"
-        );
+        assert_eq!(raw["pages"][0]["graph"]["nodes"].as_array().unwrap().len(), 2, "the first board keeps its edit");
         assert_eq!(raw["pages"][1]["thumb"], "t2");
     }
 
@@ -1424,17 +1121,9 @@ mod tests {
         let mut live = Live::new();
         live.add_line(None, "用户调网关", None);
         let g = with(&live.graph, "E 「用户」 -> 「网关」\nM 「网关」 星标");
-        live.model_drew(
-            &[(None, "用户调网关".into())],
-            g,
-            json!({ "regionAt": [["n", { "x": 1, "y": 2 }]] }),
-            "ops",
-            5,
-        );
+        live.model_drew(&[(None, "用户调网关".into())], g, json!({ "regionAt": [["n", { "x": 1, "y": 2 }]] }), "ops", 5);
         let id = live.id().to_string();
-        let revision = store
-            .save(&id, live.snapshot(), &live.origin.clone(), live.revision)
-            .unwrap();
+        let revision = store.save(&id, live.snapshot(), &live.origin.clone(), live.revision).unwrap();
         live.saved(revision);
         let again = Live::from_loaded(store.load(&id).unwrap().unwrap());
         assert_eq!(again.graph, live.graph);
@@ -1447,3 +1136,5 @@ mod tests {
         let _ = std::fs::remove_dir_all(path);
     }
 }
+
+

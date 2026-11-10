@@ -3,11 +3,7 @@
 //! It knows nothing about boards; callers receive each sentence through a callback.
 
 use anyhow::{anyhow, Context, Result};
-use sherpa_onnx::{
-    OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig,
-    OfflineTransducerModelConfig, SileroVadModelConfig, SpeakerEmbeddingExtractor,
-    SpeakerEmbeddingExtractorConfig, VadModelConfig, VoiceActivityDetector, Wave,
-};
+use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, OfflineTransducerModelConfig, SileroVadModelConfig, SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, VadModelConfig, VoiceActivityDetector, Wave};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -46,23 +42,14 @@ struct VadLevel {
 
 impl Default for VadLevel {
     fn default() -> Self {
-        Self {
-            peak: 0.0,
-            gain: 1.0,
-        }
+        Self { peak: 0.0, gain: 1.0 }
     }
 }
 
 impl VadLevel {
     fn apply(&mut self, samples: &mut [f32]) {
-        self.peak = samples
-            .iter()
-            .fold(self.peak * 0.95, |peak, x| peak.max(x.abs()));
-        let target = if self.peak >= 0.08 {
-            1.0
-        } else {
-            (0.2 / self.peak.max(0.025)).clamp(1.0, 8.0)
-        };
+        self.peak = samples.iter().fold(self.peak * 0.95, |peak, x| peak.max(x.abs()));
+        let target = if self.peak >= 0.08 { 1.0 } else { (0.2 / self.peak.max(0.025)).clamp(1.0, 8.0) };
         // Fast reduction, gradual increase: the quiet onset of normal speech must not be boosted 8x.
         let rise = if rms(samples) >= 0.0005 { 0.125 } else { 0.0 };
         self.gain = target.min(self.gain + rise);
@@ -91,9 +78,7 @@ fn soft_break(loudness: &[f32]) -> Option<usize> {
     let run = loudness.iter().rev().take_while(|&&r| r < quiet).count();
     // One window less per second past SOFT_MAX.
     let over = (n * VAD_WINDOW) as f32 / SAMPLE_RATE as f32 - SOFT_MAX;
-    let need = (SOFT_PAUSE as f32 - over)
-        .round()
-        .clamp(SOFT_PAUSE_MIN as f32, SOFT_PAUSE as f32) as usize;
+    let need = (SOFT_PAUSE as f32 - over).round().clamp(SOFT_PAUSE_MIN as f32, SOFT_PAUSE as f32) as usize;
     // After a cut only the tail is kept, so this does not fire again on the same dip.
     (run >= need).then_some(run / 2)
 }
@@ -171,9 +156,7 @@ pub fn voiced_share(samples: &[f32]) -> f32 {
             LAGS.clone().any(|lag| {
                 let (a, b) = (&f[..FRAME - lag], &f[lag..]);
                 let num: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-                let den = (a.iter().map(|x| x * x).sum::<f32>()
-                    * b.iter().map(|x| x * x).sum::<f32>())
-                .sqrt();
+                let den = (a.iter().map(|x| x * x).sum::<f32>() * b.iter().map(|x| x * x).sum::<f32>()).sqrt();
                 den > 0.0 && num / den > 0.6
             })
         })
@@ -184,8 +167,7 @@ pub fn voiced_share(samples: &[f32]) -> f32 {
 /// Whether recognized text is Korean: it has Hangul. Nobody here speaks Korean, so SenseVoice heard
 /// a short Chinese word that way, as with 哦 written 어.
 pub fn is_korean(text: &str) -> bool {
-    text.chars()
-        .any(|c| matches!(c as u32, 0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7AF))
+    text.chars().any(|c| matches!(c as u32, 0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7AF))
 }
 
 /// Whether recognized text is English rather than another language: letters, and no Chinese, Japanese
@@ -203,25 +185,14 @@ fn recognize(asr: &OfflineRecognizer, samples: &[f32]) -> String {
     let stream = asr.create_stream();
     stream.accept_waveform(SAMPLE_RATE, samples);
     asr.decode(&stream);
-    stream
-        .get_result()
-        .map(|r| r.text.trim().to_string())
-        .unwrap_or_default()
+    stream.get_result().map(|r| r.text.trim().to_string()).unwrap_or_default()
 }
 
 /// Parakeet Unified EN, from `dir`, if its files are there.
 pub fn load_parakeet(dir: &Path) -> Option<OfflineRecognizer> {
-    let file = |name: &str| {
-        dir.join(name)
-            .is_file()
-            .then(|| dir.join(name).to_string_lossy().to_string())
-    };
+    let file = |name: &str| dir.join(name).is_file().then(|| dir.join(name).to_string_lossy().to_string());
     let mut config = OfflineRecognizerConfig::default();
-    config.model_config.transducer = OfflineTransducerModelConfig {
-        encoder: file("encoder.int8.onnx"),
-        decoder: file("decoder.int8.onnx"),
-        joiner: file("joiner.int8.onnx"),
-    };
+    config.model_config.transducer = OfflineTransducerModelConfig { encoder: file("encoder.int8.onnx"), decoder: file("decoder.int8.onnx"), joiner: file("joiner.int8.onnx") };
     config.model_config.tokens = file("tokens.txt");
     config.model_config.model_type = Some("nemo_transducer".into());
     config.model_config.num_threads = 2;
@@ -237,17 +208,9 @@ pub fn load_parakeet(dir: &Path) -> Option<OfflineRecognizer> {
 
 /// ReazonSpeech k2 v2, for Japanese, from `dir`, if its files are there.
 pub fn load_reazon(dir: &Path) -> Option<OfflineRecognizer> {
-    let file = |name: &str| {
-        dir.join(name)
-            .is_file()
-            .then(|| dir.join(name).to_string_lossy().to_string())
-    };
+    let file = |name: &str| dir.join(name).is_file().then(|| dir.join(name).to_string_lossy().to_string());
     let mut config = OfflineRecognizerConfig::default();
-    config.model_config.transducer = OfflineTransducerModelConfig {
-        encoder: file("encoder-epoch-99-avg-1.int8.onnx"),
-        decoder: file("decoder-epoch-99-avg-1.int8.onnx"),
-        joiner: file("joiner-epoch-99-avg-1.int8.onnx"),
-    };
+    config.model_config.transducer = OfflineTransducerModelConfig { encoder: file("encoder-epoch-99-avg-1.int8.onnx"), decoder: file("decoder-epoch-99-avg-1.int8.onnx"), joiner: file("joiner-epoch-99-avg-1.int8.onnx") };
     config.model_config.tokens = file("tokens.txt");
     config.model_config.num_threads = 2;
     if config.model_config.transducer.encoder.is_none() || config.model_config.tokens.is_none() {
@@ -280,11 +243,7 @@ pub fn load_sense_voice(dir: &Path) -> Result<OfflineRecognizer> {
 /// SenseVoice, from `dir`, hearing one language: "zh", "en", "ja", or "auto" to tell.
 pub fn load_sense_voice_for(dir: &Path, language: &str) -> Result<OfflineRecognizer> {
     let mut config = OfflineRecognizerConfig::default();
-    config.model_config.sense_voice = OfflineSenseVoiceModelConfig {
-        model: Some(dir.join("model.int8.onnx").to_string_lossy().to_string()),
-        language: Some(language.into()),
-        use_itn: true,
-    };
+    config.model_config.sense_voice = OfflineSenseVoiceModelConfig { model: Some(dir.join("model.int8.onnx").to_string_lossy().to_string()), language: Some(language.into()), use_itn: true };
     config.model_config.tokens = Some(dir.join("tokens.txt").to_string_lossy().to_string());
     config.model_config.num_threads = 2;
     OfflineRecognizer::create(&config).context("loading SenseVoice")
@@ -317,45 +276,21 @@ impl Recognizers {
         let dir = models.join("sense-voice");
         let sense_voice = load_sense_voice_if_there(&dir);
         let sense_voice_dir = sense_voice.is_some().then_some(dir);
-        Self {
-            system: None,
-            sense_voice,
-            english: load_parakeet(&models.join("parakeet-en")),
-            japanese: load_reazon(&models.join("reazon-ja")),
-            sense_voice_dir,
-            chinese: None,
-        }
+        Self { system: None, sense_voice, english: load_parakeet(&models.join("parakeet-en")), japanese: load_reazon(&models.join("reazon-ja")), sense_voice_dir, chinese: None }
     }
 
     /// Only the system's recognizer, for when it was chosen and nothing else needs loading.
     pub fn system(recognizer: Box<dyn Recognizer>) -> Self {
-        Self {
-            system: Some(recognizer),
-            sense_voice: None,
-            english: None,
-            japanese: None,
-            sense_voice_dir: None,
-            chinese: None,
-        }
+        Self { system: Some(recognizer), sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None }
     }
 
     /// The models there, by name, for saying what hears.
     pub fn names(&self) -> Vec<&'static str> {
-        [
-            (self.sense_voice.is_some(), "SenseVoice"),
-            (self.english.is_some(), "Parakeet"),
-            (self.japanese.is_some(), "ReazonSpeech"),
-        ]
-        .into_iter()
-        .filter_map(|(there, name)| there.then_some(name))
-        .collect()
+        [(self.sense_voice.is_some(), "SenseVoice"), (self.english.is_some(), "Parakeet"), (self.japanese.is_some(), "ReazonSpeech")].into_iter().filter_map(|(there, name)| there.then_some(name)).collect()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.system.is_none()
-            && self.sense_voice.is_none()
-            && self.english.is_none()
-            && self.japanese.is_none()
+        self.system.is_none() && self.sense_voice.is_none() && self.english.is_none() && self.japanese.is_none()
     }
 
     /// The text of a sentence and what wrote it, empty if nothing was understood.
@@ -370,25 +305,16 @@ impl Recognizers {
             };
         }
         let (text, engine) = match (&self.sense_voice, &self.japanese, &self.english) {
-            (Some(asr), _, _) => (
-                self.not_korean(recognize(asr, samples), samples),
-                Engine::SenseVoice,
-            ),
-            (None, Some(japanese), _) if samples.len() >= MIN_JAPANESE => {
-                (recognize(japanese, samples), Engine::Reazon)
-            }
+            (Some(asr), _, _) => (self.not_korean(recognize(asr, samples), samples), Engine::SenseVoice),
+            (None, Some(japanese), _) if samples.len() >= MIN_JAPANESE => (recognize(japanese, samples), Engine::Reazon),
             (None, Some(_), None) => return (String::new(), Engine::Reazon),
             (None, _, Some(english)) => (recognize(english, samples), Engine::Parakeet),
             (None, _, None) => return (String::new(), Engine::SenseVoice),
         };
         // What the first reading says about the language decides who reads it again.
         let again = match engine {
-            Engine::SenseVoice if is_japanese(&text) && samples.len() >= MIN_JAPANESE => {
-                self.japanese.as_ref().map(|j| (j, Engine::Reazon))
-            }
-            Engine::SenseVoice | Engine::Reazon if is_english(&text) => {
-                self.english.as_ref().map(|e| (e, Engine::Parakeet))
-            }
+            Engine::SenseVoice if is_japanese(&text) && samples.len() >= MIN_JAPANESE => self.japanese.as_ref().map(|j| (j, Engine::Reazon)),
+            Engine::SenseVoice | Engine::Reazon if is_english(&text) => self.english.as_ref().map(|e| (e, Engine::Parakeet)),
             _ => None,
         };
         if let Some((asr, better)) = again {
@@ -409,22 +335,10 @@ impl Recognizers {
             return text;
         }
         if self.chinese.is_none() {
-            self.chinese = self.sense_voice_dir.as_ref().and_then(|dir| {
-                load_sense_voice_for(dir, "zh")
-                    .map_err(|e| eprintln!("{e:#}"))
-                    .ok()
-            });
+            self.chinese = self.sense_voice_dir.as_ref().and_then(|dir| load_sense_voice_for(dir, "zh").map_err(|e| eprintln!("{e:#}")).ok());
         }
-        let again = self
-            .chinese
-            .as_ref()
-            .map(|zh| recognize(zh, samples))
-            .unwrap_or_default();
-        if is_korean(&again) {
-            String::new()
-        } else {
-            again
-        }
+        let again = self.chinese.as_ref().map(|zh| recognize(zh, samples)).unwrap_or_default();
+        if is_korean(&again) { String::new() } else { again }
     }
 }
 
@@ -458,9 +372,7 @@ impl Ear {
     /// An ear with the recognizers given, and the detector and speaker model from `models`.
     pub fn with(models: &Path, asr: Recognizers) -> Result<Self> {
         if asr.is_empty() {
-            return Err(anyhow!(
-                "no speech recognizer: neither a speech model nor the system's recognizer is there"
-            ));
+            return Err(anyhow!("no speech recognizer: neither a speech model nor the system's recognizer is there"));
         }
         let path = |p: &str| models.join(p).to_string_lossy().to_string();
         let vad_config = VadModelConfig {
@@ -476,13 +388,8 @@ impl Ear {
             num_threads: 1,
             ..Default::default()
         };
-        let vad = VoiceActivityDetector::create(&vad_config, 60.0)
-            .context("loading the speech detector")?;
-        let speaker = SpeakerEmbeddingExtractor::create(&SpeakerEmbeddingExtractorConfig {
-            model: Some(path("speaker/campplus_zh_en.onnx")),
-            num_threads: 1,
-            ..Default::default()
-        });
+        let vad = VoiceActivityDetector::create(&vad_config, 60.0).context("loading the speech detector")?;
+        let speaker = SpeakerEmbeddingExtractor::create(&SpeakerEmbeddingExtractorConfig { model: Some(path("speaker/campplus_zh_en.onnx")), num_threads: 1, ..Default::default() });
         if speaker.is_none() {
             eprintln!("the speaker model did not load, so speakers will not be told apart");
         }
@@ -534,14 +441,8 @@ impl Ear {
                 self.vad.flush();
             }
             self.drain(heard);
-            let keep_from = if self.in_speech {
-                self.sent_until
-            } else {
-                self.fed.saturating_sub(PREROLL)
-            };
-            let discard = keep_from
-                .saturating_sub(self.fed - self.audio.len())
-                .min(self.audio.len());
+            let keep_from = if self.in_speech { self.sent_until } else { self.fed.saturating_sub(PREROLL) };
+            let discard = keep_from.saturating_sub(self.fed - self.audio.len()).min(self.audio.len());
             self.audio.drain(..discard);
         }
     }
@@ -570,15 +471,7 @@ impl Ear {
         }
         if !text.is_empty() {
             let asr_ms = ended.elapsed().as_millis();
-            heard(Sentence {
-                text,
-                voiceprint: self.voiceprint(samples),
-                asr_ms,
-                ended,
-                start: start as f64 / f64::from(SAMPLE_RATE),
-                seconds: samples.len() as f64 / f64::from(SAMPLE_RATE),
-                engine,
-            });
+            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine });
         }
     }
 
@@ -588,13 +481,7 @@ impl Ear {
             let length = segment.samples().len();
             let skip = self.sent_until.saturating_sub(start).min(length);
             let offset = (start + skip).saturating_sub(self.fed - self.audio.len());
-            let samples: Vec<f32> = self
-                .audio
-                .iter()
-                .skip(offset)
-                .take(length - skip)
-                .copied()
-                .collect();
+            let samples: Vec<f32> = self.audio.iter().skip(offset).take(length - skip).copied().collect();
             self.hear(&samples, start + skip, heard);
             self.sent_until = start + length;
             self.vad.pop();
@@ -642,8 +529,7 @@ impl Ear {
 
 /// Feed a mono WAV in real time, so timings resemble a live meeting.
 pub fn play_wav(path: &Path, samples: &Sender<Vec<f32>>) -> Result<()> {
-    let wave = Wave::read(&path.to_string_lossy())
-        .with_context(|| format!("cannot read {}", path.display()))?;
+    let wave = Wave::read(&path.to_string_lossy()).with_context(|| format!("cannot read {}", path.display()))?;
     for chunk in wave.samples().chunks(320) {
         let _ = samples.send(chunk.to_vec());
         thread::sleep(Duration::from_millis(20));
@@ -671,17 +557,8 @@ pub struct Input {
 /// which is how the other side of an online meeting is heard.
 pub fn inputs() -> Vec<Input> {
     use cpal::traits::{DeviceTrait, HostTrait};
-    let Ok(devices) = input_host().input_devices() else {
-        return vec![];
-    };
-    let mut found: Vec<Input> = devices
-        .filter_map(|d| {
-            Some(Input {
-                id: d.id().ok()?.to_string(),
-                name: d.to_string(),
-            })
-        })
-        .collect();
+    let Ok(devices) = input_host().input_devices() else { return vec![] };
+    let mut found: Vec<Input> = devices.filter_map(|d| Some(Input { id: d.id().ok()?.to_string(), name: d.to_string() })).collect();
     // Microphones first, then what the computer plays.
     found.sort_by_key(|i| i.id.ends_with(".monitor"));
     found
@@ -689,19 +566,10 @@ pub fn inputs() -> Vec<Input> {
 
 /// Live capture, mono at 16 kHz, until `stop` is set. `chosen` is an input's id; when it is gone,
 /// the default input is used and `fell_back` hears about it.
-pub fn capture(
-    stop: &AtomicBool,
-    samples: &Sender<Vec<f32>>,
-    chosen: Option<&str>,
-    fell_back: impl FnOnce(&str),
-) -> Result<()> {
+pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>, chosen: Option<&str>, fell_back: impl FnOnce(&str)) -> Result<()> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     let host = input_host();
-    let picked = chosen.and_then(|id| {
-        host.input_devices()
-            .ok()?
-            .find(|d| d.id().is_ok_and(|d| d.to_string() == id))
-    });
+    let picked = chosen.and_then(|id| host.input_devices().ok()?.find(|d| d.id().is_ok_and(|d| d.to_string() == id)));
     if let (Some(id), None) = (chosen, &picked) {
         fell_back(id);
     }
@@ -714,8 +582,7 @@ pub fn capture(
     let ratio = f64::from(supported.sample_rate()) / f64::from(SAMPLE_RATE);
     let mut config = supported.config();
     if let cpal::SupportedBufferSize::Range { min, max } = *supported.buffer_size() {
-        config.buffer_size =
-            cpal::BufferSize::Fixed((supported.sample_rate() / 50).clamp(min, max));
+        config.buffer_size = cpal::BufferSize::Fixed((supported.sample_rate() / 50).clamp(min, max));
     }
     let tx = samples.clone();
     let mut position = 0.0_f64;
@@ -732,26 +599,14 @@ pub fn capture(
     let stream = match supported.sample_format() {
         cpal::SampleFormat::F32 => device.build_input_stream::<f32, _, _>(
             config,
-            move |data: &[f32], _| {
-                send(
-                    data.chunks(channels)
-                        .map(|f| f.iter().sum::<f32>() / channels as f32)
-                        .collect(),
-                )
-            },
+            move |data: &[f32], _| send(data.chunks(channels).map(|f| f.iter().sum::<f32>() / channels as f32).collect()),
             on_error,
             None,
         )?,
         cpal::SampleFormat::I16 => device.build_input_stream::<i16, _, _>(
             config,
             move |data: &[i16], _| {
-                send(
-                    data.chunks(channels)
-                        .map(|f| {
-                            f.iter().map(|&s| f32::from(s) / 32768.0).sum::<f32>() / channels as f32
-                        })
-                        .collect(),
-                );
+                send(data.chunks(channels).map(|f| f.iter().map(|&s| f32::from(s) / 32768.0).sum::<f32>() / channels as f32).collect());
             },
             on_error,
             None,
@@ -759,14 +614,7 @@ pub fn capture(
         cpal::SampleFormat::I32 => device.build_input_stream::<i32, _, _>(
             config,
             move |data: &[i32], _| {
-                send(
-                    data.chunks(channels)
-                        .map(|f| {
-                            f.iter().map(|&s| s as f32 / 2_147_483_648.0).sum::<f32>()
-                                / channels as f32
-                        })
-                        .collect(),
-                );
+                send(data.chunks(channels).map(|f| f.iter().map(|&s| s as f32 / 2_147_483_648.0).sum::<f32>() / channels as f32).collect());
             },
             on_error,
             None,
@@ -799,21 +647,13 @@ mod tests {
         let Some(models) = models() else { return };
         let zh = load_sense_voice_for(&models.join("sense-voice"), "zh").unwrap();
         // Silence comes out as nothing, Korean least of all.
-        assert!(!is_korean(&recognize(
-            &zh,
-            &vec![0.0; SAMPLE_RATE as usize]
-        )));
+        assert!(!is_korean(&recognize(&zh, &vec![0.0; SAMPLE_RATE as usize])));
     }
 
     #[test]
     fn hangul_is_korean_and_nothing_else_is() {
         assert!(is_korean("어") && is_korean("네, 알겠습니다"));
-        assert!(
-            !is_korean("哦")
-                && !is_korean("こんにちは")
-                && !is_korean("Release notes")
-                && !is_korean("")
-        );
+        assert!(!is_korean("哦") && !is_korean("こんにちは") && !is_korean("Release notes") && !is_korean(""));
     }
 
     #[test]
@@ -835,26 +675,9 @@ mod tests {
 
     #[test]
     fn the_system_recognizer_takes_every_sentence_and_nothing_is_no_ear() {
-        let mut asr = Recognizers {
-            system: Some(Box::new(Fixed("こんにちは"))),
-            sense_voice: None,
-            english: None,
-            japanese: None,
-            sense_voice_dir: None,
-            chinese: None,
-        };
-        assert_eq!(
-            asr.hear(&[0.0; 16_000]),
-            ("こんにちは".to_string(), Engine::System)
-        );
-        let none = Recognizers {
-            system: None,
-            sense_voice: None,
-            english: None,
-            japanese: None,
-            sense_voice_dir: None,
-            chinese: None,
-        };
+        let mut asr = Recognizers { system: Some(Box::new(Fixed("こんにちは"))), sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None };
+        assert_eq!(asr.hear(&[0.0; 16_000]), ("こんにちは".to_string(), Engine::System));
+        let none = Recognizers { system: None, sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None };
         assert!(none.is_empty());
         assert!(Ear::with(Path::new("/nowhere"), none).is_err());
     }
@@ -875,10 +698,7 @@ mod tests {
         assert_eq!(silent, [0.0; VAD_WINDOW]);
         let mut quiet = [0.002; VAD_WINDOW];
         level.apply(&mut quiet);
-        assert!(
-            quiet[0] > 0.002 && quiet[0] < 0.003,
-            "the gain must rise gradually"
-        );
+        assert!(quiet[0] > 0.002 && quiet[0] < 0.003, "the gain must rise gradually");
         for _ in 0..100 {
             quiet.fill(0.002);
             level.apply(&mut quiet);
@@ -898,11 +718,7 @@ mod tests {
         let loud = vec![0.1_f32; 200];
         assert_eq!(soft_break(&loud), None);
         let quiet_speech: Vec<f32> = loud.iter().map(|r| r * 0.01).collect();
-        assert_eq!(
-            soft_break(&quiet_speech),
-            None,
-            "quiet speech is not a pause"
-        );
+        assert_eq!(soft_break(&quiet_speech), None, "quiet speech is not a pause");
         let mut short = vec![0.1_f32; 60];
         short.extend([0.001; SOFT_PAUSE]);
         assert_eq!(soft_break(&short), None);
@@ -959,16 +775,7 @@ mod tests {
     #[test]
     fn a_voice_is_voiced_and_clicks_are_not() {
         let voice: Vec<f32> = (0..SAMPLE_RATE as usize)
-            .map(|i| {
-                (1..=5)
-                    .map(|h| {
-                        (i as f32 * std::f32::consts::TAU * 150.0 * h as f32 / SAMPLE_RATE as f32)
-                            .sin()
-                            / h as f32
-                    })
-                    .sum::<f32>()
-                    * 0.2
-            })
+            .map(|i| (1..=5).map(|h| (i as f32 * std::f32::consts::TAU * 150.0 * h as f32 / SAMPLE_RATE as f32).sin() / h as f32).sum::<f32>() * 0.2)
             .collect();
         assert!(voiced_share(&voice) > 0.9);
         assert!(voiced_share(&clicks(0.5)) < MIN_VOICED);
@@ -980,11 +787,7 @@ mod tests {
         let Some(dir) = models() else { return };
         for amplitude in [0.05, 0.5] {
             let mut ear = Ear::load(&dir).unwrap();
-            assert_eq!(
-                hear_all(&mut ear, &clicks(amplitude)),
-                Vec::<String>::new(),
-                "clicks at {amplitude}"
-            );
+            assert_eq!(hear_all(&mut ear, &clicks(amplitude)), Vec::<String>::new(), "clicks at {amplitude}");
         }
     }
 
@@ -992,10 +795,7 @@ mod tests {
     fn silence_and_noise_produce_nothing() {
         let Some(dir) = models() else { return };
         let mut ear = Ear::load(&dir).unwrap();
-        assert_eq!(
-            hear_all(&mut ear, &vec![0.0; SAMPLE_RATE as usize * 3]),
-            Vec::<String>::new()
-        );
+        assert_eq!(hear_all(&mut ear, &vec![0.0; SAMPLE_RATE as usize * 3]), Vec::<String>::new());
         // Broadband noise and hum, at levels the detector's gain will boost.
         for amplitude in [0.001, 0.01] {
             let mut seed = 7_u32;
@@ -1003,8 +803,7 @@ mod tests {
                 .map(|i| {
                     seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
                     let white = f64::from(seed) / f64::from(u32::MAX) * 2.0 - 1.0;
-                    let hum =
-                        (i as f64 * std::f64::consts::TAU * 50.0 / f64::from(SAMPLE_RATE)).sin();
+                    let hum = (i as f64 * std::f64::consts::TAU * 50.0 / f64::from(SAMPLE_RATE)).sin();
                     ((white + hum) * amplitude) as f32
                 })
                 .collect();
@@ -1013,3 +812,4 @@ mod tests {
         }
     }
 }
+

@@ -49,11 +49,7 @@ struct Turn {
 
 impl Turn {
     fn utterance(&self) -> Utterance {
-        Utterance {
-            speaker: self.speaker.clone(),
-            text: self.text.clone(),
-            pointing: self.pointing.clone(),
-        }
+        Utterance { speaker: self.speaker.clone(), text: self.text.clone(), pointing: self.pointing.clone() }
     }
 }
 
@@ -102,14 +98,7 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
         if options.guidance.hint && hint.is_some() {
             hints_sent += 1;
         }
-        match propose(
-            &options.provider,
-            &graph,
-            recent,
-            &next,
-            options.guidance,
-            hint.as_deref(),
-        ) {
+        match propose(&options.provider, &graph, recent, &next, options.guidance, hint.as_deref()) {
             Ok(reply) => {
                 latencies.push(reply.ms);
                 tokens_out.push(reply.tokens_out);
@@ -118,14 +107,7 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
                 predicted_ms.extend(reply.predicted_ms.map(|ms| ms.round() as u64));
                 let ops = reply.ops.trim();
                 empty += usize::from(ops.is_empty());
-                let _ = writeln!(
-                    log,
-                    "> {}\n{}\n  ({} ms, {} tokens out)",
-                    next.text,
-                    if ops.is_empty() { "-" } else { ops },
-                    reply.ms,
-                    reply.tokens_out
-                );
+                let _ = writeln!(log, "> {}\n{}\n  ({} ms, {} tokens out)", next.text, if ops.is_empty() { "-" } else { ops }, reply.ms, reply.tokens_out);
                 graph.apply(&parse_ops(&reply.ops));
             }
             Err(e) => {
@@ -161,14 +143,7 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
         off.push(format!("extra: {}", s.extra.join(", ")));
     }
     off.extend(s.violations.iter().cloned());
-    let listed = if off.is_empty() {
-        "- all right".to_string()
-    } else {
-        off.iter()
-            .map(|x| format!("- {x}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
+    let listed = if off.is_empty() { "- all right".to_string() } else { off.iter().map(|x| format!("- {x}")).collect::<Vec<_>>().join("\n") };
     let detail = format!(
         "### {} · {}\n\n{listed}\n\n<details><summary>Each line's operations and the final board</summary>\n\n```\n{log}\n{}\n```\n</details>\n",
         case.id,
@@ -190,18 +165,7 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
         "empty_replies": empty,
         "errors": errors,
     });
-    Ok(Run {
-        metrics,
-        violations: s.violations.len(),
-        detail,
-        latencies,
-        tokens_out,
-        prompt_read,
-        prompt_ms,
-        predicted_ms,
-        errors,
-        row,
-    })
+    Ok(Run { metrics, violations: s.violations.len(), detail, latencies, tokens_out, prompt_read, prompt_ms, predicted_ms, errors, row })
 }
 
 fn mean(xs: &[f64]) -> f64 {
@@ -219,8 +183,7 @@ fn sd(xs: &[f64]) -> f64 {
 fn percentile<T: Copy + Ord>(xs: &[T], p: usize) -> Option<T> {
     let mut s = xs.to_vec();
     s.sort();
-    s.get((p * s.len() / 100).min(s.len().saturating_sub(1)))
-        .copied()
+    s.get((p * s.len() / 100).min(s.len().saturating_sub(1))).copied()
 }
 
 fn cell(v: Option<f64>) -> String {
@@ -231,11 +194,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let root = PathBuf::from(args.next().context("boardcast root")?);
     let output = args.next().context("output file")?;
     let mut guidance = Guidance::default();
-    let mut provider = Provider::Local {
-        base: "http://127.0.0.1:18765".into(),
-    };
-    let (mut set, mut only, mut workers, mut repeat, mut label) =
-        ("all".to_string(), None::<String>, 1, 1, "local".to_string());
+    let mut provider = Provider::Local { base: "http://127.0.0.1:18765".into() };
+    let (mut set, mut only, mut workers, mut repeat, mut label) = ("all".to_string(), None::<String>, 1, 1, "local".to_string());
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--skill" => (guidance.rules, guidance.hint) = (true, true),
@@ -248,11 +208,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--workers" => workers = args.next().context("count")?.parse()?,
             "--repeat" => repeat = args.next().context("count")?.parse::<usize>()?.max(1),
             "--label" => label = args.next().context("label")?,
-            "--llm" => {
-                provider = Provider::Local {
-                    base: args.next().context("url")?,
-                }
-            }
+            "--llm" => provider = Provider::Local { base: args.next().context("url")? },
             "--deepseek" => provider = Provider::deepseek_from_env()?,
             other => bail!("unknown flag {other}"),
         }
@@ -263,15 +219,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let mut cases: Vec<Case> = vec![];
     for file in *files {
         let text = std::fs::read(root.join("eval").join(file))?;
-        cases.extend(
-            serde_json::from_slice::<Vec<Case>>(&text)
-                .with_context(|| format!("reading eval/{file}"))?,
-        );
+        cases.extend(serde_json::from_slice::<Vec<Case>>(&text).with_context(|| format!("reading eval/{file}"))?);
     }
-    cases.retain(|c| {
-        only.as_ref()
-            .is_none_or(|ids| ids.split(',').any(|id| id == c.id))
-    });
+    cases.retain(|c| only.as_ref().is_none_or(|ids| ids.split(',').any(|id| id == c.id)));
     if cases.is_empty() {
         bail!("no matching eval cases");
     }
@@ -279,20 +229,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
 
     // One line first: a model that cannot be reached would otherwise score every case 0, which reads like a
     // result. It also puts the fixed prompt into the server's cache, so the first case's latency is typical.
-    let hello = Utterance {
-        speaker: None,
-        text: "大家好。".into(),
-        pointing: vec![],
-    };
-    propose(
-        &options.provider,
-        &Graph::default(),
-        &[],
-        &hello,
-        options.guidance,
-        None,
-    )
-    .context("the board model did not answer; start llama-server, or pass --llm <url>")?;
+    let hello = Utterance { speaker: None, text: "大家好。".into(), pointing: vec![] };
+    propose(&options.provider, &Graph::default(), &[], &hello, options.guidance, None).context("the board model did not answer; start llama-server, or pass --llm <url>")?;
 
     let mut passes: Vec<Vec<Run>> = vec![];
     for pass in 0..repeat {
@@ -318,46 +256,25 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         });
         let failures = failures.into_inner().expect("failures");
         if !failures.is_empty() {
-            bail!(
-                "{} of {} cases could not run:\n{}",
-                failures.len(),
-                cases.len(),
-                failures.join("\n")
-            );
+            bail!("{} of {} cases could not run:\n{}", failures.len(), cases.len(), failures.join("\n"));
         }
         let mut runs = results.into_inner().expect("results");
         runs.sort_by_key(|(i, _)| *i);
         passes.push(runs.into_iter().map(|(_, r)| r).collect());
     }
 
-    std::fs::write(
-        &output,
-        serde_json::to_vec(&passes[0].iter().map(|r| &r.row).collect::<Vec<_>>())?,
-    )?;
+    std::fs::write(&output, serde_json::to_vec(&passes[0].iter().map(|r| &r.row).collect::<Vec<_>>())?)?;
     let report = report(&cases, &passes, &label, &set);
     let dir = root.join("eval/reports");
     std::fs::create_dir_all(&dir)?;
     // Seconds since 1970: they sort, and never collide within a run.
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
     std::fs::write(dir.join(format!("{label}-{set}-{stamp}.md")), &report)?;
     if let Ok(summary) = std::env::var("GITHUB_STEP_SUMMARY") {
         use std::io::Write;
-        std::fs::OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(summary)?
-            .write_all(format!("{report}\n").as_bytes())?;
+        std::fs::OpenOptions::new().append(true).create(true).open(summary)?.write_all(format!("{report}\n").as_bytes())?;
     }
-    println!(
-        "{}",
-        report
-            .lines()
-            .take(18 + cases.len())
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+    println!("{}", report.lines().take(18 + cases.len()).collect::<Vec<_>>().join("\n"));
     let errors: usize = passes.iter().flatten().map(|r| r.errors).sum();
     if errors > 0 {
         bail!("{errors} requests failed, so these scores do not measure the model");
@@ -378,69 +295,29 @@ fn report(cases: &[Case], passes: &[Vec<Run>], label: &str, set: &str) -> String
             return "-".to_string();
         }
         let counted = passes[0].iter().filter(|r| r.metrics[k].is_some()).count();
-        let spread = if repeat > 1 {
-            format!(" ± {:.3}", sd(&per))
-        } else {
-            String::new()
-        };
+        let spread = if repeat > 1 { format!(" ± {:.3}", sd(&per)) } else { String::new() };
         format!("{:.3}{spread} ({counted} cases)", mean(&per))
     };
     // A case's metric across passes: its mean and range.
     let per_case = |i: usize, k: usize| {
         let xs: Vec<f64> = passes.iter().filter_map(|p| p[i].metrics[k]).collect();
-        let (lo, hi) = xs
-            .iter()
-            .fold((f64::MAX, f64::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+        let (lo, hi) = xs.iter().fold((f64::MAX, f64::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
         (!xs.is_empty()).then(|| (mean(&xs), hi - lo))
     };
-    let unstable = |i: usize| {
-        (0..METRICS.len()).any(|k| per_case(i, k).is_some_and(|(_, range)| range >= 0.3))
-    };
-    let latencies: Vec<u128> = passes
-        .iter()
-        .flatten()
-        .flat_map(|r| r.latencies.iter().copied())
-        .collect();
-    let tokens_out: Vec<u64> = passes
-        .iter()
-        .flatten()
-        .flat_map(|r| r.tokens_out.iter().copied())
-        .collect();
-    let all = |pick: fn(&Run) -> &Vec<u64>| {
-        passes
-            .iter()
-            .flatten()
-            .flat_map(|r| pick(r).iter().copied())
-            .collect::<Vec<u64>>()
-    };
+    let unstable = |i: usize| (0..METRICS.len()).any(|k| per_case(i, k).is_some_and(|(_, range)| range >= 0.3));
+    let latencies: Vec<u128> = passes.iter().flatten().flat_map(|r| r.latencies.iter().copied()).collect();
+    let tokens_out: Vec<u64> = passes.iter().flatten().flat_map(|r| r.tokens_out.iter().copied()).collect();
+    let all = |pick: fn(&Run) -> &Vec<u64>| passes.iter().flatten().flat_map(|r| pick(r).iter().copied()).collect::<Vec<u64>>();
     let p50 = |xs: Vec<u64>| percentile(&xs, 50).map_or_else(|| "-".into(), |v: u64| v.to_string());
     let errors: usize = passes.iter().flatten().map(|r| r.errors).sum();
-    let violations: Vec<f64> = passes
-        .iter()
-        .map(|p| p.iter().map(|r| r.violations).sum::<usize>() as f64)
-        .collect();
-    let shaky: Vec<&str> = (0..cases.len())
-        .filter(|&i| unstable(i))
-        .map(|i| cases[i].id.as_str())
-        .collect();
+    let violations: Vec<f64> = passes.iter().map(|p| p.iter().map(|r| r.violations).sum::<usize>() as f64).collect();
+    let shaky: Vec<&str> = (0..cases.len()).filter(|&i| unstable(i)).map(|i| cases[i].id.as_str()).collect();
     let ms = |p| percentile(&latencies, p).map_or_else(|| "-".into(), |v| v.to_string());
 
     let mut out = String::new();
-    let passes_note = if repeat > 1 {
-        format!(" · {repeat} passes")
-    } else {
-        String::new()
-    };
+    let passes_note = if repeat > 1 { format!(" · {repeat} passes") } else { String::new() };
     let _ = writeln!(out, "## Board eval · {label} · {set}{passes_note}\n");
-    let _ = writeln!(
-        out,
-        "| Metric | Value{} |\n|---|---|",
-        if repeat > 1 {
-            " (mean ± standard deviation between passes)"
-        } else {
-            ""
-        }
-    );
+    let _ = writeln!(out, "| Metric | Value{} |\n|---|---|", if repeat > 1 { " (mean ± standard deviation between passes)" } else { "" });
     for (name, k) in [
         ("Node F1", 0),
         ("Edge F1", 1),
@@ -451,66 +328,22 @@ fn report(cases: &[Case], passes: &[Vec<Run>], label: &str, set: &str) -> String
     ] {
         let _ = writeln!(out, "| {name} | {} |", overall(k));
     }
-    let _ = writeln!(
-        out,
-        "| Failed requests (the scores do not count while this is not zero) | {errors} |"
-    );
+    let _ = writeln!(out, "| Failed requests (the scores do not count while this is not zero) | {errors} |");
     let _ = writeln!(out, "| Groups right | {} |", overall(6));
-    let _ = writeln!(
-        out,
-        "| Violations (left in, or a correction not made), per pass | {:.1} |",
-        mean(&violations)
-    );
-    let _ = writeln!(
-        out,
-        "| Latency per line p50 / p95 | {} / {} ms |",
-        ms(50),
-        ms(95)
-    );
-    let _ = writeln!(
-        out,
-        "| Output tokens per line p50 | {} |",
-        percentile(&tokens_out, 50).map_or_else(|| "-".into(), |v| v.to_string())
-    );
-    let _ = writeln!(
-        out,
-        "| Prompt tokens read per line p50 (after the prefix cache) | {} |",
-        p50(all(|r| &r.prompt_read))
-    );
-    let _ = writeln!(
-        out,
-        "| Reading / writing per line p50 | {} / {} ms |",
-        p50(all(|r| &r.prompt_ms)),
-        p50(all(|r| &r.predicted_ms))
-    );
+    let _ = writeln!(out, "| Violations (left in, or a correction not made), per pass | {:.1} |", mean(&violations));
+    let _ = writeln!(out, "| Latency per line p50 / p95 | {} / {} ms |", ms(50), ms(95));
+    let _ = writeln!(out, "| Output tokens per line p50 | {} |", percentile(&tokens_out, 50).map_or_else(|| "-".into(), |v| v.to_string()));
+    let _ = writeln!(out, "| Prompt tokens read per line p50 (after the prefix cache) | {} |", p50(all(|r| &r.prompt_read)));
+    let _ = writeln!(out, "| Reading / writing per line p50 | {} / {} ms |", p50(all(|r| &r.prompt_ms)), p50(all(|r| &r.predicted_ms)));
     if repeat > 1 {
-        let _ = writeln!(
-            out,
-            "| Unstable cases (a score varies by 0.3 or more between passes) | {} |",
-            if shaky.is_empty() {
-                "none".into()
-            } else {
-                shaky.join(", ")
-            }
-        );
+        let _ = writeln!(out, "| Unstable cases (a score varies by 0.3 or more between passes) | {} |", if shaky.is_empty() { "none".into() } else { shaky.join(", ") });
     }
     let _ = writeln!(out, "\n| Case | Node | Edge | Topic | Item | Strike F1 | Marks | Groups | p50 ms |\n|---|---|---|---|---|---|---|---|---|");
     for (i, c) in cases.iter().enumerate() {
-        let cells: Vec<String> = (0..METRICS.len())
-            .map(|k| cell(per_case(i, k).map(|(m, _)| m)))
-            .collect();
-        let case_ms: Vec<u128> = passes
-            .iter()
-            .flat_map(|p| p[i].latencies.iter().copied())
-            .collect();
+        let cells: Vec<String> = (0..METRICS.len()).map(|k| cell(per_case(i, k).map(|(m, _)| m))).collect();
+        let case_ms: Vec<u128> = passes.iter().flat_map(|p| p[i].latencies.iter().copied()).collect();
         let p50 = percentile(&case_ms, 50).map_or_else(String::new, |v| v.to_string());
-        let _ = writeln!(
-            out,
-            "| {}{} | {} | {p50} |",
-            c.id,
-            if unstable(i) { " ⚠" } else { "" },
-            cells.join(" | ")
-        );
+        let _ = writeln!(out, "| {}{} | {} | {p50} |", c.id, if unstable(i) { " ⚠" } else { "" }, cells.join(" | "));
     }
     out.push('\n');
     for r in &passes[0] {

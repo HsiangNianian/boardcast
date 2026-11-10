@@ -1,54 +1,54 @@
-# boardcast 官网
+# boardcast website
 
-独立的静态页，和桌面版、网页演示版互不影响。依赖直接用仓库根目录装好的那些（perfect-freehand、hanzi-writer-data、hersheytext、DM Sans、JetBrains Mono），不用另外装。
+A standalone static page, separate from the desktop app and the web demo. It is English only. Its dependencies
+are the ones already installed at the repository root, so there is nothing more to install.
 
 ```bash
 pnpm site:dev       # http://localhost:1430
-pnpm site:build     # → landing/dist/，相对路径，丢到任何子路径下都能打开
+pnpm site:build     # → landing/dist/, with relative paths, so it opens under any subpath
 pnpm site:preview
 ```
 
-GitHub Pages 的首页是官网，滚动到底部会接上可操作的演示；「在线试一下」跳到这一段。演示也可以从 `/boardcast/demo/` 单独打开。
+GitHub Pages serves this page at the root. `pages.yml` builds the earlier app's web demo into `landing/dist/demo/`,
+and the footer links to it.
 
-`pages.yml` 先按 `/boardcast/demo/` 构建演示，再构建官网，把演示产物放进 `landing/dist/demo/`，一起发布 `landing/dist/`。底部用延迟加载的 iframe 展示演示。
+## The idea
 
-## 页面上有什么
+The page is one meeting, told as a set of drawing sheets. A thin frame with rulers runs around it, and a title block
+in the corner shows the sheet in view, its title, the version and a running meeting clock.
 
-全页只用两种颜色：浓墨黑和朱砂红。首屏的红只出现在三处——圈住「自己」的大红圈、划掉「短信验证码」的两道线、圈住「扫码登录」的那一圈。
+1. **talk** — a line is said first, then a pen writes "talk, and the board draws itself." in stroke order, with its
+   tip visible, and circles "itself" in red. The written words can be circled with the mouse: circling one goes to
+   its sheet, as circling works in the app. "hear it again" wipes the sheet with an eraser and writes it again.
+2. **four lines** — the meeting as four lines on one timeline: voice, voices, board and marks. A cursor walks it
+   until the reader points, and shows what was said at that moment.
+3. **the app** — the app window pins while five chapters scroll: listen, draw, correct, circle, replay. The board
+   is drawn from the scroll position, so scrolling back erases it. Once the window pins and the page is still, the
+   chapters play by themselves at a reading pace; any wheel, touch, key or click hands control back.
+4. **during** — cards that each show one thing the app does.
+5. **after** — what a meeting leaves, as pictograms made of dots that scatter when pointed at.
+6. **specs** and downloads.
+7. **now** — the reader's own time.
 
-1. **首屏海报**：画廊细线锁边，左三五右六五。左边三行巨字「说话，板书自己长出来。」撑满左栏，左下角三句对话一句句冒出来；右边高密度板书，主箭头横着刺进左栏把「自己」圈住，右上、右下两处分支伸出画框被裁掉一半。
-   - 对话里的关键词被虚线框圈住，拉一根细线连到板上对应的词块；鼠标划过哪一句，对应的词块就浮起、笔触加深一圈；
-   - 鼠标掠过板上的核心词块，只有碰到的那一块弹性地呼吸一下；
-   - 底座推杆从「工整」推到「狂草」：只改变字迹的性格（歪斜、大小错落、连笔），主箭头和红圈的弧度更张扬，板上的东西一样不多、一样不少；字内部的笔画扭曲在 0.8 以后封顶，推到头也不会糊成一团。
-2. **三幕**：首屏的外框、分界线和右栏点阵一路往下贯穿，左栏是 01 / 02 / 03 的标题，右栏是板书。主箭头的尖端顺着滚动往下画，贴着分界线下来、拐进右栏，串起三幕。每一幕在滑到屏幕正中之前就画完。
-   - 连线成图：散落漂浮的词块被追上来的线串成结构图、弹回原位；
-   - 当场涂改：「上传云端识别」被两道红线划掉，正下方一根短箭头，立起「全部本机识别」，红笔圈两圈、打星；
-   - 拖拽回弹：「一场会」和四个分支，「PC 会议模式」一直轻轻呼吸，角上一个小双向箭头；拽它，连线跟着弯、跟着晃，松手弹回去。
-3. **白板 ↔ 黑板**：板子长成整整一屏。按住横着擦过去，材质整个反转；板擦只在按住时出现，松手淡出。中间的把手可以整片拉过去，双击复原。
-4. **收尾**：画框顶边正中垂下一根墨线，在画面中央一分为二，指向两个入口；主入口外面有一道淡淡的铅笔虚线圈，鼠标移过去，朱砂红绕着画两圈。
+Reduced motion shows every drawing finished and turns off the autoplay.
 
-系统设置了「减少动态效果」时，写字动画都关掉，直接显示画好的样子。
+## Files
 
-## 手写是怎么来的
-
-和桌面版的「PAD 板书模式」是同一支笔（`src/ink/`）：汉字用 hanzi-writer-data 里按笔顺排好的骨架线，英文数字共用 Excalifont 的笔画骨架，交给 perfect-freehand 模拟马克笔压感。不同的是这里画在 canvas 上，而且每个字的随机数一开始就抽好，推杆拖动时字是连续变形的，不会每帧乱跳。
-
-`scripts/glyphs.mjs` 在 dev / build 前扫一遍 `src/` 里出现的汉字，只把这些字的笔画数据抽到 `src/gen/`（几十 KB）。改了文案直接重跑就行。
-
-巨字用的是思源黑体 Black 的子集（`public/fonts/display.woff2`，SIL OFL 1.1），只含页面上用到的几十个字。改了巨字或幕名的文字要重新子集化：
-
-```bash
-node landing/scripts/font.mjs /path/to/NotoSansCJK-Black.ttc   # 需要 uv
-```
-
-## 文件
-
-| 文件 | 做什么 |
+| File | What it does |
 |---|---|
-| `src/hero/board.ts` | 首屏板书的编排：黄金中心、出画的分支、主箭头和「自己」的圈；词块的划分 |
-| `src/hero/index.ts` | 首屏调度：开场写字、推杆变形、词块的浮起和呼吸 |
-| `src/hero/talk.ts` | 左下角的对话，关键词虚线框和连到板上词块的细线 |
-| `src/hero/fader.ts` | 底座推杆 |
-| `src/stage.ts` | 贯穿全页的墨线和三幕 |
-| `src/swap.ts` | 白板 ↔ 黑板 |
-| `src/finale.ts` | 收尾：垂下来的引线、铅笔虚线圈、红圈 |
+| `src/pen.ts` | Writes text in stroke order with a visible pen tip, from the EMS Tech single-stroke font |
+| `src/hero.ts` | The first sheet: the said line, the handwriting, circle targets and the eraser |
+| `src/sheet.ts` | The rulers, the title block that follows the section, and the closing clock |
+| `src/lasso.ts` | Circling anything on the page with the mouse or a pen |
+| `src/signals.ts` | The four-line timeline and its cursor |
+| `src/story.ts` | The pinned app, its board drawn from scroll progress, and the autoplay |
+| `src/cards.ts`, `src/dots.ts` | The "during" cards and the dot-matrix pictograms |
+| `src/pict.ts` | Pictograms made of blocks and lines, which assemble as they come into view |
+| `src/meeting.ts` | The sample meeting: who said what, and when |
+
+## Fonts
+
+DM Sans and JetBrains Mono come from `@fontsource-variable`. The board's handwriting is an unmodified Latin subset of
+Excalifont (`src/fonts/excalifont-latin.woff2`), the source of the app's English strokes. The pen in the first sheet
+writes with EMS Tech from hersheytext (`src/emstech.json`). Both are under the SIL OFL; their licenses are in
+`public/licenses/`.

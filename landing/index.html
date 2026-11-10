@@ -1,170 +1,171 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>boardcast — 说话，板书自己长出来</title>
-    <meta
-      name="description"
-      content="说话，板书自己长出来。会议里大家只管讨论，白板上的手绘示意图跟着对话实时生长。语音在本机识别，板书由本机小模型写出，不上传音频。"
-    />
-    <meta property="og:title" content="boardcast — 说话，板书自己长出来" />
-    <meta property="og:description" content="本地优先的实时会议示意图：语音 → 本机小模型 → 确定性排版 → 一笔一笔写出来的手绘板书。" />
-    <meta name="theme-color" content="#f2f0e9" />
-    <link rel="icon" type="image/png" href="./favicon.png" />
-    <link rel="preload" href="./fonts/display.woff2" as="font" type="font/woff2" crossorigin />
-    <style>
-      /* 巨字：思源黑体 Black 的子集（见 scripts/font.mjs）。写在这里，路径相对页面，部署到子路径也能找到 */
-      @font-face {
-        font-family: 'BC Display';
-        src: url('./fonts/display.woff2') format('woff2');
-        font-weight: 900;
-        font-display: block;
-      }
-    </style>
+    <title>boardcast — talk, and the board draws itself</title>
+    <meta name="description" content="A whiteboard that writes down your meeting, stroke by stroke. Speech recognition and the board model run on your own computer." />
+    <meta property="og:title" content="boardcast — talk, and the board draws itself" />
+    <meta property="og:description" content="A whiteboard that writes down your meeting, stroke by stroke, on your own computer." />
+    <meta name="theme-color" content="#000000" />
+    <link rel="icon" href="./favicon.png" />
   </head>
   <body>
-    <main>
-      <!-- 1. 首屏：画廊细线锁边的海报 -->
-      <section class="hero" id="top" aria-label="boardcast">
-        <div class="frame">
-          <div class="col-left">
-            <header class="plate">
-              <a class="mark" href="#top">boardcast</a>
-              <dl class="plate-meta">
-                <div><dt>No.</dt><dd>019 — 实时会议示意图</dd></div>
-                <div><dt>Medium</dt><dd>语音 · 本机小模型 · 马克笔</dd></div>
-                <div><dt>Runs on</dt><dd>Linux / macOS · <a href="https://github.com/HsiangNianian/boardcast">GitHub ↗</a></dd></div>
-              </dl>
-            </header>
-            <div class="giant-wrap">
-              <h1 class="giant">
-                <span class="gl">说话，</span>
-                <span class="gl">板书<span class="self">自己</span></span>
-                <span class="gl">长出来。</span>
-              </h1>
-            </div>
-            <div class="talk" aria-hidden="true"></div>
-          </div>
-          <div class="col-board" aria-hidden="true"></div>
-          <canvas class="hero-ink" aria-hidden="true"></canvas>
-          <p class="sr-only">示意：一场关于登录改版的讨论，旁边的白板随着对话自己写出话题、条目、划掉的旧方案和圈出的新方案。</p>
-          <div class="base">
-            <span class="rec"><i></i>LIVE</span>
-            <div class="ctl ctl-messy">
-              <div class="base-meta">
-                <span class="base-label">潦草度<em>MESSINESS</em></span>
-                <output class="base-val val-messy">0</output>
-              </div>
-              <div class="fader fader-messy" role="slider" tabindex="0" aria-label="板书的潦草度：从工整到狂草" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                <span class="fader-end">工整</span>
-                <div class="fader-track">
-                  <canvas class="fader-ticks" aria-hidden="true"></canvas>
-                  <div class="fader-groove"></div>
-                  <div class="fader-cap"><i></i></div>
-                </div>
-                <span class="fader-end fader-end-wild">狂草</span>
-              </div>
-            </div>
-            <div class="ctl ctl-weight">
-              <div class="base-meta">
-                <span class="base-label">英文粗细<em>ENGLISH WEIGHT</em></span>
-                <output class="base-val val-weight">100%</output>
-              </div>
-              <div class="fader fader-weight" role="slider" tabindex="0" aria-label="英文笔画粗细：从细到粗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
-                <span class="fader-end fader-end-thin">细</span>
-                <div class="fader-track">
-                  <canvas class="fader-ticks" aria-hidden="true"></canvas>
-                  <div class="fader-groove"></div>
-                  <div class="fader-cap"><i></i></div>
-                </div>
-                <span class="fader-end fader-end-bold">粗</span>
-              </div>
-            </div>
-            <a class="base-hint" href="#act-connect">往下滑<span aria-hidden="true">↓</span></a>
-          </div>
-        </div>
-        <div class="gutter gutter-top" aria-hidden="true">
-          <span>BOARDCAST — TALK, AND THE BOARD DRAWS ITSELF</span><span>LOCAL-FIRST · MIT · 2026</span>
-        </div>
-      </section>
+<div class="frame" aria-hidden="true"><div class="ruler top" id="ruler-top"></div><div class="ruler left" id="ruler-left"></div></div>
+<div class="titleblock label" aria-hidden="true">
+  <div><b>boardcast</b></div><div>sheet <b id="tb-n">01</b> / 07</div>
+  <div>title <b id="tb-title">talk</b></div><div>rev <span data-version></span></div>
+  <div>time <b id="tb-time">14:02:04</b></div><div>scale 1:1</div>
+</div>
+<svg class="lasso-layer" id="lasso-layer"></svg>
+<div class="toast" id="toast"></div>
 
-      <!-- 2. 三幕：顺着一根墨线往下走 -->
-      <section class="acts">
-        <article class="act act-connect" id="act-connect">
-          <header class="cap">
-            <span class="cap-no">01</span>
-            <h2 class="cap-title">连线成图</h2>
-            <p class="cap-text">模型不画图，只发几行图操作。连线、分组、排版交给确定性代码——乱放的词，自己归位。</p>
-          </header>
-        </article>
-        <article class="act act-revise" id="act-revise">
-          <header class="cap">
-            <span class="cap-no">02</span>
-            <h2 class="cap-title">当场涂改</h2>
-            <p class="cap-text">被否掉的方案默认划掉，不是擦掉。推翻与重来的痕迹留在板上，像真的板书。</p>
-          </header>
-        </article>
-        <article class="act act-drag" id="act-drag">
-          <header class="cap">
-            <span class="cap-no">03</span>
-            <h2 class="cap-title">拖拽回弹</h2>
-            <p class="cap-text">拽住任何一块，连线跟着走。铅笔模式下，板上每一块都能直接拖动、修改、补画。</p>
-          </header>
-        </article>
-      </section>
+<!-- ———————————————— hero ———————————————— -->
+<section class="hero" id="hero" data-sheet="01 talk">
+  <div class="wrap">
+    <nav class="top">
+      <div class="brand">board<br>cast</div>
+      <a class="nav-item" href="#story"><svg class="pict" data-icon="board" viewBox="0 0 64 64"></svg><div><b>product</b><span><em>talk &amp; draw</em><em>circle</em><em>replay</em></span></div></a>
+      <a class="nav-item" href="#get"><svg class="pict" data-icon="export" viewBox="0 0 64 64"></svg><div><b>get</b><span><em>macos</em><em>linux</em></span></div></a>
+      <a class="nav-item" href="https://github.com/HsiangNianian/boardcast/releases/latest"><svg class="pict" data-icon="replay" viewBox="0 0 64 64"></svg><div><b>latest</b><span><em data-version></em><em>changelog</em></span></div></a>
+      <a class="nav-item" href="https://github.com/HsiangNianian/boardcast#get-started"><svg class="pict" data-icon="doc" viewBox="0 0 64 64"></svg><div><b>guide</b><span><em>start</em><em>github</em></span></div></a>
+      <p class="about">boardcast is a whiteboard that writes itself. It turns what is said in a meeting into a board, stroke by stroke. Speech and the board model run on your computer: no account, and no audio leaves it.</p>
+    </nav>
+    <p class="said label"><span class="who">A</span><span id="said-time">14:02:04</span><q id="said"></q></p>
+    <svg class="ink" id="ink"></svg>
+    <div class="eraser" id="eraser"></div>
+    <div class="hero-foot">
+      <div>
+        <h1>a whiteboard that writes down your meeting.</h1>
+        <p class="inline">Turn <i data-mini="mic"></i><b data-circle="#signals">voice</b>, <i data-mini="speakers"></i><b data-circle="#during">who said it</b>, <i data-mini="lasso"></i><b data-circle="#story@0.7">what you circle</b> and <i data-mini="doc"></i><b data-circle="#after">the papers on the table</b> into one board.<br>Not just a record. <b>Understand it while you talk.</b></p>
+      </div>
+      <div class="cta"><a class="solid" href="#get">download <span>↓</span></a><a href="#story">see it write <span>→</span></a></div>
+    </div>
+    <div class="hero-rail label">
+      <div class="chapters"><span class="on">01 talk</span><span>02 four lines</span><span>03 the app</span></div>
+      <button class="replay-open label" id="again">↺ hear it again</button>
+      <span>all on your machine.</span>
+    </div>
+  </div>
+</section>
 
-      <!-- 3. 白板 ↔ 黑板：一擦切换 -->
-      <section class="swap" id="swap">
-        <div class="swap-pin">
-          <div class="swap-board">
-            <canvas class="swap-view" aria-hidden="true"></canvas>
-            <canvas class="swap-dust" aria-hidden="true"></canvas>
-            <button class="swap-handle" type="button" aria-label="拖动白板和黑板的分界"><span aria-hidden="true">⇆</span></button>
-            <div class="eraser" aria-hidden="true"><b>boardcast</b></div>
-            <div class="swap-cap">
-              <span class="cap-no">04</span>
-              <h2 class="cap-title">白板 <span>↔</span> 黑板</h2>
-              <p>按住，横着擦过去。浅色是马克笔，深色是粉笔。</p>
-            </div>
-            <p class="swap-tip" aria-hidden="true">按住拖动 · 擦 &nbsp;/&nbsp; 双击复原</p>
-          </div>
+<!-- ———————————————— signals ———————————————— -->
+<section class="block wrap" id="signals" data-sheet="02 four lines">
+  <div class="head"><h2>one meeting,<br><em>four lines.</em></h2><p>The sound, the people speaking, what went on the board and what you marked, all on one timeline. Point anywhere to read what was said at that moment.</p></div>
+  <div class="signals" id="sig">
+    <div class="row"><div class="name">voice<small class="label">voice · local asr</small></div><svg viewBox="0 0 1000 92" preserveAspectRatio="none" id="sig-voice"></svg></div>
+    <div class="row"><div class="name">voices<small class="label">voices · cam++</small></div><svg viewBox="0 0 1000 92" preserveAspectRatio="none" id="sig-who"></svg></div>
+    <div class="row"><div class="name">board<small class="label">board · strokes</small></div><svg viewBox="0 0 1000 92" preserveAspectRatio="none" id="sig-board"></svg></div>
+    <div class="row"><div class="name">marks<small class="label">marks · by hand</small></div><svg viewBox="0 0 1000 92" preserveAspectRatio="none" id="sig-marks"></svg></div>
+    <div class="cursor" id="sig-cursor"><span class="t"></span></div>
+  </div>
+  <div class="caption"><span class="label" id="sig-time">14:02</span><p id="sig-said"><b>—</b>point at the lines</p></div>
+</section>
+
+<!-- ———————————————— the app story ———————————————— -->
+<section class="story" id="story" data-sheet="03 the app">
+  <div class="pin">
+    <div class="wrap">
+      <div class="chapter">
+        <article data-ch="0"><span class="n">01 / listen</span><h3>it listens.</h3><p>Press <kbd>space</kbd> to start. Speech is recognized on your computer, the transcript fills line by line, and the meter shows it can hear you.</p></article>
+        <article data-ch="1"><span class="n">02 / draw</span><h3>then it writes.</h3><p>Finish a sentence and the board writes it out, stroke by stroke: a title, items, an arrow. No template, no hands.</p></article>
+        <article data-ch="2"><span class="n">03 / correct</span><h3>fix it in one click.</h3><p>Click anything on the board to strike, circle, star, rewrite or remove it. All of it can be undone.</p></article>
+        <article data-ch="3"><span class="n">04 / circle</span><h3>circle, then say.</h3><p>Lasso “canary”, then say “star this”. The model knows what “this” means.</p></article>
+        <article data-ch="4"><span class="n">05 / replay</span><h3>watch it again.</h3><p>After the meeting, drag the replay bar and the board goes back to how it was. Fork a new board from any moment.</p></article>
+      </div>
+      <div class="app" id="app">
+        <div class="app-title">
+          <div class="sq"><i></i><i></i><i></i></div>
+          <span class="name">Release review</span>
+          <span>start 14:02</span>
+          <span class="rec" id="clock">14:02:00</span>
+          <span class="state" id="state">idle</span>
         </div>
-      </section>
-
-      <!-- 4. 收尾：两个入口 -->
-      <section class="finale" id="get">
-        <div class="finale-frame" aria-hidden="true"></div>
-        <canvas class="cta-ink" aria-hidden="true"></canvas>
-        <nav class="cta" aria-label="开始使用">
-          <a class="cta-item" href="#demo">
-            <span class="cta-label">在线试一下</span>
-            <span class="cta-sub">浏览器里看示例会议一笔一笔长出来</span>
-          </a>
-          <a class="cta-item" href="https://github.com/HsiangNianian/boardcast/releases/latest">
-            <span class="cta-label">下载桌面版</span>
-            <span class="cta-sub">本地模型 · 语音输入 · Linux / macOS</span>
-          </a>
-        </nav>
-        <footer class="colophon">
-          <span>boardcast</span>
-          <span>MIT License</span>
-          <a href="https://github.com/HsiangNianian/boardcast">GitHub</a>
-          <a href="https://github.com/HsiangNianian/boardcast/blob/main/README.md">English</a>
-        </footer>
-      </section>
-      <section class="demo" id="demo" aria-labelledby="demo-title">
-        <header class="demo-heading">
-          <div>
-            <h2 id="demo-title">在线演示（旧版）</h2>
-            <p>选一场示例会议，看板书随着对话展开。这是之前网页版的演示；下载的桌面版界面不同，现有功能以 README 为准。</p>
+        <div class="app-body">
+          <div class="canvas">
+            <span class="coords label" id="coords">x 0 / y 0 / 100%</span>
+            <svg class="board" id="board" viewBox="20 30 560 230" preserveAspectRatio="xMinYMin meet"></svg>
+            <div class="marks" id="marks"><span class="m-strike">strike</span><span>circle</span><span>star</span><span>edit</span><span>remove</span></div>
+            <div class="replaybar" id="replaybar"><span class="label">replay</span><div class="track"><div class="fill" id="rfill"></div><div class="head" id="rhead"></div></div><span class="label" id="rtime">00:00</span></div>
+            <div class="dock">
+              <button class="mic" id="mic"><span class="stop"></span><span id="mic-label">stop<small>space</small></span><span class="meter" id="meter"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
+              <button id="b-lasso"><svg class="pict" data-icon="lasso" viewBox="0 0 64 64"></svg><span>circle<small>⌘ L</small></span></button>
+              <button><svg class="pict" data-icon="doc" viewBox="0 0 64 64"></svg><span>summary<small>⌘ ⇧ S</small></span></button>
+              <button id="b-replay"><svg class="pict" data-icon="replay" viewBox="0 0 64 64"></svg><span>replay<small>⌘ ⇧ R</small></span></button>
+              <button><svg class="pict" data-icon="export" viewBox="0 0 64 64"></svg><span>export<small>⌘ E</small></span></button>
+            </div>
           </div>
-          <a href="./demo/" target="_blank" rel="noopener">单独打开 ↗</a>
-        </header>
-        <iframe src="./demo/" title="boardcast 在线演示" loading="lazy" allow="clipboard-write"></iframe>
-      </section>
-    </main>
-    <canvas class="stage" aria-hidden="true"></canvas>
+          <aside class="side">
+            <div class="side-head"><b>transcript</b><span class="label">3 voices / en</span></div>
+            <ol class="transcript" id="lines"></ol>
+            <div class="input">type a line <kbd>/</kbd></div>
+          </aside>
+        </div>
+      </div>
+    </div>
+    <div class="tabs"><div class="wrap"><span>01 listen</span><span>02 draw</span><span>03 correct</span><span>04 circle</span><span>05 replay</span><em class="auto label" id="auto">auto-playing · scroll to take over</em></div></div>
+  </div>
+</section>
+
+<!-- ———————————————— during ———————————————— -->
+<section class="block wrap" id="during" data-sheet="04 during">
+  <div class="head"><h2>during the meeting,<br><em>one click is enough.</em></h2><p>Marking, rewriting, circling: each takes a single click. Every card shows what it really does.</p></div>
+  <div class="bento">
+    <div class="card w4"><span class="k label">02 / circle</span><svg class="pict" data-icon="lasso" viewBox="0 0 64 64"></svg>
+      <div class="art art-lasso"><svg viewBox="0 0 520 170">
+        <text class="word" x="50" y="72">cache service</text><text class="word" x="330" y="130">Redis</text>
+        <path class="loop" id="l1" pathLength="1"/><path class="loop" id="l2" pathLength="1"/><path class="link" id="lk" pathLength="1"/>
+      </svg></div>
+      <h4>circle</h4><p>Circle “cache service” and “Redis”, then say “connect these”. The model knows which two you mean.</p></div>
+    <div class="card w2"><span class="k label">04 / voices</span><svg class="pict" data-icon="speakers" viewBox="0 0 64 64"></svg>
+      <div class="art"><div>
+        <div class="voice"><b>A</b>Lin · product<span class="wave"></span></div>
+        <div class="voice quiet"><b>B</b>Chen · backend<span class="wave"></span></div>
+        <div class="voice quiet"><b>C</b>Wang · QA<span class="wave"></span></div>
+      </div></div>
+      <h4>voices</h4><p>Tells speakers apart by voice. Give one a real name and the same voice keeps it.</p></div>
+    <div class="card w2"><span class="k label">— / local</span><svg class="pict" data-icon="mic" viewBox="0 0 64 64"></svg>
+      <div class="art"><div><div class="chain"><span>mic</span><i></i><span>asr</span><i></i><span>board</span></div><div class="cloud">upload to cloud</div></div></div>
+      <h4>local</h4><p>No account, no uploaded audio. Once the models are down, it works offline.</p></div>
+    <div class="card w2"><span class="k label">05 / replay</span><svg class="pict" data-icon="replay" viewBox="0 0 64 64"></svg>
+      <div class="art"><div class="scrub"><div class="bars" id="bars"></div><div class="time label"><span>00:00</span><span id="bt">06:12</span><span>48:30</span></div></div></div>
+      <h4>replay</h4><p>Drag to any moment to see the board as it was, or fork a new one from there.</p></div>
+    <div class="card w2"><span class="k label">06 / export</span><svg class="pict" data-icon="export" viewBox="0 0 64 64"></svg>
+      <div class="art"><div class="files"><div>.md</div><div>.pdf</div><div>.svg</div><div>.html</div></div></div>
+      <h4>export</h4><p>markdown, png, svg, animated svg, a whole-meeting pdf, or a replay page.</p></div>
+  </div>
+</section>
+
+<!-- ———————————————— after ———————————————— -->
+<section class="block wrap" id="after" data-sheet="05 after">
+  <div class="head"><h2>after the meeting,<br><em>it is already sorted.</em></h2><p>Each of these is made of dots. Point at one and it scatters, then gathers again.</p></div>
+  <div class="dots">
+    <div class="dot-card"><canvas data-icon="doc"></canvas><span class="label">summary</span><h4>summary</h4><p>Conclusions, decisions and to-dos to edit, tick off and copy.</p></div>
+    <div class="dot-card"><canvas data-icon="replay"></canvas><span class="label">replay page</span><h4>replay page</h4><p>One .html file for whoever missed it. Nothing to install.</p></div>
+    <div class="dot-card"><canvas data-icon="board"></canvas><span class="label">whole meeting pdf</span><h4>whole-meeting pdf</h4><p>A page per board, then the summary and transcript, with real text.</p></div>
+    <div class="dot-card"><canvas data-icon="export"></canvas><span class="label">markdown</span><h4>markdown</h4><p>Key points, a Mermaid flow chart and the transcript.</p></div>
+  </div>
+</section>
+
+<section class="block wrap" id="get" data-sheet="06 specs">
+  <div class="head"><h2>specs.</h2><p>What is inside, written down like a product manual.</p></div>
+  <div class="specs">
+    <dl><dt>speech</dt><dd>parakeet · reazonspeech · sensevoice</dd><dt>speakers</dt><dd>cam++ voiceprints</dd><dt>board model</dt><dd>qwen3.5 4b / 9b · minicpm5</dd><dt>runtime</dt><dd>llama.cpp · vulkan / metal</dd></dl>
+    <dl><dt>languages</dt><dd>japanese · english · chinese</dd><dt>export</dt><dd>md · png · svg · pdf · html</dd><dt>network</dt><dd>none required</dd><dt>license</dt><dd>mit</dd></dl>
+  </div>
+  <div class="dl">
+    <a href="https://github.com/HsiangNianian/boardcast/releases/latest"><div><b>macos</b><span>apple silicon · 1.1 gb</span></div><em>.zip ↓</em></a>
+    <a href="https://github.com/HsiangNianian/boardcast/releases/latest"><div><b>linux</b><span>x64 · 1.1 gb</span></div><em>.tar.gz ↓</em></a>
+  </div>
+</section>
+
+<section class="now wrap" id="now-sheet" data-sheet="07 now">
+  <span class="label">your local time</span>
+  <div class="clock" id="now">--<span class="sep">:</span>--</div>
+  <p>your next meeting. let the board draw itself.</p>
+</section>
+<footer class="wrap label"><span>boardcast · <a href="https://github.com/HsiangNianian/boardcast/blob/main/LICENSE">mit</a> · fonts: <a href="./licenses/excalifont-OFL.txt">excalifont</a>, <a href="./licenses/ems-tech-OFL.txt">ems tech</a></span><span><a href="./demo/">the earlier web demo</a></span><a href="https://github.com/HsiangNianian/boardcast">github.com/hsiangnianian/boardcast</a></footer>
+
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

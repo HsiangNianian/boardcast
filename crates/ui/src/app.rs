@@ -799,6 +799,12 @@ enum ImportState {
 /// everything back.
 struct Replaying {
     player: Player,
+    /// Every board's steps as the meeting took them, each with its board, so the replay turns as it did.
+    timeline: Vec<(usize, serde_json::Value)>,
+    /// The timeline's steps alone, which time the replay.
+    steps: Vec<serde_json::Value>,
+    /// The board the replay is showing.
+    shown: usize,
     /// Where things were placed, and how the board was being viewed, before it began.
     memory: serde_json::Value,
     view: (Option<View>, bool),
@@ -1571,7 +1577,7 @@ impl Workbench {
 
     fn wait_for_next_step(&mut self) {
         if let Some(replay) = &mut self.replay {
-            replay.next_at = Instant::now() + Duration::from_secs_f64(replay.player.wait_ms(&self.live.steps) / 1000.0);
+            replay.next_at = Instant::now() + Duration::from_secs_f64(replay.player.wait_ms(&replay.steps) / 1000.0);
         }
     }
 
@@ -1585,7 +1591,9 @@ impl Workbench {
             cx.notify();
             return;
         }
-        let total = self.live.steps.len();
+        let timeline = boardcast_board::steps::timeline(&self.live.board_steps());
+        let steps: Vec<serde_json::Value> = timeline.iter().map(|(_, s)| s.clone()).collect();
+        let total = steps.len();
         if total == 0 {
             self.notice = Some(tr("This meeting has no board history to replay.", "这场会没有可以回放的记录。").into());
             cx.notify();
@@ -1603,7 +1611,9 @@ impl Workbench {
         drop(ink);
         self.notice = None;
         self.panel = Panel::Transcript;
-        self.replay = Some(Replaying { player: Player::new(total), memory, view, next_at: Instant::now(), slider, _slider_moved: slider_moved });
+        let shown = timeline.first().map_or(self.live.page(), |(b, _)| *b);
+        self.replay = Some(Replaying { player: Player::new(total), timeline, steps, shown, memory, view, next_at: Instant::now(), slider, _slider_moved: slider_moved });
+        self.show_board_image(shown);
         self.wait_for_next_step();
         window.focus(&self.focus, cx);
         cx.notify();
@@ -1612,11 +1622,19 @@ impl Workbench {
     fn seek_replay(&mut self, at: usize, cx: &mut Context<Self>) {
         let Some(replay) = &mut self.replay else { return };
         let Some(moved) = replay.player.seek(at) else { return };
-        let graph = replay_to(&self.live.steps, replay.player.at);
+        let (board, count) = boardcast_board::steps::board_at(&replay.timeline, replay.player.at);
+        let own: Vec<serde_json::Value> = replay.timeline.iter().filter(|(b, _)| *b == board).map(|(_, s)| s.clone()).collect();
+        let graph = replay_to(&own, count);
+        let turned = board != replay.shown;
+        replay.shown = board;
+        if turned {
+            self.show_board_image(board);
+        }
         self.next_batch += 1;
         let batch = self.next_batch;
         let mut ink = self.ink.borrow_mut();
-        if moved < 0 {
+        // Another board is laid out afresh, as it was when the meeting turned to it.
+        if moved < 0 || turned {
             // Going back lays out from the start, as new things found their places the first time.
             ink.open(&graph, &serde_json::Value::Null);
         } else {
@@ -1643,17 +1661,23 @@ impl Workbench {
         let mut ink = self.ink.borrow_mut();
         ink.open(&self.live.graph, &replay.memory);
         (ink.view, ink.reading) = replay.view;
+        drop(ink);
+        if replay.shown != self.live.page() {
+            self.show_page_image();
+        }
         cx.notify();
     }
 
     /// Carry on from this moment on a new board, with things where they are now. The original stays.
     fn fork_replay(&mut self, cx: &mut Context<Self>) {
         let Some(replay) = &self.replay else { return };
-        let at = replay.player.at;
-        if at == 0 || self.live.read_only.is_some() {
+        if replay.player.at == 0 || self.live.read_only.is_some() {
             return;
         }
-        let when = clock(replay.player.elapsed_ms(&self.live.steps));
+        let when = clock(replay.player.elapsed_ms(&replay.steps));
+        // The fork is of the board in view, from as far as that board had come.
+        let (board, at) = boardcast_board::steps::board_at(&replay.timeline, replay.player.at);
+        self.live.go_to_page(board);
         let memory = self.ink.borrow().board.snapshot();
         let (from, to) = (self.live.page() + 1, self.live.pages() + 1);
         let note = if tr("en", "zh") == "en" { format!("Board {to} forked from board {from} as it was at {when}") } else { format!("从第 {from} 张板回放到 {when} 的那一刻，另起了第 {to} 张板") };
@@ -2341,7 +2365,12 @@ impl Workbench {
 
     /// Put this board's imported page on screen. A page that cannot be read is said, and the rest shown.
     fn show_page_image(&mut self) {
-        let reference = self.live.board_images().into_iter().nth(self.live.page()).flatten();
+        self.show_board_image(self.live.page());
+    }
+
+    /// The imported page's picture under a board, or none.
+    fn show_board_image(&mut self, board: usize) {
+        let reference = self.live.board_images().into_iter().nth(board).flatten();
         let read = reference.map(|r| match &self.store {
             Some(store) => store.page_image(self.live.id(), &r),
             None => boardcast_meetings::decode_data_url(&r),
@@ -2354,7 +2383,7 @@ impl Workbench {
             }
         });
         let mut ink = self.ink.borrow_mut();
-        let size = self.live.graph.underlay();
+        let size = self.live.boards().get(board).and_then(Graph::underlay);
         let next = picture.zip(size).map(|(picture, (w, h))| (picture, w as f32, h as f32));
         if let Some((old, _, _)) = std::mem::replace(&mut ink.page, next) {
             ink.retired.push(old);
@@ -2881,7 +2910,7 @@ impl Workbench {
             let value = player.at as f32;
             replay.slider.update(cx, |state, cx| state.set_value(value, window, cx));
         }
-        let steps = &self.live.steps;
+        let steps = &replay.steps;
         let time = format!("{} / {}", clock(player.elapsed_ms(steps)), clock(Player::duration_ms(steps)));
         let can_fork = player.at > 0 && self.live.read_only.is_none();
         Some(
@@ -3870,7 +3899,7 @@ impl Render for Workbench {
             ViewOnly::ImportedContent => tr("This meeting has free-edit content, which this version does not show. It is view-only here, and its file is unchanged.", "这场会含自由编辑内容，这个版本不显示，这里只能查看，文件不会被改动。"),
         });
         // During a replay the transcript has only reached that moment.
-        let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&self.live.steps).min(self.live.lines.len()));
+        let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&r.steps).min(self.live.lines.len()));
         let replay_bar = self.replay_bar(window, cx);
         let transcript = div()
             .id("transcript")

@@ -129,6 +129,22 @@ pub fn replay_to(steps: &[Value], count: usize) -> Graph {
 }
 
 /// `3:07`, or `1:02:45` for an hour or more.
+/// Every board's steps as one meeting, in the order they happened, each with its board. A meeting moves
+/// between boards as it goes, and its replay follows.
+pub fn timeline(boards: &[Vec<Value>]) -> Vec<(usize, Value)> {
+    let mut all: Vec<(usize, Value)> = boards.iter().enumerate().flat_map(|(b, steps)| steps.iter().map(move |s| (b, s.clone()))).collect();
+    // Stable, so steps with no time keep their board's order.
+    all.sort_by(|a, b| a.1["t"].as_f64().unwrap_or(0.0).total_cmp(&b.1["t"].as_f64().unwrap_or(0.0)));
+    all
+}
+
+/// After the first `at` steps of a timeline: the board in view, and how many of its own steps it has had.
+pub fn board_at(timeline: &[(usize, Value)], at: usize) -> (usize, usize) {
+    let shown = timeline[..at.min(timeline.len())].last().or(timeline.first()).map_or(0, |(b, _)| *b);
+    let count = timeline[..at.min(timeline.len())].iter().filter(|(b, _)| *b == shown).count();
+    (shown, count)
+}
+
 pub fn clock(ms: f64) -> String {
     let s = (ms / 1000.0).round().max(0.0) as u64;
     let (h, m) = (s / 3600, (s % 3600) / 60);
@@ -228,6 +244,18 @@ impl Player {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_replay_follows_the_meeting_across_boards() {
+        let step = |t: f64| json!({ "t": t, "line": 0, "d": {} });
+        let line = timeline(&[vec![step(1.0), step(5.0)], vec![step(3.0), step(4.0)]]);
+        assert_eq!(line.iter().map(|(b, s)| (*b, s["t"].as_f64().unwrap() as u32)).collect::<Vec<_>>(), [(0, 1), (1, 3), (1, 4), (0, 5)]);
+        assert_eq!(board_at(&line, 0), (0, 0));
+        assert_eq!(board_at(&line, 1), (0, 1));
+        assert_eq!(board_at(&line, 3), (1, 2));
+        assert_eq!(board_at(&line, 4), (0, 2), "back on the first board, with both its steps");
+        assert_eq!(board_at(&[], 3), (0, 0));
+    }
     use crate::graph::parse_ops;
     use serde_json::json;
 

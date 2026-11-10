@@ -141,13 +141,7 @@ cargo test --workspace
 sh packaging/linux/package.sh           # target/package/boardcast-<version>-<arch>-linux.tar.gz
 ```
 
-The website and the evaluation tooling are Node projects. Use **Node.js 24+** and the pinned **pnpm 11.13.1**:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm site:dev                  # website at http://localhost:1430
-pnpm test                      # engine and ASR tooling unit tests; no model needed
-```
+Everything is Rust, the website included: it is built with [Trunk](https://trunkrs.dev) (`cd landing && trunk serve`); see [landing/README.md](landing/README.md).
 
 <details>
 <summary><strong>Evaluation</strong></summary>

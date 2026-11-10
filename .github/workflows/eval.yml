@@ -38,23 +38,8 @@ env:
   LABEL: ${{ inputs.label || 'qwen3.5-4b-q4km-cpu' }}
 
 jobs:
-  check:
-    name: typecheck · unit tests
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm test
-
   board:
     name: text to board
-    needs: check
     if: github.event_name != 'schedule' && inputs.meeting_asr != true
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -110,7 +95,6 @@ jobs:
 
   asr:
     name: ASR · ${{ matrix.engine }} · VAD ${{ matrix.vad }}
-    needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ (inputs.meeting_asr == true || github.event.schedule == '30 2 * * 4') && 180 || 60 }}
     strategy:

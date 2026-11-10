@@ -3,12 +3,18 @@
 # ///
 """uv run scripts/excalifont-strokes.py
 
+Reads Excalifont from the pinned @excalidraw/excalidraw 0.18.1 package on npm, downloaded and checked here.
+
 Extract ASCII and mathematical centerlines for the existing animated ink renderer.
 The generated data is committed; normal builds do not need Python or these tools.
 """
+import base64
+import hashlib
 import io
 import json
+import tarfile
 import unicodedata
+import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +25,19 @@ from skimage.morphology import skeletonize
 
 ROOT = Path(__file__).resolve().parents[1]
 SIZE, PAD = 256, 32
-FONTS = ROOT / "node_modules/@excalidraw/excalidraw/dist/prod/fonts"
+PACKAGE = "https://registry.npmjs.org/@excalidraw/excalidraw/-/excalidraw-0.18.1.tgz"
+PACKAGE_SHA512 = "6i5Gt7IDTOH//qa0Z315Ly5iVRhjWpu2whrlQFqkuwrkKUWgRsMk0P5qdE7bpyDpai7jeLeWYkyj1eVAfni1lw=="
+
+
+def fonts():
+    """The package's font folder, unpacked once into target/cache."""
+    out = ROOT / "target/cache/excalidraw-0.18.1"
+    if not (out / "package/dist/prod/fonts").is_dir():
+        data = urllib.request.urlopen(PACKAGE, timeout=120).read()
+        assert base64.b64encode(hashlib.sha512(data).digest()).decode() == PACKAGE_SHA512, "Unexpected Excalidraw package"
+        with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+            tar.extractall(out, members=[m for m in tar.getmembers() if m.name.startswith("package/dist/prod/fonts/")], filter="data")
+    return out / "package/dist/prod/fonts"
 
 
 def strokes(image):
@@ -67,7 +85,7 @@ codes |= set(range(0x1d62, 0x1d6b))
 data = {}
 # shortcut: symbols are limited to the bundled fonts; broader alphabets need another licensed glyph source.
 for family in ["Excalifont", "Cascadia"]:
-    for path in sorted((FONTS / family).glob("*.woff2")):
+    for path in sorted((fonts() / family).glob("*.woff2")):
         font = TTFont(path)
         available = sorted(c for c in codes & font.getBestCmap().keys() if chr(c) not in data)
         if not available:

@@ -1,10 +1,10 @@
-# 基础卫生检查；类型检查和测试在 GitHub Actions 里跑。
+# Basic hygiene; builds and tests run in GitHub Actions.
 ci:
   autofix_commit_msg: 'style: apply pre-commit fixes'
   autoupdate_commit_msg: 'chore: pre-commit autoupdate'
   autoupdate_schedule: monthly
 
-exclude: ^(pnpm-lock\.yaml|src-tauri/Cargo\.lock|src-tauri/icons/.*|docs/.*\.png|public/.*\.png)$
+exclude: ^(docs/.*\.png)$
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

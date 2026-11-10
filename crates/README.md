@@ -1,7 +1,8 @@
 # boardcast on GPUI
 
 The native rewrite of boardcast. Its core is producing the board from speech and marking on it. Excalidraw free
-editing is dropped. The Tauri app in `src-tauri/` and `src/` is no longer released, and stays only while other work still reads it: the answer key and the evaluations. Its removal is tracked in #150.
+editing is dropped. The earlier Tauri and TypeScript app has been removed (#150); what the Rust port was checked against
+is kept as frozen fixtures.
 
 | Crate | Owns | Must not depend on |
 | --- | --- | --- |
@@ -184,5 +185,4 @@ has tests).
    are waiting until they can be tested. iPad is the main target and Mac the second.
 4. **Migrate the rest once the core is stable:** summary and to-dos are done, and so are replay and Markdown, PNG, SVG,
    animated SVG, PDF and replay page export, imported pages can be marked, PDFs, arXiv papers and images can be imported, and speakers
-   are told apart by voice and can be renamed or merged. Pointing at a speaker shows what they raised on the board, and a selected item leads back to its line. The window is being redesigned, with the board filling it and the controls floating over it, built from `gpui-component` and colored through its theme. Next come Apple speech, and the web demo and website. `.excalidraw` export is still open. Only then retire `src/` and
-   `src-tauri/`.
+   are told apart by voice and can be renamed or merged. Pointing at a speaker shows what they raised on the board, and a selected item leads back to its line. The window is being redesigned, with the board filling it and the controls floating over it, built from `gpui-component` and colored through its theme. The website is Rust too, and the earlier app is retired. `.excalidraw` export is still open.

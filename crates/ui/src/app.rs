@@ -5,6 +5,7 @@ use boardcast_board::board_layout::{target_at, Bounds as BoardBounds, Rect, Stab
 use boardcast_board::check::check;
 use boardcast_board::compose::{compose, ink_boxes, InkBox, Owner, Style};
 use boardcast_board::graph::{parse_ops, Graph, Kind, Op, Ref, Utterance};
+use boardcast_board::follow;
 use boardcast_board::sugiyama::first_diagram;
 use boardcast_agent::settings::Settings;
 use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
@@ -74,6 +75,8 @@ enum MarkUnit {
     Block,
 }
 
+/// Lines after turning to another board during which no other one is offered.
+const QUIET_AFTER_TURNING: u8 = 3;
 const TOOLBAR_W: f32 = 290.0;
 const TOOLBAR_W_WITH_UNITS: f32 = 520.0;
 const TOOLBAR_W_SPEAKER: f32 = 110.0;
@@ -968,6 +971,10 @@ struct Workbench {
     needs_model: bool,
     notice: Option<String>,
     status: String,
+    /// Another board a line seemed to be about, offered rather than turned to: its place, number and title.
+    page_hint: Option<(usize, u32, String)>,
+    /// Lines left after turning to a board before another is offered, so the meeting does not bounce.
+    page_quiet: u8,
     level: f32,
     next_batch: u64,
     exit_when_done: bool,
@@ -1280,6 +1287,9 @@ impl Workbench {
                     if meeting == self.session().meeting() {
                         let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds);
                         self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
+                        if self.follow_pages(&sentence.text, cx) {
+                            continue;
+                        }
                         let renames = self.session().renames_seen();
                         let line = Utterance { speaker, text: sentence.text, pointing: self.take_pointing() };
                         let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, asr_ms: Some(sentence.asr_ms), meeting, renames });
@@ -2046,6 +2056,33 @@ impl Workbench {
         cx.notify();
     }
 
+    /// Follow the material being talked about. A line asking for a board, or agreeing to the one offered,
+    /// turns to it and is not drawn; it stays in the transcript. Otherwise a board the line is clearly
+    /// about is offered. True when the line was such a request.
+    fn follow_pages(&mut self, text: &str, cx: &mut Context<Self>) -> bool {
+        if self.live.pages() < 2 || self.replay.is_some() {
+            return false;
+        }
+        let pages = follow::pages(&self.live.boards());
+        let current = self.live.page();
+        let agreed = self.page_hint.as_ref().map(|h| h.0).filter(|_| {
+            let t = text.trim().trim_end_matches(|c: char| c.is_ascii_punctuation() || "。！？、".contains(c)).to_lowercase();
+            ["跳过去", "翻过去", "过去看看", "切过去", "go there", "go to it", "switch to it", "そっちへ", "そっちに", "そこへ"].iter().any(|w| t == *w || t.ends_with(w))
+        });
+        if let Some(board) = follow::asked(text, &pages, current).or(agreed) {
+            self.page_quiet = QUIET_AFTER_TURNING;
+            self.live.turned_to(board);
+            self.go_to_page(board, cx);
+            return true;
+        }
+        if self.page_quiet > 0 {
+            self.page_quiet -= 1;
+            return false;
+        }
+        self.page_hint = follow::suggested(text, &pages, current).map(|b| (b, pages[b].number, pages[b].title.chars().take(32).collect()));
+        false
+    }
+
     fn go_to_page(&mut self, page: usize, cx: &mut Context<Self>) {
         if self.replay.is_some() {
             self.notice = Some(tr("Can't switch boards during replay. Exit replay first.", "回放时不能切换板，请先退出回放。").into());
@@ -2053,6 +2090,7 @@ impl Workbench {
             return;
         }
         self.live.go_to_page(page);
+        self.page_hint = None;
         let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(self.live.graph.clone(), history);
         self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
@@ -2700,6 +2738,10 @@ impl Workbench {
         self.input.update(cx, |state, cx| state.set_value("", window, cx));
         let speaker = self.speaker.clone();
         self.live.add_line(speaker.as_deref(), &text, None);
+        if self.follow_pages(&text, cx) {
+            cx.notify();
+            return;
+        }
         let meeting = self.session().meeting();
         let renames = self.session().renames_seen();
         let pointing = self.take_pointing();
@@ -3672,7 +3714,28 @@ impl Render for Workbench {
             )
             .child("·")
             .child(if self.replay.is_some() { tr("replay", "回放") } else { tr("live", "实时") })
-            .when(!self.status.is_empty(), |d| d.child("·").child(self.status.clone()));
+            .when(!self.status.is_empty(), |d| d.child("·").child(self.status.clone()))
+            .when_some(self.page_hint.clone().filter(|_| self.replay.is_none()), |d, (board, number, title)| {
+                d.child(
+                    div()
+                        .id("page-hint")
+                        .occlude()
+                        .cursor_pointer()
+                        .ml_2()
+                        .px_2()
+                        .border_1()
+                        .border_color(rgb(pal().accent))
+                        .text_color(rgb(pal().accent))
+                        .hover(|d| d.text_color(rgb(pal().text)).border_color(rgb(pal().text)))
+                        .tooltip(|window, cx| Tooltip::new(tr("This seems to be about another page. Click, or say “go there”.", "刚才说的像是另一页的内容。点一下，或者说「跳过去」。")).build(window, cx))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.page_quiet = QUIET_AFTER_TURNING;
+                            this.go_to_page(board, cx);
+                        }))
+                        .child(tr("→ page {n} · {title}", "→ 第 {n} 页 · {title}").replace("{n}", &number.to_string()).replace("{title}", &title)),
+                )
+            });
         // With the transcript away, the latest line still shows that the room is being heard.
         let transcript_shown = self.panel == Panel::Transcript && self.transcript_open;
         let caption = self.live.lines.iter().rev().find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !transcript_shown && self.replay.is_none());
@@ -4596,6 +4659,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     needs_model: false,
                     notice: None,
                     status: tr("Starting…", "启动中…").into(),
+                    page_hint: None,
+                    page_quiet: 0,
                     level: 0.0,
                     next_batch: 0,
                     exit_when_done,

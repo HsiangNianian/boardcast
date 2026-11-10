@@ -4,6 +4,7 @@
 pub mod board_layout;
 pub mod check;
 pub mod compose;
+pub mod follow;
 pub mod glyphs;
 pub mod graph;
 pub mod pen;

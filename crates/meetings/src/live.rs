@@ -306,6 +306,16 @@ impl Live {
         self.touch();
     }
 
+    /// The last line asked to turn to another board rather than to draw: it is done, and says where it
+    /// turned, so a replay can follow.
+    pub fn turned_to(&mut self, page: usize) {
+        if let Some(line) = self.lines.last_mut() {
+            line["ms"] = json!(0);
+            line["turnedTo"] = json!(page);
+        }
+        self.touch();
+    }
+
     /// Whose voice this is, joining the ones this meeting has heard so that it keeps its name. `None` if
     /// the sentence is too short to name someone new.
     pub fn identify_voice(&mut self, voiceprint: &[f32], seconds: f64) -> Option<String> {
@@ -1059,3 +1069,4 @@ mod tests {
         let _ = std::fs::remove_dir_all(path);
     }
 }
+

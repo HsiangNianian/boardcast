@@ -169,6 +169,11 @@ pub struct Reply {
     pub ms: u128,
     pub tokens_in: u64,
     pub tokens_out: u64,
+    /// What llama-server reports: the prompt tokens it actually read, after its prefix cache, and how long
+    /// reading and writing took. Remote services leave these out.
+    pub prompt_read: Option<u64>,
+    pub prompt_ms: Option<f64>,
+    pub predicted_ms: Option<f64>,
 }
 
 /// One model turn for one line of speech.
@@ -193,6 +198,9 @@ pub fn propose(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &
         ms: started.elapsed().as_millis(),
         tokens_in: reply["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
         tokens_out: reply["usage"]["completion_tokens"].as_u64().unwrap_or(0),
+        prompt_read: reply["timings"]["prompt_n"].as_u64(),
+        prompt_ms: reply["timings"]["prompt_ms"].as_f64(),
+        predicted_ms: reply["timings"]["predicted_ms"].as_f64(),
     })
 }
 
@@ -407,8 +415,10 @@ fn wait_until_up(url: &str, child: &mut Child) -> Result<()> {
 }
 
 /// Requests honour the proxy settings in the environment, as the older app does.
+/// One client for every request, so connections are kept and reused rather than opened each time.
 fn http() -> ureq::Agent {
-    ureq::AgentBuilder::new().try_proxy_from_env(true).build()
+    static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
+    AGENT.get_or_init(|| ureq::AgentBuilder::new().try_proxy_from_env(true).build()).clone()
 }
 
 /// Which model answers the next line. It can change at any time from the settings.

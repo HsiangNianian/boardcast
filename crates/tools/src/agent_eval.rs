@@ -74,6 +74,11 @@ struct Run {
     detail: String,
     latencies: Vec<u128>,
     tokens_out: Vec<u64>,
+    /// Per line, as llama-server reports them: prompt tokens read after its cache, and milliseconds reading
+    /// and writing.
+    prompt_read: Vec<u64>,
+    prompt_ms: Vec<u64>,
+    predicted_ms: Vec<u64>,
     errors: usize,
     row: Value,
 }
@@ -86,6 +91,7 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
     let mut hint: Option<String> = None;
     let (mut hard_steps, mut hints_sent, mut soft_total, mut empty, mut errors) = (0, 0, 0, 0, 0);
     let (mut latencies, mut tokens_out, mut log) = (vec![], vec![], String::new());
+    let (mut prompt_read, mut prompt_ms, mut predicted_ms) = (vec![], vec![], vec![]);
     for turn in &case.turns {
         let next = turn.utterance();
         let recent = &history[history.len().saturating_sub(CONTEXT_LINES)..];
@@ -96,6 +102,9 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
             Ok(reply) => {
                 latencies.push(reply.ms);
                 tokens_out.push(reply.tokens_out);
+                prompt_read.extend(reply.prompt_read);
+                prompt_ms.extend(reply.prompt_ms.map(|ms| ms.round() as u64));
+                predicted_ms.extend(reply.predicted_ms.map(|ms| ms.round() as u64));
                 let ops = reply.ops.trim();
                 empty += usize::from(ops.is_empty());
                 let _ = writeln!(log, "> {}\n{}\n  ({} ms, {} tokens out)", next.text, if ops.is_empty() { "-" } else { ops }, reply.ms, reply.tokens_out);
@@ -156,7 +165,7 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
         "empty_replies": empty,
         "errors": errors,
     });
-    Ok(Run { metrics, violations: s.violations.len(), detail, latencies, tokens_out, errors, row })
+    Ok(Run { metrics, violations: s.violations.len(), detail, latencies, tokens_out, prompt_read, prompt_ms, predicted_ms, errors, row })
 }
 
 fn mean(xs: &[f64]) -> f64 {
@@ -298,6 +307,8 @@ fn report(cases: &[Case], passes: &[Vec<Run>], label: &str, set: &str) -> String
     let unstable = |i: usize| (0..METRICS.len()).any(|k| per_case(i, k).is_some_and(|(_, range)| range >= 0.3));
     let latencies: Vec<u128> = passes.iter().flatten().flat_map(|r| r.latencies.iter().copied()).collect();
     let tokens_out: Vec<u64> = passes.iter().flatten().flat_map(|r| r.tokens_out.iter().copied()).collect();
+    let all = |pick: fn(&Run) -> &Vec<u64>| passes.iter().flatten().flat_map(|r| pick(r).iter().copied()).collect::<Vec<u64>>();
+    let p50 = |xs: Vec<u64>| percentile(&xs, 50).map_or_else(|| "-".into(), |v: u64| v.to_string());
     let errors: usize = passes.iter().flatten().map(|r| r.errors).sum();
     let violations: Vec<f64> = passes.iter().map(|p| p.iter().map(|r| r.violations).sum::<usize>() as f64).collect();
     let shaky: Vec<&str> = (0..cases.len()).filter(|&i| unstable(i)).map(|i| cases[i].id.as_str()).collect();
@@ -322,6 +333,8 @@ fn report(cases: &[Case], passes: &[Vec<Run>], label: &str, set: &str) -> String
     let _ = writeln!(out, "| Violations (left in, or a correction not made), per pass | {:.1} |", mean(&violations));
     let _ = writeln!(out, "| Latency per line p50 / p95 | {} / {} ms |", ms(50), ms(95));
     let _ = writeln!(out, "| Output tokens per line p50 | {} |", percentile(&tokens_out, 50).map_or_else(|| "-".into(), |v| v.to_string()));
+    let _ = writeln!(out, "| Prompt tokens read per line p50 (after the prefix cache) | {} |", p50(all(|r| &r.prompt_read)));
+    let _ = writeln!(out, "| Reading / writing per line p50 | {} / {} ms |", p50(all(|r| &r.prompt_ms)), p50(all(|r| &r.predicted_ms)));
     if repeat > 1 {
         let _ = writeln!(out, "| Unstable cases (a score varies by 0.3 or more between passes) | {} |", if shaky.is_empty() { "none".into() } else { shaky.join(", ") });
     }

@@ -2,7 +2,7 @@
 // A cursor walks the meeting by itself until the reader points at it, and shows what was said then.
 
 import { LINES, MEETING, clockAt } from './meeting'
-import { $, clamp, reduced, svgEl } from './util'
+import { $, clamp, el, reduced, svgEl } from './util'
 
 export function initSignals() {
   const X = (sec: number) => (sec / MEETING) * 1000
@@ -59,7 +59,7 @@ export function initSignals() {
     $('.t', cursor).textContent = clockAt(sec)
     time.textContent = clockAt(sec)
     const last = [...LINES].reverse().find((l) => l.t - 4 <= sec)
-    said.innerHTML = last ? `<b>${last.who}</b>${last.say}` : '<b>—</b>nobody has spoken yet'
+    said.replaceChildren(el('b', '', last ? last.who : '—'), last ? last.say : 'nobody has spoken yet')
   }
   sig.addEventListener('pointermove', (e) => {
     const r = track()

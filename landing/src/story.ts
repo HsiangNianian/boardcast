@@ -2,7 +2,7 @@
 // drawn from the scroll position, so scrolling back erases it. Until the reader scrolls, it plays itself.
 
 import { LINES, MEETING, clockAt } from './meeting'
-import { $, $$, type Pt, clamp, hand, loop, reduced, star, svgEl, toD } from './util'
+import { $, $$, type Pt, clamp, el, hand, loop, reduced, star, svgEl, toD } from './util'
 
 interface Part {
   node: SVGPathElement | SVGRectElement
@@ -74,7 +74,7 @@ export function initStory() {
   const list = $('#lines')
   const lis = LINES.map((l) => {
     const li = document.createElement('li')
-    li.innerHTML = `<b>0${l.who}</b><span></span>`
+    li.append(el('b', '', `0${l.who}`), el('span'))
     list.appendChild(li)
     return li
   })
@@ -119,7 +119,8 @@ export function initStory() {
     clock.textContent = clockAt(clamp(q / 0.8) * MEETING * 0.9)
     clock.classList.toggle('off', !listening)
     $('#mic').classList.toggle('off', !listening)
-    $('#mic-label').innerHTML = listening ? 'stop<small>space</small>' : 'listen<small>space</small>'
+    const micLabel = $('#mic-label')
+    if (micLabel.firstChild?.textContent !== (listening ? 'stop' : 'listen')) micLabel.replaceChildren(listening ? 'stop' : 'listen', el('small', '', 'space'))
     meter.forEach((b, i) => (b.style.height = typing ? `${4 + Math.abs(Math.sin(performance.now() / 90 + i * 1.3)) * 20}px` : '3px'))
     // Correcting: the selection and its bar beside it.
     const correcting = !replaying && q > 0.43 && q < 0.53

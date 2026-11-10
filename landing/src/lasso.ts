@@ -1,7 +1,7 @@
 // Circle anything on the page, as in the app: drag a loop around a word and the page goes to its sheet.
 // Mouse and pen only, since a finger dragging on a phone means scrolling.
 
-import { $, $$, type Pt, encloses, reduced, svgEl, toD } from './util'
+import { $, $$, type Pt, el, encloses, reduced, svgEl, toD } from './util'
 
 const SKIP = 'a, button, input, kbd, .signals, .card, .dot-card, .app, .titleblock'
 
@@ -12,8 +12,8 @@ export function initLasso() {
   let path: SVGPathElement | null = null
   let hideToast = 0
 
-  function say(html: string) {
-    toast.innerHTML = html
+  function say(text: string) {
+    toast.replaceChildren(el('b', '', 'you'), `${$('#tb-time').textContent} · ${text}`)
     toast.classList.add('on')
     clearTimeout(hideToast)
     hideToast = window.setTimeout(() => toast.classList.remove('on'), 2600)
@@ -46,20 +46,19 @@ export function initLasso() {
     const ys = shape.map((p) => p[1])
     if (Math.max(...xs) - Math.min(...xs) < 24 || Math.max(...ys) - Math.min(...ys) < 16) return finish()
     drawn.setAttribute('d', toD([...shape, shape[0]]))
-    const hit = $$('[data-circle]').find((el) => {
-      const r = el.getBoundingClientRect()
+    const hit = $$('[data-circle]').find((node) => {
+      const r = node.getBoundingClientRect()
       return encloses(shape, [r.left + r.width / 2, r.top + r.height / 2])
     })
-    const now = $('#tb-time').textContent
     if (!hit) {
-      say(`<b>you</b>${now} · nothing circled. try a word in white.`)
+      say('nothing circled. try a word in white.')
       setTimeout(finish, 500)
       return
     }
     const [sel, frac] = hit.dataset.circle!.split('@')
     const target = $(sel)
     const name = hit.dataset.word ?? hit.textContent?.trim()
-    say(`<b>you</b>${now} · circled “${name}” → sheet ${(target.dataset.sheet ?? '').split(' ')[0]}`)
+    say(`circled “${name}” → sheet ${(target.dataset.sheet ?? '').split(' ')[0]}`)
     setTimeout(() => {
       finish()
       const y = target.getBoundingClientRect().top + scrollY + (frac ? (target.offsetHeight - innerHeight) * Number(frac) : -40)

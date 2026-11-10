@@ -16,7 +16,7 @@ export function initHero() {
 
   async function write() {
     const me = ++run
-    svg.innerHTML = ''
+    svg.replaceChildren()
     $$('.hit', host).forEach((h) => h.remove())
     const W = svg.clientWidth
     const H = svg.clientHeight

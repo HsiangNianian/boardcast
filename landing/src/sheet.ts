@@ -1,7 +1,7 @@
 // The drawing sheet around the page: rulers on two edges and a title block that follows the section in view.
 // Also the large clock at the end, which shows the reader's own time.
 
-import { $, $$ } from './util'
+import { $, $$, el } from './util'
 
 export function initSheet() {
   const top = $('#ruler-top')
@@ -36,8 +36,8 @@ export function initSheet() {
         if (!e.isIntersecting) return
         const [no, ...rest] = (e.target as HTMLElement).dataset.sheet!.split(' ')
         if (n.textContent === no) return
-        n.innerHTML = `<span class="flip">${no}</span>`
-        title.innerHTML = `<span class="flip">${rest.join(' ')}</span>`
+        n.replaceChildren(el('span', 'flip', no))
+        title.replaceChildren(el('span', 'flip', rest.join(' ')))
       }),
     { rootMargin: '-45% 0px -45% 0px' },
   )
@@ -46,7 +46,7 @@ export function initSheet() {
   const now = $('#now')
   const tick = () => {
     const d = new Date()
-    now.innerHTML = `${String(d.getHours()).padStart(2, '0')}<span class="sep">:</span>${String(d.getMinutes()).padStart(2, '0')}`
+    now.replaceChildren(String(d.getHours()).padStart(2, '0'), el('span', 'sep', ':'), String(d.getMinutes()).padStart(2, '0'))
   }
   tick()
   setInterval(tick, 5000)

@@ -1,7 +1,7 @@
 // Pictograms built from solid blocks and lines. Each part flies in from its own offset and settles when it
 // comes into view; hovering greys them, like pressing a button.
 
-import { $$, reduced } from './util'
+import { $$, reduced, svgEl, svgParts } from './util'
 
 export const ICONS: Record<string, string> = {
   board: `<rect class="s" x="9" y="9" width="46" height="46" stroke-width="7" data-from="0,-14"/>`,
@@ -35,7 +35,7 @@ export function initPictograms() {
     { threshold: 0.5 },
   )
   for (const svg of $$<SVGSVGElement>('svg.pict[data-icon]')) {
-    svg.innerHTML = ICONS[svg.dataset.icon ?? 'board']
+    svg.replaceChildren(...svgParts(ICONS[svg.dataset.icon ?? 'board']))
     if (reduced) continue
     for (const p of parts(svg)) {
       const [x, y] = (p.dataset.from ?? '0,0').split(',').map(Number)
@@ -46,5 +46,9 @@ export function initPictograms() {
     seen.observe(svg)
   }
   // Small ones inside running text.
-  for (const i of $$('[data-mini]')) i.innerHTML = `<svg class="pict" viewBox="0 0 64 64">${ICONS[i.dataset.mini ?? 'board']}</svg>`
+  for (const i of $$('[data-mini]')) {
+    const svg = svgEl('svg', { class: 'pict', viewBox: '0 0 64 64' })
+    svg.append(...svgParts(ICONS[i.dataset.mini ?? 'board']))
+    i.replaceChildren(svg)
+  }
 }

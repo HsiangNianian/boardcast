@@ -17,6 +17,20 @@ export function svgEl<K extends keyof SVGElementTagNameMap>(name: K, attrs: Reco
   return e
 }
 
+/** An HTML element with a class and children, built as nodes rather than parsed from markup. */
+export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', ...children: (string | Node)[]) {
+  const e = document.createElement(tag)
+  if (cls) e.className = cls
+  e.append(...children)
+  return e
+}
+
+/** The page's own constant SVG markup, such as a pictogram, parsed as XML into nodes for this document. */
+export function svgParts(markup: string): Node[] {
+  const doc = new DOMParser().parseFromString(`<svg xmlns="${NS}">${markup}</svg>`, 'image/svg+xml')
+  return [...doc.documentElement.childNodes].map((n) => document.importNode(n, true))
+}
+
 export function rand(seed: number) {
   let s = seed % 2147483647 || 7
   return () => (s = (s * 16807) % 2147483647) / 2147483647

@@ -1,42 +1,43 @@
-name: Release GPUI app
+name: Release
 
-# Publishes every package variant (see packaging/models.sh) for Linux and the Mac.
+# Pushing a tag v<version> publishes every package variant (see packaging/models.sh) for Linux and the Mac:
+#   git tag -a v0.23.0 -m "What changed, shown in the update prompt and on the release page"
+#   git push origin v0.23.0
+# The version must be the workspace's. The tag's message is the notes; a tag without one gets notes
+# generated from the merged pull requests. A version with a pre-release part (0.23.0-1) is published
+# as a pre-release, which the updater never offers.
 #
-# A release is tagged v<version> and marked latest, which is where the updater reads its manifest.
-# The manifest is also copied to the rolling `gpui-latest` pre-release, where the alphas looked.
-# A pre-release, chosen below, goes only to `gpui-latest`, as the alphas did.
-#
-# The release stays a draft until every package is up, so nobody downloads half of it. The manifest
-# lists Linux packages only, as the updater only installs on Linux; Mac apps are downloaded by hand.
-# It is separate from the older app's release workflow and never touches its `latest.json`.
-# Run by hand after raising the workspace version.
+# A release stays a draft until every package is up, so nobody downloads half of it, and is then marked
+# latest, which is where the updater reads its manifest; the manifest is also copied to the rolling
+# `gpui-latest` pre-release, where the alphas looked. It lists Linux packages only, as the updater
+# only installs on Linux; Mac apps are downloaded by hand.
 on:
-  workflow_dispatch:
-    inputs:
-      notes:
-        description: What changed, shown in the update prompt and on the release page
-        required: true
-      prerelease:
-        description: Publish to the rolling gpui-latest pre-release instead of a release of its own
-        type: boolean
-        default: false
+  push:
+    tags: ['v*']
 
 permissions:
   contents: write
 
 env:
-  LINUX_VARIANTS: full ja en sensevoice
-  MAC_VARIANTS: full ja en sensevoice apple
+  LINUX_VARIANTS: all ja en
+  MAC_VARIANTS: all ja en none
+  TAG: ${{ github.ref_name }}
 
 jobs:
   linux:
     runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      # Before the long build, so a mistyped tag fails at once.
+      - name: Check the tag is the workspace version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+          [ "v$version" = "$TAG" ] || { echo "the tag $TAG is not the workspace version $version" >&2; exit 1; }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: |
@@ -52,7 +53,18 @@ jobs:
         env:
           VARIANTS: ${{ env.LINUX_VARIANTS }}
       - id: version
-        run: echo "version=$(target/release/boardcast --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(target/release/boardcast --version | cut -d' ' -f2)
+          [ "v$version" = "$TAG" ] || { echo "the tag $TAG is not the workspace version $version" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac >> "$GITHUB_OUTPUT"
+      # Checkout leaves out the tag itself, and with it the message.
+      - name: Read the notes from the tag
+        run: |
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "$TAG" | sed -e '/-----BEGIN PGP SIGNATURE-----/,$d' > target/package/notes.txt
+          [ "$(git cat-file -t "$TAG")" = tag ] || : > target/package/notes.txt
+          cat target/package/notes.txt
       - name: Refuse a version that is not newer than the published one
         run: |
           version='${{ steps.version.outputs.version }}'
@@ -72,11 +84,9 @@ jobs:
       # It lists Linux packages only, so it is written here, where the tools are built.
       - name: Write the manifest
         env:
-          NOTES: ${{ inputs.notes }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if [ '${{ inputs.prerelease }}' = true ]; then tag=gpui-latest; else tag="v$VERSION"; fi
-          target/release/boardcast-tools release-manifest target/package "$tag" > target/package/manifest.json
+          NOTES=$(cat target/package/notes.txt) target/release/boardcast-tools release-manifest target/package "$TAG" > target/package/manifest.json
           cat target/package/manifest.json
       - uses: actions/upload-artifact@v4
         with:
@@ -84,12 +94,23 @@ jobs:
           path: |
             target/package/boardcast-*-linux*.tar.gz*
             target/package/manifest.json
+            target/package/notes.txt
           retention-days: 3
 
   macos:
-    runs-on: macos-26
+    strategy:
+      matrix:
+        # Apple silicon, then Intel.
+        runner: [macos-26, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
+      # SpeechAnalyzer needs the macOS 26 SDK, which the Intel image may carry beside an older default.
+      - name: Use the newest Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          [ -z "$xcode" ] || sudo xcode-select -s "$xcode"
+          xcrun --show-sdk-version
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Cache voice models
@@ -102,7 +123,7 @@ jobs:
           VARIANTS: ${{ env.MAC_VARIANTS }}
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-packages
+          name: macos-packages-${{ matrix.runner }}
           path: target/package/boardcast-*-macos*.zip
           retention-days: 3
 
@@ -111,9 +132,8 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      NOTES: ${{ inputs.notes }}
       VERSION: ${{ needs.linux.outputs.version }}
-      PRERELEASE: ${{ inputs.prerelease }}
+      PRERELEASE: ${{ needs.linux.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -123,18 +143,21 @@ jobs:
       - name: Publish
         run: |
           mv packages/manifest.json manifest.json
-          if [ "$PRERELEASE" = true ]; then TAG=gpui-latest; else TAG="v$VERSION"; fi
           packages=$(ls packages/boardcast-*.tar.gz packages/boardcast-*.zip)
+          if [ -s packages/notes.txt ]; then
+            { cat packages/notes.txt; printf '\n'; cat packaging/release-notes.md; } > notes.md
+            notes="--notes-file notes.md"
+          else
+            cp packaging/release-notes.md notes.md
+            notes="--notes-file notes.md --generate-notes"
+          fi
           if [ "$PRERELEASE" = true ]; then
-            gh release view gpui-latest >/dev/null 2>&1 || gh release create gpui-latest --prerelease --title "boardcast on GPUI" --notes "Rolling pre-release of the GPUI app."
-            gh release upload gpui-latest $packages --clobber
-            # The manifest goes last, so it never points at a package that is not there yet.
-            gh release upload gpui-latest manifest.json --clobber
+            gh release create "$TAG" --draft --prerelease --verify-tag --title "boardcast $VERSION" $notes
+            gh release upload "$TAG" $packages manifest.json
+            gh release edit "$TAG" --draft=false
             exit 0
           fi
-          printf '%s\n\n' "$NOTES" > notes.md
-          cat packaging/release-notes.md >> notes.md
-          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "boardcast $VERSION" --notes-file notes.md
+          gh release create "$TAG" --draft --verify-tag --title "boardcast $VERSION" $notes
           gh release upload "$TAG" $packages manifest.json
           gh release edit "$TAG" --draft=false --latest
           # Installs from the alphas read their manifest here; it points at this release's packages.

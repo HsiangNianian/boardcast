@@ -37,8 +37,8 @@ A package must carry a valid signature from the older app's update key, must con
 self-check from where it was unpacked. Only then is anything replaced, and a failed swap restores the previous version.
 Your meetings and models live elsewhere and are not touched. iPad versions will update through the App Store instead.
 
-Releases go to the `gpui-latest` tag, which the older app's update channel never reads. To publish one, raise the workspace
-version and run the **Release GPUI app** workflow.
+Releases are published by pushing a tag `v<version>` that matches the workspace version; the **Release** workflow
+builds and publishes every package. The older app's update channel never reads them.
 
 ## Develop
 

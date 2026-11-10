@@ -1,24 +1,22 @@
 # Shared by the package scripts: which speech models a variant carries, and what its package is called.
-#   full        SenseVoice, Parakeet (English) and ReazonSpeech (Japanese)
-#   ja          ReazonSpeech only
-#   en          Parakeet only
-#   sensevoice  SenseVoice only
-#   apple       none: Apple's own recognizer, on a Mac only
+#   all    SenseVoice, Parakeet (English) and ReazonSpeech (Japanese); "full" is its older name
+#   ja     ReazonSpeech only
+#   en     Parakeet only
+#   none   no models: Apple's own recognizer, on a Mac only
 
 variant_models() {
   case "$1" in
-    full) echo "sense-voice parakeet-en reazon-ja" ;;
+    all | full) echo "sense-voice parakeet-en reazon-ja" ;;
     ja) echo "reazon-ja" ;;
     en) echo "parakeet-en" ;;
-    sensevoice) echo "sense-voice" ;;
-    apple) echo "" ;;
+    none) echo "" ;;
     *) echo "unknown variant: $1" >&2; return 1 ;;
   esac
 }
 
-# The full package keeps the plain name, which is what installs from before variants look for.
+# The package with every model keeps the plain name, which is what installs from before variants look for.
 variant_suffix() {
-  if [ "$1" = full ]; then echo ""; else echo "-$1"; fi
+  case "$1" in all | full) echo "" ;; *) printf '%s\n' "-$1" ;; esac
 }
 
 # copy_models <variant> <voice dir in the package>

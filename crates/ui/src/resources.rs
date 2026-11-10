@@ -67,7 +67,8 @@ impl Resources {
             "ja" => japanese.into(),
             "en" => english.into(),
             "sensevoice" => sense_voice.into(),
-            "apple" => vec![("Apple speech helper", std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join("boardcast-speech"))).unwrap_or_default())],
+            // "apple" is what the package without models was called first.
+            "none" | "apple" => vec![("Apple speech helper", std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join("boardcast-speech"))).unwrap_or_default())],
             _ => sense_voice.into_iter().chain(english).chain(japanese).collect(),
         };
         let checks: Vec<(&str, PathBuf)> = [
@@ -86,7 +87,7 @@ impl Resources {
         let report = json!({
             "version": boardcast_update::VERSION,
             "installed": self.installed,
-            "variant": if variant.is_empty() { "full" } else { variant.as_str() },
+            "variant": if variant.is_empty() { "all" } else { variant.as_str() },
             "ok": ok,
             "checks": rows,
             "gpus": gpus.iter().map(|g| json!({ "id": g.id, "name": g.name, "mib": g.total_mib, "discrete": g.discrete })).collect::<Vec<_>>(),

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build the Linux packages: target/package/boardcast-<version>-<arch>-linux[-<variant>].tar.gz, one per
-# variant in VARIANTS (default "full"; see packaging/models.sh). Each unpacks into a working app, and
+# variant in VARIANTS (default "all"; see packaging/models.sh). Each unpacks into a working app, and
 # install.sh inside puts it on the system.
 # Needs Rust, and network access the first time for models and llama-server.
 set -eu
@@ -8,7 +8,7 @@ set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
 . packaging/models.sh
-variants="${VARIANTS:-full}"
+variants="${VARIANTS:-all}"
 
 cargo build --release -p boardcast-tools
 for what in glyphs "llama linux-x64" voice pdfium; do
@@ -22,7 +22,7 @@ mkdir -p target/package
 target/release/boardcast-tools pack-glyphs assets/hanzi "$glyphs"
 
 for variant in $variants; do
-  [ "$variant" = apple ] && { echo "skipping apple: Linux has no system recognizer" >&2; continue; }
+  [ "$variant" = none ] && { echo "skipping none: Linux has no system recognizer" >&2; continue; }
   name="boardcast-$version-$(uname -m)-linux$(variant_suffix "$variant")"
   out="target/package/$name"
   rm -rf "$out"

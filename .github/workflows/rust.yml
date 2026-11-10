@@ -53,7 +53,7 @@ jobs:
       # The script ends by running each packaged app's self-check. A second variant checks the model selection.
       - run: sh packaging/linux/package.sh
         env:
-          VARIANTS: full ja
+          VARIANTS: all ja
       # Its own target folder: the cache keeps compiled crates but not the speech library they were
       # built against, so rebuilding that crate in the restored folder cannot find it.
       - name: How speech is heard, with the packaged models
@@ -75,11 +75,22 @@ jobs:
           retention-days: 14
 
   macos:
-    name: macos package
+    name: macos package (${{ matrix.runner }})
     # No Mac is at hand during development, so this is what tells whether it builds and starts at all.
-    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        # Apple silicon, then Intel.
+        runner: [macos-26, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
+      # SpeechAnalyzer needs the macOS 26 SDK, which the Intel image may carry beside an older default.
+      - name: Use the newest Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          [ -z "$xcode" ] || sudo xcode-select -s "$xcode"
+          xcrun --show-sdk-version
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Cache voice models
@@ -90,7 +101,7 @@ jobs:
       # The script ends by running each packaged app's self-check, and builds and self-tests the Apple speech helper.
       - run: sh packaging/macos/package.sh
         env:
-          VARIANTS: full apple
+          VARIANTS: all none
       - name: Core crates and speech, with the packaged models
         run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-audio
         env:
@@ -98,6 +109,6 @@ jobs:
           CARGO_TARGET_DIR: ${{ runner.temp }}/macos-tests
       - uses: actions/upload-artifact@v4
         with:
-          name: boardcast-macos
+          name: boardcast-${{ matrix.runner }}
           path: target/package/*.zip
           retention-days: 14

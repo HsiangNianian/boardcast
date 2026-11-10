@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FAQ — boardcast</title>
+    <meta name="description" content="Questions about boardcast: what it does, what it needs, which package to get, and where your meetings stay." />
+    <meta name="theme-color" content="#000000" />
+    <link rel="icon" href="../favicon.png" />
+    <link rel="stylesheet" href="../pages.css" />
+  </head>
+  <body>
+<div class="frame" aria-hidden="true"></div>
+<header class="top wrap"><a class="brand" href="../">board<br>cast</a><nav><a href="../">home</a><a href="../demo/">web demo</a><a href="../faq/" class="on">faq</a><a href="../privacy/">privacy</a><a href="../terms/">terms</a></nav></header>
+<main class="doc wrap">
+  <h1>questions,<br><em>answered.</em></h1>
+  <aside><span class="label">faq</span><p>Anything missing? Ask on <a href="https://github.com/HsiangNianian/boardcast/issues">GitHub</a>.</p></aside>
+  <div>
+    <section>
+      <h2>the app</h2>
+      <details open><summary>What is boardcast?</summary><p>A whiteboard that writes down your meeting. It listens, recognizes speech, and a board model turns what is said into a board, stroke by stroke: topics, lists, flow charts, questions, things struck out. You can circle, mark, rewrite and replay it, and export the meeting afterwards.</p></details>
+      <details><summary>Does my audio leave my computer?</summary><p>No. Speech recognition and the board model run on your computer, and nothing is recorded to a server. The only exception is a remote model, which you have to set up yourself: then the transcript text and the board are sent to the provider you chose. See <a href="../privacy/">privacy</a>.</p></details>
+      <details><summary>Which languages does it understand?</summary><p>Japanese, English and Chinese, each with its own recognizer. On a Mac it can also use Apple's own recognizer, which covers whatever languages your Mac supports.</p></details>
+      <details><summary>Do I need an account or an internet connection?</summary><p>No account. The internet is needed only to download the board model the first time, and to check for updates. After that it works offline.</p></details>
+      <details><summary>Is it free?</summary><p>Yes. boardcast is open source under the MIT license. The models it runs have their own licenses, listed in the <a href="../terms/">terms</a>.</p></details>
+    </section>
+    <section>
+      <h2>getting it</h2>
+      <details open><summary>What does it run on?</summary><p>macOS on Apple silicon or Intel, Windows on x64, and Linux on x64. A graphics card makes the board model quicker but is not required. The package is about 1.1 GB with every speech model, and the default board model is a 2.6 GB download.</p></details>
+      <details><summary>Which package should I download?</summary>
+        <table><tr><th>package</th><th>recognizes</th><th>models inside</th></tr>
+        <tr><td>all</td><td>Japanese, English and Chinese, each with its best model</td><td>about 1.1 GB</td></tr>
+        <tr><td>ja</td><td>Japanese, with ReazonSpeech</td><td>about 160 MB</td></tr>
+        <tr><td>en</td><td>English, with Parakeet</td><td>about 660 MB</td></tr>
+        <tr><td>none</td><td>whatever your Mac's own recognizer supports (Mac only)</td><td>none</td></tr></table></details>
+      <details><summary>How do updates work?</summary><p>On Linux the app offers new versions and installs them itself, checking each package's signature first. On the Mac and Windows, download the new version from the <a href="https://github.com/HsiangNianian/boardcast/releases/latest">releases page</a> for now.</p></details>
+      <details><summary>The Mac says the app cannot be opened.</summary><p>It is signed only ad hoc, so the first time, open it with Control-click › Open.</p></details>
+    </section>
+    <section>
+      <h2>using it</h2>
+      <details open><summary>Can I use a cloud model instead?</summary><p>Yes. Settings take any OpenAI-compatible API, and DeepSeek can be filled in with one click. The key is kept in a settings file only your user account can read, and is never logged.</p></details>
+      <details><summary>Where are my meetings kept?</summary><p>On your computer: <code>~/.local/share/games.mmstudio.boardcast</code> on Linux, <code>~/Library/Application Support/games.mmstudio.boardcast</code> on a Mac, and <code>%APPDATA%\games.mmstudio.boardcast</code> on Windows. They are plain files you can back up or delete.</p></details>
+      <details><summary>What can I export?</summary><p>Markdown with the key points, a Mermaid flow chart and the transcript; PNG, SVG and animated SVG; a whole-meeting PDF; and a single HTML replay page for whoever missed it.</p></details>
+      <details><summary>What is the web demo?</summary><p>Five recorded sample meetings, replayed in your browser with the same board code the app runs. It does not listen to you; the app does that, live.</p></details>
+      <details><summary>Something went wrong. Where do I report it?</summary><p>Open an issue on <a href="https://github.com/HsiangNianian/boardcast/issues">GitHub</a>, or write to <a href="mailto:hsiangnianian@gmail.com">hsiangnianian@gmail.com</a>.</p></details>
+    </section>
+  </div>
+</main>
+<footer class="wrap label"><span>last updated 2026-11-10</span><nav><a href="../faq/" class="on">faq</a><a href="../privacy/">privacy</a><a href="../terms/">terms</a></nav></footer>
+  </body>
+</html>

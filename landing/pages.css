@@ -1,0 +1,61 @@
+/* The FAQ, privacy and terms pages: the website's sheet, set as a document. */
+
+@font-face { font-family: 'DM Sans Variable'; font-style: normal; font-display: swap; font-weight: 100 1000; src: url('fonts/dm-sans-latin-wght-normal.woff2') format('woff2-variations'); }
+@font-face { font-family: 'JetBrains Mono Variable'; font-style: normal; font-display: swap; font-weight: 100 800; src: url('fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations'); }
+
+:root { --bg: #000; --fg: #f2f2f2; --grey: #c4c4c4; --dim: #8a8a8a; --hair: #262626; --link: #9fb4ff;
+  --sans: 'DM Sans Variable', system-ui, sans-serif; --mono: 'JetBrains Mono Variable', ui-monospace, monospace; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg); }
+body { color: var(--fg); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased; }
+a { color: var(--link); text-decoration: none; }
+a:hover { color: var(--fg); }
+::selection { background: var(--fg); color: var(--bg); }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 40px; }
+.label { font: 400 11px var(--mono); color: var(--dim); letter-spacing: .04em; text-transform: lowercase; }
+.frame { position: fixed; inset: 12px; pointer-events: none; border: 1px solid var(--hair); }
+
+header.top { display: flex; justify-content: space-between; align-items: start; padding-top: 40px; }
+.brand { color: var(--fg); font-size: 36px; line-height: 1.05; letter-spacing: -.02em; }
+header nav { display: flex; gap: 20px; padding-top: 8px; }
+header nav a { font: 400 12px var(--mono); color: var(--dim); }
+header nav a.on, header nav a:hover { color: var(--fg); }
+
+.doc { padding-top: 96px; padding-bottom: 120px; display: grid; grid-template-columns: 220px 1fr; gap: 56px; }
+.doc > aside { position: sticky; top: 40px; align-self: start; }
+.doc > aside .label { display: block; margin-bottom: 8px; }
+.doc h1 { grid-column: 1 / -1; font-size: clamp(48px, 7vw, 104px); font-weight: 200; letter-spacing: -.045em; line-height: .95; }
+.doc h1 em { font-style: normal; color: var(--dim); }
+.doc section + section { margin-top: 56px; }
+.doc h2 { font-size: 30px; font-weight: 300; letter-spacing: -.02em; padding-bottom: 14px; border-bottom: 1px solid var(--fg); }
+.doc h3 { margin-top: 28px; font-size: 19px; font-weight: 400; }
+.doc h4 { margin-top: 22px; font: 400 13px var(--mono); color: var(--fg); }
+.doc p, .doc li { margin-top: 12px; font-size: 16px; line-height: 1.7; color: var(--grey); max-width: 44em; }
+.doc ul { padding-left: 1.2em; }
+.doc strong { color: var(--fg); font-weight: 400; }
+.doc code { font: 400 13px var(--mono); color: var(--fg); }
+.doc table { width: 100%; margin-top: 16px; border-collapse: collapse; }
+.doc th, .doc td { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--hair); text-align: left; vertical-align: top; font-size: 15px; line-height: 1.5; color: var(--grey); }
+.doc th { font: 400 11px var(--mono); color: var(--dim); text-transform: lowercase; }
+.doc td:first-child { color: var(--fg); }
+.doc .crates { font-size: 13px; line-height: 1.8; }
+.doc .crates a { color: var(--grey); }
+.doc .crates a:hover { color: var(--fg); }
+.doc .count { margin-top: 16px; }
+details { border-bottom: 1px solid var(--hair); }
+details summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 16px; padding: 20px 0; font-size: 20px; color: var(--fg); }
+details summary::after { content: '+'; font: 400 18px var(--mono); color: var(--dim); }
+details[open] summary::after { content: '−'; }
+details > :not(summary) { margin-bottom: 20px; }
+
+footer { display: flex; justify-content: space-between; gap: 16px; padding-top: 28px; padding-bottom: 56px; border-top: 1px solid var(--hair); }
+footer nav { display: flex; gap: 20px; }
+footer a { color: var(--dim); }
+footer a:hover, footer a.on { color: var(--fg); }
+
+@media (max-width: 800px) {
+  .wrap { padding: 0 20px; } .frame { inset: 6px; }
+  .doc { grid-template-columns: 1fr; gap: 32px; padding-top: 64px; } .doc > aside { position: static; }
+  header nav { display: none; }
+  .doc th:nth-child(3), .doc td:nth-child(3) { display: none; }
+}

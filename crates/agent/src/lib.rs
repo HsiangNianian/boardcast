@@ -99,7 +99,7 @@ impl Provider {
             }
         };
         let reply = self.send(&self.endpoint(), &body)?;
-        Ok(strip_thinking(reply["choices"][0]["message"]["content"].as_str().unwrap_or("")).to_string())
+        Ok(strip_thinking(message(&reply)?).to_string())
     }
 
     fn endpoint(&self) -> String {
@@ -134,6 +134,8 @@ impl Provider {
         self.send(&url, &body)
     }
 
+    /// One request, retried while the failure might pass. A reply that cannot be used says what came
+    /// back, cut short and with the key taken out, so a failure can be told apart afterwards.
     fn send(&self, url: &str, body: &Value) -> Result<Value> {
         let mut last = anyhow!("no attempt made");
         for attempt in 0..ATTEMPTS {
@@ -141,11 +143,23 @@ impl Provider {
             if let Self::Remote { key, .. } = self {
                 call = call.set("Authorization", &format!("Bearer {key}"));
             }
+            let started = Instant::now();
             match call.send_json(body.clone()) {
-                Ok(reply) => return reply.into_json().map_err(Into::into),
+                Ok(reply) => {
+                    let kind = reply.content_type().to_string();
+                    match reply.into_string() {
+                        Ok(text) => {
+                            return serde_json::from_str(&text).map_err(|e| {
+                                anyhow!("the model's reply is not JSON ({kind}, {} bytes, {} ms): {e}; it began: {}", text.len(), started.elapsed().as_millis(), self.excerpt(&text))
+                            });
+                        }
+                        // The connection broke mid-reply; another attempt may get all of it.
+                        Err(e) => last = anyhow!("the model's reply broke off after {} ms: {e}", started.elapsed().as_millis()),
+                    }
+                }
                 // A rejected request will not improve by retrying, and its body names the reason.
                 Err(ureq::Error::Status(code, reply)) if code != 429 && code < 500 => {
-                    return Err(anyhow!("model answered {code}: {}", reply.into_string().unwrap_or_default()));
+                    return Err(anyhow!("model answered {code}: {}", self.excerpt(&reply.into_string().unwrap_or_default())));
                 }
                 Err(e) => last = anyhow!("model request failed: {e}"),
             }
@@ -155,6 +169,29 @@ impl Provider {
         }
         Err(last)
     }
+}
+
+impl Provider {
+    /// The start of a reply, enough to recognize it, without the key should a server echo it back.
+    fn excerpt(&self, text: &str) -> String {
+        let text = match self {
+            Self::Remote { key, .. } if !key.is_empty() => text.replace(key.as_str(), "…"),
+            _ => text.to_string(),
+        };
+        let short: String = text.chars().take(EXCERPT).collect();
+        if short.len() < text.len() { format!("{short}…") } else { short }
+    }
+}
+
+/// How much of an unusable reply an error quotes.
+const EXCERPT: usize = 240;
+
+/// The words of a chat reply. One without a message is a failure, not an empty answer.
+fn message(reply: &Value) -> Result<&str> {
+    reply["choices"][0]["message"]["content"].as_str().ok_or_else(|| {
+        let shown: String = reply.to_string().chars().take(EXCERPT).collect();
+        anyhow!("the model's reply has no message: {shown}")
+    })
 }
 
 /// What to add to the prompt beyond the fixed instructions.
@@ -194,7 +231,7 @@ pub fn propose(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &
     let started = Instant::now();
     let reply = provider.call(messages, graph, english)?;
     Ok(Reply {
-        ops: strip_thinking(reply["choices"][0]["message"]["content"].as_str().unwrap_or("")).to_string(),
+        ops: strip_thinking(message(&reply)?).to_string(),
         ms: started.elapsed().as_millis(),
         tokens_in: reply["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
         tokens_out: reply["usage"]["completion_tokens"].as_u64().unwrap_or(0),
@@ -786,7 +823,46 @@ mod tests {
         drained: Receiver<()>,
     }
 
-    fn harness(reply: impl Fn(&str) -> Result<String> + Send + Sync + 'static) -> Harness {
+/// A server that answers every request with this status, type and body.
+    fn serve(status: &'static str, kind: &'static str, body: &'static str) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                let mut stream = stream;
+                let mut request = [0_u8; 65536];
+                let _ = stream.read(&mut request);
+                let _ = write!(stream, "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            }
+        });
+        base
+    }
+
+    fn remote(base: String) -> Provider {
+        Provider::Remote { base_url: base, key: "sk-secret-123".into(), model: "m".into() }
+    }
+
+    #[test]
+    fn an_unusable_reply_says_what_came_back() {
+        let page = remote(serve("200 OK", "text/html", "<html>Bad gateway, try later</html>")).call(vec![json!({ "role": "user", "content": "hi" })], &Graph::default(), true);
+        let e = format!("{:#}", page.unwrap_err());
+        assert!(e.contains("not JSON") && e.contains("text/html") && e.contains("Bad gateway"), "{e}");
+
+        let empty = remote(serve("200 OK", "application/json", r#"{"error":"overloaded"}"#)).call(vec![json!({ "role": "user", "content": "hi" })], &Graph::default(), true);
+        let reply = empty.unwrap();
+        let e = format!("{:#}", message(&reply).unwrap_err());
+        assert!(e.contains("no message") && e.contains("overloaded"), "{e}");
+
+        let refused = remote(serve("401 Unauthorized", "application/json", r#"{"error":"bad key sk-secret-123"}"#)).call(vec![json!({ "role": "user", "content": "hi" })], &Graph::default(), true);
+        let e = format!("{:#}", refused.unwrap_err());
+        assert!(e.contains("401") && !e.contains("sk-secret-123"), "the key never shows: {e}");
+
+        let fine = remote(serve("200 OK", "application/json", r#"{"choices":[{"message":{"content":"T 「x」"}}]}"#)).call(vec![json!({ "role": "user", "content": "hi" })], &Graph::default(), true);
+        assert_eq!(message(&fine.unwrap()).unwrap(), "T 「x」");
+    }
+
+        fn harness(reply: impl Fn(&str) -> Result<String> + Send + Sync + 'static) -> Harness {
         let (said, said_rx) = channel();
         let (ready_tx, ready_rx) = channel();
         let (drained_tx, drained) = channel();

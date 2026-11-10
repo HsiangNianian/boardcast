@@ -776,6 +776,7 @@ dependencies = [
  "boardcast-meetings",
  "chrono",
  "fontdb",
+ "gif 0.14.2",
  "image",
  "krilla",
  "serde_json",

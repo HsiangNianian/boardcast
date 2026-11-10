@@ -181,6 +181,125 @@ fn path(points: &[[f32; 2]]) -> String {
     d
 }
 
+/// GIF frames a second, the longest side in pixels, and how long the finished board holds before it loops.
+const GIF_FPS: f64 = 10.0;
+const GIF_SIDE: f64 = 960.0;
+const GIF_HOLD_MS: u16 = 2500;
+
+/// The animated board as a GIF: the same strokes in the same order and time as the animated SVG, written
+/// frame by frame, then the whole board held a moment before it starts again.
+pub fn gif(board: &Composed, nodes: &[Value], steps: &[Value]) -> anyhow::Result<Vec<u8>> {
+    use tiny_skia::{Color, FilterQuality, Pixmap, PixmapPaint, Transform};
+
+    let mut inked = vec![];
+    for piece in &board.pieces {
+        let mut r = Rng::new(&piece.seed);
+        inked.push(piece.lines.iter().map(|line| (line.inked(&mut r), line.style)).collect::<Vec<_>>());
+    }
+    let timing: Vec<Timing> = board
+        .pieces
+        .iter()
+        .zip(&inked)
+        .map(|(p, lines)| Timing { under: p.lines.first().is_some_and(|l| l.style.under), lengths: lines.iter().map(|(i, _)| f64::from(i.length)).collect() })
+        .collect();
+    let keys: Vec<String> = board.pieces.iter().map(|p| p.seed.clone()).collect();
+    let (timed, end) = timeline(&timing, &ranks(nodes, &board.regions, steps, &keys), TOTAL);
+
+    let b = &board.bounds;
+    let (x, y, w, h) = (b.x0 - PADDING, b.y0 - PADDING, b.x1 - b.x0 + 2.0 * PADDING, b.y1 - b.y0 + 2.0 * PADDING);
+    let scale = (GIF_SIDE / w.max(h)).min(2.0);
+    let (pw, ph) = ((w * scale).round().max(1.0) as u32, (h * scale).round().max(1.0) as u32);
+    let at = Transform::from_translate(-x as f32, -y as f32).post_scale(scale as f32, scale as f32);
+    // The paper and any page under the board, drawn once.
+    let mut base = Pixmap::new(pw, ph).ok_or_else(|| anyhow::anyhow!("the GIF is too big to make"))?;
+    let [_, r, g, bl] = PAPER.to_be_bytes();
+    base.fill(Color::from_rgba8(r, g, bl, 255));
+    if let Some(page) = &board.page {
+        let picture = crate::ink::page_pixmap(&page.image)?;
+        let fit = Transform::from_scale((page.w / f64::from(picture.width())) as f32, (page.h / f64::from(picture.height())) as f32).post_concat(at);
+        base.draw_pixmap(0, 0, picture.as_ref(), &PixmapPaint { quality: FilterQuality::Bilinear, ..PixmapPaint::default() }, fit, None);
+    }
+
+    let mut bytes = vec![];
+    {
+        let mut encoder = gif::Encoder::new(&mut bytes, pw as u16, ph as u16, &[])?;
+        encoder.set_repeat(gif::Repeat::Infinite)?;
+        // Each frame is only what changed, laid over the frames before.
+        let mut write = |encoder: &mut gif::Encoder<&mut Vec<u8>>, mut rgba: Vec<u8>, (left, top, w, h): (u32, u32, u32, u32), ms: u32| -> anyhow::Result<()> {
+            let mut frame = gif::Frame::from_rgba_speed(w as u16, h as u16, &mut rgba, 10);
+            (frame.left, frame.top) = (left as u16, top as u16);
+            frame.delay = (ms / 10).min(u32::from(u16::MAX)) as u16;
+            frame.dispose = gif::DisposalMethod::Keep;
+            encoder.write_frame(&frame)?;
+            Ok(())
+        };
+        let step = 1000.0 / GIF_FPS;
+        let frames = (end / step).ceil() as usize + 1;
+        let mut previous: Option<Vec<u8>> = None;
+        let mut pending: Option<(Vec<u8>, (u32, u32, u32, u32), u32)> = None;
+        for f in 0..frames {
+            let t = f as f64 * step;
+            let mut canvas = base.clone();
+            for under in [true, false] {
+                for (i, lines) in inked.iter().enumerate() {
+                    for (j, (ink, style)) in lines.iter().enumerate().filter(|(_, (_, s))| s.under == under) {
+                        let (delay, duration) = (timed[i].delays[j], timed[i].durations[j]);
+                        let k = if duration <= 0.0 { if t >= delay { 1.0 } else { 0.0 } } else { ((t - delay) / duration).clamp(0.0, 1.0) };
+                        if k > 0.0 {
+                            crate::ink::fill_stroke(&mut canvas, &outline(ink, k as f32), *style, at);
+                        }
+                    }
+                }
+            }
+            let pixels = canvas.take();
+            // Only what changed since the frame before is stored, over it; a frame with no change only
+            // lengthens the one before.
+            let changed = match &previous {
+                None => Some((0, 0, pw, ph)),
+                Some(before) => changed_area(before, &pixels, pw, ph),
+            };
+            match changed {
+                None => pending.as_mut().expect("a first frame is always stored").2 += step as u32,
+                Some(area) => {
+                    if let Some((rgba, at, ms)) = pending.take() {
+                        write(&mut encoder, rgba, at, ms)?;
+                    }
+                    let (left, top, cw, ch) = area;
+                    let mut part = Vec::with_capacity((cw * ch * 4) as usize);
+                    for y in top..top + ch {
+                        let row = ((y * pw + left) * 4) as usize;
+                        part.extend_from_slice(&pixels[row..row + (cw * 4) as usize]);
+                    }
+                    pending = Some((part, area, step as u32));
+                }
+            }
+            previous = Some(pixels);
+        }
+        if let Some((rgba, at, ms)) = pending.take() {
+            write(&mut encoder, rgba, at, ms.max(u32::from(GIF_HOLD_MS)))?;
+        }
+    }
+    Ok(bytes)
+}
+
+/// The smallest rectangle holding every pixel that differs between two frames, if any does.
+fn changed_area(a: &[u8], b: &[u8], w: u32, h: u32) -> Option<(u32, u32, u32, u32)> {
+    let (mut x0, mut y0, mut x1, mut y1) = (u32::MAX, u32::MAX, 0, 0);
+    for y in 0..h {
+        let row = (y * w * 4) as usize..((y + 1) * w * 4) as usize;
+        if a[row.clone()] == b[row.clone()] {
+            continue;
+        }
+        for x in 0..w {
+            let i = ((y * w + x) * 4) as usize;
+            if a[i..i + 4] != b[i..i + 4] {
+                (x0, y0, x1, y1) = (x0.min(x), y0.min(y), x1.max(x), y1.max(y));
+            }
+        }
+    }
+    (x0 <= x1).then(|| (x0, y0, x1 - x0 + 1, y1 - y0 + 1))
+}
+
 /// Written from the final board, which is laid out as the file will show it.
 pub fn animated_svg(board: &Composed, nodes: &[Value], steps: &[Value], title: &str) -> String {
     struct Written {
@@ -263,6 +382,23 @@ pub fn animated_svg(board: &Composed, nodes: &[Value], steps: &[Value], title: &
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_gif_writes_the_board_out_and_holds_it() {
+        use image::AnimationDecoder;
+        let mut g = boardcast_board::graph::Graph::default();
+        g.apply(&boardcast_board::graph::parse_ops("T 「Release checklist」\nL 「Release checklist」 「Load testing」\nM n2 星标"));
+        let mut glyphs = boardcast_board::glyphs::Glyphs::from_checkout(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))).unwrap();
+        let board = crate::ink::compose_board(&g, &Value::Null, None, &mut glyphs);
+        let nodes: Vec<Value> = g.nodes.iter().map(|n| serde_json::to_value(n).unwrap()).collect();
+        let bytes = gif(&board, &nodes, &[]).unwrap();
+        let frames: Vec<image::Frame> = image::codecs::gif::GifDecoder::new(std::io::Cursor::new(&bytes)).unwrap().into_frames().collect_frames().unwrap();
+        assert!(frames.len() > 5, "{} frames", frames.len());
+        let ink = |f: &image::Frame| f.buffer().pixels().filter(|p| p.0[0] < 128).count();
+        assert!(ink(&frames[0]) < ink(frames.last().unwrap()), "the first frame has less ink than the last");
+        let (hold, _) = frames.last().unwrap().delay().numer_denom_ms();
+        assert_eq!(hold, u32::from(GIF_HOLD_MS));
+    }
 
     fn goldens() -> Value {
         serde_json::from_str(include_str!("../../board/fixtures/goldens.json")).unwrap()

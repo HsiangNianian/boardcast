@@ -2991,6 +2991,7 @@ impl Workbench {
             (ExportKind::Png, tr("PNG image", "PNG 图片"), tr("This board, as it looks on screen.", "当前这张板，和画面上一样。"), drawn),
             (ExportKind::Svg, tr("SVG vector", "SVG 矢量图"), tr("This board. Stays sharp at any size.", "当前这张板，放大不糊。"), drawn),
             (ExportKind::AnimatedSvg, tr("Animated SVG", "动态 SVG"), tr("This board, written out stroke by stroke in the order of the meeting.", "当前这张板，按会议顺序逐笔写出。"), drawn),
+            (ExportKind::Gif, "GIF", tr("This board, written out stroke by stroke, for chats and documents that don't play SVG.", "当前这张板，逐笔写出，可以直接贴进群聊和文档。"), drawn),
             (ExportKind::ReplayPage, tr("Replay page", "回放网页"), tr("One .html file for someone who missed the meeting. Nothing to install.", "一个 .html 文件，发给没参会的人，双击就能看。"), content),
             (ExportKind::Pdf, tr("Whole meeting PDF", "整场会 PDF"), tr("A page per board, then the summary and transcript, with selectable text.", "每张板一页，后面是摘要和会议记录，文字可以选中复制。"), content),
         ];

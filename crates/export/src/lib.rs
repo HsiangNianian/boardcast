@@ -22,6 +22,8 @@ pub enum Kind {
     Png,
     Svg,
     AnimatedSvg,
+    /// The animated board as a GIF, for chats and documents that don't play an SVG.
+    Gif,
     Pdf,
     ReplayPage,
 }
@@ -33,6 +35,7 @@ impl Kind {
             Self::Png => "png",
             Self::Svg => "svg",
             Self::AnimatedSvg => "anim.svg",
+            Self::Gif => "gif",
             Self::Pdf => "pdf",
             Self::ReplayPage => "html",
         }
@@ -40,7 +43,7 @@ impl Kind {
 
     /// Markdown and PDF cover the whole meeting; a picture is of the board on screen.
     pub fn needs_a_drawn_board(self) -> bool {
-        matches!(self, Self::Png | Self::Svg | Self::AnimatedSvg)
+        matches!(self, Self::Png | Self::Svg | Self::AnimatedSvg | Self::Gif)
     }
 
     pub fn from_path(path: &Path) -> Option<Self> {
@@ -52,6 +55,7 @@ impl Kind {
             "png" => Some(Self::Png),
             "svg" => Some(Self::Svg),
             "pdf" => Some(Self::Pdf),
+            "gif" => Some(Self::Gif),
             "html" => Some(Self::ReplayPage),
             _ => None,
         }
@@ -179,6 +183,12 @@ impl Frozen {
                     bail!("The board is empty.");
                 }
                 Ok(text_only(animate::animated_svg(&settled, &settled_nodes, &steps, &doc.title).into_bytes()))
+            }
+            Kind::Gif => {
+                if settled.pieces.is_empty() && settled.page.is_none() {
+                    bail!("The board is empty.");
+                }
+                Ok(text_only(animate::gif(&settled, &settled_nodes, &steps)?))
             }
             Kind::Png | Kind::Svg => {
                 let page = pages.into_iter().nth(current).context("no board to export")?;

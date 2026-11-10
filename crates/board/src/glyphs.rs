@@ -67,12 +67,12 @@ pub struct Glyphs {
 impl Glyphs {
     /// Latin and kana data are built in; only the much larger Chinese data comes from `source`.
     pub fn load(source: HanziSource) -> Result<Self> {
-        let table: HashMap<String, Glyph> = serde_json::from_str(include_str!("../../../src/ink/handwritten.json"))?;
+        let table: HashMap<String, Glyph> = serde_json::from_str(include_str!("../../../assets/glyphs/handwritten.json"))?;
         let latin = table
             .into_iter()
             .filter_map(|(k, g)| Some((k.chars().next()?, Arc::new(Glyph { latin: true, ..g }))))
             .collect();
-        let table: HashMap<String, Glyph> = serde_json::from_str(include_str!("../../../src/ink/kana.json"))?;
+        let table: HashMap<String, Glyph> = serde_json::from_str(include_str!("../../../assets/glyphs/kana.json"))?;
         let kana = table.into_iter().filter_map(|(k, g)| Some((k.chars().next()?, Arc::new(g)))).collect();
         let punct = PUNCT
             .iter()
@@ -85,9 +85,9 @@ impl Glyphs {
         Ok(Self { latin, punct, kana, source, hanzi: HashMap::new() })
     }
 
-    /// A boardcast checkout with `public/hanzi` generated.
+    /// A boardcast checkout with `assets/hanzi` generated.
     pub fn from_checkout(root: &Path) -> Result<Self> {
-        Self::load(HanziSource::Directory(root.join("public/hanzi")))
+        Self::load(HanziSource::Directory(root.join("assets/hanzi")))
     }
 
     /// Characters without data return `None`; the caller leaves a blank advance.

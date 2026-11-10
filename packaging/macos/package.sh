@@ -21,7 +21,7 @@ cargo build --release -p boardcast-ui -p boardcast-tools
 version=$(target/release/boardcast --version | cut -d' ' -f2)
 mkdir -p target/package
 glyphs=target/package/glyphs.pack
-target/release/boardcast-tools pack-glyphs public/hanzi "$glyphs"
+target/release/boardcast-tools pack-glyphs assets/hanzi "$glyphs"
 speech=target/package/boardcast-speech
 sh scripts/build-apple-speech.sh "$speech"
 
@@ -47,7 +47,7 @@ for variant in $variants; do
   cp resources/voice/speaker/campplus_zh_en.onnx "$lib/voice/speaker/"
   copy_models "$variant" "$lib/voice"
   printf '%s\n' "$variant" > "$lib/variant"
-  cp LICENSE public/licenses/* public/hanzi/ARPHICPL.TXT "$lib/licenses/"
+  cp LICENSE assets/licenses/* crates/ui/fonts/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$lib/licenses/"
   cp target/pdfium/LICENSE "$lib/licenses/pdfium-LICENSE"
 
   codesign --force --deep --sign - "$out/boardcast.app"

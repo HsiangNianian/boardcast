@@ -3022,7 +3022,7 @@ fn demo_board(root: &std::path::Path, name: &str) -> Result<Graph> {
     struct DemoLine {
         ops: Option<String>,
     }
-    let demo: Demo = serde_json::from_slice(&std::fs::read(root.join(format!("public/demos/{name}.json")))?)?;
+    let demo: Demo = serde_json::from_slice(&std::fs::read(root.join(format!("assets/demos/{name}.json")))?)?;
     let mut g = Graph::default();
     for line in demo.lines {
         if let Some(ops) = line.ops {

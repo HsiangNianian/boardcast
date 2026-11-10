@@ -10,7 +10,7 @@ on:
       - 'Cargo.lock'
       - 'src/engine/**'
       - 'src/board/layout.ts'
-      - 'public/demos/**'
+      - 'assets/demos/**'
       - '.github/workflows/rust.yml'
   pull_request:
     paths:
@@ -20,7 +20,7 @@ on:
       - 'Cargo.lock'
       - 'src/engine/**'
       - 'src/board/layout.ts'
-      - 'public/demos/**'
+      - 'assets/demos/**'
       - '.github/workflows/rust.yml'
 
 jobs:

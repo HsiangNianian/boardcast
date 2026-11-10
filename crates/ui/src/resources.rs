@@ -40,7 +40,7 @@ pub fn locate(data: &Path) -> Resources {
     let root = checkout_dir().unwrap_or_else(|| PathBuf::from("."));
     let bundled = root.join("resources/voice");
     Resources {
-        hanzi: HanziSource::Directory(root.join("public/hanzi")),
+        hanzi: HanziSource::Directory(root.join("assets/hanzi")),
         binaries: root.join("resources/llama"),
         pdfium: root.join("target/pdfium"),
         voice: if bundled.join("silero_vad.onnx").is_file() { bundled } else { data.join("models/voice") },

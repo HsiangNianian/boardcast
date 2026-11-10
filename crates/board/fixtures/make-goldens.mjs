@@ -27,7 +27,7 @@ const shape = (g) => ({
 })
 
 const steps = []
-const dir = join(root, 'public/demos')
+const dir = join(root, 'assets/demos')
 for (const file of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
   const demo = JSON.parse(readFileSync(join(dir, file), 'utf8'))
   let g = emptyGraph()

@@ -7,7 +7,7 @@ models/
 eval/reports/
 *.log
 .playwright-mcp/
-public/hanzi/
+assets/hanzi/
 src-tauri/llama/
 resources/llama/
 resources/voice/

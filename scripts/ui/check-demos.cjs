@@ -6,7 +6,7 @@ module.exports = async function checkDemos(page, baseUrl, evidence = 'docs/ui-ux
   page.on('pageerror', error => report.pageErrors.push(error.message));
   await page.addInitScript(() => {localStorage.setItem('boardcast.localLlm', 'http://127.0.0.1:19880'); localStorage.setItem('boardcast.log', 'open');});
   await page.route('http://127.0.0.1:19880/**', route => route.fulfill({status: 503, body: 'No local model for recorded samples'}));
-  const index = JSON.parse(await fs.readFile('public/demos/index.json', 'utf8'));
+  const index = JSON.parse(await fs.readFile('assets/demos/index.json', 'utf8'));
   const rows = () => page.evaluate(async () => {
     const db = await new Promise((yes, no) => {const r = indexedDB.open('boardcast-v2'); r.onsuccess = () => yes(r.result); r.onerror = () => no(r.error);});
     const all = await new Promise(yes => {const r = db.transaction('meetings').objectStore('meetings').getAll(); r.onsuccess = () => yes(r.result);}); db.close(); return all;
@@ -21,7 +21,7 @@ module.exports = async function checkDemos(page, baseUrl, evidence = 'docs/ui-ux
         await page.locator('.demo-pick select').selectOption(demo.id);
         await play.click(); await page.locator('.replay-dock').waitFor();
         const range = page.locator('.replay-dock input[type=range]');
-        const data = JSON.parse(await fs.readFile(`public/demos/${demo.id}.json`, 'utf8'));
+        const data = JSON.parse(await fs.readFile(`assets/demos/${demo.id}.json`, 'utf8'));
         check(Number(await range.getAttribute('max')) === data.steps.length, `${demo.id}: the recorded sample starts its complete replay`);
         await range.focus(); await range.press('End');
         await page.waitForFunction(total => Number(document.querySelector('.replay-dock input[type=range]')?.value) === total, data.steps.length);

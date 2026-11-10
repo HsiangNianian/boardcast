@@ -75,7 +75,7 @@ test('half-width and decomposed kana retain voicing without normalizing unrelate
 test('Japanese kanji absent from the Chinese font also render in an offline replay', async (t) => {
   const host = globalThis as typeof globalThis & { __boardcastHanzi?: Record<string, number[][][]> }
   const previous = host.__boardcastHanzi
-  host.__boardcastHanzi = JSON.parse(gunzipSync(readFileSync(new URL('../ink/kanji.json.gz', import.meta.url))).toString())
+  host.__boardcastHanzi = JSON.parse(gunzipSync(readFileSync(new URL('../../assets/glyphs/kanji.json.gz', import.meta.url))).toString())
   t.after(() => { host.__boardcastHanzi = previous })
   t.mock.method(globalThis, 'fetch', () => { throw new Error('Replay must work offline') })
   for (const ch of '働込峠辻気広渋沢栄実発桜駅図') {

@@ -5,7 +5,7 @@ import { getStroke } from 'perfect-freehand'
 import { ink, placeGlyph, rng } from '../src/ink/pen.ts'
 
 const ch = process.argv[2] ?? '监'
-const medians: number[][][] = JSON.parse(readFileSync(new URL(`../public/hanzi/${ch}.json`, import.meta.url), 'utf8'))
+const medians: number[][][] = JSON.parse(readFileSync(new URL(`../assets/hanzi/${ch}.json`, import.meta.url), 'utf8'))
 const r = rng(ch)
 
 /** 轮廓多边形的面积 ÷ 长度 ≈ 平均笔宽 */

@@ -7,8 +7,8 @@ import playerCss from './player.css?inline'
 import Player from './Player.tsx'
 import type { ReplayData } from './data.ts'
 import { msg, setLangChoice } from '../i18n/index.ts'
-import handwritingLicense from '../../public/licenses/handwritten-OFL.txt?raw'
-import mathLicense from '../../public/licenses/handwritten-cascadia.txt?raw'
+import handwritingLicense from '../../assets/licenses/handwritten-OFL.txt?raw'
+import mathLicense from '../../assets/licenses/handwritten-cascadia.txt?raw'
 
 const style = document.createElement('style')
 style.textContent = appCss + playerCss

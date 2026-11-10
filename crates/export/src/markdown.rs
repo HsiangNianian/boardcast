@@ -81,7 +81,10 @@ fn text(s: &str) -> String {
     if out[lead..].starts_with(['-', '+']) {
         out.insert(lead, '\\');
     }
-    let digits = out[lead..].len() - out[lead..].trim_start_matches(|c: char| c.is_ascii_digit()).len();
+    let digits = out[lead..].len()
+        - out[lead..]
+            .trim_start_matches(|c: char| c.is_ascii_digit())
+            .len();
     if digits > 0 {
         let dot = lead + digits;
         let after = out[dot..].strip_prefix('.');
@@ -104,7 +107,13 @@ fn code(s: &str) -> String {
             let longest = line.split(|c| c != '`').map(str::len).max().unwrap_or(0);
             let fence = "`".repeat(longest + 1);
             let edge = |c: Option<char>| matches!(c, Some('`' | ' '));
-            let pad = if (edge(line.chars().next()) || edge(line.chars().last())) && !line.chars().all(|c| c == ' ') { " " } else { "" };
+            let pad = if (edge(line.chars().next()) || edge(line.chars().last()))
+                && !line.chars().all(|c| c == ' ')
+            {
+                " "
+            } else {
+                ""
+            };
             format!("{fence}{pad}{line}{pad}{fence}")
         })
         .collect();
@@ -204,18 +213,39 @@ fn board(g: &Graph, h: &str, w: &Words, english: bool, out: &mut Vec<String>) {
         }
     }
 
-    let label_of = |id: &str| g.nodes.iter().find(|n| n.id == id).map(|n| n.label.as_str());
-    let dia: Vec<&Node> = g.nodes.iter().filter(|n| live(n) && is_diagram(g, n)).collect();
+    let label_of = |id: &str| {
+        g.nodes
+            .iter()
+            .find(|n| n.id == id)
+            .map(|n| n.label.as_str())
+    };
+    let dia: Vec<&Node> = g
+        .nodes
+        .iter()
+        .filter(|n| live(n) && is_diagram(g, n))
+        .collect();
     let ids: HashSet<&str> = dia.iter().map(|n| n.id.as_str()).collect();
     if !dia.is_empty() {
-        out.extend([format!("{h} {}", w.flow), String::new(), "```mermaid".into(), "flowchart LR".into()]);
+        out.extend([
+            format!("{h} {}", w.flow),
+            String::new(),
+            "```mermaid".into(),
+            "flowchart LR".into(),
+        ]);
         let mut grouped = HashSet::new();
         for group in &g.groups {
-            let members: Vec<&&Node> = dia.iter().filter(|n| n.group.as_deref() == Some(&group.id)).collect();
+            let members: Vec<&&Node> = dia
+                .iter()
+                .filter(|n| n.group.as_deref() == Some(&group.id))
+                .collect();
             if members.is_empty() {
                 continue;
             }
-            out.push(format!("  subgraph {}[\"{}\"]", group.id, mermaid(&group.label)));
+            out.push(format!(
+                "  subgraph {}[\"{}\"]",
+                group.id,
+                mermaid(&group.label)
+            ));
             for n in members {
                 out.push(format!("    {}[\"{}\"]", n.id, mermaid(&n.label)));
                 grouped.insert(n.id.as_str());
@@ -225,7 +255,9 @@ fn board(g: &Graph, h: &str, w: &Words, english: bool, out: &mut Vec<String>) {
         for n in dia.iter().filter(|n| !grouped.contains(n.id.as_str())) {
             out.push(format!("  {}[\"{}\"]", n.id, mermaid(&n.label)));
         }
-        for e in g.edges.iter().filter(|e| e.ink != "draft" && ids.contains(e.from.as_str()) && ids.contains(e.to.as_str())) {
+        for e in g.edges.iter().filter(|e| {
+            e.ink != "draft" && ids.contains(e.from.as_str()) && ids.contains(e.to.as_str())
+        }) {
             out.push(match e.label.as_deref().filter(|l| !l.is_empty()) {
                 Some(label) => format!("  {} -->|\"{}\"| {}", e.from, mermaid(label), e.to),
                 None => format!("  {} --> {}", e.from, e.to),
@@ -234,26 +266,65 @@ fn board(g: &Graph, h: &str, w: &Words, english: bool, out: &mut Vec<String>) {
         out.extend(["```".into(), String::new()]);
         for n in dia.iter().filter(|n| !n.marks.is_empty()) {
             let marks: Vec<&str> = n.marks.iter().map(|m| mark_name(m, english)).collect();
-            out.push(format!("- {}{}{}", text(&n.label), w.colon, marks.join(" · ")));
+            out.push(format!(
+                "- {}{}{}",
+                text(&n.label),
+                w.colon,
+                marks.join(" · ")
+            ));
         }
-        let notes: Vec<&Node> = g.nodes.iter().filter(|n| live(n) && is_attach(n) && n.parent.as_deref().is_some_and(|p| !p.is_empty() && ids.contains(p))).collect();
+        let notes: Vec<&Node> = g
+            .nodes
+            .iter()
+            .filter(|n| {
+                live(n)
+                    && is_attach(n)
+                    && n.parent
+                        .as_deref()
+                        .is_some_and(|p| !p.is_empty() && ids.contains(p))
+            })
+            .collect();
         for n in &notes {
             let parent = n.parent.as_deref().and_then(label_of).unwrap_or_default();
-            out.push(format!("- {}{}{}", text(parent), w.colon, attach_line(n, w)));
+            out.push(format!(
+                "- {}{}{}",
+                text(parent),
+                w.colon,
+                attach_line(n, w)
+            ));
         }
         if !notes.is_empty() {
             out.push(String::new());
         }
     }
 
-    let spans = |n: &Node| n.extra.get("spans").and_then(Value::as_array).cloned().unwrap_or_default();
-    let pins: Vec<&Node> = g.nodes.iter().filter(|n| live(n) && n.kind == Kind::Region && (!n.marks.is_empty() || !spans(n).is_empty() || g.children(&n.id).any(live))).collect();
+    let spans = |n: &Node| {
+        n.extra
+            .get("spans")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let pins: Vec<&Node> = g
+        .nodes
+        .iter()
+        .filter(|n| {
+            live(n)
+                && n.kind == Kind::Region
+                && (!n.marks.is_empty() || !spans(n).is_empty() || g.children(&n.id).any(live))
+        })
+        .collect();
     if !pins.is_empty() {
         out.extend([format!("{h} {}", w.annotations), String::new()]);
         for n in pins {
             out.push(format!("- {}", marked(n)));
             for s in spans(n) {
-                out.push(format!("   - {}{}{}", mark_name(s["mark"].as_str().unwrap_or_default(), english), w.colon, text(s["text"].as_str().unwrap_or_default())));
+                out.push(format!(
+                    "   - {}{}{}",
+                    mark_name(s["mark"].as_str().unwrap_or_default(), english),
+                    w.colon,
+                    text(s["text"].as_str().unwrap_or_default())
+                ));
             }
             for c in g.children(&n.id).filter(|n| live(n)) {
                 out.push(format!("   - {}", attach_line(c, w)));
@@ -262,7 +333,18 @@ fn board(g: &Graph, h: &str, w: &Words, english: bool, out: &mut Vec<String>) {
         out.push(String::new());
     }
 
-    let loose: Vec<&Node> = g.nodes.iter().filter(|n| live(n) && is_attach(n) && n.parent.as_deref().filter(|p| !p.is_empty()).is_none_or(|p| label_of(p).is_none())).collect();
+    let loose: Vec<&Node> = g
+        .nodes
+        .iter()
+        .filter(|n| {
+            live(n)
+                && is_attach(n)
+                && n.parent
+                    .as_deref()
+                    .filter(|p| !p.is_empty())
+                    .is_none_or(|p| label_of(p).is_none())
+        })
+        .collect();
     if !loose.is_empty() {
         out.extend([format!("{h} {}", w.open), String::new()]);
         out.extend(loose.iter().map(|n| format!("- {}", attach_line(n, w))));
@@ -270,12 +352,20 @@ fn board(g: &Graph, h: &str, w: &Words, english: bool, out: &mut Vec<String>) {
     }
 
     let is_dia = |id: &str| dia.iter().any(|n| n.id == id);
-    let cross: Vec<_> = g.edges.iter().filter(|e| e.ink != "draft" && !(is_dia(&e.from) && is_dia(&e.to))).collect();
+    let cross: Vec<_> = g
+        .edges
+        .iter()
+        .filter(|e| e.ink != "draft" && !(is_dia(&e.from) && is_dia(&e.to)))
+        .collect();
     if !cross.is_empty() {
         out.extend([format!("{h} {}", w.links), String::new()]);
         for e in cross {
             let name = |id: &str| text(label_of(id).unwrap_or(id));
-            let label = e.label.as_deref().filter(|l| !l.is_empty()).map_or(String::new(), |l| format!("{}{}", w.colon, text(l)));
+            let label = e
+                .label
+                .as_deref()
+                .filter(|l| !l.is_empty())
+                .map_or(String::new(), |l| format!("{}{}", w.colon, text(l)));
             out.push(format!("- {} → {}{label}", name(&e.from), name(&e.to)));
         }
         out.push(String::new());
@@ -285,9 +375,19 @@ fn board(g: &Graph, h: &str, w: &Words, english: bool, out: &mut Vec<String>) {
 pub fn markdown(doc: &Doc, current: usize) -> String {
     let w = if doc.english { &EN } else { &ZH };
     let board_name = |n: u64| w.board.replace("{}", &n.to_string());
-    let mut out = vec![format!("# {}", text(&doc.title)), String::new(), format!("> {} · boardcast", doc.exported), String::new()];
+    let mut out = vec![
+        format!("# {}", text(&doc.title)),
+        String::new(),
+        format!("> {} · boardcast", doc.exported),
+        String::new(),
+    ];
     if !doc.summary.trim().is_empty() {
-        out.extend([format!("## {}", w.summary), String::new(), doc.summary.trim().to_string(), String::new()]);
+        out.extend([
+            format!("## {}", w.summary),
+            String::new(),
+            doc.summary.trim().to_string(),
+            String::new(),
+        ]);
     }
     let many = doc.boards.len() > 1;
     if many {
@@ -330,7 +430,8 @@ mod tests {
 
     #[test]
     fn every_meeting_matches_the_typescript_engine() {
-        let goldens: Value = serde_json::from_str(include_str!("../../board/fixtures/goldens.json")).unwrap();
+        let goldens: Value =
+            serde_json::from_str(include_str!("../../board/fixtures/goldens.json")).unwrap();
         let cases = goldens["markdown"].as_array().unwrap();
         assert!(cases.len() >= 30);
         for case in cases {
@@ -344,13 +445,27 @@ mod tests {
                 english: case["lang"] == "en",
                 omits_visuals: false,
             };
-            assert_eq!(markdown(&doc, 0), case["output"].as_str().unwrap(), "{}", case["name"]);
+            assert_eq!(
+                markdown(&doc, 0),
+                case["output"].as_str().unwrap(),
+                "{}",
+                case["name"]
+            );
         }
     }
 
     #[test]
     fn a_meeting_with_imported_pages_says_what_is_missing() {
-        let doc = Doc { title: "t".into(), exported: String::new(), began: String::new(), summary: String::new(), boards: vec![Graph::default()], lines: vec![], english: true, omits_visuals: true };
+        let doc = Doc {
+            title: "t".into(),
+            exported: String::new(),
+            began: String::new(),
+            summary: String::new(),
+            boards: vec![Graph::default()],
+            lines: vec![],
+            english: true,
+            omits_visuals: true,
+        };
         assert!(markdown(&doc, 0).contains("This Markdown omits"));
     }
 }

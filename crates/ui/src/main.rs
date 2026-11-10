@@ -26,7 +26,11 @@ fn main() -> Result<()> {
     #[cfg(windows)]
     if args.peek().is_some_and(|a| a.starts_with("--")) {
         // SAFETY: a plain call; it fails harmlessly when there is no console to attach to.
-        unsafe { windows_sys::Win32::System::Console::AttachConsole(windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS) };
+        unsafe {
+            windows_sys::Win32::System::Console::AttachConsole(
+                windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS,
+            )
+        };
     }
     match args.peek().map(String::as_str) {
         Some("--version") => {
@@ -37,7 +41,11 @@ fn main() -> Result<()> {
         Some("--self-check") => {
             let (ok, report) = resources::locate(&boardcast_meetings::default_dir()?).self_check();
             println!("{report}");
-            if ok { Ok(()) } else { bail!("this install is incomplete") }
+            if ok {
+                Ok(())
+            } else {
+                bail!("this install is incomplete")
+            }
         }
         Some("bench") => {
             args.next();
@@ -49,7 +57,9 @@ fn main() -> Result<()> {
 
 /// Update from the command line, the same way the window does.
 fn update() -> Result<()> {
-    let Some(prefix) = boardcast_update::installed_prefix() else { bail!("this copy was not installed from a package") };
+    let Some(prefix) = boardcast_update::installed_prefix() else {
+        bail!("this copy was not installed from a package")
+    };
     let Some(release) = boardcast_update::check()? else {
         println!("boardcast {} is up to date", boardcast_update::VERSION);
         return Ok(());
@@ -57,7 +67,9 @@ fn update() -> Result<()> {
     println!("downloading {}", release.version);
     let dir = boardcast_meetings::default_dir()?.join("updates");
     let cancel = std::sync::atomic::AtomicBool::new(false);
-    let Some(archive) = boardcast_update::fetch(&release, &dir, &cancel, &mut |_| {})? else { bail!("cancelled") };
+    let Some(archive) = boardcast_update::fetch(&release, &dir, &cancel, &mut |_| {})? else {
+        bail!("cancelled")
+    };
     let result = boardcast_update::install(&archive, &release, &prefix);
     // A package that failed verification or would not run is no use to retry from.
     let _ = std::fs::remove_file(&archive);

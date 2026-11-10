@@ -38,7 +38,21 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), interface_language: "auto".into(), appearance: "auto".into(), input: String::new() }
+        Self {
+            base_url: String::new(),
+            api_key: String::new(),
+            model: String::new(),
+            enabled: false,
+            diarize: true,
+            turn_pages: false,
+            glossary: String::new(),
+            templates: vec![],
+            system_speech: false,
+            speech_language: "auto".into(),
+            interface_language: "auto".into(),
+            appearance: "auto".into(),
+            input: String::new(),
+        }
     }
 }
 
@@ -47,7 +61,8 @@ fn config_dir() -> Result<PathBuf> {
         return Ok(PathBuf::from(dir));
     }
     #[cfg(target_os = "macos")]
-    let base = PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join("Library/Application Support");
+    let base = PathBuf::from(std::env::var("HOME").context("HOME is not set")?)
+        .join("Library/Application Support");
     #[cfg(windows)]
     let base = PathBuf::from(std::env::var("APPDATA").context("APPDATA is not set")?);
     #[cfg(not(any(target_os = "macos", windows)))]
@@ -61,7 +76,10 @@ fn config_dir() -> Result<PathBuf> {
 impl Settings {
     /// A missing or damaged file means nothing is configured yet.
     pub fn load() -> Self {
-        config_dir().ok().and_then(|d| fs::read_to_string(d.join("remote.json")).ok()).map_or_else(Self::default, |text| Self::parse(&text))
+        config_dir()
+            .ok()
+            .and_then(|d| fs::read_to_string(d.join("remote.json")).ok())
+            .map_or_else(Self::default, |text| Self::parse(&text))
     }
 
     fn parse(text: &str) -> Self {
@@ -79,14 +97,35 @@ impl Settings {
                 .as_array()
                 .map(|all| {
                     all.iter()
-                        .filter_map(|t| Some((t["name"].as_str()?.to_string(), t["topics"].as_array()?.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())))
+                        .filter_map(|t| {
+                            Some((
+                                t["name"].as_str()?.to_string(),
+                                t["topics"]
+                                    .as_array()?
+                                    .iter()
+                                    .filter_map(|x| x.as_str().map(str::to_string))
+                                    .collect(),
+                            ))
+                        })
                         .collect()
                 })
                 .unwrap_or_default(),
             system_speech: v["systemSpeech"].as_bool().unwrap_or(false),
-            speech_language: v["speechLanguage"].as_str().filter(|l| !l.is_empty()).unwrap_or("auto").to_string(),
-            interface_language: v["interfaceLanguage"].as_str().filter(|l| !l.is_empty()).unwrap_or("auto").to_string(),
-            appearance: v["appearance"].as_str().filter(|l| !l.is_empty()).unwrap_or("auto").to_string(),
+            speech_language: v["speechLanguage"]
+                .as_str()
+                .filter(|l| !l.is_empty())
+                .unwrap_or("auto")
+                .to_string(),
+            interface_language: v["interfaceLanguage"]
+                .as_str()
+                .filter(|l| !l.is_empty())
+                .unwrap_or("auto")
+                .to_string(),
+            appearance: v["appearance"]
+                .as_str()
+                .filter(|l| !l.is_empty())
+                .unwrap_or("auto")
+                .to_string(),
             input: text("input"),
         }
     }
@@ -94,7 +133,9 @@ impl Settings {
     pub fn save(&self) -> Result<()> {
         let dir = config_dir()?;
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "turnPages": self.turn_pages, "glossary": self.glossary, "templates": self.templates.iter().map(|(name, topics)| json!({ "name": name, "topics": topics })).collect::<Vec<_>>(), "systemSpeech": self.system_speech, "speechLanguage": self.speech_language, "interfaceLanguage": self.interface_language, "appearance": self.appearance, "input": self.input }))?;
+        let text = serde_json::to_string_pretty(
+            &json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "turnPages": self.turn_pages, "glossary": self.glossary, "templates": self.templates.iter().map(|(name, topics)| json!({ "name": name, "topics": topics })).collect::<Vec<_>>(), "systemSpeech": self.system_speech, "speechLanguage": self.speech_language, "interfaceLanguage": self.interface_language, "appearance": self.appearance, "input": self.input }),
+        )?;
         let tmp = dir.join("remote.json.tmp");
         // Private from the first byte: the key must never sit in a file others can read.
         let _ = fs::remove_file(&tmp);
@@ -103,7 +144,9 @@ impl Settings {
         // Only this user may read the key. A Windows profile folder is private to its user already.
         #[cfg(unix)]
         options.mode(0o600);
-        let mut file = options.open(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
+        let mut file = options
+            .open(&tmp)
+            .with_context(|| format!("creating {}", tmp.display()))?;
         file.write_all(text.as_bytes())?;
         file.sync_all()?;
         fs::rename(&tmp, dir.join("remote.json")).context("saving the model settings")?;
@@ -112,7 +155,9 @@ impl Settings {
 
     /// Whether the fields needed for a request are filled in.
     pub fn is_complete(&self) -> bool {
-        !self.base_url.trim().is_empty() && !self.api_key.trim().is_empty() && !self.model.trim().is_empty()
+        !self.base_url.trim().is_empty()
+            && !self.api_key.trim().is_empty()
+            && !self.model.trim().is_empty()
     }
 
     /// The first and last few characters, for showing which key is saved.
@@ -121,7 +166,11 @@ impl Settings {
         match chars.len() {
             0 => None,
             1..=7 => Some("…".to_string()),
-            n => Some(format!("{}…{}", chars[..3].iter().collect::<String>(), chars[n - 4..].iter().collect::<String>())),
+            n => Some(format!(
+                "{}…{}",
+                chars[..3].iter().collect::<String>(),
+                chars[n - 4..].iter().collect::<String>()
+            )),
         }
     }
 }
@@ -132,7 +181,9 @@ mod tests {
 
     #[test]
     fn reads_the_older_apps_file() {
-        let s = Settings::parse(r#"{"baseUrl":"https://api.deepseek.com","apiKey":"sk-test","model":"deepseek-flash","enabled":true}"#);
+        let s = Settings::parse(
+            r#"{"baseUrl":"https://api.deepseek.com","apiKey":"sk-test","model":"deepseek-flash","enabled":true}"#,
+        );
         assert_eq!(s.base_url, "https://api.deepseek.com");
         assert!(s.enabled && s.is_complete());
         assert_eq!(Settings::parse("not json"), Settings::default());
@@ -140,7 +191,13 @@ mod tests {
 
     #[test]
     fn the_hint_never_shows_the_whole_key() {
-        let key = |k: &str| Settings { api_key: k.into(), ..Settings::default() }.key_hint();
+        let key = |k: &str| {
+            Settings {
+                api_key: k.into(),
+                ..Settings::default()
+            }
+            .key_hint()
+        };
         assert_eq!(key(""), None);
         assert_eq!(key("short").as_deref(), Some("…"));
         assert_eq!(key("sk-1234567890abcdef").as_deref(), Some("sk-…cdef"));
@@ -152,10 +209,31 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("boardcast-settings-{}", std::process::id()));
         std::env::set_var("BOARDCAST_CONFIG", &dir);
-        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, turn_pages: true, glossary: "鉴权; API = A P I".into(), templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])], system_speech: true, speech_language: "ja-JP".into(), interface_language: "zh".into(), appearance: "dark".into(), input: "pulse:monitor".into() };
+        let s = Settings {
+            base_url: "https://x".into(),
+            api_key: "sk-secret".into(),
+            model: "m".into(),
+            enabled: true,
+            diarize: false,
+            turn_pages: true,
+            glossary: "鉴权; API = A P I".into(),
+            templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])],
+            system_speech: true,
+            speech_language: "ja-JP".into(),
+            interface_language: "zh".into(),
+            appearance: "dark".into(),
+            input: "pulse:monitor".into(),
+        };
         s.save().unwrap();
         assert_eq!(Settings::load(), s);
-        assert_eq!(fs::metadata(dir.join("remote.json")).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(
+            fs::metadata(dir.join("remote.json"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
         std::env::remove_var("BOARDCAST_CONFIG");
         let _ = fs::remove_dir_all(dir);
     }

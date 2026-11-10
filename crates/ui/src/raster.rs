@@ -32,7 +32,12 @@ impl Default for Layer {
 
 impl Layer {
     pub fn with_scale(scale: f32) -> Self {
-        Self { tiles: HashMap::new(), uploads: 0, stale: vec![], scale }
+        Self {
+            tiles: HashMap::new(),
+            uploads: 0,
+            stale: vec![],
+            scale,
+        }
     }
 
     /// Give up this layer; the caller drops the returned textures during a paint.
@@ -60,10 +65,24 @@ impl Layer {
         let pad = 1.0 / scale;
         for ty in tile_of(area.top() - pad)..=tile_of(area.bottom() + pad) {
             for tx in tile_of(area.left() - pad)..=tile_of(area.right() + pad) {
-                let Some(pixels) = Pixmap::new(TILE as u32, TILE as u32) else { continue };
-                let tile = self.tiles.entry((tx, ty)).or_insert(Tile { pixels, image: None, dirty: false });
-                let at = Transform::from_row(scale, 0.0, 0.0, scale, (-tx * TILE) as f32, (-ty * TILE) as f32);
-                tile.pixels.fill_path(&path, &paint, FillRule::Winding, at, None);
+                let Some(pixels) = Pixmap::new(TILE as u32, TILE as u32) else {
+                    continue;
+                };
+                let tile = self.tiles.entry((tx, ty)).or_insert(Tile {
+                    pixels,
+                    image: None,
+                    dirty: false,
+                });
+                let at = Transform::from_row(
+                    scale,
+                    0.0,
+                    0.0,
+                    scale,
+                    (-tx * TILE) as f32,
+                    (-ty * TILE) as f32,
+                );
+                tile.pixels
+                    .fill_path(&path, &paint, FillRule::Winding, at, None);
                 tile.dirty = true;
             }
         }
@@ -71,12 +90,19 @@ impl Layer {
 
     /// Forget everything; the old textures leave the GPU atlas on the next paint.
     pub fn clear(&mut self) {
-        self.stale.extend(self.tiles.drain().filter_map(|(_, tile)| tile.image));
+        self.stale
+            .extend(self.tiles.drain().filter_map(|(_, tile)| tile.image));
     }
 
     /// Paint at `k` screen pixels per board unit, with the board origin at `origin`. Only tiles
     /// inside `clip` are uploaded and drawn, so a large board costs what is on screen.
-    pub fn paint(&mut self, window: &mut Window, origin: Point<Pixels>, k: f32, clip: Option<Bounds<Pixels>>) {
+    pub fn paint(
+        &mut self,
+        window: &mut Window,
+        origin: Point<Pixels>,
+        k: f32,
+        clip: Option<Bounds<Pixels>>,
+    ) {
         for image in self.stale.drain(..) {
             let _ = window.drop_image(image);
         }
@@ -87,9 +113,15 @@ impl Layer {
             let top = (f32::from(origin.y) + *ty as f32 * side).round();
             let right = (f32::from(origin.x) + (*tx + 1) as f32 * side).round();
             let bottom = (f32::from(origin.y) + (*ty + 1) as f32 * side).round();
-            let bounds: Bounds<Pixels> = Bounds::new(point(px(left), px(top)), size(px(right - left), px(bottom - top)));
+            let bounds: Bounds<Pixels> = Bounds::new(
+                point(px(left), px(top)),
+                size(px(right - left), px(bottom - top)),
+            );
             if clip.is_some_and(|c| {
-                right < f32::from(c.origin.x) || bottom < f32::from(c.origin.y) || left > f32::from(c.origin.x) + f32::from(c.size.width) || top > f32::from(c.origin.y) + f32::from(c.size.height)
+                right < f32::from(c.origin.x)
+                    || bottom < f32::from(c.origin.y)
+                    || left > f32::from(c.origin.x) + f32::from(c.size.width)
+                    || top > f32::from(c.origin.y) + f32::from(c.size.height)
             }) {
                 continue;
             }
@@ -101,7 +133,9 @@ impl Layer {
                 }
                 tile.image = Some(Arc::new(to_image(&tile.pixels)));
             }
-            let Some(image) = tile.image.clone() else { continue };
+            let Some(image) = tile.image.clone() else {
+                continue;
+            };
             let _ = window.paint_image(bounds, bounds, Corners::default(), image, 0, false);
         }
     }
@@ -124,6 +158,7 @@ fn to_image(pixels: &Pixmap) -> RenderImage {
         }
         px.swap(0, 2);
     }
-    let buffer = RgbaImage::from_raw(pixels.width(), pixels.height(), raw).expect("tile buffer size");
+    let buffer =
+        RgbaImage::from_raw(pixels.width(), pixels.height(), raw).expect("tile buffer size");
     RenderImage::new([Frame::new(buffer)])
 }

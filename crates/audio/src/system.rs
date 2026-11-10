@@ -27,9 +27,22 @@ impl SystemSpeech {
             .stdout(Stdio::piped())
             .spawn()
             .with_context(|| format!("starting {}", helper.display()))?;
-        let input = child.stdin.take().context("no input to the speech helper")?;
-        let output = BufReader::new(child.stdout.take().context("no output from the speech helper")?);
-        let mut speech = Self { child, input, output, engine: String::new() };
+        let input = child
+            .stdin
+            .take()
+            .context("no input to the speech helper")?;
+        let output = BufReader::new(
+            child
+                .stdout
+                .take()
+                .context("no output from the speech helper")?,
+        );
+        let mut speech = Self {
+            child,
+            input,
+            output,
+            engine: String::new(),
+        };
         loop {
             let event = speech.next_event()?;
             match event["type"].as_str() {
@@ -37,8 +50,16 @@ impl SystemSpeech {
                     speech.engine = event["engine"].as_str().unwrap_or_default().to_string();
                     return Ok(speech);
                 }
-                Some("error") => bail!("{}", event["message"].as_str().unwrap_or("the system's speech recognition did not start")),
-                Some("fallback") => eprintln!("SpeechAnalyzer could not be used, so the older recognizer is: {}", event["message"].as_str().unwrap_or_default()),
+                Some("error") => bail!(
+                    "{}",
+                    event["message"]
+                        .as_str()
+                        .unwrap_or("the system's speech recognition did not start")
+                ),
+                Some("fallback") => eprintln!(
+                    "SpeechAnalyzer could not be used, so the older recognizer is: {}",
+                    event["message"].as_str().unwrap_or_default()
+                ),
                 _ => {}
             }
         }
@@ -66,12 +87,24 @@ impl Recognizer for SystemSpeech {
         for sample in samples {
             bytes.extend_from_slice(&sample.to_le_bytes());
         }
-        self.input.write_all(&bytes).and_then(|()| self.input.flush()).context("sending a sentence to the speech helper")?;
+        self.input
+            .write_all(&bytes)
+            .and_then(|()| self.input.flush())
+            .context("sending a sentence to the speech helper")?;
         loop {
             let event = self.next_event()?;
             match event["type"].as_str() {
-                Some("text") => return Ok(event["text"].as_str().unwrap_or_default().trim().to_string()),
-                Some("error") => bail!("{}", event["message"].as_str().unwrap_or("recognition failed")),
+                Some("text") => {
+                    return Ok(event["text"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .trim()
+                        .to_string())
+                }
+                Some("error") => bail!(
+                    "{}",
+                    event["message"].as_str().unwrap_or("recognition failed")
+                ),
                 _ => {}
             }
         }
@@ -112,12 +145,17 @@ while True:
 
     fn fake_helper() -> Option<std::path::PathBuf> {
         Command::new("python3").arg("--version").output().ok()?;
-        let dir = std::env::temp_dir().join(format!("boardcast-speech-test-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("boardcast-speech-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).ok()?;
         let script = dir.join("fake.py");
         std::fs::write(&script, FAKE).ok()?;
         let helper = dir.join("boardcast-speech");
-        std::fs::write(&helper, format!("#!/bin/sh\nexec python3 -I {} \"$@\"\n", script.display())).ok()?;
+        std::fs::write(
+            &helper,
+            format!("#!/bin/sh\nexec python3 -I {} \"$@\"\n", script.display()),
+        )
+        .ok()?;
         #[cfg(not(unix))]
         return None;
         #[cfg(unix)]
@@ -133,7 +171,10 @@ while True:
         let Some(helper) = fake_helper() else { return };
         let mut speech = SystemSpeech::start(&helper, "ja-JP").unwrap();
         assert_eq!(speech.engine, "fake");
-        assert_eq!(speech.recognize(&[0.5; 1600]).unwrap(), "1600 samples, sum 800.0");
+        assert_eq!(
+            speech.recognize(&[0.5; 1600]).unwrap(),
+            "1600 samples, sum 800.0"
+        );
         assert_eq!(speech.recognize(&[0.25; 8]).unwrap(), "8 samples, sum 2.0");
     }
 

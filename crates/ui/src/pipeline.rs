@@ -1,7 +1,7 @@
 //! Wires the audio chain to the board agent on background threads, and reports to the UI over a channel.
 
-use boardcast_agent::{Backend, Guidance, Said, Session, Update};
 use anyhow::Result;
+use boardcast_agent::{Backend, Guidance, Said, Session, Update};
 use boardcast_audio::system::SystemSpeech;
 use boardcast_audio::{capture, play_wav, Ear, Recognizers, Sentence};
 use boardcast_board::graph::Utterance;
@@ -15,13 +15,24 @@ use std::time::{Duration, Instant};
 pub enum Event {
     Agent(Update),
     Level(f32),
-    Heard { meeting: u64, speaker: Option<String>, text: String, asr_ms: Option<u128> },
+    Heard {
+        meeting: u64,
+        speaker: Option<String>,
+        text: String,
+        asr_ms: Option<u128>,
+    },
     /// A sentence from the microphone or a recording. The window works out who said it, as it holds
     /// the meeting's voices, and passes it on to the model.
-    Spoken { meeting: u64, sentence: Sentence },
+    Spoken {
+        meeting: u64,
+        sentence: Sentence,
+    },
     Failed(String),
     /// What recognizes speech now, and why it isn't what was chosen, if it isn't.
-    Hearing { with: String, note: Option<String> },
+    Hearing {
+        with: String,
+        note: Option<String>,
+    },
     /// A scripted source has finished and every queued line has been drawn.
     Done,
 }
@@ -40,7 +51,10 @@ pub struct Speech {
 impl Speech {
     /// Apple's helper sits beside the app's executable in a Mac package.
     pub fn helper_path() -> Option<PathBuf> {
-        let helper = std::env::current_exe().ok()?.parent()?.join("boardcast-speech");
+        let helper = std::env::current_exe()
+            .ok()?
+            .parent()?
+            .join("boardcast-speech");
         helper.is_file().then_some(helper)
     }
 }
@@ -50,8 +64,18 @@ impl Speech {
 fn ear_for(models: &Path, speech: &Speech) -> Result<(Ear, String, Option<String>)> {
     let system = |helper: &Path| -> Result<(Ear, String)> {
         let recognizer = SystemSpeech::start(helper, &speech.language)?;
-        let with = format!("Apple {}", if recognizer.engine == "analyzer" { "SpeechAnalyzer" } else { "SFSpeechRecognizer" });
-        Ok((Ear::with(models, Recognizers::system(Box::new(recognizer)))?, with))
+        let with = format!(
+            "Apple {}",
+            if recognizer.engine == "analyzer" {
+                "SpeechAnalyzer"
+            } else {
+                "SFSpeechRecognizer"
+            }
+        );
+        Ok((
+            Ear::with(models, Recognizers::system(Box::new(recognizer)))?,
+            with,
+        ))
     };
     let mut note = None;
     if let Some(helper) = speech.helper.as_deref().filter(|_| speech.system) {
@@ -88,7 +112,13 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn start(backend: Backend, guidance: Option<Guidance>, voice_models: PathBuf, speech: Speech, script: Script) -> Self {
+    pub fn start(
+        backend: Backend,
+        guidance: Option<Guidance>,
+        voice_models: PathBuf,
+        speech: Speech,
+        script: Script,
+    ) -> Self {
         let (event_tx, events) = channel();
         let (said, said_rx) = channel::<Said>();
         let (drained_tx, drained_rx) = channel::<()>();
@@ -120,7 +150,10 @@ impl Pipeline {
             };
             let mut ear = load(&speech);
             let mut heard = |sentence: Sentence| {
-                let _ = tx.send(Event::Spoken { meeting: stamp.load(Ordering::SeqCst), sentence });
+                let _ = tx.send(Event::Spoken {
+                    meeting: stamp.load(Ordering::SeqCst),
+                    sentence,
+                });
             };
             loop {
                 // A new choice replaces the ear; what the old one was hearing is finished first.
@@ -178,19 +211,42 @@ impl Pipeline {
             }
             for turn in script.turns {
                 let meeting = stamp.load(Ordering::SeqCst);
-                let _ = tx.send(Event::Heard { meeting, speaker: turn.speaker.clone(), text: turn.text.clone(), asr_ms: None });
-                let _ = to_model.send(Said { line: turn, ended: Instant::now(), asr_ms: None, meeting, renames: 0 });
+                let _ = tx.send(Event::Heard {
+                    meeting,
+                    speaker: turn.speaker.clone(),
+                    text: turn.text.clone(),
+                    asr_ms: None,
+                });
+                let _ = to_model.send(Said {
+                    line: turn,
+                    ended: Instant::now(),
+                    asr_ms: None,
+                    meeting,
+                    renames: 0,
+                });
                 thread::sleep(Duration::from_millis(2500));
             }
             // Lines can merge into one request, so this waits for silence rather than a count.
             let mut done = 0_usize;
-            while drained_rx.recv_timeout(Duration::from_secs(if done == 0 { 240 } else { 12 })).is_ok() {
+            while drained_rx
+                .recv_timeout(Duration::from_secs(if done == 0 { 240 } else { 12 }))
+                .is_ok()
+            {
                 done += 1;
             }
             let _ = tx.send(Event::Done);
         });
 
-        Self { said, events, session, samples, mic_stop: None, event_tx, script_start, speech: speech_tx }
+        Self {
+            said,
+            events,
+            session,
+            samples,
+            mic_stop: None,
+            event_tx,
+            script_start,
+            speech: speech_tx,
+        }
     }
 
     /// The window is ready for a scripted meeting to begin.
@@ -224,7 +280,13 @@ impl Pipeline {
         thread::spawn(move || {
             let warn = tx.clone();
             let fell_back = move |_: &str| {
-                let _ = warn.send(Event::Failed(crate::i18n::tr("The chosen input isn't connected, so the default one is listening.", "选择的输入设备没有连接，正在用默认设备收音。").into()));
+                let _ = warn.send(Event::Failed(
+                    crate::i18n::tr(
+                        "The chosen input isn't connected, so the default one is listening.",
+                        "选择的输入设备没有连接，正在用默认设备收音。",
+                    )
+                    .into(),
+                ));
             };
             if let Err(e) = capture(&stop, &samples, input.as_deref(), fell_back) {
                 let _ = tx.send(Event::Failed(format!("{e:#}")));

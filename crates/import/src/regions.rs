@@ -45,13 +45,21 @@ pub fn page_graph(w: f64, h: f64, number: Option<u32>, areas: &[Area]) -> Graph 
     g.extra.insert("underlay".into(), size);
     let mut used: HashMap<String, u32> = HashMap::new();
     for a in areas {
-        let source = a.name.as_deref().unwrap_or(&a.text).replace(['「', '」'], "");
+        let source = a
+            .name
+            .as_deref()
+            .unwrap_or(&a.text)
+            .replace(['「', '」'], "");
         let flat = source.split_whitespace().collect::<Vec<_>>().join(" ");
         if flat.is_empty() {
             continue;
         }
         let long = utf16_len(&flat) > MAX;
-        let mut label = if long { format!("{}…", utf16_prefix(&flat, MAX - 1)) } else { flat.clone() };
+        let mut label = if long {
+            format!("{}…", utf16_prefix(&flat, MAX - 1))
+        } else {
+            flat.clone()
+        };
         // Two blocks that start alike, such as two table rows, must stay two.
         let n = used.entry(label.clone()).or_insert(0);
         *n += 1;
@@ -68,7 +76,18 @@ pub fn page_graph(w: f64, h: f64, number: Option<u32>, areas: &[Area]) -> Graph 
         }
         let id = format!("n{}", g.next_node);
         g.next_node += 1;
-        let node: Node = Ordered::new(NodeData { id, label, aliases: vec![], kind: Kind::Region, parent: None, group: None, marks: vec![], icon: None, ink: "ink".into(), extra });
+        let node: Node = Ordered::new(NodeData {
+            id,
+            label,
+            aliases: vec![],
+            kind: Kind::Region,
+            parent: None,
+            group: None,
+            marks: vec![],
+            icon: None,
+            ink: "ink".into(),
+            extra,
+        });
         g.nodes.push(node);
     }
     g

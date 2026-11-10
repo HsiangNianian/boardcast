@@ -57,23 +57,36 @@ impl Resources {
 
     /// Whether everything an install promises is present, as JSON for packaging checks.
     pub fn self_check(&self) -> (bool, String) {
-        let checks = [
+        // Packages differ in their speech models; the variant says which ones this one promises.
+        let variant = self.voice.parent().map(boardcast_update::variant_of).unwrap_or_default();
+        let model = |name: &'static str, file: &str| (name, self.voice.join(file));
+        let sense_voice = [model("speech model", "sense-voice/model.int8.onnx"), model("speech tokens", "sense-voice/tokens.txt")];
+        let english = [model("English speech model", "parakeet-en/encoder.int8.onnx")];
+        let japanese = [model("Japanese speech model", "reazon-ja/encoder-epoch-99-avg-1.int8.onnx")];
+        let speech: Vec<(&str, PathBuf)> = match variant.as_str() {
+            "ja" => japanese.into(),
+            "en" => english.into(),
+            "sensevoice" => sense_voice.into(),
+            "apple" => vec![("Apple speech helper", std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join("boardcast-speech"))).unwrap_or_default())],
+            _ => sense_voice.into_iter().chain(english).chain(japanese).collect(),
+        };
+        let checks: Vec<(&str, PathBuf)> = [
             ("glyphs", self.hanzi_path().to_path_buf()),
             ("llama-server", self.binaries.join("llama-server")),
             ("voice activity model", self.voice.join("silero_vad.onnx")),
-            ("speech model", self.voice.join("sense-voice/model.int8.onnx")),
-            ("speech tokens", self.voice.join("sense-voice/tokens.txt")),
             ("speaker model", self.voice.join("speaker/campplus_zh_en.onnx")),
-            ("English speech model", self.voice.join("parakeet-en/encoder.int8.onnx")),
-            ("Japanese speech model", self.voice.join("reazon-ja/encoder-epoch-99-avg-1.int8.onnx")),
             ("PDF library", boardcast_import::pdf::library_file(&self.pdfium)),
-        ];
+        ]
+        .into_iter()
+        .chain(speech)
+        .collect();
         let rows: Vec<_> = checks.iter().map(|(name, path)| json!({ "name": name, "path": path, "ok": path.exists() })).collect();
         let ok = checks.iter().all(|(_, path)| path.exists());
         let gpus = boardcast_agent::list_gpus(&self.binaries);
         let report = json!({
             "version": boardcast_update::VERSION,
             "installed": self.installed,
+            "variant": if variant.is_empty() { "full" } else { variant.as_str() },
             "ok": ok,
             "checks": rows,
             "gpus": gpus.iter().map(|g| json!({ "id": g.id, "name": g.name, "mib": g.total_mib, "discrete": g.discrete })).collect::<Vec<_>>(),

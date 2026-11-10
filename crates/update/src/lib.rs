@@ -1,6 +1,8 @@
 //! Updating an installed app: find a newer release, download it, prove it is genuine, and swap it in.
 //!
-//! Releases live under their own `gpui-latest` tag, so the older app's update channel never sees them.
+//! The manifest is read from the latest release. `gpui-latest`, where the alphas were published, carries a
+//! copy so those installs find it too; the older app's update channel never sees either.
+//! A package comes in variants that differ only in their speech models, and an install keeps to its own.
 //! Packages are signed with the older app's update key. The signature covers the whole package, so
 //! nothing in the manifest needs to be trusted, including the version: that is read from inside the
 //! verified package, which is what stops an old signed package being served as an update.
@@ -20,7 +22,7 @@ use std::process::Command;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-const MANIFEST_URL: &str = "https://github.com/HsiangNianian/boardcast/releases/download/gpui-latest/manifest.json";
+const MANIFEST_URL: &str = "https://github.com/HsiangNianian/boardcast/releases/latest/download/manifest.json";
 /// The older app's update key. A test build can name another at compile time, never at run time.
 const PUBLIC_KEY: &str = match option_env!("BOARDCAST_UPDATE_PUBKEY") {
     Some(key) => key,
@@ -45,6 +47,21 @@ pub struct Release {
 
 fn platform() -> String {
     format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS)
+}
+
+/// Which package the resources in `lib` came from: empty for the full one, or a name like "ja". A
+/// package from before variants has no record of one, and was the full one.
+pub fn variant_of(lib: &Path) -> String {
+    fs::read_to_string(lib.join("variant")).map(|v| v.trim().to_string()).ok().filter(|v| v != "full").unwrap_or_default()
+}
+
+/// The manifest's key for a platform and variant: `x86_64-linux` for the full package, `x86_64-linux-ja` for another.
+fn platform_key(platform: &str, variant: &str) -> String {
+    if variant.is_empty() {
+        platform.to_string()
+    } else {
+        format!("{platform}-{variant}")
+    }
 }
 
 /// The release for this platform, if it is newer than `current`.
@@ -77,7 +94,8 @@ pub fn check() -> Result<Option<Release>> {
         Err(ureq::Error::Status(404, _)) => return Ok(None),
         Err(e) => return Err(anyhow!("could not reach the update server: {e}")),
     };
-    parse_manifest(&text, VERSION, &platform())
+    let variant = installed_prefix().map(|prefix| variant_of(&prefix.join("lib/boardcast"))).unwrap_or_default();
+    parse_manifest(&text, VERSION, &platform_key(&platform(), &variant))
 }
 
 /// Download a release into `dir`, resuming an earlier attempt and checking its size and hash.
@@ -285,6 +303,21 @@ mod tests {
         assert!(parse_manifest(&manifest("0.22.0-alpha.2"), "0.22.0", "x86_64-linux").unwrap().is_none());
         assert!(parse_manifest("{ damaged", "0.21.0", "x86_64-linux").is_err());
         assert!(parse_manifest(&manifest("banana"), "0.21.0", "x86_64-linux").is_err());
+        // Another variant's install looks for its own package, which this manifest does not have.
+        assert_eq!(parse_manifest(&manifest("0.22.0"), "0.21.0", &platform_key("x86_64-linux", "ja")).unwrap(), None);
+        assert_eq!(platform_key("x86_64-linux", ""), "x86_64-linux");
+    }
+
+    #[test]
+    fn an_install_without_a_variant_is_the_full_package() {
+        let dir = std::env::temp_dir().join(format!("boardcast-variant-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        assert_eq!(variant_of(&dir), "");
+        fs::write(dir.join("variant"), "full\n").unwrap();
+        assert_eq!(variant_of(&dir), "");
+        fs::write(dir.join("variant"), "ja\n").unwrap();
+        assert_eq!(variant_of(&dir), "ja");
+        let _ = fs::remove_dir_all(dir);
     }
 
     /// A package like the real one, with a program that reports `reported` and whether it is healthy.

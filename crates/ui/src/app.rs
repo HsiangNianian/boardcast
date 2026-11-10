@@ -33,7 +33,6 @@ use gpui_kit::component::separator::Separator;
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
-use gpui_kit::component::toolbar::Toolbar;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::{Disableable, Selectable, Sizable};
@@ -58,10 +57,14 @@ const MARKS: [(&str, &str); 5] = [("划掉", "Strike"), ("圈出", "Circle"), ("
 const LIBRARY_SEARCH_FROM: usize = 5;
 /// How much one press of a zoom key scales the board.
 const ZOOM_STEP: f32 = 1.25;
-/// How wide the loudness bar beside the microphone is.
-const METER_W: f32 = 64.0;
 /// Remote services filled in with one click: name, address and model.
 const REMOTE_PRESETS: [(&str, &str, &str); 1] = [("DeepSeek", "https://api.deepseek.com", "deepseek-flash")];
+/// The dock's height, along the board's lower edge.
+const DOCK_H: f32 = 56.0;
+/// Room kept clear around the board when it is fitted to the canvas.
+const BOARD_MARGIN: f32 = 28.0;
+/// The spacing of the grid drawn on the canvas, as on the website.
+const GRID: f32 = 72.0;
 const AUTOSAVE_AFTER: Duration = Duration::from_millis(500);
 const RETRY_SAVE_AFTER: Duration = Duration::from_secs(5);
 #[derive(Clone, Copy, PartialEq)]
@@ -85,8 +88,6 @@ const ESTIMATED_SHARE: f32 = 0.7;
 /// The width of what floats at the side, how far things float from the edge, and the room kept for the
 /// bars above and below the board.
 const SIDE_W: f32 = 340.0;
-const FLOAT_GAP: f32 = 12.0;
-const BAR_ROOM: f32 = 60.0;
 const JUMP_SHOWN: Duration = Duration::from_millis(2500);
 const JUMP_SCROLLING: Duration = Duration::from_millis(300);
 /// How far everything else fades while one speaker is traced.
@@ -3002,11 +3003,6 @@ fn icon_button(id: &'static str, name: &'static str, tooltip: &'static str) -> B
     Button::new(id).small().ghost().icon(icon(name)).tooltip(tooltip)
 }
 
-/// A row of controls floating over the board.
-fn floating_bar(id: &'static str) -> Toolbar {
-    Toolbar::new(id).p_1().gap_1().rounded_lg().bg(rgb(pal().surface)).border_1().border_color(rgb(pal().line)).shadow_md()
-}
-
 fn case_or_measurement(turns: &[Utterance], wav: &Option<PathBuf>, demo: &Option<String>, synthetic: Option<usize>) -> bool {
     !turns.is_empty() || wav.is_some() || demo.is_some() || synthetic.is_some()
 }
@@ -3187,6 +3183,18 @@ impl Render for Workbench {
                                 Some((tier, cover)) if inside(view, *cover) => tier,
                                 _ => &mut state.base,
                             };
+                            // A fixed grid on the canvas, as on the website's sheet, under all the ink.
+                            let line: Hsla = rgb(pal().line).into();
+                            let mut gx = bounds.origin.x + px(GRID);
+                            while gx < bounds.origin.x + bounds.size.width {
+                                window.paint_quad(gpui_kit::fill(Bounds::new(point(gx, bounds.origin.y), size(px(1.), bounds.size.height)), line));
+                                gx += px(GRID);
+                            }
+                            let mut gy = bounds.origin.y + px(GRID);
+                            while gy < bounds.origin.y + bounds.size.height {
+                                window.paint_quad(gpui_kit::fill(Bounds::new(point(bounds.origin.x, gy), size(bounds.size.width, px(1.))), line));
+                                gy += px(GRID);
+                            }
                             // Under everything, from the moment a replay reaches the page.
                             if let Some((image, w, h)) = state.page.clone().filter(|_| state.graph.as_ref().is_some_and(|g| g.underlay().is_some())) {
                                 let area = Bounds::new(origin, size(px(w * v.k), px(h * v.k)));
@@ -3370,11 +3378,10 @@ impl Render for Workbench {
                 div()
                     .id("latest")
                     .absolute()
-                    .bottom(px(44.))
-                    .left(px(FLOAT_GAP))
+                    .bottom(px(16.))
+                    .left(px(14.))
                     .px_3()
                     .py_1()
-                    .rounded_md()
                     .cursor_pointer()
                     .bg(rgb(pal().strong))
                     .text_color(rgb(pal().on_strong))
@@ -3387,7 +3394,6 @@ impl Render for Workbench {
                     })),
             );
         }
-        let meter = self.level * 100.0;
         let editable = self.editable();
         let (page, pages) = (self.live.page(), self.live.pages());
         let save_label: String = match &self.save {
@@ -3401,105 +3407,95 @@ impl Render for Workbench {
             SaveState::Failed(_) => tr("Not saved", "保存失败").into(),
         };
         let side_shown = self.panel != Panel::Transcript || self.transcript_open;
-        let (right_inset, bottom_inset) = (if side_shown { SIDE_W + FLOAT_GAP * 2.0 } else { FLOAT_GAP }, BAR_ROOM);
-        self.ink.borrow_mut().set_insets([FLOAT_GAP, BAR_ROOM, right_inset, bottom_inset]);
+        // Nothing floats over the board any more but its corner label, so it may use the whole canvas.
+        self.ink.borrow_mut().set_insets([BOARD_MARGIN, BOARD_MARGIN + 16.0, BOARD_MARGIN, BOARD_MARGIN]);
         let recording = self.pipeline.listening();
         let recorded = self.recorded();
         // Whether what was said has reached the board: the question to answer at a glance.
         let spoken_lines = || self.live.lines.iter().enumerate().filter(|(_, l)| !l["manual"].as_bool().unwrap_or(false));
         let waiting = spoken_lines().filter(|(_, l)| l["ms"].is_null() && !l["failed"].as_bool().unwrap_or(false)).count();
         let not_drawn: Vec<usize> = spoken_lines().filter(|(_, l)| l["failed"].as_bool().unwrap_or(false)).map(|(i, _)| i).collect();
-        let board_state = match () {
-            _ if self.replay.is_some() || !editable => None,
-            _ if !not_drawn.is_empty() => Some((Tag::danger(), format!("{} {}", not_drawn.len(), tr("not drawn: show", "句没画上：查看")), not_drawn.last().copied())),
-            _ if self.needs_model => Some((Tag::warning(), tr("No board model yet", "还没有板书模型").to_string(), None)),
-            _ if waiting > 0 && self.preparing.is_some() => Some((Tag::warning(), format!("{} {}", waiting, tr("waiting for the model", "句等模型就绪")), None)),
-            _ if waiting > 1 => Some((Tag::info(), format!("{} · {} {}", tr("Drawing", "正在画"), waiting - 1, tr("waiting", "句排队")), None)),
-            _ if waiting == 1 => Some((Tag::info(), tr("Drawing", "正在画").to_string(), None)),
-            _ => None,
+        // The window's own title bar, as on the website: the meeting on the left in plain words and figures,
+        // and what to open on the right.
+        let mono = |text: String| div().font_family(theme::MONO).text_xs().whitespace_nowrap().child(text);
+        let (state_text, state_color, state_line) = match () {
+            _ if self.replay.is_some() => (tr("replaying", "回放中").to_string(), pal().faint, None),
+            _ if !editable => (tr("view only", "只读").to_string(), pal().faint, None),
+            _ if !not_drawn.is_empty() => (format!("{} {}", not_drawn.len(), tr("not drawn: show", "句没画上：查看")), pal().danger, not_drawn.last().copied()),
+            _ if self.needs_model => (tr("no board model yet", "还没有板书模型").to_string(), pal().warning, None),
+            _ if waiting > 0 && self.preparing.is_some() => (format!("{waiting} {}", tr("waiting for the model", "句等模型就绪")), pal().warning, None),
+            _ if waiting > 1 => (format!("{} · {} {}", tr("drawing", "正在画"), waiting - 1, tr("waiting", "句排队")), pal().recording, None),
+            _ if waiting == 1 => (tr("drawing", "正在画").to_string(), pal().recording, None),
+            _ if recording => (tr("listening", "正在听").to_string(), pal().text, None),
+            _ => (tr("ready", "就绪").to_string(), pal().faint, None),
         };
-        // The window's own title bar: what the meeting is called, when it began and how long it has been recorded.
-        let window_bar = TitleBar::new().bg(rgb(pal().surface)).border_color(rgb(pal().line)).child(
-            div()
-                .flex()
-                .items_center()
-                .gap_3()
-                .min_w_0()
-                .pr_3()
-                .map(|d| {
-                    if self.editing_title {
-                        d.child(div().w(px(280.)).on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()).child(Input::new(&self.title_input).small()))
-                    } else {
-                        d.child(
-                            Button::new("meeting-title")
-                                .ghost()
-                                .small()
-                                .max_w(px(320.))
-                                .label(self.live.title().to_string())
-                                .when(editable, |b| b.tooltip(tr("Rename the meeting", "修改会议名称")))
-                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                .on_click(cx.listener(|this, _, window, cx| this.edit_title(window, cx))),
-                        )
-                    }
-                })
-                .when_some(self.live.created_at().map(local_time).filter(|t| !t.is_empty()), |d, started| {
-                    d.child(div().text_xs().text_color(rgb(pal().faint)).whitespace_nowrap().child(format!("{} {started}", tr("Started", "开始于"))))
-                })
-                .when(recording || !recorded.is_zero(), |d| {
+        let started = self.live.created_at().map(local_time).filter(|t| !t.is_empty()).map(|t| t.rsplit(' ').next().unwrap_or_default().to_string());
+        let meeting_side = div()
+            .flex()
+            .items_center()
+            .gap_5()
+            .min_w_0()
+            .map(|d| {
+                if self.editing_title {
+                    d.child(div().w(px(280.)).on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()).child(Input::new(&self.title_input).small()))
+                } else {
                     d.child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .text_xs()
+                            .id("meeting-title")
+                            .max_w(px(320.))
+                            .overflow_hidden()
                             .whitespace_nowrap()
-                            .text_color(rgb(if recording { pal().danger } else { pal().faint }))
-                            .when(recording, |d| d.child(div().size(px(7.)).rounded_full().bg(rgb(pal().danger))))
-                            .child(format!("{} {}", tr("Recorded", "录音"), clock(recorded.as_secs_f64() * 1000.0))),
-                    )
-                })
-                .when_some(board_state, |d, (tag, text, line)| {
-                    d.child(
-                        div()
-                            .id("board-state")
-                            .when(line.is_some() || self.needs_model, |d| d.cursor_pointer())
+                            .text_base()
+                            .when(editable, |d| d.cursor_pointer().hover(|d| d.text_color(rgb(pal().muted))))
+                            .child(self.live.title().to_string())
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Some(line) = line {
-                                    this.panel = Panel::Transcript;
-                                    this.transcript_open = true;
-                                    this.jumped_line = Some((line, Instant::now()));
-                                } else if this.needs_model {
-                                    this.panel = Panel::Settings;
-                                }
-                                cx.notify();
-                            }))
-                            .child(tag.small().rounded_full().child(text)),
+                            .on_click(cx.listener(|this, _, window, cx| this.edit_title(window, cx))),
                     )
-                })
-                .when(!save_label.is_empty(), |d| {
-                    let failed = matches!(self.save, SaveState::Failed(_));
-                    d.child(match failed {
-                        // A meeting that is not on disk is the one state here that must not go unseen.
-                        true => Tag::danger().small().rounded_full().child(save_label).into_any_element(),
-                        false => div().text_xs().text_color(rgb(pal().faint)).whitespace_nowrap().child(save_label).into_any_element(),
-                    })
-                }),
-        );
-        let title_bar = floating_bar("title-bar")
-            .child(icon_button("library", "folder-open", tr("Meetings", "会议")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
-            .child(match self.store {
-                Some(_) => icon_button("new", "file-plus", tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))),
-                // A sample has nowhere to keep a meeting, so the button says why instead of doing nothing.
-                None => icon_button("new", "file-plus", tr("A sample is not saved, so it cannot start a new meeting", "示例不会保存，不能从这里新建会议")).disabled(true),
+                }
             })
-            .when(pages > 1, |d| {
-                d.content(Separator::vertical().h(px(18.)).mx_1())
-                    .child(icon_button("previous", "chevron-left", tr("Previous board", "上一张板")).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx))))
-                    .content(div().text_sm().whitespace_nowrap().child(format!("{} / {pages}", page + 1)))
-                    .child(icon_button("next", "chevron-right", tr("Next board", "下一张板")).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx))))
+            .when_some(started, |d, started| d.child(mono(format!("{} {started}", tr("start", "开始"))).text_color(rgb(pal().faint))))
+            .when(recording || !recorded.is_zero(), |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .text_color(rgb(if recording { pal().recording } else { pal().faint }))
+                        .child(div().size(px(8.)).bg(rgb(if recording { pal().recording } else { pal().faint })))
+                        .child(mono(clock(recorded.as_secs_f64() * 1000.0))),
+                )
+            })
+            .child(
+                div()
+                    .id("board-state")
+                    .flex()
+                    .gap_1()
+                    .when(state_line.is_some() || self.needs_model, |d| d.cursor_pointer())
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(line) = state_line {
+                            this.panel = Panel::Transcript;
+                            this.transcript_open = true;
+                            this.jumped_line = Some((line, Instant::now()));
+                        } else if this.needs_model {
+                            this.panel = Panel::Settings;
+                        }
+                        cx.notify();
+                    }))
+                    .child(mono(tr("board /", "板书 /").to_string()).text_color(rgb(pal().faint)))
+                    .child(mono(state_text).text_color(rgb(state_color))),
+            )
+            .when(!save_label.is_empty(), |d| {
+                // A meeting that is not on disk is the one state here that must not go unseen.
+                let failed = matches!(self.save, SaveState::Failed(_));
+                d.child(mono(save_label).text_color(rgb(if failed { pal().danger } else { pal().faint })))
             });
-        let views_bar = floating_bar("views-bar")
+        let open_side = div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .pr_2()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .when_some(match &self.update {
                 UpdateState::Available(release) => Some(format!("{} {}", tr("Update to", "更新到"), release.version)),
                 UpdateState::ReadyToRestart(_) => Some(tr("Restart to update", "重启完成更新").to_string()),
@@ -3513,9 +3509,21 @@ impl Render for Workbench {
                     }
                 })))
             })
-            .child(icon_button("speakers", "users", tr("Speakers", "说话人")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Speakers, cx))))
-            .child(icon_button("settings", "settings", tr("Settings", "设置")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))))
-            .content(Separator::vertical().h(px(18.)).mx_1())
+            .when(pages > 1, |d| {
+                d.child(icon_button("previous", "chevron-left", tr("Previous board", "上一张板")).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx))))
+                    .child(mono(format!("{} / {pages}", page + 1)))
+                    .child(icon_button("next", "chevron-right", tr("Next board", "下一张板")).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx))))
+                    .child(Separator::vertical().h(px(18.)).mx_1())
+            })
+            .child(icon_button("library", "folder-open", tr("Meetings", "会议")).selected(self.panel == Panel::Library).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
+            .child(match self.store {
+                Some(_) => icon_button("new", "file-plus", tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))),
+                // A sample has nowhere to keep a meeting, so the button says why instead of doing nothing.
+                None => icon_button("new", "file-plus", tr("A sample is not saved, so it cannot start a new meeting", "示例不会保存，不能从这里新建会议")).disabled(true),
+            })
+            .child(Separator::vertical().h(px(18.)).mx_1())
+            .child(icon_button("speakers", "users", tr("Speakers", "说话人")).selected(self.panel == Panel::Speakers).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Speakers, cx))))
+            .child(icon_button("settings", "settings", tr("Settings", "设置")).selected(self.panel == Panel::Settings).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))))
             .child(icon_button("transcript-toggle", if self.transcript_open { "panel-right-close" } else { "panel-right-open" }, tr("Transcript", "转写")).on_click(cx.listener(|this, _, _, cx| {
                 if this.panel == Panel::Transcript {
                     this.transcript_open = !this.transcript_open;
@@ -3525,30 +3533,72 @@ impl Render for Workbench {
                 }
                 cx.notify();
             })));
-        let dock = floating_bar("dock")
+        let window_bar = TitleBar::new().bg(rgb(pal().surface)).border_color(rgb(pal().line)).child(meeting_side).child(open_side);
+
+        // The dock along the board's lower edge: each command with its name and, where it has one, its keys.
+        let key = |mac: &'static str, other: &'static str| if cfg!(target_os = "macos") { mac } else { other };
+        let dock_button = |id: &'static str, icon_name: &'static str, label: &'static str, keys: Option<&'static str>| {
+            Button::new(id).ghost().rounded_none().h(px(DOCK_H - 1.0)).px_4().border_r_1().border_color(rgb(pal().line)).child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(icon(icon_name).size_5())
+                    .child(div().flex().flex_col().items_start().child(div().text_sm().child(label)).when_some(keys, |d, keys| d.child(div().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(keys)))),
+            )
+        };
+        let (circling, circled) = {
+            let ink = self.ink.borrow();
+            (ink.circling, ink.pointed.len())
+        };
+        let dock = div()
+            .flex()
+            .items_center()
+            .h(px(DOCK_H))
+            .flex_none()
+            .border_t_1()
+            .border_color(rgb(pal().line))
+            .bg(rgb(pal().surface))
             .when(editable, |d| {
-                // As content, since the toolbar turns the buttons it is given into plain commands.
-                d.content(
+                // The microphone is the one solid block, with the level beside it while it listens.
+                d.child(
                     Button::new("mic")
-                        .small()
-                        .icon(icon(if listening { "square" } else { "mic" }))
-                        .label(if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") })
+                        .primary()
+                        .rounded_none()
+                        .h(px(DOCK_H - 1.0))
+                        .px_4()
                         .tooltip(tr("Space", "空格键"))
-                        .when(listening, |b| b.danger())
-                        .when(!listening, |b| b.primary())
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.toggle_mic();
                             cx.notify();
-                        })),
+                        }))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_3()
+                                .child(div().size(px(26.)).flex().items_center().justify_center().bg(rgb(pal().on_strong)).child(div().size(px(10.)).bg(rgb(pal().recording)).when(!listening, |d| d.rounded_full())))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .items_start()
+                                        .child(div().text_sm().child(if listening { tr("stop listening", "停止收音") } else { tr("start listening", "开始收音") }))
+                                        .child(div().font_family(theme::MONO).text_size(px(10.)).opacity(0.6).child(tr("space", "空格"))),
+                                )
+                                .when(listening, |d| {
+                                    let level = self.level;
+                                    d.child(div().flex().items_end().gap(px(2.)).h(px(24.)).children((0..7).map(|i| {
+                                        let h = 3.0 + level * 21.0 * (0.55 + 0.45 * ((i as f32) * 1.7).sin().abs());
+                                        div().w(px(3.)).h(px(h)).bg(rgb(pal().on_strong))
+                                    })))
+                                }),
+                        ),
                 )
-                .when(listening, |d| d.content(div().w(px(METER_W)).h(px(6.)).mx_1().rounded_sm().bg(rgb(pal().track)).child(div().h_full().rounded_sm().w(px(meter / 100.0 * METER_W)).bg(rgb(pal().accent)))))
-                .content(Separator::vertical().h(px(18.)).mx_1())
-            })
-            .when(editable, |d| {
-                let (circling, count) = { let ink = self.ink.borrow(); (ink.circling, ink.pointed.len()) };
-                d.child(
-                    icon_button("circle", "lasso", if circling { tr("Stop circling (Esc)", "取消圈选（Esc）") } else { tr("Circle things, then say what to do with them", "圈住板上的东西，再说要怎么处理") })
+                .child(
+                    dock_button("circle", "lasso", tr("circle", "圈选"), if circling { Some("esc") } else { None })
                         .selected(circling)
+                        .tooltip(if circling { tr("Stop circling (Esc)", "取消圈选（Esc）") } else { tr("Circle things, then say what to do with them", "圈住板上的东西，再说要怎么处理") })
                         .on_click(cx.listener(|this, _, _, cx| {
                             let mut ink = this.ink.borrow_mut();
                             if ink.circling {
@@ -3561,21 +3611,17 @@ impl Render for Workbench {
                         })),
                 )
                 .when(circling, |d| {
-                    d.content(div().text_xs().text_color(rgb(pal().muted)).whitespace_nowrap().child(match count {
-                        0 => tr("Draw around things", "在板上画圈").to_string(),
+                    d.child(mono(match circled {
+                        0 => tr("draw around things", "在板上画圈").to_string(),
                         n => format!("{n} {}", tr("circled: now say it", "个已圈住：说吧")),
-                    }))
+                    }).px_2().text_color(rgb(pal().muted)))
                 })
             })
-            .child(icon_button("summary", "sparkles", tr("Summary", "摘要")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
-            .child(icon_button("import", "import", tr("Import", "导入")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))))
-            .child(icon_button("export", "file-down", tr("Export", "导出")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
+            .child(dock_button("summary", "sparkles", tr("summary", "摘要"), None).selected(self.panel == Panel::Summary).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
+            .child(dock_button("import", "import", tr("import", "导入"), None).selected(self.panel == Panel::Import).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))))
+            .child(dock_button("export", "file-down", tr("export", "导出"), None).selected(self.panel == Panel::Export).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
             .child(
-                icon_button("replay", "rotate-ccw", match (self.replay.is_some(), cfg!(target_os = "macos")) {
-                    (true, _) => tr("Exit replay (Esc)", "退出回放（Esc）"),
-                    (false, true) => tr("Replay (⇧⌘R)", "回放（⇧⌘R）"),
-                    (false, false) => tr("Replay (Ctrl+Shift+R)", "回放（Ctrl+Shift+R）"),
-                })
+                dock_button("replay", "rotate-ccw", if self.replay.is_some() { tr("exit replay", "退出回放") } else { tr("replay", "回放") }, Some(if self.replay.is_some() { "esc" } else { key("⇧⌘R", "ctrl ⇧ R") }))
                     .selected(self.replay.is_some())
                     .disabled(self.live.steps.is_empty())
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -3586,38 +3632,36 @@ impl Render for Workbench {
                         }
                     })),
             )
+            .child(div().flex_1())
             .when(editable, |d| {
-                d.content(Separator::vertical().h(px(18.)).mx_1())
-                    .child(icon_button("undo", "undo-2", if cfg!(target_os = "macos") { tr("Undo (⌘Z)", "撤销（⌘Z）") } else { tr("Undo (Ctrl+Z)", "撤销（Ctrl+Z）") }).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
-                    .child(icon_button("redo", "redo-2", if cfg!(target_os = "macos") { tr("Redo (⇧⌘Z)", "重做（⇧⌘Z）") } else { tr("Redo (Ctrl+Shift+Z)", "重做（Ctrl+Shift+Z）") }).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
+                d.child(icon_button("undo", "undo-2", key("Undo (⌘Z)", "Undo (Ctrl+Z)")).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
+                    .child(icon_button("redo", "redo-2", key("Redo (⇧⌘Z)", "Redo (Ctrl+Shift+Z)")).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
                     .child(icon_button("tidy", "wand-sparkles", tr("Tidy", "整理排版")).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
+                    .child(div().w(px(8.)))
             });
-        let status = div()
-            .max_w(px(280.))
+        // The corner of the board: how far it is zoomed, whether it is live, and what the model is doing.
+        let coords = div()
             .flex()
             .items_center()
             .gap_2()
-            .px_2()
-            .h(px(24.))
-            .rounded_md()
-            .text_xs()
+            .font_family(theme::MONO)
+            .text_size(px(11.))
             .text_color(rgb(pal().faint))
             .whitespace_nowrap()
-            .overflow_hidden()
             .child(
                 div()
                     .id("zoom")
                     .occlude()
-                    .px_1()
-                    .rounded_sm()
                     .cursor_pointer()
-                    .hover(|d| d.bg(rgb(pal().selected)))
+                    .hover(|d| d.text_color(rgb(pal().text)))
                     .tooltip(|window, cx| Tooltip::new(if cfg!(target_os = "macos") { tr("Fit the board (⌘0). Zoom with ⌘+ and ⌘−", "适应屏幕（⌘0），⌘+ / ⌘− 缩放") } else { tr("Fit the board (Ctrl+0). Zoom with Ctrl+ and Ctrl−", "适应屏幕（Ctrl+0），Ctrl+ / Ctrl− 缩放") }).build(window, cx))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(cx.listener(|this, _, _, cx| this.fit_board(cx)))
                     .child(format!("{:.0}%", zoom * 100.0)),
             )
-            .child(self.status.clone());
+            .child("·")
+            .child(if self.replay.is_some() { tr("replay", "回放") } else { tr("live", "实时") })
+            .when(!self.status.is_empty(), |d| d.child("·").child(self.status.clone()));
         // With the transcript away, the latest line still shows that the room is being heard.
         let transcript_shown = self.panel == Panel::Transcript && self.transcript_open;
         let caption = self.live.lines.iter().rev().find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !transcript_shown && self.replay.is_none());
@@ -4019,32 +4063,28 @@ impl Render for Workbench {
         let side = div()
             .id("side")
             .occlude()
-            .absolute()
-            .top(px(BAR_ROOM))
-            .right(px(FLOAT_GAP))
-            .bottom(px(FLOAT_GAP))
             .w(px(SIDE_W))
+            .flex_none()
+            .h_full()
             .flex()
             .flex_col()
             .overflow_hidden()
-            .rounded_lg()
             .bg(rgb(pal().surface))
-            .border_1()
+            .border_l_1()
             .border_color(rgb(pal().line))
-            .shadow_md()
             // Every panel says what it is and closes the same way.
             .child(
                 div()
                     .flex()
                     .items_center()
                     .justify_between()
-                    .pl_3()
+                    .pl_4()
                     .pr_1()
-                    .h(px(36.))
+                    .h(px(52.))
                     .flex_none()
                     .border_b_1()
                     .border_color(rgb(pal().line))
-                    .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(match self.panel {
+                    .child(div().text_xl().font_weight(gpui_kit::FontWeight::LIGHT).child(match self.panel {
                         Panel::Transcript => tr("Transcript", "转写"),
                         Panel::Library => tr("Meetings", "会议"),
                         Panel::Summary => tr("Summary", "摘要"),
@@ -4140,9 +4180,9 @@ impl Render for Workbench {
         let notices = (view_only.is_some() || banner.is_some()).then(|| {
             div()
                 .absolute()
-                .top(px(BAR_ROOM))
+                .top(px(36.))
                 .left_0()
-                .right(px(right_inset))
+                .right_0()
                 .flex()
                 .flex_col()
                 .items_center()
@@ -4150,33 +4190,38 @@ impl Render for Workbench {
                 .when_some(view_only, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().bg(rgb(pal().selected)).border_1().border_color(rgb(pal().line)).child(text)))
                 .when_some(banner, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().text_color(rgb(pal().danger)).bg(rgb(pal().danger_soft)).border_1().border_color(rgb(pal().line)).child(text)))
         });
+        // The board with its corner label above and the dock attached below, and the side panel beside them.
+        let canvas_area = div()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .child(board)
+            .child(div().absolute().top(px(10.)).left(px(14.)).child(coords))
+            .when_some(caption, |d, text| {
+                d.child(
+                    div().absolute().bottom(px(16.)).left_0().right_0().flex().justify_center().child(
+                        div().occlude().max_w(px(560.)).px_3().py_1().bg(rgb(pal().strong)).text_color(rgb(pal().on_strong)).text_sm().overflow_hidden().whitespace_nowrap().child(text),
+                    ),
+                )
+            })
+            .when_some(notices, |d, notices| d.child(notices));
+        let main = div()
+            .relative()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .flex()
+            .flex_col()
+            .child(canvas_area)
+            .when_some(replay_bar, |d, bar| d.child(div().occlude().flex_none().border_t_1().border_color(rgb(pal().line)).bg(rgb(pal().surface)).child(bar)))
+            .child(div().occlude().child(dock));
         let content = div()
             .relative()
             .flex_1()
             .min_h_0()
             .w_full()
-            .child(board)
-            .child(div().absolute().top(px(FLOAT_GAP)).left(px(FLOAT_GAP)).occlude().child(title_bar))
-            .child(div().absolute().top(px(FLOAT_GAP)).right(px(FLOAT_GAP)).occlude().child(views_bar))
-            .child(div().absolute().bottom(px(FLOAT_GAP)).left(px(FLOAT_GAP)).child(status))
-            .child(
-                // Centered on the part of the board that is showing, with what belongs to it above.
-                div()
-                    .absolute()
-                    .bottom(px(FLOAT_GAP))
-                    .left_0()
-                    .right(px(right_inset))
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap_2()
-                    .when_some(caption, |d, text| {
-                        d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().bg(rgb(pal().strong)).text_color(rgb(pal().on_strong)).text_sm().overflow_hidden().whitespace_nowrap().child(text))
-                    })
-                    .when_some(replay_bar, |d, bar| d.child(div().occlude().w(px(560.)).rounded_lg().bg(rgb(pal().surface)).border_1().border_color(rgb(pal().line)).shadow_md().child(bar)))
-                    .child(div().occlude().child(dock)),
-            )
-            .when_some(notices, |d, notices| d.child(notices))
+            .flex()
+            .child(main)
             .when(side_shown, |d| d.child(side))
             .when_some(preparing_page, |d, page| d.child(page));
         div()

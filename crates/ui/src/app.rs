@@ -4600,6 +4600,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone() };
     let pipeline = Pipeline::start(backend, guidance, resources.voice, speech, Script { turns, wav });
     pipeline.session().set_glossary(Glossary::parse(&settings.glossary));
+    std::thread::spawn(boardcast_agent::sound::warm);
     // Everything slow happens away from the window, which has to appear straight away.
     let (startup, starting) = channel::<Startup>();
     let probe_binaries = binaries.clone();

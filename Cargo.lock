@@ -825,6 +825,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sherpa-onnx",
+ "sys-locale",
  "tiny-skia",
 ]
 

@@ -26,4 +26,5 @@ image = { version = "0.25", default-features = false, features = ["gif", "jpeg",
 serde.workspace = true
 serde_json.workspace = true
 sherpa-onnx = "2.0.1"
+sys-locale = "0.3"
 tiny-skia = "0.11"

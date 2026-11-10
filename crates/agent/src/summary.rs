@@ -270,6 +270,40 @@ pub fn tidy(text: &str, english: bool) -> String {
     out.trim().to_string()
 }
 
+static ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b([ng]\d+)\b(?:\s*[(（]([^)）\n]*)[)）])?").expect("valid"));
+
+/// The board reaches the model with its ids, as in `n6 [话题] Login`, and a model sometimes copies them
+/// into the summary. Each id becomes its node's or group's text; one already followed by that text, as in
+/// `n6 (Login)` or `n6 Login`, is simply dropped.
+pub fn name_ids(text: &str, boards: &[Graph]) -> String {
+    let label = |id: &str| {
+        boards.iter().find_map(|g| {
+            g.nodes.iter().find(|n| n.id == id).map(|n| n.label.clone()).or_else(|| g.groups.iter().find(|x| x.id == id).map(|x| x.label.clone()))
+        })
+    };
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    for c in ID.captures_iter(text) {
+        let whole = c.get(0).expect("a match");
+        let Some(name) = label(&c[1]) else { continue };
+        out.push_str(&text[last..whole.start()]);
+        let rest = &text[whole.end()..];
+        match c.get(2) {
+            // The text in brackets is usually the name again; otherwise it is a note on it, and stays.
+            Some(said) if said.as_str().trim() == name => out.push_str(&name),
+            Some(said) if !said.as_str().trim().is_empty() => out.push_str(&format!("{name}{}", text[c.get(1).expect("an id").end()..whole.end()].trim_start())),
+            _ if rest.trim_start().starts_with(&name) => {}
+            _ => out.push_str(&name),
+        }
+        last = whole.end();
+        if c.get(2).is_none() && rest.trim_start().starts_with(&name) {
+            last += rest.len() - rest.trim_start().len();
+        }
+    }
+    out.push_str(&text[last..]);
+    out
+}
+
 static BOLD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\*\*(.+?)\*\*").expect("valid"));
 static STRUCK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"~~(.+?)~~").expect("valid"));
 static CODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`([^`]+)`").expect("valid"));
@@ -418,7 +452,7 @@ pub fn summarize(provider: &Provider, boards: &[Graph], lines: &[Line], cancel: 
     let total = if parts.len() > 1 { parts.len() + 1 } else { 1 };
     progress(Step::Writing { done: total - 1, total });
     let reply = ask(provider, &messages(boards, &said, false, english), if remote { 4096 } else { 1024 }, cancel)?;
-    let tidied = tidy(&reply, english);
+    let tidied = name_ids(&tidy(&reply, english), boards);
     if tidied.is_empty() {
         bail!("The model returned no summary.");
     }
@@ -436,6 +470,21 @@ mod tests {
 
     fn lines_of(v: &Value) -> Vec<Line> {
         Line::spoken(v.as_array().unwrap())
+    }
+
+    #[test]
+    fn node_ids_in_a_reply_become_their_text() {
+        let mut g = Graph::default();
+        g.apply(&boardcast_board::graph::parse_ops("T 「登录流程」\nL 「登录流程」 「短信验证」\nT 「Release checklist」"));
+        let boards = [g];
+        assert_eq!(name_ids("- 确认 n2 的超时", &boards), "- 确认 短信验证 的超时");
+        assert_eq!(name_ids("- n2（短信验证）要加限流", &boards), "- 短信验证要加限流");
+        assert_eq!(name_ids("- Ship n3 Release checklist first", &boards), "- Ship Release checklist first");
+        assert_eq!(name_ids("- n1: 先画完", &boards), "- 登录流程: 先画完");
+        assert_eq!(name_ids("- n2（超时问题）", &boards), "- 短信验证（超时问题）");
+        // Not an id on this board, or not an id at all.
+        assert_eq!(name_ids("- n99 and win32 and n2x stay", &boards), "- n99 and win32 and n2x stay");
+        assert!(!Regex::new(r"\bn\d+\b").unwrap().is_match(&name_ids("### 结论\n- n1 已定，n2 待办", &boards)));
     }
 
     #[test]

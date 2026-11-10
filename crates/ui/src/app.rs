@@ -61,6 +61,8 @@ const LIBRARY_SEARCH_FROM: usize = 5;
 const ZOOM_STEP: f32 = 1.25;
 /// How wide the loudness bar beside the microphone is.
 const METER_W: f32 = 64.0;
+/// Remote services filled in with one click: name, address and model.
+const REMOTE_PRESETS: [(&str, &str, &str); 1] = [("DeepSeek", "https://api.deepseek.com", "deepseek-flash")];
 const AUTOSAVE_AFTER: Duration = Duration::from_millis(500);
 const RETRY_SAVE_AFTER: Duration = Duration::from_secs(5);
 #[derive(Clone, Copy, PartialEq)]
@@ -3668,6 +3670,22 @@ impl Render for Workbench {
             })
             .when(self.form.remote, |d| {
                 d
+                // The usual service, filled in, so only the key is left to paste.
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(div().text_xs().text_color(rgb(MUTED)).child(tr("Fill in", "一键填写")))
+                        .children(REMOTE_PRESETS.iter().enumerate().map(|(i, (name, base, model))| {
+                            button(("remote-preset", i), *name).on_click(cx.listener(move |this, _, window, cx| {
+                                this.form.base_url.update(cx, |s, cx| s.set_value(*base, window, cx));
+                                this.form.model.update(cx, |s, cx| s.set_value(*model, window, cx));
+                                this.form.key.update(cx, |s, cx| s.focus(window, cx));
+                                cx.notify();
+                            }))
+                        })),
+                )
                 .child(field(tr("API address", "接口地址"), &self.form.base_url))
                 .child(field(tr("Model", "模型"), &self.form.model))
                 .child(field(tr("API key", "API key"), &self.form.key))
@@ -3688,69 +3706,9 @@ impl Render for Workbench {
                 d.child(button("save-local", tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
             })
             .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
-            // Metal keeps its own shaders, so there is nothing here for a Mac to manage.
-            .when(self.panel == Panel::Settings && cfg!(not(target_os = "macos")), |d| {
-                let size = dir_size(&shader_dir(&self.models));
-                d.child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Graphics cache", "显卡缓存")))
-                    .child(div().text_xs().text_color(rgb(MUTED)).child(format!(
-                        "{} {:.1} MB. {}",
-                        tr("Shaders compiled for this computer take", "为这台电脑编译的着色器占用"),
-                        size as f64 / 1e6,
-                        tr("Deleting them is safe, and the next start compiles them again, which takes about half a minute.", "删除是安全的，下次启动模型时会重新编译，大约需要半分钟。"),
-                    )))
-                    .child(div().flex().child(button("clear-shaders", tr("Delete", "删除")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
-                        if let Err(e) = std::fs::remove_dir_all(shader_dir(&this.models)) {
-                            this.form.note = Some(format!("{e:#}"));
-                        }
-                        cx.notify();
-                    }))))
-            })
-            .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Language", "语言")))
-            .child({
-                let chosen = self.form.saved.interface_language.clone();
-                let languages = [("auto", tr("Follow the system", "跟随系统")), ("en", "English"), ("zh", "中文")];
-                div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
-                    button(gpui_kit::ElementId::Name(format!("interface-language-{id}").into()), label)
-                        .when(chosen == id, |b| b.primary())
-                        .on_click(cx.listener(move |this, _, _, cx| this.choose_language(id, cx)))
-                }))
-            })
-            .child(div().text_xs().text_color(rgb(MUTED)).child(tr(
-                "The interface changes at once; a few hints in text fields change on the next start. The board and summary follow the meeting's own language.",
-                "界面立即切换；输入框里的少数提示文字下次启动后切换。板书和摘要跟随会议本身的语言。",
-            )))
-            .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Updates", "更新")))
-            .child(div().text_xs().text_color(rgb(MUTED)).child(format!("{} {}", tr("Version", "版本"), boardcast_update::VERSION)))
-            .child(match &self.update {
-                _ if self.prefix.is_none() => div().text_sm().child(tr("Updates apply to installed copies.", "只有安装版可以更新。")).into_any_element(),
-                UpdateState::Idle => button("check-update", tr("Check for updates", "检查更新")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
-                UpdateState::Checking => div().text_sm().child(tr("Checking…", "正在检查…")).into_any_element(),
-                UpdateState::UpToDate => div().flex().items_center().gap_2().child(div().text_sm().child(tr("Up to date.", "已是最新版本。"))).child(button("check-update", tr("Check again", "再次检查")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); }))).into_any_element(),
-                UpdateState::Available(release) => div().flex().flex_col().gap_2()
-                    .child(div().text_sm().child(format!("{} {} · {}", tr("New version", "新版本"), release.version, gigabytes(release.size))))
-                    .when(!release.notes.is_empty(), |d| d.child(div().text_xs().text_color(rgb(MUTED)).child(release.notes.clone())))
-                    .child(button("install-update", tr("Download and install", "下载并安装")).on_click(cx.listener(|this, _, _, cx| this.install_update(cx))))
-                    .into_any_element(),
-                UpdateState::Installing { release, progress } => {
-                    let text = progress.as_ref().map_or(tr("Starting…", "正在开始…").to_string(), |p| {
-                        if p.done >= p.total { tr("Verifying and installing…", "正在校验并安装…").to_string() } else { format!("{} / {}", gigabytes(p.done), gigabytes(p.total)) }
-                    });
-                    let fraction = progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
-                    div().flex().flex_col().gap_1()
-                        .child(div().text_xs().child(format!("{} {text}", release.version)))
-                        .child(div().h(px(6.)).w_full().rounded_sm().bg(rgb(TRACK)).child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(ACCENT))))
-                        .into_any_element()
-                }
-                UpdateState::ReadyToRestart(release) => div().flex().flex_col().gap_2()
-                    .child(div().text_sm().child(format!("{} {}", release.version, tr("is installed. Your meeting keeps running until you restart.", "已安装。重启之前，当前会议不受影响。"))))
-                    .child(button("restart-update", tr("Save and restart", "保存并重启")).on_click(cx.listener(|this, _, _, cx| this.restart(cx))))
-                    .into_any_element(),
-                UpdateState::Failed(error) => div().flex().flex_col().gap_2()
-                    .child(div().text_sm().text_color(rgb(DANGER)).child(error.clone()))
-                    .child(button("check-update", tr("Try again", "重试")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })))
-                    .into_any_element(),
-            })
-            .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Speech", "语音")))
+            .when(forced, |d| d.child(div().text_xs().text_color(rgb(WARNING)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
+            .when(local_only, |d| d.child(div().text_xs().text_color(rgb(WARNING)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))))
+            .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Speech", "语音")))
             .child(
                 div()
                     .flex()
@@ -3795,8 +3753,71 @@ impl Render for Workbench {
                     })
             })
             .when_some(self.hearing.clone(), |d, with| d.child(div().text_xs().text_color(rgb(MUTED)).child(format!("{} {with}", tr("Hearing with", "当前识别：")))))
-            .when(forced, |d| d.child(div().text_xs().text_color(rgb(WARNING)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
-            .when(local_only, |d| d.child(div().text_xs().text_color(rgb(WARNING)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))));
+            .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Language", "语言")))
+            .child({
+                let chosen = self.form.saved.interface_language.clone();
+                let languages = [("auto", tr("Follow the system", "跟随系统")), ("en", "English"), ("zh", "中文")];
+                div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
+                    button(gpui_kit::ElementId::Name(format!("interface-language-{id}").into()), label)
+                        .when(chosen == id, |b| b.primary())
+                        .on_click(cx.listener(move |this, _, _, cx| this.choose_language(id, cx)))
+                }))
+            })
+            .child(div().text_xs().text_color(rgb(MUTED)).child(tr(
+                "The interface changes at once; a few hints in text fields change on the next start. The board and summary follow the meeting's own language.",
+                "界面立即切换；输入框里的少数提示文字下次启动后切换。板书和摘要跟随会议本身的语言。",
+            )))
+            // Before there is a model, choosing one is the only thing to do here.
+            .when(!self.needs_model, |d| {
+                d.child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Updates", "更新")))
+                .child(div().text_xs().text_color(rgb(MUTED)).child(format!("{} {}", tr("Version", "版本"), boardcast_update::VERSION)))
+                .child(match &self.update {
+                _ if self.prefix.is_none() => div().text_sm().child(tr("Updates apply to installed copies.", "只有安装版可以更新。")).into_any_element(),
+                UpdateState::Idle => button("check-update", tr("Check for updates", "检查更新")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
+                UpdateState::Checking => div().text_sm().child(tr("Checking…", "正在检查…")).into_any_element(),
+                UpdateState::UpToDate => div().flex().items_center().gap_2().child(div().text_sm().child(tr("Up to date.", "已是最新版本。"))).child(button("check-update", tr("Check again", "再次检查")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); }))).into_any_element(),
+                UpdateState::Available(release) => div().flex().flex_col().gap_2()
+                    .child(div().text_sm().child(format!("{} {} · {}", tr("New version", "新版本"), release.version, gigabytes(release.size))))
+                    .when(!release.notes.is_empty(), |d| d.child(div().text_xs().text_color(rgb(MUTED)).child(release.notes.clone())))
+                    .child(button("install-update", tr("Download and install", "下载并安装")).on_click(cx.listener(|this, _, _, cx| this.install_update(cx))))
+                    .into_any_element(),
+                UpdateState::Installing { release, progress } => {
+                    let text = progress.as_ref().map_or(tr("Starting…", "正在开始…").to_string(), |p| {
+                        if p.done >= p.total { tr("Verifying and installing…", "正在校验并安装…").to_string() } else { format!("{} / {}", gigabytes(p.done), gigabytes(p.total)) }
+                    });
+                    let fraction = progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
+                    div().flex().flex_col().gap_1()
+                        .child(div().text_xs().child(format!("{} {text}", release.version)))
+                        .child(div().h(px(6.)).w_full().rounded_sm().bg(rgb(TRACK)).child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(ACCENT))))
+                        .into_any_element()
+                }
+                UpdateState::ReadyToRestart(release) => div().flex().flex_col().gap_2()
+                    .child(div().text_sm().child(format!("{} {}", release.version, tr("is installed. Your meeting keeps running until you restart.", "已安装。重启之前，当前会议不受影响。"))))
+                    .child(button("restart-update", tr("Save and restart", "保存并重启")).on_click(cx.listener(|this, _, _, cx| this.restart(cx))))
+                    .into_any_element(),
+                UpdateState::Failed(error) => div().flex().flex_col().gap_2()
+                    .child(div().text_sm().text_color(rgb(DANGER)).child(error.clone()))
+                    .child(button("check-update", tr("Try again", "重试")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })))
+                    .into_any_element(),
+            })
+            })
+            // Metal keeps its own shaders, so there is nothing here for a Mac to manage.
+            .when(self.panel == Panel::Settings && !self.needs_model && cfg!(not(target_os = "macos")), |d| {
+                let size = dir_size(&shader_dir(&self.models));
+                d.child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Graphics cache", "显卡缓存")))
+                    .child(div().text_xs().text_color(rgb(MUTED)).child(format!(
+                        "{} {:.1} MB. {}",
+                        tr("Shaders compiled for this computer take", "为这台电脑编译的着色器占用"),
+                        size as f64 / 1e6,
+                        tr("Deleting them is safe, and the next start compiles them again, which takes about half a minute.", "删除是安全的，下次启动模型时会重新编译，大约需要半分钟。"),
+                    )))
+                    .child(div().flex().child(button("clear-shaders", tr("Delete", "删除")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
+                        if let Err(e) = std::fs::remove_dir_all(shader_dir(&this.models)) {
+                            this.form.note = Some(format!("{e:#}"));
+                        }
+                        cx.notify();
+                    }))))
+            });
         let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
         let import_panel = (self.panel == Panel::Import).then(|| self.import_panel(cx));

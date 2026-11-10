@@ -43,7 +43,7 @@ env:
 
 jobs:
   check:
-    name: typecheck · unit tests · web build
+    name: typecheck · unit tests
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -63,7 +63,6 @@ jobs:
           name: phonetic-eval
           path: eval/reports/phonetic.*
           if-no-files-found: ignore
-      - run: pnpm build
 
   board:
     name: text to board

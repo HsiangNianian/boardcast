@@ -1,6 +1,6 @@
 # boardcast website
 
-A standalone static page, separate from the desktop app and the web demo. It is English only. Its dependencies
+A standalone static page, separate from the desktop app. It is English only. Its dependencies
 are the ones already installed at the repository root, so there is nothing more to install.
 
 ```bash
@@ -9,8 +9,7 @@ pnpm site:build     # → landing/dist/, with relative paths, so it opens under 
 pnpm site:preview
 ```
 
-GitHub Pages serves this page at the root. `pages.yml` builds the earlier app's web demo into `landing/dist/demo/`,
-and the footer links to it.
+GitHub Pages serves this page at the root; `pages.yml` builds and publishes it.
 
 ## The idea
 

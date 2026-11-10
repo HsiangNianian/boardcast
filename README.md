@@ -24,7 +24,7 @@ boardcast turns a discussion into a growing whiteboard. Flows, notes, assignment
 
 Speech recognition and the board model run on your computer by default. Once the models are downloaded, you can work offline. You can also connect an OpenAI-compatible API for a larger model.
 
-The desktop app is a native rewrite in Rust on [GPUI](crates/README.md). The earlier Tauri app is no longer released. The [web demo](https://hsiangnianian.github.io/boardcast/demo/) on the website still runs that earlier app, so a few things it shows are [not in the current app yet](#not-in-this-app-yet).
+The desktop app is a native rewrite in Rust on [GPUI](crates/README.md). The earlier Tauri app is no longer released, and a few of its features are [not in the current app yet](#not-in-this-app-yet).
 
 [Get started](#get-started) · [What you can do](#what-you-can-do) · [Shortcuts](#shortcuts) · [Models and privacy](#models-and-privacy) · [Development](#development-and-evaluation)
 
@@ -91,7 +91,7 @@ In **Settings › Speech › Listen to**, choose a microphone or, on Linux, the 
 
 ### Not in this app yet
 
-These were in the earlier app, and so in the web demo, and have not been rebuilt yet: free editing and export with Excalidraw, the glossary and pronunciation correction ([#117](https://github.com/HsiangNianian/boardcast/issues/117)), hearing the microphone and system audio together, system audio on macOS ([#34](https://github.com/HsiangNianian/boardcast/issues/34)), a Windows package, a global microphone shortcut and the diagnostics bundle.
+These were in the earlier app and have not been rebuilt yet: free editing and export with Excalidraw, the glossary and pronunciation correction ([#117](https://github.com/HsiangNianian/boardcast/issues/117)), hearing the microphone and system audio together, system audio on macOS ([#34](https://github.com/HsiangNianian/boardcast/issues/34)), a Windows package, a global microphone shortcut and the diagnostics bundle.
 
 ## Shortcuts
 
@@ -141,12 +141,11 @@ cargo test --workspace
 sh packaging/linux/package.sh           # target/package/boardcast-<version>-<arch>-linux.tar.gz
 ```
 
-The website, the web demo and the evaluation tooling are still Node projects. Use **Node.js 24+** and the pinned **pnpm 11.13.1**:
+The website and the evaluation tooling are Node projects. Use **Node.js 24+** and the pinned **pnpm 11.13.1**:
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm site:dev                  # website at http://localhost:1430
-pnpm dev                       # the earlier app's web demo at http://localhost:1420
 pnpm test                      # engine and ASR tooling unit tests; no model needed
 ```
 

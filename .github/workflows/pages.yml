@@ -44,7 +44,7 @@ jobs:
         # The demo is a page of its own under demo/, built after the site, which empties dist/ first.
         run: |
           trunk build --release
-          trunk build --release demo/index.html --dist dist/demo
+          trunk build demo/index.html --dist dist/demo --release
       - uses: actions/upload-pages-artifact@v4
         with:
           path: landing/dist

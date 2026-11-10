@@ -626,6 +626,13 @@ impl Session {
         graph.clone()
     }
 
+    /// A change made by hand, such as rewriting or removing something, applies at once.
+    pub fn edit(&self, ops: &[boardcast_board::graph::Op]) -> Graph {
+        let mut graph = self.graph.lock().expect("graph lock");
+        graph.apply(ops);
+        graph.clone()
+    }
+
     /// Mark a word or sentence of imported text by hand, or take the mark off.
     pub fn toggle_span(&self, id: &str, span: boardcast_board::spans::Span) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");

@@ -44,6 +44,11 @@ pub fn next_name<'a>(taken: impl IntoIterator<Item = &'a str>) -> String {
 /// Say whose voice this is, joining it to that voice or adding a new one. `taken` holds names already
 /// in use in the meeting, including hand-written ones, which a new voice must not share.
 pub fn identify(voices: &mut Vec<Voice>, voiceprint: &[f64], taken: &[&str]) -> String {
+    identify_at(voices, voiceprint, taken, SAME)
+}
+
+/// As [`identify`], counting voices this alike as one person, for measuring other thresholds.
+pub fn identify_at(voices: &mut Vec<Voice>, voiceprint: &[f64], taken: &[&str], same: f64) -> String {
     // The first of equals wins, as in the older app.
     let mut closest: Option<(usize, f64)> = None;
     for (i, voice) in voices.iter().enumerate() {
@@ -52,7 +57,7 @@ pub fn identify(voices: &mut Vec<Voice>, voiceprint: &[f64], taken: &[&str]) -> 
             closest = Some((i, score));
         }
     }
-    if let Some((i, _)) = closest.filter(|(_, score)| *score >= SAME) {
+    if let Some((i, _)) = closest.filter(|(_, score)| *score >= same) {
         let voice = &mut voices[i];
         let weight = f64::from(voice.n.min(MEMORY));
         let merged: Vec<f64> = voice.centroid.iter().enumerate().map(|(k, x)| x * weight + voiceprint.get(k).copied().unwrap_or(0.0)).collect();
@@ -72,8 +77,13 @@ const NEW_VOICE_SECONDS: f64 = 1.5;
 /// Who said this sentence, if its voice can tell. `None` means it is too short to name someone new, and
 /// belongs to whoever spoke last.
 pub fn identify_sentence(voices: &mut Vec<Voice>, voiceprint: &[f64], seconds: f64, taken: &[&str]) -> Option<String> {
-    let known = voices.iter().any(|voice| dot(&voice.centroid, voiceprint) >= SAME);
-    (known || seconds >= NEW_VOICE_SECONDS).then(|| identify(voices, voiceprint, taken))
+    identify_sentence_at(voices, voiceprint, seconds, taken, SAME, NEW_VOICE_SECONDS)
+}
+
+/// As [`identify_sentence`], with the threshold and the shortest new voice given, for measuring others.
+pub fn identify_sentence_at(voices: &mut Vec<Voice>, voiceprint: &[f64], seconds: f64, taken: &[&str], same: f64, new_voice: f64) -> Option<String> {
+    let known = voices.iter().any(|voice| dot(&voice.centroid, voiceprint) >= same);
+    (known || seconds >= new_voice).then(|| identify_at(voices, voiceprint, taken, same))
 }
 
 /// Rename a voice. Taking a name another voice has joins the two, which had been told apart by mistake.

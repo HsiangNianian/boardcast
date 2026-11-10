@@ -82,3 +82,12 @@ The [Eval workflow](../../.github/workflows/eval.yml) runs three jobs, one per r
 Until #150 the evaluation ran the earlier Tauri app's voice engine, which this app does not use. Its candidate survey (Whisper, Qwen3-ASR, Paraformer, wav2vec2 and others), GTCRN denoising and dynamic review were retired with it; the GPUI app's recognizers are SenseVoice, Parakeet and ReazonSpeech. Their reports stay as a record: [the first four-way run](baseline.md), [the candidate survey](candidates.md), [the 19-configuration sweep](sweep-2026-11-02.md), [the long meetings](long-meetings-2026-11-02.md) and [dynamic review](dynamic.md). A new candidate is evaluated by adding it to `crates/audio` first. `crates/audio/examples/` keeps narrower experiments: `asr-compare`, `asr-bench`, `asr-japanese` and `speaker-eval`.
 
 Your own voice can be recorded for a personal check with [own-voice/record.sh](own-voice/README.md).
+
+## Telling speakers apart
+
+`asr-eval speakers <root> [--only id,id] [--output dir] [--reuse]` hears the meeting recordings whose
+references say who spoke when, keeps every sentence's voiceprint in `<output>/sentences/`, and gives the
+sentences to speakers by the app's own rule at thresholds from 0.35 to 0.6. Each sentence is compared with the
+reference speaker it overlaps most: purity is how much of each speaker found is one person, coverage how much of
+each person is one speaker found. `--reuse` measures again from the kept voiceprints without hearing anything.
+

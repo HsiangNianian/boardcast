@@ -10,6 +10,7 @@ name = "asr-eval"
 path = "src/main.rs"
 
 [dependencies]
+boardcast-board.workspace = true
 anyhow.workspace = true
 boardcast-audio.workspace = true
 serde.workspace = true

@@ -2085,6 +2085,31 @@ impl Workbench {
         cx.notify();
     }
 
+    /// Keep this board's topics as a template, named after the meeting.
+    fn save_template(&mut self, cx: &mut Context<Self>) {
+        let topics: Vec<String> = self.live.graph.nodes.iter().filter(|n| n.kind == Kind::Topic).map(|n| n.label.clone()).collect();
+        if topics.is_empty() {
+            return;
+        }
+        let name = Some(self.live.title().to_string()).filter(|t| !t.is_empty()).unwrap_or_else(|| topics.join(" · "));
+        self.form.saved.templates.retain(|(n, _)| *n != name);
+        self.form.saved.templates.push((name, topics));
+        if let Err(e) = self.form.saved.save() {
+            self.notice = Some(format!("{e:#}"));
+        }
+        cx.notify();
+    }
+
+    fn forget_template(&mut self, index: usize, cx: &mut Context<Self>) {
+        if index < self.form.saved.templates.len() {
+            self.form.saved.templates.remove(index);
+            if let Err(e) = self.form.saved.save() {
+                self.notice = Some(format!("{e:#}"));
+            }
+        }
+        cx.notify();
+    }
+
     /// A new meeting with a template's topics already on the board, for the model to fill.
     fn new_meeting_from(&mut self, topics: Vec<String>, cx: &mut Context<Self>) {
         if self.leave() {
@@ -2623,6 +2648,7 @@ impl Workbench {
             diarize: self.form.saved.diarize,
             turn_pages: self.form.saved.turn_pages,
             glossary: self.form.saved.glossary.clone(),
+            templates: self.form.saved.templates.clone(),
             system_speech: self.form.saved.system_speech,
             speech_language: self.form.saved.speech_language.clone(),
             interface_language: self.form.saved.interface_language.clone(),
@@ -3991,7 +4017,13 @@ impl Render for Workbench {
                         d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(tr("This is a sample, which is not saved, so there are no meetings to list here.", "这是示例，不会保存，这里没有会议可以列出。")))
                     })
                     .when(self.store.is_some() && query.is_empty(), |d| {
-                        d.child(manual_label("+", tr("New from a template", "从模板新建")).mt_0().mb_1()).children(templates().into_iter().enumerate().map(|(i, (name, topics))| {
+                        let own: Vec<(String, Vec<String>, Option<usize>)> = templates()
+                            .into_iter()
+                            .map(|(n, t)| (n.to_string(), t, None))
+                            .chain(self.form.saved.templates.iter().enumerate().map(|(i, (n, t))| (n.clone(), t.clone(), Some(i))))
+                            .collect();
+                        let has_topics = self.live.graph.nodes.iter().any(|n| n.kind == Kind::Topic);
+                        d.child(manual_label("+", tr("New from a template", "从模板新建")).mt_0().mb_1()).children(own.into_iter().enumerate().map(|(i, (name, topics, saved))| {
                             let shown = topics.join(" · ");
                             div()
                                 .id(("template", i))
@@ -4002,9 +4034,41 @@ impl Render for Workbench {
                                 .border_color(rgb(pal().line))
                                 .hover(|d| d.bg(rgb(pal().selected)))
                                 .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(topics.clone(), cx)))
-                                .child(div().text_sm().child(name))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .justify_between()
+                                        .child(div().text_sm().child(name))
+                                        .when_some(saved, |d, index| {
+                                            d.child(
+                                                div()
+                                                    .id(("forget-template", index))
+                                                    .px_1()
+                                                    .text_xs()
+                                                    .text_color(rgb(pal().faint))
+                                                    .hover(|d| d.text_color(rgb(pal().text)))
+                                                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                                    .on_click(cx.listener(move |this, _, _, cx| this.forget_template(index, cx)))
+                                                    .child("×"),
+                                            )
+                                        }),
+                                )
                                 .child(div().text_xs().text_color(rgb(pal().muted)).child(shown))
                         }))
+                        .when(has_topics, |d| {
+                            d.child(
+                                div()
+                                    .id("save-template")
+                                    .py_1()
+                                    .px_2()
+                                    .cursor_pointer()
+                                    .text_xs()
+                                    .text_color(rgb(pal().accent))
+                                    .hover(|d| d.text_color(rgb(pal().text)))
+                                    .on_click(cx.listener(|this, _, _, cx| this.save_template(cx)))
+                                    .child(tr("+ Keep this board's topics as a template", "+ 把这张板的话题存成模板")),
+                            )
+                        })
                         .child(manual_label("·", tr("Meetings", "会议")).mb_1())
                     })
                     .when(self.store.is_some() && self.library.is_empty(), |d| {

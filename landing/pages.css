@@ -48,13 +48,13 @@ details summary::after { content: '+'; font: 400 18px var(--mono); color: var(--
 details[open] summary::after { content: '−'; }
 details > :not(summary) { margin-bottom: 20px; }
 
-footer { display: flex; justify-content: space-between; gap: 16px; padding-top: 28px; padding-bottom: 56px; border-top: 1px solid var(--hair); }
+footer.wrap { display: flex; justify-content: space-between; gap: 16px; padding-top: 28px; padding-bottom: 56px; border-top: 1px solid var(--hair); }
 footer nav { display: flex; gap: 20px; }
 footer a { color: var(--dim); }
 footer a:hover, footer a.on { color: var(--fg); }
 
 @media (max-width: 800px) {
-  .wrap { padding: 0 20px; } .frame { inset: 6px; }
+  .wrap { padding-left: 20px; padding-right: 20px; } .frame { inset: 6px; }
   .doc { grid-template-columns: 1fr; gap: 32px; padding-top: 64px; } .doc > aside { position: static; }
   header nav { display: none; }
   .doc th:nth-child(3), .doc td:nth-child(3) { display: none; }

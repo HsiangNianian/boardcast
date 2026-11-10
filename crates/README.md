@@ -129,6 +129,11 @@ The checker's auto-repair fired on real model output once, on DeepSeek's `group-
 Speech is recognized by SenseVoice. A sentence it hears as English, with no Chinese, Japanese or Korean in it, is recognized
 again by Parakeet Unified EN, which did better on English meetings (18.49% against 13.79% WER on four business calls in
 `eval/asr/long-meetings-2026-11-02.md`). Chinese with English terms stays with SenseVoice, as Parakeet has no Chinese.
+A sentence with kana in it, and at least 0.3 s long, is recognized again by ReazonSpeech k2 v2, which did better on
+Japanese (5.02% against 9.14% CER on short clips, and about the same on a long meeting, in
+`crates/audio/examples/asr-japanese.rs`); shorter pieces made it invent words. Any of the three models may be left out of a
+package: without SenseVoice, the one that is there hears everything, and on a Mac the system's recognizer can stand in
+for all of them.
 `crates/audio/examples/asr-compare.rs` compares the two and the routing on any recordings with known text, such as
 `eval/asr/own-voice/`.
 

@@ -1,4 +1,5 @@
-//! The audio chain: microphone or file -> 16 kHz mono -> Silero VAD -> SenseVoice and CAM++ -> a finished sentence.
+//! The audio chain: microphone or file -> 16 kHz mono -> Silero VAD -> a recognizer and CAM++ -> a finished sentence.
+//! Any of the recognizers may be missing; SenseVoice, when there, decides which language a sentence is in.
 //! It knows nothing about boards; callers receive each sentence through a callback.
 
 use anyhow::{anyhow, Context, Result};
@@ -108,6 +109,24 @@ pub struct Sentence {
 pub enum Engine {
     SenseVoice,
     Parakeet,
+    /// ReazonSpeech, for Japanese.
+    Reazon,
+    /// The recognizer built into the system, such as Apple's.
+    System,
+}
+
+/// Shorter than this, ReazonSpeech makes up words, so SenseVoice's reading stands.
+const MIN_JAPANESE: usize = SAMPLE_RATE as usize * 3 / 10;
+
+/// Whether recognized text is Japanese: it has kana. Japanese written only in kanji is too rare to matter,
+/// and telling it from Chinese would take more than the text.
+pub fn is_japanese(text: &str) -> bool {
+    text.chars().any(|c| matches!(c as u32, 0x3040..=0x309F | 0x30A0..=0x30FF | 0x31F0..=0x31FF | 0xFF66..=0xFF9D))
+}
+
+/// A recognizer outside this crate, such as the system's own, that takes a sentence and gives its text.
+pub trait Recognizer: Send {
+    fn recognize(&mut self, samples: &[f32]) -> Result<String>;
 }
 
 /// Whether recognized text is English rather than another language: letters, and no Chinese, Japanese
@@ -146,6 +165,35 @@ pub fn load_parakeet(dir: &Path) -> Option<OfflineRecognizer> {
     recognizer
 }
 
+/// ReazonSpeech k2 v2, for Japanese, from `dir`, if its files are there.
+pub fn load_reazon(dir: &Path) -> Option<OfflineRecognizer> {
+    let file = |name: &str| dir.join(name).is_file().then(|| dir.join(name).to_string_lossy().to_string());
+    let mut config = OfflineRecognizerConfig::default();
+    config.model_config.transducer = OfflineTransducerModelConfig { encoder: file("encoder-epoch-99-avg-1.int8.onnx"), decoder: file("decoder-epoch-99-avg-1.int8.onnx"), joiner: file("joiner-epoch-99-avg-1.int8.onnx") };
+    config.model_config.tokens = file("tokens.txt");
+    config.model_config.num_threads = 2;
+    if config.model_config.transducer.encoder.is_none() || config.model_config.tokens.is_none() {
+        return None;
+    }
+    let recognizer = OfflineRecognizer::create(&config);
+    if recognizer.is_none() {
+        eprintln!("ReazonSpeech did not load, so Japanese is left to the other recognizers");
+    }
+    recognizer
+}
+
+/// SenseVoice, from `dir`, if its files are there.
+fn load_sense_voice_if_there(dir: &Path) -> Option<OfflineRecognizer> {
+    if !dir.join("model.int8.onnx").is_file() {
+        return None;
+    }
+    let recognizer = load_sense_voice(dir);
+    if let Err(e) = &recognizer {
+        eprintln!("{e:#}");
+    }
+    recognizer.ok()
+}
+
 /// SenseVoice, from `dir`.
 pub fn load_sense_voice(dir: &Path) -> Result<OfflineRecognizer> {
     let mut config = OfflineRecognizerConfig::default();
@@ -160,11 +208,65 @@ pub fn transcribe(asr: &OfflineRecognizer, samples: &[f32]) -> String {
     recognize(asr, samples)
 }
 
+/// The recognizers an ear has. Each may be missing, but not all of them.
+pub struct Recognizers {
+    /// Takes every sentence when given, as the person chose it over the models.
+    pub system: Option<Box<dyn Recognizer>>,
+    /// Hears every language and says which one it was, so it routes the others.
+    pub sense_voice: Option<OfflineRecognizer>,
+    /// Recognizes English again, as it does English better.
+    pub english: Option<OfflineRecognizer>,
+    /// Recognizes Japanese again, as it does Japanese better.
+    pub japanese: Option<OfflineRecognizer>,
+}
+
+impl Recognizers {
+    /// Whatever models are in `models`: `sense-voice/`, `parakeet-en/` and `reazon-ja/`.
+    pub fn load(models: &Path) -> Self {
+        Self { system: None, sense_voice: load_sense_voice_if_there(&models.join("sense-voice")), english: load_parakeet(&models.join("parakeet-en")), japanese: load_reazon(&models.join("reazon-ja")) }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.system.is_none() && self.sense_voice.is_none() && self.english.is_none() && self.japanese.is_none()
+    }
+
+    /// The text of a sentence and what wrote it, empty if nothing was understood.
+    fn hear(&mut self, samples: &[f32]) -> (String, Engine) {
+        if let Some(system) = self.system.as_mut() {
+            return match system.recognize(samples) {
+                Ok(text) => (text, Engine::System),
+                Err(e) => {
+                    eprintln!("the system recognizer failed: {e:#}");
+                    (String::new(), Engine::System)
+                }
+            };
+        }
+        let (text, engine) = match (&self.sense_voice, &self.japanese, &self.english) {
+            (Some(asr), _, _) => (recognize(asr, samples), Engine::SenseVoice),
+            (None, Some(japanese), _) if samples.len() >= MIN_JAPANESE => (recognize(japanese, samples), Engine::Reazon),
+            (None, Some(_), None) => return (String::new(), Engine::Reazon),
+            (None, _, Some(english)) => (recognize(english, samples), Engine::Parakeet),
+            (None, _, None) => return (String::new(), Engine::SenseVoice),
+        };
+        // What the first reading says about the language decides who reads it again.
+        let again = match engine {
+            Engine::SenseVoice if is_japanese(&text) && samples.len() >= MIN_JAPANESE => self.japanese.as_ref().map(|j| (j, Engine::Reazon)),
+            Engine::SenseVoice | Engine::Reazon if is_english(&text) => self.english.as_ref().map(|e| (e, Engine::Parakeet)),
+            _ => None,
+        };
+        if let Some((asr, better)) = again {
+            let text = recognize(asr, samples);
+            if !text.is_empty() {
+                return (text, better);
+            }
+        }
+        (text, engine)
+    }
+}
+
 pub struct Ear {
     vad: VoiceActivityDetector,
-    asr: OfflineRecognizer,
-    /// Recognizes English again, as it does English better. Without its files, SenseVoice does everything.
-    english: Option<OfflineRecognizer>,
+    asr: Recognizers,
     speaker: Option<SpeakerEmbeddingExtractor>,
     pending: Vec<f32>,
     /// The sentence being said, from the moment speech was detected and with some audio before it.
@@ -183,9 +285,17 @@ pub struct Ear {
 }
 
 impl Ear {
-    /// `models` holds `silero_vad.onnx`, `sense-voice/`, `speaker/` and `parakeet-en/`. Without the last two,
-    /// speech is still heard, but speakers are not told apart and English is left to SenseVoice.
+    /// `models` holds `silero_vad.onnx`, `speaker/` and the recognizers' folders (see [`Recognizers::load`]).
+    /// Without the speaker model, speech is still heard, but speakers are not told apart.
     pub fn load(models: &Path) -> Result<Self> {
+        Self::with(models, Recognizers::load(models))
+    }
+
+    /// An ear with the recognizers given, and the detector and speaker model from `models`.
+    pub fn with(models: &Path, asr: Recognizers) -> Result<Self> {
+        if asr.is_empty() {
+            return Err(anyhow!("no speech recognizer: neither a speech model nor the system's recognizer is there"));
+        }
         let path = |p: &str| models.join(p).to_string_lossy().to_string();
         let vad_config = VadModelConfig {
             silero_vad: SileroVadModelConfig {
@@ -201,16 +311,6 @@ impl Ear {
             ..Default::default()
         };
         let vad = VoiceActivityDetector::create(&vad_config, 60.0).context("loading the speech detector")?;
-        let mut asr_config = OfflineRecognizerConfig::default();
-        asr_config.model_config.sense_voice = OfflineSenseVoiceModelConfig {
-            model: Some(path("sense-voice/model.int8.onnx")),
-            language: Some("auto".into()),
-            use_itn: true,
-        };
-        asr_config.model_config.tokens = Some(path("sense-voice/tokens.txt"));
-        asr_config.model_config.num_threads = 2;
-        let asr = OfflineRecognizer::create(&asr_config).context("loading SenseVoice")?;
-        let english = load_parakeet(&models.join("parakeet-en"));
         let speaker = SpeakerEmbeddingExtractor::create(&SpeakerEmbeddingExtractorConfig { model: Some(path("speaker/campplus_zh_en.onnx")), num_threads: 1, ..Default::default() });
         if speaker.is_none() {
             eprintln!("the speaker model did not load, so speakers will not be told apart");
@@ -218,7 +318,6 @@ impl Ear {
         Ok(Self {
             vad,
             asr,
-            english,
             speaker,
             pending: vec![],
             speech: vec![],
@@ -286,14 +385,7 @@ impl Ear {
             return;
         }
         let ended = Instant::now();
-        let mut text = recognize(&self.asr, samples);
-        let mut engine = Engine::SenseVoice;
-        if let Some(english) = self.english.as_ref().filter(|_| is_english(&text)) {
-            let again = recognize(english, samples);
-            if !again.is_empty() {
-                (text, engine) = (again, Engine::Parakeet);
-            }
-        }
+        let (text, engine) = self.asr.hear(samples);
         if !text.is_empty() {
             let asr_ms = ended.elapsed().as_millis();
             heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine });
@@ -434,6 +526,32 @@ mod tests {
         assert!(!is_english("はい、そうです"));
         assert!(!is_english("1."));
         assert!(!is_english(""));
+    }
+
+    #[test]
+    fn kana_goes_to_reazon_and_chinese_does_not() {
+        assert!(is_japanese("はい、そうです"));
+        assert!(is_japanese("サーバーを再起動します"));
+        assert!(is_japanese("ｻｰﾊﾞｰ"));
+        assert!(!is_japanese("小程序把请求发给后端"));
+        assert!(!is_japanese("The gateway"));
+    }
+
+    struct Fixed(&'static str);
+
+    impl Recognizer for Fixed {
+        fn recognize(&mut self, _: &[f32]) -> Result<String> {
+            Ok(self.0.to_string())
+        }
+    }
+
+    #[test]
+    fn the_system_recognizer_takes_every_sentence_and_nothing_is_no_ear() {
+        let mut asr = Recognizers { system: Some(Box::new(Fixed("こんにちは"))), sense_voice: None, english: None, japanese: None };
+        assert_eq!(asr.hear(&[0.0; 16_000]), ("こんにちは".to_string(), Engine::System));
+        let none = Recognizers { system: None, sense_voice: None, english: None, japanese: None };
+        assert!(none.is_empty());
+        assert!(Ear::with(Path::new("/nowhere"), none).is_err());
     }
 
     #[test]

@@ -65,6 +65,7 @@ impl Resources {
             ("speech tokens", self.voice.join("sense-voice/tokens.txt")),
             ("speaker model", self.voice.join("speaker/campplus_zh_en.onnx")),
             ("English speech model", self.voice.join("parakeet-en/encoder.int8.onnx")),
+            ("Japanese speech model", self.voice.join("reazon-ja/encoder-epoch-99-avg-1.int8.onnx")),
             ("PDF library", boardcast_import::pdf::library_file(&self.pdfium)),
         ];
         let rows: Vec<_> = checks.iter().map(|(name, path)| json!({ "name": name, "path": path, "ok": path.exists() })).collect();

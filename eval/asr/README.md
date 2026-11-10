@@ -90,4 +90,3 @@ references say who spoke when, keeps every sentence's voiceprint in `<output>/se
 sentences to speakers by the app's own rule at thresholds from 0.35 to 0.6. Each sentence is compared with the
 reference speaker it overlaps most: purity is how much of each speaker found is one person, coverage how much of
 each person is one speaker found. `--reuse` measures again from the kept voiceprints without hearing anything.
-

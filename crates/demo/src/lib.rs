@@ -33,7 +33,8 @@ struct SampleLine {
     ops: Option<String>,
 }
 
-/// The English samples: their boards need only the Latin strokes built into the board crate.
+/// The English samples, whose boards need only the Latin strokes built into the board crate, then two in
+/// Chinese, whose characters come from `zh-glyphs.pack`.
 fn samples() -> Vec<Sample> {
     [
         include_str!("../../../assets/demos/en-release-priorities.json"),
@@ -41,6 +42,8 @@ fn samples() -> Vec<Sample> {
         include_str!("../../../assets/demos/en-upload-branch.json"),
         include_str!("../../../assets/demos/en-platform-groups.json"),
         include_str!("../../../assets/demos/en-owner-handoff.json"),
+        include_str!("../../../assets/demos/login-flow.json"),
+        include_str!("../../../assets/demos/bs-mixed.json"),
     ]
     .iter()
     .map(|s| serde_json::from_str(s).expect("a sample meeting"))
@@ -48,7 +51,7 @@ fn samples() -> Vec<Sample> {
 }
 
 /// Short names for the sample list, in the samples' order.
-const TITLES: [&str; 5] = ["Release checklist", "Sign-in flow", "Upload pipeline", "Service groups", "Owner handoff"];
+const TITLES: [&str; 7] = ["Release checklist", "Sign-in flow", "Upload pipeline", "Service groups", "Owner handoff", "登录流程", "流程和待办"];
 
 /// The app's dark board shows strokes, composed in marker colors, in their chalk.
 fn chalk(rgb: u32) -> String {
@@ -150,8 +153,9 @@ impl Board {
         let (under, ink) = (svg_el("g", &[]), svg_el("g", &[]));
         let _ = root.append_child(&under);
         let _ = root.append_child(&ink);
-        // No Chinese data here: the samples are English, and Latin strokes are built in.
-        let glyphs = Glyphs::load(HanziSource::Directory(Default::default())).expect("built-in strokes");
+        // Only the characters the Chinese samples use, from hanzi-writer-data (Arphic Public License):
+        // `boardcast-tools pack-glyphs assets/hanzi crates/demo/zh-glyphs.pack --only-from <the samples>`.
+        let glyphs = Glyphs::load(HanziSource::PackBytes(include_bytes!("../zh-glyphs.pack"))).expect("the samples' strokes");
         Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), view: [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1] }
     }
 

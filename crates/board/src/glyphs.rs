@@ -49,6 +49,8 @@ pub enum HanziSource {
     Pack(PathBuf),
     /// One JSON file per character, as `boardcast-tools fetch glyphs` generates them in a checkout.
     Directory(PathBuf),
+    /// A pack already in memory, as a web page carries a few characters of one.
+    PackBytes(&'static [u8]),
 }
 
 enum Hanzi {
@@ -81,6 +83,7 @@ impl Glyphs {
         let source = match source {
             HanziSource::Pack(path) => Hanzi::Pack(Pack::read(&path)?),
             HanziSource::Directory(path) => Hanzi::Directory(path),
+            HanziSource::PackBytes(bytes) => Hanzi::Pack(Pack::parse(bytes).context("the glyph pack is damaged")?),
         };
         Ok(Self { latin, punct, kana, source, hanzi: HashMap::new() })
     }
@@ -180,6 +183,11 @@ impl Pack {
 
 /// Build a pack from the folder `boardcast-tools fetch glyphs` generates. Returns how many characters it holds.
 pub fn write_pack(dir: &Path, out: &Path) -> Result<usize> {
+    write_pack_of(dir, out, None)
+}
+
+/// As [`write_pack`], keeping only the characters in `only` when given.
+pub fn write_pack_of(dir: &Path, out: &Path, only: Option<&std::collections::HashSet<char>>) -> Result<usize> {
     let mut entries: Vec<(u32, Vec<Vec<[f32; 2]>>)> = vec![];
     for file in std::fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
         let path = file?.path();
@@ -189,6 +197,9 @@ pub fn write_pack(dir: &Path, out: &Path) -> Result<usize> {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
         let mut chars = stem.chars();
         let (Some(ch), None) = (chars.next(), chars.next()) else { continue };
+        if only.is_some_and(|keep| !keep.contains(&ch)) {
+            continue;
+        }
         let medians: Vec<Vec<[f32; 2]>> = serde_json::from_slice(&std::fs::read(&path)?).with_context(|| format!("parsing {}", path.display()))?;
         entries.push((ch as u32, medians));
     }

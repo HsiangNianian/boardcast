@@ -1,0 +1,20 @@
+[package]
+name = "boardcast-asr-eval"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Measures the app's speech recognition on a fixed corpus of recordings"
+
+[[bin]]
+name = "asr-eval"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+boardcast-audio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+sherpa-onnx = "2.0.1"
+unicode-normalization = "0.1"
+ureq = { version = "2", features = ["proxy-from-env"] }

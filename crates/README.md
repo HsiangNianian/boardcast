@@ -15,6 +15,7 @@ editing is dropped. The Tauri app in `src-tauri/` and `src/` is no longer releas
 | `boardcast-update` | Finding, verifying and installing a new version | UI, audio, board |
 | `boardcast-ui` | The GPUI window, tiled ink rendering, wiring the chain together | |
 | `boardcast-tools` | `check` and `agent-eval` for CI and model evaluation | UI |
+| `boardcast-asr-eval` | `asr-eval`: the app's speech recognition measured on fixed recordings | UI, board |
 
 ## Install on Linux
 

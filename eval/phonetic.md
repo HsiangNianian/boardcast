@@ -1,6 +1,6 @@
 # Phonetic label and command evaluation
 
-Run `pnpm eval:phonetic`. The existing **Eval** workflow runs this suite and publishes `phonetic-eval` with JSON results and a Markdown comparison. No Python, model download, microphone or external service is required. `pnpm install --frozen-lockfile` supplies the pinned dictionaries.
+This suite measured the earlier app's pronunciation matching, which the GPUI app does not have yet. Its runner and CI job were removed with the earlier app's tooling (#150); the cases in `phonetic-cases.json` stay, to measure the matching again once it is rebuilt in Rust (#117).
 
 The fixtures in [phonetic-cases.json](phonetic-cases.json) are **synthetic transcript perturbations**, not recorded speech. They check the shared production resolver against exact-name lookup with glossary correction, then check explicit commands, required abstentions and delegation. Reported correctness includes expected abstentions; wrong matches count incorrect non-empty selections. These numbers do not measure ASR accuracy or guarantee an LLM's decisions. Audio model comparisons remain in [asr/](asr/README.md).
 

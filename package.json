@@ -12,18 +12,13 @@
     "dev": "node scripts/glyphs.mjs && vite build -c vite.player.config.ts --logLevel warn && vite",
     "build": "node scripts/glyphs.mjs && tsc --noEmit && vite build -c vite.player.config.ts && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"src/engine/*.test.ts\" \"eval/asr/*.test.mjs\"",
-    "eval:phonetic": "node eval/phonetic.ts",
+    "test": "node --test \"src/engine/*.test.ts\"",
     "tauri": "node scripts/fetch-llama.mjs && node scripts/fetch-voice.mjs && tauri",
     "release": "node scripts/release.mjs",
     "build:player": "vite build -c vite.player.config.ts",
     "site:dev": "vite -c landing/vite.config.ts",
     "site:build": "vite build -c landing/vite.config.ts",
-    "site:preview": "vite preview -c landing/vite.config.ts",
-    "eval:audio": "node eval/asr/download.mjs",
-    "eval:listen": "node eval/asr/listen.mjs",
-    "eval:asr": "node eval/asr/run.mjs",
-    "eval:asr:sweep": "node eval/asr/sweep.mjs"
+    "site:preview": "vite preview -c landing/vite.config.ts"
   },
   "dependencies": {
     "@d2lang/d2": "0.1.34",

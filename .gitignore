@@ -15,8 +15,6 @@ src-tauri/voice/
 src-tauri/apple-speech/boardcast-speech-*
 public/player/
 eval/asr/.data/
-eval/asr/.models/
-eval/asr/__pycache__/
 target/
 # The model downloader is code; only downloaded models are ignored above.
 !crates/models/

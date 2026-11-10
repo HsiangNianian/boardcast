@@ -15,7 +15,7 @@ out="$here/recordings"
 mkdir -p "$out"
 only="${1:-}"
 
-node -e 'for (const s of require(process.argv[1])) console.log(`${s.id}\t${s.text}`)' "$here/sentences.json" |
+python3 -c 'import json, sys; [print(s["id"], s["text"], sep="\t") for s in json.load(open(sys.argv[1]))]' "$here/sentences.json" |
 while IFS="$(printf '\t')" read -r id text; do
   [ -n "$only" ] && [ "$id" != "$only" ] && continue
   [ -z "$only" ] && [ -f "$out/$id.wav" ] && continue

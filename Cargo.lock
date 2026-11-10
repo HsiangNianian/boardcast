@@ -708,6 +708,7 @@ dependencies = [
  "anyhow",
  "base64",
  "boardcast-board",
+ "flate2",
  "libc",
  "pinyin",
  "regex",

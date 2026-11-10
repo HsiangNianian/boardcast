@@ -4,12 +4,83 @@
 //! says one of them in other characters.
 //!
 //! Chinese is compared by pinyin without tones, character by character, any reading of a character
-//! counting. Latin text is compared without case or spaces, so "open ai" is OpenAI and "A P I" is API.
-//! Japanese kana are compared as katakana. Other homophones, such as "cash" for cache or 公正 for 構成,
-//! need a written alias in the glossary: that takes a pronouncing dictionary this does not have yet.
+//! counting. English words are compared by their sounds in the CMU Pronouncing Dictionary, without
+//! stress, so "cash" is cache and "cue" is queue; and without case or spaces, so "open ai" is OpenAI and
+//! "A P I" is API. Japanese kana are compared as katakana. Kanji read alike, such as 公正 for 構成, need
+//! a written alias in the glossary: that takes a Japanese reading dictionary this does not have yet.
 
 use pinyin::ToPinyinMulti;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::io::Read;
+use std::sync::OnceLock;
+
+/// Every English word's ways of being said, as sounds without stress: "cache" → ["K AE SH"].
+fn cmu() -> &'static HashMap<String, Vec<String>> {
+    static CMU: OnceLock<HashMap<String, Vec<String>>> = OnceLock::new();
+    CMU.get_or_init(|| {
+        let mut text = String::new();
+        let packed: &[u8] = include_bytes!("../../../assets/dictionaries/cmudict.dict.gz");
+        if flate2::read::GzDecoder::new(packed).read_to_string(&mut text).is_err() {
+            return HashMap::new();
+        }
+        let mut words: HashMap<String, Vec<String>> = HashMap::new();
+        for line in text.lines() {
+            let Some((word, sounds)) = line.split_once(' ') else { continue };
+            // Variants are written word(2); a trailing comment starts with #.
+            let word = word.split('(').next().unwrap_or(word);
+            let sounds: Vec<&str> = sounds.split('#').next().unwrap_or("").split_whitespace().map(|p| p.trim_end_matches(|c: char| c.is_ascii_digit())).collect();
+            words.entry(word.to_string()).or_default().push(sounds.join(" "));
+        }
+        words
+    })
+}
+
+/// Load the dictionary now, away from the window, rather than on the first English line.
+pub fn warm() {
+    cmu();
+}
+
+/// How a run of English words can be said, each way as one string of sounds. Empty if a word is unknown.
+fn said(words: &str) -> HashSet<String> {
+    let mut ways: HashSet<String> = [String::new()].into();
+    for word in words.split(|c: char| !c.is_ascii_alphanumeric() && c != '\'').filter(|w| !w.is_empty()) {
+        let Some(sounds) = cmu().get(&word.to_ascii_lowercase()) else { return HashSet::new() };
+        // A long phrase with many variants per word is cut short rather than grown without end.
+        ways = ways.iter().flat_map(|w| sounds.iter().map(move |s| if w.is_empty() { s.clone() } else { format!("{w} {s}") })).take(64).collect();
+    }
+    if ways.contains("") { HashSet::new() } else { ways }
+}
+
+/// Whether two English words or phrases, spelled differently, are said the same.
+pub fn said_alike(a: &str, b: &str) -> bool {
+    let latin = |s: &str| s.chars().any(|c| c.is_ascii_alphabetic()) && s.chars().all(|c| c.is_ascii());
+    latin(a) && latin(b) && squeeze(a) != squeeze(b) && !said(a).is_disjoint(&said(b))
+}
+
+/// Runs of one to three words in Latin text, with where each lies.
+fn word_runs(text: &str, longest: usize) -> Vec<(usize, usize)> {
+    let mut words = vec![];
+    let mut start = None;
+    for (i, c) in text.char_indices().chain([(text.len(), ' ')]) {
+        match (c.is_ascii_alphanumeric() || c == '\'', start) {
+            (true, None) => start = Some(i),
+            (false, Some(s)) => {
+                words.push((s, i));
+                start = None;
+            }
+            _ => {}
+        }
+    }
+    let mut runs = vec![];
+    for n in 1..=longest {
+        for w in words.windows(n) {
+            if text[w[0].0..w[n - 1].1].chars().all(|c| c.is_ascii()) {
+                runs.push((w[0].0, w[n - 1].1));
+            }
+        }
+    }
+    runs
+}
 
 /// How a set of names is written, as entered: one per line, `Name` or `Name = how it is heard, …`.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -58,6 +129,9 @@ impl Glossary {
             }
             if kana(&term.text) {
                 out = replace_kana(&out, &term.text);
+            }
+            if term.text.chars().all(|c| c.is_ascii()) {
+                out = replace_said(&out, &term.text, &self.terms);
             }
         }
         out
@@ -180,6 +254,19 @@ fn replace_homophones(text: &str, name: &str, terms: &[Term]) -> String {
     out
 }
 
+/// English words said like `name` become `name`, unless they are another name already.
+fn replace_said(text: &str, name: &str, terms: &[Term]) -> String {
+    let size = name.split_whitespace().count();
+    let found = word_runs(text, size).into_iter().filter(|&(a, b)| text[a..b].split_whitespace().count() == size).find(|&(a, b)| {
+        let run = &text[a..b];
+        !terms.iter().any(|t| squeeze(&t.text) == squeeze(run)) && said_alike(run, name)
+    });
+    match found {
+        Some((a, b)) => format!("{}{name}{}", &text[..a], replace_said(&text[b..], name, terms)),
+        None => text.to_string(),
+    }
+}
+
 fn replace_kana(text: &str, name: &str) -> String {
     let (key, chars): (Vec<char>, Vec<char>) = (katakana(name).chars().collect(), text.chars().collect());
     let mut out = String::new();
@@ -203,6 +290,19 @@ fn replace_kana(text: &str, name: &str) -> String {
 pub fn board_hints(text: &str, labels: &[&str]) -> Vec<(String, String)> {
     let chars: Vec<char> = text.chars().collect();
     let mut out: Vec<(String, String)> = vec![];
+    let lower = text.to_ascii_lowercase();
+    for label in labels.iter().filter(|l| l.chars().all(|c| c.is_ascii()) && !lower.contains(&l.to_ascii_lowercase())) {
+        let size = label.split_whitespace().count().max(1);
+        for (a, b) in word_runs(text, size) {
+            let run = &text[a..b];
+            if run.split_whitespace().count() == size && said_alike(run, label) && !labels.iter().any(|l| squeeze(l) == squeeze(run)) {
+                let others = labels.iter().filter(|l| *l != label && said_alike(run, l)).count();
+                if others == 0 && !out.iter().any(|(w, _)| w == run) {
+                    out.push((run.to_string(), (*label).to_string()));
+                }
+            }
+        }
+    }
     for label in labels.iter().filter(|l| han(l) && !text.contains(*l)) {
         let size = label.chars().count();
         for start in 0..chars.len().saturating_sub(size - 1) {
@@ -244,7 +344,7 @@ pub fn resolve(word: &str, labels: &[&str], glossary: &Glossary, pointed: &[usiz
     let alike: Vec<usize> = labels
         .iter()
         .enumerate()
-        .filter(|(_, l)| (han(l) && han(word) && sound_alike(word, l)) || (kana(word) && katakana(word) == katakana(l)))
+        .filter(|(_, l)| (han(l) && han(word) && sound_alike(word, l)) || (kana(word) && katakana(word) == katakana(l)) || said_alike(word, l))
         .map(|(i, _)| i)
         .collect();
     match alike.as_slice() {
@@ -274,6 +374,9 @@ mod tests {
         // Whole words only, and nothing that does not read the same.
         assert_eq!(g.correct("the openair market"), "the openair market");
         assert_eq!(g.correct("系统很健康"), "系统很健康");
+        let cache = Glossary::parse("cache; queue");
+        assert_eq!(cache.correct("clear the cash and the cue"), "clear the cache and the queue");
+        assert_eq!(cache.correct("cashier"), "cashier", "a word of its own");
     }
 
     #[test]
@@ -284,6 +387,8 @@ mod tests {
         let note = note(&Glossary::default(), "给换存加下划线", &["缓存"], false).unwrap();
         assert!(note.contains("「换存」可能是板上的「缓存」"), "{note}");
         assert_eq!(super::note(&Glossary::default(), "加一个支付服务", &["缓存"], false), None, "nothing to say");
+        assert_eq!(board_hints("circle the service cash", &["service cache", "API"]), [("service cash".to_string(), "service cache".to_string())]);
+        assert!(board_hints("circle cite", &["site", "sight"]).is_empty(), "two labels said alike");
     }
 
     /// The pronunciation cases kept from the earlier app, for what this matching covers. English and
@@ -291,7 +396,7 @@ mod tests {
     #[test]
     fn the_kept_pronunciation_cases_resolve() {
         let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!("../../../eval/phonetic-cases.json")).unwrap();
-        let needs_dictionary = ["en-homophone-circle", "en-phrase-homophone", "en-queue-cue", "en-link", "en-collision", "en-pointed-collision", "en-multiple-pointed", "en-negated-delete", "en-negated-circle", "en-question", "en-sound-delete-blocked", "ja-kanji-homophone", "ja-negated-delete", "ja-sound-delete-blocked", "ja-kana-reading", "ja-mixed-connect", "ja-negated-circle", "ja-collision", "ja-pointed-collision", "en-uppercase-word"];
+        let needs_dictionary = ["ja-kanji-homophone", "ja-negated-delete", "ja-sound-delete-blocked", "ja-kana-reading", "ja-mixed-connect", "ja-negated-circle", "ja-collision", "ja-pointed-collision"];
         let (mut checked, mut skipped, mut wrong) = (0, 0, vec![]);
         for case in &cases {
             let id = case["id"].as_str().unwrap();

@@ -38,27 +38,12 @@ fn edge_key(e: &Edge) -> String {
     format!("{}>{}", e.from, e.to)
 }
 
-fn diff_part<T: Clone + PartialEq>(
-    a: &[T],
-    b: &[T],
-    key: impl Fn(&T) -> String,
-) -> Option<Part<T>> {
-    let set: Vec<T> = b
-        .iter()
-        .filter(|x| a.iter().find(|o| key(o) == key(x)) != Some(*x))
-        .cloned()
-        .collect();
-    let del: Vec<String> = a
-        .iter()
-        .map(&key)
-        .filter(|k| !b.iter().any(|x| &key(x) == k))
-        .collect();
+fn diff_part<T: Clone + PartialEq>(a: &[T], b: &[T], key: impl Fn(&T) -> String) -> Option<Part<T>> {
+    let set: Vec<T> = b.iter().filter(|x| a.iter().find(|o| key(o) == key(x)) != Some(*x)).cloned().collect();
+    let del: Vec<String> = a.iter().map(&key).filter(|k| !b.iter().any(|x| &key(x) == k)).collect();
     let real: Vec<String> = b.iter().map(&key).collect();
     let kept = a.iter().map(&key).filter(|k| real.contains(k));
-    let added = real
-        .iter()
-        .filter(|k| !a.iter().any(|x| &key(x) == *k))
-        .cloned();
+    let added = real.iter().filter(|k| !a.iter().any(|x| &key(x) == *k)).cloned();
     let guess: Vec<String> = kept.chain(added).collect();
     let order = (guess != real).then_some(real);
     (!set.is_empty() || !del.is_empty() || order.is_some()).then_some(Part { set, del, order })
@@ -66,11 +51,7 @@ fn diff_part<T: Clone + PartialEq>(
 
 fn patch_part<T: Clone>(a: &[T], part: Option<&Part<T>>, key: impl Fn(&T) -> String) -> Vec<T> {
     let Some(part) = part else { return a.to_vec() };
-    let mut rows: Vec<(String, T)> = a
-        .iter()
-        .filter(|x| !part.del.contains(&key(x)))
-        .map(|x| (key(x), x.clone()))
-        .collect();
+    let mut rows: Vec<(String, T)> = a.iter().filter(|x| !part.del.contains(&key(x))).map(|x| (key(x), x.clone())).collect();
     for x in &part.set {
         match rows.iter_mut().find(|(k, _)| *k == key(x)) {
             Some(row) => row.1 = x.clone(),
@@ -78,10 +59,7 @@ fn patch_part<T: Clone>(a: &[T], part: Option<&Part<T>>, key: impl Fn(&T) -> Str
         }
     }
     match &part.order {
-        Some(order) => order
-            .iter()
-            .filter_map(|k| rows.iter().find(|(o, _)| o == k).map(|(_, x)| x.clone()))
-            .collect(),
+        Some(order) => order.iter().filter_map(|k| rows.iter().find(|(o, _)| o == k).map(|(_, x)| x.clone())).collect(),
         None => rows.into_iter().map(|(_, x)| x).collect(),
     }
 }
@@ -95,8 +73,7 @@ pub fn diff(a: &Graph, b: &Graph) -> Option<Diff> {
         next_node: (a.next_node != b.next_node).then_some(b.next_node),
         next_group: (a.next_group != b.next_group).then_some(b.next_group),
         // An explicit null takes a page away, as the older app's record does.
-        underlay: (a.extra.get("underlay") != b.extra.get("underlay"))
-            .then(|| b.extra.get("underlay").cloned().unwrap_or(Value::Null)),
+        underlay: (a.extra.get("underlay") != b.extra.get("underlay")).then(|| b.extra.get("underlay").cloned().unwrap_or(Value::Null)),
     };
     (d != Diff::default()).then_some(d)
 }
@@ -129,16 +106,13 @@ pub fn ink_only(g: &Graph) -> Graph {
     let mut out = g.clone();
     out.nodes.retain(|n| n.ink != "draft");
     let alive: Vec<String> = out.nodes.iter().map(|n| n.id.clone()).collect();
-    out.edges
-        .retain(|e| e.ink != "draft" && alive.contains(&e.from) && alive.contains(&e.to));
+    out.edges.retain(|e| e.ink != "draft" && alive.contains(&e.from) && alive.contains(&e.to));
     out
 }
 
 /// The board after every stored step. Steps this code cannot read are skipped.
 pub fn replay(steps: &[Value]) -> Graph {
-    steps
-        .iter()
-        .fold(Graph::default(), |g, step| apply_step(&g, step))
+    steps.iter().fold(Graph::default(), |g, step| apply_step(&g, step))
 }
 
 /// The board after one more stored step. A step this code cannot read changes nothing.
@@ -158,31 +132,16 @@ pub fn replay_to(steps: &[Value], count: usize) -> Graph {
 /// Every board's steps as one meeting, in the order they happened, each with its board. A meeting moves
 /// between boards as it goes, and its replay follows.
 pub fn timeline(boards: &[Vec<Value>]) -> Vec<(usize, Value)> {
-    let mut all: Vec<(usize, Value)> = boards
-        .iter()
-        .enumerate()
-        .flat_map(|(b, steps)| steps.iter().map(move |s| (b, s.clone())))
-        .collect();
+    let mut all: Vec<(usize, Value)> = boards.iter().enumerate().flat_map(|(b, steps)| steps.iter().map(move |s| (b, s.clone()))).collect();
     // Stable, so steps with no time keep their board's order.
-    all.sort_by(|a, b| {
-        a.1["t"]
-            .as_f64()
-            .unwrap_or(0.0)
-            .total_cmp(&b.1["t"].as_f64().unwrap_or(0.0))
-    });
+    all.sort_by(|a, b| a.1["t"].as_f64().unwrap_or(0.0).total_cmp(&b.1["t"].as_f64().unwrap_or(0.0)));
     all
 }
 
 /// After the first `at` steps of a timeline: the board in view, and how many of its own steps it has had.
 pub fn board_at(timeline: &[(usize, Value)], at: usize) -> (usize, usize) {
-    let shown = timeline[..at.min(timeline.len())]
-        .last()
-        .or(timeline.first())
-        .map_or(0, |(b, _)| *b);
-    let count = timeline[..at.min(timeline.len())]
-        .iter()
-        .filter(|(b, _)| *b == shown)
-        .count();
+    let shown = timeline[..at.min(timeline.len())].last().or(timeline.first()).map_or(0, |(b, _)| *b);
+    let count = timeline[..at.min(timeline.len())].iter().filter(|(b, _)| *b == shown).count();
     (shown, count)
 }
 
@@ -214,12 +173,7 @@ fn time_of(step: &Value) -> f64 {
 
 impl Player {
     pub fn new(total: usize) -> Self {
-        Self {
-            at: 0,
-            total,
-            playing: true,
-            speed: SPEEDS[0],
-        }
+        Self { at: 0, total, playing: true, speed: SPEEDS[0] }
     }
 
     /// Move to a step, stopping at the end. Says how far it moved, or `None` if it did not.
@@ -268,10 +222,7 @@ impl Player {
 
     /// How far into the meeting this step was, in milliseconds.
     pub fn elapsed_ms(&self, steps: &[Value]) -> f64 {
-        match (
-            steps.first(),
-            self.at.checked_sub(1).and_then(|i| steps.get(i)),
-        ) {
+        match (steps.first(), self.at.checked_sub(1).and_then(|i| steps.get(i))) {
             (Some(first), Some(now)) => time_of(now) - time_of(first),
             _ => 0.0,
         }
@@ -286,11 +237,7 @@ impl Player {
 
     /// How many transcript lines had been said by this step.
     pub fn lines_said(&self, steps: &[Value]) -> usize {
-        self.at
-            .checked_sub(1)
-            .and_then(|i| steps.get(i))
-            .and_then(|s| s["line"].as_u64())
-            .unwrap_or(0) as usize
+        self.at.checked_sub(1).and_then(|i| steps.get(i)).and_then(|s| s["line"].as_u64()).unwrap_or(0) as usize
     }
 }
 
@@ -302,20 +249,11 @@ mod tests {
     fn a_replay_follows_the_meeting_across_boards() {
         let step = |t: f64| json!({ "t": t, "line": 0, "d": {} });
         let line = timeline(&[vec![step(1.0), step(5.0)], vec![step(3.0), step(4.0)]]);
-        assert_eq!(
-            line.iter()
-                .map(|(b, s)| (*b, s["t"].as_f64().unwrap() as u32))
-                .collect::<Vec<_>>(),
-            [(0, 1), (1, 3), (1, 4), (0, 5)]
-        );
+        assert_eq!(line.iter().map(|(b, s)| (*b, s["t"].as_f64().unwrap() as u32)).collect::<Vec<_>>(), [(0, 1), (1, 3), (1, 4), (0, 5)]);
         assert_eq!(board_at(&line, 0), (0, 0));
         assert_eq!(board_at(&line, 1), (0, 1));
         assert_eq!(board_at(&line, 3), (1, 2));
-        assert_eq!(
-            board_at(&line, 4),
-            (0, 2),
-            "back on the first board, with both its steps"
-        );
+        assert_eq!(board_at(&line, 4), (0, 2), "back on the first board, with both its steps");
         assert_eq!(board_at(&[], 3), (0, 0));
     }
     use crate::graph::parse_ops;
@@ -323,8 +261,7 @@ mod tests {
 
     #[test]
     fn replaying_the_diffs_rebuilds_every_recorded_board() {
-        let goldens: Value =
-            serde_json::from_str(include_str!("../fixtures/goldens.json")).unwrap();
+        let goldens: Value = serde_json::from_str(include_str!("../fixtures/goldens.json")).unwrap();
         let mut steps: Vec<Value> = vec![];
         let (mut g, mut file) = (Graph::default(), String::new());
         for s in goldens["steps"].as_array().unwrap() {
@@ -346,11 +283,7 @@ mod tests {
     }
 
     fn recorded() -> Vec<Value> {
-        let boards = [
-            "T 「甲」",
-            "T 「甲」\nT 「乙」",
-            "T 「甲」\nT 「乙」\nT 「丙」",
-        ];
+        let boards = ["T 「甲」", "T 「甲」\nT 「乙」", "T 「甲」\nT 「乙」\nT 「丙」"];
         let mut before = Graph::default();
         let mut steps = vec![];
         for (i, ops) in boards.iter().enumerate() {

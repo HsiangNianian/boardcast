@@ -59,34 +59,10 @@ pub const ROW_LEADING: f64 = 8.0;
 
 impl Row {
     /// An item written at its place, broken into lines if it is long. A formula keeps to one line.
-    fn new(
-        id: &str,
-        prefix: String,
-        text: String,
-        x: f64,
-        y: f64,
-        size: f64,
-        formula: bool,
-    ) -> Self {
-        let lines = if formula {
-            vec![text.clone()]
-        } else {
-            wrap(&text, size, ROW_MAX)
-        };
-        let w = lines
-            .iter()
-            .map(|l| text_width(l, size))
-            .fold(0.0, f64::max);
-        Self {
-            id: id.to_string(),
-            prefix,
-            text,
-            lines,
-            x,
-            y,
-            w,
-            size,
-        }
+    fn new(id: &str, prefix: String, text: String, x: f64, y: f64, size: f64, formula: bool) -> Self {
+        let lines = if formula { vec![text.clone()] } else { wrap(&text, size, ROW_MAX) };
+        let w = lines.iter().map(|l| text_width(l, size)).fold(0.0, f64::max);
+        Self { id: id.to_string(), prefix, text, lines, x, y, w, size }
     }
 
     /// How much taller than one line the item is.
@@ -151,23 +127,11 @@ impl Layout {
         }
         for r in &self.regions {
             if let (Some(head), Some(t)) = (&r.head, &r.title) {
-                out.push(Rect {
-                    id: head.clone(),
-                    x: r.rect.x + t.x,
-                    y: r.rect.y,
-                    w: t.w,
-                    h: TITLE + 10.0,
-                });
+                out.push(Rect { id: head.clone(), x: r.rect.x + t.x, y: r.rect.y, w: t.w, h: TITLE + 10.0 });
             }
             for row in &r.rows {
                 let pre = if row.prefix.is_empty() { 0.0 } else { 30.0 };
-                out.push(Rect {
-                    id: row.id.clone(),
-                    x: r.rect.x + row.x,
-                    y: r.rect.y + row.y,
-                    w: row.w + pre,
-                    h: row.size + 8.0 + row.extra(),
-                });
+                out.push(Rect { id: row.id.clone(), x: r.rect.x + row.x, y: r.rect.y + row.y, w: row.w + pre, h: row.size + 8.0 + row.extra() });
             }
         }
         // Last, as something written over a page should be what a click finds.
@@ -178,21 +142,13 @@ impl Layout {
 
 /// The target under a board position, if any.
 pub fn target_at(targets: &[Rect], x: f64, y: f64) -> Option<&Rect> {
-    targets
-        .iter()
-        .find(|b| x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)
+    targets.iter().find(|b| x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)
 }
 
 /// Rough width: CJK characters take a full em, others a bit over half.
 pub fn text_width(s: &str, size: f64) -> f64 {
     s.chars()
-        .map(|c| {
-            if matches!(c as u32, 0x2E80..=0x9FFF | 0xFF00..=0xFFEF) {
-                size
-            } else {
-                size * 0.62
-            }
-        })
+        .map(|c| if matches!(c as u32, 0x2E80..=0x9FFF | 0xFF00..=0xFFEF) { size } else { size * 0.62 })
         .sum()
 }
 
@@ -222,9 +178,7 @@ pub fn wrap(s: &str, size: f64, max: f64) -> Vec<String> {
     let mut lines: Vec<String> = vec![];
     let mut line = String::new();
     for p in pieces {
-        if !line.is_empty()
-            && text_width(line.trim_end(), size) + text_width(p.trim_end(), size) > max
-        {
+        if !line.is_empty() && text_width(line.trim_end(), size) + text_width(p.trim_end(), size) > max {
             lines.push(line.trim_end().to_string());
             line.clear();
         }
@@ -251,17 +205,14 @@ fn is_attach(n: &Node) -> bool {
 }
 
 fn has_parent(g: &Graph, n: &Node) -> bool {
-    n.parent
-        .as_deref()
-        .is_some_and(|p| g.nodes.iter().any(|o| o.id == p))
+    n.parent.as_deref().is_some_and(|p| g.nodes.iter().any(|o| o.id == p))
 }
 
 pub fn is_head(g: &Graph, n: &Node) -> bool {
     if has_parent(g, n) {
         return false;
     }
-    n.kind == Kind::Topic
-        || (n.kind == Kind::Node && g.children(&n.id).any(|c| c.kind == Kind::Item))
+    n.kind == Kind::Topic || (n.kind == Kind::Node && g.children(&n.id).any(|c| c.kind == Kind::Item))
 }
 
 pub fn is_diagram(g: &Graph, n: &Node) -> bool {
@@ -295,21 +246,8 @@ fn topic_region(g: &Graph, head: &Node) -> Region {
                 index += 1;
             }
             let x = 8.0 + (d as f64 - 1.0) * 30.0;
-            let row = Row::new(
-                &c.id,
-                prefix,
-                c.label.clone(),
-                x,
-                *y,
-                size,
-                c.kind == Kind::Formula,
-            );
-            *y += row.extra()
-                + if c.kind == Kind::Formula {
-                    size + 30.0
-                } else {
-                    size + 16.0
-                };
+            let row = Row::new(&c.id, prefix, c.label.clone(), x, *y, size, c.kind == Kind::Formula);
+            *y += row.extra() + if c.kind == Kind::Formula { size + 30.0 } else { size + 16.0 };
             rows.push(row);
             walk(g, &c.id, depth + 1, y, rows);
         }
@@ -319,39 +257,16 @@ fn topic_region(g: &Graph, head: &Node) -> Region {
     let row_w = |r: &Row| r.x + if r.prefix.is_empty() { 0.0 } else { 30.0 } + r.w + 24.0;
     let mut w = rows.iter().map(row_w).fold(title_w, f64::max) + 16.0;
     let mut boxes: HashMap<&str, Rect> = HashMap::new();
-    boxes.insert(
-        &head.id,
-        Rect {
-            id: head.id.clone(),
-            x: 0.0,
-            y: 0.0,
-            w: title_w,
-            h: TITLE,
-        },
-    );
+    boxes.insert(&head.id, Rect { id: head.id.clone(), x: 0.0, y: 0.0, w: title_w, h: TITLE });
     for r in &rows {
         let pre = if r.prefix.is_empty() { 0.0 } else { 30.0 };
-        boxes.insert(
-            &r.id,
-            Rect {
-                id: r.id.clone(),
-                x: r.x,
-                y: r.y,
-                w: r.w + pre,
-                h: r.size + 8.0 + r.extra(),
-            },
-        );
+        boxes.insert(&r.id, Rect { id: r.id.clone(), x: r.x, y: r.y, w: r.w + pre, h: r.size + 8.0 + r.extra() });
     }
     // A topic's region contains its children, so explicit edges take a lane outside the text.
     let mut links = vec![];
     for e in g.edges.iter().filter(|e| e.from != e.to) {
-        let (Some(a), Some(b)) = (boxes.get(e.from.as_str()), boxes.get(e.to.as_str())) else {
-            continue;
-        };
-        let label_w = e
-            .label
-            .as_deref()
-            .map_or(0.0, |l| text_width(l, FONT - 4.0));
+        let (Some(a), Some(b)) = (boxes.get(e.from.as_str()), boxes.get(e.to.as_str())) else { continue };
+        let label_w = e.label.as_deref().map_or(0.0, |l| text_width(l, FONT - 4.0));
         let lane = w + 24.0 + label_w / 2.0;
         let (ay, by) = (a.y + a.h / 2.0, b.y + b.h / 2.0);
         let label_box = e.label.as_ref().filter(|l| !l.is_empty()).map(|_| Rect {
@@ -364,88 +279,33 @@ fn topic_region(g: &Graph, head: &Node) -> Region {
         links.push(Route {
             from: e.from.clone(),
             to: e.to.clone(),
-            points: vec![
-                [a.x + a.w + 14.0, ay],
-                [lane, ay],
-                [lane, by],
-                [b.x + b.w + 14.0, by],
-            ],
+            points: vec![[a.x + a.w + 14.0, ay], [lane, ay], [lane, by], [b.x + b.w + 14.0, by]],
             label_box,
         });
         w = lane + label_w / 2.0 + 24.0;
     }
-    let title = Title {
-        text: head.label.clone(),
-        x: if head.icon.is_some() { 46.0 } else { 0.0 },
-        w: text_width(&head.label, TITLE),
-    };
-    Region {
-        rect: Rect {
-            id: head.id.clone(),
-            x: 0.0,
-            y: 0.0,
-            w,
-            h: y + 8.0,
-        },
-        head: Some(head.id.clone()),
-        title: Some(title),
-        rows,
-        links,
-    }
+    let title = Title { text: head.label.clone(), x: if head.icon.is_some() { 46.0 } else { 0.0 }, w: text_width(&head.label, TITLE) };
+    Region { rect: Rect { id: head.id.clone(), x: 0.0, y: 0.0, w, h: y + 8.0 }, head: Some(head.id.clone()), title: Some(title), rows, links }
 }
 
 fn loose_region(g: &Graph, loose: &[&Node]) -> Region {
     let en = crate::graph::is_english(g.nodes.iter().map(|n| n.label.as_str()));
     let questions = loose.iter().any(|n| n.kind == Kind::Question);
     let notes = loose.iter().any(|n| n.kind != Kind::Question);
-    let names = if en {
-        ["Notes & questions", "Open", "Notes"]
-    } else {
-        ["补充与问题", "待定", "补充"]
-    };
+    let names = if en { ["Notes & questions", "Open", "Notes"] } else { ["补充与问题", "待定", "补充"] };
     let heading = names[if questions { usize::from(!notes) } else { 2 }];
     let mut rows = vec![];
     let mut seen = vec![];
     let mut y = TITLE + 26.0;
-    fn walk(
-        g: &Graph,
-        n: &Node,
-        depth: usize,
-        en: bool,
-        y: &mut f64,
-        rows: &mut Vec<Row>,
-        seen: &mut Vec<String>,
-    ) {
+    fn walk(g: &Graph, n: &Node, depth: usize, en: bool, y: &mut f64, rows: &mut Vec<Row>, seen: &mut Vec<String>) {
         if seen.contains(&n.id) {
             return;
         }
         seen.push(n.id.clone());
-        let host = if depth == 0 {
-            n.parent
-                .as_deref()
-                .and_then(|p| g.nodes.iter().find(|o| o.id == p))
-        } else {
-            None
-        };
-        let text = host.map_or_else(
-            || n.label.clone(),
-            |h| format!("{}{}{}", h.label, if en { ": " } else { "：" }, n.label),
-        );
-        let row = Row::new(
-            &n.id,
-            prefix_for(n, depth + 1, 0),
-            text,
-            8.0 + depth as f64 * 30.0,
-            *y,
-            FONT,
-            n.kind == Kind::Formula,
-        );
-        *y += row.extra()
-            + if n.kind == Kind::Formula {
-                FONT + 30.0
-            } else {
-                FONT + 16.0
-            };
+        let host = if depth == 0 { n.parent.as_deref().and_then(|p| g.nodes.iter().find(|o| o.id == p)) } else { None };
+        let text = host.map_or_else(|| n.label.clone(), |h| format!("{}{}{}", h.label, if en { ": " } else { "：" }, n.label));
+        let row = Row::new(&n.id, prefix_for(n, depth + 1, 0), text, 8.0 + depth as f64 * 30.0, *y, FONT, n.kind == Kind::Formula);
+        *y += row.extra() + if n.kind == Kind::Formula { FONT + 30.0 } else { FONT + 16.0 };
         rows.push(row);
         for c in g.children(&n.id) {
             walk(g, c, depth + 1, en, y, rows, seen);
@@ -455,25 +315,11 @@ fn loose_region(g: &Graph, loose: &[&Node]) -> Region {
         walk(g, n, 0, en, &mut y, &mut rows, &mut seen);
     }
     let title_w = text_width(heading, TITLE);
-    let w = rows
-        .iter()
-        .map(|r| r.x + 30.0 + r.w + 24.0)
-        .fold(title_w, f64::max)
-        + 16.0;
+    let w = rows.iter().map(|r| r.x + 30.0 + r.w + 24.0).fold(title_w, f64::max) + 16.0;
     Region {
-        rect: Rect {
-            id: LOOSE.into(),
-            x: 0.0,
-            y: 0.0,
-            w,
-            h: y + 8.0,
-        },
+        rect: Rect { id: LOOSE.into(), x: 0.0, y: 0.0, w, h: y + 8.0 },
         head: None,
-        title: Some(Title {
-            text: heading.into(),
-            x: 0.0,
-            w: title_w,
-        }),
+        title: Some(Title { text: heading.into(), x: 0.0, w: title_w }),
         rows,
         links: vec![],
     }
@@ -490,26 +336,8 @@ pub fn overlaps(a: &Rect, b: &Rect, m: f64) -> bool {
 /// Whether a horizontal or vertical run of the polyline passes through another node.
 pub fn crosses(points: &[P], boxes: &[Rect]) -> bool {
     points.windows(2).any(|s| {
-        let seg = Rect {
-            id: String::new(),
-            x: s[0][0].min(s[1][0]),
-            y: s[0][1].min(s[1][1]),
-            w: (s[1][0] - s[0][0]).abs(),
-            h: (s[1][1] - s[0][1]).abs(),
-        };
-        boxes.iter().any(|b| {
-            overlaps(
-                &seg,
-                &Rect {
-                    id: String::new(),
-                    x: b.x + 4.0,
-                    y: b.y + 4.0,
-                    w: b.w - 8.0,
-                    h: b.h - 8.0,
-                },
-                0.0,
-            )
-        })
+        let seg = Rect { id: String::new(), x: s[0][0].min(s[1][0]), y: s[0][1].min(s[1][1]), w: (s[1][0] - s[0][0]).abs(), h: (s[1][1] - s[0][1]).abs() };
+        boxes.iter().any(|b| overlaps(&seg, &Rect { id: String::new(), x: b.x + 4.0, y: b.y + 4.0, w: b.w - 8.0, h: b.h - 8.0 }, 0.0))
     })
 }
 
@@ -521,47 +349,27 @@ pub fn route(a: &Rect, b: &Rect, others: &[Rect]) -> Vec<P> {
     if b.x >= a.x + a.w + 20.0 {
         let sx = a.x + a.w;
         let mx = (sx + b.x) / 2.0;
-        cands.push(if (ay - by).abs() < 2.0 {
-            vec![[sx, ay], [b.x, by]]
-        } else {
-            vec![[sx, ay], [mx, ay], [mx, by], [b.x, by]]
-        });
+        cands.push(if (ay - by).abs() < 2.0 { vec![[sx, ay], [b.x, by]] } else { vec![[sx, ay], [mx, ay], [mx, by], [b.x, by]] });
     } else if b.y >= a.y + a.h + 20.0 || a.y >= b.y + b.h + 20.0 {
-        let (top, bottom) = if b.y >= a.y {
-            (a.y + a.h, b.y)
-        } else {
-            (a.y, b.y + b.h)
-        };
+        let (top, bottom) = if b.y >= a.y { (a.y + a.h, b.y) } else { (a.y, b.y + b.h) };
         let mid = (top + bottom) / 2.0;
         cands.push(vec![[ax, top], [ax, mid], [bx, mid], [bx, bottom]]);
     }
     let x0 = a.x.min(b.x);
     let x1 = (a.x + a.w).max(b.x + b.w);
-    let between: Vec<&Rect> = others
-        .iter()
-        .filter(|o| o.x < x1 && o.x + o.w > x0)
-        .collect();
-    let low = between
-        .iter()
-        .map(|o| o.y + o.h)
-        .fold((a.y + a.h).max(b.y + b.h), f64::max)
-        + 28.0;
+    let between: Vec<&Rect> = others.iter().filter(|o| o.x < x1 && o.x + o.w > x0).collect();
+    let low = between.iter().map(|o| o.y + o.h).fold((a.y + a.h).max(b.y + b.h), f64::max) + 28.0;
     let high = between.iter().map(|o| o.y).fold(a.y.min(b.y), f64::min) - 28.0;
     cands.push(vec![[ax, a.y + a.h], [ax, low], [bx, low], [bx, b.y + b.h]]);
     cands.push(vec![[ax, a.y], [ax, high], [bx, high], [bx, b.y]]);
     let fallback = cands.len() - 2;
-    cands
-        .iter()
-        .position(|c| !crosses(c, others))
-        .map_or_else(|| cands[fallback].clone(), |i| cands[i].clone())
+    cands.iter().position(|c| !crosses(c, others)).map_or_else(|| cands[fallback].clone(), |i| cands[i].clone())
 }
 
 fn signature(from: &str, to: &str, at: &[Rect]) -> String {
     let find = |id: &str| at.iter().find(|b| b.id == id).expect("edge end placed");
     let (a, b) = (find(from), find(to));
-    [a.x, a.y, a.w, b.x, b.y, b.w]
-        .map(|v| format!("{v:.1}"))
-        .join(",")
+    [a.x, a.y, a.w, b.x, b.y, b.w].map(|v| format!("{v:.1}")).join(",")
 }
 
 /// The layout for one board, remembering positions from one call to the next.
@@ -599,64 +407,32 @@ impl StableLayout {
     /// skipped: at worst those things are placed again.
     pub fn restore(&mut self, memory: &Value) {
         fn rows<'a>(memory: &'a Value, key: &str) -> impl Iterator<Item = (&'a str, &'a Value)> {
-            memory[key]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|row| Some((row.get(0)?.as_str()?, row.get(1)?)))
+            memory[key].as_array().into_iter().flatten().filter_map(|row| Some((row.get(0)?.as_str()?, row.get(1)?)))
         }
         fn rect(id: &str, v: &Value) -> Option<Rect> {
-            Some(Rect {
-                id: id.to_string(),
-                x: v["x"].as_f64()?,
-                y: v["y"].as_f64()?,
-                w: v["w"].as_f64()?,
-                h: v["h"].as_f64()?,
-            })
+            Some(Rect { id: id.to_string(), x: v["x"].as_f64()?, y: v["y"].as_f64()?, w: v["w"].as_f64()?, h: v["h"].as_f64()? })
         }
         *self = Self::default();
-        self.region_at = rows(memory, "regionAt")
-            .filter_map(|(k, v)| Some((k.to_string(), (v["x"].as_f64()?, v["y"].as_f64()?))))
-            .collect();
-        self.node_at = rows(memory, "nodeAt")
-            .filter_map(|(k, v)| rect(k, v))
-            .collect();
-        self.box_at = rows(memory, "boxAt")
-            .filter_map(|(k, v)| Some((k.to_string(), rect(k, v)?)))
-            .collect();
+        self.region_at = rows(memory, "regionAt").filter_map(|(k, v)| Some((k.to_string(), (v["x"].as_f64()?, v["y"].as_f64()?)))).collect();
+        self.node_at = rows(memory, "nodeAt").filter_map(|(k, v)| rect(k, v)).collect();
+        self.box_at = rows(memory, "boxAt").filter_map(|(k, v)| Some((k.to_string(), rect(k, v)?))).collect();
         self.route_at = rows(memory, "routeAt")
             .filter_map(|(k, v)| {
-                let points = v["points"]
-                    .as_array()?
-                    .iter()
-                    .map(|p| Some([p.get(0)?.as_f64()?, p.get(1)?.as_f64()?]))
-                    .collect::<Option<Vec<P>>>()?;
+                let points = v["points"].as_array()?.iter().map(|p| Some([p.get(0)?.as_f64()?, p.get(1)?.as_f64()?])).collect::<Option<Vec<P>>>()?;
                 Some((k.to_string(), (v["sig"].as_str()?.to_string(), points)))
             })
             .collect();
     }
 
-    fn diagram(
-        &mut self,
-        g: &Graph,
-        ids: &[String],
-        first: &mut dyn FnMut(&Graph, &[String]) -> Diagram,
-    ) -> Diagram {
+    fn diagram(&mut self, g: &Graph, ids: &[String], first: &mut dyn FnMut(&Graph, &[String]) -> Diagram) -> Diagram {
         self.node_at.retain(|b| ids.contains(&b.id));
-        let inner: Vec<_> = g
-            .edges
-            .iter()
-            .filter(|e| ids.contains(&e.from) && ids.contains(&e.to))
-            .collect();
+        let inner: Vec<_> = g.edges.iter().filter(|e| ids.contains(&e.from) && ids.contains(&e.to)).collect();
         if self.node_at.is_empty() {
             let d = first(g, ids);
             self.node_at.clone_from(&d.nodes);
             self.route_at.clear();
             for e in &d.edges {
-                self.route_at.insert(
-                    format!("{}>{}", e.from, e.to),
-                    (signature(&e.from, &e.to, &self.node_at), e.points.clone()),
-                );
+                self.route_at.insert(format!("{}>{}", e.from, e.to), (signature(&e.from, &e.to, &self.node_at), e.points.clone()));
             }
             return d;
         }
@@ -667,26 +443,12 @@ impl StableLayout {
             .box_at
             .iter()
             .filter(|(k, _)| k.as_str() != DIAGRAM)
-            .map(|(_, b)| Rect {
-                id: String::new(),
-                x: b.x - ox - GAP / 2.0,
-                y: b.y - oy - GAP / 2.0,
-                w: b.w + GAP,
-                h: b.h + GAP,
-            })
+            .map(|(_, b)| Rect { id: String::new(), x: b.x - ox - GAP / 2.0, y: b.y - oy - GAP / 2.0, w: b.w + GAP, h: b.h + GAP })
             .collect();
         let mut placed: Vec<Rect> = vec![];
         for n in &g.nodes {
-            if let Some(old) = self
-                .node_at
-                .iter()
-                .find(|b| b.id == n.id)
-                .filter(|_| ids.contains(&n.id))
-            {
-                placed.push(Rect {
-                    w: node_w(n),
-                    ..old.clone()
-                });
+            if let Some(old) = self.node_at.iter().find(|b| b.id == n.id).filter(|_| ids.contains(&n.id)) {
+                placed.push(Rect { w: node_w(n), ..old.clone() });
             }
         }
         for n in &g.nodes {
@@ -695,24 +457,10 @@ impl StableLayout {
             }
             let w = node_w(n);
             let find = |id: &str, placed: &[Rect]| placed.iter().find(|b| b.id == id).cloned();
-            let from = inner
-                .iter()
-                .find(|e| e.to == n.id && find(&e.from, &placed).is_some());
-            let to = inner
-                .iter()
-                .find(|e| e.from == n.id && find(&e.to, &placed).is_some());
-            let mate = n.group.as_ref().and_then(|grp| {
-                g.nodes
-                    .iter()
-                    .find(|m| m.group.as_ref() == Some(grp) && find(&m.id, &placed).is_some())
-            });
-            let mut bx = Rect {
-                id: n.id.clone(),
-                x: 0.0,
-                y: 0.0,
-                w,
-                h: NODE_H,
-            };
+            let from = inner.iter().find(|e| e.to == n.id && find(&e.from, &placed).is_some());
+            let to = inner.iter().find(|e| e.from == n.id && find(&e.to, &placed).is_some());
+            let mate = n.group.as_ref().and_then(|grp| g.nodes.iter().find(|m| m.group.as_ref() == Some(grp) && find(&m.id, &placed).is_some()));
+            let mut bx = Rect { id: n.id.clone(), x: 0.0, y: 0.0, w, h: NODE_H };
             if let Some(e) = from {
                 let p = find(&e.from, &placed).expect("found");
                 (bx.x, bx.y) = (p.x + p.w + 80.0, p.y);
@@ -739,13 +487,7 @@ impl StableLayout {
                 let y = placed.iter().map(|p| p.y).fold(b.y, f64::min);
                 let right = placed.iter().map(|p| p.x + p.w).fold(b.x + b.w, f64::max);
                 let bottom = placed.iter().map(|p| p.y + p.h).fold(b.y + b.h, f64::max);
-                let hull = Rect {
-                    id: String::new(),
-                    x,
-                    y,
-                    w: right - x,
-                    h: bottom - y,
-                };
+                let hull = Rect { id: String::new(), x, y, w: right - x, h: bottom - y };
                 !others.iter().any(|r| overlaps(&hull, r, 0.0))
             };
             let mut tries = vec![0_i32];
@@ -754,14 +496,8 @@ impl StableLayout {
                 tries.push(i);
             }
             let y0 = bx.y;
-            let at = |k: i32| Rect {
-                y: y0 + f64::from(k) * step,
-                ..bx.clone()
-            };
-            let hit = tries
-                .iter()
-                .find(|k| free(&at(**k), true))
-                .or_else(|| tries.iter().find(|k| free(&at(**k), false)));
+            let at = |k: i32| Rect { y: y0 + f64::from(k) * step, ..bx.clone() };
+            let hit = tries.iter().find(|k| free(&at(**k), true)).or_else(|| tries.iter().find(|k| free(&at(**k), false)));
             bx.y = y0 + f64::from(hit.copied().unwrap_or(0)) * step;
             placed.push(bx);
         }
@@ -769,14 +505,7 @@ impl StableLayout {
 
         let mut groups = vec![];
         for grp in &g.groups {
-            let members: Vec<&Rect> = placed
-                .iter()
-                .filter(|b| {
-                    g.nodes
-                        .iter()
-                        .any(|n| n.id == b.id && n.group.as_ref() == Some(&grp.id))
-                })
-                .collect();
+            let members: Vec<&Rect> = placed.iter().filter(|b| g.nodes.iter().any(|n| n.id == b.id && n.group.as_ref() == Some(&grp.id))).collect();
             if members.is_empty() {
                 continue;
             }
@@ -784,43 +513,21 @@ impl StableLayout {
             let y = members.iter().map(|b| b.y).fold(f64::MAX, f64::min) - 44.0;
             let x1 = members.iter().map(|b| b.x + b.w).fold(f64::MIN, f64::max) + 24.0;
             let y1 = members.iter().map(|b| b.y + b.h).fold(f64::MIN, f64::max) + 24.0;
-            groups.push((
-                Rect {
-                    id: grp.id.clone(),
-                    x,
-                    y,
-                    w: x1 - x,
-                    h: y1 - y,
-                },
-                grp.label.clone(),
-            ));
+            groups.push((Rect { id: grp.id.clone(), x, y, w: x1 - x, h: y1 - y }, grp.label.clone()));
         }
 
         let mut edges = vec![];
         for e in &inner {
             let key = format!("{}>{}", e.from, e.to);
             let sig = signature(&e.from, &e.to, &placed);
-            let rest: Vec<Rect> = placed
-                .iter()
-                .filter(|b| b.id != e.from && b.id != e.to)
-                .cloned()
-                .collect();
-            let keep = self
-                .route_at
-                .get(&key)
-                .filter(|(s, points)| *s == sig && !crosses(points, &rest))
-                .map(|(_, p)| p.clone());
+            let rest: Vec<Rect> = placed.iter().filter(|b| b.id != e.from && b.id != e.to).cloned().collect();
+            let keep = self.route_at.get(&key).filter(|(s, points)| *s == sig && !crosses(points, &rest)).map(|(_, p)| p.clone());
             let points = keep.unwrap_or_else(|| {
                 let find = |id: &str| placed.iter().find(|b| b.id == id).expect("edge end placed");
                 route(find(&e.from), find(&e.to), &rest)
             });
             self.route_at.insert(key, (sig, points.clone()));
-            edges.push(Route {
-                from: e.from.clone(),
-                to: e.to.clone(),
-                points,
-                label_box: None,
-            });
+            edges.push(Route { from: e.from.clone(), to: e.to.clone(), points, label_box: None });
         }
 
         let boxes = placed.iter().chain(groups.iter().map(|(b, _)| b));
@@ -841,28 +548,14 @@ impl StableLayout {
             x1 = x1.max(p[0]);
             y1 = y1.max(p[1]);
         }
-        Diagram {
-            x0,
-            y0,
-            w: x1 - x0,
-            h: y1 - y0,
-            nodes: placed,
-            groups,
-            edges,
-        }
+        Diagram { x0, y0, w: x1 - x0, h: y1 - y0, nodes: placed, groups, edges }
     }
 
     /// A new region goes beside or below an existing one, keeping the board close to 16:10.
     fn free_spot(key: &str, w: f64, h: f64, placed: &[Rect]) -> Rect {
         let jx = jitter(key, 14.0);
         let jy = jitter(&format!("{key}y"), 10.0);
-        let rect = |x, y| Rect {
-            id: key.to_string(),
-            x,
-            y,
-            w,
-            h,
-        };
+        let rect = |x, y| Rect { id: key.to_string(), x, y, w, h };
         if placed.is_empty() {
             return rect(jx, jy);
         }
@@ -873,10 +566,7 @@ impl StableLayout {
         let mut best = None;
         let mut best_cost = f64::INFINITY;
         for p in placed {
-            for c in [
-                rect(p.x + p.w + GAP + jx, p.y + jy),
-                rect(p.x + jx, p.y + p.h + GAP + jy),
-            ] {
+            for c in [rect(p.x + p.w + GAP + jx, p.y + jy), rect(p.x + jx, p.y + p.h + GAP + jy)] {
                 if placed.iter().any(|b| overlaps(&c, b, GAP / 2.0 - 1.0)) {
                     continue;
                 }
@@ -892,68 +582,24 @@ impl StableLayout {
         best.unwrap_or_else(|| rect(x0 + jx, y1 + GAP + jy))
     }
 
-    pub fn layout(
-        &mut self,
-        g: &Graph,
-        first: &mut dyn FnMut(&Graph, &[String]) -> Diagram,
-    ) -> Layout {
-        let order = |id: &str| {
-            g.nodes
-                .iter()
-                .position(|n| n.id == id)
-                .expect("node exists")
-        };
-        let ids: Vec<String> = g
-            .nodes
-            .iter()
-            .filter(|n| is_diagram(g, n))
-            .map(|n| n.id.clone())
-            .collect();
+    pub fn layout(&mut self, g: &Graph, first: &mut dyn FnMut(&Graph, &[String]) -> Diagram) -> Layout {
+        let order = |id: &str| g.nodes.iter().position(|n| n.id == id).expect("node exists");
+        let ids: Vec<String> = g.nodes.iter().filter(|n| is_diagram(g, n)).map(|n| n.id.clone()).collect();
         let loose: Vec<&Node> = g
             .nodes
             .iter()
-            .filter(|n| {
-                is_attach(n)
-                    && (!has_parent(g, n) || n.parent.as_ref().is_some_and(|p| ids.contains(p)))
-            })
+            .filter(|n| is_attach(n) && (!has_parent(g, n) || n.parent.as_ref().is_some_and(|p| ids.contains(p))))
             .collect();
         // An imported page holds the top left, its text stays where it is printed, and notes on that
         // text go in a margin to its right.
-        let page = g.underlay().map(|(w, h)| Rect {
-            id: PAGE.into(),
-            x: 0.0,
-            y: 0.0,
-            w: w + PAGE_MARGIN,
-            h,
-        });
-        let pins: Vec<&Node> = g
-            .nodes
-            .iter()
-            .filter(|n| n.kind == Kind::Region && n.at().is_some())
-            .collect();
-        let on_pins: Vec<&Node> = g
-            .nodes
-            .iter()
-            .filter(|n| {
-                is_attach(n)
-                    && n.parent
-                        .as_ref()
-                        .is_some_and(|p| pins.iter().any(|x| &x.id == p))
-            })
-            .collect();
+        let page = g.underlay().map(|(w, h)| Rect { id: PAGE.into(), x: 0.0, y: 0.0, w: w + PAGE_MARGIN, h });
+        let pins: Vec<&Node> = g.nodes.iter().filter(|n| n.kind == Kind::Region && n.at().is_some()).collect();
+        let on_pins: Vec<&Node> = g.nodes.iter().filter(|n| is_attach(n) && n.parent.as_ref().is_some_and(|p| pins.iter().any(|x| &x.id == p))).collect();
         let mut slots = vec![];
         for n in &g.nodes {
             if is_head(g, n) {
                 let r = topic_region(g, n);
-                slots.push(Slot {
-                    key: r.rect.id.clone(),
-                    at: order(&n.id),
-                    x0: 0.0,
-                    y0: 0.0,
-                    w: r.rect.w,
-                    h: r.rect.h,
-                    region: Some(r),
-                });
+                slots.push(Slot { key: r.rect.id.clone(), at: order(&n.id), x0: 0.0, y0: 0.0, w: r.rect.w, h: r.rect.h, region: Some(r) });
             }
         }
         let mut dia = None;
@@ -962,33 +608,16 @@ impl StableLayout {
         } else {
             let d = self.diagram(g, &ids, first);
             let at = ids.iter().map(|id| order(id)).min().expect("not empty");
-            slots.push(Slot {
-                key: DIAGRAM.into(),
-                at,
-                region: None,
-                x0: d.x0,
-                y0: d.y0,
-                w: d.w,
-                h: d.h,
-            });
+            slots.push(Slot { key: DIAGRAM.into(), at, region: None, x0: d.x0, y0: d.y0, w: d.w, h: d.h });
             dia = Some(d);
         }
         if !loose.is_empty() {
             let r = loose_region(g, &loose);
             let at = loose.iter().map(|n| order(&n.id)).min().expect("not empty");
-            slots.push(Slot {
-                key: LOOSE.into(),
-                at,
-                x0: 0.0,
-                y0: 0.0,
-                w: r.rect.w,
-                h: r.rect.h,
-                region: Some(r),
-            });
+            slots.push(Slot { key: LOOSE.into(), at, x0: 0.0, y0: 0.0, w: r.rect.w, h: r.rect.h, region: Some(r) });
         }
         slots.sort_by_key(|s| s.at);
-        self.region_at
-            .retain(|k, _| slots.iter().any(|s| &s.key == k));
+        self.region_at.retain(|k, _| slots.iter().any(|s| &s.key == k));
         self.box_at.retain(|k, _| slots.iter().any(|s| &s.key == k));
 
         // Remembered regions return to their place, pushed down if an earlier one has grown over them.
@@ -996,18 +625,9 @@ impl StableLayout {
         let mut origin: HashMap<String, (f64, f64)> = HashMap::new();
         for s in &slots {
             let mut bx = if let Some(&(x, y)) = self.region_at.get(&s.key) {
-                let mut b = Rect {
-                    id: s.key.clone(),
-                    x: x + s.x0,
-                    y: y + s.y0,
-                    w: s.w,
-                    h: s.h,
-                };
+                let mut b = Rect { id: s.key.clone(), x: x + s.x0, y: y + s.y0, w: s.w, h: s.h };
                 for _ in 0..60 {
-                    let hit: Vec<&Rect> = placed
-                        .iter()
-                        .filter(|o| overlaps(&b, o, GAP / 2.0 - 1.0))
-                        .collect();
+                    let hit: Vec<&Rect> = placed.iter().filter(|o| overlaps(&b, o, GAP / 2.0 - 1.0)).collect();
                     if hit.is_empty() {
                         break;
                     }
@@ -1032,38 +652,17 @@ impl StableLayout {
                 r.rect.x = px;
                 r.rect.y = py;
                 let anchor = match (&r.title, r.links.is_empty()) {
-                    (Some(t), false) => Rect {
-                        id: r.rect.id.clone(),
-                        x: px,
-                        y: py,
-                        w: t.w + t.x,
-                        h: TITLE,
-                    },
+                    (Some(t), false) => Rect { id: r.rect.id.clone(), x: px, y: py, w: t.w + t.x, h: TITLE },
                     _ => r.rect.clone(),
                 };
                 out.anchors.insert(r.rect.id.clone(), anchor);
                 for row in &r.rows {
                     let pre = if row.prefix.is_empty() { 0.0 } else { 30.0 };
-                    out.anchors.insert(
-                        row.id.clone(),
-                        Rect {
-                            id: row.id.clone(),
-                            x: px + row.x,
-                            y: py + row.y,
-                            w: row.w + pre,
-                            h: row.size + 8.0,
-                        },
-                    );
+                    out.anchors.insert(row.id.clone(), Rect { id: row.id.clone(), x: px + row.x, y: py + row.y, w: row.w + pre, h: row.size + 8.0 });
                 }
                 out.regions.push(r);
             } else if let Some(mut d) = dia.take() {
-                let frame = Rect {
-                    id: DIAGRAM.into(),
-                    x: px + d.x0,
-                    y: py + d.y0,
-                    w: d.w,
-                    h: d.h,
-                };
+                let frame = Rect { id: DIAGRAM.into(), x: px + d.x0, y: py + d.y0, w: d.w, h: d.h };
                 for b in &mut d.nodes {
                     b.x += px;
                     b.y += py;
@@ -1086,75 +685,25 @@ impl StableLayout {
         if let (Some(page), Some((page_w, _))) = (&page, g.underlay()) {
             for n in &pins {
                 let [x, y, w, h] = n.at().expect("filtered above");
-                out.anchors.insert(
-                    n.id.clone(),
-                    Rect {
-                        id: n.id.clone(),
-                        x,
-                        y,
-                        w,
-                        h,
-                    },
-                );
-                out.pins.push(Rect {
-                    id: n.id.clone(),
-                    x,
-                    y,
-                    w,
-                    h,
-                });
+                out.anchors.insert(n.id.clone(), Rect { id: n.id.clone(), x, y, w, h });
+                out.pins.push(Rect { id: n.id.clone(), x, y, w, h });
             }
-            let host_y = |n: &Node| {
-                g.nodes
-                    .iter()
-                    .find(|p| Some(&p.id) == n.parent.as_ref())
-                    .and_then(|p| p.at())
-                    .map_or(0.0, |a| a[1])
-            };
+            let host_y = |n: &Node| g.nodes.iter().find(|p| Some(&p.id) == n.parent.as_ref()).and_then(|p| p.at()).map_or(0.0, |a| a[1]);
             let mut notes = on_pins.clone();
             notes.sort_by(|a, b| host_y(a).total_cmp(&host_y(b)));
             let mut rows = vec![];
             let mut next = f64::NEG_INFINITY;
             for n in notes {
                 let y = host_y(n).max(next);
-                let row = Row::new(
-                    &n.id,
-                    prefix_for(n, 1, 0),
-                    n.label.clone(),
-                    page_w + 28.0,
-                    y,
-                    SMALL,
-                    n.kind == Kind::Formula,
-                );
+                let row = Row::new(&n.id, prefix_for(n, 1, 0), n.label.clone(), page_w + 28.0, y, SMALL, n.kind == Kind::Formula);
                 next = y + SMALL + 14.0 + row.extra();
                 rows.push(row);
             }
             if !rows.is_empty() {
                 for row in &rows {
-                    out.anchors.insert(
-                        row.id.clone(),
-                        Rect {
-                            id: row.id.clone(),
-                            x: row.x,
-                            y: row.y,
-                            w: row.w + 30.0,
-                            h: row.size + 8.0 + row.extra(),
-                        },
-                    );
+                    out.anchors.insert(row.id.clone(), Rect { id: row.id.clone(), x: row.x, y: row.y, w: row.w + 30.0, h: row.size + 8.0 + row.extra() });
                 }
-                out.regions.push(Region {
-                    rect: Rect {
-                        id: MARGIN_REGION.into(),
-                        x: 0.0,
-                        y: 0.0,
-                        w: page.w,
-                        h: page.h,
-                    },
-                    head: None,
-                    title: None,
-                    rows,
-                    links: vec![],
-                });
+                out.regions.push(Region { rect: Rect { id: MARGIN_REGION.into(), x: 0.0, y: 0.0, w: page.w, h: page.h }, head: None, title: None, rows, links: vec![] });
             }
         }
 
@@ -1176,19 +725,11 @@ impl StableLayout {
         for e in &g.edges {
             let in_diagram = ids.contains(&e.from) && ids.contains(&e.to);
             if !in_diagram && out.anchors.contains_key(&e.from) && out.anchors.contains_key(&e.to) {
-                out.links.push((
-                    e.from.clone(),
-                    e.to.clone(),
-                    topic_routes.get(&format!("{}>{}", e.from, e.to)).cloned(),
-                ));
+                out.links.push((e.from.clone(), e.to.clone(), topic_routes.get(&format!("{}>{}", e.from, e.to)).cloned()));
             }
         }
 
-        let mut all: Vec<&Rect> = out
-            .anchors
-            .values()
-            .chain(out.regions.iter().map(|r| &r.rect))
-            .collect();
+        let mut all: Vec<&Rect> = out.anchors.values().chain(out.regions.iter().map(|r| &r.rect)).collect();
         if let Some((frame, _)) = &out.diagram {
             all.push(frame);
         }
@@ -1196,12 +737,7 @@ impl StableLayout {
             all.push(page);
         }
         out.bounds = if all.is_empty() {
-            Bounds {
-                x0: 0.0,
-                y0: 0.0,
-                x1: 1.0,
-                y1: 1.0,
-            }
+            Bounds { x0: 0.0, y0: 0.0, x1: 1.0, y1: 1.0 }
         } else {
             Bounds {
                 x0: all.iter().map(|b| b.x).fold(f64::MAX, f64::min),
@@ -1221,27 +757,12 @@ mod wrap_tests {
     #[test]
     fn text_breaks_where_its_script_allows() {
         assert_eq!(wrap("短信验证", 16.0, 200.0), ["短信验证"]);
-        assert_eq!(
-            wrap("用户输入抖音账号", 16.0, 70.0),
-            ["用户输入", "抖音账号"]
-        );
-        assert_eq!(
-            wrap("用户输入，抖音账号", 16.0, 80.0),
-            ["用户输入，", "抖音账号"]
-        );
+        assert_eq!(wrap("用户输入抖音账号", 16.0, 70.0), ["用户输入", "抖音账号"]);
+        assert_eq!(wrap("用户输入，抖音账号", 16.0, 80.0), ["用户输入，", "抖音账号"]);
         // A closing mark never starts a line: it goes down with the character before it.
-        assert_eq!(
-            wrap("用户输入，抖音账号", 16.0, 70.0),
-            ["用户输", "入，抖音", "账号"]
-        );
-        assert_eq!(
-            wrap("forwards every request", 16.0, 90.0),
-            ["forwards", "every", "request"]
-        );
-        assert_eq!(
-            wrap("ログインして確認", 16.0, 70.0),
-            ["ログイン", "して確認"]
-        );
+        assert_eq!(wrap("用户输入，抖音账号", 16.0, 70.0), ["用户输", "入，抖音", "账号"]);
+        assert_eq!(wrap("forwards every request", 16.0, 90.0), ["forwards", "every", "request"]);
+        assert_eq!(wrap("ログインして確認", 16.0, 70.0), ["ログイン", "して確認"]);
     }
 
     #[test]
@@ -1250,22 +771,12 @@ mod wrap_tests {
         g.apply(&crate::graph::parse_ops("T 「登录流程」\nL 「登录流程」 「用户输入抖音账号并完成短信验证后跳转到首页继续浏览推荐内容」\nL 「登录流程」 「短信验证」"));
         let l = StableLayout::default().layout(&g, &mut crate::sugiyama::first_diagram);
         let rows = &l.regions[0].rows;
-        assert!(
-            rows[0].lines.len() >= 2 && rows[0].w <= ROW_MAX,
-            "{:?}",
-            rows[0].lines
-        );
+        assert!(rows[0].lines.len() >= 2 && rows[0].w <= ROW_MAX, "{:?}", rows[0].lines);
         assert_eq!(rows[0].lines.concat(), rows[0].text);
-        assert!(
-            rows[1].y >= rows[0].y + rows[0].size + rows[0].extra(),
-            "the next item clears the long one"
-        );
+        assert!(rows[1].y >= rows[0].y + rows[0].size + rows[0].extra(), "the next item clears the long one");
         let targets = l.targets();
         let long = targets.iter().find(|t| t.id == rows[0].id).unwrap();
-        assert!(
-            long.h > rows[0].size + 8.0,
-            "a click anywhere on it finds it"
-        );
+        assert!(long.h > rows[0].size + 8.0, "a click anywhere on it finds it");
     }
 }
 
@@ -1277,34 +788,17 @@ mod tests {
     #[test]
     fn clicks_find_titles_rows_and_boxes_but_not_empty_column_space() {
         let mut g = Graph::default();
-        g.apply(&parse_ops(
-            "T 「待办」\nL 「待办」 「压测」\nE 「甲」 -> 「乙」",
-        ));
+        g.apply(&parse_ops("T 「待办」\nL 「待办」 「压测」\nE 「甲」 -> 「乙」"));
         let l = StableLayout::default().layout(&g, &mut crate::sugiyama::first_diagram);
         let targets = l.targets();
-        let id = |label: &str| {
-            g.nodes
-                .iter()
-                .find(|n| n.label == label)
-                .unwrap()
-                .id
-                .clone()
-        };
+        let id = |label: &str| g.nodes.iter().find(|n| n.label == label).unwrap().id.clone();
         for label in ["待办", "压测", "甲", "乙"] {
             let want = id(label);
-            let b = targets
-                .iter()
-                .find(|t| t.id == want)
-                .unwrap_or_else(|| panic!("{label} has no target"));
+            let b = targets.iter().find(|t| t.id == want).unwrap_or_else(|| panic!("{label} has no target"));
             let hit = target_at(&targets, b.x + b.w / 2.0, b.y + b.h / 2.0).unwrap();
             assert_eq!(hit.id, want, "{label}");
         }
         let column = l.regions.iter().find(|r| r.head.is_some()).unwrap();
-        assert!(target_at(
-            &targets,
-            column.rect.x + column.rect.w - 1.0,
-            column.rect.y + column.rect.h - 1.0
-        )
-        .is_none());
+        assert!(target_at(&targets, column.rect.x + column.rect.w - 1.0, column.rect.y + column.rect.h - 1.0).is_none());
     }
 }

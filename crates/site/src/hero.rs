@@ -2,10 +2,7 @@
 //! The words can be circled to jump to their sheet, and an eraser wipes the sheet to write it again.
 
 use crate::pen::{pen_draw, text_strokes, Pen};
-use crate::util::{
-    add_class, append, clear, clear_timeout, el, frame, hand, lasso_loop, now, q, qa_in, reduced,
-    remove_class, set_attr, set_style, set_text, svg_el, timeout, wait, win, Pt,
-};
+use crate::util::{add_class, append, clear, clear_timeout, el, frame, hand, lasso_loop, now, q, qa_in, reduced, remove_class, set_attr, set_style, set_text, svg_el, timeout, wait, win, Pt};
 use std::cell::Cell;
 use std::rc::Rc;
 use web_sys::Element;
@@ -44,10 +41,7 @@ async fn write(h: Rc<Hero>) {
     for hit in qa_in(&h.host, ".hit") {
         hit.remove();
     }
-    let (w, ht) = (
-        f64::from(h.svg.client_width()),
-        f64::from(h.svg.client_height()),
-    );
+    let (w, ht) = (f64::from(h.svg.client_width()), f64::from(h.svg.client_height()));
     set_attr(&h.svg, "viewBox", format!("0 0 {w} {ht}"));
 
     set_text(&h.said, "");
@@ -74,51 +68,17 @@ async fn write(h: Rc<Hero>) {
     let l2 = text_strokes("board draws itself.", x0 + size * 0.5, y2, size, 9);
     set_attr(&h.svg, "aria-label", "talk, and the board draws itself.");
     let speed = (size / 52.0).max(1.6);
-    pen_draw(
-        &h.svg,
-        &l1.strokes,
-        Pen {
-            class: "w big",
-            speed,
-            ..Pen::default()
-        },
-    )
-    .await;
+    pen_draw(&h.svg, &l1.strokes, Pen { class: "w big", speed, ..Pen::default() }).await;
     if !h.live(me) {
         return;
     }
-    pen_draw(
-        &h.svg,
-        &l2.strokes,
-        Pen {
-            class: "w big",
-            speed,
-            ..Pen::default()
-        },
-    )
-    .await;
+    pen_draw(&h.svg, &l2.strokes, Pen { class: "w big", speed, ..Pen::default() }).await;
     if !h.live(me) {
         return;
     }
     let it = &l2.words[2];
-    let ring = lasso_loop(
-        it.x + it.w / 2.0,
-        y2 - size * 0.3,
-        it.w / 2.0 + size * 0.22,
-        size * 0.48,
-        21,
-        1.14,
-    );
-    pen_draw(
-        &h.svg,
-        &[ring],
-        Pen {
-            class: "w a big",
-            speed: speed * 1.4,
-            lift: 0.0,
-        },
-    )
-    .await;
+    let ring = lasso_loop(it.x + it.w / 2.0, y2 - size * 0.3, it.w / 2.0 + size * 0.22, size * 0.48, 21, 1.14);
+    pen_draw(&h.svg, &[ring], Pen { class: "w a big", speed: speed * 1.4, lift: 0.0 }).await;
     if !h.live(me) {
         return;
     }
@@ -134,16 +94,8 @@ async fn write(h: Rc<Hero>) {
         let hit = el("span", "hit", "");
         set_attr(&hit, "data-circle", to);
         set_attr(&hit, "data-word", &name);
-        set_style(
-            &hit,
-            "left",
-            &format!("{}px", box_.left() - hb.left() + word.x),
-        );
-        set_style(
-            &hit,
-            "top",
-            &format!("{}px", box_.top() - hb.top() + y - size * 0.75),
-        );
+        set_style(&hit, "left", &format!("{}px", box_.left() - hb.left() + word.x));
+        set_style(&hit, "top", &format!("{}px", box_.top() - hb.top() + y - size * 0.75));
         set_style(&hit, "width", &format!("{}px", word.w));
         set_style(&hit, "height", &format!("{}px", size * 0.8));
         append(&h.host, &hit);
@@ -158,48 +110,16 @@ async fn write(h: Rc<Hero>) {
     let note_size = (size * 0.15).max(18.0);
     let width = text_strokes("drag a circle around any word", 0.0, 0.0, note_size, 5).width;
     let nx = (w - size * 3.2).min(w - width - 8.0).max(size * 0.8);
-    let note = text_strokes(
-        "drag a circle around any word",
-        nx,
-        y2 + size * 0.62,
-        note_size,
-        5,
-    );
-    pen_draw(
-        &h.svg,
-        &note.strokes,
-        Pen {
-            class: "w note",
-            speed: 1.4,
-            lift: 12.0,
-        },
-    )
-    .await;
+    let note = text_strokes("drag a circle around any word", nx, y2 + size * 0.62, note_size, 5);
+    pen_draw(&h.svg, &note.strokes, Pen { class: "w note", speed: 1.4, lift: 12.0 }).await;
     let a: Pt = (nx - size * 0.05, y2 + size * 0.58);
     let b: Pt = (a.0 - size * 0.7, a.1 + size * 0.35);
-    let arrow = [
-        hand(&[a, b], 4.0, 3),
-        hand(&[(b.0 + 16.0, b.1 - 2.0), b], 1.0, 4),
-        hand(&[(b.0 + 4.0, b.1 - 15.0), b], 1.0, 5),
-    ];
-    pen_draw(
-        &h.svg,
-        &arrow,
-        Pen {
-            class: "w note",
-            speed: 1.4,
-            lift: 4.0,
-        },
-    )
-    .await;
+    let arrow = [hand(&[a, b], 4.0, 3), hand(&[(b.0 + 16.0, b.1 - 2.0), b], 1.0, 4), hand(&[(b.0 + 4.0, b.1 - 15.0), b], 1.0, 5)];
+    pen_draw(&h.svg, &arrow, Pen { class: "w note", speed: 1.4, lift: 4.0 }).await;
 }
 
 fn fine_pointer() -> bool {
-    win()
-        .match_media("(any-pointer: fine)")
-        .ok()
-        .flatten()
-        .is_some_and(|m| m.matches())
+    win().match_media("(any-pointer: fine)").ok().flatten().is_some_and(|m| m.matches())
 }
 
 /// Wipe the sheet with an eraser, then write it again.
@@ -214,25 +134,12 @@ async fn again(h: Rc<Hero>) {
     set_style(&eraser, "display", "block");
     set_style(&eraser, "top", &format!("{}px", box_.top() - hb.top()));
     set_style(&eraser, "height", &format!("{}px", box_.height()));
-    let clip = h
-        .svg
-        .query_selector("#wipe")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| {
-            let clip = svg_el("clipPath", &[("id", "wipe".into())], None);
-            let _ = h.svg.prepend_with_node_1(&clip);
-            svg_el(
-                "rect",
-                &[
-                    ("y", "-2000".into()),
-                    ("height", "6000".into()),
-                    ("width", "10000".into()),
-                ],
-                Some(&clip),
-            );
-            clip
-        });
+    let clip = h.svg.query_selector("#wipe").ok().flatten().unwrap_or_else(|| {
+        let clip = svg_el("clipPath", &[("id", "wipe".into())], None);
+        let _ = h.svg.prepend_with_node_1(&clip);
+        svg_el("rect", &[("y", "-2000".into()), ("height", "6000".into()), ("width", "10000".into())], Some(&clip));
+        clip
+    });
     let rect = clip.first_element_child().expect("the wipe's rectangle");
     for g in qa_in(&h.svg, ":scope > g") {
         set_attr(&g, "clip-path", "url(#wipe)");
@@ -245,17 +152,9 @@ async fn again(h: Rc<Hero>) {
         let t = frame().await;
         let k = ((t - t0) / 900.0).min(1.0);
         let x = -140.0 + (box_.width() + 280.0) * (k * k * (3.0 - 2.0 * k));
-        set_style(
-            &eraser,
-            "left",
-            &format!("{}px", box_.left() - hb.left() + x),
-        );
+        set_style(&eraser, "left", &format!("{}px", box_.left() - hb.left() + x));
         // A slight up and down, like a hand scrubbing.
-        set_style(
-            &eraser,
-            "transform",
-            &format!("translateY({}px)", (k * 30.0).sin() * 6.0),
-        );
+        set_style(&eraser, "transform", &format!("translateY({}px)", (k * 30.0).sin() * 6.0));
         set_attr(&rect, "x", x + 120.0);
         if k >= 1.0 {
             break;
@@ -267,17 +166,10 @@ async fn again(h: Rc<Hero>) {
 }
 
 pub fn init() {
-    let h = Rc::new(Hero {
-        svg: q("#ink"),
-        said: q("#said"),
-        host: q("#hero"),
-        run: Cell::new(0),
-    });
+    let h = Rc::new(Hero { svg: q("#ink"), said: q("#said"), host: q("#hero"), run: Cell::new(0) });
     {
         let h = h.clone();
-        crate::util::on(&q("#again"), "click", move |_| {
-            wasm_bindgen_futures::spawn_local(again(h.clone()))
-        });
+        crate::util::on(&q("#again"), "click", move |_| wasm_bindgen_futures::spawn_local(again(h.clone())));
     }
     let resizing = Rc::new(Cell::new(0));
     {
@@ -285,9 +177,7 @@ pub fn init() {
         crate::util::on(&win(), "resize", move |_| {
             clear_timeout(resizing.get());
             let h = h.clone();
-            resizing.set(timeout(300, move || {
-                wasm_bindgen_futures::spawn_local(write(h))
-            }));
+            resizing.set(timeout(300, move || wasm_bindgen_futures::spawn_local(write(h))));
         });
     }
     wasm_bindgen_futures::spawn_local(write(h));

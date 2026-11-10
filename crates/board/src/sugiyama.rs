@@ -39,26 +39,12 @@ struct Oriented {
 }
 
 fn sweep_order(count: usize, forward: bool) -> Vec<usize> {
-    if forward {
-        (1..count).collect()
-    } else {
-        (0..count.saturating_sub(1)).rev().collect()
-    }
+    if forward { (1..count).collect() } else { (0..count.saturating_sub(1)).rev().collect() }
 }
 
 pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
-    let nodes: Vec<usize> = g
-        .nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, n)| ids.contains(&n.id))
-        .map(|(i, _)| i)
-        .collect();
-    let pos: HashMap<&str, usize> = nodes
-        .iter()
-        .enumerate()
-        .map(|(k, &i)| (g.nodes[i].id.as_str(), k))
-        .collect();
+    let nodes: Vec<usize> = g.nodes.iter().enumerate().filter(|(_, n)| ids.contains(&n.id)).map(|(i, _)| i).collect();
+    let pos: HashMap<&str, usize> = nodes.iter().enumerate().map(|(k, &i)| (g.nodes[i].id.as_str(), k)).collect();
     let edges: Vec<(usize, usize, usize)> = g
         .edges
         .iter()
@@ -94,13 +80,7 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
         .zip(&back)
         .map(|(&(edge, a, b), &reversed)| {
             let (a, b) = if reversed { (b, a) } else { (a, b) };
-            Oriented {
-                edge,
-                a,
-                b,
-                reversed,
-                chain: vec![],
-            }
+            Oriented { edge, a, b, reversed, chain: vec![] }
         })
         .collect();
 
@@ -120,59 +100,26 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
     // A node with no incoming edge sits next to what it feeds rather than far to the left.
     for v in 0..n {
         if !oriented.iter().any(|o| o.b == v) {
-            if let Some(next) = oriented
-                .iter()
-                .filter(|o| o.a == v)
-                .map(|o| layer[o.b])
-                .min()
-            {
+            if let Some(next) = oriented.iter().filter(|o| o.a == v).map(|o| layer[o.b]).min() {
                 layer[v] = next.saturating_sub(1);
             }
         }
     }
 
-    let bands: Vec<&str> = g
-        .groups
-        .iter()
-        .map(|x| x.id.as_str())
-        .filter(|id| {
-            nodes
-                .iter()
-                .any(|&i| g.nodes[i].group.as_deref() == Some(*id))
-        })
-        .collect();
+    let bands: Vec<&str> = g.groups.iter().map(|x| x.id.as_str()).filter(|id| nodes.iter().any(|&i| g.nodes[i].group.as_deref() == Some(*id))).collect();
     let count = layer.iter().copied().max().map_or(0, |m| m + 1);
     let mut layers: Vec<Vec<Item>> = vec![vec![]; count];
     for (k, &i) in nodes.iter().enumerate() {
         let node = &g.nodes[i];
-        let band = node
-            .group
-            .as_deref()
-            .and_then(|x| bands.iter().position(|b| *b == x));
-        layers[layer[k]].push(Item {
-            id: node.id.clone(),
-            real: true,
-            band,
-            zone: band.map_or(0, |b| b * 2 + 1),
-            h: NODE_H,
-            w: node_w(node),
-            y: 0.0,
-        });
+        let band = node.group.as_deref().and_then(|x| bands.iter().position(|b| *b == x));
+        layers[layer[k]].push(Item { id: node.id.clone(), real: true, band, zone: band.map_or(0, |b| b * 2 + 1), h: NODE_H, w: node_w(node), y: 0.0 });
     }
     let mut joints: Vec<(String, String)> = vec![];
     for (k, o) in oriented.iter_mut().enumerate() {
         let mut previous = g.nodes[nodes[o.a]].id.clone();
         for l in layer[o.a] + 1..layer[o.b] {
             let id = format!("#{k}:{l}");
-            layers[l].push(Item {
-                id: id.clone(),
-                real: false,
-                band: None,
-                zone: 0,
-                h: DUMMY_H,
-                w: 0.0,
-                y: 0.0,
-            });
+            layers[l].push(Item { id: id.clone(), real: false, band: None, zone: 0, h: DUMMY_H, w: 0.0, y: 0.0 });
             joints.push((previous, id.clone()));
             previous = id.clone();
             o.chain.push(id);
@@ -180,18 +127,7 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
         joints.push((previous, g.nodes[nodes[o.b]].id.clone()));
     }
     let neighbours = |id: &str, left: bool| -> Vec<String> {
-        joints
-            .iter()
-            .filter_map(|(a, b)| {
-                if left && b == id {
-                    Some(a.clone())
-                } else if !left && a == id {
-                    Some(b.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
+        joints.iter().filter_map(|(a, b)| if left && b == id { Some(a.clone()) } else if !left && a == id { Some(b.clone()) } else { None }).collect()
     };
 
     // Barycenter sweeps. Sorting is stable, so ties keep the order things were said in.
@@ -199,27 +135,13 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
         let left = sweep % 2 == 0;
         for l in sweep_order(count, left) {
             let other = if left { l - 1 } else { l + 1 };
-            let rank: HashMap<String, f64> = layers[other]
-                .iter()
-                .enumerate()
-                .map(|(i, it)| (it.id.clone(), i as f64))
-                .collect();
+            let rank: HashMap<String, f64> = layers[other].iter().enumerate().map(|(i, it)| (it.id.clone(), i as f64)).collect();
             let mut keys: Vec<(f64, Item)> = layers[l]
                 .iter()
                 .enumerate()
                 .map(|(i, it)| {
-                    let seen: Vec<f64> = neighbours(&it.id, left)
-                        .iter()
-                        .filter_map(|o| rank.get(o).copied())
-                        .collect();
-                    (
-                        if seen.is_empty() {
-                            i as f64
-                        } else {
-                            seen.iter().sum::<f64>() / seen.len() as f64
-                        },
-                        it.clone(),
-                    )
+                    let seen: Vec<f64> = neighbours(&it.id, left).iter().filter_map(|o| rank.get(o).copied()).collect();
+                    (if seen.is_empty() { i as f64 } else { seen.iter().sum::<f64>() / seen.len() as f64 }, it.clone())
                 })
                 .collect();
             keys.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -241,16 +163,9 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
         for sweep in 0..6 {
             let left = sweep % 2 == 0;
             for l in sweep_order(count, left) {
-                let zones: HashMap<String, usize> = layers
-                    .iter()
-                    .flatten()
-                    .map(|it| (it.id.clone(), it.zone))
-                    .collect();
+                let zones: HashMap<String, usize> = layers.iter().flatten().map(|it| (it.id.clone(), it.zone)).collect();
                 for it in layers[l].iter_mut().filter(|it| it.band.is_none()) {
-                    let seen: Vec<usize> = neighbours(&it.id, left)
-                        .iter()
-                        .filter_map(|o| zones.get(o).copied())
-                        .collect();
+                    let seen: Vec<usize> = neighbours(&it.id, left).iter().filter_map(|o| zones.get(o).copied()).collect();
                     if !seen.is_empty() {
                         let mean = seen.iter().sum::<usize>() as f64 / seen.len() as f64;
                         // Round to the nearest free zone, which are the even ones.
@@ -265,13 +180,7 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
     }
 
     // Stack each zone by itself, align items with their neighbours, then place zones in sequence.
-    let gap = |a: &Item, b: &Item| {
-        if a.real && b.real {
-            NODE_GAP
-        } else {
-            DUMMY_GAP
-        }
-    };
+    let gap = |a: &Item, b: &Item| if a.real && b.real { NODE_GAP } else { DUMMY_GAP };
     let zones = bands.len() * 2 + 1;
     let mut offset = 0.0;
     for zone in 0..zones {
@@ -293,47 +202,23 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
         for pass in 0..8 {
             let left = pass % 2 == 0;
             for l in sweep_order(count, left) {
-                let centers: HashMap<String, f64> = layers
-                    .iter()
-                    .flatten()
-                    .filter(|it| it.zone == zone)
-                    .map(|it| (it.id.clone(), it.y + it.h / 2.0))
-                    .collect();
+                let centers: HashMap<String, f64> = layers.iter().flatten().filter(|it| it.zone == zone).map(|it| (it.id.clone(), it.y + it.h / 2.0)).collect();
                 let items = &mut layers[l];
                 let mut previous: Option<usize> = None;
                 for i in 0..items.len() {
                     if items[i].zone != zone {
                         continue;
                     }
-                    let seen: Vec<f64> = neighbours(&items[i].id, left)
-                        .iter()
-                        .filter_map(|o| centers.get(o).copied())
-                        .collect();
-                    let wanted = if seen.is_empty() {
-                        items[i].y
-                    } else {
-                        seen.iter().sum::<f64>() / seen.len() as f64 - items[i].h / 2.0
-                    };
-                    let least = previous.map_or(f64::MIN, |p| {
-                        items[p].y + items[p].h + gap(&items[p], &items[i])
-                    });
+                    let seen: Vec<f64> = neighbours(&items[i].id, left).iter().filter_map(|o| centers.get(o).copied()).collect();
+                    let wanted = if seen.is_empty() { items[i].y } else { seen.iter().sum::<f64>() / seen.len() as f64 - items[i].h / 2.0 };
+                    let least = previous.map_or(f64::MIN, |p| items[p].y + items[p].h + gap(&items[p], &items[i]));
                     items[i].y = wanted.max(least);
                     previous = Some(i);
                 }
             }
         }
-        let top = layers
-            .iter()
-            .flatten()
-            .filter(|it| it.zone == zone)
-            .map(|it| it.y)
-            .fold(f64::MAX, f64::min);
-        let bottom = layers
-            .iter()
-            .flatten()
-            .filter(|it| it.zone == zone)
-            .map(|it| it.y + it.h)
-            .fold(f64::MIN, f64::max);
+        let top = layers.iter().flatten().filter(|it| it.zone == zone).map(|it| it.y).fold(f64::MAX, f64::min);
+        let bottom = layers.iter().flatten().filter(|it| it.zone == zone).map(|it| it.y + it.h).fold(f64::MIN, f64::max);
         let used = bottom >= top;
         let is_band = zone % 2 == 1;
         // Room for the frame around a band, and for the title along its top.
@@ -345,24 +230,13 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
                 it.y += offset - top;
             }
             offset += bottom - top;
-            offset += if is_band {
-                GROUP_PAD + NODE_GAP
-            } else {
-                NODE_GAP
-            };
+            offset += if is_band { GROUP_PAD + NODE_GAP } else { NODE_GAP };
         }
     }
 
     // Nodes centre in their layer; a line crosses the rest of the layer's width horizontally,
     // so a narrow node's edge cannot slice through a wider neighbour.
-    let mut x = if layers
-        .first()
-        .is_some_and(|l| l.iter().any(|i| i.band.is_some()))
-    {
-        GROUP_PAD
-    } else {
-        0.0
-    };
+    let mut x = if layers.first().is_some_and(|l| l.iter().any(|i| i.band.is_some())) { GROUP_PAD } else { 0.0 };
     let mut placed: Vec<Rect> = vec![];
     let mut dummy: HashMap<String, (f64, f64, f64)> = HashMap::new();
     let mut span: HashMap<String, (f64, f64)> = HashMap::new();
@@ -371,13 +245,7 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
         for it in items {
             span.insert(it.id.clone(), (x, x + width));
             if it.real {
-                placed.push(Rect {
-                    id: it.id.clone(),
-                    x: x + (width - it.w) / 2.0,
-                    y: it.y,
-                    w: it.w,
-                    h: it.h,
-                });
+                placed.push(Rect { id: it.id.clone(), x: x + (width - it.w) / 2.0, y: it.y, w: it.w, h: it.h });
             } else {
                 dummy.insert(it.id.clone(), (x, x + width, it.y + it.h / 2.0));
             }
@@ -389,11 +257,7 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
 
     // Several edges on one side of a node spread out, ordered by where they head.
     let next_y = |o: &Oriented, from_a: bool| -> f64 {
-        let waypoint = if from_a {
-            o.chain.first()
-        } else {
-            o.chain.last()
-        };
+        let waypoint = if from_a { o.chain.first() } else { o.chain.last() };
         waypoint.map_or_else(
             || {
                 let far = find(&g.nodes[nodes[if from_a { o.b } else { o.a }]].id);
@@ -403,15 +267,8 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
         )
     };
     let port = |node: usize, o_index: usize, from_a: bool| -> f64 {
-        let mut same: Vec<usize> = oriented
-            .iter()
-            .enumerate()
-            .filter(|(_, o)| if from_a { o.a == node } else { o.b == node })
-            .map(|(i, _)| i)
-            .collect();
-        same.sort_by(|&p, &q| {
-            next_y(&oriented[p], from_a).total_cmp(&next_y(&oriented[q], from_a))
-        });
+        let mut same: Vec<usize> = oriented.iter().enumerate().filter(|(_, o)| if from_a { o.a == node } else { o.b == node }).map(|(i, _)| i).collect();
+        same.sort_by(|&p, &q| next_y(&oriented[p], from_a).total_cmp(&next_y(&oriented[q], from_a)));
         let rank = same.iter().position(|&i| i == o_index).expect("listed") as f64;
         let b = find(&g.nodes[nodes[node]].id);
         b.y + b.h / 2.0 + (rank - (same.len() as f64 - 1.0) / 2.0) * PORT_GAP
@@ -442,24 +299,12 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
         if o.reversed {
             points.reverse();
         }
-        routes.push(Route {
-            from: e.from.clone(),
-            to: e.to.clone(),
-            points,
-            label_box: None,
-        });
+        routes.push(Route { from: e.from.clone(), to: e.to.clone(), points, label_box: None });
     }
 
     let mut groups = vec![];
     for grp in &g.groups {
-        let members: Vec<&Rect> = placed
-            .iter()
-            .filter(|b| {
-                g.nodes
-                    .iter()
-                    .any(|n| n.id == b.id && n.group.as_ref() == Some(&grp.id))
-            })
-            .collect();
+        let members: Vec<&Rect> = placed.iter().filter(|b| g.nodes.iter().any(|n| n.id == b.id && n.group.as_ref() == Some(&grp.id))).collect();
         if members.is_empty() {
             continue;
         }
@@ -467,16 +312,7 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
         let gy = members.iter().map(|b| b.y).fold(f64::MAX, f64::min) - GROUP_TOP;
         let gx1 = members.iter().map(|b| b.x + b.w).fold(f64::MIN, f64::max) + GROUP_PAD;
         let gy1 = members.iter().map(|b| b.y + b.h).fold(f64::MIN, f64::max) + GROUP_PAD;
-        groups.push((
-            Rect {
-                id: grp.id.clone(),
-                x: gx,
-                y: gy,
-                w: gx1 - gx,
-                h: gy1 - gy,
-            },
-            grp.label.clone(),
-        ));
+        groups.push((Rect { id: grp.id.clone(), x: gx, y: gy, w: gx1 - gx, h: gy1 - gy }, grp.label.clone()));
     }
 
     let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
@@ -506,13 +342,5 @@ pub fn first_diagram(g: &Graph, ids: &[String]) -> Diagram {
             p[1] -= y0;
         }
     }
-    Diagram {
-        x0: 0.0,
-        y0: 0.0,
-        w: x1 - x0,
-        h: y1 - y0,
-        nodes: placed,
-        groups,
-        edges: routes,
-    }
+    Diagram { x0: 0.0, y0: 0.0, w: x1 - x0, h: y1 - y0, nodes: placed, groups, edges: routes }
 }

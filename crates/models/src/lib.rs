@@ -47,33 +47,13 @@ pub struct Model {
 
 fn sources(modelscope: &str, huggingface: &str) -> Vec<Source> {
     vec![
-        Source {
-            name: "ModelScope".into(),
-            url: format!("https://modelscope.cn/models/{modelscope}"),
-            direct: true,
-        },
-        Source {
-            name: "hf-mirror".into(),
-            url: format!("https://hf-mirror.com/{huggingface}"),
-            direct: false,
-        },
-        Source {
-            name: "Hugging Face".into(),
-            url: format!("https://huggingface.co/{huggingface}"),
-            direct: false,
-        },
+        Source { name: "ModelScope".into(), url: format!("https://modelscope.cn/models/{modelscope}"), direct: true },
+        Source { name: "hf-mirror".into(), url: format!("https://hf-mirror.com/{huggingface}"), direct: false },
+        Source { name: "Hugging Face".into(), url: format!("https://huggingface.co/{huggingface}"), direct: false },
     ]
 }
 
-fn minicpm(
-    id: &'static str,
-    label: &'static str,
-    repo: &str,
-    file: &str,
-    size: u64,
-    sha256: &str,
-    note: (&'static str, &'static str),
-) -> Model {
+fn minicpm(id: &'static str, label: &'static str, repo: &str, file: &str, size: u64, sha256: &str, note: (&'static str, &'static str)) -> Model {
     Model {
         id,
         label,
@@ -82,10 +62,7 @@ fn minicpm(
         sha256: sha256.to_string(),
         vram_mib: 0,
         note: Some(note),
-        sources: sources(
-            &format!("OpenBMB/{repo}/resolve/master/{file}"),
-            &format!("openbmb/{repo}/resolve/main/{file}"),
-        ),
+        sources: sources(&format!("OpenBMB/{repo}/resolve/master/{file}"), &format!("openbmb/{repo}/resolve/main/{file}")),
     }
 }
 
@@ -102,10 +79,7 @@ pub fn catalog() -> Vec<Model> {
             sha256: "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4".into(),
             vram_mib: 0,
             note: None,
-            sources: sources(
-                "unsloth/Qwen3.5-4B-GGUF/resolve/master/Qwen3.5-4B-Q4_K_M.gguf",
-                "unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf",
-            ),
+            sources: sources("unsloth/Qwen3.5-4B-GGUF/resolve/master/Qwen3.5-4B-Q4_K_M.gguf", "unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"),
         },
         Model {
             id: "qwen3.5-9b",
@@ -115,10 +89,7 @@ pub fn catalog() -> Vec<Model> {
             sha256: "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8".into(),
             vram_mib: 6000,
             note: None,
-            sources: sources(
-                "unsloth/Qwen3.5-9B-GGUF/resolve/master/Qwen3.5-9B-Q4_K_M.gguf",
-                "unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf",
-            ),
+            sources: sources("unsloth/Qwen3.5-9B-GGUF/resolve/master/Qwen3.5-9B-Q4_K_M.gguf", "unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf"),
         },
         minicpm(
             "minicpm5-2b",
@@ -127,10 +98,7 @@ pub fn catalog() -> Vec<Model> {
             "MiniCPM5-2B-Q4_K_M.gguf",
             1_561_318_368,
             "ec2d5801640099e97d8d7e8003ad4d81f336e757811f03a26173dddf386602fd",
-            (
-                "Smaller and faster, but its boards miss more of what was said.",
-                "更小更快，但板书会漏掉更多内容。",
-            ),
+            ("Smaller and faster, but its boards miss more of what was said.", "更小更快，但板书会漏掉更多内容。"),
         ),
         minicpm(
             "minicpm-v-4.7-1b",
@@ -139,10 +107,7 @@ pub fn catalog() -> Vec<Model> {
             "MiniCPM-V-4_7-1B-Q4_K_M.gguf",
             672_003_680,
             "f18f594747e5317ab490cff9c06339c9cfb89acbe2f02ebc48a4e167bc23576d",
-            (
-                "Draws boards poorly. It can read images with its add-on.",
-                "板书效果较差。配上看图组件可以读图。",
-            ),
+            ("Draws boards poorly. It can read images with its add-on.", "板书效果较差。配上看图组件可以读图。"),
         ),
         minicpm(
             "minicpm5-1b",
@@ -151,10 +116,7 @@ pub fn catalog() -> Vec<Model> {
             "MiniCPM5-1B-Q4_K_M.gguf",
             688_065_920,
             "81b64d05a23b17b34c475f42b3e72fbde62d4b92cc34541f7a8031d0752deafa",
-            (
-                "Very fast, but draws boards poorly and loses most points.",
-                "速度很快，但板书效果较差，大部分要点会丢失。",
-            ),
+            ("Very fast, but draws boards poorly and loses most points.", "速度很快，但板书效果较差，大部分要点会丢失。"),
         ),
     ]
 }
@@ -162,12 +124,7 @@ pub fn catalog() -> Vec<Model> {
 /// The largest model the discrete graphics memory can carry; without one, the smallest.
 pub fn recommended(vram_mib: u64) -> &'static str {
     let models = catalog();
-    models
-        .iter()
-        .filter(|m| m.note.is_none())
-        .rfind(|m| m.vram_mib <= vram_mib)
-        .unwrap_or(&models[0])
-        .id
+    models.iter().filter(|m| m.note.is_none()).rfind(|m| m.vram_mib <= vram_mib).unwrap_or(&models[0]).id
 }
 
 /// What lets a board model read images, by the board model's file name. It is downloaded the same way
@@ -183,43 +140,14 @@ pub fn vision_for(model_file: &str) -> Option<Model> {
         note: None,
         sources: source,
     };
-    let unsloth = |repo: &str| {
-        sources(
-            &format!("{repo}/resolve/master/mmproj-F16.gguf"),
-            &format!("{repo}/resolve/main/mmproj-F16.gguf"),
-        )
-    };
+    let unsloth = |repo: &str| sources(&format!("{repo}/resolve/master/mmproj-F16.gguf"), &format!("{repo}/resolve/main/mmproj-F16.gguf"));
     if model_file.starts_with("Qwen3.5-4B") {
-        Some(add_on(
-            "qwen3.5-4b-vision",
-            "Vision add-on · Qwen3.5-4B",
-            "Qwen3.5-4B-mmproj-F16.gguf",
-            672_423_616,
-            "cd88edcf8d031894960bb0c9c5b9b7e1fea6ebee02b9f7ce925a00d12891f864",
-            unsloth("unsloth/Qwen3.5-4B-GGUF"),
-        ))
+        Some(add_on("qwen3.5-4b-vision", "Vision add-on · Qwen3.5-4B", "Qwen3.5-4B-mmproj-F16.gguf", 672_423_616, "cd88edcf8d031894960bb0c9c5b9b7e1fea6ebee02b9f7ce925a00d12891f864", unsloth("unsloth/Qwen3.5-4B-GGUF")))
     } else if model_file.starts_with("Qwen3.5-9B") {
-        Some(add_on(
-            "qwen3.5-9b-vision",
-            "Vision add-on · Qwen3.5-9B",
-            "Qwen3.5-9B-mmproj-F16.gguf",
-            918_166_080,
-            "f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f",
-            unsloth("unsloth/Qwen3.5-9B-GGUF"),
-        ))
+        Some(add_on("qwen3.5-9b-vision", "Vision add-on · Qwen3.5-9B", "Qwen3.5-9B-mmproj-F16.gguf", 918_166_080, "f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f", unsloth("unsloth/Qwen3.5-9B-GGUF")))
     } else if model_file.starts_with("MiniCPM-V-4_7-1B") {
-        let source = sources(
-            "OpenBMB/MiniCPM-V-4.7-1B-gguf/resolve/master/mmproj-model-f16.gguf",
-            "openbmb/MiniCPM-V-4.7-1B-gguf/resolve/main/mmproj-model-f16.gguf",
-        );
-        Some(add_on(
-            "minicpm-v-4.7-1b-vision",
-            "Vision add-on · MiniCPM-V 4.7 1B",
-            "MiniCPM-V-4_7-1B-mmproj-f16.gguf",
-            1_110_117_984,
-            "fb9cc047a3cdad5317fd8433a4aeda2d22f00f02ca4bd93b34ad84165b25a900",
-            source,
-        ))
+        let source = sources("OpenBMB/MiniCPM-V-4.7-1B-gguf/resolve/master/mmproj-model-f16.gguf", "openbmb/MiniCPM-V-4.7-1B-gguf/resolve/main/mmproj-model-f16.gguf");
+        Some(add_on("minicpm-v-4.7-1b-vision", "Vision add-on · MiniCPM-V 4.7 1B", "MiniCPM-V-4_7-1B-mmproj-f16.gguf", 1_110_117_984, "fb9cc047a3cdad5317fd8433a4aeda2d22f00f02ca4bd93b34ad84165b25a900", source))
     } else {
         None
     }
@@ -231,17 +159,11 @@ pub fn installed(model: &Model, dir: &Path) -> bool {
 
 /// The file the user chose, or else the first one present.
 pub fn current(dir: &Path) -> Option<PathBuf> {
-    let chosen = fs::read_to_string(dir.join(SELECTED))
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
+    let chosen = fs::read_to_string(dir.join(SELECTED)).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     if let Some(path) = chosen.map(|file| dir.join(file)).filter(|p| p.is_file()) {
         return Some(path);
     }
-    catalog()
-        .iter()
-        .find(|m| installed(m, dir))
-        .map(|m| dir.join(&m.file))
+    catalog().iter().find(|m| installed(m, dir)).map(|m| dir.join(&m.file))
 }
 
 pub fn select(model: &Model, dir: &Path) -> Result<()> {
@@ -262,14 +184,7 @@ fn free_space(dir: &Path) -> Result<u64> {
     let wide: Vec<u16> = dir.as_os_str().encode_wide().chain([0]).collect();
     let mut free = 0_u64;
     // SAFETY: `wide` is a NUL-terminated path and `free` is written by the call.
-    let ok = unsafe {
-        windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(
-            wide.as_ptr(),
-            &mut free,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        )
-    };
+    let ok = unsafe { windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(wide.as_ptr(), &mut free, std::ptr::null_mut(), std::ptr::null_mut()) };
     if ok == 0 {
         return Err(std::io::Error::last_os_error().into());
     }
@@ -308,20 +223,11 @@ pub enum Outcome {
 }
 
 fn agent(direct: bool) -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .try_proxy_from_env(!direct)
-        .timeout_connect(Duration::from_secs(20))
-        .timeout_read(STALL)
-        .build()
+    ureq::AgentBuilder::new().try_proxy_from_env(!direct).timeout_connect(Duration::from_secs(20)).timeout_read(STALL).build()
 }
 
 /// Download a model, resuming anything left by an earlier attempt. `report` runs a few times a second.
-pub fn download(
-    model: &Model,
-    dir: &Path,
-    cancel: &AtomicBool,
-    report: &mut dyn FnMut(Progress),
-) -> Result<Outcome> {
+pub fn download(model: &Model, dir: &Path, cancel: &AtomicBool, report: &mut dyn FnMut(Progress)) -> Result<Outcome> {
     let path = dir.join(&model.file);
     if path.is_file() {
         return Ok(Outcome::Finished(path));
@@ -333,13 +239,7 @@ pub fn download(
     let mut hasher = Sha256::new();
     let mut have = 0_u64;
     if let Ok(mut file) = File::open(&part) {
-        report(Progress {
-            done: 0,
-            total: model.size,
-            speed: 0,
-            source: None,
-            verifying: true,
-        });
+        report(Progress { done: 0, total: model.size, speed: 0, source: None, verifying: true });
         let mut buffer = vec![0; CHUNK];
         loop {
             if cancel.load(Ordering::Relaxed) {
@@ -362,12 +262,7 @@ pub fn download(
     let free = free_space(dir)?;
     if needed > free {
         let gb = |n: u64| n as f64 / 1e9;
-        bail!(
-            "Not enough disk space for {}: it needs {:.1} GB and {:.1} GB is free.",
-            model.label,
-            gb(needed),
-            gb(free)
-        );
+        bail!("Not enough disk space for {}: it needs {:.1} GB and {:.1} GB is free.", model.label, gb(needed), gb(free));
     }
 
     let mut failure = anyhow!("all download sources failed");
@@ -379,13 +274,7 @@ pub fn download(
         if cancel.load(Ordering::Relaxed) {
             return Ok(Outcome::Cancelled);
         }
-        report(Progress {
-            done: have,
-            total: model.size,
-            speed: 0,
-            source: Some(source.name.clone()),
-            verifying: false,
-        });
+        report(Progress { done: have, total: model.size, speed: 0, source: Some(source.name.clone()), verifying: false });
         let mut request = agent(source.direct).get(&source.url);
         if have > 0 {
             request = request.set("Range", &format!("bytes={have}-"));
@@ -403,16 +292,9 @@ pub fn download(
             hasher = Sha256::new();
             have = 0;
         }
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .append(append)
-            .truncate(!append)
-            .open(&part)
-            .with_context(|| format!("writing {}", part.display()))?;
+        let mut file = OpenOptions::new().create(true).write(true).append(append).truncate(!append).open(&part).with_context(|| format!("writing {}", part.display()))?;
         let mut reader = response.into_reader();
-        let (mut last_report, mut window_start, mut window_bytes, mut speed) =
-            (Instant::now(), Instant::now(), 0_u64, 0_u64);
+        let (mut last_report, mut window_start, mut window_bytes, mut speed) = (Instant::now(), Instant::now(), 0_u64, 0_u64);
         loop {
             if cancel.load(Ordering::Relaxed) {
                 file.flush()?;
@@ -429,8 +311,7 @@ pub fn download(
             if n == 0 {
                 break;
             }
-            file.write_all(&buffer[..n])
-                .with_context(|| format!("writing {}", part.display()))?;
+            file.write_all(&buffer[..n]).with_context(|| format!("writing {}", part.display()))?;
             hasher.update(&buffer[..n]);
             have += n as u64;
             window_bytes += n as u64;
@@ -441,35 +322,19 @@ pub fn download(
             }
             if last_report.elapsed() >= Duration::from_millis(200) {
                 last_report = Instant::now();
-                report(Progress {
-                    done: have,
-                    total: model.size,
-                    speed,
-                    source: Some(source.name.clone()),
-                    verifying: false,
-                });
+                report(Progress { done: have, total: model.size, speed, source: Some(source.name.clone()), verifying: false });
             }
         }
         file.sync_all()?;
     }
     if have < model.size {
-        return Err(failure.context(format!(
-            "{} stopped at {have} of {} bytes; the next attempt continues from there",
-            model.label, model.size
-        )));
+        return Err(failure.context(format!("{} stopped at {have} of {} bytes; the next attempt continues from there", model.label, model.size)));
     }
-    let actual: String = hasher
-        .finalize()
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect();
+    let actual: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
     if have != model.size || actual != model.sha256 {
         // Bad data must not be resumed from, or every retry would fail the same way.
         fs::remove_file(&part)?;
-        bail!(
-            "{} failed verification and was discarded. Please try again.",
-            model.label
-        );
+        bail!("{} failed verification and was discarded. Please try again.", model.label);
     }
     fs::rename(&part, &path).with_context(|| format!("finishing {}", path.display()))?;
     Ok(Outcome::Finished(path))
@@ -489,11 +354,7 @@ mod tests {
 
     impl Dir {
         fn new() -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "boardcast-models-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
+            let path = std::env::temp_dir().join(format!("boardcast-models-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
             fs::create_dir_all(&path).unwrap();
             Self(path)
         }
@@ -529,12 +390,7 @@ mod tests {
         (url, ranges)
     }
 
-    fn answer(
-        mut stream: TcpStream,
-        body: &[u8],
-        behaviour: Behaviour,
-        seen: &Mutex<Vec<Option<usize>>>,
-    ) {
+    fn answer(mut stream: TcpStream, body: &[u8], behaviour: Behaviour, seen: &Mutex<Vec<Option<usize>>>) {
         let mut range = None;
         let reader = BufReader::new(stream.try_clone().unwrap());
         for line in reader.lines().map_while(Result::ok) {
@@ -548,21 +404,12 @@ mod tests {
         seen.lock().unwrap().push(range);
         let (status, slice) = match (behaviour, range) {
             (Behaviour::Missing, _) => ("404 Not Found", &body[..0]),
-            (Behaviour::Honest | Behaviour::Breaks(_), Some(from)) => {
-                ("206 Partial Content", &body[from..])
-            }
+            (Behaviour::Honest | Behaviour::Breaks(_), Some(from)) => ("206 Partial Content", &body[from..]),
             _ => ("200 OK", body),
         };
-        let header = format!(
-            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-            slice.len()
-        );
+        let header = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", slice.len());
         stream.write_all(header.as_bytes()).unwrap();
-        let sent = if let Behaviour::Breaks(n) = behaviour {
-            &slice[..n.min(slice.len())]
-        } else {
-            slice
-        };
+        let sent = if let Behaviour::Breaks(n) = behaviour { &slice[..n.min(slice.len())] } else { slice };
         let _ = stream.write_all(sent);
     }
 
@@ -572,21 +419,10 @@ mod tests {
             label: "Test",
             file: "model.gguf".into(),
             size: body.len() as u64,
-            sha256: Sha256::digest(body)
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect(),
+            sha256: Sha256::digest(body).iter().map(|b| format!("{b:02x}")).collect(),
             vram_mib: 0,
             note: None,
-            sources: urls
-                .iter()
-                .enumerate()
-                .map(|(i, u)| Source {
-                    name: format!("source {i}"),
-                    url: (*u).to_string(),
-                    direct: true,
-                })
-                .collect(),
+            sources: urls.iter().enumerate().map(|(i, u)| Source { name: format!("source {i}"), url: (*u).to_string(), direct: true }).collect(),
         }
     }
 
@@ -603,9 +439,7 @@ mod tests {
         let (dir, data) = (Dir::new(), body());
         let (url, _) = serve(data.clone(), Behaviour::Honest);
         let m = model(&data, &[&url]);
-        let Outcome::Finished(path) = fetch(&m, &dir.0).unwrap() else {
-            panic!("cancelled")
-        };
+        let Outcome::Finished(path) = fetch(&m, &dir.0).unwrap() else { panic!("cancelled") };
         assert_eq!(fs::read(&path).unwrap(), data);
         assert!(!part_of(&path).exists());
         assert!(installed(&m, &dir.0));
@@ -676,10 +510,7 @@ mod tests {
         let m = model(&data, &[&url]);
         assert!(fetch(&m, &dir.0).is_err());
         assert!(!dir.0.join(&m.file).exists());
-        assert!(
-            !part_of(&dir.0.join(&m.file)).exists(),
-            "a bad leftover would poison every retry"
-        );
+        assert!(!part_of(&dir.0.join(&m.file)).exists(), "a bad leftover would poison every retry");
     }
 
     #[test]
@@ -688,10 +519,7 @@ mod tests {
         let (url, _) = serve(data.clone(), Behaviour::Honest);
         let m = model(&data, &[&url]);
         let cancel = AtomicBool::new(true);
-        assert!(matches!(
-            download(&m, &dir.0, &cancel, &mut |_| {}).unwrap(),
-            Outcome::Cancelled
-        ));
+        assert!(matches!(download(&m, &dir.0, &cancel, &mut |_| {}).unwrap(), Outcome::Cancelled));
         assert!(!dir.0.join(&m.file).exists());
         fetch(&m, &dir.0).unwrap();
         assert_eq!(fs::read(dir.0.join(&m.file)).unwrap(), data);
@@ -705,10 +533,7 @@ mod tests {
         m.size = u64::MAX / 4;
         let error = fetch(&m, &dir.0).unwrap_err();
         assert!(error.to_string().contains("disk space"), "{error}");
-        assert!(
-            ranges.lock().unwrap().is_empty(),
-            "nothing should be fetched"
-        );
+        assert!(ranges.lock().unwrap().is_empty(), "nothing should be fetched");
     }
 
     #[test]
@@ -748,10 +573,7 @@ mod tests {
     fn a_model_with_a_caveat_can_be_chosen_but_is_not_recommended() {
         let models = catalog();
         for id in ["minicpm5-1b", "minicpm5-2b", "minicpm-v-4.7-1b"] {
-            assert!(
-                models.iter().find(|m| m.id == id).unwrap().note.is_some(),
-                "{id}"
-            );
+            assert!(models.iter().find(|m| m.id == id).unwrap().note.is_some(), "{id}");
         }
         for vram in [0, 2048, 4096, 8192, 65536] {
             assert!(recommended(vram).starts_with("qwen"), "{vram}");
@@ -760,20 +582,14 @@ mod tests {
 
     #[test]
     fn only_models_that_can_see_have_a_vision_add_on() {
-        let has = |id: &str| {
-            vision_for(&catalog().into_iter().find(|m| m.id == id).unwrap().file).is_some()
-        };
+        let has = |id: &str| vision_for(&catalog().into_iter().find(|m| m.id == id).unwrap().file).is_some();
         assert!(has("qwen3.5-4b") && has("qwen3.5-9b") && has("minicpm-v-4.7-1b"));
         assert!(!has("minicpm5-1b") && !has("minicpm5-2b"));
     }
 
     #[test]
     fn every_download_has_its_own_file_name() {
-        let mut names: Vec<String> = catalog()
-            .into_iter()
-            .flat_map(|m| [vision_for(&m.file).map(|v| v.file), Some(m.file)])
-            .flatten()
-            .collect();
+        let mut names: Vec<String> = catalog().into_iter().flat_map(|m| [vision_for(&m.file).map(|v| v.file), Some(m.file)]).flatten().collect();
         let total = names.len();
         names.sort();
         names.dedup();

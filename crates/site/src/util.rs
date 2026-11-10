@@ -5,9 +5,7 @@ use std::cell::OnceCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{
-    CssStyleDeclaration, Document, Element, Event, HtmlElement, Node, SvgElement, Window,
-};
+use web_sys::{CssStyleDeclaration, Document, Element, Event, HtmlElement, Node, SvgElement, Window};
 
 pub type Pt = (f64, f64);
 
@@ -29,15 +27,7 @@ thread_local! {
 
 /// Whether the reader asked for less motion.
 pub fn reduced() -> bool {
-    REDUCED.with(|r| {
-        *r.get_or_init(|| {
-            win()
-                .match_media("(prefers-reduced-motion: reduce)")
-                .ok()
-                .flatten()
-                .is_some_and(|m| m.matches())
-        })
-    })
+    REDUCED.with(|r| *r.get_or_init(|| win().match_media("(prefers-reduced-motion: reduce)").ok().flatten().is_some_and(|m| m.matches())))
 }
 
 pub fn clamp(x: f64) -> f64 {
@@ -46,18 +36,11 @@ pub fn clamp(x: f64) -> f64 {
 
 /// The first element matching `sel`; the page's own markup always has it.
 pub fn q(sel: &str) -> Element {
-    doc()
-        .query_selector(sel)
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| panic!("no {sel} on the page"))
+    doc().query_selector(sel).ok().flatten().unwrap_or_else(|| panic!("no {sel} on the page"))
 }
 
 pub fn q_in(root: &Element, sel: &str) -> Element {
-    root.query_selector(sel)
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| panic!("no {sel} on the page"))
+    root.query_selector(sel).ok().flatten().unwrap_or_else(|| panic!("no {sel} on the page"))
 }
 
 pub fn qa(sel: &str) -> Vec<Element> {
@@ -70,9 +53,7 @@ pub fn qa_in(root: &Element, sel: &str) -> Vec<Element> {
 
 fn list(nodes: Option<web_sys::NodeList>) -> Vec<Element> {
     let Some(nodes) = nodes else { return vec![] };
-    (0..nodes.length())
-        .filter_map(|i| nodes.item(i)?.dyn_into::<Element>().ok())
-        .collect()
+    (0..nodes.length()).filter_map(|i| nodes.item(i)?.dyn_into::<Element>().ok()).collect()
 }
 
 /// The inline style of an HTML or SVG element.
@@ -136,9 +117,7 @@ const NS: &str = "http://www.w3.org/2000/svg";
 
 /// An SVG element with its attributes, added to `parent` when given.
 pub fn svg_el(name: &str, attrs: &[(&str, String)], parent: Option<&Element>) -> Element {
-    let e = doc()
-        .create_element_ns(Some(NS), name)
-        .expect("an SVG element");
+    let e = doc().create_element_ns(Some(NS), name).expect("an SVG element");
     for (k, v) in attrs {
         let _ = e.set_attribute(k, v);
     }
@@ -163,18 +142,10 @@ pub fn el(tag: &str, class: &str, content: &str) -> Element {
 /// The page's own constant SVG markup, such as a pictogram, parsed as XML into nodes for this document.
 pub fn svg_parts(markup: &str) -> Vec<Node> {
     let parser = web_sys::DomParser::new().expect("a DOM parser");
-    let parsed = parser
-        .parse_from_string(
-            &format!("<svg xmlns=\"{NS}\">{markup}</svg>"),
-            web_sys::SupportedType::ImageSvgXml,
-        )
-        .expect("valid SVG");
+    let parsed = parser.parse_from_string(&format!("<svg xmlns=\"{NS}\">{markup}</svg>"), web_sys::SupportedType::ImageSvgXml).expect("valid SVG");
     let root = parsed.document_element().expect("an SVG root");
     let children = root.child_nodes();
-    (0..children.length())
-        .filter_map(|i| children.item(i))
-        .filter_map(|n| doc().import_node_with_deep(&n, true).ok())
-        .collect()
+    (0..children.length()).filter_map(|i| children.item(i)).filter_map(|n| doc().import_node_with_deep(&n, true).ok()).collect()
 }
 
 /// Keep a closure alive for as long as the page is open.
@@ -188,28 +159,20 @@ pub fn on_passive(target: &web_sys::EventTarget, event: &str, f: impl FnMut(Even
     let f = Closure::<dyn FnMut(Event)>::new(f);
     let options = web_sys::AddEventListenerOptions::new();
     options.set_passive(true);
-    let _ = target.add_event_listener_with_callback_and_add_event_listener_options(
-        event,
-        f.as_ref().unchecked_ref(),
-        &options,
-    );
+    let _ = target.add_event_listener_with_callback_and_add_event_listener_options(event, f.as_ref().unchecked_ref(), &options);
     f.forget();
 }
 
 pub fn interval(ms: i32, f: impl FnMut() + 'static) -> i32 {
     let f = Closure::<dyn FnMut()>::new(f);
-    let id = win()
-        .set_interval_with_callback_and_timeout_and_arguments_0(f.as_ref().unchecked_ref(), ms)
-        .unwrap_or(0);
+    let id = win().set_interval_with_callback_and_timeout_and_arguments_0(f.as_ref().unchecked_ref(), ms).unwrap_or(0);
     f.forget();
     id
 }
 
 pub fn timeout(ms: i32, f: impl FnOnce() + 'static) -> i32 {
     let f = Closure::once_into_js(f);
-    win()
-        .set_timeout_with_callback_and_timeout_and_arguments_0(f.unchecked_ref(), ms)
-        .unwrap_or(0)
+    win().set_timeout_with_callback_and_timeout_and_arguments_0(f.unchecked_ref(), ms).unwrap_or(0)
 }
 
 pub fn clear_timeout(id: i32) {
@@ -234,11 +197,7 @@ pub async fn frame() -> f64 {
     let promise = js_sys::Promise::new(&mut |done, _| {
         let _ = win().request_animation_frame(&done);
     });
-    JsFuture::from(promise)
-        .await
-        .ok()
-        .and_then(|t| t.as_f64())
-        .unwrap_or_else(now)
+    JsFuture::from(promise).await.ok().and_then(|t| t.as_f64()).unwrap_or_else(now)
 }
 
 /// Run `f` on every animation frame for as long as it returns true.
@@ -254,18 +213,12 @@ pub fn every_frame(mut f: impl FnMut(f64) -> bool + 'static) {
 }
 
 /// Watch elements come into view.
-pub fn observer(
-    margin: Option<&str>,
-    threshold: Option<f64>,
-    mut f: impl FnMut(web_sys::IntersectionObserverEntry, &web_sys::IntersectionObserver) + 'static,
-) -> web_sys::IntersectionObserver {
-    let callback = Closure::<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>::new(
-        move |entries: js_sys::Array, io: web_sys::IntersectionObserver| {
-            for entry in entries.iter() {
-                f(entry.unchecked_into(), &io);
-            }
-        },
-    );
+pub fn observer(margin: Option<&str>, threshold: Option<f64>, mut f: impl FnMut(web_sys::IntersectionObserverEntry, &web_sys::IntersectionObserver) + 'static) -> web_sys::IntersectionObserver {
+    let callback = Closure::<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>::new(move |entries: js_sys::Array, io: web_sys::IntersectionObserver| {
+        for entry in entries.iter() {
+            f(entry.unchecked_into(), &io);
+        }
+    });
     let options = web_sys::IntersectionObserverInit::new();
     if let Some(m) = margin {
         options.set_root_margin(m);
@@ -273,11 +226,7 @@ pub fn observer(
     if let Some(t) = threshold {
         options.set_threshold(&JsValue::from_f64(t));
     }
-    let io = web_sys::IntersectionObserver::new_with_options(
-        callback.as_ref().unchecked_ref(),
-        &options,
-    )
-    .expect("an observer");
+    let io = web_sys::IntersectionObserver::new_with_options(callback.as_ref().unchecked_ref(), &options).expect("an observer");
     callback.forget();
     io
 }
@@ -302,27 +251,18 @@ impl Rand {
 }
 
 pub fn to_d(pts: &[Pt]) -> String {
-    let parts: Vec<String> = pts
-        .iter()
-        .map(|p| format!("{} {}", fixed(p.0), fixed(p.1)))
-        .collect();
+    let parts: Vec<String> = pts.iter().map(|p| format!("{} {}", fixed(p.0), fixed(p.1))).collect();
     format!("M{}", parts.join(" L"))
 }
 
 /// One decimal, written as JavaScript's toFixed writes it.
 pub fn fixed(x: f64) -> String {
     let s = format!("{x:.1}");
-    if s == "-0.0" {
-        "0.0".into()
-    } else {
-        s
-    }
+    if s == "-0.0" { "0.0".into() } else { s }
 }
 
 pub fn length_of(pts: &[Pt]) -> f64 {
-    pts.windows(2)
-        .map(|w| (w[1].0 - w[0].0).hypot(w[1].1 - w[0].1))
-        .sum()
+    pts.windows(2).map(|w| (w[1].0 - w[0].0).hypot(w[1].1 - w[0].1)).sum()
 }
 
 /// A pen line through the points, with the slight wobble of a hand.
@@ -362,8 +302,7 @@ pub fn lasso_loop(cx: f64, cy: f64, rx: f64, ry: f64, seed: u32, turns: f64) -> 
 pub fn star(cx: f64, cy: f64, radius: f64) -> Vec<Pt> {
     (0..=5)
         .map(|i| {
-            let a =
-                -std::f64::consts::FRAC_PI_2 + (f64::from(i) * 4.0 * std::f64::consts::PI) / 5.0;
+            let a = -std::f64::consts::FRAC_PI_2 + (f64::from(i) * 4.0 * std::f64::consts::PI) / 5.0;
             (cx + a.cos() * radius, cy + a.sin() * radius)
         })
         .collect()

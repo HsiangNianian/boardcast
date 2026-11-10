@@ -24,18 +24,13 @@ fn truth_at(reference: &[Value], start: f64, end: f64) -> Option<String> {
             *talking.entry(turn["speaker"].as_str()?).or_default() += shared;
         }
     }
-    talking
-        .into_iter()
-        .max_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(name, _)| name.to_string())
+    talking.into_iter().max_by(|a, b| a.1.total_cmp(&b.1)).map(|(name, _)| name.to_string())
 }
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let every_sentence = std::env::var_os("SPEAKER_EVAL_EVERY_SENTENCE").is_some();
-    let [models, recording, reference] = args.as_slice() else {
-        anyhow::bail!("usage: speaker-eval <voice-models> <recording.wav> <reference.json>")
-    };
+    let [models, recording, reference] = args.as_slice() else { anyhow::bail!("usage: speaker-eval <voice-models> <recording.wav> <reference.json>") };
     let reference: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(reference)?)?;
     let wave = Wave::read(recording).ok_or_else(|| anyhow::anyhow!("cannot read {recording}"))?;
     let mut ear = Ear::load(Path::new(models))?;
@@ -59,63 +54,33 @@ fn main() -> anyhow::Result<()> {
                 if every_sentence {
                     identify(&mut voices, &print, &[])
                 } else {
-                    identify_sentence(&mut voices, &print, sentence.seconds, &[])
-                        .unwrap_or_else(|| last.clone())
+                    identify_sentence(&mut voices, &print, sentence.seconds, &[]).unwrap_or_else(|| last.clone())
                 }
             }
             None => last.clone(),
         };
         last.clone_from(&named);
-        said.push(Said {
-            named,
-            truth: truth_at(&reference, sentence.start, end),
-        });
+        said.push(Said { named, truth: truth_at(&reference, sentence.start, end) });
     }
 
-    let scored: Vec<&Said> = said
-        .iter()
-        .filter(|s| s.truth.is_some() && !s.named.is_empty())
-        .collect();
+    let scored: Vec<&Said> = said.iter().filter(|s| s.truth.is_some() && !s.named.is_empty()).collect();
     let mut pairs: BTreeMap<(&str, &str), usize> = BTreeMap::new();
     for s in &scored {
-        *pairs
-            .entry((s.named.as_str(), s.truth.as_deref().unwrap_or_default()))
-            .or_default() += 1;
+        *pairs.entry((s.named.as_str(), s.truth.as_deref().unwrap_or_default())).or_default() += 1;
     }
     // Each name counts as the person it most often was, and each person as the name they most often got.
-    let best = |counts: &BTreeMap<&str, BTreeMap<&str, usize>>| -> usize {
-        counts
-            .values()
-            .map(|inner| inner.values().copied().max().unwrap_or(0))
-            .sum()
-    };
-    let (mut by_name, mut by_truth): (
-        BTreeMap<&str, BTreeMap<&str, usize>>,
-        BTreeMap<&str, BTreeMap<&str, usize>>,
-    ) = (BTreeMap::new(), BTreeMap::new());
+    let best = |counts: &BTreeMap<&str, BTreeMap<&str, usize>>| -> usize { counts.values().map(|inner| inner.values().copied().max().unwrap_or(0)).sum() };
+    let (mut by_name, mut by_truth): (BTreeMap<&str, BTreeMap<&str, usize>>, BTreeMap<&str, BTreeMap<&str, usize>>) = (BTreeMap::new(), BTreeMap::new());
     for ((name, truth), n) in &pairs {
         by_name.entry(name).or_default().insert(truth, *n);
         by_truth.entry(truth).or_default().insert(name, *n);
     }
-    let people: BTreeSet<&str> = reference
-        .iter()
-        .filter_map(|t| t["speaker"].as_str())
-        .collect();
+    let people: BTreeSet<&str> = reference.iter().filter_map(|t| t["speaker"].as_str()).collect();
     let count = scored.len().max(1) as f64;
-    println!(
-        "sentences {} (without a voiceprint {})",
-        said.len(),
-        sentences.iter().filter(|s| s.voiceprint.is_none()).count()
-    );
+    println!("sentences {} (without a voiceprint {})", said.len(), sentences.iter().filter(|s| s.voiceprint.is_none()).count());
     println!("people {} voices found {}", people.len(), voices.len());
-    println!(
-        "purity {:.3} (a name holds one person)",
-        best(&by_name) as f64 / count
-    );
-    println!(
-        "coverage {:.3} (a person keeps one name)",
-        best(&by_truth) as f64 / count
-    );
+    println!("purity {:.3} (a name holds one person)", best(&by_name) as f64 / count);
+    println!("coverage {:.3} (a person keeps one name)", best(&by_truth) as f64 / count);
     for ((name, truth), n) in &pairs {
         println!("  {name} = {truth}: {n}");
     }

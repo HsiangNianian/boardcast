@@ -1,32 +1,32 @@
 //! The window: the board, the transcript, and an input that accepts Chinese through the IME.
 
-use crate::i18n::tr;
-use crate::pipeline::{Event, Pipeline, Script, Speech};
-use crate::raster::Layer;
-use crate::resources;
-use crate::theme::{self, icon, pal};
-use anyhow::{Context as _, Result};
-use boardcast_agent::settings::Settings;
-use boardcast_agent::sound::Glossary;
-use boardcast_agent::summary::{self, Block, Line, Step};
-use boardcast_agent::vision::VisionServer;
-use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
+use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
 use boardcast_board::board_layout::{target_at, Bounds as BoardBounds, Rect, StableLayout};
 use boardcast_board::check::check;
 use boardcast_board::compose::{compose, ink_boxes, InkBox, Owner, Style};
-use boardcast_board::follow;
-use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
 use boardcast_board::graph::{parse_ops, Graph, Kind, Op, Ref, Utterance};
+use boardcast_agent::sound::Glossary;
+use boardcast_board::follow;
+use boardcast_board::sugiyama::first_diagram;
+use boardcast_agent::settings::Settings;
+use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
+use boardcast_meetings::{default_dir, Info, Live, Store, ViewOnly};
 use boardcast_board::pen::{marker, outline, Inked, Rng};
+use crate::i18n::tr;
+use crate::theme::{self, icon, pal};
+use crate::pipeline::{Event, Pipeline, Script, Speech};
+use crate::resources;
+use boardcast_models::{Model, Outcome, Progress};
+use boardcast_update::Release;
+use crate::raster::Layer;
+use anyhow::{Context as _, Result};
+use boardcast_agent::summary::{self, Block, Line, Step};
+use boardcast_agent::vision::VisionServer;
+use boardcast_export::Kind as ExportKind;
+use boardcast_import::pdf::NewPage;
 use boardcast_board::spans::{span_at, Unit};
 use boardcast_board::speakers::{by_of_edge, by_of_node, first_seen, initial, said_at};
 use boardcast_board::steps::{clock, replay_to, Player};
-use boardcast_board::sugiyama::first_diagram;
-use boardcast_export::Kind as ExportKind;
-use boardcast_import::pdf::NewPage;
-use boardcast_meetings::{default_dir, Info, Live, Store, ViewOnly};
-use boardcast_models::{Model, Outcome, Progress};
-use boardcast_update::Release;
 use gpui_kit::base::input::{Textarea, TextareaState};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -39,36 +39,28 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::TitleBar;
 use gpui_kit::component::{Disableable, Selectable, Sizable};
 use gpui_kit::{
-    canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, Entity,
-    FillOptions, FocusHandle, Hsla, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, PathBuilder, PathStyle, Pixels, Point, Render, RenderImage, ScrollEvent, Window,
-    WindowBounds, WindowOptions,
+    canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, Entity, FillOptions, FocusHandle,
+    Hsla, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PathBuilder, PathStyle, Pixels, Point, Render, RenderImage,
+    ScrollEvent, Window, WindowBounds, WindowOptions,
 };
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// What the board stores, and what each is called on its button.
-const MARKS: [(&str, &str); 5] = [
-    ("划掉", "Strike"),
-    ("圈出", "Circle"),
-    ("下划线", "Underline"),
-    ("星标", "Star"),
-    ("高亮", "Highlight"),
-];
+const MARKS: [(&str, &str); 5] = [("划掉", "Strike"), ("圈出", "Circle"), ("下划线", "Underline"), ("星标", "Star"), ("高亮", "Highlight")];
 /// More meetings than this, and the list gets a search box.
 const LIBRARY_SEARCH_FROM: usize = 5;
 /// How much one press of a zoom key scales the board.
 const ZOOM_STEP: f32 = 1.25;
 /// Remote services filled in with one click: name, address and model.
-const REMOTE_PRESETS: [(&str, &str, &str); 1] =
-    [("DeepSeek", "https://api.deepseek.com", "deepseek-flash")];
+const REMOTE_PRESETS: [(&str, &str, &str); 1] = [("DeepSeek", "https://api.deepseek.com", "deepseek-flash")];
 /// The dock's height, along the board's lower edge.
 const DOCK_H: f32 = 56.0;
 /// Room kept clear around the board when it is fitted to the canvas.
@@ -137,16 +129,7 @@ struct Stroke {
 type Area = [f32; 4];
 
 fn area_of(shape: &[Pt]) -> Area {
-    shape
-        .iter()
-        .fold([f32::MAX, f32::MAX, f32::MIN, f32::MIN], |a, p| {
-            [
-                a[0].min(p[0]),
-                a[1].min(p[1]),
-                a[2].max(p[0]),
-                a[3].max(p[1]),
-            ]
-        })
+    shape.iter().fold([f32::MAX, f32::MAX, f32::MIN, f32::MIN], |a, p| [a[0].min(p[0]), a[1].min(p[1]), a[2].max(p[0]), a[3].max(p[1])])
 }
 
 fn meets(a: Area, b: Area) -> bool {
@@ -166,20 +149,12 @@ struct Tier {
 
 impl Tier {
     fn new(level: f32) -> Self {
-        Self {
-            under: Layer::with_scale(level),
-            layer: Layer::with_scale(level),
-            level,
-        }
+        Self { under: Layer::with_scale(level), layer: Layer::with_scale(level), level }
     }
 
     fn fill(&mut self, stroke: &Stroke) {
         let [_, r, g, b] = pal().ink(stroke.style.rgb).to_be_bytes();
-        let target = if stroke.style.under {
-            &mut self.under
-        } else {
-            &mut self.layer
-        };
+        let target = if stroke.style.under { &mut self.under } else { &mut self.layer };
         target.fill(&stroke.shape, [r, g, b], (stroke.style.alpha * 255.0) as u8);
     }
 
@@ -308,9 +283,7 @@ fn encloses(shape: &[[f32; 2]], p: [f32; 2]) -> bool {
     let mut j = shape.len() - 1;
     for i in 0..shape.len() {
         let (a, b) = (shape[i], shape[j]);
-        if (a[1] > p[1]) != (b[1] > p[1])
-            && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]
-        {
+        if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0] {
             inside = !inside;
         }
         j = i;
@@ -400,9 +373,7 @@ impl Ink {
 
     /// Forget every position and lay the board out again in one go.
     fn tidy(&mut self) {
-        let Some(graph) = self.graph.clone() else {
-            return;
-        };
+        let Some(graph) = self.graph.clone() else { return };
         self.board = StableLayout::default();
         self.next_tidy_batch += 1;
         let batch = u64::MAX - self.next_tidy_batch;
@@ -413,32 +384,16 @@ impl Ink {
     /// What to bring back out from under the veil when a speaker is traced: patches of ink, and what
     /// to mark with their color, both in board coordinates.
     fn traced_areas(&self, who: &str) -> (Vec<[f32; 4]>, Vec<[f32; 4]>) {
-        let Some(graph) = &self.graph else {
-            return (vec![], vec![]);
-        };
-        let nodes: HashSet<&str> = graph
-            .nodes
-            .iter()
-            .filter(|n| by_of_node(n) == Some(who))
-            .map(|n| n.id.as_str())
-            .collect();
-        let edges: HashSet<(&str, &str)> = graph
-            .edges
-            .iter()
-            .filter(|e| by_of_edge(e) == Some(who))
-            .map(|e| (e.from.as_str(), e.to.as_str()))
-            .collect();
+        let Some(graph) = &self.graph else { return (vec![], vec![]) };
+        let nodes: HashSet<&str> = graph.nodes.iter().filter(|n| by_of_node(n) == Some(who)).map(|n| n.id.as_str()).collect();
+        let edges: HashSet<(&str, &str)> = graph.edges.iter().filter(|e| by_of_edge(e) == Some(who)).map(|e| (e.from.as_str(), e.to.as_str())).collect();
         let area = |b: &InkBox| [b.x, b.y, b.w, b.h];
         let raised = |b: &&InkBox| match &b.owner {
             Owner::Node(id) => nodes.contains(id.as_str()),
             Owner::Edge(from, to) => edges.contains(&(from.as_str(), to.as_str())),
         };
         let shown = self.ink_boxes.iter().filter(raised);
-        let marked = self
-            .targets
-            .iter()
-            .filter(|t| nodes.contains(t.id.as_str()))
-            .map(|t| [t.x as f32, t.y as f32, t.w as f32, t.h as f32]);
+        let marked = self.targets.iter().filter(|t| nodes.contains(t.id.as_str())).map(|t| [t.x as f32, t.y as f32, t.w as f32, t.h as f32]);
         let labels = shown.clone().filter(|b| b.label).map(area);
         (shown.map(area).collect(), marked.chain(labels).collect())
     }
@@ -456,27 +411,19 @@ impl Ink {
     /// A point on the canvas, in board coordinates.
     fn on_board(&self, at: Point<Pixels>) -> [f32; 2] {
         let v = self.shown();
-        [
-            v.x + (f32::from(at.x) - f32::from(self.canvas.origin.x)) / v.k,
-            v.y + (f32::from(at.y) - f32::from(self.canvas.origin.y)) / v.k,
-        ]
+        [v.x + (f32::from(at.x) - f32::from(self.canvas.origin.x)) / v.k, v.y + (f32::from(at.y) - f32::from(self.canvas.origin.y)) / v.k]
     }
 
     /// Close the circle being drawn, and take in whatever has its middle inside it.
     fn close_loop(&mut self) {
-        let Some(shape) = self.drawing.take().filter(|s| s.len() >= 3) else {
-            return;
-        };
+        let Some(shape) = self.drawing.take().filter(|s| s.len() >= 3) else { return };
         for t in &self.targets {
             let middle = [(t.x + t.w / 2.0) as f32, (t.y + t.h / 2.0) as f32];
             if encloses(&shape, middle) && !self.pointed.contains(&t.id) {
                 self.pointed.push(t.id.clone());
             }
         }
-        let over = self
-            .pointed
-            .len()
-            .saturating_sub(boardcast_board::graph::MAX_POINTED);
+        let over = self.pointed.len().saturating_sub(boardcast_board::graph::MAX_POINTED);
         self.pointed.drain(..over);
         self.loops.push(shape);
     }
@@ -493,52 +440,26 @@ impl Ink {
         let id = self.selected.as_ref()?;
         let t = self.targets.iter().find(|t| &t.id == id)?;
         let v = self.shown();
-        let (w, h) = (
-            f32::from(self.canvas.size.width),
-            f32::from(self.canvas.size.height),
-        );
+        let (w, h) = (f32::from(self.canvas.size.width), f32::from(self.canvas.size.height));
         let x = (t.x as f32 - v.x) * v.k;
         let below = (t.y as f32 + t.h as f32 - v.y) * v.k + 8.0;
         let above = (t.y as f32 - v.y) * v.k - TOOLBAR_H - 8.0;
         let y = if below + TOOLBAR_H > h { above } else { below };
         // Imported text also offers how much to mark, which makes the bar wider.
-        let has_text = self
-            .graph
-            .as_ref()
-            .and_then(|g| g.nodes.iter().find(|n| &n.id == id))
-            .is_some_and(|n| !n.rows().is_empty());
-        let raised = self
-            .graph
-            .as_ref()
-            .and_then(|g| g.nodes.iter().find(|n| &n.id == id))
-            .is_some_and(|n| by_of_node(n).is_some());
-        let fixed = self
-            .graph
-            .as_ref()
-            .and_then(|g| g.nodes.iter().find(|n| &n.id == id))
-            .is_some_and(|n| n.kind == Kind::Region);
+        let has_text = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| !n.rows().is_empty());
+        let raised = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| by_of_node(n).is_some());
+        let fixed = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| n.kind == Kind::Region);
         let width = match self.editing {
             true => TOOLBAR_W_EDITING,
-            false => {
-                (if has_text {
-                    TOOLBAR_W_WITH_UNITS
-                } else {
-                    TOOLBAR_W
-                }) + if raised { TOOLBAR_W_SPEAKER } else { 0.0 }
-                    + if fixed { 0.0 } else { TOOLBAR_W_EDIT }
-            }
+            false => (if has_text { TOOLBAR_W_WITH_UNITS } else { TOOLBAR_W }) + if raised { TOOLBAR_W_SPEAKER } else { 0.0 } + if fixed { 0.0 } else { TOOLBAR_W_EDIT },
         };
-        Some((
-            x.clamp(8.0, (w - width - 8.0).max(8.0)),
-            y.clamp(8.0, (h - TOOLBAR_H - 8.0).max(8.0)),
-        ))
+        Some((x.clamp(8.0, (w - width - 8.0).max(8.0)), y.clamp(8.0, (h - TOOLBAR_H - 8.0).max(8.0))))
     }
 
     /// Draw what is on the board again, in the palette now in use.
     fn redraw(&mut self) {
         let level = self.base.level;
-        self.retired
-            .extend(std::mem::replace(&mut self.base, Tier::new(level)).release());
+        self.retired.extend(std::mem::replace(&mut self.base, Tier::new(level)).release());
         self.retire_detail();
         for stroke in self.finished.clone() {
             self.base.fill(&stroke);
@@ -549,8 +470,7 @@ impl Ink {
     /// rather than being rewritten stroke by stroke.
     fn open(&mut self, graph: &Graph, memory: &serde_json::Value) {
         let level = self.base.level;
-        self.retired
-            .extend(std::mem::replace(&mut self.base, Tier::new(level)).release());
+        self.retired.extend(std::mem::replace(&mut self.base, Tier::new(level)).release());
         self.retire_detail();
         self.queue.clear();
         self.finished.clear();
@@ -575,20 +495,13 @@ impl Ink {
     /// Fit everything: never above actual size, so a small board is not blown up.
     fn fit(&self) -> View {
         let [left, top, right, bottom] = self.insets;
-        let (w, h) = (
-            f32::from(self.canvas.size.width),
-            f32::from(self.canvas.size.height),
-        );
+        let (w, h) = (f32::from(self.canvas.size.width), f32::from(self.canvas.size.height));
         let (free_w, free_h) = ((w - left - right).max(1.0), (h - top - bottom).max(1.0));
         let e = &self.extent;
         let bw = (e.x1 - e.x0) as f32 + 120.0;
         let bh = (e.y1 - e.y0) as f32 + 120.0;
         let k = (free_w / bw).min(free_h / bh).min(1.0);
-        View {
-            k,
-            x: (e.x0 + e.x1) as f32 / 2.0 - (left + free_w / 2.0) / k,
-            y: (e.y0 + e.y1) as f32 / 2.0 - (top + free_h / 2.0) / k,
-        }
+        View { k, x: (e.x0 + e.x1) as f32 / 2.0 - (left + free_w / 2.0) / k, y: (e.y0 + e.y1) as f32 / 2.0 - (top + free_h / 2.0) / k }
     }
 
     /// The controls float somewhere new: unless the user chose the view, fit the board between them.
@@ -611,10 +524,7 @@ impl Ink {
             return;
         }
         let cur = self.shown();
-        let (w, h) = (
-            f32::from(self.canvas.size.width),
-            f32::from(self.canvas.size.height),
-        );
+        let (w, h) = (f32::from(self.canvas.size.width), f32::from(self.canvas.size.height));
         let [left, top, right, bottom] = self.insets;
         let inside = self.extent.x1 > self.extent.x0
             && next.x0 as f32 >= cur.x + left / cur.k
@@ -631,17 +541,10 @@ impl Ink {
     /// Zoom around a point on the canvas, as the current app does.
     fn zoom_at(&mut self, at: Point<Pixels>, factor: f32) {
         let v = self.shown();
-        let (px_, py) = (
-            f32::from(at.x) - f32::from(self.canvas.origin.x),
-            f32::from(at.y) - f32::from(self.canvas.origin.y),
-        );
+        let (px_, py) = (f32::from(at.x) - f32::from(self.canvas.origin.x), f32::from(at.y) - f32::from(self.canvas.origin.y));
         let k = (v.k * factor).clamp(MIN_ZOOM, MAX_ZOOM);
         let (mx, my) = (v.x + px_ / v.k, v.y + py / v.k);
-        self.view = Some(View {
-            k,
-            x: mx - px_ / k,
-            y: my - py / k,
-        });
+        self.view = Some(View { k, x: mx - px_ / k, y: my - py / k });
         self.reading = true;
         self.zoomed_at = Instant::now();
     }
@@ -655,10 +558,7 @@ impl Ink {
     /// The board area visible now.
     fn visible(&self) -> Area {
         let v = self.shown();
-        let (w, h) = (
-            f32::from(self.canvas.size.width),
-            f32::from(self.canvas.size.height),
-        );
+        let (w, h) = (f32::from(self.canvas.size.width), f32::from(self.canvas.size.height));
         [v.x, v.y, v.x + w / v.k, v.y + h / v.k]
     }
 
@@ -700,16 +600,10 @@ impl Ink {
             None
         } else {
             let view = self.visible();
-            let current = self
-                .detail
-                .as_ref()
-                .is_some_and(|(t, cover)| t.level == wanted && inside(view, *cover));
+            let current = self.detail.as_ref().is_some_and(|(t, cover)| t.level == wanted && inside(view, *cover));
             // One screen of margin on every side, so a short pan is already sharp.
             let (w, h) = (view[2] - view[0], view[3] - view[1]);
-            (!current).then_some((
-                wanted,
-                Some([view[0] - w, view[1] - h, view[2] + w, view[3] + h]),
-            ))
+            (!current).then_some((wanted, Some([view[0] - w, view[1] - h, view[2] + w, view[3] + h])))
         };
         let Some((level, cover)) = job else { return };
         let strokes = self.finished.clone();
@@ -724,26 +618,17 @@ impl Ink {
                     tier.fill(s);
                 }
             }
-            let _ = tx.send(Rebuilt {
-                tier,
-                cover,
-                covers: strokes.len(),
-                generation,
-                ms: started.elapsed().as_millis(),
-            });
+            let _ = tx.send(Rebuilt { tier, cover, covers: strokes.len(), generation, ms: started.elapsed().as_millis() });
         });
     }
 
     /// During a zoom test, says what each slow frame was doing, so a stall can be attributed.
     fn note_frame(&mut self, paint: Duration, uploads_before: usize) {
-        let uploads = self.base.uploads() + self.detail.as_ref().map_or(0, |(t, _)| t.uploads())
-            - uploads_before;
+        let uploads = self.base.uploads() + self.detail.as_ref().map_or(0, |(t, _)| t.uploads()) - uploads_before;
         let k = self.shown().k;
         let detail = self.detail.is_some();
         let rebuilding = self.rebuilding.is_some();
-        let Some(test) = &mut self.zoom_test else {
-            return;
-        };
+        let Some(test) = &mut self.zoom_test else { return };
         let gap = test.frames.last().copied().unwrap_or(0.0);
         if gap > 50.0 || paint.as_millis() > 20 {
             eprintln!("slow frame: gap {gap:.0} ms, paint {} ms, uploads {uploads}, k {k:.2}, detail {detail}, rebuilding {rebuilding}", paint.as_millis());
@@ -757,9 +642,7 @@ impl Ink {
             return false;
         }
         let k_fit = self.fit().k;
-        let Some(test) = &mut self.zoom_test else {
-            return false;
-        };
+        let Some(test) = &mut self.zoom_test else { return false };
         let now = Instant::now();
         let started = *test.started.get_or_insert(now);
         if test.base == 0.0 {
@@ -794,15 +677,8 @@ impl Ink {
             std::process::exit(0);
         }
         let e = &self.extent;
-        let (w, h) = (
-            f32::from(self.canvas.size.width),
-            f32::from(self.canvas.size.height),
-        );
-        self.view = Some(View {
-            k,
-            x: (e.x0 + e.x1) as f32 / 2.0 - w / (2.0 * k) + pan / k,
-            y: (e.y0 + e.y1) as f32 / 2.0 - h / (2.0 * k),
-        });
+        let (w, h) = (f32::from(self.canvas.size.width), f32::from(self.canvas.size.height));
+        self.view = Some(View { k, x: (e.x0 + e.x1) as f32 / 2.0 - w / (2.0 * k) + pan / k, y: (e.y0 + e.y1) as f32 / 2.0 - h / (2.0 * k) });
         self.reading = true;
         if moving {
             self.zoomed_at = now;
@@ -815,26 +691,12 @@ impl Ink {
             self.instant = false;
         }
         let now = Instant::now();
-        let dt = self
-            .last
-            .replace(now)
-            .map_or(0.016, |l| (now - l).as_secs_f32())
-            .min(0.1);
-        let mut budget = if self.instant {
-            f32::MAX
-        } else {
-            PEN_PX_PER_SECOND * (1.0 + self.queue.len() as f32 / 60.0) * dt
-        };
+        let dt = self.last.replace(now).map_or(0.016, |l| (now - l).as_secs_f32()).min(0.1);
+        let mut budget = if self.instant { f32::MAX } else { PEN_PX_PER_SECOND * (1.0 + self.queue.len() as f32 / 60.0) * dt };
         while budget > 0.0 {
-            let Some(front) = self.queue.front() else {
-                break;
-            };
+            let Some(front) = self.queue.front() else { break };
             let (id, length) = (front.batch, front.inked.length);
-            if let Some(t) = self
-                .timings
-                .iter_mut()
-                .find(|t| t.id == id && t.first_ink.is_none())
-            {
+            if let Some(t) = self.timings.iter_mut().find(|t| t.id == id && t.first_ink.is_none()) {
                 t.first_ink = Some(now);
             }
             let left = length * (1.0 - self.live);
@@ -846,12 +708,7 @@ impl Ink {
             self.live = 0.0;
             let done = self.queue.pop_front().expect("front exists");
             let shape = outline(&done.inked, 1.0);
-            let stroke = Arc::new(Stroke {
-                key: done.key,
-                area: area_of(&shape),
-                shape,
-                style: done.style,
-            });
+            let stroke = Arc::new(Stroke { key: done.key, area: area_of(&shape), shape, style: done.style });
             self.base.fill(&stroke);
             if let Some((tier, cover)) = &mut self.detail {
                 if meets(stroke.area, *cover) {
@@ -866,9 +723,7 @@ impl Ink {
     }
 
     fn report(&mut self, id: u64, now: Instant) {
-        let Some(i) = self.timings.iter().position(|t| t.id == id) else {
-            return;
-        };
+        let Some(i) = self.timings.iter().position(|t| t.id == id) else { return };
         let t = self.timings.remove(i);
         let first = t.first_ink.unwrap_or(now);
         println!(
@@ -910,12 +765,7 @@ enum ImportSource {
     File(PathBuf),
     Arxiv(String),
     /// An image, with the local model and add-on that will read it.
-    Image {
-        path: PathBuf,
-        binaries: PathBuf,
-        model: PathBuf,
-        projector: PathBuf,
-    },
+    Image { path: PathBuf, binaries: PathBuf, model: PathBuf, projector: PathBuf },
 }
 
 /// A file read and ready. Nothing joins a meeting until a place for it is chosen.
@@ -938,18 +788,11 @@ enum ImportUpdate {
 
 enum ImportState {
     Idle,
-    Reading {
-        progress: String,
-        cancel: Arc<AtomicBool>,
-        updates: Receiver<ImportUpdate>,
-    },
+    Reading { progress: String, cancel: Arc<AtomicBool>, updates: Receiver<ImportUpdate> },
     Ready(ImportPreview),
     Failed(String),
     /// An image is waiting for the add-on that lets the local model read it.
-    NeedsVision {
-        path: PathBuf,
-        add_on: Model,
-    },
+    NeedsVision { path: PathBuf, add_on: Model },
 }
 
 /// A replay on screen. It only moves the ink: the meeting itself is not touched, so leaving puts
@@ -1025,10 +868,7 @@ enum UpdateState {
     Checking,
     UpToDate,
     Available(Release),
-    Installing {
-        release: Release,
-        progress: Option<Progress>,
-    },
+    Installing { release: Release, progress: Option<Progress> },
     /// Installed; the next start runs it. Never restarted unasked, as a meeting may be under way.
     ReadyToRestart(Release),
     Failed(String),
@@ -1173,9 +1013,7 @@ fn shader_dir(models: &std::path::Path) -> PathBuf {
 const SHADERS_READY: &str = "ready";
 
 fn dir_size(dir: &std::path::Path) -> u64 {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return 0;
-    };
+    let Ok(entries) = std::fs::read_dir(dir) else { return 0 };
     entries
         .flatten()
         .map(|entry| match entry.metadata() {
@@ -1206,41 +1044,25 @@ impl Preparing {
     /// estimate that keeps moving but slows down, and it never claims to be nearly done.
     fn fraction(&self) -> f32 {
         if self.done > 0 && self.total > 0 {
-            return ESTIMATED_SHARE
-                + (1.0 - ESTIMATED_SHARE) * self.done as f32 / self.total as f32;
+            return ESTIMATED_SHARE + (1.0 - ESTIMATED_SHARE) * self.done as f32 / self.total as f32;
         }
         ESTIMATED_SHARE * (1.0 - (-self.started.elapsed().as_secs_f32() / 15.0).exp())
     }
 }
 
-fn backend_from(
-    settings: &Settings,
-    local_only: bool,
-    binaries: &std::path::Path,
-    models: &std::path::Path,
-) -> Backend {
+fn backend_from(settings: &Settings, local_only: bool, binaries: &std::path::Path, models: &std::path::Path) -> Backend {
     if settings.enabled && settings.is_complete() && !local_only {
-        return Backend::Ready(Provider::Remote {
-            base_url: settings.base_url.clone(),
-            key: settings.api_key.clone(),
-            model: settings.model.clone(),
-        });
+        return Backend::Ready(Provider::Remote { base_url: settings.base_url.clone(), key: settings.api_key.clone(), model: settings.model.clone() });
     }
     match boardcast_models::current(models) {
-        Some(model) => Backend::ManagedLocal(Arc::new(LocalServer {
-            binaries: binaries.to_path_buf(),
-            model,
-            shaders: Some(shader_dir(models)),
-        })),
+        Some(model) => Backend::ManagedLocal(Arc::new(LocalServer { binaries: binaries.to_path_buf(), model, shaders: Some(shader_dir(models)) })),
         None => Backend::NoModel,
     }
 }
 
 /// An image as the screen takes it: blue first, with alpha left straight.
 fn page_render_image(bytes: &[u8]) -> Result<Arc<RenderImage>, String> {
-    let mut picture = image::load_from_memory(bytes)
-        .map_err(|e| e.to_string())?
-        .to_rgba8();
+    let mut picture = image::load_from_memory(bytes).map_err(|e| e.to_string())?.to_rgba8();
     for p in picture.pixels_mut() {
         p.0.swap(0, 2);
     }
@@ -1250,78 +1072,28 @@ fn page_render_image(bytes: &[u8]) -> Result<Arc<RenderImage>, String> {
 const IMAGE_TYPES: [&str; 5] = ["png", "jpg", "jpeg", "webp", "gif"];
 
 /// Start a local model that can see, have it read the blocks of the image, and word what happened.
-fn read_image(
-    path: &std::path::Path,
-    binaries: &std::path::Path,
-    model: &std::path::Path,
-    projector: &std::path::Path,
-    english: bool,
-    cancel: &AtomicBool,
-    tx: &std::sync::mpsc::Sender<ImportUpdate>,
-) -> anyhow::Result<ImportPreview> {
-    let name = path.file_name().map_or_else(
-        || path.display().to_string(),
-        |n| n.to_string_lossy().into_owned(),
-    );
+fn read_image(path: &std::path::Path, binaries: &std::path::Path, model: &std::path::Path, projector: &std::path::Path, english: bool, cancel: &AtomicBool, tx: &std::sync::mpsc::Sender<ImportUpdate>) -> anyhow::Result<ImportPreview> {
+    let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
-    let _ = tx.send(ImportUpdate::Progress(if english {
-        "Starting the local model to read the image…".to_string()
-    } else {
-        "正在启动本地模型来读图…".to_string()
-    }));
+    let _ = tx.send(ImportUpdate::Progress(if english { "Starting the local model to read the image…".to_string() } else { "正在启动本地模型来读图…".to_string() }));
     let shaders = model.parent().map(shader_dir);
     let server = VisionServer::start(binaries, model, projector, shaders.as_deref())?;
-    let imported = boardcast_import::image::import_image(
-        &bytes,
-        english,
-        cancel,
-        &mut |png| server.read(png),
-        &mut |done, total| {
-            let _ = tx.send(ImportUpdate::Progress(if english {
-                format!("Reading {name}: block {done}/{total}")
-            } else {
-                format!("正在读 {name}：{done}/{total} 块")
-            }));
-        },
-    )?;
+    let imported = boardcast_import::image::import_image(&bytes, english, cancel, &mut |png| server.read(png), &mut |done, total| {
+        let _ = tx.send(ImportUpdate::Progress(if english { format!("Reading {name}: block {done}/{total}") } else { format!("正在读 {name}：{done}/{total} 块") }));
+    })?;
     let limit = boardcast_import::image::MAX_AREAS;
-    let mut details = vec![if english {
-        format!(
-            "Found {} regions; recognized text in {}.",
-            imported.found, imported.read
-        )
-    } else {
-        format!(
-            "找到 {} 个区域，其中 {} 个识别到了文字。",
-            imported.found, imported.read
-        )
-    }];
+    let mut details = vec![if english { format!("Found {} regions; recognized text in {}.", imported.found, imported.read) } else { format!("找到 {} 个区域，其中 {} 个识别到了文字。", imported.found, imported.read) }];
     if imported.capped {
-        details.push(if english {
-            format!("Only the first {limit} regions were read; the full image is retained.")
-        } else {
-            format!("只读了前 {limit} 个区域，完整图片仍然保留。")
-        });
+        details.push(if english { format!("Only the first {limit} regions were read; the full image is retained.") } else { format!("只读了前 {limit} 个区域，完整图片仍然保留。") });
     }
     if imported.read == 0 {
-        details.push(if english {
-            "No text was recognized. The original image will still be available on the board."
-                .to_string()
-        } else {
-            "没有识别到文字。原图仍会显示在板上。".to_string()
-        });
+        details.push(if english { "No text was recognized. The original image will still be available on the board.".to_string() } else { "没有识别到文字。原图仍会显示在板上。".to_string() });
     }
     let read = imported.read;
-    let word = if read == 1 {
-        "text block"
-    } else {
-        "text blocks"
-    };
+    let word = if read == 1 { "text block" } else { "text blocks" };
     let note = match (english, imported.capped) {
         (true, false) => format!("Imported {name} ({read} {word} read)"),
-        (true, true) => {
-            format!("Imported {name} ({read} {word} read, too many blocks, so only some were read)")
-        }
+        (true, true) => format!("Imported {name} ({read} {word} read, too many blocks, so only some were read)"),
         (false, false) => format!("导入了 {name}（读出 {read} 块文字）"),
         (false, true) => format!("导入了 {name}（读出 {read} 块文字，块太多只读了一部分）"),
     };
@@ -1331,125 +1103,44 @@ fn read_image(
         (false, true) => format!("{name} 导入好了，开会时可以说「把这里圈出来」"),
         (false, false) => format!("{name} 里没有读出文字，只能当背景用"),
     };
-    Ok(ImportPreview {
-        name,
-        pages: vec![imported.page],
-        title: None,
-        note,
-        details,
-        ready,
-    })
+    Ok(ImportPreview { name, pages: vec![imported.page], title: None, note, details, ready })
 }
 
 /// Download if need be, read the file, and word what happened.
-fn read_import(
-    source: ImportSource,
-    library: &std::path::Path,
-    english: bool,
-    cancel: &AtomicBool,
-    tx: &std::sync::mpsc::Sender<ImportUpdate>,
-) -> anyhow::Result<ImportPreview> {
+fn read_import(source: ImportSource, library: &std::path::Path, english: bool, cancel: &AtomicBool, tx: &std::sync::mpsc::Sender<ImportUpdate>) -> anyhow::Result<ImportPreview> {
     let (name, bytes) = match source {
-        ImportSource::Image {
-            path,
-            binaries,
-            model,
-            projector,
-        } => return read_image(&path, &binaries, &model, &projector, english, cancel, tx),
+        ImportSource::Image { path, binaries, model, projector } => return read_image(&path, &binaries, &model, &projector, english, cancel, tx),
         ImportSource::File(path) => {
-            let name = path.file_name().map_or_else(
-                || path.display().to_string(),
-                |n| n.to_string_lossy().into_owned(),
-            );
-            (
-                name,
-                std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?,
-            )
+            let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
+            (name, std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?)
         }
         ImportSource::Arxiv(id) => {
-            let _ = tx.send(ImportUpdate::Progress(if english {
-                format!("Downloading {id} from arXiv…")
-            } else {
-                format!("正在从 arXiv 下载 {id}…")
-            }));
-            (
-                format!("arXiv {id}"),
-                boardcast_import::arxiv::download(&id, cancel)?,
-            )
+            let _ = tx.send(ImportUpdate::Progress(if english { format!("Downloading {id} from arXiv…") } else { format!("正在从 arXiv 下载 {id}…") }));
+            (format!("arXiv {id}"), boardcast_import::arxiv::download(&id, cancel)?)
         }
     };
-    let imported =
-        boardcast_import::pdf::import_pdf(&bytes, library, english, cancel, &mut |done, total| {
-            let _ = tx.send(ImportUpdate::Progress(if english {
-                format!("Reading {name}: page {done}/{total}")
-            } else {
-                format!("正在读 {name}：{done}/{total} 页")
-            }));
-        })?;
-    let plural = |n: usize, word: &str| {
-        if n == 1 {
-            format!("1 {word}")
-        } else {
-            format!("{n} {word}s")
-        }
-    };
+    let imported = boardcast_import::pdf::import_pdf(&bytes, library, english, cancel, &mut |done, total| {
+        let _ = tx.send(ImportUpdate::Progress(if english { format!("Reading {name}: page {done}/{total}") } else { format!("正在读 {name}：{done}/{total} 页") }));
+    })?;
+    let plural = |n: usize, word: &str| if n == 1 { format!("1 {word}") } else { format!("{n} {word}s") };
     let mut details = vec![];
     if imported.refs_skipped > 0 {
-        details.push(if english {
-            format!(
-                "{} of references skipped",
-                plural(imported.refs_skipped, "page")
-            )
-        } else {
-            format!("参考文献 {} 页没建板", imported.refs_skipped)
-        });
+        details.push(if english { format!("{} of references skipped", plural(imported.refs_skipped, "page")) } else { format!("参考文献 {} 页没建板", imported.refs_skipped) });
     }
     if imported.unread > 0 {
-        details.push(if english {
-            format!(
-                "board limit reached, last {} not imported",
-                plural(imported.unread, "page")
-            )
-        } else {
-            format!("板到上限了，最后 {} 页没导", imported.unread)
-        });
+        details.push(if english { format!("board limit reached, last {} not imported", plural(imported.unread, "page")) } else { format!("板到上限了，最后 {} 页没导", imported.unread) });
     }
     if imported.scanned > 0 {
         // Talk is matched against a page's words, so these can only be turned to by number.
-        details.push(if english {
-            format!(
-                "{} without a text layer, imported as images and turned to only by number",
-                plural(imported.scanned, "page")
-            )
-        } else {
-            format!(
-                "{} 页没有文字层，整页算一张图，只能按页码翻到",
-                imported.scanned
-            )
-        });
+        details.push(if english { format!("{} without a text layer, imported as images and turned to only by number", plural(imported.scanned, "page")) } else { format!("{} 页没有文字层，整页算一张图，只能按页码翻到", imported.scanned) });
     }
     let boards = imported.pages.len();
     let note = if english {
-        let extra = if details.is_empty() {
-            String::new()
-        } else {
-            format!("; {}", details.join("; "))
-        };
-        format!(
-            "Imported {name} ({}, {}{extra})",
-            plural(imported.total, "page"),
-            plural(boards, "board")
-        )
+        let extra = if details.is_empty() { String::new() } else { format!("; {}", details.join("; ")) };
+        format!("Imported {name} ({}, {}{extra})", plural(imported.total, "page"), plural(boards, "board"))
     } else {
-        let extra = if details.is_empty() {
-            String::new()
-        } else {
-            format!("，{}", details.join("，"))
-        };
-        format!(
-            "导入了 {name}（共 {} 页，建了 {boards} 张板{extra}）",
-            imported.total
-        )
+        let extra = if details.is_empty() { String::new() } else { format!("，{}", details.join("，")) };
+        format!("导入了 {name}（共 {} 页，建了 {boards} 张板{extra}）", imported.total)
     };
     let ready = match (imported.paper, english) {
         (true, true) => format!("{name} is ready: split by sections, figures and equations. Try \"here in figure 3\" or \"equation 5 is wrong\""),
@@ -1457,14 +1148,7 @@ fn read_import(
         (false, true) => format!("{name} is ready: one board per page. Try \"circle this paragraph\""),
         (false, false) => format!("{name} 导入好了：每页一张板，开会时可以说「把这一段圈出来」"),
     };
-    Ok(ImportPreview {
-        name,
-        pages: imported.pages,
-        title: imported.title,
-        note,
-        details,
-        ready,
-    })
+    Ok(ImportPreview { name, pages: imported.pages, title: imported.title, note, details, ready })
 }
 
 fn gigabytes(bytes: u64) -> String {
@@ -1472,10 +1156,7 @@ fn gigabytes(bytes: u64) -> String {
 }
 
 fn spoken(lines: &[Utterance]) -> Vec<(Option<String>, String)> {
-    lines
-        .iter()
-        .map(|l| (l.speaker.clone(), l.text.clone()))
-        .collect()
+    lines.iter().map(|l| (l.speaker.clone(), l.text.clone())).collect()
 }
 
 fn fingerprint_of(live: &Live) -> String {
@@ -1490,14 +1171,7 @@ fn line_note(line: &serde_json::Value, model_loading: bool) -> String {
     if line["failed"].as_bool().unwrap_or(false) {
         parts.push(tr("Not drawn", "没有画上").to_string());
     } else if line["ms"].is_null() {
-        parts.push(
-            if model_loading {
-                tr("Waiting for the model…", "等模型就绪后上板…")
-            } else {
-                tr("Drawing…", "正在画…")
-            }
-            .to_string(),
-        );
+        parts.push(if model_loading { tr("Waiting for the model…", "等模型就绪后上板…") } else { tr("Drawing…", "正在画…") }.to_string());
     } else if let Some(ms) = line["ms"].as_u64().filter(|ms| *ms > 0) {
         parts.push(format!("{} {ms} ms", tr("Model", "模型")));
     }
@@ -1516,21 +1190,18 @@ impl Workbench {
     /// Turn the microphone on or off, counting the time it was on towards the meeting.
     fn toggle_mic(&mut self) {
         let was_listening = self.pipeline.listening();
-        self.pipeline
-            .toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()));
+        self.pipeline.toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()));
         if !was_listening {
             self.listening_since = Some(Instant::now());
         } else if let Some(since) = self.listening_since.take() {
-            self.live
-                .add_recorded(since.elapsed().as_secs_f64() * 1000.0);
+            self.live.add_recorded(since.elapsed().as_secs_f64() * 1000.0);
         }
     }
 
     /// Put the listening so far into the meeting before it is saved, and go on counting from here.
     fn count_listening(&mut self) {
         if let Some(since) = self.listening_since.replace(Instant::now()) {
-            self.live
-                .add_recorded(since.elapsed().as_secs_f64() * 1000.0);
+            self.live.add_recorded(since.elapsed().as_secs_f64() * 1000.0);
         } else {
             self.listening_since = None;
         }
@@ -1538,10 +1209,7 @@ impl Workbench {
 
     /// The time the microphone has been on for this meeting, counting now.
     fn recorded(&self) -> Duration {
-        Duration::from_millis(self.live.recorded_ms() as u64)
-            + self
-                .listening_since
-                .map_or(Duration::ZERO, |since| since.elapsed())
+        Duration::from_millis(self.live.recorded_ms() as u64) + self.listening_since.map_or(Duration::ZERO, |since| since.elapsed())
     }
 
     fn edit_title(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1580,35 +1248,22 @@ impl Workbench {
         if let Err(e) = saved.save() {
             self.form.note = Some(format!("{e:#}"));
         }
-        self.pipeline.set_speech(Speech {
-            helper: self.speech_helper.clone(),
-            system,
-            language: saved.speech_language.clone(),
-        });
+        self.pipeline.set_speech(Speech { helper: self.speech_helper.clone(), system, language: saved.speech_language.clone() });
         self.hearing = None;
         cx.notify();
     }
 
     fn dirty(&self) -> bool {
-        self.store.is_some()
-            && self.live.read_only.is_none()
-            && self.live.has_content()
-            && self.live.changes != self.saved_changes
+        self.store.is_some() && self.live.read_only.is_none() && self.live.has_content() && self.live.changes != self.saved_changes
     }
 
     fn pump(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
         {
             let mut ink = self.ink.borrow_mut();
-            let before = (
-                ink.base.level,
-                ink.detail.as_ref().map(|(t, c)| (t.level, *c)),
-            );
+            let before = (ink.base.level, ink.detail.as_ref().map(|(t, c)| (t.level, *c)));
             ink.maintain_sharpness();
-            changed |= (
-                ink.base.level,
-                ink.detail.as_ref().map(|(t, c)| (t.level, *c)),
-            ) != before;
+            changed |= (ink.base.level, ink.detail.as_ref().map(|(t, c)| (t.level, *c))) != before;
             // Hints go to the model with the next line it is asked about.
             if let Some(hint) = ink.hints.take().filter(|_| self.replay.is_none()) {
                 self.session().set_hint(hint);
@@ -1623,13 +1278,7 @@ impl Workbench {
             match event {
                 Event::Agent(Update::Loading) => {
                     self.status = tr("Loading the board model…", "正在加载板书模型…").into();
-                    self.preparing = Some(Preparing {
-                        started: Instant::now(),
-                        first_time: !shader_dir(&self.models).join(SHADERS_READY).exists(),
-                        done: 0,
-                        total: 0,
-                        dismissed: false,
-                    });
+                    self.preparing = Some(Preparing { started: Instant::now(), first_time: !shader_dir(&self.models).join(SHADERS_READY).exists(), done: 0, total: 0, dismissed: false });
                 }
                 Event::Agent(Update::Preparing { done, total }) => {
                     if let Some(preparing) = &mut self.preparing {
@@ -1650,67 +1299,33 @@ impl Workbench {
                     self.panel = Panel::Settings;
                 }
                 // Rises at once and falls away gently, so the bar reads as speech rather than flicker.
-                Event::Level(peak) => {
-                    self.level = boardcast_audio::loudness(peak).max(self.level * 0.9)
-                }
-                Event::Heard {
-                    meeting,
-                    speaker,
-                    text,
-                    asr_ms,
-                } => {
+                Event::Level(peak) => self.level = boardcast_audio::loudness(peak).max(self.level * 0.9),
+                Event::Heard { meeting, speaker, text, asr_ms } => {
                     if meeting == self.session().meeting() {
                         self.live.add_line(speaker.as_deref(), &text, asr_ms);
                     }
                 }
                 Event::Spoken { meeting, sentence } => {
                     if meeting == self.session().meeting() {
-                        let speaker =
-                            self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds);
+                        let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds);
                         let mut sentence = sentence;
                         sentence.text = self.as_glossary_writes(&sentence.text);
-                        self.live.add_line(
-                            speaker.as_deref(),
-                            &sentence.text,
-                            Some(sentence.asr_ms),
-                        );
+                        self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
                         self.keep_heard_text();
                         if self.follow_pages(&sentence.text, cx) {
                             continue;
                         }
                         let renames = self.session().renames_seen();
-                        let line = Utterance {
-                            speaker,
-                            text: sentence.text,
-                            pointing: self.take_pointing(),
-                        };
-                        let _ = self.pipeline.said.send(Said {
-                            line,
-                            ended: sentence.ended,
-                            asr_ms: Some(sentence.asr_ms),
-                            meeting,
-                            renames,
-                        });
+                        let line = Utterance { speaker, text: sentence.text, pointing: self.take_pointing() };
+                        let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, asr_ms: Some(sentence.asr_ms), meeting, renames });
                     }
                 }
-                Event::Agent(Update::Drawn {
-                    meeting,
-                    graph,
-                    ops,
-                    lines,
-                    asr_ms,
-                    llm_ms,
-                    ended,
-                }) => {
+                Event::Agent(Update::Drawn { meeting, graph, ops, lines, asr_ms, llm_ms, ended }) => {
                     if meeting != self.session().meeting() {
                         continue;
                     }
                     self.exit_replay(cx);
-                    println!(
-                        "{{\"ops\":{},\"board\":{}}}",
-                        serde_json::Value::from(ops.clone()),
-                        serde_json::Value::from(graph.describe())
-                    );
+                    println!("{{\"ops\":{},\"board\":{}}}", serde_json::Value::from(ops.clone()), serde_json::Value::from(graph.describe()));
                     self.next_batch += 1;
                     let id = self.next_batch;
                     let arrived = Instant::now();
@@ -1718,39 +1333,21 @@ impl Workbench {
                     let mut ink = self.ink.borrow_mut();
                     let strokes = ink.update(&graph, id);
                     if strokes > 0 {
-                        ink.timings.push(Timing {
-                            id,
-                            text,
-                            asr_ms,
-                            llm_ms,
-                            batch: lines.len(),
-                            ended,
-                            arrived,
-                            first_ink: None,
-                            strokes,
-                        });
+                        ink.timings.push(Timing { id, text, asr_ms, llm_ms, batch: lines.len(), ended, arrived, first_ink: None, strokes });
                     }
                     let memory = ink.board.snapshot();
                     drop(ink);
                     self.offer_topic_board(&graph);
-                    self.live
-                        .model_drew(&spoken(&lines), graph, memory, &ops, llm_ms);
+                    self.live.model_drew(&spoken(&lines), graph, memory, &ops, llm_ms);
                     self.status = String::new();
                 }
-                Event::Agent(Update::Failed {
-                    meeting,
-                    message,
-                    lines,
-                }) => {
+                Event::Agent(Update::Failed { meeting, message, lines }) => {
                     if meeting != self.session().meeting() {
                         continue;
                     }
                     eprintln!("model failed: {message}");
                     self.live.model_failed(&spoken(&lines));
-                    self.notice = Some(format!(
-                        "{}{message}",
-                        tr("The model did not answer: ", "模型没有回应：")
-                    ));
+                    self.notice = Some(format!("{}{message}", tr("The model did not answer: ", "模型没有回应：")));
                 }
                 Event::Hearing { with, note } => {
                     if let Some(note) = note {
@@ -1781,8 +1378,7 @@ impl Workbench {
             } else if at.elapsed() < JUMP_SCROLLING {
                 // A list scrolls only once it has been laid out, which the transcript may not have
                 // been if another panel was showing. Newest first on screen.
-                self.transcript_scroll
-                    .scroll_to_item(self.live.lines.len().saturating_sub(line + 1));
+                self.transcript_scroll.scroll_to_item(self.live.lines.len().saturating_sub(line + 1));
                 changed = true;
             }
         }
@@ -1812,9 +1408,7 @@ impl Workbench {
     }
 
     fn pump_summary(&mut self, changed: &mut bool, cx: &mut Context<Self>) {
-        let Some(job) = &mut self.summary.job else {
-            return;
-        };
+        let Some(job) = &mut self.summary.job else { return };
         let mut finished = None;
         loop {
             match job.updates.try_recv() {
@@ -1839,10 +1433,7 @@ impl Workbench {
         match result {
             Ok(text) => {
                 println!("{{\"summary\":{}}}", serde_json::Value::from(text.clone()));
-                if job.had_text
-                    || !self.live.summary().trim().is_empty()
-                    || self.summary.edits != job.edits
-                {
+                if job.had_text || !self.live.summary().trim().is_empty() || self.summary.edits != job.edits {
                     self.summary.draft = Some((text, job.source));
                 } else {
                     self.live.set_summary(&text, Some(&job.source));
@@ -1851,10 +1442,7 @@ impl Workbench {
             }
             Err(error) => {
                 eprintln!("summary failed: {error}");
-                self.summary.note = Some(format!(
-                    "{}{error}",
-                    tr("Could not write the summary: ", "生成摘要失败：")
-                ));
+                self.summary.note = Some(format!("{}{error}", tr("Could not write the summary: ", "生成摘要失败：")));
             }
         }
         if self.summarize_when_done && self.exit_when_done {
@@ -1869,10 +1457,7 @@ impl Workbench {
         let provider = match self.session().provider() {
             Ok(provider) => provider,
             Err(error) => {
-                self.summary.note = Some(format!(
-                    "{}{error:#}",
-                    tr("Could not write the summary: ", "生成摘要失败：")
-                ));
+                self.summary.note = Some(format!("{}{error:#}", tr("Could not write the summary: ", "生成摘要失败：")));
                 cx.notify();
                 return;
             }
@@ -1884,28 +1469,13 @@ impl Workbench {
         let (tx, updates) = channel();
         let stop = cancel.clone();
         std::thread::spawn(move || {
-            let result = summary::summarize(
-                &provider,
-                &boards,
-                &lines,
-                &stop,
-                &mut |Step::Writing { done, total }| {
-                    let _ = tx.send(SummaryUpdate::Step(done, total));
-                },
-            );
-            let _ = tx.send(SummaryUpdate::Finished(
-                result.map_err(|e| format!("{e:#}")),
-            ));
+            let result = summary::summarize(&provider, &boards, &lines, &stop, &mut |Step::Writing { done, total }| {
+                let _ = tx.send(SummaryUpdate::Step(done, total));
+            });
+            let _ = tx.send(SummaryUpdate::Finished(result.map_err(|e| format!("{e:#}"))));
         });
         self.summary.note = None;
-        self.summary.job = Some(SummaryJob {
-            cancel,
-            updates,
-            source,
-            had_text: !self.live.summary().trim().is_empty(),
-            edits: self.summary.edits,
-            step: None,
-        });
+        self.summary.job = Some(SummaryJob { cancel, updates, source, had_text: !self.live.summary().trim().is_empty(), edits: self.summary.edits, step: None });
         cx.notify();
     }
 
@@ -1923,13 +1493,9 @@ impl Workbench {
             window.focus(&self.focus, cx);
         } else if self.editable() {
             let text = self.live.summary().to_string();
-            self.summary
-                .editor
-                .update(cx, |state, cx| state.set_value(text, window, cx));
+            self.summary.editor.update(cx, |state, cx| state.set_value(text, window, cx));
             self.summary.editing = true;
-            self.summary
-                .editor
-                .update(cx, |state, cx| state.focus(window, cx));
+            self.summary.editor.update(cx, |state, cx| state.focus(window, cx));
         }
         cx.notify();
     }
@@ -1941,11 +1507,7 @@ impl Workbench {
         }
         let text = self.summary.editor.read(cx).value().to_string();
         if text != self.live.summary() {
-            let source = self
-                .live
-                .summary_source()
-                .map(str::to_string)
-                .unwrap_or_else(|| fingerprint_of(&self.live));
+            let source = self.live.summary_source().map(str::to_string).unwrap_or_else(|| fingerprint_of(&self.live));
             self.live.set_summary(&text, Some(&source));
             self.summary.edits += 1;
             self.summary.cleared = None;
@@ -1968,10 +1530,7 @@ impl Workbench {
         if !self.editable() {
             return;
         }
-        self.summary.cleared = Some((
-            self.live.summary().to_string(),
-            self.live.summary_source().map(str::to_string),
-        ));
+        self.summary.cleared = Some((self.live.summary().to_string(), self.live.summary_source().map(str::to_string)));
         self.summary.editing = false;
         self.summary.edits += 1;
         self.live.set_summary("", None);
@@ -2018,8 +1577,7 @@ impl Workbench {
 
     fn wait_for_next_step(&mut self) {
         if let Some(replay) = &mut self.replay {
-            replay.next_at = Instant::now()
-                + Duration::from_secs_f64(replay.player.wait_ms(&replay.steps) / 1000.0);
+            replay.next_at = Instant::now() + Duration::from_secs_f64(replay.player.wait_ms(&replay.steps) / 1000.0);
         }
     }
 
@@ -2027,19 +1585,9 @@ impl Workbench {
         if self.replay.is_some() {
             return;
         }
-        let waiting = self
-            .live
-            .lines
-            .iter()
-            .any(|l| l["ms"].is_null() && !l["manual"].as_bool().unwrap_or(false));
+        let waiting = self.live.lines.iter().any(|l| l["ms"].is_null() && !l["manual"].as_bool().unwrap_or(false));
         if self.pipeline.listening() || waiting {
-            self.notice = Some(
-                tr(
-                    "Can't replay while listening or while the model is drawing.",
-                    "收音中或模型还在画时不能回放。",
-                )
-                .into(),
-            );
+            self.notice = Some(tr("Can't replay while listening or while the model is drawing.", "收音中或模型还在画时不能回放。").into());
             cx.notify();
             return;
         }
@@ -2047,23 +1595,11 @@ impl Workbench {
         let steps: Vec<serde_json::Value> = timeline.iter().map(|(_, s)| s.clone()).collect();
         let total = steps.len();
         if total == 0 {
-            self.notice = Some(
-                tr(
-                    "This meeting has no board history to replay.",
-                    "这场会没有可以回放的记录。",
-                )
-                .into(),
-            );
+            self.notice = Some(tr("This meeting has no board history to replay.", "这场会没有可以回放的记录。").into());
             cx.notify();
             return;
         }
-        let slider = cx.new(|_| {
-            SliderState::new()
-                .min(0.0)
-                .max(total as f32)
-                .step(1.0)
-                .default_value(0.0)
-        });
+        let slider = cx.new(|_| SliderState::new().min(0.0).max(total as f32).step(1.0).default_value(0.0));
         let slider_moved = cx.subscribe(&slider, |this: &mut Self, _, event: &SliderEvent, cx| {
             if let SliderEvent::Change(value) = event {
                 this.seek_replay(value.end().round() as usize, cx);
@@ -2076,17 +1612,7 @@ impl Workbench {
         self.notice = None;
         self.panel = Panel::Transcript;
         let shown = timeline.first().map_or(self.live.page(), |(b, _)| *b);
-        self.replay = Some(Replaying {
-            player: Player::new(total),
-            timeline,
-            steps,
-            shown,
-            memory,
-            view,
-            next_at: Instant::now(),
-            slider,
-            _slider_moved: slider_moved,
-        });
+        self.replay = Some(Replaying { player: Player::new(total), timeline, steps, shown, memory, view, next_at: Instant::now(), slider, _slider_moved: slider_moved });
         self.show_board_image(shown);
         self.wait_for_next_step();
         window.focus(&self.focus, cx);
@@ -2094,19 +1620,10 @@ impl Workbench {
     }
 
     fn seek_replay(&mut self, at: usize, cx: &mut Context<Self>) {
-        let Some(replay) = &mut self.replay else {
-            return;
-        };
-        let Some(moved) = replay.player.seek(at) else {
-            return;
-        };
+        let Some(replay) = &mut self.replay else { return };
+        let Some(moved) = replay.player.seek(at) else { return };
         let (board, count) = boardcast_board::steps::board_at(&replay.timeline, replay.player.at);
-        let own: Vec<serde_json::Value> = replay
-            .timeline
-            .iter()
-            .filter(|(b, _)| *b == board)
-            .map(|(_, s)| s.clone())
-            .collect();
+        let own: Vec<serde_json::Value> = replay.timeline.iter().filter(|(b, _)| *b == board).map(|(_, s)| s.clone()).collect();
         let graph = replay_to(&own, count);
         let turned = board != replay.shown;
         replay.shown = board;
@@ -2131,22 +1648,16 @@ impl Workbench {
     }
 
     fn toggle_replay(&mut self, cx: &mut Context<Self>) {
-        let Some(replay) = &mut self.replay else {
-            return;
-        };
+        let Some(replay) = &mut self.replay else { return };
         if replay.player.toggle() {
-            self.ink
-                .borrow_mut()
-                .open(&Graph::default(), &serde_json::Value::Null);
+            self.ink.borrow_mut().open(&Graph::default(), &serde_json::Value::Null);
         }
         self.wait_for_next_step();
         cx.notify();
     }
 
     fn exit_replay(&mut self, cx: &mut Context<Self>) {
-        let Some(replay) = self.replay.take() else {
-            return;
-        };
+        let Some(replay) = self.replay.take() else { return };
         let mut ink = self.ink.borrow_mut();
         ink.open(&self.live.graph, &replay.memory);
         (ink.view, ink.reading) = replay.view;
@@ -2169,23 +1680,12 @@ impl Workbench {
         self.live.go_to_page(board);
         let memory = self.ink.borrow().board.snapshot();
         let (from, to) = (self.live.page() + 1, self.live.pages() + 1);
-        let note = if tr("en", "zh") == "en" {
-            format!("Board {to} forked from board {from} as it was at {when}")
-        } else {
-            format!("从第 {from} 张板回放到 {when} 的那一刻，另起了第 {to} 张板")
-        };
+        let note = if tr("en", "zh") == "en" { format!("Board {to} forked from board {from} as it was at {when}") } else { format!("从第 {from} 张板回放到 {when} 的那一刻，另起了第 {to} 张板") };
         self.replay = None;
         self.live.fork_page(at, memory, &note);
-        let history: Vec<Utterance> = self
-            .live
-            .history
-            .iter()
-            .filter_map(|h| serde_json::from_value(h.clone()).ok())
-            .collect();
+        let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(self.live.graph.clone(), history);
-        self.ink
-            .borrow_mut()
-            .open(&self.live.graph, &self.live.memory);
+        self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
         self.show_page_image();
         cx.notify();
     }
@@ -2206,20 +1706,10 @@ impl Workbench {
                 })
             })
             .collect();
-        let frozen = boardcast_export::freeze(
-            &self.live,
-            tr("en", "zh") == "en",
-            &mut self.ink.borrow_mut().glyphs,
-            self.hanzi.clone(),
-            &images,
-        );
+        let frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images);
         let directory = self.export_dir.clone().unwrap_or_else(|| {
-            let home = std::env::var_os("HOME")
-                .or_else(|| std::env::var_os("USERPROFILE"))
-                .map_or_else(|| self.data.clone(), PathBuf::from);
-            Some(home.join("Documents"))
-                .filter(|d| d.is_dir())
-                .unwrap_or(home)
+            let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map_or_else(|| self.data.clone(), PathBuf::from);
+            Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
         });
         let answer = cx.prompt_for_new_path(&directory, Some(&boardcast_export::file_name(kind)));
         self.exporting = Some(kind);
@@ -2228,9 +1718,7 @@ impl Workbench {
             let chosen = match answer.await {
                 Ok(Ok(chosen)) => chosen,
                 Ok(Err(error)) => {
-                    let _ = this.update(cx, |this, cx| {
-                        this.finish_export(Some(Exported::Failed(format!("{error:#}"))), cx)
-                    });
+                    let _ = this.update(cx, |this, cx| this.finish_export(Some(Exported::Failed(format!("{error:#}"))), cx));
                     return;
                 }
                 Err(_) => None,
@@ -2253,10 +1741,7 @@ impl Workbench {
                 let result = match written {
                     Ok(text_left_out) => {
                         this.export_dir = path.parent().map(PathBuf::from);
-                        Exported::Saved {
-                            path,
-                            text_left_out,
-                        }
+                        Exported::Saved { path, text_left_out }
                     }
                     Err(error) => {
                         eprintln!("export failed: {error:#}");
@@ -2298,9 +1783,7 @@ impl Workbench {
         }
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let _ = tx.send(UpdateEvent::Checked(
-                boardcast_update::check().map_err(|e| format!("{e:#}")),
-            ));
+            let _ = tx.send(UpdateEvent::Checked(boardcast_update::check().map_err(|e| format!("{e:#}"))));
         });
         self.update_events = Some(rx);
         self.update = UpdateState::Checking;
@@ -2313,9 +1796,7 @@ impl Workbench {
             self.check_for_update();
             *changed = true;
         }
-        let Some(rx) = &self.update_events else {
-            return;
-        };
+        let Some(rx) = &self.update_events else { return };
         let mut events = vec![];
         let mut ended = false;
         loop {
@@ -2331,14 +1812,10 @@ impl Workbench {
         for event in events {
             *changed = true;
             match event {
-                UpdateEvent::Checked(Ok(Some(release))) => {
-                    self.update = UpdateState::Available(release)
-                }
+                UpdateEvent::Checked(Ok(Some(release))) => self.update = UpdateState::Available(release),
                 UpdateEvent::Checked(Ok(None)) => self.update = UpdateState::UpToDate,
                 // A check nobody asked for stays quiet: being offline is not worth a message.
-                UpdateEvent::Checked(Err(_)) if self.silent_check => {
-                    self.update = UpdateState::Idle
-                }
+                UpdateEvent::Checked(Err(_)) if self.silent_check => self.update = UpdateState::Idle,
                 UpdateEvent::Checked(Err(error)) => self.update = UpdateState::Failed(error),
                 UpdateEvent::Progress(p) => {
                     if let UpdateState::Installing { progress, .. } = &mut self.update {
@@ -2361,11 +1838,7 @@ impl Workbench {
 
     /// Download and install in the background, so the meeting carries on meanwhile.
     fn install_update(&mut self, cx: &mut Context<Self>) {
-        let (UpdateState::Available(release), Some(prefix)) =
-            (self.update.clone(), self.prefix.clone())
-        else {
-            return;
-        };
+        let (UpdateState::Available(release), Some(prefix)) = (self.update.clone(), self.prefix.clone()) else { return };
         if self.update_events.is_some() {
             return;
         }
@@ -2388,38 +1861,26 @@ impl Workbench {
             let _ = tx.send(UpdateEvent::Installed(result.map_err(|e| format!("{e:#}"))));
         });
         self.update_events = Some(rx);
-        self.update = UpdateState::Installing {
-            release,
-            progress: None,
-        };
+        self.update = UpdateState::Installing { release, progress: None };
         cx.notify();
     }
 
     /// Start the new version, once the meeting is safely saved.
     fn restart(&mut self, cx: &mut Context<Self>) {
-        let Some(prefix) = self.prefix.clone() else {
-            return;
-        };
+        let Some(prefix) = self.prefix.clone() else { return };
         if !self.leave() {
             cx.notify();
             return;
         }
         match std::process::Command::new(prefix.join("bin/boardcast")).spawn() {
             Ok(_) => cx.quit(),
-            Err(e) => {
-                self.update = UpdateState::Failed(format!(
-                    "{}{e}",
-                    tr("Could not start the new version: ", "无法启动新版本：")
-                ))
-            }
+            Err(e) => self.update = UpdateState::Failed(format!("{}{e}", tr("Could not start the new version: ", "无法启动新版本："))),
         }
         cx.notify();
     }
 
     fn pump_download(&mut self, changed: &mut bool) {
-        let Some(download) = &mut self.download else {
-            return;
-        };
+        let Some(download) = &mut self.download else { return };
         let mut finished = None;
         while let Ok(update) = download.updates.try_recv() {
             *changed = true;
@@ -2445,15 +1906,7 @@ impl Workbench {
                 self.form.note = Some(format!("{label} {}", tr("is ready.", "已就绪。")));
                 self.apply_backend();
             }
-            Ok(Outcome::Cancelled) => {
-                self.form.note = Some(
-                    tr(
-                        "Paused. Download again to continue from where it stopped.",
-                        "已暂停。再次下载会从中断处继续。",
-                    )
-                    .into(),
-                )
-            }
+            Ok(Outcome::Cancelled) => self.form.note = Some(tr("Paused. Download again to continue from where it stopped.", "已暂停。再次下载会从中断处继续。").into()),
             Err(error) => self.form.note = Some(error),
         }
     }
@@ -2465,22 +1918,14 @@ impl Workbench {
         let (tx, updates) = channel();
         let cancel = Arc::new(AtomicBool::new(false));
         let (flag, dir) = (cancel.clone(), self.models.clone());
-        self.download = Some(Download {
-            id: model.id,
-            label: model.label,
-            cancel,
-            updates,
-            progress: None,
-        });
+        self.download = Some(Download { id: model.id, label: model.label, cancel, updates, progress: None });
         self.form.note = None;
         std::thread::spawn(move || {
             let progress = tx.clone();
             let result = boardcast_models::download(&model, &dir, &flag, &mut |p| {
                 let _ = progress.send(DownloadUpdate::Progress(p));
             });
-            let _ = tx.send(DownloadUpdate::Finished(
-                result.map_err(|e| format!("{e:#}")),
-            ));
+            let _ = tx.send(DownloadUpdate::Finished(result.map_err(|e| format!("{e:#}"))));
         });
         cx.notify();
     }
@@ -2506,11 +1951,7 @@ impl Workbench {
             Ok(revision) => {
                 self.live.saved(revision);
                 self.saved_changes = covers;
-                self.save = if self.live.changes == covers {
-                    SaveState::Saved
-                } else {
-                    SaveState::Dirty
-                };
+                self.save = if self.live.changes == covers { SaveState::Saved } else { SaveState::Dirty };
             }
             Err(error) => {
                 eprintln!("save failed: {error}");
@@ -2545,9 +1986,7 @@ impl Workbench {
             }
         }
         let waited = match self.save {
-            SaveState::Failed(_) => self
-                .last_attempt
-                .is_none_or(|t| t.elapsed() >= RETRY_SAVE_AFTER),
+            SaveState::Failed(_) => self.last_attempt.is_none_or(|t| t.elapsed() >= RETRY_SAVE_AFTER),
             _ => self.last_change.elapsed() >= AUTOSAVE_AFTER,
         };
         if self.dirty() && waited {
@@ -2557,23 +1996,12 @@ impl Workbench {
     }
 
     fn start_save(&mut self) {
-        let Some(store) = self.store.clone() else {
-            return;
-        };
+        let Some(store) = self.store.clone() else { return };
         let covers = self.live.changes;
-        let (id, snapshot, origin, revision) = (
-            self.live.id().to_string(),
-            self.live.snapshot(),
-            self.live.origin.clone(),
-            self.live.revision,
-        );
+        let (id, snapshot, origin, revision) = (self.live.id().to_string(), self.live.snapshot(), self.live.origin.clone(), self.live.revision);
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let _ = tx.send(
-                store
-                    .save(&id, snapshot, &origin, revision)
-                    .map_err(|e| format!("{e:#}")),
-            );
+            let _ = tx.send(store.save(&id, snapshot, &origin, revision).map_err(|e| format!("{e:#}")));
         });
         self.saving = Some((rx, covers));
         if !matches!(self.save, SaveState::Failed(_)) {
@@ -2584,9 +2012,7 @@ impl Workbench {
     /// Everything on disk before leaving this meeting. On failure the caller must stay.
     fn flush(&mut self) -> Result<(), String> {
         if let Some((rx, covers)) = self.saving.take() {
-            let result = rx
-                .recv()
-                .unwrap_or_else(|_| Err("the save did not finish".into()));
+            let result = rx.recv().unwrap_or_else(|_| Err("the save did not finish".into()));
             self.finish_save(result, covers);
         }
         if self.dirty() {
@@ -2595,9 +2021,7 @@ impl Workbench {
             let id = self.live.id().to_string();
             let origin = self.live.origin.clone();
             let revision = self.live.revision;
-            let result = store
-                .save(&id, self.live.snapshot(), &origin, revision)
-                .map_err(|e| format!("{e:#}"));
+            let result = store.save(&id, self.live.snapshot(), &origin, revision).map_err(|e| format!("{e:#}"));
             self.finish_save(result, covers);
         }
         match &self.save {
@@ -2608,12 +2032,7 @@ impl Workbench {
 
     fn apply_backend(&self) {
         if !self.forced_backend {
-            self.session().set_backend(backend_from(
-                &self.form.saved,
-                self.live.local_only(),
-                &self.binaries,
-                &self.models,
-            ));
+            self.session().set_backend(backend_from(&self.form.saved, self.live.local_only(), &self.binaries, &self.models));
         }
     }
 
@@ -2624,11 +2043,7 @@ impl Workbench {
             self.toggle_mic();
         }
         self.editing_title = false;
-        let history: Vec<Utterance> = live
-            .history
-            .iter()
-            .filter_map(|h| serde_json::from_value(h.clone()).ok())
-            .collect();
+        let history: Vec<Utterance> = live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(live.graph.clone(), history);
         self.session().set_references(references_of(&live.boards()));
         self.ink.borrow_mut().open(&live.graph, &live.memory);
@@ -2657,13 +2072,7 @@ impl Workbench {
         match self.flush() {
             Ok(()) => true,
             Err(error) => {
-                self.notice = Some(format!(
-                    "{}{error}",
-                    tr(
-                        "Staying on this meeting because it could not be saved: ",
-                        "这场会保存失败，先留在这里："
-                    )
-                ));
+                self.notice = Some(format!("{}{error}", tr("Staying on this meeting because it could not be saved: ", "这场会保存失败，先留在这里：")));
                 false
             }
         }
@@ -2679,20 +2088,11 @@ impl Workbench {
 
     /// Keep this board's topics as a template, named after the meeting.
     fn save_template(&mut self, cx: &mut Context<Self>) {
-        let topics: Vec<String> = self
-            .live
-            .graph
-            .nodes
-            .iter()
-            .filter(|n| n.kind == Kind::Topic)
-            .map(|n| n.label.clone())
-            .collect();
+        let topics: Vec<String> = self.live.graph.nodes.iter().filter(|n| n.kind == Kind::Topic).map(|n| n.label.clone()).collect();
         if topics.is_empty() {
             return;
         }
-        let name = Some(self.live.title().to_string())
-            .filter(|t| !t.is_empty())
-            .unwrap_or_else(|| topics.join(" · "));
+        let name = Some(self.live.title().to_string()).filter(|t| !t.is_empty()).unwrap_or_else(|| topics.join(" · "));
         self.form.saved.templates.retain(|(n, _)| *n != name);
         self.form.saved.templates.push((name, topics));
         if let Err(e) = self.form.saved.save() {
@@ -2726,25 +2126,15 @@ impl Workbench {
     }
 
     fn open_meeting(&mut self, id: &str, cx: &mut Context<Self>) {
-        let Some(store) = self.store.clone() else {
-            return;
-        };
+        let Some(store) = self.store.clone() else { return };
         if id != self.live.id() && self.leave() {
             match store.load(id) {
                 Ok(Some(loaded)) => {
                     self.show(Live::from_loaded(loaded));
                     self.panel = Panel::Transcript;
                 }
-                Ok(None) => {
-                    self.notice =
-                        Some(tr("That meeting no longer exists.", "这场会已经不存在了。").into())
-                }
-                Err(e) => {
-                    self.notice = Some(format!(
-                        "{}{e:#}",
-                        tr("Could not open the meeting: ", "打不开这场会：")
-                    ))
-                }
+                Ok(None) => self.notice = Some(tr("That meeting no longer exists.", "这场会已经不存在了。").into()),
+                Err(e) => self.notice = Some(format!("{}{e:#}", tr("Could not open the meeting: ", "打不开这场会："))),
             }
         }
         cx.notify();
@@ -2777,11 +2167,7 @@ impl Workbench {
         if before.nodes.len() < BUSY_BOARD || self.page_quiet > 0 {
             return;
         }
-        let new = drawn.nodes.iter().find(|n| {
-            n.kind == Kind::Topic
-                && !before.nodes.iter().any(|o| o.id == n.id)
-                && !self.topics_offered.contains(&n.id)
-        });
+        let new = drawn.nodes.iter().find(|n| n.kind == Kind::Topic && !before.nodes.iter().any(|o| o.id == n.id) && !self.topics_offered.contains(&n.id));
         if let Some(topic) = new {
             self.topics_offered.insert(topic.id.clone());
             self.topic_hint = Some((topic.id.clone(), topic.label.chars().take(24).collect()));
@@ -2791,31 +2177,16 @@ impl Workbench {
 
     /// Give the offered topic its own board, and carry on there.
     fn split_topic(&mut self, cx: &mut Context<Self>) {
-        let Some((id, label)) = self.topic_hint.take() else {
-            return;
-        };
-        if self.replay.is_some()
-            || !self.live.split_topic(
-                &id,
-                &tr("Moved “{t}” to a new board", "把「{t}」移到了新的一张板")
-                    .replace("{t}", &label),
-            )
-        {
+        let Some((id, label)) = self.topic_hint.take() else { return };
+        if self.replay.is_some() || !self.live.split_topic(&id, &tr("Moved “{t}” to a new board", "把「{t}」移到了新的一张板").replace("{t}", &label)) {
             cx.notify();
             return;
         }
         self.page_hint = None;
         self.page_quiet = QUIET_AFTER_TURNING;
-        let history: Vec<Utterance> = self
-            .live
-            .history
-            .iter()
-            .filter_map(|h| serde_json::from_value(h.clone()).ok())
-            .collect();
+        let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(self.live.graph.clone(), history);
-        self.ink
-            .borrow_mut()
-            .open(&self.live.graph, &self.live.memory);
+        self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
         self.show_page_image();
         cx.notify();
     }
@@ -2830,24 +2201,8 @@ impl Workbench {
         let pages = follow::pages(&self.live.boards());
         let current = self.live.page();
         let agreed = self.page_hint.as_ref().map(|h| h.0).filter(|_| {
-            let t = text
-                .trim()
-                .trim_end_matches(|c: char| c.is_ascii_punctuation() || "。！？、".contains(c))
-                .to_lowercase();
-            [
-                "跳过去",
-                "翻过去",
-                "过去看看",
-                "切过去",
-                "go there",
-                "go to it",
-                "switch to it",
-                "そっちへ",
-                "そっちに",
-                "そこへ",
-            ]
-            .iter()
-            .any(|w| t == *w || t.ends_with(w))
+            let t = text.trim().trim_end_matches(|c: char| c.is_ascii_punctuation() || "。！？、".contains(c)).to_lowercase();
+            ["跳过去", "翻过去", "过去看看", "切过去", "go there", "go to it", "switch to it", "そっちへ", "そっちに", "そこへ"].iter().any(|w| t == *w || t.ends_with(w))
         });
         if let Some(board) = follow::asked(text, &pages, current).or(agreed) {
             self.page_quiet = QUIET_AFTER_TURNING;
@@ -2866,52 +2221,28 @@ impl Workbench {
             self.go_to_page(board, cx);
             return false;
         }
-        self.page_hint = about.map(|b| {
-            (
-                b,
-                pages[b].number,
-                pages[b].title.chars().take(32).collect(),
-            )
-        });
+        self.page_hint = about.map(|b| (b, pages[b].number, pages[b].title.chars().take(32).collect()));
         false
     }
 
     fn go_to_page(&mut self, page: usize, cx: &mut Context<Self>) {
         if self.replay.is_some() {
-            self.notice = Some(
-                tr(
-                    "Can't switch boards during replay. Exit replay first.",
-                    "回放时不能切换板，请先退出回放。",
-                )
-                .into(),
-            );
+            self.notice = Some(tr("Can't switch boards during replay. Exit replay first.", "回放时不能切换板，请先退出回放。").into());
             cx.notify();
             return;
         }
         self.live.go_to_page(page);
         self.page_hint = None;
         self.topic_hint = None;
-        let history: Vec<Utterance> = self
-            .live
-            .history
-            .iter()
-            .filter_map(|h| serde_json::from_value(h.clone()).ok())
-            .collect();
+        let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
         self.session().open(self.live.graph.clone(), history);
-        self.ink
-            .borrow_mut()
-            .open(&self.live.graph, &self.live.memory);
+        self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
         self.show_page_image();
         cx.notify();
     }
 
     fn pump_import(&mut self, changed: &mut bool) {
-        let ImportState::Reading {
-            updates, progress, ..
-        } = &mut self.import
-        else {
-            return;
-        };
+        let ImportState::Reading { updates, progress, .. } = &mut self.import else { return };
         loop {
             match updates.try_recv() {
                 Ok(ImportUpdate::Progress(text)) => {
@@ -2940,16 +2271,9 @@ impl Workbench {
     }
 
     fn pick_import_file(&mut self, cx: &mut Context<Self>) {
-        let answer = cx.prompt_for_paths(gpui_kit::PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: None,
-        });
+        let answer = cx.prompt_for_paths(gpui_kit::PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
         cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = answer.await else {
-                return;
-            };
+            let Ok(Ok(Some(paths))) = answer.await else { return };
             let _ = this.update(cx, |this, cx| this.import_paths(&paths, cx));
         })
         .detach();
@@ -2958,39 +2282,14 @@ impl Workbench {
     fn import_paths(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
         self.panel = Panel::Import;
         match paths {
-            [path]
-                if path
-                    .extension()
-                    .is_some_and(|e| e.eq_ignore_ascii_case("pdf")) =>
-            {
-                self.start_import(ImportSource::File(path.clone()), cx)
-            }
-            [path]
-                if path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .is_some_and(|e| IMAGE_TYPES.contains(&e.to_ascii_lowercase().as_str())) =>
-            {
-                self.import_image_file(path.clone(), cx)
-            }
+            [path] if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) => self.start_import(ImportSource::File(path.clone()), cx),
+            [path] if path.extension().and_then(|e| e.to_str()).is_some_and(|e| IMAGE_TYPES.contains(&e.to_ascii_lowercase().as_str())) => self.import_image_file(path.clone(), cx),
             [_] => {
-                self.import = ImportState::Failed(
-                    tr(
-                        "You can import PDFs and images (PNG, JPEG, WebP and GIF).",
-                        "可以导入 PDF 和图片（PNG、JPEG、WebP、GIF）。",
-                    )
-                    .to_string(),
-                );
+                self.import = ImportState::Failed(tr("You can import PDFs and images (PNG, JPEG, WebP and GIF).", "可以导入 PDF 和图片（PNG、JPEG、WebP、GIF）。").to_string());
                 cx.notify();
             }
             _ => {
-                self.import = ImportState::Failed(
-                    tr(
-                        "Choose one file at a time. Nothing was imported.",
-                        "一次选一个文件，什么都没有导入。",
-                    )
-                    .to_string(),
-                );
+                self.import = ImportState::Failed(tr("Choose one file at a time. Nothing was imported.", "一次选一个文件，什么都没有导入。").to_string());
                 cx.notify();
             }
         }
@@ -3003,10 +2302,7 @@ impl Workbench {
             cx.notify();
             return;
         };
-        let file = model
-            .file_name()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_default();
+        let file = model.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
         let Some(add_on) = boardcast_models::vision_for(&file) else {
             self.import = ImportState::Failed(tr("This local model can't read images. To read one, choose Qwen3.5 or MiniCPM-V in Settings.", "这个本地模型不能看图。要读图，请在设置里选择 Qwen3.5 或 MiniCPM-V。").to_string());
             cx.notify();
@@ -3014,15 +2310,7 @@ impl Workbench {
         };
         if boardcast_models::installed(&add_on, &self.models) {
             let projector = self.models.join(&add_on.file);
-            self.start_import(
-                ImportSource::Image {
-                    path,
-                    binaries: self.binaries.clone(),
-                    model,
-                    projector,
-                },
-                cx,
-            );
+            self.start_import(ImportSource::Image { path, binaries: self.binaries.clone(), model, projector }, cx);
         } else {
             self.import = ImportState::NeedsVision { path, add_on };
             cx.notify();
@@ -3033,8 +2321,7 @@ impl Workbench {
         let input = self.arxiv_input.read(cx).value().to_string();
         match boardcast_import::arxiv::parse(&input) {
             Some(id) => {
-                self.arxiv_input
-                    .update(cx, |state, cx| state.set_value("", window, cx));
+                self.arxiv_input.update(cx, |state, cx| state.set_value("", window, cx));
                 self.start_import(ImportSource::Arxiv(id), cx);
             }
             None => {
@@ -3058,11 +2345,7 @@ impl Workbench {
             let result = read_import(source, &library, english, &stop, &tx);
             let _ = tx.send(ImportUpdate::Finished(result.map_err(|e| format!("{e:#}"))));
         });
-        self.import = ImportState::Reading {
-            progress: tr("Reading the selected file…", "正在读取所选文件…").to_string(),
-            cancel,
-            updates,
-        };
+        self.import = ImportState::Reading { progress: tr("Reading the selected file…", "正在读取所选文件…").to_string(), cancel, updates };
         cx.notify();
     }
 
@@ -3077,51 +2360,25 @@ impl Workbench {
     /// Put a read file in a meeting. Its pictures are kept first, so a failure leaves the preview ready.
     fn place_import(&mut self, fresh: bool, cx: &mut Context<Self>) {
         self.exit_replay(cx);
-        if self
-            .live
-            .lines
-            .iter()
-            .any(|l| l["ms"].is_null() && !l["manual"].as_bool().unwrap_or(false))
-        {
-            self.notice = Some(
-                tr(
-                    "The model is still drawing. Import when it is done.",
-                    "模型还在画，画完再导入。",
-                )
-                .into(),
-            );
+        if self.live.lines.iter().any(|l| l["ms"].is_null() && !l["manual"].as_bool().unwrap_or(false)) {
+            self.notice = Some(tr("The model is still drawing. Import when it is done.", "模型还在画，画完再导入。").into());
             cx.notify();
             return;
         }
-        let Some(store) = self.store.clone() else {
-            return;
-        };
+        let Some(store) = self.store.clone() else { return };
         if !matches!(self.import, ImportState::Ready(_)) || (fresh && !self.leave()) {
             cx.notify();
             return;
         }
-        let ImportState::Ready(preview) = std::mem::replace(&mut self.import, ImportState::Idle)
-        else {
-            return;
-        };
-        let keep = if fresh {
-            Live::new()
-        } else {
-            std::mem::take(&mut self.live)
-        };
+        let ImportState::Ready(preview) = std::mem::replace(&mut self.import, ImportState::Idle) else { return };
+        let keep = if fresh { Live::new() } else { std::mem::take(&mut self.live) };
         let id = keep.id().to_string();
         let mut stored = vec![];
         for page in &preview.pages {
             match store.put_image(&id, "image/jpeg", &page.jpeg) {
                 Ok(reference) => stored.push(reference),
                 Err(error) => {
-                    self.notice = Some(format!(
-                        "{}{error:#}",
-                        tr(
-                            "The imported pages could not be saved. Nothing was added: ",
-                            "导入页保存失败，什么都没有加进去："
-                        )
-                    ));
+                    self.notice = Some(format!("{}{error:#}", tr("The imported pages could not be saved. Nothing was added: ", "导入页保存失败，什么都没有加进去：")));
                     if !fresh {
                         self.live = keep;
                     }
@@ -3137,12 +2394,7 @@ impl Workbench {
                 live.set_title(title);
             }
         }
-        let added = preview
-            .pages
-            .into_iter()
-            .map(|p| p.graph)
-            .zip(stored)
-            .collect();
+        let added = preview.pages.into_iter().map(|p| p.graph).zip(stored).collect();
         live.add_pages(added, &preview.note);
         self.show(live);
         self.live.changes += 1;
@@ -3163,26 +2415,16 @@ impl Workbench {
             Some(store) => store.page_image(self.live.id(), &r),
             None => boardcast_meetings::decode_data_url(&r),
         });
-        let picture = read.and_then(|image| {
-            match image
-                .map_err(|e| format!("{e:#}"))
-                .and_then(|i| page_render_image(&i.bytes))
-            {
-                Ok(picture) => Some(picture),
-                Err(error) => {
-                    self.notice = Some(format!(
-                        "{}{error}",
-                        tr("The imported page could not be shown: ", "导入页显示失败：")
-                    ));
-                    None
-                }
+        let picture = read.and_then(|image| match image.map_err(|e| format!("{e:#}")).and_then(|i| page_render_image(&i.bytes)) {
+            Ok(picture) => Some(picture),
+            Err(error) => {
+                self.notice = Some(format!("{}{error}", tr("The imported page could not be shown: ", "导入页显示失败：")));
+                None
             }
         });
         let mut ink = self.ink.borrow_mut();
         let size = self.live.boards().get(board).and_then(Graph::underlay);
-        let next = picture
-            .zip(size)
-            .map(|(picture, (w, h))| (picture, w as f32, h as f32));
+        let next = picture.zip(size).map(|(picture, (w, h))| (picture, w as f32, h as f32));
         if let Some((old, _, _)) = std::mem::replace(&mut ink.page, next) {
             ink.retired.push(old);
         }
@@ -3200,15 +2442,8 @@ impl Workbench {
                 MarkUnit::Sentence => Some(Unit::Sentence),
                 MarkUnit::Block => None,
             };
-            let rows = self
-                .live
-                .graph
-                .nodes
-                .iter()
-                .find(|n| n.id == id)
-                .map_or(vec![], |n| n.rows());
-            unit.zip(ink.selected_at)
-                .and_then(|(unit, (x, y))| span_at(&rows, x, y, mark, unit))
+            let rows = self.live.graph.nodes.iter().find(|n| n.id == id).map_or(vec![], |n| n.rows());
+            unit.zip(ink.selected_at).and_then(|(unit, (x, y))| span_at(&rows, x, y, mark, unit))
         };
         let graph = match span {
             Some(span) => self.session().toggle_span(id, span),
@@ -3239,16 +2474,7 @@ impl Workbench {
     }
 
     fn start_label(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(label) = self
-            .live
-            .graph
-            .nodes
-            .iter()
-            .find(|n| n.id == id)
-            .map(|n| n.label.clone())
-        else {
-            return;
-        };
+        let Some(label) = self.live.graph.nodes.iter().find(|n| n.id == id).map(|n| n.label.clone()) else { return };
         self.label_input.update(cx, |state, cx| {
             state.set_value(label, window, cx);
             state.focus(window, cx);
@@ -3284,11 +2510,7 @@ impl Workbench {
         if !self.editable() {
             return;
         }
-        let snap = if forward {
-            self.live.redo()
-        } else {
-            self.live.undo()
-        };
+        let snap = if forward { self.live.redo() } else { self.live.undo() };
         if let Some(snap) = snap {
             self.session().set_graph(snap.graph.clone());
             self.next_batch += 1;
@@ -3316,10 +2538,7 @@ impl Workbench {
         let keys = &event.keystroke;
         // Escape in a text field, such as a setting or the line being typed, leaves it: a side panel
         // closes back to the transcript, and the board has the keys again.
-        let plain = !(keys.modifiers.control
-            || keys.modifiers.platform
-            || keys.modifiers.alt
-            || keys.modifiers.shift);
+        let plain = !(keys.modifiers.control || keys.modifiers.platform || keys.modifiers.alt || keys.modifiers.shift);
         if keys.key == "escape" && plain && !self.focus.is_focused(window) {
             if self.panel != Panel::Transcript {
                 self.panel = Panel::Transcript;
@@ -3335,11 +2554,7 @@ impl Workbench {
         if let Some(at) = self.replay.as_ref().map(|r| r.player.at) {
             match keys.key.as_str() {
                 "escape" => self.exit_replay(cx),
-                "r" if keys.modifiers.shift
-                    && (keys.modifiers.control || keys.modifiers.platform) =>
-                {
-                    self.exit_replay(cx)
-                }
+                "r" if keys.modifiers.shift && (keys.modifiers.control || keys.modifiers.platform) => self.exit_replay(cx),
                 "space" => self.toggle_replay(cx),
                 "left" => self.seek_replay(at.saturating_sub(1), cx),
                 "right" => self.seek_replay(at + 1, cx),
@@ -3407,11 +2622,7 @@ impl Workbench {
     }
 
     fn toggle_panel(&mut self, panel: Panel, cx: &mut Context<Self>) {
-        self.panel = if self.panel == panel {
-            Panel::Transcript
-        } else {
-            panel
-        };
+        self.panel = if self.panel == panel { Panel::Transcript } else { panel };
         if self.panel == Panel::Settings {
             self.inputs = boardcast_audio::inputs();
         }
@@ -3419,12 +2630,7 @@ impl Workbench {
             if let Some(store) = &self.store {
                 match store.list() {
                     Ok(list) => self.library = list,
-                    Err(e) => {
-                        self.notice = Some(format!(
-                            "{}{e:#}",
-                            tr("Could not list meetings: ", "读取会议列表失败：")
-                        ))
-                    }
+                    Err(e) => self.notice = Some(format!("{}{e:#}", tr("Could not list meetings: ", "读取会议列表失败："))),
                 }
             }
         }
@@ -3438,11 +2644,7 @@ impl Workbench {
             base_url: value(&self.form.base_url),
             model: value(&self.form.model),
             // An empty field keeps the saved key, which is never shown again.
-            api_key: if key.is_empty() {
-                self.form.saved.api_key.clone()
-            } else {
-                key
-            },
+            api_key: if key.is_empty() { self.form.saved.api_key.clone() } else { key },
             enabled: self.form.remote,
             diarize: self.form.saved.diarize,
             turn_pages: self.form.saved.turn_pages,
@@ -3489,28 +2691,18 @@ impl Workbench {
     fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let settings = self.form_settings(cx);
         if settings.enabled && !settings.is_complete() {
-            self.form.note = Some(
-                tr(
-                    "Fill in the address, model and API key first.",
-                    "请先填写地址、模型和 API key。",
-                )
-                .into(),
-            );
+            self.form.note = Some(tr("Fill in the address, model and API key first.", "请先填写地址、模型和 API key。").into());
             cx.notify();
             return;
         }
         match settings.save() {
             Ok(()) => {
                 self.form.saved = settings;
-                self.form
-                    .key
-                    .update(cx, |state, cx| state.set_value("", window, cx));
+                self.form.key.update(cx, |state, cx| state.set_value("", window, cx));
                 self.form.note = Some(tr("Saved.", "已保存。").into());
                 self.apply_backend();
             }
-            Err(e) => {
-                self.form.note = Some(format!("{}{e:#}", tr("Could not save: ", "保存失败：")))
-            }
+            Err(e) => self.form.note = Some(format!("{}{e:#}", tr("Could not save: ", "保存失败："))),
         }
         cx.notify();
     }
@@ -3518,36 +2710,15 @@ impl Workbench {
     fn test_settings(&mut self, cx: &mut Context<Self>) {
         let settings = self.form_settings(cx);
         if !settings.is_complete() {
-            self.form.note = Some(
-                tr(
-                    "Fill in the address, model and API key first.",
-                    "请先填写地址、模型和 API key。",
-                )
-                .into(),
-            );
+            self.form.note = Some(tr("Fill in the address, model and API key first.", "请先填写地址、模型和 API key。").into());
             cx.notify();
             return;
         }
-        let provider = Provider::Remote {
-            base_url: settings.base_url,
-            key: settings.api_key,
-            model: settings.model,
-        };
+        let provider = Provider::Remote { base_url: settings.base_url, key: settings.api_key, model: settings.model };
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let hello = Utterance {
-                speaker: None,
-                text: "Hello".into(),
-                pointing: vec![],
-            };
-            let reply = propose(
-                &provider,
-                &Graph::default(),
-                &[],
-                &hello,
-                Guidance::default(),
-                None,
-            );
+            let hello = Utterance { speaker: None, text: "Hello".into(), pointing: vec![] };
+            let reply = propose(&provider, &Graph::default(), &[], &hello, Guidance::default(), None);
             let _ = tx.send(reply.map(|r| r.ms).map_err(|e| format!("{e:#}")));
         });
         self.form.probing = Some(rx);
@@ -3556,21 +2727,9 @@ impl Workbench {
     }
 
     fn retry_line(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some((speaker, text)) = self.live.retry_line(index) else {
-            return;
-        };
+        let Some((speaker, text)) = self.live.retry_line(index) else { return };
         let (meeting, renames) = (self.session().meeting(), self.session().renames_seen());
-        let _ = self.pipeline.said.send(Said {
-            line: Utterance {
-                speaker,
-                text,
-                pointing: vec![],
-            },
-            ended: Instant::now(),
-            asr_ms: None,
-            meeting,
-            renames,
-        });
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting, renames });
         cx.notify();
     }
 
@@ -3585,10 +2744,7 @@ impl Workbench {
     /// A speaker stands out while the pointer is on them, and on a touch screen, with no pointer, while
     /// they are chosen in the speakers panel.
     fn traced_speaker(&self) -> Option<&String> {
-        self.speaker_hovered.as_ref().or(self
-            .speaker_chosen
-            .as_ref()
-            .filter(|_| self.panel == Panel::Speakers))
+        self.speaker_hovered.as_ref().or(self.speaker_chosen.as_ref().filter(|_| self.panel == Panel::Speakers))
     }
 
     fn hover_speaker(&mut self, name: &str, hovered: bool, cx: &mut Context<Self>) {
@@ -3602,27 +2758,13 @@ impl Workbench {
 
     /// Go to the line that put this node on the board.
     fn jump_to_source(&mut self, id: &str, cx: &mut Context<Self>) {
-        let Some(node) = self.live.graph.nodes.iter().find(|n| n.id == id) else {
-            return;
-        };
+        let Some(node) = self.live.graph.nodes.iter().find(|n| n.id == id) else { return };
         let Some(who) = by_of_node(node) else { return };
         let mut names = vec![node.label.as_str()];
         names.extend(node.aliases.iter().map(String::as_str));
-        let found = said_at(
-            &self.live.lines,
-            who,
-            &names,
-            self.live.page(),
-            first_seen(&self.live.steps, id),
-        );
+        let found = said_at(&self.live.lines, who, &names, self.live.page(), first_seen(&self.live.steps, id));
         let Some(line) = found else {
-            self.notice = Some(
-                tr(
-                    "The line behind this isn't in the transcript.",
-                    "会议记录里找不到这条板书对应的话。",
-                )
-                .into(),
-            );
+            self.notice = Some(tr("The line behind this isn't in the transcript.", "会议记录里找不到这条板书对应的话。").into());
             cx.notify();
             return;
         };
@@ -3643,8 +2785,7 @@ impl Workbench {
     }
 
     fn choose_speaker(&mut self, name: String, window: &mut Window, cx: &mut Context<Self>) {
-        self.speaker_name
-            .update(cx, |state, cx| state.set_value(name.clone(), window, cx));
+        self.speaker_name.update(cx, |state, cx| state.set_value(name.clone(), window, cx));
         self.speaker_chosen = Some(name);
         self.panel = Panel::Speakers;
         cx.notify();
@@ -3652,9 +2793,7 @@ impl Workbench {
 
     fn rename_speaker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let to = self.speaker_name.read(cx).value().trim().to_string();
-        let Some(from) = self.speaker_chosen.clone() else {
-            return;
-        };
+        let Some(from) = self.speaker_chosen.clone() else { return };
         if !self.editable() || to.is_empty() || to == from {
             return;
         }
@@ -3667,52 +2806,28 @@ impl Workbench {
         self.choose_speaker(to, window, cx);
     }
 
-    fn speakers_panel(
-        &self,
-        editable: bool,
-        cx: &mut Context<Self>,
-    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+    fn speakers_panel(&self, editable: bool, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
         let names = self.live.speakers();
-        let rows = names
-            .iter()
-            .enumerate()
-            .map(|(i, name)| {
-                let chosen = self.speaker_chosen.as_deref() == Some(name.as_str());
-                let (lines, _, _) = self.live.speaker_impact(name);
-                let (picked, hovered) = (name.clone(), name.clone());
-                div()
-                    .id(("speaker-row", i))
-                    .on_hover(cx.listener(move |this, over: &bool, _, cx| {
-                        this.hover_speaker(&hovered, *over, cx)
-                    }))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .p_1()
-                    .rounded_md()
-                    .cursor_pointer()
-                    .when(chosen, |d| d.bg(rgb(pal().selected)))
-                    .child(speaker_badge(&names, name))
-                    .child(div().flex_1().min_w_0().text_sm().child(name.clone()))
-                    .when(self.speaker.as_deref() == Some(name.as_str()), |d| {
-                        d.child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(pal().accent))
-                                .child(tr("next", "下一句")),
-                        )
-                    })
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(pal().faint))
-                            .child(format!("{lines} {}", tr("lines", "句"))),
-                    )
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.choose_speaker(picked.clone(), window, cx)
-                    }))
-            })
-            .collect::<Vec<_>>();
+        let rows = names.iter().enumerate().map(|(i, name)| {
+            let chosen = self.speaker_chosen.as_deref() == Some(name.as_str());
+            let (lines, _, _) = self.live.speaker_impact(name);
+            let (picked, hovered) = (name.clone(), name.clone());
+            div()
+                .id(("speaker-row", i))
+                .on_hover(cx.listener(move |this, over: &bool, _, cx| this.hover_speaker(&hovered, *over, cx)))
+                .flex()
+                .items_center()
+                .gap_2()
+                .p_1()
+                .rounded_md()
+                .cursor_pointer()
+                .when(chosen, |d| d.bg(rgb(pal().selected)))
+                .child(speaker_badge(&names, name))
+                .child(div().flex_1().min_w_0().text_sm().child(name.clone()))
+                .when(self.speaker.as_deref() == Some(name.as_str()), |d| d.child(div().text_xs().text_color(rgb(pal().accent)).child(tr("next", "下一句"))))
+                .child(div().text_xs().text_color(rgb(pal().faint)).child(format!("{lines} {}", tr("lines", "句"))))
+                .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx)))
+        }).collect::<Vec<_>>();
         let editing = self.speaker_chosen.clone().filter(|name| editable && names.contains(name)).map(|from| {
             let to = self.speaker_name.read(cx).value().trim().to_string();
             let merging = to != from && names.contains(&to);
@@ -3761,14 +2876,7 @@ impl Workbench {
             .flex()
             .flex_col()
             .gap_2()
-            .when(names.is_empty(), |d| {
-                d.child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(pal().faint))
-                        .child(tr("Nobody has spoken yet.", "还没有人说话。")),
-                )
-            })
+            .when(names.is_empty(), |d| d.child(div().text_sm().text_color(rgb(pal().faint)).child(tr("Nobody has spoken yet.", "还没有人说话。"))))
             .children(rows)
             .when_some(editing, |d, editing| d.child(editing))
     }
@@ -3778,8 +2886,7 @@ impl Workbench {
         if text.is_empty() || !self.editable() {
             return;
         }
-        self.input
-            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.input.update(cx, |state, cx| state.set_value("", window, cx));
         let speaker = self.speaker.clone();
         self.live.add_line(speaker.as_deref(), &text, None);
         if self.follow_pages(&text, cx) {
@@ -3789,17 +2896,7 @@ impl Workbench {
         let meeting = self.session().meeting();
         let renames = self.session().renames_seen();
         let pointing = self.take_pointing();
-        let _ = self.pipeline.said.send(Said {
-            line: Utterance {
-                speaker,
-                text,
-                pointing,
-            },
-            ended: Instant::now(),
-            asr_ms: None,
-            meeting,
-            renames,
-        });
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing }, ended: Instant::now(), asr_ms: None, meeting, renames });
         cx.notify();
     }
 
@@ -3811,13 +2908,7 @@ impl Workbench {
         self.count_listening();
         if let Err(error) = self.flush() {
             self.close_refused = true;
-            self.notice = Some(format!(
-                "{}{error}",
-                tr(
-                    "Not saved, so the window stayed open. Close again to discard: ",
-                    "没有保存成功，窗口先不关。再关一次将丢弃未保存内容："
-                )
-            ));
+            self.notice = Some(format!("{}{error}", tr("Not saved, so the window stayed open. Close again to discard: ", "没有保存成功，窗口先不关。再关一次将丢弃未保存内容：")));
             cx.notify();
             return false;
         }
@@ -3826,76 +2917,24 @@ impl Workbench {
 }
 
 fn replay_slider(state: &Entity<SliderState>) -> impl IntoElement {
-    Slider::new(state)
-        .accessibility_label(tr("Replay progress", "回放进度"))
-        .flex_1()
-        .min_w_0()
+    Slider::new(state).accessibility_label(tr("Replay progress", "回放进度")).flex_1().min_w_0()
 }
 
 /// A summary as it reads on screen. To-dos can be ticked when `tick` is given, with a target big
 /// enough for a finger.
-fn summary_blocks(
-    text: &str,
-    group: &'static str,
-    tick: Option<&Context<Workbench>>,
-) -> Vec<gpui_kit::AnyElement> {
+fn summary_blocks(text: &str, group: &'static str, tick: Option<&Context<Workbench>>) -> Vec<gpui_kit::AnyElement> {
     summary::blocks(text)
         .into_iter()
         .enumerate()
         .map(|(i, block)| match block {
-            Block::Heading(text) => div()
-                .mt_2()
-                .text_sm()
-                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                .child(text)
-                .into_any_element(),
+            Block::Heading(text) => div().mt_2().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(text).into_any_element(),
             Block::Paragraph(text) => div().text_sm().child(text).into_any_element(),
-            Block::Bullet(text) => div()
-                .flex()
-                .gap_2()
-                .text_sm()
-                .child(div().flex_shrink_0().child("•"))
-                .child(div().flex_1().min_w_0().child(text))
-                .into_any_element(),
+            Block::Bullet(text) => div().flex().gap_2().text_sm().child(div().flex_shrink_0().child("•")).child(div().flex_1().min_w_0().child(text)).into_any_element(),
             Block::Todo { done, text, line } => {
-                let tick_box = div()
-                    .flex_shrink_0()
-                    .mt(px(3.))
-                    .size(px(16.))
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(rgb(pal().faint))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_xs()
-                    .text_color(rgb(pal().on_strong))
-                    .when(done, |d| {
-                        d.bg(rgb(pal().accent))
-                            .border_color(rgb(pal().accent))
-                            .child("✓")
-                    });
-                let row = div()
-                    .id((group, i))
-                    .flex()
-                    .items_start()
-                    .gap_2()
-                    .py_1()
-                    .min_h(px(32.))
-                    .text_sm()
-                    .child(tick_box)
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .when(done, |d| d.text_color(rgb(pal().faint)).line_through())
-                            .child(text),
-                    );
+                let tick_box = div().flex_shrink_0().mt(px(3.)).size(px(16.)).rounded_sm().border_1().border_color(rgb(pal().faint)).flex().items_center().justify_center().text_xs().text_color(rgb(pal().on_strong)).when(done, |d| d.bg(rgb(pal().accent)).border_color(rgb(pal().accent)).child("✓"));
+                let row = div().id((group, i)).flex().items_start().gap_2().py_1().min_h(px(32.)).text_sm().child(tick_box).child(div().flex_1().min_w_0().when(done, |d| d.text_color(rgb(pal().faint)).line_through()).child(text));
                 match tick {
-                    Some(cx) => row
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, _, _, cx| this.tick_todo(line, cx)))
-                        .into_any_element(),
+                    Some(cx) => row.cursor_pointer().on_click(cx.listener(move |this, _, _, cx| this.tick_todo(line, cx))).into_any_element(),
                     None => row.into_any_element(),
                 }
             }
@@ -3910,16 +2949,10 @@ impl Workbench {
         // Steps move on their own, and the slider has to follow.
         if replay.slider.read(cx).value().end() != player.at as f32 {
             let value = player.at as f32;
-            replay
-                .slider
-                .update(cx, |state, cx| state.set_value(value, window, cx));
+            replay.slider.update(cx, |state, cx| state.set_value(value, window, cx));
         }
         let steps = &replay.steps;
-        let time = format!(
-            "{} / {}",
-            clock(player.elapsed_ms(steps)),
-            clock(Player::duration_ms(steps))
-        );
+        let time = format!("{} / {}", clock(player.elapsed_ms(steps)), clock(Player::duration_ms(steps)));
         let can_fork = player.at > 0 && self.live.read_only.is_none();
         Some(
             div()
@@ -3929,57 +2962,25 @@ impl Workbench {
                 .px_3()
                 .h(px(48.))
                 .flex_shrink_0()
-                .child(
-                    button(
-                        "replay-toggle",
-                        if player.playing {
-                            tr("Pause", "暂停")
-                        } else {
-                            tr("Play", "播放")
-                        },
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_replay(cx))),
-                )
+                .child(button("replay-toggle", if player.playing { tr("Pause", "暂停") } else { tr("Play", "播放") }).on_click(cx.listener(|this, _, _, cx| this.toggle_replay(cx))))
                 .child(replay_slider(&replay.slider))
-                .child(
-                    div()
-                        .text_xs()
-                        .whitespace_nowrap()
-                        .text_color(rgb(pal().muted))
-                        .child(time),
-                )
-                .child(
-                    button("replay-speed", format!("{}×", player.speed)).on_click(cx.listener(
-                        |this, _, _, cx| {
-                            if let Some(replay) = &mut this.replay {
-                                replay.player.next_speed();
-                            }
-                            this.wait_for_next_step();
-                            cx.notify();
-                        },
-                    )),
-                )
+                .child(div().text_xs().whitespace_nowrap().text_color(rgb(pal().muted)).child(time))
+                .child(button("replay-speed", format!("{}×", player.speed)).on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(replay) = &mut this.replay {
+                        replay.player.next_speed();
+                    }
+                    this.wait_for_next_step();
+                    cx.notify();
+                })))
                 .when(self.live.read_only.is_none(), |d| {
-                    d.child(
-                        button("replay-fork", tr("Fork a board", "另起一板"))
-                            .whitespace_nowrap()
-                            .disabled(!can_fork)
-                            .on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))),
-                    )
+                    d.child(button("replay-fork", tr("Fork a board", "另起一板")).whitespace_nowrap().disabled(!can_fork).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
                 }),
         )
     }
 
     fn import_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
         let hint = |text: &'static str| div().text_xs().text_color(rgb(pal().muted)).child(text);
-        let panel = div()
-            .id("import-panel")
-            .flex_1()
-            .overflow_y_scroll()
-            .p_3()
-            .flex()
-            .flex_col()
-            .gap_2();
+        let panel = div().id("import-panel").flex_1().overflow_y_scroll().p_3().flex().flex_col().gap_2();
         let can_add_here = self.live.read_only.is_none();
         match &self.import {
             ImportState::NeedsVision { add_on, path } => {
@@ -4036,50 +3037,29 @@ impl Workbench {
             (ExportKind::Pdf, tr("Whole meeting PDF", "整场会 PDF"), tr("A page per board, then the summary and transcript, with selectable text.", "每张板一页，后面是摘要和会议记录，文字可以选中复制。"), content),
         ];
         let busy = self.exporting;
-        let rows = formats
-            .into_iter()
-            .enumerate()
-            .map(|(i, (kind, name, hint, available))| {
-                let enabled = available && busy.is_none();
-                // A row of the manual's table, as on the website: the format, what it holds, and its file.
-                div()
-                    .id(("export", i))
-                    .flex()
-                    .items_start()
-                    .justify_between()
-                    .gap_3()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(rgb(pal().line))
-                    .when(!enabled, |d| d.opacity(0.4))
-                    .when(enabled, |d| {
-                        d.cursor_pointer()
-                            .hover(|d| d.bg(rgb(pal().selected)))
-                            .on_click(
-                                cx.listener(move |this, _, _, cx| this.start_export(kind, cx)),
-                            )
-                    })
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(div().text_sm().child(if busy == Some(kind) {
-                                format!("{name} · {}", tr("Exporting…", "正在导出…"))
-                            } else {
-                                name.to_string()
-                            }))
-                            .child(div().text_xs().text_color(rgb(pal().muted)).child(hint)),
-                    )
-                    .child(
-                        div()
-                            .pt(px(2.))
-                            .font_family(theme::MONO)
-                            .text_xs()
-                            .text_color(rgb(pal().faint))
-                            .whitespace_nowrap()
-                            .child(format!(".{} ↓", kind.extension())),
-                    )
-            });
+        let rows = formats.into_iter().enumerate().map(|(i, (kind, name, hint, available))| {
+            let enabled = available && busy.is_none();
+            // A row of the manual's table, as on the website: the format, what it holds, and its file.
+            div()
+                .id(("export", i))
+                .flex()
+                .items_start()
+                .justify_between()
+                .gap_3()
+                .py_2()
+                .border_b_1()
+                .border_color(rgb(pal().line))
+                .when(!enabled, |d| d.opacity(0.4))
+                .when(enabled, |d| d.cursor_pointer().hover(|d| d.bg(rgb(pal().selected))).on_click(cx.listener(move |this, _, _, cx| this.start_export(kind, cx))))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(div().text_sm().child(if busy == Some(kind) { format!("{name} · {}", tr("Exporting…", "正在导出…")) } else { name.to_string() }))
+                        .child(div().text_xs().text_color(rgb(pal().muted)).child(hint)),
+                )
+                .child(div().pt(px(2.)).font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).whitespace_nowrap().child(format!(".{} ↓", kind.extension())))
+        });
         let result = self.exported.as_ref().map(|result| match result {
             Exported::Saved { path, text_left_out } => {
                 let shown = path.clone();
@@ -4106,85 +3086,34 @@ impl Workbench {
             .flex()
             .flex_col()
             .gap_2()
-            .when(
-                self.live.read_only == Some(ViewOnly::ImportedContent),
-                |d| {
-                    d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr(
-                        "Free-edit content is not included.",
-                        "自由编辑内容不会导出。",
-                    )))
-                },
-            )
+            .when(self.live.read_only == Some(ViewOnly::ImportedContent), |d| {
+                d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("Free-edit content is not included.", "自由编辑内容不会导出。")))
+            })
             .children(rows)
             .when_some(result, |d, result| d.child(result))
     }
 
-    fn summary_panel(
-        &mut self,
-        editable: bool,
-        cx: &mut Context<Self>,
-    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+    fn summary_panel(&mut self, editable: bool, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
         // Reading the whole meeting is only worth doing once per change.
         let (id, changes) = (self.live.id().to_string(), self.live.changes);
-        if !self
-            .summary
-            .current
-            .as_ref()
-            .is_some_and(|(i, c, _)| *i == id && *c == changes)
-        {
+        if !self.summary.current.as_ref().is_some_and(|(i, c, _)| *i == id && *c == changes) {
             self.summary.current = Some((id, changes, fingerprint_of(&self.live)));
         }
-        let current = self
-            .summary
-            .current
-            .as_ref()
-            .map_or("", |(_, _, value)| value.as_str());
+        let current = self.summary.current.as_ref().map_or("", |(_, _, value)| value.as_str());
         let text = self.live.summary().to_string();
         // A view-only meeting cannot change, and its board may not have been read in full.
-        let stale = editable
-            && !text.is_empty()
-            && self
-                .live
-                .summary_source()
-                .is_some_and(|source| source != current);
-        let draft_stale = self
-            .summary
-            .draft
-            .as_ref()
-            .is_some_and(|(_, source)| source != current);
+        let stale = editable && !text.is_empty() && self.live.summary_source().is_some_and(|source| source != current);
+        let draft_stale = self.summary.draft.as_ref().is_some_and(|(_, source)| source != current);
         let busy = self.summary.job.as_ref().map(|job| match job.step {
-            Some((done, total)) if total > 1 && done + 1 < total => format!(
-                "{} {}/{}…",
-                tr("Writing part", "分段整理"),
-                done + 1,
-                total - 1
-            ),
+            Some((done, total)) if total > 1 && done + 1 < total => format!("{} {}/{}…", tr("Writing part", "分段整理"), done + 1, total - 1),
             Some((_, total)) if total > 1 => tr("Putting it together…", "合成摘要…").to_string(),
             _ => tr("Writing…", "整理中…").to_string(),
         });
-        let can_make = editable
-            && self.summary.draft.is_none()
-            && (self.live.has_content() || !text.is_empty());
+        let can_make = editable && self.summary.draft.is_none() && (self.live.has_content() || !text.is_empty());
         let destination = match self.session().provider() {
-            Ok(Provider::Remote {
-                base_url, model, ..
-            }) => {
-                let host = base_url
-                    .split("//")
-                    .last()
-                    .unwrap_or(&base_url)
-                    .split('/')
-                    .next()
-                    .unwrap_or_default()
-                    .to_string();
-                Some(format!(
-                    "{} {model}{} {host}",
-                    tr("Uses the cloud model", "用云端的"),
-                    tr(
-                        "; the whole transcript is sent to",
-                        "生成：整场会议记录会发到"
-                    )
-                ))
+            Ok(Provider::Remote { base_url, model, .. }) => {
+                let host = base_url.split("//").last().unwrap_or(&base_url).split('/').next().unwrap_or_default().to_string();
+                Some(format!("{} {model}{} {host}", tr("Uses the cloud model", "用云端的"), tr("; the whole transcript is sent to", "生成：整场会议记录会发到")))
             }
             _ => None,
         };
@@ -4194,77 +3123,25 @@ impl Workbench {
             .flex_wrap()
             .gap_1()
             .when(editable, |d| match &busy {
-                Some(_) => d.child(
-                    button("stop-summary", tr("Stop", "停止生成"))
-                        .on_click(cx.listener(|this, _, _, cx| this.stop_summary(cx))),
-                ),
+                Some(_) => d.child(button("stop-summary", tr("Stop", "停止生成")).on_click(cx.listener(|this, _, _, cx| this.stop_summary(cx)))),
                 None => d.child(
-                    button(
-                        "make-summary",
-                        if text.is_empty() {
-                            tr("Write summary", "生成摘要")
-                        } else {
-                            tr("Write again", "重新生成")
-                        },
-                    )
-                    .disabled(!can_make)
-                    .when(can_make, |b| {
-                        b.on_click(cx.listener(|this, _, _, cx| this.make_summary(cx)))
-                    }),
+                    button("make-summary", if text.is_empty() { tr("Write summary", "生成摘要") } else { tr("Write again", "重新生成") })
+                        .disabled(!can_make)
+                        .when(can_make, |b| b.on_click(cx.listener(|this, _, _, cx| this.make_summary(cx)))),
                 ),
             })
             .when(!text.is_empty(), |d| {
                 let (markdown, plain) = (text.clone(), summary::plain_text(&text));
-                d.child(
-                    button("copy-markdown", tr("Copy source", "复制原文")).on_click(cx.listener(
-                        move |this, _, _, cx| {
-                            this.copy_summary(
-                                markdown.clone(),
-                                tr("Copied the Markdown source", "已复制 Markdown 原文"),
-                                cx,
-                            )
-                        },
-                    )),
-                )
-                .child(
-                    button("copy-plain", tr("Text only", "仅文本")).on_click(cx.listener(
-                        move |this, _, _, cx| {
-                            this.copy_summary(
-                                plain.clone(),
-                                tr("Copied as plain text", "已复制纯文本"),
-                                cx,
-                            )
-                        },
-                    )),
-                )
-                .when(editable, |d| {
-                    d.child(
-                        button(
-                            "edit-summary",
-                            if self.summary.editing {
-                                tr("Done editing", "改完了")
-                            } else {
-                                tr("Edit", "修改")
-                            },
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| this.edit_summary(window, cx))),
-                    )
-                    .child(
-                        button("clear-summary", tr("Delete", "删除")).on_click(
-                            cx.listener(|this, _, window, cx| this.clear_summary(window, cx)),
-                        ),
-                    )
-                })
+                d.child(button("copy-markdown", tr("Copy source", "复制原文")).on_click(cx.listener(move |this, _, _, cx| this.copy_summary(markdown.clone(), tr("Copied the Markdown source", "已复制 Markdown 原文"), cx))))
+                    .child(button("copy-plain", tr("Text only", "仅文本")).on_click(cx.listener(move |this, _, _, cx| this.copy_summary(plain.clone(), tr("Copied as plain text", "已复制纯文本"), cx))))
+                    .when(editable, |d| {
+                        d.child(button("edit-summary", if self.summary.editing { tr("Done editing", "改完了") } else { tr("Edit", "修改") }).on_click(cx.listener(|this, _, window, cx| this.edit_summary(window, cx))))
+                            .child(button("clear-summary", tr("Delete", "删除")).on_click(cx.listener(|this, _, window, cx| this.clear_summary(window, cx))))
+                    })
             });
         let tick = editable.then_some(&*cx);
-        let reading = (!self.summary.editing)
-            .then(|| summary_blocks(&text, "todo", tick))
-            .unwrap_or_default();
-        let proposed = self
-            .summary
-            .draft
-            .as_ref()
-            .map(|(draft, _)| summary_blocks(draft, "draft-todo", None));
+        let reading = (!self.summary.editing).then(|| summary_blocks(&text, "todo", tick)).unwrap_or_default();
+        let proposed = self.summary.draft.as_ref().map(|(draft, _)| summary_blocks(draft, "draft-todo", None));
         div()
             .id("summary-panel")
             .flex_1()
@@ -4320,31 +3197,14 @@ impl Workbench {
 
 /// A speaker's letter in their color, which follows the order people first spoke in.
 fn speaker_badge(speakers: &[String], name: &str) -> Tag {
-    const COLORS: [(u32, u32); 6] = [
-        (0xfc_d7_ea, 0xa6_1e_4d),
-        (0xd6_e6_ff, 0x1c_4f_9c),
-        (0xd4_f5_e7, 0x1f_7a_45),
-        (0xfd_e8_c8, 0x9f_4f_0b),
-        (0xe5_dc_ff, 0x5b_3c_c4),
-        (0xe2_e8_f0, 0x47_55_69),
-    ];
-    let (background, ink) =
-        COLORS[speakers.iter().position(|s| s == name).unwrap_or(0) % COLORS.len()];
-    Tag::custom(
-        rgb(background).into(),
-        rgb(ink).into(),
-        rgb(background).into(),
-    )
-    .xsmall()
-    .rounded(px(10.))
-    .child(initial(name))
+    const COLORS: [(u32, u32); 6] = [(0xfc_d7_ea, 0xa6_1e_4d), (0xd6_e6_ff, 0x1c_4f_9c), (0xd4_f5_e7, 0x1f_7a_45), (0xfd_e8_c8, 0x9f_4f_0b), (0xe5_dc_ff, 0x5b_3c_c4), (0xe2_e8_f0, 0x47_55_69)];
+    let (background, ink) = COLORS[speakers.iter().position(|s| s == name).unwrap_or(0) % COLORS.len()];
+    Tag::custom(rgb(background).into(), rgb(ink).into(), rgb(background).into()).xsmall().rounded(px(10.)).child(initial(name))
 }
 
 /// The highlighter that goes with a speaker's badge: the same hue, strong enough to show under ink.
 fn speaker_marker(speakers: &[String], name: &str) -> u32 {
-    const MARKERS: [u32; 6] = [
-        0xf7_83_ac, 0x74_c0_fc, 0x69_db_7c, 0xff_a9_4d, 0xb1_97_fc, 0xad_b5_bd,
-    ];
+    const MARKERS: [u32; 6] = [0xf7_83_ac, 0x74_c0_fc, 0x69_db_7c, 0xff_a9_4d, 0xb1_97_fc, 0xad_b5_bd];
     MARKERS[speakers.iter().position(|s| s == name).unwrap_or(0) % MARKERS.len()]
 }
 
@@ -4354,74 +3214,26 @@ fn button(id: impl Into<gpui_kit::ElementId>, label: impl Into<gpui_kit::SharedS
 
 /// An icon that does something, named in a tooltip.
 fn icon_button(id: &'static str, name: &'static str, tooltip: &'static str) -> Button {
-    Button::new(id)
-        .small()
-        .ghost()
-        .icon(icon(name))
-        .tooltip(tooltip)
+    Button::new(id).small().ghost().icon(icon(name)).tooltip(tooltip)
 }
 
-fn case_or_measurement(
-    turns: &[Utterance],
-    wav: &Option<PathBuf>,
-    demo: &Option<String>,
-    synthetic: Option<usize>,
-) -> bool {
+fn case_or_measurement(turns: &[Utterance], wav: &Option<PathBuf>, demo: &Option<String>, synthetic: Option<usize>) -> bool {
     !turns.is_empty() || wav.is_some() || demo.is_some() || synthetic.is_some()
 }
 
 fn local_time(ms: f64) -> String {
     use chrono::TimeZone;
-    chrono::Local
-        .timestamp_millis_opt(ms as i64)
-        .single()
-        .map_or(String::new(), |t| t.format("%Y-%m-%d %H:%M").to_string())
+    chrono::Local.timestamp_millis_opt(ms as i64).single().map_or(String::new(), |t| t.format("%Y-%m-%d %H:%M").to_string())
 }
 
 /// Meetings that keep to a shape, with the topics they start from.
 fn templates() -> Vec<(&'static str, Vec<String>)> {
-    let topics = |list: [(&'static str, &'static str); 3]| {
-        list.iter()
-            .map(|(en, zh)| tr(en, zh).to_string())
-            .collect::<Vec<_>>()
-    };
+    let topics = |list: [(&'static str, &'static str); 3]| list.iter().map(|(en, zh)| tr(en, zh).to_string()).collect::<Vec<_>>();
     vec![
-        (
-            tr("Weekly meeting", "周会"),
-            topics([
-                ("Last week", "上周进展"),
-                ("This week", "本周计划"),
-                ("Risks", "风险"),
-            ]),
-        ),
-        (
-            tr("Retrospective", "复盘"),
-            topics([
-                ("Went well", "做得好的"),
-                ("To improve", "要改进的"),
-                ("Actions", "行动项"),
-            ]),
-        ),
-        (
-            tr("Stand-up", "站会"),
-            topics([
-                ("Yesterday", "昨天"),
-                ("Today", "今天"),
-                ("Blocked", "阻塞"),
-            ]),
-        ),
-        (
-            tr("Design review", "方案评审"),
-            [
-                ("Background", "背景"),
-                ("Options", "方案"),
-                ("Risks", "风险"),
-                ("Decision", "结论"),
-            ]
-            .iter()
-            .map(|(en, zh)| tr(en, zh).to_string())
-            .collect(),
-        ),
+        (tr("Weekly meeting", "周会"), topics([("Last week", "上周进展"), ("This week", "本周计划"), ("Risks", "风险")])),
+        (tr("Retrospective", "复盘"), topics([("Went well", "做得好的"), ("To improve", "要改进的"), ("Actions", "行动项")])),
+        (tr("Stand-up", "站会"), topics([("Yesterday", "昨天"), ("Today", "今天"), ("Blocked", "阻塞")])),
+        (tr("Design review", "方案评审"), [("Background", "背景"), ("Options", "方案"), ("Risks", "风险"), ("Decision", "结论")].iter().map(|(en, zh)| tr(en, zh).to_string()).collect()),
     ]
 }
 
@@ -4448,9 +3260,7 @@ fn demo_board(root: &std::path::Path, name: &str) -> Result<Graph> {
     struct DemoLine {
         ops: Option<String>,
     }
-    let demo: Demo = serde_json::from_slice(&std::fs::read(
-        root.join(format!("assets/demos/{name}.json")),
-    )?)?;
+    let demo: Demo = serde_json::from_slice(&std::fs::read(root.join(format!("assets/demos/{name}.json")))?)?;
     let mut g = Graph::default();
     for line in demo.lines {
         if let Some(ops) = line.ops {
@@ -4462,16 +3272,7 @@ fn demo_board(root: &std::path::Path, name: &str) -> Result<Graph> {
 
 /// A big board from plain operations, for measuring size rather than the model.
 fn synthetic_board(chars: usize) -> Graph {
-    const NAMES: [&str; 8] = [
-        "灰度发布",
-        "回滚演练",
-        "负载测试",
-        "Release notes",
-        "支付回调",
-        "消息队列",
-        "无障碍审计",
-        "数据库缓存",
-    ];
+    const NAMES: [&str; 8] = ["灰度发布", "回滚演练", "负载测试", "Release notes", "支付回调", "消息队列", "无障碍审计", "数据库缓存"];
     let mut ops = String::new();
     let mut written = 0;
     let mut i = 0;
@@ -4542,20 +3343,17 @@ impl Render for Workbench {
                 wheel.borrow_mut().zoom_at(e.position, (dy * 0.0015).exp());
                 cx.notify();
             }))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |this, e: &MouseDownEvent, window, cx| {
-                    window.focus(&this.focus, cx);
-                    let mut b = press.borrow_mut();
-                    if b.circling {
-                        let start = b.on_board(e.position);
-                        b.drawing = Some(vec![start]);
-                        return;
-                    }
-                    let view = b.shown();
-                    b.drag = Some((e.position, view));
-                }),
-            )
+            .on_mouse_down(MouseButton::Left, cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                window.focus(&this.focus, cx);
+                let mut b = press.borrow_mut();
+                if b.circling {
+                    let start = b.on_board(e.position);
+                    b.drawing = Some(vec![start]);
+                    return;
+                }
+                let view = b.shown();
+                b.drag = Some((e.position, view));
+            }))
             .on_mouse_move(cx.listener(move |_, e: &MouseMoveEvent, _, cx| {
                 let mut b = moved.borrow_mut();
                 if b.drawing.is_some() && e.pressed_button == Some(MouseButton::Left) {
@@ -4564,39 +3362,29 @@ impl Render for Workbench {
                     cx.notify();
                     return;
                 }
-                if let Some((from, view)) = b
-                    .drag
-                    .filter(|_| e.pressed_button == Some(MouseButton::Left))
-                {
+                if let Some((from, view)) = b.drag.filter(|_| e.pressed_button == Some(MouseButton::Left)) {
                     let d = e.position - from;
-                    b.view = Some(View {
-                        x: view.x - f32::from(d.x) / view.k,
-                        y: view.y - f32::from(d.y) / view.k,
-                        k: view.k,
-                    });
+                    b.view = Some(View { x: view.x - f32::from(d.x) / view.k, y: view.y - f32::from(d.y) / view.k, k: view.k });
                     b.reading = true;
                     b.zoomed_at = Instant::now();
                     cx.notify();
                 }
             }))
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(move |_, e: &MouseUpEvent, _, cx| {
-                    let mut b = release.borrow_mut();
-                    if b.drawing.is_some() {
-                        b.close_loop();
+            .on_mouse_up(MouseButton::Left, cx.listener(move |_, e: &MouseUpEvent, _, cx| {
+                let mut b = release.borrow_mut();
+                if b.drawing.is_some() {
+                    b.close_loop();
+                    cx.notify();
+                    return;
+                }
+                if let Some((from, _)) = b.drag.take() {
+                    let d = e.position - from;
+                    if f32::from(d.x).hypot(f32::from(d.y)) < CLICK_SLOP {
+                        b.click(e.position);
                         cx.notify();
-                        return;
                     }
-                    if let Some((from, _)) = b.drag.take() {
-                        let d = e.position - from;
-                        if f32::from(d.x).hypot(f32::from(d.y)) < CLICK_SLOP {
-                            b.click(e.position);
-                            cx.notify();
-                        }
-                    }
-                }),
-            )
+                }
+            }))
             .child(
                 canvas(
                     |_, _, _| (),
@@ -4605,8 +3393,7 @@ impl Render for Workbench {
                         b.canvas = bounds;
                         b.dpr = window.scale_factor();
                         let started = Instant::now();
-                        let uploads_before =
-                            b.base.uploads() + b.detail.as_ref().map_or(0, |(t, _)| t.uploads());
+                        let uploads_before = b.base.uploads() + b.detail.as_ref().map_or(0, |(t, _)| t.uploads());
                         // Before the first stroke: a big board must not start at full resolution.
                         if b.finished.is_empty() {
                             let level = raster_level(b.fit().k, b.dpr);
@@ -4622,182 +3409,119 @@ impl Render for Workbench {
                         for image in std::mem::take(&mut b.retired) {
                             let _ = window.drop_image(image);
                         }
-                        window.with_content_mask(
-                            Some(gpui_kit::ContentMask { bounds }),
-                            |window| {
-                                let state = &mut *b;
-                                let trace = state.trace.clone().map(|(who, marker)| {
-                                    let (shown, marked) = state.traced_areas(&who);
-                                    (marker, shown, marked)
-                                });
-                                // The detail tier replaces the base rather than overlaying it, or
-                                // the two copies of each stroke would thicken and blur together.
-                                let tier = match &mut state.detail {
-                                    Some((tier, cover)) if inside(view, *cover) => tier,
-                                    _ => &mut state.base,
-                                };
-                                // A fixed grid on the canvas, as on the website's sheet, under all the ink.
-                                let line: Hsla = rgb(pal().line).into();
-                                let mut gx = bounds.origin.x + px(GRID);
-                                while gx < bounds.origin.x + bounds.size.width {
-                                    window.paint_quad(gpui_kit::fill(
-                                        Bounds::new(
-                                            point(gx, bounds.origin.y),
-                                            size(px(1.), bounds.size.height),
-                                        ),
-                                        line,
-                                    ));
-                                    gx += px(GRID);
-                                }
-                                let mut gy = bounds.origin.y + px(GRID);
-                                while gy < bounds.origin.y + bounds.size.height {
-                                    window.paint_quad(gpui_kit::fill(
-                                        Bounds::new(
-                                            point(bounds.origin.x, gy),
-                                            size(bounds.size.width, px(1.)),
-                                        ),
-                                        line,
-                                    ));
-                                    gy += px(GRID);
-                                }
-                                // Under everything, from the moment a replay reaches the page.
-                                if let Some((image, w, h)) = state.page.clone().filter(|_| {
-                                    state.graph.as_ref().is_some_and(|g| g.underlay().is_some())
-                                }) {
-                                    let area = Bounds::new(origin, size(px(w * v.k), px(h * v.k)));
-                                    let _ = window.paint_image(
-                                        area,
-                                        area,
-                                        gpui_kit::Corners::default(),
-                                        image,
-                                        0,
-                                        false,
-                                    );
-                                }
-                                tier.under.paint(window, origin, v.k, Some(bounds));
-                                tier.layer.paint(window, origin, v.k, Some(bounds));
-                                // Ink is already on textures, so tracing someone veils the board and paints
-                                // their parts again on top, which costs next to nothing to turn on and off.
-                                if let Some((tone, shown, marked)) = trace {
-                                    let on_screen = |area: &[f32; 4]| {
-                                        Bounds::new(
-                                            origin + point(px(area[0] * v.k), px(area[1] * v.k)),
-                                            size(px(area[2] * v.k), px(area[3] * v.k)),
-                                        )
-                                    };
-                                    let mut veil: Hsla = rgb(pal().paper).into();
-                                    veil.a = TRACE_VEIL;
-                                    window.paint_quad(gpui_kit::fill(bounds, veil));
-                                    let mut mark: Hsla = rgb(tone).into();
-                                    mark.a = TRACE_MARK;
-                                    for area in &marked {
-                                        // The same highlighter the board's own marks use.
-                                        let middle = area[1] + area[3] / 2.0;
-                                        let band = marker(
-                                            &[[area[0], middle], [area[0] + area[2], middle]],
-                                            area[3],
-                                            0.0,
-                                            &mut Rng::new("trace"),
-                                        );
-                                        let shape = outline(&band, 1.0);
-                                        let mut pb = fill_builder();
-                                        let at =
-                                            |p: &Pt| origin + point(px(p[0] * v.k), px(p[1] * v.k));
-                                        if let Some(first) = shape.first() {
-                                            pb.move_to(at(first));
-                                            shape[1..].iter().for_each(|p| pb.line_to(at(p)));
-                                            pb.close();
-                                        }
-                                        if let Ok(path) = pb.build() {
-                                            window.paint_path(path, Background::from(mark));
-                                        }
-                                    }
-                                    for area in &shown {
-                                        let patch = on_screen(area);
-                                        window.with_content_mask(
-                                            Some(gpui_kit::ContentMask { bounds: patch }),
-                                            |window| {
-                                                tier.under.paint(window, origin, v.k, Some(patch));
-                                                tier.layer.paint(window, origin, v.k, Some(patch));
-                                            },
-                                        );
-                                    }
-                                }
-                                // The circles, in the accent's ink: an aid for pointing, never part of the board.
-                                for shape in b.loops.iter().chain(b.drawing.iter()) {
-                                    let mut pb = PathBuilder::stroke(px(2.5));
-                                    let at = |p: &[f32; 2]| {
-                                        origin + point(px(p[0] * v.k), px(p[1] * v.k))
-                                    };
+                        window.with_content_mask(Some(gpui_kit::ContentMask { bounds }), |window| {
+                            let state = &mut *b;
+                            let trace = state.trace.clone().map(|(who, marker)| {
+                                let (shown, marked) = state.traced_areas(&who);
+                                (marker, shown, marked)
+                            });
+                            // The detail tier replaces the base rather than overlaying it, or
+                            // the two copies of each stroke would thicken and blur together.
+                            let tier = match &mut state.detail {
+                                Some((tier, cover)) if inside(view, *cover) => tier,
+                                _ => &mut state.base,
+                            };
+                            // A fixed grid on the canvas, as on the website's sheet, under all the ink.
+                            let line: Hsla = rgb(pal().line).into();
+                            let mut gx = bounds.origin.x + px(GRID);
+                            while gx < bounds.origin.x + bounds.size.width {
+                                window.paint_quad(gpui_kit::fill(Bounds::new(point(gx, bounds.origin.y), size(px(1.), bounds.size.height)), line));
+                                gx += px(GRID);
+                            }
+                            let mut gy = bounds.origin.y + px(GRID);
+                            while gy < bounds.origin.y + bounds.size.height {
+                                window.paint_quad(gpui_kit::fill(Bounds::new(point(bounds.origin.x, gy), size(bounds.size.width, px(1.))), line));
+                                gy += px(GRID);
+                            }
+                            // Under everything, from the moment a replay reaches the page.
+                            if let Some((image, w, h)) = state.page.clone().filter(|_| state.graph.as_ref().is_some_and(|g| g.underlay().is_some())) {
+                                let area = Bounds::new(origin, size(px(w * v.k), px(h * v.k)));
+                                let _ = window.paint_image(area, area, gpui_kit::Corners::default(), image, 0, false);
+                            }
+                            tier.under.paint(window, origin, v.k, Some(bounds));
+                            tier.layer.paint(window, origin, v.k, Some(bounds));
+                            // Ink is already on textures, so tracing someone veils the board and paints
+                            // their parts again on top, which costs next to nothing to turn on and off.
+                            if let Some((tone, shown, marked)) = trace {
+                                let on_screen = |area: &[f32; 4]| Bounds::new(origin + point(px(area[0] * v.k), px(area[1] * v.k)), size(px(area[2] * v.k), px(area[3] * v.k)));
+                                let mut veil: Hsla = rgb(pal().paper).into();
+                                veil.a = TRACE_VEIL;
+                                window.paint_quad(gpui_kit::fill(bounds, veil));
+                                let mut mark: Hsla = rgb(tone).into();
+                                mark.a = TRACE_MARK;
+                                for area in &marked {
+                                    // The same highlighter the board's own marks use.
+                                    let middle = area[1] + area[3] / 2.0;
+                                    let band = marker(&[[area[0], middle], [area[0] + area[2], middle]], area[3], 0.0, &mut Rng::new("trace"));
+                                    let shape = outline(&band, 1.0);
+                                    let mut pb = fill_builder();
+                                    let at = |p: &Pt| origin + point(px(p[0] * v.k), px(p[1] * v.k));
                                     if let Some(first) = shape.first() {
                                         pb.move_to(at(first));
                                         shape[1..].iter().for_each(|p| pb.line_to(at(p)));
-                                        if b.drawing.as_ref() != Some(shape) {
-                                            pb.close();
-                                        }
-                                    }
-                                    if let Ok(path) = pb.build() {
-                                        let mut ink: Hsla = rgb(pal().accent).into();
-                                        ink.a = 0.8;
-                                        window.paint_path(path, Background::from(ink));
-                                    }
-                                }
-                                if let Some(front) = b.queue.front().filter(|_| b.live > 0.0) {
-                                    let shape = outline(&front.inked, b.live);
-                                    let mut pb = fill_builder();
-                                    if let Some(first) = shape.first() {
-                                        let at =
-                                            |p: &Pt| origin + point(px(p[0] * v.k), px(p[1] * v.k));
-                                        pb.move_to(at(first));
-                                        for p in &shape[1..] {
-                                            pb.line_to(at(p));
-                                        }
                                         pb.close();
                                     }
                                     if let Ok(path) = pb.build() {
-                                        window
-                                            .paint_path(path, Background::from(color(front.style)));
+                                        window.paint_path(path, Background::from(mark));
                                     }
                                 }
-                            },
-                        );
+                                for area in &shown {
+                                    let patch = on_screen(area);
+                                    window.with_content_mask(Some(gpui_kit::ContentMask { bounds: patch }), |window| {
+                                        tier.under.paint(window, origin, v.k, Some(patch));
+                                        tier.layer.paint(window, origin, v.k, Some(patch));
+                                    });
+                                }
+                            }
+                            // The circles, in the accent's ink: an aid for pointing, never part of the board.
+                            for shape in b.loops.iter().chain(b.drawing.iter()) {
+                                let mut pb = PathBuilder::stroke(px(2.5));
+                                let at = |p: &[f32; 2]| origin + point(px(p[0] * v.k), px(p[1] * v.k));
+                                if let Some(first) = shape.first() {
+                                    pb.move_to(at(first));
+                                    shape[1..].iter().for_each(|p| pb.line_to(at(p)));
+                                    if b.drawing.as_ref() != Some(shape) {
+                                        pb.close();
+                                    }
+                                }
+                                if let Ok(path) = pb.build() {
+                                    let mut ink: Hsla = rgb(pal().accent).into();
+                                    ink.a = 0.8;
+                                    window.paint_path(path, Background::from(ink));
+                                }
+                            }
+                            if let Some(front) = b.queue.front().filter(|_| b.live > 0.0) {
+                                let shape = outline(&front.inked, b.live);
+                                let mut pb = fill_builder();
+                                if let Some(first) = shape.first() {
+                                    let at = |p: &Pt| origin + point(px(p[0] * v.k), px(p[1] * v.k));
+                                    pb.move_to(at(first));
+                                    for p in &shape[1..] {
+                                        pb.line_to(at(p));
+                                    }
+                                    pb.close();
+                                }
+                                if let Ok(path) = pb.build() {
+                                    window.paint_path(path, Background::from(color(front.style)));
+                                }
+                            }
+                        });
                         b.note_frame(started.elapsed(), uploads_before);
                     },
                 )
                 .size_full(),
             );
         let speakers = self.live.speakers();
-        self.ink.borrow_mut().trace = self
-            .traced_speaker()
-            .map(|who| (who.clone(), speaker_marker(&speakers, who)));
+        self.ink.borrow_mut().trace = self.traced_speaker().map(|who| (who.clone(), speaker_marker(&speakers, who)));
         let toolbar = {
             let ink = self.ink.borrow();
             ink.toolbar_at().zip(ink.selected.clone())
         };
         if let Some(((x, y), id)) = toolbar.filter(|_| self.editable()) {
-            let has_text = self
-                .live
-                .graph
-                .nodes
-                .iter()
-                .find(|n| n.id == id)
-                .is_some_and(|n| !n.rows().is_empty());
-            let fixed = self
-                .live
-                .graph
-                .nodes
-                .iter()
-                .find(|n| n.id == id)
-                .is_some_and(|n| n.kind == Kind::Region);
+            let has_text = self.live.graph.nodes.iter().find(|n| n.id == id).is_some_and(|n| !n.rows().is_empty());
+            let fixed = self.live.graph.nodes.iter().find(|n| n.id == id).is_some_and(|n| n.kind == Kind::Region);
             let editing = self.ink.borrow().editing;
-            let raised = self
-                .live
-                .graph
-                .nodes
-                .iter()
-                .find(|n| n.id == id)
-                .and_then(|n| by_of_node(n))
-                .map(str::to_string);
+            let raised = self.live.graph.nodes.iter().find(|n| n.id == id).and_then(|n| by_of_node(n)).map(str::to_string);
             let unit_now = self.ink.borrow().mark_unit;
             let active: Vec<String> = self
                 .ink
@@ -4823,13 +3547,7 @@ impl Render for Workbench {
                     .bg(rgb(pal().surface))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .when(editing, |d| {
-                        d.child(
-                            div()
-                                .w(px(TOOLBAR_W_EDITING - 16.0))
-                                .child(Input::new(&self.label_input).small()),
-                        )
-                    })
+                    .when(editing, |d| d.child(div().w(px(TOOLBAR_W_EDITING - 16.0)).child(Input::new(&self.label_input).small())))
                     .when_some(raised.clone().filter(|_| !editing), |d, who| {
                         let (speakers, source) = (self.live.speakers(), id.clone());
                         d.child(
@@ -4843,24 +3561,12 @@ impl Render for Workbench {
                                 .cursor_pointer()
                                 .text_xs()
                                 .child(speaker_badge(&speakers, &who))
-                                .child(
-                                    div()
-                                        .max_w(px(70.))
-                                        .overflow_hidden()
-                                        .whitespace_nowrap()
-                                        .child(who),
-                                )
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.jump_to_source(&source, cx)
-                                })),
+                                .child(div().max_w(px(70.)).overflow_hidden().whitespace_nowrap().child(who))
+                                .on_click(cx.listener(move |this, _, _, cx| this.jump_to_source(&source, cx))),
                         )
                     })
                     .when(has_text && !editing, |d| {
-                        let units = [
-                            (MarkUnit::Word, "unit-word", tr("Word", "词")),
-                            (MarkUnit::Sentence, "unit-sentence", tr("Sentence", "句")),
-                            (MarkUnit::Block, "unit-block", tr("Block", "段")),
-                        ];
+                        let units = [(MarkUnit::Word, "unit-word", tr("Word", "词")), (MarkUnit::Sentence, "unit-sentence", tr("Sentence", "句")), (MarkUnit::Block, "unit-block", tr("Block", "段"))];
                         d.children(units.into_iter().map(|(unit, name, label)| {
                             let chooser = self.ink.clone();
                             div()
@@ -4883,11 +3589,7 @@ impl Render for Workbench {
                     .children(MARKS.iter().filter(|_| !editing).map(|(mark, english)| {
                         let on = active.iter().any(|m| m == mark);
                         let id = id.clone();
-                        let label = if tr("en", "zh") == "zh" {
-                            *mark
-                        } else {
-                            *english
-                        };
+                        let label = if tr("en", "zh") == "zh" { *mark } else { *english };
                         div()
                             .id(*mark)
                             .px_2()
@@ -4895,9 +3597,7 @@ impl Render for Workbench {
                             .rounded_sm()
                             .cursor_pointer()
                             .text_sm()
-                            .when(on, |d| {
-                                d.bg(rgb(pal().strong)).text_color(rgb(pal().on_strong))
-                            })
+                            .when(on, |d| d.bg(rgb(pal().strong)).text_color(rgb(pal().on_strong)))
                             .child(label)
                             .on_click(cx.listener(move |this, _, _, cx| this.mark(&id, mark, cx)))
                     }))
@@ -4905,25 +3605,8 @@ impl Render for Workbench {
                     .when(!fixed && !editing, |d| {
                         let (rewrite, removed) = (id.clone(), id.clone());
                         d.child(Separator::vertical().h(px(18.)))
-                            .child(
-                                icon_button("rewrite", "pencil", tr("Change the words", "改字"))
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.start_label(&rewrite, window, cx)
-                                    })),
-                            )
-                            .child(
-                                icon_button(
-                                    "remove",
-                                    "trash",
-                                    tr(
-                                        "Remove, with what hangs under it",
-                                        "删除（连同下面挂着的）",
-                                    ),
-                                )
-                                .on_click(
-                                    cx.listener(move |this, _, _, cx| this.remove(&removed, cx)),
-                                ),
-                            )
+                            .child(icon_button("rewrite", "pencil", tr("Change the words", "改字")).on_click(cx.listener(move |this, _, window, cx| this.start_label(&rewrite, window, cx))))
+                            .child(icon_button("remove", "trash", tr("Remove, with what hangs under it", "删除（连同下面挂着的）")).on_click(cx.listener(move |this, _, _, cx| this.remove(&removed, cx))))
                     }),
             );
         }
@@ -4963,82 +3646,28 @@ impl Render for Workbench {
         };
         let side_shown = self.panel != Panel::Transcript || self.transcript_open;
         // Nothing floats over the board any more but its corner label, so it may use the whole canvas.
-        self.ink.borrow_mut().set_insets([
-            BOARD_MARGIN,
-            BOARD_MARGIN + 16.0,
-            BOARD_MARGIN,
-            BOARD_MARGIN,
-        ]);
+        self.ink.borrow_mut().set_insets([BOARD_MARGIN, BOARD_MARGIN + 16.0, BOARD_MARGIN, BOARD_MARGIN]);
         let recording = self.pipeline.listening();
         let recorded = self.recorded();
         // Whether what was said has reached the board: the question to answer at a glance.
-        let spoken_lines = || {
-            self.live
-                .lines
-                .iter()
-                .enumerate()
-                .filter(|(_, l)| !l["manual"].as_bool().unwrap_or(false))
-        };
-        let waiting = spoken_lines()
-            .filter(|(_, l)| l["ms"].is_null() && !l["failed"].as_bool().unwrap_or(false))
-            .count();
-        let not_drawn: Vec<usize> = spoken_lines()
-            .filter(|(_, l)| l["failed"].as_bool().unwrap_or(false))
-            .map(|(i, _)| i)
-            .collect();
+        let spoken_lines = || self.live.lines.iter().enumerate().filter(|(_, l)| !l["manual"].as_bool().unwrap_or(false));
+        let waiting = spoken_lines().filter(|(_, l)| l["ms"].is_null() && !l["failed"].as_bool().unwrap_or(false)).count();
+        let not_drawn: Vec<usize> = spoken_lines().filter(|(_, l)| l["failed"].as_bool().unwrap_or(false)).map(|(i, _)| i).collect();
         // The window's own title bar, as on the website: the meeting on the left in plain words and figures,
         // and what to open on the right.
-        let mono = |text: String| {
-            div()
-                .font_family(theme::MONO)
-                .text_xs()
-                .whitespace_nowrap()
-                .child(text)
-        };
+        let mono = |text: String| div().font_family(theme::MONO).text_xs().whitespace_nowrap().child(text);
         let (state_text, state_color, state_line) = match () {
-            _ if self.replay.is_some() => {
-                (tr("replaying", "回放中").to_string(), pal().faint, None)
-            }
+            _ if self.replay.is_some() => (tr("replaying", "回放中").to_string(), pal().faint, None),
             _ if !editable => (tr("view only", "只读").to_string(), pal().faint, None),
-            _ if !not_drawn.is_empty() => (
-                format!(
-                    "{} {}",
-                    not_drawn.len(),
-                    tr("not drawn: show", "句没画上：查看")
-                ),
-                pal().danger,
-                not_drawn.last().copied(),
-            ),
-            _ if self.needs_model => (
-                tr("no board model yet", "还没有板书模型").to_string(),
-                pal().warning,
-                None,
-            ),
-            _ if waiting > 0 && self.preparing.is_some() => (
-                format!("{waiting} {}", tr("waiting for the model", "句等模型就绪")),
-                pal().warning,
-                None,
-            ),
-            _ if waiting > 1 => (
-                format!(
-                    "{} · {} {}",
-                    tr("drawing", "正在画"),
-                    waiting - 1,
-                    tr("waiting", "句排队")
-                ),
-                pal().recording,
-                None,
-            ),
+            _ if !not_drawn.is_empty() => (format!("{} {}", not_drawn.len(), tr("not drawn: show", "句没画上：查看")), pal().danger, not_drawn.last().copied()),
+            _ if self.needs_model => (tr("no board model yet", "还没有板书模型").to_string(), pal().warning, None),
+            _ if waiting > 0 && self.preparing.is_some() => (format!("{waiting} {}", tr("waiting for the model", "句等模型就绪")), pal().warning, None),
+            _ if waiting > 1 => (format!("{} · {} {}", tr("drawing", "正在画"), waiting - 1, tr("waiting", "句排队")), pal().recording, None),
             _ if waiting == 1 => (tr("drawing", "正在画").to_string(), pal().recording, None),
             _ if recording => (tr("listening", "正在听").to_string(), pal().text, None),
             _ => (tr("ready", "就绪").to_string(), pal().faint, None),
         };
-        let started = self
-            .live
-            .created_at()
-            .map(local_time)
-            .filter(|t| !t.is_empty())
-            .map(|t| t.rsplit(' ').next().unwrap_or_default().to_string());
+        let started = self.live.created_at().map(local_time).filter(|t| !t.is_empty()).map(|t| t.rsplit(' ').next().unwrap_or_default().to_string());
         let meeting_side = div()
             .flex()
             .items_center()
@@ -5046,12 +3675,7 @@ impl Render for Workbench {
             .min_w_0()
             .map(|d| {
                 if self.editing_title {
-                    d.child(
-                        div()
-                            .w(px(280.))
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .child(Input::new(&self.title_input).small()),
-                    )
+                    d.child(div().w(px(280.)).on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()).child(Input::new(&self.title_input).small()))
                 } else {
                     d.child(
                         div()
@@ -5060,38 +3684,22 @@ impl Render for Workbench {
                             .overflow_hidden()
                             .whitespace_nowrap()
                             .text_base()
-                            .when(editable, |d| {
-                                d.cursor_pointer().hover(|d| d.text_color(rgb(pal().muted)))
-                            })
+                            .when(editable, |d| d.cursor_pointer().hover(|d| d.text_color(rgb(pal().muted))))
                             .child(self.live.title().to_string())
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.edit_title(window, cx)),
-                            ),
+                            .on_click(cx.listener(|this, _, window, cx| this.edit_title(window, cx))),
                     )
                 }
             })
-            .when_some(started, |d, started| {
-                d.child(
-                    mono(format!("{} {started}", tr("start", "开始"))).text_color(rgb(pal().faint)),
-                )
-            })
+            .when_some(started, |d, started| d.child(mono(format!("{} {started}", tr("start", "开始"))).text_color(rgb(pal().faint))))
             .when(recording || !recorded.is_zero(), |d| {
                 d.child(
                     div()
                         .flex()
                         .items_center()
                         .gap_2()
-                        .text_color(rgb(if recording {
-                            pal().recording
-                        } else {
-                            pal().faint
-                        }))
-                        .child(div().size(px(8.)).bg(rgb(if recording {
-                            pal().recording
-                        } else {
-                            pal().faint
-                        })))
+                        .text_color(rgb(if recording { pal().recording } else { pal().faint }))
+                        .child(div().size(px(8.)).bg(rgb(if recording { pal().recording } else { pal().faint })))
                         .child(mono(clock(recorded.as_secs_f64() * 1000.0))),
                 )
             })
@@ -5100,9 +3708,7 @@ impl Render for Workbench {
                     .id("board-state")
                     .flex()
                     .gap_1()
-                    .when(state_line.is_some() || self.needs_model, |d| {
-                        d.cursor_pointer()
-                    })
+                    .when(state_line.is_some() || self.needs_model, |d| d.cursor_pointer())
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(line) = state_line {
@@ -5120,11 +3726,7 @@ impl Render for Workbench {
             .when(!save_label.is_empty(), |d| {
                 // A meeting that is not on disk is the one state here that must not go unseen.
                 let failed = matches!(self.save, SaveState::Failed(_));
-                d.child(mono(save_label).text_color(rgb(if failed {
-                    pal().danger
-                } else {
-                    pal().faint
-                })))
+                d.child(mono(save_label).text_color(rgb(if failed { pal().danger } else { pal().faint })))
             });
         let open_side = div()
             .flex()
@@ -5132,144 +3734,56 @@ impl Render for Workbench {
             .gap_1()
             .pr_2()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .when_some(
-                match &self.update {
-                    UpdateState::Available(release) => {
-                        Some(format!("{} {}", tr("Update to", "更新到"), release.version))
+            .when_some(match &self.update {
+                UpdateState::Available(release) => Some(format!("{} {}", tr("Update to", "更新到"), release.version)),
+                UpdateState::ReadyToRestart(_) => Some(tr("Restart to update", "重启完成更新").to_string()),
+                _ => None,
+            }, |d, label| {
+                d.child(Button::new("update-chip").small().success().label(label).on_click(cx.listener(|this, _, _, cx| {
+                    if matches!(this.update, UpdateState::ReadyToRestart(_)) {
+                        this.restart(cx);
+                    } else {
+                        this.install_update(cx);
                     }
-                    UpdateState::ReadyToRestart(_) => {
-                        Some(tr("Restart to update", "重启完成更新").to_string())
-                    }
-                    _ => None,
-                },
-                |d, label| {
-                    d.child(
-                        Button::new("update-chip")
-                            .small()
-                            .success()
-                            .label(label)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if matches!(this.update, UpdateState::ReadyToRestart(_)) {
-                                    this.restart(cx);
-                                } else {
-                                    this.install_update(cx);
-                                }
-                            })),
-                    )
-                },
-            )
-            .when(pages > 1, |d| {
-                d.child(
-                    icon_button("previous", "chevron-left", tr("Previous board", "上一张板"))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.go_to_page(page.saturating_sub(1), cx)
-                        })),
-                )
-                .child(mono(format!("{} / {pages}", page + 1)))
-                .child(
-                    icon_button("next", "chevron-right", tr("Next board", "下一张板"))
-                        .on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx))),
-                )
-                .child(Separator::vertical().h(px(18.)).mx_1())
+                })))
             })
-            .child(
-                icon_button("library", "folder-open", tr("Meetings", "会议"))
-                    .selected(self.panel == Panel::Library)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))),
-            )
+            .when(pages > 1, |d| {
+                d.child(icon_button("previous", "chevron-left", tr("Previous board", "上一张板")).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx))))
+                    .child(mono(format!("{} / {pages}", page + 1)))
+                    .child(icon_button("next", "chevron-right", tr("Next board", "下一张板")).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx))))
+                    .child(Separator::vertical().h(px(18.)).mx_1())
+            })
+            .child(icon_button("library", "folder-open", tr("Meetings", "会议")).selected(self.panel == Panel::Library).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
             .child(match self.store {
-                Some(_) => icon_button("new", "file-plus", tr("New meeting", "新建会议"))
-                    .on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))),
+                Some(_) => icon_button("new", "file-plus", tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))),
                 // A sample has nowhere to keep a meeting, so the button says why instead of doing nothing.
-                None => icon_button(
-                    "new",
-                    "file-plus",
-                    tr(
-                        "A sample is not saved, so it cannot start a new meeting",
-                        "示例不会保存，不能从这里新建会议",
-                    ),
-                )
-                .disabled(true),
+                None => icon_button("new", "file-plus", tr("A sample is not saved, so it cannot start a new meeting", "示例不会保存，不能从这里新建会议")).disabled(true),
             })
             .child(Separator::vertical().h(px(18.)).mx_1())
-            .child(
-                icon_button("speakers", "users", tr("Speakers", "说话人"))
-                    .selected(self.panel == Panel::Speakers)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Speakers, cx))),
-            )
-            .child(
-                icon_button("settings", "settings", tr("Settings", "设置"))
-                    .selected(self.panel == Panel::Settings)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))),
-            )
-            .child(
-                icon_button(
-                    "transcript-toggle",
-                    if self.transcript_open {
-                        "panel-right-close"
-                    } else {
-                        "panel-right-open"
-                    },
-                    tr("Transcript", "转写"),
-                )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    if this.panel == Panel::Transcript {
-                        this.transcript_open = !this.transcript_open;
-                    } else {
-                        this.panel = Panel::Transcript;
-                        this.transcript_open = true;
-                    }
-                    cx.notify();
-                })),
-            );
-        let window_bar = TitleBar::new()
-            .bg(rgb(pal().surface))
-            .border_color(rgb(pal().line))
-            .child(meeting_side)
-            .child(open_side);
+            .child(icon_button("speakers", "users", tr("Speakers", "说话人")).selected(self.panel == Panel::Speakers).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Speakers, cx))))
+            .child(icon_button("settings", "settings", tr("Settings", "设置")).selected(self.panel == Panel::Settings).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))))
+            .child(icon_button("transcript-toggle", if self.transcript_open { "panel-right-close" } else { "panel-right-open" }, tr("Transcript", "转写")).on_click(cx.listener(|this, _, _, cx| {
+                if this.panel == Panel::Transcript {
+                    this.transcript_open = !this.transcript_open;
+                } else {
+                    this.panel = Panel::Transcript;
+                    this.transcript_open = true;
+                }
+                cx.notify();
+            })));
+        let window_bar = TitleBar::new().bg(rgb(pal().surface)).border_color(rgb(pal().line)).child(meeting_side).child(open_side);
 
         // The dock along the board's lower edge: each command with its name and, where it has one, its keys.
-        let key = |mac: &'static str, other: &'static str| {
-            if cfg!(target_os = "macos") {
-                mac
-            } else {
-                other
-            }
-        };
-        let dock_button = |id: &'static str,
-                           icon_name: &'static str,
-                           label: &'static str,
-                           keys: Option<&'static str>| {
-            Button::new(id)
-                .ghost()
-                .rounded_none()
-                .h(px(DOCK_H - 1.0))
-                .px_4()
-                .border_r_1()
-                .border_color(rgb(pal().line))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(icon(icon_name).size_5())
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_start()
-                                .child(div().text_sm().child(label))
-                                .when_some(keys, |d, keys| {
-                                    d.child(
-                                        div()
-                                            .font_family(theme::MONO)
-                                            .text_size(px(10.))
-                                            .text_color(rgb(pal().faint))
-                                            .child(keys),
-                                    )
-                                }),
-                        ),
-                )
+        let key = |mac: &'static str, other: &'static str| if cfg!(target_os = "macos") { mac } else { other };
+        let dock_button = |id: &'static str, icon_name: &'static str, label: &'static str, keys: Option<&'static str>| {
+            Button::new(id).ghost().rounded_none().h(px(DOCK_H - 1.0)).px_4().border_r_1().border_color(rgb(pal().line)).child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(icon(icon_name).size_5())
+                    .child(div().flex().flex_col().items_start().child(div().text_sm().child(label)).when_some(keys, |d, keys| d.child(div().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(keys)))),
+            )
         };
         let (circling, circled) = {
             let ink = self.ink.borrow();
@@ -5301,151 +3815,67 @@ impl Render for Workbench {
                                 .flex()
                                 .items_center()
                                 .gap_3()
-                                .child(
-                                    div()
-                                        .size(px(26.))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .bg(rgb(pal().on_strong))
-                                        .child(
-                                            div()
-                                                .size(px(10.))
-                                                .bg(rgb(pal().recording))
-                                                .when(!listening, |d| d.rounded_full()),
-                                        ),
-                                )
+                                .child(div().size(px(26.)).flex().items_center().justify_center().bg(rgb(pal().on_strong)).child(div().size(px(10.)).bg(rgb(pal().recording)).when(!listening, |d| d.rounded_full())))
                                 .child(
                                     div()
                                         .flex()
                                         .flex_col()
                                         .items_start()
-                                        .child(div().text_sm().child(if listening {
-                                            tr("stop listening", "停止收音")
-                                        } else {
-                                            tr("start listening", "开始收音")
-                                        }))
-                                        .child(
-                                            div()
-                                                .font_family(theme::MONO)
-                                                .text_size(px(10.))
-                                                .opacity(0.6)
-                                                .child(tr("space", "空格")),
-                                        ),
+                                        .child(div().text_sm().child(if listening { tr("stop listening", "停止收音") } else { tr("start listening", "开始收音") }))
+                                        .child(div().font_family(theme::MONO).text_size(px(10.)).opacity(0.6).child(tr("space", "空格"))),
                                 )
                                 .when(listening, |d| {
                                     let level = self.level;
-                                    d.child(
-                                        div().flex().items_end().gap(px(2.)).h(px(24.)).children(
-                                            (0..7).map(|i| {
-                                                let h = 3.0
-                                                    + level
-                                                        * 21.0
-                                                        * (0.55
-                                                            + 0.45
-                                                                * ((i as f32) * 1.7).sin().abs());
-                                                div().w(px(3.)).h(px(h)).bg(rgb(pal().on_strong))
-                                            }),
-                                        ),
-                                    )
+                                    d.child(div().flex().items_end().gap(px(2.)).h(px(24.)).children((0..7).map(|i| {
+                                        let h = 3.0 + level * 21.0 * (0.55 + 0.45 * ((i as f32) * 1.7).sin().abs());
+                                        div().w(px(3.)).h(px(h)).bg(rgb(pal().on_strong))
+                                    })))
                                 }),
                         ),
                 )
                 .child(
-                    dock_button(
-                        "circle",
-                        "lasso",
-                        tr("circle", "圈选"),
-                        if circling { Some("esc") } else { None },
-                    )
-                    .selected(circling)
-                    .tooltip(if circling {
-                        tr("Stop circling (Esc)", "取消圈选（Esc）")
-                    } else {
-                        tr(
-                            "Circle things, then say what to do with them",
-                            "圈住板上的东西，再说要怎么处理",
-                        )
-                    })
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        let mut ink = this.ink.borrow_mut();
-                        if ink.circling {
-                            ink.clear_circles();
-                        } else {
-                            ink.circling = true;
-                            ink.selected = None;
-                        }
-                        cx.notify();
-                    })),
+                    dock_button("circle", "lasso", tr("circle", "圈选"), if circling { Some("esc") } else { None })
+                        .selected(circling)
+                        .tooltip(if circling { tr("Stop circling (Esc)", "取消圈选（Esc）") } else { tr("Circle things, then say what to do with them", "圈住板上的东西，再说要怎么处理") })
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let mut ink = this.ink.borrow_mut();
+                            if ink.circling {
+                                ink.clear_circles();
+                            } else {
+                                ink.circling = true;
+                                ink.selected = None;
+                            }
+                            cx.notify();
+                        })),
                 )
                 .when(circling, |d| {
-                    d.child(
-                        mono(match circled {
-                            0 => tr("draw around things", "在板上画圈").to_string(),
-                            n => format!("{n} {}", tr("circled: now say it", "个已圈住：说吧")),
-                        })
-                        .px_2()
-                        .text_color(rgb(pal().muted)),
-                    )
+                    d.child(mono(match circled {
+                        0 => tr("draw around things", "在板上画圈").to_string(),
+                        n => format!("{n} {}", tr("circled: now say it", "个已圈住：说吧")),
+                    }).px_2().text_color(rgb(pal().muted)))
                 })
             })
+            .child(dock_button("summary", "sparkles", tr("summary", "摘要"), None).selected(self.panel == Panel::Summary).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
+            .child(dock_button("import", "import", tr("import", "导入"), None).selected(self.panel == Panel::Import).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))))
+            .child(dock_button("export", "file-down", tr("export", "导出"), None).selected(self.panel == Panel::Export).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
             .child(
-                dock_button("summary", "sparkles", tr("summary", "摘要"), None)
-                    .selected(self.panel == Panel::Summary)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))),
-            )
-            .child(
-                dock_button("import", "import", tr("import", "导入"), None)
-                    .selected(self.panel == Panel::Import)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))),
-            )
-            .child(
-                dock_button("export", "file-down", tr("export", "导出"), None)
-                    .selected(self.panel == Panel::Export)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))),
-            )
-            .child(
-                dock_button(
-                    "replay",
-                    "rotate-ccw",
-                    if self.replay.is_some() {
-                        tr("exit replay", "退出回放")
-                    } else {
-                        tr("replay", "回放")
-                    },
-                    Some(if self.replay.is_some() {
-                        "esc"
-                    } else {
-                        key("⇧⌘R", "ctrl ⇧ R")
-                    }),
-                )
-                .selected(self.replay.is_some())
-                .disabled(self.live.steps.is_empty())
-                .on_click(cx.listener(|this, _, window, cx| {
-                    if this.replay.is_some() {
-                        this.exit_replay(cx);
-                    } else {
-                        this.start_replay(window, cx);
-                    }
-                })),
+                dock_button("replay", "rotate-ccw", if self.replay.is_some() { tr("exit replay", "退出回放") } else { tr("replay", "回放") }, Some(if self.replay.is_some() { "esc" } else { key("⇧⌘R", "ctrl ⇧ R") }))
+                    .selected(self.replay.is_some())
+                    .disabled(self.live.steps.is_empty())
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        if this.replay.is_some() {
+                            this.exit_replay(cx);
+                        } else {
+                            this.start_replay(window, cx);
+                        }
+                    })),
             )
             .child(div().flex_1())
             .when(editable, |d| {
-                d.child(
-                    icon_button("undo", "undo-2", key("Undo (⌘Z)", "Undo (Ctrl+Z)"))
-                        .disabled(!self.live.can_undo())
-                        .on_click(cx.listener(|this, _, _, cx| this.step(false, cx))),
-                )
-                .child(
-                    icon_button("redo", "redo-2", key("Redo (⇧⌘Z)", "Redo (Ctrl+Shift+Z)"))
-                        .disabled(!self.live.can_redo())
-                        .on_click(cx.listener(|this, _, _, cx| this.step(true, cx))),
-                )
-                .child(
-                    icon_button("tidy", "wand-sparkles", tr("Tidy", "整理排版"))
-                        .on_click(cx.listener(|this, _, _, cx| this.tidy(cx))),
-                )
-                .child(div().w(px(8.)))
+                d.child(icon_button("undo", "undo-2", key("Undo (⌘Z)", "Undo (Ctrl+Z)")).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
+                    .child(icon_button("redo", "redo-2", key("Redo (⇧⌘Z)", "Redo (Ctrl+Shift+Z)")).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
+                    .child(icon_button("tidy", "wand-sparkles", tr("Tidy", "整理排版")).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
+                    .child(div().w(px(8.)))
             });
         // The corner of the board: how far it is zoomed, whether it is live, and what the model is doing.
         let coords = div()
@@ -5511,23 +3941,9 @@ impl Render for Workbench {
             });
         // With the transcript away, the latest line still shows that the room is being heard.
         let transcript_shown = self.panel == Panel::Transcript && self.transcript_open;
-        let caption = self
-            .live
-            .lines
-            .iter()
-            .rev()
-            .find(|l| !l["manual"].as_bool().unwrap_or(false))
-            .and_then(|l| l["text"].as_str())
-            .map(str::to_string)
-            .filter(|_| !transcript_shown && self.replay.is_none());
+        let caption = self.live.lines.iter().rev().find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !transcript_shown && self.replay.is_none());
         let banner = self.notice.clone().or_else(|| match &self.save {
-            SaveState::Failed(error) => Some(format!(
-                "{}{error}",
-                tr(
-                    "Your meeting is still open here, but it was not saved: ",
-                    "这场会还在这里，但没有保存成功："
-                )
-            )),
+            SaveState::Failed(error) => Some(format!("{}{error}", tr("Your meeting is still open here, but it was not saved: ", "这场会还在这里，但没有保存成功："))),
             _ => None,
         });
         let view_only = self.live.read_only.map(|reason| match reason {
@@ -5536,9 +3952,7 @@ impl Render for Workbench {
             ViewOnly::ImportedContent => tr("This meeting has free-edit content, which this version does not show. It is view-only here, and its file is unchanged.", "这场会含自由编辑内容，这个版本不显示，这里只能查看，文件不会被改动。"),
         });
         // During a replay the transcript has only reached that moment.
-        let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| {
-            r.player.lines_said(&r.steps).min(self.live.lines.len())
-        });
+        let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&r.steps).min(self.live.lines.len()));
         let replay_bar = self.replay_bar(window, cx);
         let transcript = div()
             .id("transcript")
@@ -5549,91 +3963,40 @@ impl Render for Workbench {
             .gap_3()
             .flex()
             .flex_col()
-            .children(
-                self.live.lines[..shown_lines]
-                    .iter()
-                    .enumerate()
-                    .rev()
-                    .map(|(i, l)| {
-                        let manual = l["manual"].as_bool().unwrap_or(false);
-                        let note = line_note(l, self.preparing.is_some());
-                        let jumped = self.jumped_line.is_some_and(|(line, _)| line == i);
-                        div()
-                            .flex()
-                            .flex_col()
-                            .when(jumped, |d| d.rounded_md().bg(rgb(pal().jumped)))
-                            .when_some(
-                                l["speaker"]
-                                    .as_str()
-                                    .filter(|s| !s.is_empty())
-                                    .map(str::to_string),
-                                |d, name| {
-                                    let (picked, hovered) = (name.clone(), name.clone());
-                                    d.child(
-                                        div()
-                                            .id(("line-speaker", i))
-                                            .on_hover(cx.listener(
-                                                move |this, over: &bool, _, cx| {
-                                                    this.hover_speaker(&hovered, *over, cx)
-                                                },
-                                            ))
-                                            .flex()
-                                            .items_center()
-                                            .gap_1()
-                                            .mb_1()
-                                            .cursor_pointer()
-                                            .child(speaker_badge(&speakers, &name))
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                                    .child(name),
-                                            )
-                                            .on_click(cx.listener(move |this, _, window, cx| {
-                                                this.choose_speaker(picked.clone(), window, cx)
-                                            })),
-                                    )
-                                },
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .when(manual, |d| d.text_color(rgb(pal().faint)))
-                                    .child(l["text"].as_str().unwrap_or_default().to_string()),
-                            )
-                            .when(!note.is_empty() && !manual, |d| {
-                                d.child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgb(
-                                            if l["failed"].as_bool().unwrap_or(false) {
-                                                pal().danger
-                                            } else {
-                                                pal().faint
-                                            },
-                                        ))
-                                        .child(note),
-                                )
-                            })
-                            .when(l["failed"].as_bool().unwrap_or(false) && editable, |d| {
-                                d.child(
-                                    div().mt_1().child(
-                                        button(("retry-line", i), tr("Draw it again", "重新上板"))
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                this.retry_line(i, cx)
-                                            })),
-                                    ),
-                                )
-                            })
-                    }),
-            );
+            .children(self.live.lines[..shown_lines].iter().enumerate().rev().map(|(i, l)| {
+                let manual = l["manual"].as_bool().unwrap_or(false);
+                let note = line_note(l, self.preparing.is_some());
+                let jumped = self.jumped_line.is_some_and(|(line, _)| line == i);
+                div()
+                    .flex()
+                    .flex_col()
+                    .when(jumped, |d| d.rounded_md().bg(rgb(pal().jumped)))
+                    .when_some(l["speaker"].as_str().filter(|s| !s.is_empty()).map(str::to_string), |d, name| {
+                        let (picked, hovered) = (name.clone(), name.clone());
+                        d.child(
+                            div()
+                                .id(("line-speaker", i))
+                                .on_hover(cx.listener(move |this, over: &bool, _, cx| this.hover_speaker(&hovered, *over, cx)))
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .mb_1()
+                                .cursor_pointer()
+                                .child(speaker_badge(&speakers, &name))
+                                .child(div().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name))
+                                .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx))),
+                        )
+                    })
+                    .child(div().text_sm().when(manual, |d| d.text_color(rgb(pal().faint))).child(l["text"].as_str().unwrap_or_default().to_string()))
+                    .when(!note.is_empty() && !manual, |d| {
+                        d.child(div().text_xs().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { pal().danger } else { pal().faint })).child(note))
+                    })
+                    .when(l["failed"].as_bool().unwrap_or(false) && editable, |d| {
+                        d.child(div().mt_1().child(button(("retry-line", i), tr("Draw it again", "重新上板")).on_click(cx.listener(move |this, _, _, cx| this.retry_line(i, cx)))))
+                    })
+            }));
         let query = self.library_query.read(cx).value().trim().to_lowercase();
-        let found: Vec<(usize, &Info)> = self
-            .library
-            .iter()
-            .enumerate()
-            .filter(|(_, m)| query.is_empty() || m.title.to_lowercase().contains(&query))
-            .collect();
+        let found: Vec<(usize, &Info)> = self.library.iter().enumerate().filter(|(_, m)| query.is_empty() || m.title.to_lowercase().contains(&query)).collect();
         let library = div()
             .id("library")
             .flex_1()
@@ -5742,110 +4105,58 @@ impl Render for Workbench {
                             .when(m.read_error.is_none(), |d| d.on_click(cx.listener(move |this, _, _, cx| this.open_meeting(&id, cx))))
                     })),
             );
-        let field = |label: &'static str, input: &Entity<InputState>| {
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(div().text_xs().text_color(rgb(pal().muted)).child(label))
-                .child(Input::new(input))
-        };
+        let field = |label: &'static str, input: &Entity<InputState>| div().flex().flex_col().gap_1().child(div().text_xs().text_color(rgb(pal().muted)).child(label)).child(Input::new(input));
         let local_only = self.live.local_only();
         let current_model = boardcast_models::current(&self.models);
         let recommended = boardcast_models::recommended(self.vram_mib);
         let using_remote = self.form.saved.enabled && self.form.saved.is_complete();
         let progress_row = self.download.as_ref().map(|d| {
             let text = match &d.progress {
-                Some(p) if p.verifying => format!(
-                    "{} {}",
-                    d.label,
-                    tr(
-                        "checking what was already downloaded…",
-                        "正在检查已下载的部分…"
-                    )
-                ),
+                Some(p) if p.verifying => format!("{} {}", d.label, tr("checking what was already downloaded…", "正在检查已下载的部分…")),
                 Some(p) => format!(
                     "{} {} / {}{}",
                     d.label,
                     gigabytes(p.done),
                     gigabytes(p.total),
-                    if p.speed > 0 {
-                        format!(" · {:.1} MB/s", p.speed as f64 / 1e6)
-                    } else {
-                        String::new()
-                    },
+                    if p.speed > 0 { format!(" · {:.1} MB/s", p.speed as f64 / 1e6) } else { String::new() },
                 ),
                 None => format!("{} {}", d.label, tr("starting…", "正在开始…")),
             };
-            let fraction = d
-                .progress
-                .as_ref()
-                .map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
+            let fraction = d.progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
             (text, fraction)
         });
-        let local_models = boardcast_models::catalog()
-            .into_iter()
-            .enumerate()
-            .map(|(i, model)| {
-                let installed = boardcast_models::installed(&model, &self.models);
-                let active = !using_remote
-                    && current_model
-                        .as_ref()
-                        .is_some_and(|p| p.ends_with(&model.file));
-                let busy = self.download.is_some();
-                let name = format!(
-                    "{} · {}{}",
-                    model.label,
-                    gigabytes(model.size),
-                    if model.id == recommended {
-                        tr(" · recommended", " · 推荐")
-                    } else {
-                        ""
-                    },
-                );
-                let (action, fetch) = (model.clone(), model.clone());
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    // The name gives way, so a long one can never push its button out of reach.
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .child(div().text_sm().child(name))
-                            .when_some(model.note, |d, (en, zh)| {
-                                d.child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgb(pal().muted))
-                                        .child(tr(en, zh)),
-                                )
-                            }),
-                    )
-                    .when(active, |d| {
-                        d.child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(pal().accent))
-                                .child(tr("In use", "使用中")),
-                        )
-                    })
-                    .when(installed && !active, |d| {
-                        d.child(button(("use-model", i), tr("Use", "使用")).on_click(
-                            cx.listener(move |this, _, _, cx| this.use_model(&action, cx)),
-                        ))
-                    })
-                    .when(!installed && !busy, |d| {
-                        d.child(button(("get-model", i), tr("Download", "下载")).on_click(
-                            cx.listener(move |this, _, _, cx| {
-                                this.start_download(fetch.clone(), cx)
-                            }),
-                        ))
-                    })
-            })
-            .collect::<Vec<_>>();
+        let local_models = boardcast_models::catalog().into_iter().enumerate().map(|(i, model)| {
+            let installed = boardcast_models::installed(&model, &self.models);
+            let active = !using_remote && current_model.as_ref().is_some_and(|p| p.ends_with(&model.file));
+            let busy = self.download.is_some();
+            let name = format!(
+                "{} · {}{}",
+                model.label,
+                gigabytes(model.size),
+                if model.id == recommended { tr(" · recommended", " · 推荐") } else { "" },
+            );
+            let (action, fetch) = (model.clone(), model.clone());
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                // The name gives way, so a long one can never push its button out of reach.
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(div().text_sm().child(name))
+                        .when_some(model.note, |d, (en, zh)| d.child(div().text_xs().text_color(rgb(pal().muted)).child(tr(en, zh)))),
+                )
+                .when(active, |d| d.child(div().text_xs().text_color(rgb(pal().accent)).child(tr("In use", "使用中"))))
+                .when(installed && !active, |d| {
+                    d.child(button(("use-model", i), tr("Use", "使用")).on_click(cx.listener(move |this, _, _, cx| this.use_model(&action, cx))))
+                })
+                .when(!installed && !busy, |d| {
+                    d.child(button(("get-model", i), tr("Download", "下载")).on_click(cx.listener(move |this, _, _, cx| this.start_download(fetch.clone(), cx))))
+                })
+        }).collect::<Vec<_>>();
         let forced = self.forced_backend;
         let key_hint = self.form.saved.key_hint();
         let settings = div()
@@ -6102,12 +4413,10 @@ impl Render for Workbench {
                         cx.notify();
                     }))))
             });
-        let summary_panel =
-            (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
+        let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
         let import_panel = (self.panel == Panel::Import).then(|| self.import_panel(cx));
-        let speakers_panel =
-            (self.panel == Panel::Speakers).then(|| self.speakers_panel(editable, cx));
+        let speakers_panel = (self.panel == Panel::Speakers).then(|| self.speakers_panel(editable, cx));
         let side = div()
             .id("side")
             .occlude()
@@ -6132,39 +4441,23 @@ impl Render for Workbench {
                     .flex_none()
                     .border_b_1()
                     .border_color(rgb(pal().line))
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(gpui_kit::FontWeight::LIGHT)
-                            .child(match self.panel {
-                                Panel::Transcript => tr("Transcript", "转写"),
-                                Panel::Library => tr("Meetings", "会议"),
-                                Panel::Summary => tr("Summary", "摘要"),
-                                Panel::Export => tr("Export", "导出"),
-                                Panel::Import => tr("Import", "导入"),
-                                Panel::Speakers => tr("Speakers", "说话人"),
-                                Panel::Settings => tr("Settings", "设置"),
-                            }),
-                    )
-                    .child(
-                        icon_button(
-                            "close-panel",
-                            "x",
-                            if self.panel == Panel::Transcript {
-                                tr("Hide the transcript", "收起转写")
-                            } else {
-                                tr("Back to the transcript (Esc)", "回到转写（Esc）")
-                            },
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            if this.panel == Panel::Transcript {
-                                this.transcript_open = false;
-                            } else {
-                                this.panel = Panel::Transcript;
-                            }
-                            cx.notify();
-                        })),
-                    ),
+                    .child(div().text_xl().font_weight(gpui_kit::FontWeight::LIGHT).child(match self.panel {
+                        Panel::Transcript => tr("Transcript", "转写"),
+                        Panel::Library => tr("Meetings", "会议"),
+                        Panel::Summary => tr("Summary", "摘要"),
+                        Panel::Export => tr("Export", "导出"),
+                        Panel::Import => tr("Import", "导入"),
+                        Panel::Speakers => tr("Speakers", "说话人"),
+                        Panel::Settings => tr("Settings", "设置"),
+                    }))
+                    .child(icon_button("close-panel", "x", if self.panel == Panel::Transcript { tr("Hide the transcript", "收起转写") } else { tr("Back to the transcript (Esc)", "回到转写（Esc）") }).on_click(cx.listener(|this, _, _, cx| {
+                        if this.panel == Panel::Transcript {
+                            this.transcript_open = false;
+                        } else {
+                            this.panel = Panel::Transcript;
+                        }
+                        cx.notify();
+                    }))),
             )
             .when(self.panel == Panel::Transcript, |d| {
                 d.child(transcript).when(editable, |d| {
@@ -6189,9 +4482,7 @@ impl Render for Workbench {
                                         .text_color(rgb(pal().muted))
                                         .child(speaker_badge(&speakers, &name))
                                         .child(format!("{}{name}", tr("Typing as ", "输入身份：")))
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.choose_speaker(picked.clone(), window, cx)
-                                        })),
+                                        .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx))),
                                 )
                             })
                             .child(Input::new(&self.input)),
@@ -6253,37 +4544,8 @@ impl Render for Workbench {
                 .flex_col()
                 .items_center()
                 .gap_1()
-                .when_some(view_only, |d, text| {
-                    d.child(
-                        div()
-                            .occlude()
-                            .max_w(px(560.))
-                            .px_3()
-                            .py_1()
-                            .rounded_lg()
-                            .text_sm()
-                            .bg(rgb(pal().selected))
-                            .border_1()
-                            .border_color(rgb(pal().line))
-                            .child(text),
-                    )
-                })
-                .when_some(banner, |d, text| {
-                    d.child(
-                        div()
-                            .occlude()
-                            .max_w(px(560.))
-                            .px_3()
-                            .py_1()
-                            .rounded_lg()
-                            .text_sm()
-                            .text_color(rgb(pal().danger))
-                            .bg(rgb(pal().danger_soft))
-                            .border_1()
-                            .border_color(rgb(pal().line))
-                            .child(text),
-                    )
-                })
+                .when_some(view_only, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().bg(rgb(pal().selected)).border_1().border_color(rgb(pal().line)).child(text)))
+                .when_some(banner, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().text_color(rgb(pal().danger)).bg(rgb(pal().danger_soft)).border_1().border_color(rgb(pal().line)).child(text)))
         });
         // The board with its corner label above and the dock attached below, and the side panel beside them.
         let canvas_area = div()
@@ -6294,26 +4556,9 @@ impl Render for Workbench {
             .child(div().absolute().top(px(10.)).left(px(14.)).child(coords))
             .when_some(caption, |d, text| {
                 d.child(
-                    div()
-                        .absolute()
-                        .bottom(px(16.))
-                        .left_0()
-                        .right_0()
-                        .flex()
-                        .justify_center()
-                        .child(
-                            div()
-                                .occlude()
-                                .max_w(px(560.))
-                                .px_3()
-                                .py_1()
-                                .bg(rgb(pal().strong))
-                                .text_color(rgb(pal().on_strong))
-                                .text_sm()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .child(text),
-                        ),
+                    div().absolute().bottom(px(16.)).left_0().right_0().flex().justify_center().child(
+                        div().occlude().max_w(px(560.)).px_3().py_1().bg(rgb(pal().strong)).text_color(rgb(pal().on_strong)).text_sm().overflow_hidden().whitespace_nowrap().child(text),
+                    ),
                 )
             })
             .when_some(notices, |d, notices| d.child(notices));
@@ -6325,17 +4570,7 @@ impl Render for Workbench {
             .flex()
             .flex_col()
             .child(canvas_area)
-            .when_some(replay_bar, |d, bar| {
-                d.child(
-                    div()
-                        .occlude()
-                        .flex_none()
-                        .border_t_1()
-                        .border_color(rgb(pal().line))
-                        .bg(rgb(pal().surface))
-                        .child(bar),
-                )
-            })
+            .when_some(replay_bar, |d, bar| d.child(div().occlude().flex_none().border_t_1().border_color(rgb(pal().line)).bg(rgb(pal().surface)).child(bar)))
             .child(div().occlude().child(dock));
         let content = div()
             .relative()
@@ -6351,9 +4586,7 @@ impl Render for Workbench {
             .track_focus(&self.focus)
             .font_family(theme::SANS)
             .on_key_down(cx.listener(Self::on_key))
-            .on_drop(cx.listener(|this, paths: &gpui_kit::ExternalPaths, _, cx| {
-                this.import_paths(paths.paths(), cx)
-            }))
+            .on_drop(cx.listener(|this, paths: &gpui_kit::ExternalPaths, _, cx| this.import_paths(paths.paths(), cx)))
             .size_full()
             .flex()
             .flex_col()
@@ -6399,28 +4632,11 @@ struct Shell {
 
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .size_full()
-            .font_family(theme::SANS)
-            .bg(rgb(pal().paper))
-            .map(|d| match &self.workbench {
-                Some(workbench) => d.child(workbench.clone()).into_any_element(),
-                // The bar is there from the start, so the window can be moved while the app gets ready.
-                None => d
-                    .flex()
-                    .flex_col()
-                    .child(
-                        TitleBar::new()
-                            .bg(rgb(pal().surface))
-                            .border_color(rgb(pal().line)),
-                    )
-                    .child(div().flex_1().min_h_0().child(crate::splash::splash(
-                        &self.word,
-                        self.started,
-                        window,
-                    )))
-                    .into_any_element(),
-            })
+        div().size_full().font_family(theme::SANS).bg(rgb(pal().paper)).map(|d| match &self.workbench {
+            Some(workbench) => d.child(workbench.clone()).into_any_element(),
+            // The bar is there from the start, so the window can be moved while the app gets ready.
+            None => d.flex().flex_col().child(TitleBar::new().bg(rgb(pal().surface)).border_color(rgb(pal().line))).child(div().flex_1().min_h_0().child(crate::splash::splash(&self.word, self.started, window))).into_any_element(),
+        })
     }
 }
 
@@ -6430,14 +4646,7 @@ gpui_kit::actions!(boardcast, [Quit]);
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn app_menu(cx: &mut App) {
     cx.bind_keys([gpui_kit::KeyBinding::new("cmd-q", Quit, None)]);
-    cx.set_menus(vec![gpui_kit::Menu {
-        name: "boardcast".into(),
-        items: vec![gpui_kit::MenuItem::action(
-            tr("Quit boardcast", "退出 boardcast"),
-            Quit,
-        )],
-        disabled: false,
-    }]);
+    cx.set_menus(vec![gpui_kit::Menu { name: "boardcast".into(), items: vec![gpui_kit::MenuItem::action(tr("Quit boardcast", "退出 boardcast"), Quit)], disabled: false }]);
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
@@ -6492,21 +4701,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let mut turns = vec![];
     if let Some(id) = case {
         let root = root.as_ref().context("--case needs --root <checkout>")?;
-        let cases: Vec<Case> =
-            serde_json::from_slice(&std::fs::read(root.join("eval/cases.json"))?)?;
-        let found = cases
-            .into_iter()
-            .find(|c| c.id == id)
-            .with_context(|| format!("no case {id}"))?;
-        turns = found
-            .turns
-            .into_iter()
-            .map(|t| Utterance {
-                speaker: t.speaker,
-                text: t.text,
-                pointing: vec![],
-            })
-            .collect();
+        let cases: Vec<Case> = serde_json::from_slice(&std::fs::read(root.join("eval/cases.json"))?)?;
+        let found = cases.into_iter().find(|c| c.id == id).with_context(|| format!("no case {id}"))?;
+        turns = found.turns.into_iter().map(|t| Utterance { speaker: t.speaker, text: t.text, pointing: vec![] }).collect();
     }
     let data = default_dir()?;
     let models = data.join("models");
@@ -6526,42 +4723,20 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     } else {
         backend_from(&settings, false, &binaries, &models)
     };
-    let guidance = skill.then_some(Guidance {
-        rules: true,
-        hint: true,
-    });
+    let guidance = skill.then_some(Guidance { rules: true, hint: true });
     let hanzi = resources.hanzi.clone();
     let pdfium = resources.pdfium.clone();
     let start_board = match &demo {
-        Some(name) => Some(demo_board(
-            root.as_ref().context("--demo needs --root <checkout>")?,
-            name,
-        )?),
+        Some(name) => Some(demo_board(root.as_ref().context("--demo needs --root <checkout>")?, name)?),
         None => synthetic.map(synthetic_board),
     };
     // A sample or measurement never reads or writes real meetings, and a script starts a new one.
     let store = start_board.is_none().then(|| Store::new(data.clone()));
-    let reopen = if turns.is_empty() && wav.is_none() {
-        open.or_else(|| store.as_ref().and_then(Store::last_opened))
-    } else {
-        None
-    };
+    let reopen = if turns.is_empty() && wav.is_none() { open.or_else(|| store.as_ref().and_then(Store::last_opened)) } else { None };
     let reads_meetings = store.is_some();
-    let speech = Speech {
-        helper: Speech::helper_path(),
-        system: settings.system_speech,
-        language: settings.speech_language.clone(),
-    };
-    let pipeline = Pipeline::start(
-        backend,
-        guidance,
-        resources.voice,
-        speech,
-        Script { turns, wav },
-    );
-    pipeline
-        .session()
-        .set_glossary(Glossary::parse(&settings.glossary));
+    let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone() };
+    let pipeline = Pipeline::start(backend, guidance, resources.voice, speech, Script { turns, wav });
+    pipeline.session().set_glossary(Glossary::parse(&settings.glossary));
     std::thread::spawn(boardcast_agent::sound::warm);
     // Everything slow happens away from the window, which has to appear straight away.
     let (startup, starting) = channel::<Startup>();
@@ -6576,12 +4751,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 (Some(store), Some(id)) => store.load(&id).ok().flatten().map(Live::from_loaded),
                 _ => None,
             };
-            let vram_mib = boardcast_agent::list_gpus(&probe_binaries)
-                .iter()
-                .filter(|g| g.discrete)
-                .map(|g| g.total_mib)
-                .max()
-                .unwrap_or(0);
+            let vram_mib = boardcast_agent::list_gpus(&probe_binaries).iter().filter(|g| g.discrete).map(|g| g.total_mib).max().unwrap_or(0);
             let mut state = Ink {
                 glyphs,
                 board: StableLayout::default(),
@@ -6619,396 +4789,264 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 loops: vec![],
                 drawing: None,
                 pointed: vec![],
-                zoom_test: zoom_test.then_some(ZoomTest {
-                    started: None,
-                    frames: vec![],
-                    last: None,
-                    base: 0.0,
-                    rebuilds: vec![],
-                    peak_rss: 0,
-                }),
+                zoom_test: zoom_test.then_some(ZoomTest { started: None, frames: vec![], last: None, base: 0.0, rebuilds: vec![], peak_rss: 0 }),
                 instant: start_board.is_some(),
             };
             let mut live = start_meeting.unwrap_or_default();
             if start_board.is_none() {
-                state.open(&live.graph, &live.memory);
+                                state.open(&live.graph, &live.memory);
                 live.adopt_summary_source(&fingerprint_of(&live));
             }
             if let Some(graph) = &start_board {
                 let started = Instant::now();
                 let strokes = state.update(graph, 0);
-                println!(
-                    "{{\"synthetic_nodes\":{},\"strokes\":{strokes},\"layout_and_compose_ms\":{}}}",
-                    graph.nodes.len(),
-                    started.elapsed().as_millis()
-                );
-                live.change_board(graph.clone(), state.board.snapshot());
+                println!("{{\"synthetic_nodes\":{},\"strokes\":{strokes},\"layout_and_compose_ms\":{}}}", graph.nodes.len(), started.elapsed().as_millis());
+                                live.change_board(graph.clone(), state.board.snapshot());
             }
             if let Some(k) = zoom {
                 let e = &state.extent;
-                state.view = Some(View {
-                    k,
-                    x: e.x0 as f32 - 20.0 / k,
-                    y: e.y0 as f32 - 20.0 / k,
-                });
+                state.view = Some(View { k, x: e.x0 as f32 - 20.0 / k, y: e.y0 as f32 - 20.0 / k });
                 state.reading = true;
             }
-            Ok(Prepared {
-                state,
-                live,
-                vram_mib,
-                dark,
-            })
+            Ok(Prepared { state, live, vram_mib, dark })
         })();
         let _ = startup.send(Startup::Ready(Box::new(prepared)));
     });
-    gpui_kit::application()
-        .with_assets(theme::Assets)
-        .run(move |cx: &mut App| {
-            gpui_kit::init(cx);
-            theme::apply(cx);
-            let options = WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds::new(
-                    point(px(0.), px(0.)),
-                    size(px(1280.), px(800.)),
-                ))),
-                app_id: Some("boardcast".into()),
-                // On a Mac the system bar goes, and ours takes its place with the window buttons in it.
-                ..if cfg!(target_os = "macos") {
-                    let base = TitleBar::window_options();
-                    WindowOptions {
-                        titlebar: base.titlebar.map(|t| gpui_kit::TitlebarOptions {
-                            title: Some("boardcast".into()),
-                            ..t
-                        }),
-                        ..base
-                    }
-                } else {
-                    WindowOptions {
-                        titlebar: Some(gpui_kit::TitlebarOptions {
-                            title: Some("boardcast".into()),
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    }
-                }
-            };
-            // Closing the last window ends the app, which also stops the local model.
-            cx.on_window_closed(|cx, _| {
-                if cx.windows().is_empty() {
-                    cx.quit();
-                }
-            })
-            .detach();
-            let build = move |prepared: Prepared,
-                              window: &mut Window,
-                              cx: &mut App|
-                  -> Entity<Workbench> {
-                let Prepared {
-                    state,
-                    live,
-                    vram_mib,
-                    ..
-                } = prepared;
-                let history: Vec<Utterance> = live
-                    .history
-                    .iter()
-                    .filter_map(|h| serde_json::from_value(h.clone()).ok())
-                    .collect();
-                pipeline.session().open(live.graph.clone(), history);
-                pipeline.start_script();
-                let ink = Rc::new(RefCell::new(state));
-                let input = cx.new(|cx| {
-                    InputState::new(window, cx).placeholder(tr(
-                        "Type a line, Enter puts it on the board",
-                        "输入一句话，回车上板",
-                    ))
-                });
-                let base_url = cx.new(|cx| {
-                    InputState::new(window, cx)
-                        .placeholder("https://api.deepseek.com")
-                        .default_value(settings.base_url.clone())
-                });
-                let glossary = cx.new(|cx| {
-                    InputState::new(window, cx)
-                        .placeholder("鉴权; OpenAI; API = A P I, エーピーアイ")
-                        .default_value(settings.glossary.clone())
-                });
-                let model = cx.new(|cx| {
-                    InputState::new(window, cx)
-                        .placeholder("deepseek-flash")
-                        .default_value(settings.model.clone())
-                });
-                let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
-                let editor = cx.new(|cx| TextareaState::new(window, cx));
-                let arxiv_input = cx
-                    .new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
-                let speaker_name = cx.new(|cx| InputState::new(window, cx));
-                let title_input = cx.new(|cx| {
-                    InputState::new(window, cx).placeholder(tr("Meeting name", "会议名称"))
-                });
-                let label_input = cx.new(|cx| InputState::new(window, cx));
-                let library_query = cx.new(|cx| {
-                    InputState::new(window, cx).placeholder(tr("Search meetings", "搜索会议"))
-                });
-                let view = cx.new(|cx| {
-                    cx.subscribe_in(
-                        &input,
-                        window,
-                        |this: &mut Workbench, _, event, window, cx| {
-                            if matches!(event, InputEvent::PressEnter { .. }) {
-                                this.submit(window, cx);
-                            }
-                        },
-                    )
-                    .detach();
-                    cx.subscribe_in(
-                        &glossary,
-                        window,
-                        |this: &mut Workbench, field, event, _, cx| {
-                            if matches!(event, InputEvent::Change) {
-                                this.form.saved.glossary = field.read(cx).value().to_string();
-                                this.session()
-                                    .set_glossary(Glossary::parse(&this.form.saved.glossary));
-                                if let Err(e) = this.form.saved.save() {
-                                    this.form.note = Some(format!("{e:#}"));
-                                }
-                            }
-                        },
-                    )
-                    .detach();
-                    cx.subscribe_in(
-                        &speaker_name,
-                        window,
-                        |this: &mut Workbench, _, event, window, cx| {
-                            if matches!(event, InputEvent::PressEnter { .. }) {
-                                this.rename_speaker(window, cx);
-                            }
-                        },
-                    )
-                    .detach();
-                    cx.subscribe_in(
-                        &title_input,
-                        window,
-                        |this: &mut Workbench, _, event, window, cx| {
-                            if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
-                                this.finish_title(window, cx);
-                            }
-                        },
-                    )
-                    .detach();
-                    cx.subscribe_in(
-                        &label_input,
-                        window,
-                        |this: &mut Workbench, _, event, window, cx| {
-                            if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
-                                this.finish_label(true, window, cx);
-                            }
-                        },
-                    )
-                    .detach();
-                    cx.subscribe_in(
-                        &library_query,
-                        window,
-                        |_: &mut Workbench, _, event, _, cx| {
-                            if matches!(event, InputEvent::Change) {
-                                cx.notify();
-                            }
-                        },
-                    )
-                    .detach();
-                    cx.subscribe_in(&editor, window, |this: &mut Workbench, _, event, _, cx| {
-                        if matches!(event, InputEvent::Change) {
-                            this.summary_typed(cx);
-                        }
-                    })
-                    .detach();
-                    cx.spawn(async move |this, cx| loop {
-                        cx.background_executor()
-                            .timer(Duration::from_millis(33))
-                            .await;
-                        if this.update(cx, Workbench::pump).is_err() {
-                            break;
-                        }
-                    })
-                    .detach();
-                    let focus = cx.focus_handle();
-                    window.focus(&focus, cx);
-                    let saved_changes = live.changes;
-                    let remote = settings.enabled;
-                    if let Some(store) = &store {
-                        let _ = store.remember_opened(live.id());
-                    }
-                    let mut workbench = Workbench {
-                        ink,
-                        pipeline,
-                        input,
-                        focus,
-                        live,
-                        store,
-                        save: SaveState::Idle,
-                        saving: None,
-                        saved_changes,
-                        seen_changes: saved_changes,
-                        last_change: Instant::now(),
-                        last_attempt: None,
-                        panel: start_panel,
-                        library: vec![],
-                        inputs: vec![],
-                        library_query,
-                        label_input,
-                        form: SettingsForm {
-                            glossary,
-                            base_url,
-                            model,
-                            key,
-                            remote,
-                            saved: settings,
-                            note: None,
-                            probing: None,
-                        },
-                        summary: SummaryPanel {
-                            editor,
-                            editing: false,
-                            job: None,
-                            draft: None,
-                            cleared: None,
-                            edits: 0,
-                            note: None,
-                            current: None,
-                        },
-                        replay: None,
-                        import: ImportState::Idle,
-                        arxiv_input,
-                        speaker: None,
-                        speaker_chosen: None,
-                        speaker_name,
-                        title_input,
-                        editing_title: false,
-                        hearing: None,
-                        speech_helper: Speech::helper_path(),
-                        listening_since: None,
-                        clock_second: 0,
-                        preparing: None,
-                        transcript_open: true,
-                        speaker_hovered: None,
-                        transcript_scroll: gpui_kit::ScrollHandle::new(),
-                        jumped_line: None,
-                        pdfium,
-                        hanzi,
-                        exporting: None,
-                        exported: None,
-                        export_dir: None,
-                        summarize_when_done,
-                        forced_backend,
-                        models,
-                        binaries,
-                        download: None,
-                        update: UpdateState::Idle,
-                        silent_check: false,
-                        update_events: None,
-                        prefix,
-                        check_at,
-                        data: update_data,
-                        vram_mib,
-                        needs_model: false,
-                        notice: None,
-                        status: tr("Starting…", "启动中…").into(),
-                        heard: None,
-                        page_hint: None,
-                        page_quiet: 0,
-                        topic_hint: None,
-                        topics_offered: Default::default(),
-                        topic_hint_age: 0,
-                        level: 0.0,
-                        next_batch: 0,
-                        exit_when_done,
-                        close_refused: false,
-                    };
-                    workbench.show_page_image();
-                    workbench
-                });
-                let closing = view.clone();
-                window.on_window_should_close(cx, move |_, cx| {
-                    closing.update(cx, |this, cx| this.closing(cx))
-                });
-                let quitting = view.clone();
-                cx.on_action(move |_: &Quit, cx: &mut App| {
-                    if quitting.update(cx, |this, cx| this.closing(cx)) {
-                        cx.quit();
-                    }
-                });
-                #[cfg(target_os = "macos")]
-                app_menu(cx);
-                view
-            };
-            gpui_kit::open_window(options, cx, move |window, cx| {
-                cx.new(|cx| {
-                    cx.spawn_in(window, async move |this, cx| {
-                        let mut build = Some(build);
-                        let mut ready: Option<Prepared> = None;
-                        loop {
-                            cx.background_executor()
-                                .timer(Duration::from_millis(16))
-                                .await;
-                            while let Ok(update) = starting.try_recv() {
-                                match update {
-                                    Startup::Word(strokes) => {
-                                        let _ = this.update(cx, |shell: &mut Shell, cx| {
-                                            shell.word = strokes;
-                                            shell.started = Instant::now();
-                                            cx.notify();
-                                        });
-                                    }
-                                    Startup::Ready(prepared) => match *prepared {
-                                        Ok(prepared) => ready = Some(prepared),
-                                        Err(e) => {
-                                            eprintln!("could not start: {e:#}");
-                                            std::process::exit(1);
-                                        }
-                                    },
-                                }
-                            }
-                            let written = this
-                                .update(cx, |shell: &mut Shell, _| {
-                                    shell.started.elapsed() >= crate::splash::WRITING
-                                })
-                                .unwrap_or(true);
-                            if ready.is_some() && (written || scripted) {
-                                break;
-                            }
-                        }
-                        let mut prepared = ready.take().expect("checked above");
-                        // The board was drawn before the window knew the system's appearance.
-                        if prepared.dark != theme::is_dark() {
-                            prepared.state.redraw();
-                        }
-                        let build = build.take().expect("runs once");
-                        let _ = this.update_in(cx, |shell: &mut Shell, window, cx| {
-                            shell.workbench = Some(build(prepared, window, cx));
-                            cx.notify();
-                        });
-                    })
-                    .detach();
-                    Shell {
-                        workbench: None,
-                        word: vec![],
-                        started: Instant::now(),
+    gpui_kit::application().with_assets(theme::Assets).run(move |cx: &mut App| {
+        gpui_kit::init(cx);
+        theme::apply(cx);
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds::new(point(px(0.), px(0.)), size(px(1280.), px(800.))))),
+            app_id: Some("boardcast".into()),
+            // On a Mac the system bar goes, and ours takes its place with the window buttons in it.
+            ..if cfg!(target_os = "macos") {
+                let base = TitleBar::window_options();
+                WindowOptions { titlebar: base.titlebar.map(|t| gpui_kit::TitlebarOptions { title: Some("boardcast".into()), ..t }), ..base }
+            } else {
+                WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some("boardcast".into()), ..Default::default() }), ..Default::default() }
+            }
+        };
+        // Closing the last window ends the app, which also stops the local model.
+        cx.on_window_closed(|cx, _| {
+            if cx.windows().is_empty() {
+                cx.quit();
+            }
+        })
+        .detach();
+        let build = move |prepared: Prepared, window: &mut Window, cx: &mut App| -> Entity<Workbench> {
+            let Prepared { state, live, vram_mib, .. } = prepared;
+            let history: Vec<Utterance> = live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
+            pipeline.session().open(live.graph.clone(), history);
+            pipeline.start_script();
+            let ink = Rc::new(RefCell::new(state));
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Type a line, Enter puts it on the board", "输入一句话，回车上板")));
+            let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
+            let glossary = cx.new(|cx| InputState::new(window, cx).placeholder("鉴权; OpenAI; API = A P I, エーピーアイ").default_value(settings.glossary.clone()));
+            let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
+            let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
+            let editor = cx.new(|cx| TextareaState::new(window, cx));
+            let arxiv_input = cx.new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
+            let speaker_name = cx.new(|cx| InputState::new(window, cx));
+            let title_input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Meeting name", "会议名称")));
+            let label_input = cx.new(|cx| InputState::new(window, cx));
+            let library_query = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Search meetings", "搜索会议")));
+            let view = cx.new(|cx| {
+                cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
+                    if matches!(event, InputEvent::PressEnter { .. }) {
+                        this.submit(window, cx);
                     }
                 })
+                .detach();
+                cx.subscribe_in(&glossary, window, |this: &mut Workbench, field, event, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.form.saved.glossary = field.read(cx).value().to_string();
+                        this.session().set_glossary(Glossary::parse(&this.form.saved.glossary));
+                        if let Err(e) = this.form.saved.save() {
+                            this.form.note = Some(format!("{e:#}"));
+                        }
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&speaker_name, window, |this: &mut Workbench, _, event, window, cx| {
+                    if matches!(event, InputEvent::PressEnter { .. }) {
+                        this.rename_speaker(window, cx);
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&title_input, window, |this: &mut Workbench, _, event, window, cx| {
+                    if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                        this.finish_title(window, cx);
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&label_input, window, |this: &mut Workbench, _, event, window, cx| {
+                    if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                        this.finish_label(true, window, cx);
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&library_query, window, |_: &mut Workbench, _, event, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        cx.notify();
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&editor, window, |this: &mut Workbench, _, event, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.summary_typed(cx);
+                    }
+                })
+                .detach();
+                cx.spawn(async move |this, cx| loop {
+                    cx.background_executor().timer(Duration::from_millis(33)).await;
+                    if this.update(cx, Workbench::pump).is_err() {
+                        break;
+                    }
+                })
+                .detach();
+                let focus = cx.focus_handle();
+                window.focus(&focus, cx);
+                let saved_changes = live.changes;
+                let remote = settings.enabled;
+                if let Some(store) = &store {
+                    let _ = store.remember_opened(live.id());
+                }
+                let mut workbench = Workbench {
+                    ink,
+                    pipeline,
+                    input,
+                    focus,
+                    live,
+                    store,
+                    save: SaveState::Idle,
+                    saving: None,
+                    saved_changes,
+                    seen_changes: saved_changes,
+                    last_change: Instant::now(),
+                    last_attempt: None,
+                    panel: start_panel,
+                    library: vec![],
+                    inputs: vec![],
+                    library_query,
+                    label_input,
+                    form: SettingsForm { glossary, base_url, model, key, remote, saved: settings, note: None, probing: None },
+                    summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
+                    replay: None,
+                    import: ImportState::Idle,
+                    arxiv_input,
+                    speaker: None,
+                    speaker_chosen: None,
+                    speaker_name,
+                    title_input,
+                    editing_title: false,
+                    hearing: None,
+                    speech_helper: Speech::helper_path(),
+                    listening_since: None,
+                    clock_second: 0,
+                    preparing: None,
+                    transcript_open: true,
+                    speaker_hovered: None,
+                    transcript_scroll: gpui_kit::ScrollHandle::new(),
+                    jumped_line: None,
+                    pdfium,
+                    hanzi,
+                    exporting: None,
+                    exported: None,
+                    export_dir: None,
+                    summarize_when_done,
+                    forced_backend,
+                    models,
+                    binaries,
+                    download: None,
+                    update: UpdateState::Idle,
+                    silent_check: false,
+                    update_events: None,
+                    prefix,
+                    check_at,
+                    data: update_data,
+                    vram_mib,
+                    needs_model: false,
+                    notice: None,
+                    status: tr("Starting…", "启动中…").into(),
+                    heard: None,
+                    page_hint: None,
+                    page_quiet: 0,
+                    topic_hint: None,
+                    topics_offered: Default::default(),
+                    topic_hint_age: 0,
+                    level: 0.0,
+                    next_batch: 0,
+                    exit_when_done,
+                    close_refused: false,
+                };
+                workbench.show_page_image();
+                workbench
+            });
+            let closing = view.clone();
+            window.on_window_should_close(cx, move |_, cx| closing.update(cx, |this, cx| this.closing(cx)));
+            let quitting = view.clone();
+            cx.on_action(move |_: &Quit, cx: &mut App| {
+                if quitting.update(cx, |this, cx| this.closing(cx)) {
+                    cx.quit();
+                }
+            });
+            #[cfg(target_os = "macos")]
+            app_menu(cx);
+            view
+        };
+        gpui_kit::open_window(options, cx, move |window, cx| {
+            cx.new(|cx| {
+                cx.spawn_in(window, async move |this, cx| {
+                    let mut build = Some(build);
+                    let mut ready: Option<Prepared> = None;
+                    loop {
+                        cx.background_executor().timer(Duration::from_millis(16)).await;
+                        while let Ok(update) = starting.try_recv() {
+                            match update {
+                                Startup::Word(strokes) => {
+                                    let _ = this.update(cx, |shell: &mut Shell, cx| {
+                                        shell.word = strokes;
+                                        shell.started = Instant::now();
+                                        cx.notify();
+                                    });
+                                }
+                                Startup::Ready(prepared) => match *prepared {
+                                    Ok(prepared) => ready = Some(prepared),
+                                    Err(e) => {
+                                        eprintln!("could not start: {e:#}");
+                                        std::process::exit(1);
+                                    }
+                                },
+                            }
+                        }
+                        let written = this.update(cx, |shell: &mut Shell, _| shell.started.elapsed() >= crate::splash::WRITING).unwrap_or(true);
+                        if ready.is_some() && (written || scripted) {
+                            break;
+                        }
+                    }
+                    let mut prepared = ready.take().expect("checked above");
+                    // The board was drawn before the window knew the system's appearance.
+                    if prepared.dark != theme::is_dark() {
+                        prepared.state.redraw();
+                    }
+                    let build = build.take().expect("runs once");
+                    let _ = this.update_in(cx, |shell: &mut Shell, window, cx| {
+                        shell.workbench = Some(build(prepared, window, cx));
+                        cx.notify();
+                    });
+                })
+                .detach();
+                Shell { workbench: None, word: vec![], started: Instant::now() }
             })
-            .expect("open window");
-        });
+        })
+        .expect("open window");
+    });
     Ok(())
 }
 
 /// The numbered references a meeting's imported paper listed, kept on its first page.
 fn references_of(boards: &[Graph]) -> Vec<(u32, String)> {
-    boards
-        .iter()
-        .find_map(|g| g.extra.get("references"))
-        .and_then(|r| serde_json::from_value(r.clone()).ok())
-        .unwrap_or_default()
+    boards.iter().find_map(|g| g.extra.get("references")).and_then(|r| serde_json::from_value(r.clone()).ok()).unwrap_or_default()
 }
 
 #[cfg(test)]

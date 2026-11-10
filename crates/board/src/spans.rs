@@ -88,10 +88,7 @@ fn weight(c: char) -> f64 {
 }
 
 fn is_cjk(c: char) -> bool {
-    matches!(
-        c.script(),
-        Script::Han | Script::Hiragana | Script::Katakana
-    )
+    matches!(c.script(), Script::Han | Script::Hiragana | Script::Katakana)
 }
 
 fn nfkc(s: &str) -> String {
@@ -109,57 +106,30 @@ fn chars(rows: &[RegionRow]) -> Vec<Ch> {
         for seg in &row.segs {
             // A gap between pieces is a word boundary.
             if let Some(end) = last_end.filter(|end| seg.x - end > row.h * 0.12) {
-                out.push(Ch {
-                    c: ' ',
-                    row: ri,
-                    x0: end,
-                    x1: seg.x,
-                    skip: true,
-                });
+                out.push(Ch { c: ' ', row: ri, x0: end, x1: seg.x, skip: true });
             }
             let total: f64 = seg.t.chars().map(weight).sum();
             let total = if total == 0.0 { 1.0 } else { total };
             let mut x = seg.x;
             for c in seg.t.chars() {
                 let w = weight(c) / total * seg.w;
-                out.push(Ch {
-                    c,
-                    row: ri,
-                    x0: x,
-                    x1: x + w,
-                    skip: c.is_whitespace(),
-                });
+                out.push(Ch { c, row: ri, x0: x, x1: x + w, skip: c.is_whitespace() });
                 x += w;
             }
             last_end = Some(seg.x + seg.w);
         }
         // Chinese lines join with no space. A hyphen at a line's end joins the next line, and other
         // line ends keep the space between words.
-        let next = rows
-            .get(ri + 1)
-            .and_then(|r| r.segs.first())
-            .and_then(|s| s.t.chars().next());
+        let next = rows.get(ri + 1).and_then(|r| r.segs.first()).and_then(|s| s.t.chars().next());
         let Some(next) = next else { continue };
         let last = out.last().map(|c| c.c);
         if last == Some('-') && next.is_ascii_lowercase() {
             out.last_mut().expect("just read").skip = true;
         } else {
-            let joined = last.is_some_and(|l| {
-                is_cjk(l)
-                    || is_cjk(next)
-                    || nfkc(&format!("{l}{next}"))
-                        .chars()
-                        .any(|c| "。！？「」『』".contains(c))
-            });
+            let joined = last.is_some_and(|l| is_cjk(l) || is_cjk(next) || nfkc(&format!("{l}{next}")).chars().any(|c| "。！？「」『』".contains(c)));
             if !joined {
                 let end = last_end.unwrap_or(0.0);
-                out.push(Ch {
-                    c: ' ',
-                    row: ri,
-                    x0: end,
-                    x1: end,
-                    skip: true,
-                });
+                out.push(Ch { c: ' ', row: ri, x0: end, x1: end, skip: true });
             }
         }
     }
@@ -173,9 +143,7 @@ fn is_letter(c: char) -> bool {
 /// Whether a sentence ends here. Abbreviations such as "et al." and "Fig." do not end one.
 fn ends_sentence(cs: &[Ch], i: usize) -> bool {
     let mut punctuation = i;
-    while punctuation > 0
-        && (cs[punctuation].skip || is_closing(&nfkc(&cs[punctuation].c.to_string())))
-    {
+    while punctuation > 0 && (cs[punctuation].skip || is_closing(&nfkc(&cs[punctuation].c.to_string()))) {
         punctuation -= 1;
     }
     // A closing quote or bracket after the stop belongs to the sentence it closes.
@@ -183,9 +151,7 @@ fn ends_sentence(cs: &[Ch], i: usize) -> bool {
     while cs.get(after).is_some_and(|c| c.skip) {
         after += 1;
     }
-    let next = cs
-        .get(after)
-        .map_or(String::new(), |c| nfkc(&c.c.to_string()));
+    let next = cs.get(after).map_or(String::new(), |c| nfkc(&c.c.to_string()));
     if is_closing(&next) || next.chars().any(|c| "。！？?!".contains(c)) {
         return false;
     }
@@ -220,12 +186,7 @@ fn ends_sentence(cs: &[Ch], i: usize) -> bool {
         word.insert(0, cs[k].c);
     }
     let single_capital = word.len() == 1 && word.chars().all(|c| c.is_ascii_uppercase());
-    !(single_capital
-        || [
-            "et", "al", "e.g", "i.e", "cf", "vs", "etc", "Fig", "Figs", "Eq", "Eqs", "Ref", "Refs",
-            "Dr", "No",
-        ]
-        .contains(&word.as_str()))
+    !(single_capital || ["et", "al", "e.g", "i.e", "cf", "vs", "etc", "Fig", "Figs", "Eq", "Eqs", "Ref", "Refs", "Dr", "No"].contains(&word.as_str()))
 }
 
 fn sentence_around(cs: &[Ch], a: usize, b: usize) -> (usize, usize) {
@@ -245,11 +206,7 @@ fn sentence_around(cs: &[Ch], a: usize, b: usize) -> (usize, usize) {
 
 fn word_around(cs: &[Ch], i: usize) -> (usize, usize) {
     let on_cjk = is_cjk(cs[i].c);
-    let word = |c: &Ch| {
-        !c.c.is_whitespace()
-            && (c.c.is_alphanumeric() || c.c == '_' || c.c == '-')
-            && (on_cjk || !is_cjk(c.c))
-    };
+    let word = |c: &Ch| !c.c.is_whitespace() && (c.c.is_alphanumeric() || c.c == '_' || c.c == '-') && (on_cjk || !is_cjk(c.c));
     // A hyphen breaking a word across lines stays part of the word.
     let inside = |c: &Ch| word(c) || (c.c == '-' && c.skip);
     if !inside(&cs[i]) {
@@ -292,37 +249,13 @@ fn to_span(cs: &[Ch], a: usize, b: usize, mark: &str, rows: &[RegionRow]) -> Spa
         let row = &rows[c.row];
         match boxes.iter_mut().find(|bx| bx.0 == c.row) {
             Some(bx) => bx.3 = (bx.1 + bx.3).max(c.x1) - bx.1,
-            None => boxes.push((
-                c.row,
-                c.x0,
-                row.y,
-                c.x1 - c.x0,
-                row.h,
-                row.angle.filter(|v| *v != 0.0),
-            )),
+            None => boxes.push((c.row, c.x0, row.y, c.x1 - c.x0, row.h, row.angle.filter(|v| *v != 0.0))),
         }
     }
-    let text: String = cs[a..b]
-        .iter()
-        .filter(|c| !(c.c == '-' && c.skip))
-        .map(|c| c.c)
-        .collect();
+    let text: String = cs[a..b].iter().filter(|c| !(c.c == '-' && c.skip)).map(|c| c.c).collect();
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    let boxes = boxes
-        .into_iter()
-        .map(|(_, x, y, w, h, angle)| SpanBox {
-            x: round(x),
-            y: round(y),
-            w: round(w),
-            h: round(h),
-            angle,
-        })
-        .collect();
-    Span {
-        mark: mark.to_string(),
-        text,
-        boxes,
-    }
+    let boxes = boxes.into_iter().map(|(_, x, y, w, h, angle)| SpanBox { x: round(x), y: round(y), w: round(w), h: round(h), angle }).collect();
+    Span { mark: mark.to_string(), text, boxes }
 }
 
 fn folded(s: &str) -> String {
@@ -343,10 +276,7 @@ pub fn locate(rows: &[RegionRow], quote: &str, mark: &str, unit: Unit) -> Option
             index.push(i);
         }
     }
-    let quote: Vec<char> = folded(quote)
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .collect();
+    let quote: Vec<char> = folded(quote).chars().filter(|c| !c.is_whitespace()).collect();
     if quote.is_empty() {
         return None;
     }
@@ -361,18 +291,11 @@ pub fn locate(rows: &[RegionRow], quote: &str, mark: &str, unit: Unit) -> Option
 /// Find what a point on the page is touching, for marking by hand.
 pub fn span_at(rows: &[RegionRow], x: f64, y: f64, mark: &str, unit: Unit) -> Option<Span> {
     let cs = chars(rows);
-    let points: Vec<[f64; 2]> = rows
-        .iter()
-        .map(|r| rotate_point([x, y], -r.angle.unwrap_or(0.0)))
-        .collect();
+    let points: Vec<[f64; 2]> = rows.iter().map(|r| rotate_point([x, y], -r.angle.unwrap_or(0.0))).collect();
     let distance = |i: usize| {
         let (r, p) = (&rows[i], points[i]);
         let left = r.segs.iter().map(|s| s.x).fold(f64::INFINITY, f64::min);
-        let right = r
-            .segs
-            .iter()
-            .map(|s| s.x + s.w)
-            .fold(f64::NEG_INFINITY, f64::max);
+        let right = r.segs.iter().map(|s| s.x + s.w).fold(f64::NEG_INFINITY, f64::max);
         let dx = (left - p[0]).max(p[0] - right).max(0.0);
         dx * dx + (r.y + r.h / 2.0 - p[1]).powi(2)
     };
@@ -402,11 +325,7 @@ pub fn span_at(rows: &[RegionRow], x: f64, y: f64, mark: &str, unit: Unit) -> Op
         }
     }
     let hit = hit?;
-    let (a, b) = if unit == Unit::Word {
-        word_around(&cs, hit)
-    } else {
-        sentence_around(&cs, hit, hit + 1)
-    };
+    let (a, b) = if unit == Unit::Word { word_around(&cs, hit) } else { sentence_around(&cs, hit, hit + 1) };
     Some(to_span(&cs, a, b, mark, rows))
 }
 
@@ -417,34 +336,18 @@ mod tests {
 
     #[test]
     fn locating_matches_the_typescript_engine() {
-        let goldens: Value =
-            serde_json::from_str(include_str!("../fixtures/goldens.json")).unwrap();
+        let goldens: Value = serde_json::from_str(include_str!("../fixtures/goldens.json")).unwrap();
         let cases = goldens["spans"].as_array().unwrap();
         assert!(cases.len() >= 30);
         for case in cases {
             let rows: Vec<RegionRow> = serde_json::from_value(case["rows"].clone()).unwrap();
-            let unit = if case["unit"] == "sentence" {
-                Unit::Sentence
-            } else {
-                Unit::Word
-            };
+            let unit = if case["unit"] == "sentence" { Unit::Sentence } else { Unit::Word };
             let mark = case["mark"].as_str().unwrap();
             let got = match case["quote"].as_str() {
                 Some(quote) => locate(&rows, quote, mark, unit),
-                None => span_at(
-                    &rows,
-                    case["x"].as_f64().unwrap(),
-                    case["y"].as_f64().unwrap(),
-                    mark,
-                    unit,
-                ),
+                None => span_at(&rows, case["x"].as_f64().unwrap(), case["y"].as_f64().unwrap(), mark, unit),
             };
-            assert_eq!(
-                serde_json::to_value(&got).unwrap(),
-                case["span"],
-                "{}",
-                case["name"]
-            );
+            assert_eq!(serde_json::to_value(&got).unwrap(), case["span"], "{}", case["name"]);
         }
     }
 }

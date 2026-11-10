@@ -10,15 +10,8 @@ use boardcast_board::sugiyama::first_diagram;
 use std::path::{Path, PathBuf};
 
 fn demo_lines(root: &Path, name: &str) -> Result<Vec<String>> {
-    let demo: serde_json::Value = serde_json::from_slice(&std::fs::read(
-        root.join(format!("assets/demos/{name}.json")),
-    )?)?;
-    Ok(demo["lines"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|l| l["ops"].as_str().map(str::to_string))
-        .collect())
+    let demo: serde_json::Value = serde_json::from_slice(&std::fs::read(root.join(format!("assets/demos/{name}.json")))?)?;
+    Ok(demo["lines"].as_array().into_iter().flatten().filter_map(|l| l["ops"].as_str().map(str::to_string)).collect())
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
@@ -71,11 +64,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             last = repaired.unwrap_or(found);
             left += last.hard.len();
         }
-        println!(
-            "{{\"board\":{},\"report\":{}}}",
-            serde_json::Value::from(name.clone()),
-            last.to_json()
-        );
+        println!("{{\"board\":{},\"report\":{}}}", serde_json::Value::from(name.clone()), last.to_json());
     }
     println!("{{\"boards\":{},\"steps\":{steps},\"steps_with_hard_defect\":{hard_steps},\"hard_after_repair\":{left}}}", sets.len());
     if left > 0 {

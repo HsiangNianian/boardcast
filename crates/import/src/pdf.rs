@@ -22,15 +22,10 @@ const HYPHEN_AT_LINE_END: char = '\u{2}';
 /// The most boards made from one file, as each keeps a picture.
 pub const MAX_PAGES: usize = 40;
 
-static ONLY_REFERENCES: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)^(References|Bibliography|参考文献)").expect("valid"));
-static NOT_SECTIONS: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^(Abstract|摘要|References|Bibliography|参考文献)").expect("valid")
-});
-static FIRST_SECTION: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^§1(?-u:\b)").expect("valid"));
-static NUMBERED_NAME: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^§(\S+)\s+(.*)$").expect("valid"));
+static ONLY_REFERENCES: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^(References|Bibliography|参考文献)").expect("valid"));
+static NOT_SECTIONS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^(Abstract|摘要|References|Bibliography|参考文献)").expect("valid"));
+static FIRST_SECTION: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^§1(?-u:\b)").expect("valid"));
+static NUMBERED_NAME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^§(\S+)\s+(.*)$").expect("valid"));
 
 pub struct NewPage {
     pub graph: Graph,
@@ -68,44 +63,20 @@ pub fn library_file(folder: &Path) -> PathBuf {
 
 fn bind(library: &Path) -> Result<Pdfium> {
     let path = Pdfium::pdfium_platform_library_name_at_path(library);
-    let bindings = Pdfium::bind_to_library(&path).map_err(|e| {
-        anyhow!(
-            "PDF support could not be loaded from {}: {e:?}",
-            path.display()
-        )
-    })?;
+    let bindings = Pdfium::bind_to_library(&path).map_err(|e| anyhow!("PDF support could not be loaded from {}: {e:?}", path.display()))?;
     Ok(Pdfium::new(bindings))
 }
 
 fn open<'a>(pdfium: &'a Pdfium, bytes: &'a [u8], english: bool) -> Result<PdfDocument<'a>> {
-    pdfium
-        .load_pdf_from_byte_slice(bytes, None)
-        .map_err(|e| match e {
-            PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError) => {
-                anyhow!(if english {
-                    "This PDF is password-protected; remove the password and import it again"
-                } else {
-                    "这个 PDF 有密码，先去掉密码再导入"
-                })
-            }
-            PdfiumError::PdfiumLibraryInternalError(
-                PdfiumInternalError::FormatError | PdfiumInternalError::FileError,
-            ) => {
-                anyhow!(if english {
-                    "Can't open the PDF: the file is damaged or is not really a PDF"
-                } else {
-                    "PDF 打不开：文件损坏了，或者其实不是 PDF"
-                })
-            }
-            other => anyhow!(
-                "{}{other:?}",
-                if english {
-                    "Can't open the PDF: "
-                } else {
-                    "PDF 打不开："
-                }
-            ),
-        })
+    pdfium.load_pdf_from_byte_slice(bytes, None).map_err(|e| match e {
+        PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::PasswordError) => {
+            anyhow!(if english { "This PDF is password-protected; remove the password and import it again" } else { "这个 PDF 有密码，先去掉密码再导入" })
+        }
+        PdfiumError::PdfiumLibraryInternalError(PdfiumInternalError::FormatError | PdfiumInternalError::FileError) => {
+            anyhow!(if english { "Can't open the PDF: the file is damaged or is not really a PDF" } else { "PDF 打不开：文件损坏了，或者其实不是 PDF" })
+        }
+        other => anyhow!("{}{other:?}", if english { "Can't open the PDF: " } else { "PDF 打不开：" }),
+    })
 }
 
 /// A run of characters is one piece while it keeps going in one direction at one size.
@@ -125,26 +96,12 @@ impl Run {
             return;
         }
         let angle = (self.angle != 0.0).then_some(self.angle);
-        out.push(TextPiece {
-            text: self.text,
-            x: self.start,
-            y: self.baseline - self.size,
-            w: (self.end - self.start).max(0.1),
-            h: self.size,
-            angle,
-        });
+        out.push(TextPiece { text: self.text, x: self.start, y: self.baseline - self.size, w: (self.end - self.start).max(0.1), h: self.size, angle });
     }
 }
 
 /// Page coordinates have y going up. A rotated page turns those to how it is shown.
-fn to_board(
-    x: f64,
-    y: f64,
-    page_w: f64,
-    page_h: f64,
-    rotation: PdfPageRenderRotation,
-    scale: f64,
-) -> [f64; 2] {
+fn to_board(x: f64, y: f64, page_w: f64, page_h: f64, rotation: PdfPageRenderRotation, scale: f64) -> [f64; 2] {
     let (bx, by) = match rotation {
         PdfPageRenderRotation::None => (x, page_h - y),
         PdfPageRenderRotation::Degrees90 => (y, x),
@@ -156,20 +113,10 @@ fn to_board(
 
 fn page_text(page: &PdfPage, scale: f64) -> Result<Vec<TextPiece>> {
     let rotation = page.rotation().unwrap_or(PdfPageRenderRotation::None);
-    let turned = matches!(
-        rotation,
-        PdfPageRenderRotation::Degrees90 | PdfPageRenderRotation::Degrees270
-    );
-    let (shown_w, shown_h) = (
-        f64::from(page.width().value),
-        f64::from(page.height().value),
-    );
+    let turned = matches!(rotation, PdfPageRenderRotation::Degrees90 | PdfPageRenderRotation::Degrees270);
+    let (shown_w, shown_h) = (f64::from(page.width().value), f64::from(page.height().value));
     // Before turning, the page's own width and height are the other way around.
-    let (page_w, page_h) = if turned {
-        (shown_h, shown_w)
-    } else {
-        (shown_w, shown_h)
-    };
+    let (page_w, page_h) = if turned { (shown_h, shown_w) } else { (shown_w, shown_h) };
     let turn = match rotation {
         PdfPageRenderRotation::None => 0.0,
         PdfPageRenderRotation::Degrees90 => std::f64::consts::FRAC_PI_2,
@@ -190,9 +137,7 @@ fn page_text(page: &PdfPage, scale: f64) -> Result<Vec<TextPiece>> {
             }
             continue;
         }
-        let (Ok(origin), Ok(bounds)) = (ch.origin(), ch.loose_bounds()) else {
-            continue;
-        };
+        let (Ok(origin), Ok(bounds)) = (ch.origin(), ch.loose_bounds()) else { continue };
         let size = f64::from(ch.scaled_font_size().value) * scale;
         if size <= 0.0 {
             continue;
@@ -201,34 +146,14 @@ fn page_text(page: &PdfPage, scale: f64) -> Result<Vec<TextPiece>> {
         let own = f64::from(ch.angle_radians().unwrap_or(0.0));
         let angle = ((own + turn) * 1e6).round() / 1e6;
         let angle = if angle.abs() < 1e-6 { 0.0 } else { angle };
-        let board = |x: PdfPoints, y: PdfPoints| {
-            to_board(
-                f64::from(x.value),
-                f64::from(y.value),
-                page_w,
-                page_h,
-                rotation,
-                scale,
-            )
-        };
+        let board = |x: PdfPoints, y: PdfPoints| to_board(f64::from(x.value), f64::from(y.value), page_w, page_h, rotation, scale);
         let local = rotate_point(board(origin.0, origin.1), -angle);
-        let far = [
-            (bounds.left(), bounds.top()),
-            (bounds.right(), bounds.top()),
-            (bounds.left(), bounds.bottom()),
-            (bounds.right(), bounds.bottom()),
-        ]
-        .iter()
-        .map(|(x, y)| rotate_point(board(*x, *y), -angle)[0])
-        .fold(local[0], f64::max);
+        let far = [(bounds.left(), bounds.top()), (bounds.right(), bounds.top()), (bounds.left(), bounds.bottom()), (bounds.right(), bounds.bottom())]
+            .iter()
+            .map(|(x, y)| rotate_point(board(*x, *y), -angle)[0])
+            .fold(local[0], f64::max);
         // A new direction or size, another line, or a wide gap such as a table cell starts a new piece.
-        let carries = run.as_ref().is_some_and(|r| {
-            r.angle == angle
-                && (r.size - size).abs() < r.size * 0.05
-                && (r.baseline - local[1]).abs() < size * 0.2
-                && local[0] - r.end < size * 1.5
-                && local[0] > r.start - size * 0.5
-        });
+        let carries = run.as_ref().is_some_and(|r| r.angle == angle && (r.size - size).abs() < r.size * 0.05 && (r.baseline - local[1]).abs() < size * 0.2 && local[0] - r.end < size * 1.5 && local[0] > r.start - size * 0.5);
         if !carries {
             if let Some(done) = run.take() {
                 done.finish(&mut pieces);
@@ -239,16 +164,7 @@ fn page_text(page: &PdfPage, scale: f64) -> Result<Vec<TextPiece>> {
                 r.text.push(c);
                 r.end = r.end.max(far);
             }
-            None => {
-                run = Some(Run {
-                    text: c.to_string(),
-                    angle,
-                    size,
-                    start: local[0],
-                    end: far,
-                    baseline: local[1],
-                })
-            }
+            None => run = Some(Run { text: c.to_string(), angle, size, start: local[0], end: far, baseline: local[1] }),
         }
     }
     if let Some(done) = run.take() {
@@ -264,11 +180,7 @@ pub fn read_text(bytes: &[u8], library: &Path) -> Result<Vec<PageText>> {
     let mut out = vec![];
     for page in document.pages().iter() {
         let scale = WIDTH / f64::from(page.width().value);
-        out.push(PageText {
-            w: WIDTH,
-            h: f64::from(page.height().value) * scale,
-            pieces: page_text(&page, scale)?,
-        });
+        out.push(PageText { w: WIDTH, h: f64::from(page.height().value) * scale, pieces: page_text(&page, scale)? });
     }
     Ok(out)
 }
@@ -288,12 +200,7 @@ fn ink_box(rgba: &[u8], width: usize, height: usize) -> Option<[f64; 4]> {
             }
         }
     }
-    Some([
-        x0 as f64,
-        y0 as f64,
-        (x1? - x0 + STEP) as f64,
-        (y1? - y0 + STEP) as f64,
-    ])
+    Some([x0 as f64, y0 as f64, (x1? - x0 + STEP) as f64, (y1? - y0 + STEP) as f64])
 }
 
 fn utf16_prefix(s: &str, units: usize) -> String {
@@ -303,10 +210,7 @@ fn utf16_prefix(s: &str, units: usize) -> String {
 
 /// A heading as an item on the outline: the number goes last, as the board numbers its own items.
 fn outline_item(heading: &str) -> String {
-    let clean: String = heading
-        .chars()
-        .filter(|c| !matches!(c, '「' | '」' | '\n'))
-        .collect();
+    let clean: String = heading.chars().filter(|c| !matches!(c, '「' | '」' | '\n')).collect();
     match NUMBERED_NAME.captures(&clean) {
         Some(m) => format!("{}（§{}）", utf16_prefix(&m[2], 28), &m[1]),
         None => utf16_prefix(&clean, 30),
@@ -320,34 +224,20 @@ fn title_from_page(pieces: &[TextPiece]) -> Option<String> {
     let mut line: Vec<&&TextPiece> = flat.iter().filter(|p| p.h >= big * 0.95).collect();
     line.sort_by(|a, b| a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x)));
     let words: Vec<&str> = line.iter().map(|p| p.text.as_str()).collect();
-    let text = words
-        .join(" ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let text = words.join(" ").split_whitespace().collect::<Vec<_>>().join(" ");
     (4..=120).contains(&utf16_len(&text)).then_some(text)
 }
 
-pub fn import_pdf(
-    bytes: &[u8],
-    library: &Path,
-    english: bool,
-    cancel: &AtomicBool,
-    progress: &mut dyn FnMut(usize, usize),
-) -> Result<PdfImport> {
+pub fn import_pdf(bytes: &[u8], library: &Path, english: bool, cancel: &AtomicBool, progress: &mut dyn FnMut(usize, usize)) -> Result<PdfImport> {
     let pdfium = bind(library)?;
     let document = open(&pdfium, bytes, english)?;
     let total = usize::from(document.pages().len());
-    let mut title = document
-        .metadata()
-        .get(PdfDocumentMetadataTagType::Title)
-        .map(|t| t.value().trim().to_string())
-        .filter(|t| !t.is_empty());
+    let mut title = document.metadata().get(PdfDocumentMetadataTagType::Title).map(|t| t.value().trim().to_string()).filter(|t| !t.is_empty());
     let mut pages: Vec<NewPage> = vec![];
     let (mut scanned, mut refs_skipped, mut captions, mut read) = (0, 0, 0, 0);
-    let mut reference_text: Vec<String> = vec![];
     let mut state = PaperState::default();
     let mut headings: Vec<String> = vec![];
+    let mut reference_text: Vec<String> = vec![];
     for (i, page) in document.pages().iter().enumerate() {
         if pages.len() >= MAX_PAGES {
             break;
@@ -366,47 +256,18 @@ pub fn import_pdf(
         let was_in_refs = state.in_refs;
         let analysis = analyze_page(&pieces, WIDTH, height, &mut state);
         let mut areas: Vec<PaperArea> = analysis.areas;
-        headings.extend(
-            analysis
-                .headings
-                .into_iter()
-                .filter(|h| !NOT_SECTIONS.is_match(h)),
-        );
-        captions += areas
-            .iter()
-            .filter(|a| matches!(a.kind, BlockKind::Figure | BlockKind::Table))
-            .count();
-        reference_text.extend(
-            areas
-                .iter()
-                .filter(|a| a.kind == BlockKind::Reference)
-                .map(|a| a.area.text.clone()),
-        );
+        headings.extend(analysis.headings.into_iter().filter(|h| !NOT_SECTIONS.is_match(h)));
+        captions += areas.iter().filter(|a| matches!(a.kind, BlockKind::Figure | BlockKind::Table)).count();
+        reference_text.extend(areas.iter().filter(|a| a.kind == BlockKind::Reference).map(|a| a.area.text.clone()));
         // A page of nothing but references gets no board: nobody needs to turn past them.
-        let refs_only = !areas.is_empty()
-            && areas.iter().all(|a| {
-                a.kind == BlockKind::Reference
-                    || (a.kind == BlockKind::Heading && ONLY_REFERENCES.is_match(&a.area.text))
-            });
+        let refs_only = !areas.is_empty() && areas.iter().all(|a| a.kind == BlockKind::Reference || (a.kind == BlockKind::Heading && ONLY_REFERENCES.is_match(&a.area.text)));
         if refs_only && (was_in_refs || state.in_refs) && !pages.is_empty() {
             refs_skipped += 1;
             continue;
         }
         let number = i + 1;
-        let unusable = || {
-            if english {
-                format!("Page {number} could not produce a valid image. Crop the page or adjust its dimensions, then import the PDF again.")
-            } else {
-                format!("第 {number} 页无法生成有效的图片。请裁剪页面或调整页面尺寸后重新导入。")
-            }
-        };
-        let bitmap = page
-            .render_with_config(
-                &PdfRenderConfig::new()
-                    .set_target_width(PICTURE_WIDTH)
-                    .set_clear_color(PdfColor::WHITE),
-            )
-            .map_err(|_| anyhow!(unusable()))?;
+        let unusable = || if english { format!("Page {number} could not produce a valid image. Crop the page or adjust its dimensions, then import the PDF again.") } else { format!("第 {number} 页无法生成有效的图片。请裁剪页面或调整页面尺寸后重新导入。") };
+        let bitmap = page.render_with_config(&PdfRenderConfig::new().set_target_width(PICTURE_WIDTH).set_clear_color(PdfColor::WHITE)).map_err(|_| anyhow!(unusable()))?;
         let (pw, ph) = (bitmap.width() as usize, bitmap.height() as usize);
         let rgba = bitmap.as_rgba_bytes();
         if pw == 0 || ph == 0 || rgba.len() < pw * ph * 4 {
@@ -417,83 +278,38 @@ pub fn import_pdf(
             scanned += 1;
             if let Some(b) = ink_box(&rgba, pw, ph) {
                 let k = WIDTH / pw as f64;
-                let name = if english {
-                    format!("Figure on page {number}")
-                } else {
-                    format!("第 {number} 页的图")
-                };
-                areas.push(PaperArea {
-                    kind: BlockKind::Figure,
-                    area: Area {
-                        name: Some(name),
-                        x: b[0] * k,
-                        y: b[1] * k,
-                        w: b[2] * k,
-                        h: b[3] * k,
-                        ..Area::default()
-                    },
-                });
+                let name = if english { format!("Figure on page {number}") } else { format!("第 {number} 页的图") };
+                areas.push(PaperArea { kind: BlockKind::Figure, area: Area { name: Some(name), x: b[0] * k, y: b[1] * k, w: b[2] * k, h: b[3] * k, ..Area::default() } });
             }
         }
-        let rgb: Vec<u8> = rgba
-            .chunks_exact(4)
-            .flat_map(|p| [p[0], p[1], p[2]])
-            .collect();
+        let rgb: Vec<u8> = rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
         let mut jpeg = vec![];
-        JpegEncoder::new_with_quality(&mut jpeg, JPEG_QUALITY)
-            .encode(&rgb, pw as u32, ph as u32, image::ExtendedColorType::Rgb8)
-            .context("encoding the page")?;
+        JpegEncoder::new_with_quality(&mut jpeg, JPEG_QUALITY).encode(&rgb, pw as u32, ph as u32, image::ExtendedColorType::Rgb8).context("encoding the page")?;
         let plain: Vec<Area> = areas.into_iter().map(|a| a.area).collect();
-        pages.push(NewPage {
-            graph: page_graph(WIDTH, height, Some(number as u32), &plain),
-            jpeg,
-        });
+        pages.push(NewPage { graph: page_graph(WIDTH, height, Some(number as u32), &plain), jpeg });
     }
     if cancel.load(Ordering::Relaxed) {
         bail!("cancelled");
     }
     progress(total, total);
     // A paper gets an outline of its sections on the first board, to hang notes and questions on.
-    let paper =
-        headings.len() >= 2 && (captions > 0 || headings.iter().any(|h| FIRST_SECTION.is_match(h)));
+    let paper = headings.len() >= 2 && (captions > 0 || headings.iter().any(|h| FIRST_SECTION.is_match(h)));
     if paper {
         if let Some(first) = pages.first_mut() {
-            let outline = if english {
-                "Paper outline"
-            } else {
-                "论文结构"
-            };
+            let outline = if english { "Paper outline" } else { "论文结构" };
             let mut ops = vec![format!("T 「{outline}」")];
-            ops.extend(
-                headings
-                    .iter()
-                    .take(30)
-                    .map(|h| format!("L 「{outline}」 「{}」", outline_item(h))),
-            );
+            ops.extend(headings.iter().take(30).map(|h| format!("L 「{outline}」 「{}」", outline_item(h))));
             first.graph.apply(&parse_ops(&ops.join("\n")));
         }
     }
     let references = numbered_references(&reference_text);
     if let Some(first) = pages.first_mut().filter(|_| !references.is_empty()) {
-        first
-            .graph
-            .extra
-            .insert("references".into(), serde_json::json!(references));
+        first.graph.extra.insert("references".into(), serde_json::json!(references));
     }
-    Ok(PdfImport {
-        pages,
-        total,
-        unread: total - read,
-        scanned,
-        paper,
-        refs_skipped,
-        references,
-        title: title.map(|t| utf16_prefix(&t, 80)),
-    })
+    Ok(PdfImport { pages, total, unread: total - read, scanned, paper, refs_skipped, references, title: title.map(|t| utf16_prefix(&t, 80)) })
 }
 
-static ENTRY: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?:^|\s)(?:\[(\d{1,3})\]|(\d{1,3})\.)\s+").expect("valid"));
+static ENTRY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|\s)(?:\[(\d{1,3})\]|(\d{1,3})\.)\s+").expect("valid"));
 
 /// Reference entries by their number: "[12] A. Author. Title." or "12. A. Author. Title.", split where
 /// a block holds several. Author–year lists have no numbers and are left out.
@@ -513,15 +329,8 @@ fn numbered_references(blocks: &[String]) -> Vec<(u32, String)> {
         if n != expected {
             continue;
         }
-        let stop = starts
-            .iter()
-            .skip(i + 1)
-            .find(|s| s.2 == n + 1)
-            .map_or(text.len(), |s| s.0);
-        let entry: String = text[end..stop]
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
+        let stop = starts.iter().skip(i + 1).find(|s| s.2 == n + 1).map_or(text.len(), |s| s.0);
+        let entry: String = text[end..stop].split_whitespace().collect::<Vec<_>>().join(" ");
         if !entry.is_empty() {
             out.push((n, entry.chars().take(240).collect()));
             expected += 1;
@@ -532,6 +341,8 @@ fn numbered_references(blocks: &[String]) -> Vec<(u32, String)> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn numbered_references_are_kept_by_number() {
         let blocks = vec![
@@ -542,64 +353,32 @@ mod tests {
         let refs = super::numbered_references(&blocks);
         assert_eq!(refs.iter().map(|r| r.0).collect::<Vec<_>>(), [1, 2, 3]);
         assert!(refs[1].1.starts_with("J. Devlin et al. BERT"));
-        assert!(
-            !refs[1].1.contains("Brown"),
-            "an entry ends where the next begins"
-        );
-        let dotted = super::numbered_references(&[
-            "1. Smith, A. Title one. 2. Jones, B. Title two.".to_string(),
-        ]);
+        assert!(!refs[1].1.contains("Brown"), "an entry ends where the next begins");
+        let dotted = super::numbered_references(&["1. Smith, A. Title one. 2. Jones, B. Title two.".to_string()]);
         assert_eq!(dotted.len(), 2);
-        assert!(
-            super::numbered_references(&["Smith, A. (2020). Title. Jones, B. (2021).".to_string()])
-                .is_empty(),
-            "author-year has no numbers"
-        );
+        assert!(super::numbered_references(&["Smith, A. (2020). Title. Jones, B. (2021).".to_string()]).is_empty(), "author-year has no numbers");
     }
-
-    use super::*;
     use image::GenericImageView;
 
     fn library() -> Option<PathBuf> {
         let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/pdfium"));
         let found = Pdfium::pdfium_platform_library_name_at_path(&dir).is_file();
         // CI fetches it, so there a missing library is a failure rather than a skipped test.
-        assert!(
-            found || std::env::var_os("CI").is_none(),
-            "run `boardcast-tools fetch pdfium` first"
-        );
+        assert!(found || std::env::var_os("CI").is_none(), "run `boardcast-tools fetch pdfium` first");
         found.then_some(dir)
     }
 
     /// A small PDF of text lines, each given as x, y from the bottom, and the text.
-    fn pdf(
-        width: u32,
-        height: u32,
-        rotate: u32,
-        title: Option<&str>,
-        pages: &[Vec<(u32, u32, &str)>],
-    ) -> Vec<u8> {
+    fn pdf(width: u32, height: u32, rotate: u32, title: Option<&str>, pages: &[Vec<(u32, u32, &str)>]) -> Vec<u8> {
         let mut objects: Vec<String> = vec![];
-        let kids: Vec<String> = (0..pages.len())
-            .map(|i| format!("{} 0 R", 4 + i * 2))
-            .collect();
+        let kids: Vec<String> = (0..pages.len()).map(|i| format!("{} 0 R", 4 + i * 2)).collect();
         objects.push("<< /Type /Catalog /Pages 2 0 R >>".to_string());
-        objects.push(format!(
-            "<< /Type /Pages /Count {} /Kids [{}] >>",
-            pages.len(),
-            kids.join(" ")
-        ));
+        objects.push(format!("<< /Type /Pages /Count {} /Kids [{}] >>", pages.len(), kids.join(" ")));
         objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string());
         for (i, lines) in pages.iter().enumerate() {
-            let content: String = lines
-                .iter()
-                .map(|(x, y, text)| format!("BT /F1 12 Tf {x} {y} Td ({text}) Tj ET\n"))
-                .collect();
+            let content: String = lines.iter().map(|(x, y, text)| format!("BT /F1 12 Tf {x} {y} Td ({text}) Tj ET\n")).collect();
             objects.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Rotate {rotate} /Resources << /Font << /F1 3 0 R >> >> /Contents {} 0 R >>", 5 + i * 2));
-            objects.push(format!(
-                "<< /Length {} >>\nstream\n{content}endstream",
-                content.len()
-            ));
+            objects.push(format!("<< /Length {} >>\nstream\n{content}endstream", content.len()));
         }
         let mut info = None;
         if let Some(title) = title {
@@ -618,21 +397,12 @@ mod tests {
             out += &format!("{offset:010} 00000 n \n");
         }
         let info = info.map_or(String::new(), |n| format!(" /Info {n} 0 R"));
-        out += &format!(
-            "trailer\n<< /Size {} /Root 1 0 R{info} >>\nstartxref\n{xref}\n%%EOF\n",
-            objects.len() + 1
-        );
+        out += &format!("trailer\n<< /Size {} /Root 1 0 R{info} >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1);
         out.into_bytes()
     }
 
     fn run(bytes: &[u8]) -> Result<PdfImport> {
-        import_pdf(
-            bytes,
-            &library().unwrap(),
-            true,
-            &AtomicBool::new(false),
-            &mut |_, _| {},
-        )
+        import_pdf(bytes, &library().unwrap(), true, &AtomicBool::new(false), &mut |_, _| {})
     }
 
     fn dark_inside(picture: &image::DynamicImage, area: [f64; 4]) -> u32 {
@@ -655,19 +425,10 @@ mod tests {
             return;
         }
         for rotate in [0, 90, 180, 270] {
-            let lines = vec![(
-                100,
-                700,
-                "Hello there, this line is near the top of the page.",
-            )];
+            let lines = vec![(100, 700, "Hello there, this line is near the top of the page.")];
             let imported = run(&pdf(612, 792, rotate, None, &[lines])).unwrap();
             let page = &imported.pages[0];
-            let block = page
-                .graph
-                .nodes
-                .iter()
-                .find(|n| n.kind == boardcast_board::graph::Kind::Region)
-                .expect("a block of text");
+            let block = page.graph.nodes.iter().find(|n| n.kind == boardcast_board::graph::Kind::Region).expect("a block of text");
             assert!(block.label.starts_with("Hello"), "{}", block.label);
             let picture = image::load_from_memory(&page.jpeg).unwrap();
             let at = block.at().unwrap();
@@ -685,26 +446,9 @@ mod tests {
         if library().is_none() {
             return;
         }
-        let imported = run(&pdf(
-            612,
-            792,
-            0,
-            None,
-            &[vec![(
-                100,
-                700,
-                "alpha beta gamma delta epsilon zeta eta theta",
-            )]],
-        ))
-        .unwrap();
+        let imported = run(&pdf(612, 792, 0, None, &[vec![(100, 700, "alpha beta gamma delta epsilon zeta eta theta")]])).unwrap();
         let block = &imported.pages[0].graph.nodes[0];
-        let span = boardcast_board::spans::locate(
-            &block.rows(),
-            "gamma",
-            "圈出",
-            boardcast_board::spans::Unit::Word,
-        )
-        .unwrap();
+        let span = boardcast_board::spans::locate(&block.rows(), "gamma", "圈出", boardcast_board::spans::Unit::Word).unwrap();
         let picture = image::load_from_memory(&imported.pages[0].jpeg).unwrap();
         let b = &span.boxes[0];
         assert!(dark_inside(&picture, [b.x as f64, b.y as f64, b.w as f64, b.h as f64]) > 50);
@@ -717,27 +461,11 @@ mod tests {
         if library().is_none() {
             return;
         }
-        let lines = vec![
-            (72, 700, "This paragraph talks about the automa-"),
-            (72, 686, "tion of many things that are done by hand."),
-        ];
+        let lines = vec![(72, 700, "This paragraph talks about the automa-"), (72, 686, "tion of many things that are done by hand.")];
         let imported = run(&pdf(612, 792, 0, None, &[lines])).unwrap();
         let block = &imported.pages[0].graph.nodes[0];
-        assert!(
-            block.extra["text"]
-                .as_str()
-                .unwrap()
-                .contains("automation of"),
-            "{}",
-            block.extra["text"]
-        );
-        assert!(boardcast_board::spans::locate(
-            &block.rows(),
-            "automation",
-            "圈出",
-            boardcast_board::spans::Unit::Word
-        )
-        .is_some());
+        assert!(block.extra["text"].as_str().unwrap().contains("automation of"), "{}", block.extra["text"]);
+        assert!(boardcast_board::spans::locate(&block.rows(), "automation", "圈出", boardcast_board::spans::Unit::Word).is_some());
     }
 
     #[test]
@@ -745,36 +473,13 @@ mod tests {
         if library().is_none() {
             return;
         }
-        let imported = run(&pdf(
-            600,
-            800,
-            0,
-            Some("Stored Title"),
-            &[
-                vec![(72, 700, "First page of the document")],
-                vec![(72, 700, "Second page of the document")],
-            ],
-        ))
-        .unwrap();
-        assert_eq!(
-            (
-                imported.total,
-                imported.pages.len(),
-                imported.unread,
-                imported.scanned
-            ),
-            (2, 2, 0, 0)
-        );
+        let imported = run(&pdf(600, 800, 0, Some("Stored Title"), &[vec![(72, 700, "First page of the document")], vec![(72, 700, "Second page of the document")]])).unwrap();
+        assert_eq!((imported.total, imported.pages.len(), imported.unread, imported.scanned), (2, 2, 0, 0));
         assert_eq!(imported.title.as_deref(), Some("Stored Title"));
         assert_eq!(imported.pages[1].graph.underlay(), Some((900.0, 1200.0)));
         assert!(!imported.paper);
         assert_eq!(&imported.pages[0].jpeg[..2], &[0xff, 0xd8]);
-        assert_eq!(
-            image::load_from_memory(&imported.pages[0].jpeg)
-                .unwrap()
-                .width(),
-            1800
-        );
+        assert_eq!(image::load_from_memory(&imported.pages[0].jpeg).unwrap().width(), 1800);
     }
 
     #[test]
@@ -782,14 +487,7 @@ mod tests {
         if library().is_none() {
             return;
         }
-        let imported = run(&pdf(
-            600,
-            800,
-            0,
-            None,
-            &[vec![(72, 700, "All one size here")]],
-        ))
-        .unwrap();
+        let imported = run(&pdf(600, 800, 0, None, &[vec![(72, 700, "All one size here")]])).unwrap();
         assert_eq!(imported.title.as_deref(), Some("All one size here"));
     }
 
@@ -808,14 +506,9 @@ mod tests {
         if library().is_none() {
             return;
         }
-        let pages: Vec<Vec<(u32, u32, &str)>> = (0..MAX_PAGES + 3)
-            .map(|_| vec![(72, 700, "A page of text")])
-            .collect();
+        let pages: Vec<Vec<(u32, u32, &str)>> = (0..MAX_PAGES + 3).map(|_| vec![(72, 700, "A page of text")]).collect();
         let imported = run(&pdf(100, 100, 0, None, &pages)).unwrap();
-        assert_eq!(
-            (imported.total, imported.pages.len(), imported.unread),
-            (MAX_PAGES + 3, MAX_PAGES, 3)
-        );
+        assert_eq!((imported.total, imported.pages.len(), imported.unread), (MAX_PAGES + 3, MAX_PAGES, 3));
     }
 
     #[test]
@@ -823,20 +516,12 @@ mod tests {
         if library().is_none() {
             return;
         }
-        let lines = vec![
-            (72, 700, "1. Introduction"),
-            (72, 650, "2. Proposed Method"),
-            (72, 600, "Figure 1. A picture of things."),
-        ];
+        let lines = vec![(72, 700, "1. Introduction"), (72, 650, "2. Proposed Method"), (72, 600, "Figure 1. A picture of things.")];
         let imported = run(&pdf(612, 792, 0, None, &[lines])).unwrap();
         assert!(imported.paper);
         let graph = &imported.pages[0].graph;
         assert!(graph.nodes.iter().any(|n| n.label == "Paper outline"));
-        assert!(
-            graph.nodes.iter().any(|n| n.label == "Introduction（§1）"),
-            "{}",
-            graph.describe()
-        );
+        assert!(graph.nodes.iter().any(|n| n.label == "Introduction（§1）"), "{}", graph.describe());
     }
 
     #[test]
@@ -844,38 +529,16 @@ mod tests {
         if library().is_none() {
             return;
         }
-        let Err(error) = run(b"%PDF-1.4 this is not really one") else {
-            panic!("should fail")
-        };
-        assert_eq!(
-            format!("{error}"),
-            "Can't open the PDF: the file is damaged or is not really a PDF"
-        );
+        let Err(error) = run(b"%PDF-1.4 this is not really one") else { panic!("should fail") };
+        assert_eq!(format!("{error}"), "Can't open the PDF: the file is damaged or is not really a PDF");
         let stop = AtomicBool::new(true);
-        let result = import_pdf(
-            &pdf(100, 100, 0, None, &[vec![]]),
-            &library().unwrap(),
-            true,
-            &stop,
-            &mut |_, _| {},
-        );
+        let result = import_pdf(&pdf(100, 100, 0, None, &[vec![]]), &library().unwrap(), true, &stop, &mut |_, _| {});
         assert!(result.is_err());
     }
 
     #[test]
     fn a_missing_library_is_a_clear_error() {
-        let Err(error) = import_pdf(
-            b"",
-            Path::new("/nonexistent"),
-            true,
-            &AtomicBool::new(false),
-            &mut |_, _| {},
-        ) else {
-            panic!("should fail")
-        };
-        assert!(
-            format!("{error}").contains("PDF support could not be loaded"),
-            "{error}"
-        );
+        let Err(error) = import_pdf(b"", Path::new("/nonexistent"), true, &AtomicBool::new(false), &mut |_, _| {}) else { panic!("should fail") };
+        assert!(format!("{error}").contains("PDF support could not be loaded"), "{error}");
     }
 }

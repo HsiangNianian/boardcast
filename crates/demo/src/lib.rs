@@ -51,15 +51,7 @@ fn samples() -> Vec<Sample> {
 }
 
 /// Short names for the sample list, in the samples' order.
-const TITLES: [&str; 7] = [
-    "Release checklist",
-    "Sign-in flow",
-    "Upload pipeline",
-    "Service groups",
-    "Owner handoff",
-    "登录流程",
-    "流程和待办",
-];
+const TITLES: [&str; 7] = ["Release checklist", "Sign-in flow", "Upload pipeline", "Service groups", "Owner handoff", "登录流程", "流程和待办"];
 
 /// The app's dark board shows strokes, composed in marker colors, in their chalk.
 fn chalk(rgb: u32) -> String {
@@ -88,11 +80,7 @@ fn doc() -> Document {
 }
 
 fn q(sel: &str) -> Element {
-    doc()
-        .query_selector(sel)
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| panic!("no {sel} on the page"))
+    doc().query_selector(sel).ok().flatten().unwrap_or_else(|| panic!("no {sel} on the page"))
 }
 
 fn el(tag: &str, class: &str, text: &str) -> Element {
@@ -107,9 +95,7 @@ fn el(tag: &str, class: &str, text: &str) -> Element {
 }
 
 fn svg_el(name: &str, attrs: &[(&str, &str)]) -> Element {
-    let e = doc()
-        .create_element_ns(Some("http://www.w3.org/2000/svg"), name)
-        .expect("an SVG element");
+    let e = doc().create_element_ns(Some("http://www.w3.org/2000/svg"), name).expect("an SVG element");
     for (k, v) in attrs {
         let _ = e.set_attribute(k, v);
     }
@@ -117,11 +103,7 @@ fn svg_el(name: &str, attrs: &[(&str, &str)]) -> Element {
 }
 
 fn reduced() -> bool {
-    win()
-        .match_media("(prefers-reduced-motion: reduce)")
-        .ok()
-        .flatten()
-        .is_some_and(|m| m.matches())
+    win().match_media("(prefers-reduced-motion: reduce)").ok().flatten().is_some_and(|m| m.matches())
 }
 
 async fn sleep(ms: f64) {
@@ -135,11 +117,7 @@ async fn frame() -> f64 {
     let promise = js_sys::Promise::new(&mut |done, _| {
         let _ = win().request_animation_frame(&done);
     });
-    JsFuture::from(promise)
-        .await
-        .ok()
-        .and_then(|t| t.as_f64())
-        .unwrap_or(0.0)
+    JsFuture::from(promise).await.ok().and_then(|t| t.as_f64()).unwrap_or(0.0)
 }
 
 fn path_of(points: &[Pt]) -> String {
@@ -177,18 +155,8 @@ impl Board {
         let _ = root.append_child(&ink);
         // Only the characters the Chinese samples use, from hanzi-writer-data (Arphic Public License):
         // `boardcast-tools pack-glyphs assets/hanzi crates/demo/zh-glyphs.pack --only-from <the samples>`.
-        let glyphs = Glyphs::load(HanziSource::PackBytes(include_bytes!("../zh-glyphs.pack")))
-            .expect("the samples' strokes");
-        Self {
-            svg: root,
-            under,
-            ink,
-            glyphs,
-            layout: StableLayout::default(),
-            graph: Graph::default(),
-            shown: HashSet::new(),
-            view: [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1],
-        }
+        let glyphs = Glyphs::load(HanziSource::PackBytes(include_bytes!("../zh-glyphs.pack"))).expect("the samples' strokes");
+        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), view: [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1] }
     }
 
     fn clear(&mut self) {
@@ -217,11 +185,7 @@ impl Board {
             for line in &piece.lines {
                 let inked = line.inked(&mut r);
                 let node = stroke_node(line.style);
-                let layer = if line.style.under {
-                    &self.under
-                } else {
-                    &self.ink
-                };
+                let layer = if line.style.under { &self.under } else { &self.ink };
                 let _ = layer.append_child(&node);
                 if new {
                     fresh.push(Drawing { node, inked });
@@ -236,53 +200,24 @@ impl Board {
 
     fn set_view(&mut self, v: [f64; 4]) {
         self.view = v;
-        let _ = self.svg.set_attribute(
-            "viewBox",
-            &format!("{:.1} {:.1} {:.1} {:.1}", v[0], v[1], v[2], v[3]),
-        );
+        let _ = self.svg.set_attribute("viewBox", &format!("{:.1} {:.1} {:.1} {:.1}", v[0], v[1], v[2], v[3]));
     }
 }
 
 /// The part of the board to show: all its ink, centred, never closer than a set size, in the canvas's shape.
 fn frame_for(b: &Bounds) -> [f64; 4] {
-    let (bw, bh, cx, cy) = if b.x1 > b.x0 {
-        (
-            b.x1 - b.x0,
-            b.y1 - b.y0,
-            (b.x0 + b.x1) / 2.0,
-            (b.y0 + b.y1) / 2.0,
-        )
-    } else {
-        (0.0, 0.0, 0.0, 0.0)
-    };
+    let (bw, bh, cx, cy) = if b.x1 > b.x0 { (b.x1 - b.x0, b.y1 - b.y0, (b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0) } else { (0.0, 0.0, 0.0, 0.0) };
     let r = q("#board").get_bounding_client_rect();
     let narrow = (r.width() / MIN_VIEW.0).clamp(0.45, 1.0);
     let margin = MARGIN * narrow;
-    let (w, h) = (
-        (bw + margin * 2.0).max(MIN_VIEW.0 * narrow),
-        (bh + margin * 2.0).max(MIN_VIEW.1 * narrow),
-    );
-    let aspect = if r.height() > 0.0 {
-        r.width() / r.height()
-    } else {
-        1.6
-    };
-    let (w, h) = if w / h > aspect {
-        (w, w / aspect)
-    } else {
-        (h * aspect, h)
-    };
+    let (w, h) = ((bw + margin * 2.0).max(MIN_VIEW.0 * narrow), (bh + margin * 2.0).max(MIN_VIEW.1 * narrow));
+    let aspect = if r.height() > 0.0 { r.width() / r.height() } else { 1.6 };
+    let (w, h) = if w / h > aspect { (w, w / aspect) } else { (h * aspect, h) };
     [cx - w / 2.0, cy - h / 2.0, w, h]
 }
 
 fn stroke_node(style: Style) -> Element {
-    svg_el(
-        "path",
-        &[
-            ("fill", &chalk(style.rgb)),
-            ("fill-opacity", &style.alpha.to_string()),
-        ],
-    )
+    svg_el("path", &[("fill", &chalk(style.rgb)), ("fill-opacity", &style.alpha.to_string())])
 }
 
 struct Ui {
@@ -296,10 +231,7 @@ struct Ui {
 impl Ui {
     fn set_state(&self, s: &str) {
         self.state.set_text_content(Some(&format!("board / {s}")));
-        let _ = self
-            .state
-            .class_list()
-            .toggle_with_force("hot", s == "drawing");
+        let _ = self.state.class_list().toggle_with_force("hot", s == "drawing");
     }
 }
 
@@ -312,14 +244,7 @@ struct Control {
 }
 
 /// Play one sample through. False if the reader started another one meanwhile.
-async fn play(
-    sample: &Sample,
-    index: usize,
-    board: &RefCell<Board>,
-    ui: &Ui,
-    control: &Control,
-    me: u32,
-) -> bool {
+async fn play(sample: &Sample, index: usize, board: &RefCell<Board>, ui: &Ui, control: &Control, me: u32) -> bool {
     let live = || control.run.get() == me;
     board.borrow_mut().clear();
     ui.lines.set_text_content(None);
@@ -327,12 +252,7 @@ async fn play(
     for (i, t) in ui.tabs.iter().enumerate() {
         let _ = t.class_list().toggle_with_force("on", i == index);
     }
-    board.borrow_mut().set_view(frame_for(&Bounds {
-        x0: 0.0,
-        y0: 0.0,
-        x1: 0.0,
-        y1: 0.0,
-    }));
+    board.borrow_mut().set_view(frame_for(&Bounds { x0: 0.0, y0: 0.0, x1: 0.0, y1: 0.0 }));
     ui.set_state("listening");
     sleep(600.0).await;
     for line in &sample.lines {
@@ -344,11 +264,7 @@ async fn play(
         }
         // The line comes in as it is recognized.
         let li = el("li", "live", "");
-        let _ = li.append_child(&el(
-            "b",
-            "who",
-            &line.speaker.chars().take(1).collect::<String>(),
-        ));
+        let _ = li.append_child(&el("b", "who", &line.speaker.chars().take(1).collect::<String>()));
         let body = el("div", "", "");
         let _ = body.append_child(&el("span", "name", &line.speaker));
         let said = el("p", "", "");
@@ -379,13 +295,7 @@ async fn play(
             continue;
         };
         let (fresh, bounds) = board.borrow_mut().apply(ops);
-        if let Some(head) = board
-            .borrow()
-            .graph
-            .nodes
-            .iter()
-            .find(|n| matches!(n.kind, Kind::Topic))
-        {
+        if let Some(head) = board.borrow().graph.nodes.iter().find(|n| matches!(n.kind, Kind::Topic)) {
             ui.title.set_text_content(Some(&head.label));
         }
         ui.set_state("drawing");
@@ -410,9 +320,7 @@ async fn ease_view(board: &RefCell<Board>, to: [f64; 4], live: &dyn Fn() -> bool
         let t = frame().await;
         let k = ((t - t0) / 450.0).min(1.0);
         let e = 1.0 - (1.0 - k).powi(3);
-        board
-            .borrow_mut()
-            .set_view(std::array::from_fn(|i| from[i] + (to[i] - from[i]) * e));
+        board.borrow_mut().set_view(std::array::from_fn(|i| from[i] + (to[i] - from[i]) * e));
         if k >= 1.0 || !live() {
             break;
         }
@@ -442,17 +350,13 @@ async fn write(strokes: &[Drawing], live: &dyn Fn() -> bool) {
         let pen = (t - t0) as f32 * speed;
         // Finish every stroke the pen has passed, then draw the one it is on up to the pen.
         while done < strokes.len() && pen >= before + lengths[done] {
-            let _ = strokes[done]
-                .node
-                .set_attribute("d", &path_of(&outline(&strokes[done].inked, 1.0)));
+            let _ = strokes[done].node.set_attribute("d", &path_of(&outline(&strokes[done].inked, 1.0)));
             before += lengths[done];
             done += 1;
         }
         if done < strokes.len() {
             let k = ((pen - before) / lengths[done]).clamp(0.0, 1.0);
-            let _ = strokes[done]
-                .node
-                .set_attribute("d", &path_of(&outline(&strokes[done].inked, k)));
+            let _ = strokes[done].node.set_attribute("d", &path_of(&outline(&strokes[done].inked, k)));
         }
     }
 }
@@ -465,16 +369,8 @@ fn on(target: &web_sys::EventTarget, event: &str, f: impl FnMut(web_sys::Event) 
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    let embed = win()
-        .location()
-        .search()
-        .unwrap_or_default()
-        .contains("embed");
-    let _ = doc()
-        .document_element()
-        .expect("a root")
-        .class_list()
-        .toggle_with_force("embed", embed);
+    let embed = win().location().search().unwrap_or_default().contains("embed");
+    let _ = doc().document_element().expect("a root").class_list().toggle_with_force("embed", embed);
 
     let samples = Rc::new(samples());
     let picker = q("#samples");
@@ -489,18 +385,8 @@ pub fn start() {
             b
         })
         .collect();
-    let ui = Rc::new(Ui {
-        title: q("#title"),
-        state: q("#state"),
-        lines: q("#lines"),
-        tabs: tabs.clone(),
-        listen: q("#listen"),
-    });
-    let control = Rc::new(Control {
-        wanted: Cell::new(None),
-        paused: Cell::new(false),
-        run: Cell::new(0),
-    });
+    let ui = Rc::new(Ui { title: q("#title"), state: q("#state"), lines: q("#lines"), tabs: tabs.clone(), listen: q("#listen") });
+    let control = Rc::new(Control { wanted: Cell::new(None), paused: Cell::new(false), run: Cell::new(0) });
     let board = Rc::new(RefCell::new(Board::new()));
 
     for (i, b) in tabs.iter().enumerate() {
@@ -515,10 +401,7 @@ pub fn start() {
         let (control, ui) = (control.clone(), ui.clone());
         on(&q("#listen"), "click", move |_| {
             control.paused.set(!control.paused.get());
-            let _ = ui
-                .listen
-                .class_list()
-                .toggle_with_force("paused", control.paused.get());
+            let _ = ui.listen.class_list().toggle_with_force("paused", control.paused.get());
         });
     }
     {

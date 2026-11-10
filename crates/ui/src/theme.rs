@@ -115,11 +115,38 @@ impl Palette {
 
 gpui_kit_assets::icon_assets!(ExtraIcons, [FileDown, FilePlus, Import, Lasso, Pencil, RotateCcw, Sparkles, Trash, Users, WandSparkles, X]);
 
-/// The icons the toolkit carries, and the few more this window asks for.
+/// The website's pictograms, built from blocks and lines, in place of the toolkit's icons of the same name.
+/// Holes are cut with even-odd fills, since an icon is drawn as one shape in the text's color.
+const PICTOGRAMS: [(&str, &str); 19] = [
+    ("icons/chevron-left.svg", include_str!("../icons/chevron-left.svg")),
+    ("icons/chevron-right.svg", include_str!("../icons/chevron-right.svg")),
+    ("icons/file-down.svg", include_str!("../icons/file-down.svg")),
+    ("icons/file-plus.svg", include_str!("../icons/file-plus.svg")),
+    ("icons/folder-open.svg", include_str!("../icons/folder-open.svg")),
+    ("icons/import.svg", include_str!("../icons/import.svg")),
+    ("icons/lasso.svg", include_str!("../icons/lasso.svg")),
+    ("icons/panel-right-close.svg", include_str!("../icons/panel-right-close.svg")),
+    ("icons/panel-right-open.svg", include_str!("../icons/panel-right-open.svg")),
+    ("icons/pencil.svg", include_str!("../icons/pencil.svg")),
+    ("icons/redo-2.svg", include_str!("../icons/redo-2.svg")),
+    ("icons/rotate-ccw.svg", include_str!("../icons/rotate-ccw.svg")),
+    ("icons/settings.svg", include_str!("../icons/settings.svg")),
+    ("icons/sparkles.svg", include_str!("../icons/sparkles.svg")),
+    ("icons/trash.svg", include_str!("../icons/trash.svg")),
+    ("icons/undo-2.svg", include_str!("../icons/undo-2.svg")),
+    ("icons/users.svg", include_str!("../icons/users.svg")),
+    ("icons/wand-sparkles.svg", include_str!("../icons/wand-sparkles.svg")),
+    ("icons/x.svg", include_str!("../icons/x.svg")),
+];
+
+/// The icons the toolkit carries, the few more this window asks for, and our own pictograms over both.
 pub struct Assets;
 
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
+        if let Some((_, svg)) = PICTOGRAMS.iter().find(|(name, _)| *name == path) {
+            return Ok(Some(Cow::Borrowed(svg.as_bytes())));
+        }
         if let Some(bytes) = ExtraIcons.load(path)? {
             return Ok(Some(bytes));
         }

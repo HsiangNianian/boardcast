@@ -101,15 +101,25 @@ async fn write(h: Rc<Hero>) {
         append(&h.host, &hit);
     }
 
-    // A note inviting the reader to try it, with an arrow down to the words that can be circled.
+    // A note inviting the reader to try it, with an arrow down to the words that can be circled. Circling
+    // needs a mouse or a pen, so a touch screen gets no note.
+    if !fine_pointer() {
+        return;
+    }
     wait(300).await;
     let note_size = (size * 0.15).max(18.0);
-    let note = text_strokes("drag a circle around any word", w - size * 3.2, y2 + size * 0.62, note_size, 5);
+    let width = text_strokes("drag a circle around any word", 0.0, 0.0, note_size, 5).width;
+    let nx = (w - size * 3.2).min(w - width - 8.0).max(size * 0.8);
+    let note = text_strokes("drag a circle around any word", nx, y2 + size * 0.62, note_size, 5);
     pen_draw(&h.svg, &note.strokes, Pen { class: "w note", speed: 1.4, lift: 12.0 }).await;
-    let a: Pt = (w - size * 3.25, y2 + size * 0.58);
+    let a: Pt = (nx - size * 0.05, y2 + size * 0.58);
     let b: Pt = (a.0 - size * 0.7, a.1 + size * 0.35);
     let arrow = [hand(&[a, b], 4.0, 3), hand(&[(b.0 + 16.0, b.1 - 2.0), b], 1.0, 4), hand(&[(b.0 + 4.0, b.1 - 15.0), b], 1.0, 5)];
     pen_draw(&h.svg, &arrow, Pen { class: "w note", speed: 1.4, lift: 4.0 }).await;
+}
+
+fn fine_pointer() -> bool {
+    win().match_media("(any-pointer: fine)").ok().flatten().is_some_and(|m| m.matches())
 }
 
 /// Wipe the sheet with an eraser, then write it again.

@@ -1110,7 +1110,8 @@ fn read_import(source: ImportSource, library: &std::path::Path, english: bool, c
         details.push(if english { format!("board limit reached, last {} not imported", plural(imported.unread, "page")) } else { format!("板到上限了，最后 {} 页没导", imported.unread) });
     }
     if imported.scanned > 0 {
-        details.push(if english { format!("{} without a text layer, imported as images", plural(imported.scanned, "page")) } else { format!("{} 页没有文字层，整页算一张图", imported.scanned) });
+        // Talk is matched against a page's words, so these can only be turned to by number.
+        details.push(if english { format!("{} without a text layer, imported as images and turned to only by number", plural(imported.scanned, "page")) } else { format!("{} 页没有文字层，整页算一张图，只能按页码翻到", imported.scanned) });
     }
     let boards = imported.pages.len();
     let note = if english {
@@ -2079,7 +2080,14 @@ impl Workbench {
             self.page_quiet -= 1;
             return false;
         }
-        self.page_hint = follow::suggested(text, &pages, current).map(|b| (b, pages[b].number, pages[b].title.chars().take(32).collect()));
+        let about = follow::suggested(text, &pages, current);
+        // Turning by itself, the line is drawn on the page it is about.
+        if let Some(board) = about.filter(|_| self.form.saved.turn_pages) {
+            self.page_quiet = QUIET_AFTER_TURNING;
+            self.go_to_page(board, cx);
+            return false;
+        }
+        self.page_hint = about.map(|b| (b, pages[b].number, pages[b].title.chars().take(32).collect()));
         false
     }
 
@@ -2499,6 +2507,7 @@ impl Workbench {
             api_key: if key.is_empty() { self.form.saved.api_key.clone() } else { key },
             enabled: self.form.remote,
             diarize: self.form.saved.diarize,
+            turn_pages: self.form.saved.turn_pages,
             system_speech: self.form.saved.system_speech,
             speech_language: self.form.saved.speech_language.clone(),
             interface_language: self.form.saved.interface_language.clone(),
@@ -4028,6 +4037,25 @@ impl Render for Workbench {
             .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
                 "New voices are named A, B, C in order. Click a speaker to give them a real name, and the same voice keeps it. Voice data stays in the meeting file on this device. Very short sentences go to whoever spoke last.",
                 "新的声音按 A、B、C 命名。点说话人可以改成真名，同一个声音之后都用这个名字。声纹只保存在本机的会议文件里。很短的句子会算给上一个说话的人。",
+            )))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(div().flex_1().min_w_0().text_sm().child(tr("Turn to the page being talked about", "讲到别的页时自动翻过去")))
+                    .child(Switch::new("turn-pages").checked(self.form.saved.turn_pages).accessibility_label(tr("Turn to the page being talked about", "讲到别的页时自动翻过去")).on_click(cx.listener(|this, checked: &bool, _, cx| {
+                        this.form.saved.turn_pages = *checked;
+                        if let Err(e) = this.form.saved.save() {
+                            this.form.note = Some(format!("{e:#}"));
+                        }
+                        cx.notify();
+                    }))),
+            )
+            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
+                "With pages imported, saying \u{201c}go to page 5\u{201d} always turns to it. When what is said is about another page, it is offered at the board's corner; with this on, the board turns by itself.",
+                "导入了多页材料时，说「翻到第5页」总会翻过去。讲到另一页的内容时，画布角落会给出建议；打开这项后会直接翻过去。",
             )))
             .when(self.speech_helper.is_some(), |d| {
                 let system = self.form.saved.system_speech;

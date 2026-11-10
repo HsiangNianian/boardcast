@@ -1,0 +1,74 @@
+[
+  {
+    "id": "zh-guess-stays-open",
+    "why": "A guess nobody confirmed is not a conclusion (#68).",
+    "lines": [["A", "失败标准应该有两个吧？"], ["B", "我也说不准，回头再对一下。"], ["A", "行，那先往下说部署。"], ["B", "部署这周三上线。"]],
+    "checks": [
+      { "in": ["结论", "决定"], "absent": ["两个"] },
+      { "in": ["待讨论"], "any": ["失败标准", "两个"] }
+    ]
+  },
+  {
+    "id": "zh-answered-question-closes",
+    "why": "A question answered and accepted later leaves Open questions, and the answer is kept.",
+    "lines": [["A", "三次重试还是不满足要求，之后怎么办？"], ["B", "这时就动态缩小字号兜底。"], ["A", "好，那就不做硬切了，就用缩小字号。"]],
+    "checks": [
+      { "in": ["结论", "决定"], "any": ["缩小"] },
+      { "in": ["待讨论"], "absent": ["怎么办", "三次重试"] }
+    ]
+  },
+  {
+    "id": "zh-tentative-answer-stays-open",
+    "why": "An answer offered as a maybe does not settle the question.",
+    "lines": [["A", "三次重试还是不满足要求，之后怎么办？"], ["B", "也许可以缩小字号，不过得稍后验证一下。"], ["A", "嗯，先记下来。"]],
+    "checks": [
+      { "in": ["决定"], "absent": ["缩小"] },
+      { "in": ["待讨论"], "any": ["缩小", "重试", "三次"] }
+    ]
+  },
+  {
+    "id": "zh-withdrawn-plan",
+    "why": "A plan withdrawn is not the decision; the one that replaced it is.",
+    "lines": [["A", "我们先用方案一，直接硬切。"], ["B", "硬切会把字从中间切断，不太好。"], ["A", "那方案一撤回，改用方案二，按词换行。"], ["B", "同意方案二。"]],
+    "checks": [
+      { "in": ["决定"], "any": ["方案二", "按词换行"] },
+      { "in": ["决定"], "absent": ["采用方案一", "用方案一，"] }
+    ]
+  },
+  {
+    "id": "zh-letter-is-no-owner",
+    "why": "A lettered speaker is numbered, not named, so it owns nothing; no date is made up.",
+    "lines": [["A", "接口文档我来写，周五前发给大家。"], ["B", "好的，没问题。"]],
+    "checks": [
+      { "in": ["待办"], "any": ["接口文档"] },
+      { "in": ["待办"], "absent": ["负责人：A", "负责人: A", "周四", "下周"] }
+    ]
+  },
+  {
+    "id": "zh-in-the-moment-is-no-todo",
+    "why": "Something done there and then is not work for after the meeting.",
+    "lines": [["A", "我们先看一下这段视频。"], ["B", "嗯，这里卡顿很明显。"], ["A", "卡顿问题要查一下，小王负责。"], ["C", "好，我来查。"]],
+    "checks": [
+      { "in": ["待办"], "any": ["卡顿"] },
+      { "in": ["待办"], "absent": ["看一下", "看视频"] }
+    ]
+  },
+  {
+    "id": "en-guess-stays-open",
+    "why": "A guess nobody confirmed is not a conclusion.",
+    "lines": [["A", "There should be two failure criteria, right?"], ["B", "Not sure, we'll have to check."], ["A", "Okay, moving on to deployment."], ["B", "We ship on Wednesday."]],
+    "checks": [
+      { "in": ["Conclusions", "Decisions"], "absent": ["two failure", "two criteria"] },
+      { "in": ["Open questions"], "any": ["criteri"] }
+    ]
+  },
+  {
+    "id": "en-answered-question-closes",
+    "why": "A question answered and accepted later leaves Open questions.",
+    "lines": [["A", "If three retries still don't fit, what do we do then?"], ["B", "Then we shrink the font as a fallback."], ["A", "Good, so no hard cut, we shrink the font."]],
+    "checks": [
+      { "in": ["Conclusions", "Decisions"], "any": ["shrink"] },
+      { "in": ["Open questions"], "absent": ["what do we do", "three retries"] }
+    ]
+  }
+]

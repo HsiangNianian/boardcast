@@ -21,11 +21,13 @@ pub fn default_dir() -> Result<PathBuf> {
     }
     #[cfg(target_os = "macos")]
     return Ok(PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join("Library/Application Support/games.mmstudio.boardcast"));
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    return Ok(PathBuf::from(std::env::var("APPDATA").context("APPDATA is not set")?).join("games.mmstudio.boardcast"));
+    #[cfg(not(any(target_os = "macos", windows)))]
     if let Ok(dir) = std::env::var("XDG_DATA_HOME") {
         return Ok(PathBuf::from(dir).join("games.mmstudio.boardcast"));
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     Ok(PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join(".local/share/games.mmstudio.boardcast"))
 }
 

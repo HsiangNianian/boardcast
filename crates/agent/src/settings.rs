@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
 
@@ -41,7 +42,9 @@ fn config_dir() -> Result<PathBuf> {
     }
     #[cfg(target_os = "macos")]
     let base = PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join("Library/Application Support");
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    let base = PathBuf::from(std::env::var("APPDATA").context("APPDATA is not set")?);
+    #[cfg(not(any(target_os = "macos", windows)))]
     let base = match std::env::var("XDG_CONFIG_HOME") {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join(".config"),
@@ -79,7 +82,12 @@ impl Settings {
         let tmp = dir.join("remote.json.tmp");
         // Private from the first byte: the key must never sit in a file others can read.
         let _ = fs::remove_file(&tmp);
-        let mut file = OpenOptions::new().create_new(true).write(true).mode(0o600).open(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
+        let mut options = OpenOptions::new();
+        options.create_new(true).write(true);
+        // Only this user may read the key. A Windows profile folder is private to its user already.
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
         file.write_all(text.as_bytes())?;
         file.sync_all()?;
         fs::rename(&tmp, dir.join("remote.json")).context("saving the model settings")?;
@@ -122,6 +130,7 @@ mod tests {
         assert_eq!(key("sk-1234567890abcdef").as_deref(), Some("sk-…cdef"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn saved_settings_round_trip_with_private_permissions() {
         use std::os::unix::fs::PermissionsExt;

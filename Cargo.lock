@@ -712,6 +712,7 @@ dependencies = [
  "regex",
  "serde_json",
  "ureq",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -801,6 +802,7 @@ dependencies = [
  "libc",
  "sha2 0.10.9",
  "ureq",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -835,6 +837,7 @@ dependencies = [
  "sha2 0.10.9",
  "tar",
  "ureq",
+ "zip",
 ]
 
 [[package]]
@@ -859,6 +862,7 @@ dependencies = [
  "sherpa-onnx",
  "sys-locale",
  "tiny-skia",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

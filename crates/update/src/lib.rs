@@ -235,7 +235,8 @@ fn install_with(archive: &Path, signature: &str, key: &str, prefix: &Path, curre
     result
 }
 
-#[cfg(test)]
+// Installing swaps Unix files and permissions, and only Linux installs itself.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use flate2::write::GzEncoder;

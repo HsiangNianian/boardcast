@@ -6,9 +6,11 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use sha2::{Digest, Sha256};
+#[cfg(unix)]
 use std::ffi::CString;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
+#[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -176,6 +178,21 @@ fn part_of(path: &Path) -> PathBuf {
 }
 
 /// Bytes free on the disk holding `dir`.
+#[cfg(windows)]
+fn free_space(dir: &Path) -> Result<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    let wide: Vec<u16> = dir.as_os_str().encode_wide().chain([0]).collect();
+    let mut free = 0_u64;
+    // SAFETY: `wide` is a NUL-terminated path and `free` is written by the call.
+    let ok = unsafe { windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(wide.as_ptr(), &mut free, std::ptr::null_mut(), std::ptr::null_mut()) };
+    if ok == 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(free)
+}
+
+/// Bytes free on the disk holding `dir`.
+#[cfg(unix)]
 fn free_space(dir: &Path) -> Result<u64> {
     let path = CString::new(dir.as_os_str().as_bytes())?;
     // SAFETY: `path` is a valid C string and `stat` is written by the call before being read.

@@ -118,8 +118,13 @@ while True:
         std::fs::write(&script, FAKE).ok()?;
         let helper = dir.join("boardcast-speech");
         std::fs::write(&helper, format!("#!/bin/sh\nexec python3 -I {} \"$@\"\n", script.display())).ok()?;
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).ok()?;
+        #[cfg(not(unix))]
+        return None;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).ok()?;
+        }
         Some(helper)
     }
 

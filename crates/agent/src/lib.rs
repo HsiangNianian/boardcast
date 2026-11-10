@@ -263,12 +263,21 @@ fn parse_devices(text: &str) -> Vec<Gpu> {
         .collect()
 }
 
+/// The server's file name in the folder it ships in.
+pub const LLAMA_SERVER: &str = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
+
 fn server_command(binaries: &std::path::Path) -> Command {
-    let mut cmd = Command::new(binaries.join("llama-server"));
+    let mut cmd = Command::new(binaries.join(LLAMA_SERVER));
     #[cfg(target_os = "macos")]
     cmd.env("DYLD_LIBRARY_PATH", binaries);
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     cmd.env("LD_LIBRARY_PATH", binaries);
+    // Windows looks for libraries beside the program already; this keeps it from opening a console.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
+    }
     cmd.stdin(Stdio::null());
     cmd
 }
@@ -333,15 +342,42 @@ fn spawn_llama(server: &LocalServer, device: Option<&str>, discrete: bool, port:
             Ok(())
         });
     }
-    let child = cmd.spawn().with_context(|| format!("starting {}", server.binaries.join("llama-server").display()))?;
-    #[cfg(not(target_os = "linux"))]
+    let child = cmd.spawn().with_context(|| format!("starting {}", server.binaries.join(LLAMA_SERVER).display()))?;
+    #[cfg(target_os = "macos")]
     end_with_this_process(child.id());
+    #[cfg(windows)]
+    end_with_this_process(&child);
     Ok(child)
 }
 
-/// Other systems can't tie a child's life to its parent, so a small shell waits for this process to go,
+/// On Windows the child joins a job that the system ends, with everything in it, when this process goes.
+#[cfg(windows)]
+fn end_with_this_process(child: &Child) {
+    use std::os::windows::io::AsRawHandle;
+    use std::sync::OnceLock;
+    use windows_sys::Win32::System::JobObjects::*;
+    static JOB: OnceLock<usize> = OnceLock::new();
+    let job = *JOB.get_or_init(|| {
+        // SAFETY: the job's handle is kept for the life of the process, which is what ends the job; the
+        // limits are a plain struct written before it is passed.
+        unsafe {
+            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            let size = std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32;
+            SetInformationJobObject(job, JobObjectExtendedLimitInformation, (&raw const limits).cast(), size);
+            job as usize
+        }
+    });
+    // SAFETY: both handles are live: the job's for good, the child's while `child` is borrowed.
+    if unsafe { AssignProcessToJobObject(job as _, child.as_raw_handle() as _) } == 0 {
+        eprintln!("could not tie the model to this process: {}", std::io::Error::last_os_error());
+    }
+}
+
+/// A Mac can't tie a child's life to its parent, so a small shell waits for this process to go,
 /// however it goes, and then ends the child. It goes away by itself if the child ends first.
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 fn end_with_this_process(child: u32) {
     let script = format!("while kill -0 {parent} 2>/dev/null && kill -0 {child} 2>/dev/null; do sleep 1; done; kill {child} 2>/dev/null", parent = std::process::id());
     if let Err(e) = Command::new("/bin/sh").args(["-c", &script]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {

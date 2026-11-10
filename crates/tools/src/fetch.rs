@@ -78,10 +78,18 @@ fn unpack(archive: &Path, into: &Path) -> Result<()> {
     tar::Archive::new(flate2::read::GzDecoder::new(File::open(archive)?)).unpack(into).with_context(|| format!("unpacking {}", archive.display()))
 }
 
-fn host(mac: &str) -> Result<String> {
+/// This machine as a download names it: the Mac and Windows are called differently by different projects.
+fn unzip(archive: &Path, into: &Path) -> Result<()> {
+    let _ = fs::remove_dir_all(into);
+    fs::create_dir_all(into)?;
+    zip::ZipArchive::new(File::open(archive)?)?.extract(into).with_context(|| format!("unpacking {}", archive.display()))
+}
+
+fn host(mac: &str, windows: &str) -> Result<String> {
     let os = match std::env::consts::OS {
         "linux" => "linux",
         "macos" => mac,
+        "windows" => windows,
         other => bail!("no build for {other}"),
     };
     let arch = match std::env::consts::ARCH {
@@ -149,12 +157,13 @@ fn voice() -> Result<()> {
 const PDFIUM_BUILD: &str = "chromium/8138";
 
 fn pdfium(platform: Option<&str>) -> Result<()> {
-    let platform = platform.map_or_else(|| host("mac"), |p| Ok(p.to_string()))?;
+    let platform = platform.map_or_else(|| host("mac", "win"), |p| Ok(p.to_string()))?;
     let sha256 = match platform.as_str() {
         "linux-x64" => "d6b1e28950a0392590d79bbdbb7eb19686872b688f8a36f170acb19e41473113",
         "linux-arm64" => "c70b1ce4d13257f741af19e0aeee575890875995eb81370a65be942e601a1862",
         "mac-arm64" => "21a1567b397b571f4f77f21ca91eac7b892774219c3c715a5127a20950ccb18b",
         "mac-x64" => "72662ac8eff7bf5381ef82ceebd0a0ad5bddb051b303981115114e6972fd201c",
+        "win-x64" => "8d48973e3eb472dda0f5f2435e595ac043f9f2219dd71883392f549445afa8a5",
         other => bail!("no PDFium build for {other}"),
     };
     let out = root().join("target/pdfium");
@@ -169,22 +178,28 @@ fn pdfium(platform: Option<&str>) -> Result<()> {
     unpack(&archive, &work)?;
     let _ = fs::remove_dir_all(&out);
     fs::create_dir_all(&out)?;
-    let library = if platform.starts_with("mac") { "libpdfium.dylib" } else { "libpdfium.so" };
-    fs::copy(work.join("lib").join(library), out.join(library))?;
+    let library = match &platform[..3] {
+        "mac" => "lib/libpdfium.dylib",
+        "win" => "bin/pdfium.dll",
+        _ => "lib/libpdfium.so",
+    };
+    fs::copy(work.join(library), out.join(Path::new(library).file_name().context("library name")?))?;
     fs::copy(work.join("LICENSE"), out.join("LICENSE"))?;
     fs::write(marker, wanted)?;
     fs::remove_dir_all(work)?;
     Ok(())
 }
 
-/// Linux takes the Vulkan build, which falls back to the CPU on a machine without Vulkan; the Mac the Metal build.
+/// Linux and Windows take the Vulkan build, which falls back to the CPU on a machine without Vulkan; the Mac the
+/// Metal build.
 /// Keep LLAMA_BUILD in .github/workflows/eval.yml in step.
 const LLAMA_BUILD: &str = "b11954";
 
 fn llama(platform: Option<&str>) -> Result<()> {
-    let platform = platform.map_or_else(|| host("macos"), |p| Ok(p.to_string()))?;
+    let platform = platform.map_or_else(|| host("macos", "windows"), |p| Ok(p.to_string()))?;
     let asset = match platform.as_str() {
         "linux-x64" => format!("llama-{LLAMA_BUILD}-bin-ubuntu-vulkan-x64.tar.gz"),
+        "windows-x64" => format!("llama-{LLAMA_BUILD}-bin-win-vulkan-x64.zip"),
         "macos-arm64" | "macos-x64" => format!("llama-{LLAMA_BUILD}-bin-{platform}.tar.gz"),
         other => bail!("no llama-server build for {other}"),
     };
@@ -200,7 +215,11 @@ fn llama(platform: Option<&str>) -> Result<()> {
         fs::write(&archive, bytes)?;
     }
     let work = cache()?.join(format!("llama-{platform}"));
-    unpack(&archive, &work)?;
+    if asset.ends_with(".zip") {
+        unzip(&archive, &work)?;
+    } else {
+        unpack(&archive, &work)?;
+    }
     // The archive may hold one folder.
     let top: Vec<PathBuf> = fs::read_dir(&work)?.map(|e| e.map(|e| e.path())).collect::<io::Result<_>>()?;
     let src = if let [only] = top.as_slice() { if only.is_dir() { only.clone() } else { work.clone() } } else { work.clone() };
@@ -214,7 +233,8 @@ fn llama(platform: Option<&str>) -> Result<()> {
         bytes += fs::copy(src.join(name), out.join(name))?;
         kept += 1;
     }
-    ensure!(out.join("llama-server").is_file(), "{asset} has no llama-server");
+    let server = if platform.starts_with("windows") { "llama-server.exe" } else { "llama-server" };
+    ensure!(out.join(server).is_file(), "{asset} has no {server}");
     fs::write(marker, format!("{wanted}\n"))?;
     fs::remove_dir_all(work)?;
     println!("fetch: {platform} llama-server into resources/llama ({kept} files, {:.1} MB)", bytes as f64 / 1e6);
@@ -223,8 +243,12 @@ fn llama(platform: Option<&str>) -> Result<()> {
 
 /// llama-server, the libraries it loads, and the licence; not the other tools or duplicate library names.
 fn keep_for_llama(name: &str, names: &[String], mac: bool) -> bool {
-    if name == "llama-server" || name == "LICENSE" {
+    if name == "llama-server" || name == "llama-server.exe" || name == "LICENSE" {
         return true;
+    }
+    // Windows: the libraries are DLLs with one name each.
+    if let Some(stem) = name.strip_suffix(".dll") {
+        return !(stem.contains("ggml-rpc") || (stem.contains("llama-") && stem.ends_with("-impl") && !stem.contains("llama-server-impl")));
     }
     let numbered = |s: &str| !s.is_empty() && s.split('.').all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
     let library = name.ends_with(".so") || name.ends_with(".dylib") || name.split_once(".so.").is_some_and(|(_, v)| numbered(v));
@@ -350,6 +374,10 @@ mod tests {
         .into();
         let kept: Vec<&str> = linux.iter().filter(|n| keep_for_llama(n, &linux, false)).map(String::as_str).collect();
         assert_eq!(kept, ["llama-server", "LICENSE", "libllama.so.0", "libggml-vulkan.so", "libllama-server-impl.so"]);
+
+        let windows: Vec<String> = ["llama-server.exe", "llama-cli.exe", "llama.dll", "ggml-vulkan.dll", "ggml-rpc.dll", "llama-cli-impl.dll", "llama-server-impl.dll"].map(String::from).into();
+        let kept: Vec<&str> = windows.iter().filter(|n| keep_for_llama(n, &windows, false)).map(String::as_str).collect();
+        assert_eq!(kept, ["llama-server.exe", "llama.dll", "ggml-vulkan.dll", "llama-server-impl.dll"]);
 
         let mac: Vec<String> = ["llama-server", "libllama.dylib", "libllama.0.dylib", "libllama.0.27.0.dylib", "libggml-rpc.dylib", "libggml-metal.dylib"].map(String::from).into();
         let kept: Vec<&str> = mac.iter().filter(|n| keep_for_llama(n, &mac, true)).map(String::as_str).collect();

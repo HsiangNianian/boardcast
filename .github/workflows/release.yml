@@ -10,7 +10,8 @@ name: Release
 # A release stays a draft until every package is up, so nobody downloads half of it, and is then marked
 # latest, which is where the updater reads its manifest; the manifest is also copied to the rolling
 # `gpui-latest` pre-release, where the alphas looked. It lists Linux packages only, as the updater
-# only installs on Linux; Mac apps are downloaded by hand.
+# only installs on Linux; Mac and Windows apps are downloaded by hand. Windows is added once the release is
+# out, so a Windows build that fails holds up nothing else.
 on:
   push:
     tags: ['v*']
@@ -21,6 +22,7 @@ permissions:
 env:
   LINUX_VARIANTS: all ja en
   MAC_VARIANTS: all ja en none
+  WINDOWS_VARIANTS: all ja en
   TAG: ${{ github.ref_name }}
 
 jobs:
@@ -164,3 +166,25 @@ jobs:
           if gh release view gpui-latest >/dev/null 2>&1; then
             gh release upload gpui-latest manifest.json --clobber
           fi
+
+  windows:
+    needs: publish
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache voice models
+        uses: actions/cache@v4
+        with:
+          path: resources/voice
+          key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      - run: sh packaging/windows/package.sh
+        env:
+          VARIANTS: ${{ env.WINDOWS_VARIANTS }}
+      - run: gh release upload "$TAG" target/package/boardcast-*-windows*.zip --clobber

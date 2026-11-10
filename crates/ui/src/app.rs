@@ -2383,7 +2383,17 @@ impl Workbench {
             diarize: self.form.saved.diarize,
             system_speech: self.form.saved.system_speech,
             speech_language: self.form.saved.speech_language.clone(),
+            interface_language: self.form.saved.interface_language.clone(),
         }
+    }
+
+    fn choose_language(&mut self, language: &str, cx: &mut Context<Self>) {
+        self.form.saved.interface_language = language.to_string();
+        crate::i18n::choose(language);
+        if let Err(e) = self.form.saved.save() {
+            self.form.note = Some(format!("{e:#}"));
+        }
+        cx.notify();
     }
 
     fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -3695,6 +3705,20 @@ impl Render for Workbench {
                         cx.notify();
                     }))))
             })
+            .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Language", "语言")))
+            .child({
+                let chosen = self.form.saved.interface_language.clone();
+                let languages = [("auto", tr("Follow the system", "跟随系统")), ("en", "English"), ("zh", "中文")];
+                div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
+                    button(gpui_kit::ElementId::Name(format!("interface-language-{id}").into()), label)
+                        .when(chosen == id, |b| b.primary())
+                        .on_click(cx.listener(move |this, _, _, cx| this.choose_language(id, cx)))
+                }))
+            })
+            .child(div().text_xs().text_color(rgb(MUTED)).child(tr(
+                "The interface changes at once; a few hints in text fields change on the next start. The board and summary follow the meeting's own language.",
+                "界面立即切换；输入框里的少数提示文字下次启动后切换。板书和摘要跟随会议本身的语言。",
+            )))
             .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Updates", "更新")))
             .child(div().text_xs().text_color(rgb(MUTED)).child(format!("{} {}", tr("Version", "版本"), boardcast_update::VERSION)))
             .child(match &self.update {
@@ -4006,6 +4030,8 @@ fn app_menu(cx: &mut App) {
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
+    // Before any text is made, so even the first words are in the chosen language.
+    crate::i18n::choose(&Settings::load().interface_language);
     let mut root: Option<PathBuf> = None;
     let mut case = None;
     let mut wav = None;

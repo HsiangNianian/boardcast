@@ -13,7 +13,7 @@ target/release/asr-eval run . --only ja-fleurs-00,en-ami-00
 target/release/asr-eval compare eval/reports/asr/*/report.json
 ```
 
-The speech models are read from `resources/voice`, where `scripts/fetch-voice.mjs` puts them for the packages too. `download` checks every recording, cached or not, against its size and SHA-256 and replaces a missing or damaged one; nothing is skipped quietly. It also writes `eval/asr/.data/index.html`, a page to hear each recording beside its reference: open it from the folder, it needs no server and no script. The audio comes from the fixed [asr-fixtures-v1 Release](https://github.com/HsiangNianian/boardcast/releases/tag/asr-fixtures-v1); Release files are never replaced in place, so a change means a new version and new hashes.
+The speech models are read from `resources/voice`, where `boardcast-tools fetch voice` puts them for the packages too. `download` checks every recording, cached or not, against its size and SHA-256 and replaces a missing or damaged one; nothing is skipped quietly. It also writes `eval/asr/.data/index.html`, a page to hear each recording beside its reference: open it from the folder, it needs no server and no script. The audio comes from the fixed [asr-fixtures-v1 Release](https://github.com/HsiangNianian/boardcast/releases/tag/asr-fixtures-v1); Release files are never replaced in place, so a change means a new version and new hashes.
 
 `corpus.json` is the manifest for downloads, listening and scoring; `meetings.json` holds the long meetings. Source IDs, original intervals, licence links and reference quality travel with each sample. See [LICENSES.md](LICENSES.md) before redistributing audio or transcripts.
 

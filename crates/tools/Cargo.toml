@@ -11,12 +11,21 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+base64 = "0.22"
 boardcast-agent.workspace = true
 boardcast-board.workspace = true
 boardcast-export.workspace = true
 boardcast-import.workspace = true
 boardcast-meetings.workspace = true
 boardcast-models.workspace = true
+flate2 = "1"
+minisign = "0.7"
 semver = "1"
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10"
+tar = "0.4"
+ureq = { version = "2", features = ["proxy-from-env"] }
+
+[dev-dependencies]
+boardcast-update.workspace = true

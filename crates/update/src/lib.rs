@@ -123,7 +123,8 @@ fn decode_text(encoded: &str) -> Result<String> {
     String::from_utf8(bytes).context("not text")
 }
 
-fn verify(path: &Path, signature: &str, key: &str) -> Result<()> {
+/// Check a file against a signature and public key, both in the base64 form Tauri writes.
+pub fn verify(path: &Path, signature: &str, key: &str) -> Result<()> {
     let key = PublicKey::decode(&decode_text(key).context("the update key is damaged")?).map_err(|e| anyhow!("the update key is damaged: {e}"))?;
     let signature = Signature::decode(&decode_text(signature).context("the signature is damaged")?).map_err(|e| anyhow!("the signature is damaged: {e}"))?;
     let mut stream = key.verify_stream(&signature).map_err(|e| anyhow!("the signature cannot be checked: {e}"))?;

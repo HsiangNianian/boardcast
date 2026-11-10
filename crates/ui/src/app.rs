@@ -933,6 +933,8 @@ struct Workbench {
     replay: Option<Replaying>,
     import: ImportState,
     arxiv_input: Entity<InputState>,
+    /// Which of a read document's pages to import, as "1-5, 8"; empty for all.
+    import_pages: Entity<InputState>,
     /// Who is speaking now, as far as anyone knows: lines with no voiceprint and typed lines go to them.
     speaker: Option<String>,
     /// The speaker being looked at in the speakers panel, and the name being written for them.
@@ -2363,7 +2365,34 @@ impl Workbench {
     }
 
     /// Put a read file in a meeting. Its pictures are kept first, so a failure leaves the preview ready.
-    fn place_import(&mut self, fresh: bool, cx: &mut Context<Self>) {
+    fn place_import(&mut self, fresh: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let spec = self.import_pages.read(cx).value().to_string();
+        let Some(wanted) = page_ranges(&spec) else {
+            self.notice = Some(tr("Write pages as numbers and ranges, like 1-5, 8.", "页码写成数字和范围，比如 1-5, 8。").into());
+            cx.notify();
+            return;
+        };
+        if let ImportState::Ready(preview) = &mut self.import {
+            if !wanted.is_empty() {
+                let asked = |p: &NewPage| wanted.iter().any(|(a, b)| (*a..=*b).contains(&page_number(&p.graph)));
+                if !preview.pages.iter().any(asked) {
+                    self.notice = Some(tr("None of those pages are in the file.", "文件里没有这些页。").into());
+                    cx.notify();
+                    return;
+                }
+                // The paper's references are kept on its first page, and stay with whichever page comes first now.
+                let references = preview.pages.first().and_then(|p| p.graph.extra.get("references").cloned());
+                preview.pages.retain(asked);
+                if let (Some(first), Some(references)) = (preview.pages.first_mut(), references) {
+                    first.graph.extra.insert("references".into(), references);
+                }
+            }
+        }
+        self.import_pages.update(cx, |state, cx| state.set_value("", window, cx));
+        self.place_read_import(fresh, cx);
+    }
+
+    fn place_read_import(&mut self, fresh: bool, cx: &mut Context<Self>) {
         self.exit_replay(cx);
         if self.live.lines.iter().any(|l| l["ms"].is_null() && !l["manual"].as_bool().unwrap_or(false)) {
             self.notice = Some(tr("The model is still drawing. Import when it is done.", "模型还在画，画完再导入。").into());
@@ -3066,9 +3095,15 @@ impl Workbench {
                 .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(format!("{} · {} {}", preview.name, preview.pages.len(), tr("boards", "张板"))))
                 .child(hint(tr("Choose where to put them.", "选择放到哪里。")))
                 .children(preview.details.iter().map(|d| div().text_xs().text_color(rgb(pal().warning)).child(d.clone())))
-                .child(button("import-new", tr("New meeting", "新开一场会")).on_click(cx.listener(|this, _, _, cx| this.place_import(true, cx))))
-                .when(can_add_here, |d| d.child(button("import-here", tr("Add to this meeting", "加到这场会")).on_click(cx.listener(|this, _, _, cx| this.place_import(false, cx)))))
-                .child(button("import-cancel", tr("Cancel", "取消")).on_click(cx.listener(|this, _, _, cx| this.stop_import(cx)))),
+                .when(preview.pages.len() > 1, |d| {
+                    d.child(div().mt_1().text_xs().text_color(rgb(pal().muted)).child(tr("Pages to import", "要导入的页"))).child(Input::new(&self.import_pages).small())
+                })
+                .child(button("import-new", tr("New meeting", "新开一场会")).on_click(cx.listener(|this, _, window, cx| this.place_import(true, window, cx))))
+                .when(can_add_here, |d| d.child(button("import-here", tr("Add to this meeting", "加到这场会")).on_click(cx.listener(|this, _, window, cx| this.place_import(false, window, cx)))))
+                .child(button("import-cancel", tr("Cancel", "取消")).on_click(cx.listener(|this, _, window, cx| {
+                    this.import_pages.update(cx, |state, cx| state.set_value("", window, cx));
+                    this.stop_import(cx);
+                }))),
             state => panel
                 .when_some(if let ImportState::Failed(error) = state { Some(error.clone()) } else { None }, |d, error| d.child(div().text_sm().text_color(rgb(pal().danger)).child(error)))
                 .child(hint(tr("A PDF page or an image becomes a board, with its text in place to circle, link and note on during the meeting.", "PDF 的每一页或一张图片变成一张板，文字留在原位，开会时可以圈画、连线、写批注。")))
@@ -4905,6 +4940,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
             let editor = cx.new(|cx| TextareaState::new(window, cx));
             let arxiv_input = cx.new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
+            let import_pages = cx.new(|cx| InputState::new(window, cx).placeholder(tr("All pages, or e.g. 1-5, 8", "全部页，或如 1-5, 8")));
             let speaker_name = cx.new(|cx| InputState::new(window, cx));
             let title_input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Meeting name", "会议名称")));
             let label_input = cx.new(|cx| InputState::new(window, cx));
@@ -4993,6 +5029,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     replay: None,
                     import: ImportState::Idle,
                     arxiv_input,
+                    import_pages,
                     speaker: None,
                     speaker_chosen: None,
                     speaker_line: None,
@@ -5109,9 +5146,39 @@ fn references_of(boards: &[Graph]) -> Vec<(u32, String)> {
     boards.iter().find_map(|g| g.extra.get("references")).and_then(|r| serde_json::from_value(r.clone()).ok()).unwrap_or_default()
 }
 
+/// The pages "1-5, 8" asks for, as ranges; empty for all, `None` when it cannot be read.
+fn page_ranges(spec: &str) -> Option<Vec<(u32, u32)>> {
+    let mut out = vec![];
+    for part in spec.split([',', '，', '、', ';', ' ']).map(str::trim).filter(|p| !p.is_empty()) {
+        let (a, b) = match part.split_once(['-', '–', '~', '～']) {
+            Some((a, b)) => (a.trim().parse().ok()?, b.trim().parse().ok()?),
+            None => {
+                let n: u32 = part.parse().ok()?;
+                (n, n)
+            }
+        };
+        out.push((a.min(b), a.max(b)));
+    }
+    Some(out)
+}
+
+/// The number a page had in its document, or 1 for a lone image.
+fn page_number(graph: &Graph) -> u32 {
+    graph.extra.get("underlay").and_then(|u| u.get("no")).and_then(serde_json::Value::as_u64).map_or(1, |n| n as u32)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::encloses;
+    use super::{encloses, page_ranges};
+
+    #[test]
+    fn pages_to_import_are_read_from_numbers_and_ranges() {
+        assert_eq!(page_ranges(""), Some(vec![]));
+        assert_eq!(page_ranges("1-5, 8"), Some(vec![(1, 5), (8, 8)]));
+        assert_eq!(page_ranges("3，7～9、12"), Some(vec![(3, 3), (7, 9), (12, 12)]));
+        assert_eq!(page_ranges("9-7"), Some(vec![(7, 9)]));
+        assert_eq!(page_ranges("one to five"), None);
+    }
 
     #[test]
     fn a_circle_holds_what_is_inside_it() {

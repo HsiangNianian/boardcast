@@ -1,6 +1,6 @@
 // 准备手写模式用的笔画数据（dev 和 build 前自动跑，已经准备好就跳过）：
 // - 汉字：hanzi-writer-data 每个字一份 JSON，只保留按笔顺排列的骨架线（medians），
-//   复制到 public/hanzi/，运行时按需加载。数据使用 Arphic Public License，许可文本一并带上。
+//   复制到 assets/hanzi/，运行时按需加载。数据使用 Arphic Public License，许可文本一并带上。
 // - 拉丁字母和数字：从 hersheytext 里抽出 futural 这一套单线字体，写成一个小 JSON。
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, copyFileSync } from 'node:fs'
@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url)
 const root = fileURLToPath(new URL('..', import.meta.url))
 
 const hanziSrc = dirname(require.resolve('hanzi-writer-data/package.json'))
-const hanziOut = join(root, 'public/hanzi')
+const hanziOut = join(root, 'assets/hanzi')
 const marker = join(hanziOut, '.done-2.0.1')
 if (!existsSync(marker)) {
   mkdirSync(hanziOut, { recursive: true })
@@ -27,18 +27,18 @@ if (!existsSync(marker)) {
   }
   copyFileSync(join(hanziSrc, 'ARPHICPL.TXT'), join(hanziOut, 'ARPHICPL.TXT'))
   writeFileSync(marker, String(n))
-  console.log(`glyphs: ${n} 个汉字 → public/hanzi/`)
+  console.log(`glyphs: ${n} 个汉字 → assets/hanzi/`)
 }
 
 // KanjiVG fills Japanese kanji missing from hanzi-writer-data; keep existing Chinese shapes.
-const kanji = JSON.parse(gunzipSync(readFileSync(join(root, 'src/ink/kanji.json.gz'))))
+const kanji = JSON.parse(gunzipSync(readFileSync(join(root, 'assets/glyphs/kanji.json.gz'))))
 for (const [ch, medians] of Object.entries(kanji)) {
   if (existsSync(join(hanziSrc, `${ch}.json`))) continue
   const file = join(hanziOut, `${ch}.json`)
   const data = JSON.stringify(medians)
   if (!existsSync(file) || readFileSync(file, 'utf8') !== data) writeFileSync(file, data)
 }
-copyFileSync(join(root, 'public/licenses/kanjivg-CC-BY-SA-3.0.txt'), join(hanziOut, 'KANJIVG-LICENSE.txt'))
+copyFileSync(join(root, 'assets/licenses/kanjivg-CC-BY-SA-3.0.txt'), join(hanziOut, 'KANJIVG-LICENSE.txt'))
 
 // futural：手写印刷体；scripts：单线连写体，潦草度高的时候用
 const hersheyOut = join(root, 'src/ink/hershey.json')

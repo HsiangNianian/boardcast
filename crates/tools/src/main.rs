@@ -2,7 +2,7 @@
 //!   check <root> (--all-demos | --demo <name> | --ops <file>) [--tidy]
 //!   agent-eval <root> <output.json> [--deepseek] [--llm <url>] [--skill | --rules-only | --hints-only]
 //!              [--only-dev | --only-holdout] [--only <id>] [--workers <n>]
-//!   pack-glyphs <public/hanzi> <glyphs.pack>
+//!   pack-glyphs <assets/hanzi> <glyphs.pack>
 //!   download-model <id> <dir>
 //!   version-newer <new> <old>   Fails unless <new> is a later version than <old>.
 //!   meetings-check <data-dir>   Rewrites every meeting into <data-dir>'s v2 folder; use on a copy.

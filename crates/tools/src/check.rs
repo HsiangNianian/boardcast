@@ -10,7 +10,7 @@ use boardcast_board::sugiyama::first_diagram;
 use std::path::{Path, PathBuf};
 
 fn demo_lines(root: &Path, name: &str) -> Result<Vec<String>> {
-    let demo: serde_json::Value = serde_json::from_slice(&std::fs::read(root.join(format!("public/demos/{name}.json")))?)?;
+    let demo: serde_json::Value = serde_json::from_slice(&std::fs::read(root.join(format!("assets/demos/{name}.json")))?)?;
     Ok(demo["lines"].as_array().into_iter().flatten().filter_map(|l| l["ops"].as_str().map(str::to_string)).collect())
 }
 
@@ -21,7 +21,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--all-demos" => {
-                let mut names: Vec<String> = std::fs::read_dir(root.join("public/demos"))?
+                let mut names: Vec<String> = std::fs::read_dir(root.join("assets/demos"))?
                     .filter_map(|e| e.ok()?.file_name().into_string().ok())
                     .filter_map(|f| f.strip_suffix(".json").map(str::to_string))
                     .collect();

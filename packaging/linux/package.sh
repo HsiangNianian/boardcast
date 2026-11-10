@@ -19,7 +19,7 @@ cargo build --release -p boardcast-ui -p boardcast-tools
 version=$(target/release/boardcast --version | cut -d' ' -f2)
 glyphs=target/package/glyphs.pack
 mkdir -p target/package
-target/release/boardcast-tools pack-glyphs public/hanzi "$glyphs"
+target/release/boardcast-tools pack-glyphs assets/hanzi "$glyphs"
 
 for variant in $variants; do
   [ "$variant" = apple ] && { echo "skipping apple: Linux has no system recognizer" >&2; continue; }
@@ -41,7 +41,7 @@ for variant in $variants; do
   copy_models "$variant" "$lib/voice"
   printf '%s\n' "$variant" > "$lib/variant"
 
-  cp LICENSE public/licenses/* public/hanzi/ARPHICPL.TXT "$out/share/licenses/boardcast/"
+  cp LICENSE assets/licenses/* crates/ui/fonts/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$out/share/licenses/boardcast/"
   cp target/pdfium/LICENSE "$out/share/licenses/boardcast/pdfium-LICENSE"
   install -m644 packaging/icons/128x128@2x.png "$out/share/boardcast.png"
   install -m644 packaging/linux/boardcast.desktop.in "$out/share/boardcast.desktop.in"

@@ -65,7 +65,7 @@ cargo run --release -p boardcast-tools -- meetings-check /tmp/copy
 node crates/meetings/fixtures/verify-with-typescript.mjs . /tmp/copy
 ```
 
-A checkout runs with the resources in `resources/`, fetched by `scripts/fetch-llama.mjs` and `scripts/fetch-voice.mjs`, and `public/hanzi`. Regenerate the answer key and `crates/agent/prompts.json` with
+A checkout runs with the resources in `resources/`, fetched by `scripts/fetch-llama.mjs` and `scripts/fetch-voice.mjs`, and `assets/hanzi`. Regenerate the answer key and `crates/agent/prompts.json` with
 `node crates/board/fixtures/make-goldens.mjs <root> crates/board/fixtures/goldens.json`.
 
 Measured on Linux with niri at 100 Hz, on Intel Iris Xe and an RTX 3060, each forced with `VK_DRIVER_FILES`.

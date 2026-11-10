@@ -114,8 +114,8 @@ pub fn replay_page(doc: &Doc, pages: &[Page], glyphs: &mut Glyphs) -> String {
     let data = json!({ "title": doc.title, "began": doc.began, "summary": doc.summary.trim(), "words": words, "note": note, "lines": lines, "boards": boards });
     let licenses = format!(
         "Japanese stroke data: KanjiVG, Copyright (C) 2009/2010/2011 Ulrich Apel. https://kanjivg.tagaini.net/ adapted centerlines, CC BY-SA 3.0 https://creativecommons.org/licenses/by-sa/3.0/\n{}\n{}",
-        include_str!("../../../public/licenses/handwritten-OFL.txt"),
-        include_str!("../../../public/licenses/handwritten-cascadia.txt"),
+        include_str!("../../../assets/licenses/handwritten-OFL.txt"),
+        include_str!("../../../assets/licenses/handwritten-cascadia.txt"),
     );
     let suffix = if doc.english { "Replay" } else { "回放" };
     // The meeting's own words go in last and apart, so they can never be taken for a marker.

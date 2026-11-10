@@ -4,7 +4,7 @@
 //
 //   node eval/record.ts [--base-url http://127.0.0.1:8080] [--only login-flow,en-auth-correction]
 //
-// Output: public/demos/<id>.json (one Demo each) and public/demos/index.json (the list).
+// Output: assets/demos/<id>.json (one Demo each) and assets/demos/index.json (the list).
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
@@ -50,7 +50,7 @@ const llm = { baseUrl: base, noThink: true }
 const cases = (JSON.parse(readFileSync(new URL('./cases.json', import.meta.url), 'utf8')) as Case[]).filter(
   (c) => (!args.only || args.only.split(',').includes(c.id)) && !SKIP.has(c.id),
 )
-const out = new URL('../public/demos/', import.meta.url)
+const out = new URL('../assets/demos/', import.meta.url)
 mkdirSync(out, { recursive: true })
 
 const indexFile = new URL('index.json', out)

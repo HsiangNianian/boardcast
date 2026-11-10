@@ -58,8 +58,8 @@ def strokes(image):
     return paths or dots
 
 
-assert "SIL OPEN FONT LICENSE" in (ROOT / "public/licenses/handwritten-OFL.txt").read_text()
-assert "Microsoft Corporation" in (ROOT / "public/licenses/handwritten-cascadia.txt").read_text()
+assert "SIL OPEN FONT LICENSE" in (ROOT / "assets/licenses/handwritten-OFL.txt").read_text()
+assert "Microsoft Corporation" in (ROOT / "assets/licenses/handwritten-cascadia.txt").read_text()
 codes = set(range(32, 127)) | {0xb0, 0xb1, 0xb2, 0xb3, 0xb5, 0xb9, 0xbc, 0xbd, 0xbe, 0xd7, 0xf7}
 codes |= {c for c in range(0x370, 0x400) if unicodedata.category(chr(c)).startswith("L")}
 codes |= set(range(0x2070, 0x20a0)) | set(range(0x2100, 0x2150)) | set(range(0x2190, 0x2300))
@@ -94,5 +94,5 @@ for code in sorted(codes):
         shift = -0.15 if placement == ["<super>"] else 0.4
         data[ch] = {"strokes": [[[round(x * 0.65, 4), round(y * 0.65 + shift, 4)] for x, y in s] for s in base["strokes"]], "advance": round(base["advance"] * 0.65, 4)}
 
-(ROOT / "src/ink/handwritten.json").write_text(json.dumps(dict(sorted(data.items())), separators=(",", ":")) + "\n")
-print(f"Generated {len(data)} glyphs; licenses in public/licenses/handwritten-*.txt.")
+(ROOT / "assets/glyphs/handwritten.json").write_text(json.dumps(dict(sorted(data.items())), separators=(",", ":")) + "\n")
+print(f"Generated {len(data)} glyphs; licenses in assets/licenses/handwritten-*.txt.")

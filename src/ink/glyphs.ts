@@ -6,7 +6,7 @@
 // - 中文标点没有现成数据，用几笔手画近似。
 
 import hershey from './hershey.json' with { type: 'json' }
-import handwritten from './handwritten.json' with { type: 'json' }
+import handwritten from '../../assets/glyphs/handwritten.json' with { type: 'json' }
 import { kana } from './kana.ts'
 
 export type Pt = [number, number]

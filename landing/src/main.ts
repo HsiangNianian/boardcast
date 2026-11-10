@@ -1,17 +1,29 @@
 import '@fontsource-variable/dm-sans'
 import '@fontsource-variable/jetbrains-mono'
 import './style.css'
-import { initFinale } from './finale'
+import { initCards } from './cards'
+import { initDots } from './dots'
 import { initHero } from './hero'
-import { initStage } from './stage'
-import { initSwap } from './swap'
+import { initLasso } from './lasso'
+import { initPictograms } from './pict'
+import { initSheet } from './sheet'
+import { initSignals } from './signals'
+import { initStory } from './story'
+import { $$ } from './util'
 
-async function boot() {
-  // 巨字的位置要等字体到了再量
-  await Promise.all([document.fonts.load('900 100px "BC Display"', '说话自己'), document.fonts.ready]).catch(() => {})
-  const hero = initHero()
-  initStage(hero)
-  initSwap()
-  initFinale()
-}
-boot()
+for (const el of $$('[data-version]')) el.textContent = __VERSION__
+
+initPictograms()
+initSheet()
+initLasso()
+initSignals()
+initCards()
+initDots()
+// Board words are measured, so they wait for the handwriting font.
+document.fonts
+  .load('22px Excalifont', 'Release checklist')
+  .catch(() => {})
+  .then(() => {
+    initHero()
+    initStory()
+  })

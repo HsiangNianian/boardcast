@@ -211,7 +211,8 @@ impl Pipeline {
         self.mic_stop.is_some()
     }
 
-    pub fn toggle_mic(&mut self) {
+    /// Start or stop listening, to `input` when it is given and still there.
+    pub fn toggle_mic(&mut self, input: Option<String>) {
         if let Some(stop) = self.mic_stop.take() {
             stop.store(true, Ordering::Relaxed);
             return;
@@ -221,7 +222,11 @@ impl Pipeline {
         let samples = self.samples.clone();
         let tx = self.event_tx.clone();
         thread::spawn(move || {
-            if let Err(e) = capture(&stop, &samples) {
+            let warn = tx.clone();
+            let fell_back = move |_: &str| {
+                let _ = warn.send(Event::Failed(crate::i18n::tr("The chosen input isn't connected, so the default one is listening.", "选择的输入设备没有连接，正在用默认设备收音。").into()));
+            };
+            if let Err(e) = capture(&stop, &samples, input.as_deref(), fell_back) {
                 let _ = tx.send(Event::Failed(format!("{e:#}")));
             }
         });

@@ -847,6 +847,8 @@ struct Workbench {
     last_attempt: Option<Instant>,
     panel: Panel,
     library: Vec<Info>,
+    /// What can be listened to, as of opening Settings.
+    inputs: Vec<boardcast_audio::Input>,
     /// The label being written for the selected thing on the board.
     label_input: Entity<InputState>,
     /// What the meeting list is narrowed to.
@@ -1100,7 +1102,7 @@ impl Workbench {
     /// Turn the microphone on or off, counting the time it was on towards the meeting.
     fn toggle_mic(&mut self) {
         let was_listening = self.pipeline.listening();
-        self.pipeline.toggle_mic();
+        self.pipeline.toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()));
         if !was_listening {
             self.listening_since = Some(Instant::now());
         } else if let Some(since) = self.listening_since.take() {
@@ -2361,6 +2363,9 @@ impl Workbench {
 
     fn toggle_panel(&mut self, panel: Panel, cx: &mut Context<Self>) {
         self.panel = if self.panel == panel { Panel::Transcript } else { panel };
+        if self.panel == Panel::Settings {
+            self.inputs = boardcast_audio::inputs();
+        }
         if self.panel == Panel::Library {
             if let Some(store) = &self.store {
                 match store.list() {
@@ -2385,7 +2390,21 @@ impl Workbench {
             system_speech: self.form.saved.system_speech,
             speech_language: self.form.saved.speech_language.clone(),
             interface_language: self.form.saved.interface_language.clone(),
+            input: self.form.saved.input.clone(),
         }
+    }
+
+    /// Listen to another input from now on, switching over at once if listening.
+    fn choose_input(&mut self, id: String, cx: &mut Context<Self>) {
+        self.form.saved.input = id;
+        if let Err(e) = self.form.saved.save() {
+            self.form.note = Some(format!("{e:#}"));
+        }
+        if self.pipeline.listening() {
+            self.toggle_mic();
+            self.toggle_mic();
+        }
+        cx.notify();
     }
 
     fn choose_language(&mut self, language: &str, cx: &mut Context<Self>) {
@@ -3708,6 +3727,35 @@ impl Render for Workbench {
             .when(forced, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))))
             .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Speech", "语音")))
+            .child(div().text_sm().child(tr("Listen to", "收音来源")))
+            .child({
+                let chosen = self.form.saved.input.clone();
+                let rows = std::iter::once((String::new(), tr("The system's default input", "系统默认输入").to_string()))
+                    .chain(self.inputs.iter().map(|i| (i.id.clone(), i.name.clone())))
+                    .chain((!chosen.is_empty() && !self.inputs.iter().any(|i| i.id == chosen)).then(|| (chosen.clone(), tr("The chosen input, not connected now", "选择的设备（现在没有连接）").to_string())));
+                div().flex().flex_col().gap_1().children(rows.enumerate().map(|(i, (id, name))| {
+                    let on = id == chosen;
+                    div()
+                        .id(("input", i))
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .cursor_pointer()
+                        .text_sm()
+                        .overflow_hidden()
+                        .whitespace_nowrap()
+                        .hover(|d| d.bg(rgb(pal().selected)))
+                        .when(on, |d| d.bg(rgb(pal().selected)).font_weight(gpui_kit::FontWeight::SEMIBOLD))
+                        .child(name)
+                        .on_click(cx.listener(move |this, _, _, cx| this.choose_input(id.clone(), cx)))
+                }))
+            })
+            .when(cfg!(target_os = "linux"), |d| {
+                d.child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
+                    "To hear the other side of an online meeting, choose the \"Monitor of\" input for the speakers or headphones it plays through. One input is heard at a time.",
+                    "要收线上会议里对方的声音，选播放它的扬声器或耳机对应的 “Monitor of” 输入。一次只收一个来源。",
+                )))
+            })
             .child(
                 div()
                     .flex()
@@ -4293,6 +4341,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     last_attempt: None,
                     panel: Panel::Transcript,
                     library: vec![],
+                    inputs: vec![],
                     library_query,
                     label_input,
                     form: SettingsForm { base_url, model, key, remote, saved: settings, note: None, probing: None },

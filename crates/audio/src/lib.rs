@@ -467,14 +467,45 @@ pub fn play_wav(path: &Path, samples: &Sender<Vec<f32>>) -> Result<()> {
     Ok(())
 }
 
-/// Live microphone capture, mono at 16 kHz, until `stop` is set.
-pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>) -> Result<()> {
-    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+fn input_host() -> cpal::Host {
     #[cfg(target_os = "linux")]
-    let host = cpal::host_from_id(cpal::HostId::PulseAudio).unwrap_or_else(|_| cpal::default_host());
+    return cpal::host_from_id(cpal::HostId::PulseAudio).unwrap_or_else(|_| cpal::default_host());
     #[cfg(not(target_os = "linux"))]
-    let host = cpal::default_host();
-    let device = host.default_input_device().context("no microphone")?;
+    cpal::default_host()
+}
+
+/// Something to listen to: a microphone, or on Linux the sound the computer is playing.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Input {
+    /// Stable across runs, for saving the choice.
+    pub id: String,
+    pub name: String,
+}
+
+/// What can be listened to now. On Linux, PulseAudio and PipeWire list each output's monitor here,
+/// which is how the other side of an online meeting is heard.
+pub fn inputs() -> Vec<Input> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    let Ok(devices) = input_host().input_devices() else { return vec![] };
+    let mut found: Vec<Input> = devices.filter_map(|d| Some(Input { id: d.id().ok()?.to_string(), name: d.to_string() })).collect();
+    // Microphones first, then what the computer plays.
+    found.sort_by_key(|i| i.id.ends_with(".monitor"));
+    found
+}
+
+/// Live capture, mono at 16 kHz, until `stop` is set. `chosen` is an input's id; when it is gone,
+/// the default input is used and `fell_back` hears about it.
+pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>, chosen: Option<&str>, fell_back: impl FnOnce(&str)) -> Result<()> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    let host = input_host();
+    let picked = chosen.and_then(|id| host.input_devices().ok()?.find(|d| d.id().is_ok_and(|d| d.to_string() == id)));
+    if let (Some(id), None) = (chosen, &picked) {
+        fell_back(id);
+    }
+    let device = match picked {
+        Some(device) => device,
+        None => host.default_input_device().context("no microphone")?,
+    };
     let supported = device.default_input_config()?;
     let channels = supported.channels() as usize;
     let ratio = f64::from(supported.sample_rate()) / f64::from(SAMPLE_RATE);

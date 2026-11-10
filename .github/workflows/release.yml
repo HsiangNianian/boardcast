@@ -98,9 +98,19 @@ jobs:
           retention-days: 3
 
   macos:
-    runs-on: macos-26
+    strategy:
+      matrix:
+        # Apple silicon, then Intel.
+        runner: [macos-26, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
+      # SpeechAnalyzer needs the macOS 26 SDK, which the Intel image may carry beside an older default.
+      - name: Use the newest Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          [ -z "$xcode" ] || sudo xcode-select -s "$xcode"
+          xcrun --show-sdk-version
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Cache voice models
@@ -113,7 +123,7 @@ jobs:
           VARIANTS: ${{ env.MAC_VARIANTS }}
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-packages
+          name: macos-packages-${{ matrix.runner }}
           path: target/package/boardcast-*-macos*.zip
           retention-days: 3
 

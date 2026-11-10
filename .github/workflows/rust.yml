@@ -70,8 +70,10 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
-      # The script ends by running the packaged app's self-check.
+      # The script ends by running each packaged app's self-check. A second variant checks the model selection.
       - run: sh packaging/linux/package.sh
+        env:
+          VARIANTS: full ja
       # Its own target folder: the cache keeps compiled crates but not the speech library they were
       # built against, so rebuilding that crate in the restored folder cannot find it.
       - name: How speech is heard, with the packaged models
@@ -82,7 +84,7 @@ jobs:
       - name: Install from the package and check again
         run: |
           mkdir unpacked
-          tar -xzf target/package/*.tar.gz -C unpacked
+          tar -xzf target/package/boardcast-*-linux.tar.gz -C unpacked
           PREFIX="$PWD/prefix" sh unpacked/*/install.sh
           rm -rf unpacked
           prefix/bin/boardcast --self-check
@@ -111,8 +113,10 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
-      # The script ends by running the packaged app's self-check.
+      # The script ends by running each packaged app's self-check, and builds and self-tests the Apple speech helper.
       - run: sh packaging/macos/package.sh
+        env:
+          VARIANTS: full apple
       - name: Core crates and speech, with the packaged models
         run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-audio
         env:

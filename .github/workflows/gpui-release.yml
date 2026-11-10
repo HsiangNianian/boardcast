@@ -1,25 +1,40 @@
 name: Release GPUI app
 
-# Publishes the Linux package to the rolling `gpui-latest` pre-release, which the GPUI app's updater reads,
-# and a Mac app beside it to download by hand. The updater only knows Linux, as the manifest lists nothing else.
+# Publishes every package variant (see packaging/models.sh) for Linux and the Mac.
+#
+# A release is tagged v<version> and marked latest, which is where the updater reads its manifest.
+# The manifest is also copied to the rolling `gpui-latest` pre-release, where the alphas looked.
+# A pre-release, chosen below, goes only to `gpui-latest`, as the alphas did.
+#
+# The release stays a draft until every package is up, so nobody downloads half of it. The manifest
+# lists Linux packages only, as the updater only installs on Linux; Mac apps are downloaded by hand.
 # It is separate from the older app's release workflow and never touches its `latest.json`.
 # Run by hand after raising the workspace version.
 on:
   workflow_dispatch:
     inputs:
       notes:
-        description: What changed, shown in the update prompt
+        description: What changed, shown in the update prompt and on the release page
         required: true
+      prerelease:
+        description: Publish to the rolling gpui-latest pre-release instead of a release of its own
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+env:
+  LINUX_VARIANTS: full ja en sensevoice
+  MAC_VARIANTS: full ja en sensevoice apple
+
 jobs:
-  release:
+  linux:
     runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      NOTES: ${{ inputs.notes }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -40,48 +55,36 @@ jobs:
           path: resources/voice
           key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
       - run: sh packaging/linux/package.sh
+        env:
+          VARIANTS: ${{ env.LINUX_VARIANTS }}
+      - id: version
+        run: echo "version=$(target/release/boardcast --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
       - name: Refuse a version that is not newer than the published one
         run: |
-          version=$(cat target/package/boardcast-*-linux/VERSION)
-          if gh release download gpui-latest --pattern manifest.json --output published.json 2>/dev/null; then
-            target/release/boardcast-tools version-newer "$version" "$(node -p 'JSON.parse(require("fs").readFileSync("published.json")).version')"
-          fi
+          version='${{ steps.version.outputs.version }}'
+          # The latest release, then the rolling pre-release.
+          for tag in "" gpui-latest; do
+            rm -f published.json
+            if gh release download $tag --pattern manifest.json --output published.json 2>/dev/null; then
+              target/release/boardcast-tools version-newer "$version" "$(node -p 'JSON.parse(require("fs").readFileSync("published.json")).version')"
+            fi
+          done
       - name: Sign
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm tauri signer sign target/package/boardcast-*-linux.tar.gz
-      - name: Write the manifest
         run: |
-          package=$(ls target/package/boardcast-*-linux.tar.gz)
-          node -e '
-            const fs = require("fs"), crypto = require("crypto"), path = require("path")
-            const file = process.argv[1], name = path.basename(file), bytes = fs.readFileSync(file)
-            fs.writeFileSync("manifest.json", JSON.stringify({
-              version: name.match(/^boardcast-(.+)-x86_64-linux\.tar\.gz$/)[1],
-              notes: process.env.NOTES,
-              platforms: { "x86_64-linux": {
-                url: `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/gpui-latest/${name}`,
-                size: bytes.length,
-                sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
-                signature: fs.readFileSync(`${file}.sig`, "utf8").trim(),
-              } },
-            }, null, 1))
-          ' "$package"
-      - name: Publish
-        run: |
-          package=$(ls target/package/boardcast-*-linux.tar.gz)
-          gh release view gpui-latest >/dev/null 2>&1 || gh release create gpui-latest --prerelease --title "boardcast on GPUI" --notes "Rolling pre-release of the GPUI app."
-          # The manifest goes last, so it never points at a package that is not there yet.
-          gh release upload gpui-latest "$package" --clobber
-          gh release upload gpui-latest manifest.json --clobber
+          for package in target/package/boardcast-*-linux*.tar.gz; do
+            pnpm tauri signer sign "$package"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: target/package/boardcast-*-linux*.tar.gz*
+          retention-days: 3
 
   macos:
-    # After the Linux job, which creates the release and refuses a version that isn't newer.
-    needs: release
     runs-on: macos-26
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -98,5 +101,50 @@ jobs:
           path: resources/voice
           key: voice-${{ hashFiles('scripts/fetch-voice.mjs') }}
       - run: sh packaging/macos/package.sh
+        env:
+          VARIANTS: ${{ env.MAC_VARIANTS }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-packages
+          path: target/package/boardcast-*-macos*.zip
+          retention-days: 3
+
+  publish:
+    needs: [linux, macos]
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NOTES: ${{ inputs.notes }}
+      VERSION: ${{ needs.linux.outputs.version }}
+      PRERELEASE: ${{ inputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Write the manifest
+        run: |
+          if [ "$PRERELEASE" = true ]; then tag=gpui-latest; else tag="v$VERSION"; fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          node scripts/release-manifest.mjs packages "$tag" > manifest.json
+          cat manifest.json
       - name: Publish
-        run: gh release upload gpui-latest target/package/boardcast-*-macos.zip --clobber
+        run: |
+          packages=$(ls packages/boardcast-*.tar.gz packages/boardcast-*.zip)
+          if [ "$PRERELEASE" = true ]; then
+            gh release view gpui-latest >/dev/null 2>&1 || gh release create gpui-latest --prerelease --title "boardcast on GPUI" --notes "Rolling pre-release of the GPUI app."
+            gh release upload gpui-latest $packages --clobber
+            # The manifest goes last, so it never points at a package that is not there yet.
+            gh release upload gpui-latest manifest.json --clobber
+            exit 0
+          fi
+          printf '%s\n\n' "$NOTES" > notes.md
+          cat packaging/release-notes.md >> notes.md
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "boardcast $VERSION" --notes-file notes.md
+          gh release upload "$TAG" $packages manifest.json
+          gh release edit "$TAG" --draft=false --latest
+          # Installs from the alphas read their manifest here; it points at this release's packages.
+          if gh release view gpui-latest >/dev/null 2>&1; then
+            gh release upload gpui-latest manifest.json --clobber
+          fi

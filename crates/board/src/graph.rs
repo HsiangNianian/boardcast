@@ -1,5 +1,5 @@
 //! The board's state and the model's operations, ported from src/engine/{graph,ops,prompt,lang}.ts.
-//! Pencil drafts are left out, as free editing is gone. Tests hold this to the TypeScript engine's output on real recorded model replies; see fixtures/make-goldens.mjs.
+//! Pencil drafts are left out, as free editing is gone. Tests hold this to the TypeScript engine's output on real recorded model replies; frozen in fixtures/goldens.json.
 
 use crate::spans::{locate, RegionRow, Span, Unit};
 use serde::de::DeserializeOwned;

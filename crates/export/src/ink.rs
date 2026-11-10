@@ -137,7 +137,7 @@ pub fn svg(board: &Drawn, title: &str) -> String {
     out
 }
 
-fn page_pixmap(image: &PageImage) -> Result<Pixmap> {
+pub(crate) fn page_pixmap(image: &PageImage) -> Result<Pixmap> {
     let decoded = image::load_from_memory(&image.bytes).context("reading the page image")?.to_rgba8();
     let (w, h) = decoded.dimensions();
     let mut data = decoded.into_raw();
@@ -164,24 +164,29 @@ pub fn png(board: &Drawn) -> Result<Vec<u8>> {
         canvas.draw_pixmap(0, 0, picture.as_ref(), &PixmapPaint { opacity: 1.0, blend_mode: BlendMode::SourceOver, quality: FilterQuality::Bilinear }, fit, None);
     }
     for stroke in &board.strokes {
-        let Some((first, rest)) = stroke.outline.split_first() else { continue };
-        let mut path = PathBuilder::new();
-        path.move_to(first[0], first[1]);
-        for p in rest {
-            path.line_to(p[0], p[1]);
-        }
-        path.close();
-        let Some(path) = path.finish() else { continue };
-        let [_, r, g, b] = stroke.style.rgb.to_be_bytes();
-        let mut paint = Paint::default();
-        paint.set_color_rgba8(r, g, b, (stroke.style.alpha * 255.0) as u8);
-        paint.anti_alias = true;
-        if stroke.style.under {
-            paint.blend_mode = BlendMode::Multiply;
-        }
-        canvas.fill_path(&path, &paint, FillRule::Winding, at, None);
+        fill_stroke(&mut canvas, &stroke.outline, stroke.style, at);
     }
     canvas.encode_png().context("encoding the picture")
+}
+
+/// One stroke's outline, filled in its color; a highlight multiplies, as a marker does over ink.
+pub(crate) fn fill_stroke(canvas: &mut Pixmap, outline: &[Pt], style: Style, at: Transform) {
+    let Some((first, rest)) = outline.split_first() else { return };
+    let mut path = PathBuilder::new();
+    path.move_to(first[0], first[1]);
+    for p in rest {
+        path.line_to(p[0], p[1]);
+    }
+    path.close();
+    let Some(path) = path.finish() else { return };
+    let [_, r, g, b] = style.rgb.to_be_bytes();
+    let mut paint = Paint::default();
+    paint.set_color_rgba8(r, g, b, (style.alpha * 255.0) as u8);
+    paint.anti_alias = true;
+    if style.under {
+        paint.blend_mode = BlendMode::Multiply;
+    }
+    canvas.fill_path(&path, &paint, FillRule::Winding, at, None);
 }
 
 #[cfg(test)]

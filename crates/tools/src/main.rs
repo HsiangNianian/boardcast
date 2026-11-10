@@ -3,7 +3,7 @@
 //!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [--deepseek | --llm <url>] [--skill | --rules-only | --hints-only]
 //!              [--only-dev | --only-holdout] [--only <id>] [--workers <n>]
 //!   fetch voice | pdfium [platform] | llama [platform] | glyphs
-//!   pack-glyphs <assets/hanzi> <glyphs.pack>
+//!   pack-glyphs <assets/hanzi> <glyphs.pack> [--only-from <file>...]   Only the characters those files use.
 //!   download-model <id> <dir>
 //!   sign <file>...              Writes <file>.sig with the update key; see release.rs.
 //!   release-manifest <packages> <tag>
@@ -44,7 +44,19 @@ fn main() -> Result<()> {
 fn pack_glyphs(mut args: impl Iterator<Item = String>) -> Result<()> {
     let dir = PathBuf::from(args.next().context("source folder")?);
     let out = PathBuf::from(args.next().context("output file")?);
-    let count = boardcast_board::glyphs::write_pack(&dir, &out)?;
+    let rest: Vec<String> = args.collect();
+    let only = match rest.split_first() {
+        Some((flag, files)) if flag == "--only-from" => {
+            let mut keep = std::collections::HashSet::new();
+            for f in files {
+                keep.extend(std::fs::read_to_string(f).with_context(|| format!("reading {f}"))?.chars().filter(|c| *c as u32 >= 0x2E80));
+            }
+            Some(keep)
+        }
+        Some((other, _)) => anyhow::bail!("unknown flag {other}"),
+        None => None,
+    };
+    let count = boardcast_board::glyphs::write_pack_of(&dir, &out, only.as_ref())?;
     println!("{count} characters in {}", out.display());
     Ok(())
 }

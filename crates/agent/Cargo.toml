@@ -8,6 +8,7 @@ publish.workspace = true
 
 
 [dependencies]
+pinyin = { version = "0.11", default-features = false, features = ["plain", "heteronym"] }
 anyhow.workspace = true
 base64 = "0.22"
 boardcast-board.workspace = true

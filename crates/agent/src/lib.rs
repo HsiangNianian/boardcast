@@ -7,6 +7,7 @@
 //! Hints from the checker did not help on either model, so they stay opt-in.
 
 pub mod settings;
+pub mod sound;
 pub mod summary;
 pub mod vision;
 
@@ -215,6 +216,12 @@ pub struct Reply {
 
 /// One model turn for one line of speech.
 pub fn propose(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &Utterance, guidance: Guidance, hint: Option<&str>) -> Result<Reply> {
+    propose_with(provider, graph, recent, next, guidance, hint, &sound::Glossary::default())
+}
+
+/// As [`propose`], telling the model how the glossary writes names and which words in the line may be the
+/// board's labels heard in other characters.
+pub fn propose_with(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &Utterance, guidance: Guidance, hint: Option<&str>, glossary: &sound::Glossary) -> Result<Reply> {
     let english = board_is_english(recent, next);
     let all = prompts();
     let mut messages: Vec<Value> = all[if english { "en" } else { "zh" }].as_array().cloned().context("prompts")?;
@@ -226,6 +233,10 @@ pub fn propose(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &
     let mut content = user_message(graph, recent, next);
     if let Some(h) = hint.filter(|_| guidance.hint) {
         content = format!("{h}\n{content}");
+    }
+    let labels: Vec<&str> = graph.nodes.iter().map(|n| n.label.as_str()).collect();
+    if let Some(note) = sound::note(glossary, &next.text, &labels, english) {
+        content = format!("{note}\n{content}");
     }
     messages.push(json!({ "role": "user", "content": content }));
     let started = Instant::now();
@@ -513,6 +524,7 @@ pub struct Session {
     graph: Arc<Mutex<Graph>>,
     history: Arc<Mutex<Vec<Utterance>>>,
     hint: Arc<Mutex<Option<String>>>,
+    glossary: Arc<Mutex<sound::Glossary>>,
     backend: Arc<Mutex<Backend>>,
     guidance: Arc<Mutex<Option<Guidance>>>,
     meeting: Arc<AtomicU64>,
@@ -536,6 +548,7 @@ impl Session {
             graph: Arc::new(Mutex::new(Graph::default())),
             history: Arc::new(Mutex::new(vec![])),
             hint: Arc::new(Mutex::new(None)),
+            glossary: Arc::new(Mutex::new(sound::Glossary::default())),
             backend: Arc::new(Mutex::new(backend)),
             guidance: Arc::new(Mutex::new(guidance)),
             meeting: Arc::new(AtomicU64::new(0)),
@@ -544,6 +557,7 @@ impl Session {
         };
         let (graph, history, hint, backend, guidance, meeting) =
             (session.graph.clone(), session.history.clone(), session.hint.clone(), session.backend.clone(), session.guidance.clone(), session.meeting.clone());
+        let glossary = session.glossary.clone();
         let local_base = session.local_base.clone();
         let renames = session.renames.clone();
         thread::spawn(move || {
@@ -631,7 +645,8 @@ impl Session {
                 let note = hint.lock().expect("hint lock").take();
                 let result = provider_now(&updates).and_then(|provider| {
                     let chosen = guidance.lock().expect("guidance lock").unwrap_or_else(|| provider.default_guidance());
-                    propose(&provider, &seen, &recent, &next, chosen, note.as_deref())
+                    let terms = glossary.lock().expect("glossary lock").clone();
+                    propose_with(&provider, &seen, &recent, &next, chosen, note.as_deref(), &terms)
                 });
                 // The lock is held across the check, so a meeting cannot open between it and the write.
                 let mut board = graph.lock().expect("graph lock");
@@ -729,6 +744,11 @@ impl Session {
         let mut graph = self.graph.lock().expect("graph lock");
         graph.toggle_span(id, span);
         graph.clone()
+    }
+
+    /// How names are written, for every line from now on.
+    pub fn set_glossary(&self, glossary: sound::Glossary) {
+        *self.glossary.lock().expect("glossary lock") = glossary;
     }
 
     pub fn set_hint(&self, hint: String) {
@@ -844,6 +864,25 @@ mod tests {
     }
 
     #[test]
+    fn the_model_hears_the_glossary_and_the_labels_a_line_may_mean() {
+        let seen = Arc::new(Mutex::new(String::new()));
+        let heard = seen.clone();
+        let provider = Provider::Scripted(Arc::new(move |said: &str| {
+            *heard.lock().unwrap() = said.to_string();
+            Ok(String::new())
+        }));
+        let mut g = Graph::default();
+        g.apply(&boardcast_board::graph::parse_ops("T 「登录」\nL 「登录」 「鉴权」"));
+        let line = Utterance { speaker: None, text: "把健全圈起来".into(), pointing: vec![] };
+        propose_with(&provider, &g, &[], &line, Guidance::default(), None, &sound::Glossary::parse("OpenAI; API = A P I")).unwrap();
+        let said = seen.lock().unwrap().clone();
+        assert!(said.contains("术语表，名字照这样写：OpenAI、API"), "{said}");
+        assert!(said.contains("「健全」可能是板上的「鉴权」"), "{said}");
+        propose(&provider, &g, &[], &Utterance { speaker: None, text: "加一个支付服务".into(), pointing: vec![] }, Guidance::default(), None).unwrap();
+        assert!(!seen.lock().unwrap().contains("术语表"), "nothing added without a glossary or a likely label");
+    }
+
+        #[test]
     fn an_unusable_reply_says_what_came_back() {
         let page = remote(serve("200 OK", "text/html", "<html>Bad gateway, try later</html>")).call(vec![json!({ "role": "user", "content": "hi" })], &Graph::default(), true);
         let e = format!("{:#}", page.unwrap_err());

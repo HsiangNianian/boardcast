@@ -2349,11 +2349,22 @@ impl Workbench {
             self.finish_label(false, window, cx);
             return;
         }
+        let keys = &event.keystroke;
+        // Escape in a text field, such as a setting or the line being typed, leaves it: a side panel
+        // closes back to the transcript, and the board has the keys again.
+        let plain = !(keys.modifiers.control || keys.modifiers.platform || keys.modifiers.alt || keys.modifiers.shift);
+        if keys.key == "escape" && plain && !self.focus.is_focused(window) {
+            if self.panel != Panel::Transcript {
+                self.panel = Panel::Transcript;
+            }
+            window.focus(&self.focus, cx);
+            cx.notify();
+            return;
+        }
         // Text fields keep their own undo.
         if !self.focus.is_focused(window) {
             return;
         }
-        let keys = &event.keystroke;
         if let Some(at) = self.replay.as_ref().map(|r| r.player.at) {
             match keys.key.as_str() {
                 "escape" => self.exit_replay(cx),

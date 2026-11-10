@@ -1,15 +1,17 @@
 # boardcast website
 
-A standalone static page, separate from the desktop app. It is English only. Its dependencies
-are the ones already installed at the repository root, so there is nothing more to install.
+A standalone static page, separate from the desktop app. It is English only. The page and its styles are here;
+what fills and animates them is Rust compiled to WebAssembly, in `crates/site`. [Trunk](https://trunkrs.dev) builds
+both, and fetches the matching wasm-bindgen itself.
 
 ```bash
-pnpm site:dev       # http://localhost:1430
-pnpm site:build     # → landing/dist/, with relative paths, so it opens under any subpath
-pnpm site:preview
+rustup target add wasm32-unknown-unknown   # or your distribution's Rust WebAssembly package
+cd landing
+trunk serve            # http://localhost:1430
+trunk build --release  # → landing/dist/, with relative paths, so it opens under any subpath
 ```
 
-GitHub Pages serves this page at the root; `pages.yml` builds and publishes it.
+GitHub Pages serves this page at the root; `pages.yml` builds it on pull requests and publishes it from main.
 
 ## The idea
 
@@ -35,19 +37,20 @@ Reduced motion shows every drawing finished and turns off the autoplay.
 
 | File | What it does |
 |---|---|
-| `src/pen.ts` | Writes text in stroke order with a visible pen tip, from the EMS Tech single-stroke font |
-| `src/hero.ts` | The first sheet: the said line, the handwriting, circle targets and the eraser |
-| `src/sheet.ts` | The rulers, the title block that follows the section, and the closing clock |
-| `src/lasso.ts` | Circling anything on the page with the mouse or a pen |
-| `src/signals.ts` | The four-line timeline and its cursor |
-| `src/story.ts` | The pinned app, its board drawn from scroll progress, and the autoplay |
-| `src/cards.ts`, `src/dots.ts` | The "during" cards and the dot-matrix pictograms |
-| `src/pict.ts` | Pictograms made of blocks and lines, which assemble as they come into view |
-| `src/meeting.ts` | The sample meeting: who said what, and when |
+| `index.html`, `style.css` | The page and its look |
+| `crates/site/src/pen.rs` | Writes text in stroke order with a visible pen tip, from the EMS Tech single-stroke font |
+| `crates/site/src/hero.rs` | The first sheet: the said line, the handwriting, circle targets and the eraser |
+| `crates/site/src/sheet.rs` | The rulers, the title block that follows the section, and the closing clock |
+| `crates/site/src/lasso.rs` | Circling anything on the page with the mouse or a pen |
+| `crates/site/src/signals.rs` | The four-line timeline and its cursor |
+| `crates/site/src/story.rs` | The pinned app, its board drawn from scroll progress, and the autoplay |
+| `crates/site/src/cards.rs`, `dots.rs` | The "during" cards and the dot-matrix pictograms |
+| `crates/site/src/pict.rs` | Pictograms made of blocks and lines, which assemble as they come into view |
+| `crates/site/src/meeting.rs` | The sample meeting: who said what, and when |
 
 ## Fonts
 
-DM Sans and JetBrains Mono come from `@fontsource-variable`. The board's handwriting is an unmodified Latin subset of
-Excalifont (`src/fonts/excalifont-latin.woff2`), the source of the app's English strokes. The pen in the first sheet
-writes with EMS Tech from hersheytext (`src/emstech.json`). Both are under the SIL OFL; their licenses are in
-`public/licenses/`.
+DM Sans and JetBrains Mono are the Latin and Latin Extended files from Fontsource, in `fonts/`. The board's
+handwriting is an unmodified Latin subset of Excalifont (`fonts/excalifont-latin.woff2`), the source of the app's
+English strokes. The pen in the first sheet writes with EMS Tech from hersheytext (`crates/site/src/emstech.json`).
+All four are under the SIL OFL; their licenses are in `public/licenses/`.

@@ -14,10 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/engine/*.test.ts\"",
     "tauri": "cargo run -q -p boardcast-tools -- fetch llama && cargo run -q -p boardcast-tools -- fetch voice && tauri",
-    "build:player": "vite build -c vite.player.config.ts",
-    "site:dev": "vite -c landing/vite.config.ts",
-    "site:build": "vite build -c landing/vite.config.ts",
-    "site:preview": "vite preview -c landing/vite.config.ts"
+    "build:player": "vite build -c vite.player.config.ts"
   },
   "dependencies": {
     "@d2lang/d2": "0.1.34",

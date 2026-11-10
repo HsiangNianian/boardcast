@@ -804,6 +804,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "boardcast-site"
+version = "0.22.0"
+dependencies = [
+ "js-sys",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "boardcast-tools"
 version = "0.22.0"
 dependencies = [

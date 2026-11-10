@@ -530,7 +530,14 @@ impl Session {
                         .iter()
                         .map(|s| s.line.speaker.as_ref().map_or_else(|| s.line.text.clone(), |n| format!("{n}：{}", s.line.text)))
                         .collect();
-                    Utterance { speaker: None, text: text.join(" ") }
+                    // Everything circled across the merged lines still counts, in the order it was circled.
+                    let mut pointing: Vec<String> = vec![];
+                    for id in batch.iter().flat_map(|s| &s.line.pointing) {
+                        if !pointing.contains(id) {
+                            pointing.push(id.clone());
+                        }
+                    }
+                    Utterance { speaker: None, text: text.join(" "), pointing }
                 };
                 let recent: Vec<Utterance> = {
                     let all = history.lock().expect("history lock");
@@ -745,7 +752,7 @@ mod tests {
 
     impl Harness {
         fn say(&self, text: &str) {
-            self.said.send(Said { line: Utterance { speaker: None, text: text.into() }, ended: Instant::now(), asr_ms: None, meeting: self.session.meeting(), renames: 0 }).unwrap();
+            self.said.send(Said { line: Utterance { speaker: None, text: text.into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: self.session.meeting(), renames: 0 }).unwrap();
         }
 
         fn wait(&self) {
@@ -815,7 +822,7 @@ mod tests {
         });
         let stale = h.session.meeting();
         h.session.open(Graph::default(), vec![]);
-        h.said.send(Said { line: Utterance { speaker: None, text: "排队的旧话".into() }, ended: Instant::now(), asr_ms: None, meeting: stale, renames: 0 }).unwrap();
+        h.said.send(Said { line: Utterance { speaker: None, text: "排队的旧话".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: stale, renames: 0 }).unwrap();
         h.wait();
         h.say("新会议的话");
         h.wait();
@@ -834,13 +841,13 @@ mod tests {
             release_rx.lock().unwrap().recv().unwrap();
             Ok("N n1 「网关」".into())
         });
-        let line = |renames| Said { line: Utterance { speaker: Some("B".into()), text: "网关".into() }, ended: Instant::now(), asr_ms: None, meeting: h.session.meeting(), renames };
+        let line = |renames| Said { line: Utterance { speaker: Some("B".into()), text: "网关".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: h.session.meeting(), renames };
         h.said.send(line(0)).unwrap();
         entered.recv_timeout(Duration::from_secs(5)).unwrap();
         // Renamed while the model is answering, with the name then given to someone else's next line.
         h.session.rename_speaker("B", "李工");
         h.session.rename_speaker("C", "B");
-        h.said.send(Said { line: Utterance { speaker: Some("B".into()), text: "日志".into() }, ..line(h.session.renames_seen()) }).unwrap();
+        h.said.send(Said { line: Utterance { speaker: Some("B".into()), text: "日志".into(), pointing: vec![] }, ..line(h.session.renames_seen()) }).unwrap();
         release.send(()).unwrap();
         h.wait();
         let Update::Drawn { graph, lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("not drawn") };
@@ -885,12 +892,12 @@ mod tests {
         let session = Session::start(Backend::NoModel, None, said_rx, ready_tx, drained_tx, updates_tx);
         ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(matches!(updates.recv_timeout(Duration::from_secs(5)).unwrap(), Update::NoModel));
-        said.send(Said { line: Utterance { speaker: None, text: "这句没有模型".into() }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
+        said.send(Said { line: Utterance { speaker: None, text: "这句没有模型".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
         drained.recv_timeout(Duration::from_secs(5)).unwrap();
         let Update::Failed { lines, .. } = updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("expected a failure") };
         assert_eq!(lines[0].text, "这句没有模型");
         session.set_backend(Backend::Ready(Provider::Scripted(Arc::new(|_| Ok("T 「现在有了」".into())))));
-        said.send(Said { line: Utterance { speaker: None, text: "再试".into() }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
+        said.send(Said { line: Utterance { speaker: None, text: "再试".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
         drained.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(session.board().nodes.len(), 1, "a model added later takes effect");
     }

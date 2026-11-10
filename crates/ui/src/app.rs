@@ -229,6 +229,13 @@ struct Ink {
     generation: u64,
     rebuilding: Option<Receiver<Rebuilt>>,
     drag: Option<(Point<Pixels>, View)>,
+    /// Dragging draws a circle around things rather than moving the board.
+    circling: bool,
+    /// Circles drawn so far, and the one being drawn, in board coordinates.
+    loops: Vec<Vec<[f32; 2]>>,
+    drawing: Option<Vec<[f32; 2]>>,
+    /// What the circles took in, first circled first; the next line carries it to the model.
+    pointed: Vec<String>,
     zoom_test: Option<ZoomTest>,
     instant: bool,
 }
@@ -259,6 +266,20 @@ struct Timing {
     arrived: Instant,
     first_ink: Option<Instant>,
     strokes: usize,
+}
+
+/// Whether a closed shape holds a point, by counting crossings.
+fn encloses(shape: &[[f32; 2]], p: [f32; 2]) -> bool {
+    let mut inside = false;
+    let mut j = shape.len() - 1;
+    for i in 0..shape.len() {
+        let (a, b) = (shape[i], shape[j]);
+        if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0] {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
 }
 
 fn fill_builder() -> PathBuilder {
@@ -376,6 +397,33 @@ impl Ink {
         self.selected = target_at(&self.targets, f64::from(x), f64::from(y)).map(|t| t.id.clone());
         self.selected_at = self.selected.as_ref().map(|_| (f64::from(x), f64::from(y)));
         self.mark_unit = MarkUnit::Block;
+    }
+
+    /// A point on the canvas, in board coordinates.
+    fn on_board(&self, at: Point<Pixels>) -> [f32; 2] {
+        let v = self.shown();
+        [v.x + (f32::from(at.x) - f32::from(self.canvas.origin.x)) / v.k, v.y + (f32::from(at.y) - f32::from(self.canvas.origin.y)) / v.k]
+    }
+
+    /// Close the circle being drawn, and take in whatever has its middle inside it.
+    fn close_loop(&mut self) {
+        let Some(shape) = self.drawing.take().filter(|s| s.len() >= 3) else { return };
+        for t in &self.targets {
+            let middle = [(t.x + t.w / 2.0) as f32, (t.y + t.h / 2.0) as f32];
+            if encloses(&shape, middle) && !self.pointed.contains(&t.id) {
+                self.pointed.push(t.id.clone());
+            }
+        }
+        let over = self.pointed.len().saturating_sub(boardcast_board::graph::MAX_POINTED);
+        self.pointed.drain(..over);
+        self.loops.push(shape);
+    }
+
+    fn clear_circles(&mut self) {
+        self.circling = false;
+        self.loops.clear();
+        self.drawing = None;
+        self.pointed.clear();
     }
 
     /// Where the toolbar goes, in canvas pixels: under the selection, kept inside the canvas.
@@ -1222,7 +1270,7 @@ impl Workbench {
                         let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds);
                         self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
                         let renames = self.session().renames_seen();
-                        let line = Utterance { speaker, text: sentence.text };
+                        let line = Utterance { speaker, text: sentence.text, pointing: self.take_pointing() };
                         let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, asr_ms: Some(sentence.asr_ms), meeting, renames });
                     }
                 }
@@ -2324,6 +2372,10 @@ impl Workbench {
         }
         match keys.key.as_str() {
             // Closes the nearest thing first: the selection, then a panel.
+            "escape" if self.ink.borrow().circling => {
+                self.ink.borrow_mut().clear_circles();
+                cx.notify();
+            }
             "escape" => {
                 let deselected = self.ink.borrow_mut().selected.take().is_some();
                 if !deselected && self.panel != Panel::Transcript {
@@ -2445,7 +2497,7 @@ impl Workbench {
         let provider = Provider::Remote { base_url: settings.base_url, key: settings.api_key, model: settings.model };
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let hello = Utterance { speaker: None, text: "Hello".into() };
+            let hello = Utterance { speaker: None, text: "Hello".into(), pointing: vec![] };
             let reply = propose(&provider, &Graph::default(), &[], &hello, Guidance::default(), None);
             let _ = tx.send(reply.map(|r| r.ms).map_err(|e| format!("{e:#}")));
         });
@@ -2457,8 +2509,16 @@ impl Workbench {
     fn retry_line(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some((speaker, text)) = self.live.retry_line(index) else { return };
         let (meeting, renames) = (self.session().meeting(), self.session().renames_seen());
-        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text }, ended: Instant::now(), asr_ms: None, meeting, renames });
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting, renames });
         cx.notify();
+    }
+
+    /// What is circled goes with the next line, and the circles go away.
+    fn take_pointing(&mut self) -> Vec<String> {
+        let mut ink = self.ink.borrow_mut();
+        let pointed = std::mem::take(&mut ink.pointed);
+        ink.clear_circles();
+        pointed
     }
 
     /// A speaker stands out while the pointer is on them, and on a touch screen, with no pointer, while
@@ -2611,7 +2671,8 @@ impl Workbench {
         self.live.add_line(speaker.as_deref(), &text, None);
         let meeting = self.session().meeting();
         let renames = self.session().renames_seen();
-        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text }, ended: Instant::now(), asr_ms: None, meeting, renames });
+        let pointing = self.take_pointing();
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing }, ended: Instant::now(), asr_ms: None, meeting, renames });
         cx.notify();
     }
 
@@ -3032,11 +3093,22 @@ impl Render for Workbench {
             .on_mouse_down(MouseButton::Left, cx.listener(move |this, e: &MouseDownEvent, window, cx| {
                 window.focus(&this.focus, cx);
                 let mut b = press.borrow_mut();
+                if b.circling {
+                    let start = b.on_board(e.position);
+                    b.drawing = Some(vec![start]);
+                    return;
+                }
                 let view = b.shown();
                 b.drag = Some((e.position, view));
             }))
             .on_mouse_move(cx.listener(move |_, e: &MouseMoveEvent, _, cx| {
                 let mut b = moved.borrow_mut();
+                if b.drawing.is_some() && e.pressed_button == Some(MouseButton::Left) {
+                    let at = b.on_board(e.position);
+                    b.drawing.as_mut().expect("drawing").push(at);
+                    cx.notify();
+                    return;
+                }
                 if let Some((from, view)) = b.drag.filter(|_| e.pressed_button == Some(MouseButton::Left)) {
                     let d = e.position - from;
                     b.view = Some(View { x: view.x - f32::from(d.x) / view.k, y: view.y - f32::from(d.y) / view.k, k: view.k });
@@ -3047,6 +3119,11 @@ impl Render for Workbench {
             }))
             .on_mouse_up(MouseButton::Left, cx.listener(move |_, e: &MouseUpEvent, _, cx| {
                 let mut b = release.borrow_mut();
+                if b.drawing.is_some() {
+                    b.close_loop();
+                    cx.notify();
+                    return;
+                }
                 if let Some((from, _)) = b.drag.take() {
                     let d = e.position - from;
                     if f32::from(d.x).hypot(f32::from(d.y)) < CLICK_SLOP {
@@ -3129,6 +3206,23 @@ impl Render for Workbench {
                                         tier.under.paint(window, origin, v.k, Some(patch));
                                         tier.layer.paint(window, origin, v.k, Some(patch));
                                     });
+                                }
+                            }
+                            // The circles, in the accent's ink: an aid for pointing, never part of the board.
+                            for shape in b.loops.iter().chain(b.drawing.iter()) {
+                                let mut pb = PathBuilder::stroke(px(2.5));
+                                let at = |p: &[f32; 2]| origin + point(px(p[0] * v.k), px(p[1] * v.k));
+                                if let Some(first) = shape.first() {
+                                    pb.move_to(at(first));
+                                    shape[1..].iter().for_each(|p| pb.line_to(at(p)));
+                                    if b.drawing.as_ref() != Some(shape) {
+                                        pb.close();
+                                    }
+                                }
+                                if let Ok(path) = pb.build() {
+                                    let mut ink: Hsla = rgb(pal().accent).into();
+                                    ink.a = 0.8;
+                                    window.paint_path(path, Background::from(ink));
                                 }
                             }
                             if let Some(front) = b.queue.front().filter(|_| b.live > 0.0) {
@@ -3430,6 +3524,29 @@ impl Render for Workbench {
                 )
                 .when(listening, |d| d.content(div().w(px(METER_W)).h(px(6.)).mx_1().rounded_sm().bg(rgb(pal().track)).child(div().h_full().rounded_sm().w(px(meter / 100.0 * METER_W)).bg(rgb(pal().accent)))))
                 .content(Separator::vertical().h(px(18.)).mx_1())
+            })
+            .when(editable, |d| {
+                let (circling, count) = { let ink = self.ink.borrow(); (ink.circling, ink.pointed.len()) };
+                d.child(
+                    icon_button("circle", "lasso", if circling { tr("Stop circling (Esc)", "取消圈选（Esc）") } else { tr("Circle things, then say what to do with them", "圈住板上的东西，再说要怎么处理") })
+                        .selected(circling)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let mut ink = this.ink.borrow_mut();
+                            if ink.circling {
+                                ink.clear_circles();
+                            } else {
+                                ink.circling = true;
+                                ink.selected = None;
+                            }
+                            cx.notify();
+                        })),
+                )
+                .when(circling, |d| {
+                    d.content(div().text_xs().text_color(rgb(pal().muted)).whitespace_nowrap().child(match count {
+                        0 => tr("Draw around things", "在板上画圈").to_string(),
+                        n => format!("{n} {}", tr("circled: now say it", "个已圈住：说吧")),
+                    }))
+                })
             })
             .child(icon_button("summary", "sparkles", tr("Summary", "摘要")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
             .child(icon_button("import", "import", tr("Import", "导入")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))))
@@ -4136,7 +4253,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         let root = root.as_ref().context("--case needs --root <checkout>")?;
         let cases: Vec<Case> = serde_json::from_slice(&std::fs::read(root.join("eval/cases.json"))?)?;
         let found = cases.into_iter().find(|c| c.id == id).with_context(|| format!("no case {id}"))?;
-        turns = found.turns.into_iter().map(|t| Utterance { speaker: t.speaker, text: t.text }).collect();
+        turns = found.turns.into_iter().map(|t| Utterance { speaker: t.speaker, text: t.text, pointing: vec![] }).collect();
     }
     let data = default_dir()?;
     let models = data.join("models");
@@ -4215,6 +4332,10 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 generation: 0,
                 rebuilding: None,
                 drag: None,
+                circling: false,
+                loops: vec![],
+                drawing: None,
+                pointed: vec![],
                 zoom_test: zoom_test.then_some(ZoomTest { started: None, frames: vec![], last: None, base: 0.0, rebuilds: vec![], peak_rss: 0 }),
                 instant: start_board.is_some(),
             };
@@ -4447,4 +4568,19 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         .expect("open window");
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::encloses;
+
+    #[test]
+    fn a_circle_holds_what_is_inside_it() {
+        let square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
+        assert!(encloses(&square, [5.0, 5.0]));
+        assert!(!encloses(&square, [15.0, 5.0]));
+        // A loose hand-drawn loop that is not closed still counts as closed.
+        let loop_ = [[0.0, 0.0], [20.0, 2.0], [22.0, 20.0], [1.0, 18.0]];
+        assert!(encloses(&loop_, [10.0, 10.0]));
+    }
 }

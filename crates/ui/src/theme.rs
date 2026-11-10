@@ -95,7 +95,7 @@ impl Palette {
     }
 }
 
-gpui_kit_assets::icon_assets!(ExtraIcons, [FileDown, FilePlus, Import, Pencil, RotateCcw, Sparkles, Trash, Users, WandSparkles, X]);
+gpui_kit_assets::icon_assets!(ExtraIcons, [FileDown, FilePlus, Import, Lasso, Pencil, RotateCcw, Sparkles, Trash, Users, WandSparkles, X]);
 
 /// The icons the toolkit carries, and the few more this window asks for.
 pub struct Assets;

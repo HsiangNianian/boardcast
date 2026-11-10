@@ -2968,17 +2968,26 @@ impl Workbench {
         let busy = self.exporting;
         let rows = formats.into_iter().enumerate().map(|(i, (kind, name, hint, available))| {
             let enabled = available && busy.is_none();
+            // A row of the manual's table, as on the website: the format, what it holds, and its file.
             div()
                 .id(("export", i))
-                .p_2()
-                .min_h(px(48.))
-                .rounded_md()
-                .border_1()
+                .flex()
+                .items_start()
+                .justify_between()
+                .gap_3()
+                .py_2()
+                .border_b_1()
                 .border_color(rgb(pal().line))
                 .when(!enabled, |d| d.opacity(0.4))
-                .when(enabled, |d| d.cursor_pointer().on_click(cx.listener(move |this, _, _, cx| this.start_export(kind, cx))))
-                .child(div().text_sm().child(if busy == Some(kind) { format!("{name} · {}", tr("Exporting…", "正在导出…")) } else { name.to_string() }))
-                .child(div().text_xs().text_color(rgb(pal().muted)).child(hint))
+                .when(enabled, |d| d.cursor_pointer().hover(|d| d.bg(rgb(pal().selected))).on_click(cx.listener(move |this, _, _, cx| this.start_export(kind, cx))))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .child(div().text_sm().child(if busy == Some(kind) { format!("{name} · {}", tr("Exporting…", "正在导出…")) } else { name.to_string() }))
+                        .child(div().text_xs().text_color(rgb(pal().muted)).child(hint)),
+                )
+                .child(div().pt(px(2.)).font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).whitespace_nowrap().child(format!(".{} ↓", kind.extension())))
         });
         let result = self.exported.as_ref().map(|result| match result {
             Exported::Saved { path, text_left_out } => {
@@ -3144,6 +3153,19 @@ fn case_or_measurement(turns: &[Utterance], wav: &Option<PathBuf>, demo: &Option
 fn local_time(ms: f64) -> String {
     use chrono::TimeZone;
     chrono::Local.timestamp_millis_opt(ms as i64).single().map_or(String::new(), |t| t.format("%Y-%m-%d %H:%M").to_string())
+}
+
+/// A section of a panel, numbered in the website's manual style: a hairline, then "01 / board model".
+fn manual_label(number: &str, name: &str) -> gpui_kit::Div {
+    div()
+        .mt_3()
+        .pt_2()
+        .border_t_1()
+        .border_color(rgb(pal().line))
+        .font_family(theme::MONO)
+        .text_xs()
+        .text_color(rgb(pal().faint))
+        .child(format!("{number} / {}", name.to_lowercase()))
 }
 
 /// A recorded sample replayed from its stored model output, with no model involved.
@@ -4008,7 +4030,7 @@ impl Render for Workbench {
             .flex()
             .flex_col()
             .gap_3()
-            .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Board model", "板书模型")))
+            .child(manual_label("01", tr("Board model", "板书模型")))
             .when(self.needs_model, |d| {
                 d.child(div().text_sm().child(tr(
                     "To draw the board, download a model that runs on this computer, or set up a remote one. Speech recognition is already included.",
@@ -4079,7 +4101,7 @@ impl Render for Workbench {
             .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
             .when(forced, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))))
-            .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Speech", "语音")))
+            .child(manual_label("02", tr("Speech", "语音")))
             .child(div().text_sm().child(tr("Listen to", "收音来源")))
             .child({
                 let chosen = self.form.saved.input.clone();
@@ -4147,7 +4169,7 @@ impl Render for Workbench {
                 "With pages imported, saying \u{201c}go to page 5\u{201d} always turns to it. When what is said is about another page, it is offered at the board's corner; with this on, the board turns by itself.",
                 "导入了多页材料时，说「翻到第5页」总会翻过去。讲到另一页的内容时，画布角落会给出建议；打开这项后会直接翻过去。",
             )))
-            .child(div().text_sm().child(tr("Glossary", "术语表")))
+            .child(manual_label("03", tr("Glossary", "术语表")))
             .child(Input::new(&self.form.glossary).small())
             .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
                 "Names as they should be written, apart by semicolons. Recognition is corrected to them, and the board writes them so. Chinese is matched by sound; for other ways a name is heard, add them after an equals sign: API = A P I, エーピーアイ.",
@@ -4503,6 +4525,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let mut synthetic: Option<usize> = None;
     let mut zoom_test = false;
     let mut demo: Option<String> = None;
+    // For looking at a side panel without clicking to it.
+    let mut start_panel = Panel::Transcript;
     let mut zoom: Option<f32> = None;
     let mut skill = false;
     let mut deepseek = false;
@@ -4517,6 +4541,17 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--synthetic" => synthetic = args.next().map(|n| n.parse()).transpose()?,
             "--zoom-test" => zoom_test = true,
             "--demo" => demo = args.next(),
+            "--panel" => {
+                start_panel = match args.next().as_deref() {
+                    Some("library") => Panel::Library,
+                    Some("summary") => Panel::Summary,
+                    Some("export") => Panel::Export,
+                    Some("import") => Panel::Import,
+                    Some("speakers") => Panel::Speakers,
+                    Some("settings") => Panel::Settings,
+                    _ => Panel::Transcript,
+                }
+            }
             "--zoom" => zoom = args.next().map(|v| v.parse()).transpose()?,
             "--skill" => skill = true,
             "--deepseek" => deepseek = true,
@@ -4751,7 +4786,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     seen_changes: saved_changes,
                     last_change: Instant::now(),
                     last_attempt: None,
-                    panel: Panel::Transcript,
+                    panel: start_panel,
                     library: vec![],
                     inputs: vec![],
                     library_query,

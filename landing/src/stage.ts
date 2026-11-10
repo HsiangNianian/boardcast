@@ -406,9 +406,9 @@ export function initStage(hero: HeroApi) {
     const c3: Pt = [cx, A3.C]
     hub = makeNode('hub', '一场会', Math.round(size * 1.25), c3, { star: true })
     const sat: [string, number, boolean][] = [
-      ['PAD 板书模式', 215, false],
+      ['圈着说', 215, false],
       ['黑板 · 粉笔', -35, false],
-      ['PC 会议模式', 35, true],
+      ['改字 · 标记', 35, true],
       ['回放 · 任意时刻', 145, false],
     ]
     const Rx = narrow ? colW * 0.27 : Math.min(colW * 0.3, 300 * s)

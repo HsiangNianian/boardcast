@@ -96,10 +96,35 @@ fn hits_rect(r: Area, o: Area) -> bool {
     r.x < o.x + o.w && o.x < r.x + r.w && r.y < o.y + o.h && o.y < r.y + r.h
 }
 
+/// Room left between a label and what it keeps clear of.
+const LABEL_ROOM: f32 = 4.0;
+/// The space between the lines of a label that had to be broken.
+const LABEL_LEADING: f32 = 5.0;
+
+/// Where a label goes, and its lines: on one line if there is a clear spot for it, otherwise broken into
+/// two or three shorter lines, which fit where one long line would run into something.
+fn place_label(points: &[Pt], label: &str, size: f32, blocks: &[Area], lines: &[Vec<Pt>], prefer: &[Pt]) -> (Area, Vec<String>, bool) {
+    let total = crate::board_layout::text_width(label, f64::from(size));
+    let mut first = None;
+    for count in 1..=3 {
+        let broken = if count == 1 { vec![label.to_string()] } else { crate::board_layout::wrap(label, f64::from(size), (total / count as f64).max(f64::from(size) * 2.0) * 1.05) };
+        if count > 1 && broken.len() < 2 {
+            break;
+        }
+        let w = broken.iter().map(|l| crate::board_layout::text_width(l, f64::from(size)) as f32).fold(0.0, f32::max);
+        let h = broken.len() as f32 * (size + LABEL_LEADING) - LABEL_LEADING;
+        let (spot, clear) = label_spot(points, w, h, blocks, lines, prefer);
+        if clear {
+            return (spot, broken, true);
+        }
+        first.get_or_insert((spot, broken));
+    }
+    let (spot, broken) = first.expect("one attempt at least");
+    (spot, broken, false)
+}
+
 /// Along the longest segments first, the first place clear of text, boxes and every line.
-fn label_spot(points: &[Pt], label: &str, size: f32, blocks: &[Area], lines: &[Vec<Pt>], prefer: &[Pt]) -> (Area, bool) {
-    let w = crate::board_layout::text_width(label, f64::from(size)) as f32;
-    let h = size;
+fn label_spot(points: &[Pt], w: f32, h: f32, blocks: &[Area], lines: &[Vec<Pt>], prefer: &[Pt]) -> (Area, bool) {
     let mut cands: Vec<Pt> = prefer.to_vec();
     let mut segs: Vec<(Pt, Pt)> = points.windows(2).map(|s| (s[0], s[1])).collect();
     segs.sort_by(|s, t| (t.1[0] - t.0[0]).hypot(t.1[1] - t.0[1]).total_cmp(&(s.1[0] - s.0[0]).hypot(s.1[1] - s.0[1])));
@@ -118,7 +143,8 @@ fn label_spot(points: &[Pt], label: &str, size: f32, blocks: &[Area], lines: &[V
     }
     let free = |p: &&Pt| {
         let r = Area { x: p[0], y: p[1], w, h };
-        !blocks.iter().any(|b| hits_rect(r, *b)) && !lines.iter().any(|l| hits_line(r, l))
+        let roomy = Area { x: r.x - LABEL_ROOM, y: r.y - LABEL_ROOM, w: r.w + 2.0 * LABEL_ROOM, h: r.h + 2.0 * LABEL_ROOM };
+        !blocks.iter().any(|b| hits_rect(roomy, *b)) && !lines.iter().any(|l| hits_line(r, l))
     };
     let hit = cands.iter().find(free).copied();
     let at = hit.or_else(|| cands.first().copied()).unwrap_or(points[0]);
@@ -428,7 +454,30 @@ impl Canvas<'_> {
             let shape = circle_mark(x + pre + w / 2.0, y + size / 2.0, w / 2.0 + 16.0, size / 2.0 + 10.0, &mut r);
             self.add(format!("{}|f|{}", row.id, row.text), rgb, alpha(n), false, vec![(shape, false)], pen_for(size) * 0.9);
         }
-        self.text(n, &row.id, &row.text, x + pre, y, size, rgb, w, None);
+        if row.lines.len() <= 1 {
+            self.text(n, &row.id, &row.text, x + pre, y, size, rgb, w, None);
+            return;
+        }
+        // A long item, written over several lines: a strike or highlight runs along each one, a circle
+        // goes round them all, and an underline and a star come after the last.
+        let step = size + crate::board_layout::ROW_LEADING as f32;
+        let last = row.lines.len() - 1;
+        for (i, line) in row.lines.iter().enumerate() {
+            let lw = crate::board_layout::text_width(line, f64::from(size)) as f32;
+            let keep: Vec<String> = n.map_or(vec![], |n| n.marks.iter().filter(|m| matches!(m.as_str(), "划掉" | "高亮") || (i == last && matches!(m.as_str(), "下划线" | "星标"))).cloned().collect());
+            let shown = n.map(|n| {
+                let mut shown = n.clone();
+                shown.marks = keep;
+                shown
+            });
+            self.text(shown.as_ref(), &row.id, line, x + pre, y + i as f32 * step, size, rgb, lw, alpha(n).into());
+        }
+        if n.is_some_and(|n| n.marks.iter().any(|m| m == "圈出")) {
+            let h = size + last as f32 * step;
+            let mut r = Rng::new(&format!("{}|{}m", row.id, row.text));
+            let ring = circle_mark(x + pre + w / 2.0, y + h / 2.0, w / 2.0 + 18.0, h / 2.0 + 14.0, &mut r);
+            self.add(format!("{}|{}|o", row.id, row.text), RED, 1.0, false, vec![(ring, false)], pen_for(size));
+        }
     }
 }
 
@@ -600,16 +649,19 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
     // Labels last, once every line is known, so they can avoid all of them.
     let mut unclear = vec![];
     let mut blocks: Vec<Area> = l.anchors.iter().filter(|(id, _)| !l.regions.iter().any(|r| &r.rect.id == *id)).map(|(_, b)| area(b)).collect();
+    // The writing in each region, so a label never lands on an item.
+    blocks.extend(l.targets().iter().map(area));
     for r in &l.regions {
         if let Some(t) = &r.title {
-            blocks.push(Area { x: (r.rect.x + t.x) as f32, y: r.rect.y as f32, w: t.w as f32, h: title + 14.0 });
+            // The underline runs a little past the title on both sides.
+            blocks.push(Area { x: (r.rect.x + t.x) as f32 - 6.0, y: r.rect.y as f32, w: t.w as f32 + 20.0, h: title + 14.0 });
         }
     }
     for lb in labels {
         let size = font - 4.0;
-        let (spot, clear) = match lb.fixed {
-            Some(a) => (a, false),
-            None => label_spot(&lb.route, &lb.text, size, &blocks, &lines, &lb.prefer),
+        let (spot, broken, clear) = match lb.fixed {
+            Some(a) => (a, vec![lb.text.clone()], false),
+            None => place_label(&lb.route, &lb.text, size, &blocks, &lines, &lb.prefer),
         };
         blocks.push(spot);
         // Nothing goes under the words, as a hand writes straight on the paper. A label with no clean spot
@@ -617,7 +669,9 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
         if !clear && lb.fixed.is_none() {
             unclear.push(lb.text.clone());
         }
-        c.text(None, &lb.key, &lb.text, spot.x, spot.y, size, INK, 0.0, Some(1.0));
+        for (i, text) in broken.iter().enumerate() {
+            c.text(None, &lb.key, text, spot.x, spot.y + i as f32 * (size + LABEL_LEADING), size, INK, 0.0, Some(1.0));
+        }
     }
     c.pieces.retain(|p| !p.lines.is_empty());
     (c.pieces, unclear)
@@ -630,8 +684,9 @@ mod tests {
     #[test]
     fn a_label_finds_room_beside_a_slanting_line() {
         let route = [[0.0, 0.0], [300.0, 200.0]];
-        let (_, clear) = label_spot(&route, "publishes first", 16.0, &[], &[route.to_vec()], &[]);
+        let (_, lines, clear) = place_label(&route, "publishes first", 16.0, &[], &[route.to_vec()], &[]);
         assert!(clear);
+        assert_eq!(lines, ["publishes first"]);
     }
 
     #[test]
@@ -651,6 +706,19 @@ mod tests {
         let label = boxes.iter().find(|b| b.label).unwrap();
         assert_eq!(label.owner, Owner::Edge("n1".into(), "n2".into()));
         assert!(!boxes.iter().any(|b| matches!(&b.owner, Owner::Node(id) if id.starts_with('g'))), "a group belongs to nobody");
+    }
+
+    #[test]
+    fn a_label_between_two_topics_stays_off_their_writing() {
+        let l = grown(&["T 「登录」\nL 「登录」 「短信验证」\nL 「登录」 「密码登录」\nT 「账号绑定」\nL 「账号绑定」 「抖音」\nL 「账号绑定」 「微信」", "E 「登录」 -> 「账号绑定」 : 「用户输入抖音账号」"]);
+        let g = {
+            let mut g = Graph::default();
+            g.apply(&crate::graph::parse_ops("T 「登录」\nL 「登录」 「短信验证」\nL 「登录」 「密码登录」\nT 「账号绑定」\nL 「账号绑定」 「抖音」\nL 「账号绑定」 「微信」\nE 「登录」 -> 「账号绑定」 : 「用户输入抖音账号」"));
+            g
+        };
+        let mut glyphs = crate::glyphs::Glyphs::load(crate::glyphs::HanziSource::Directory(Default::default())).unwrap();
+        let (_, unclear) = compose(&g, &l, &mut glyphs);
+        assert!(unclear.is_empty(), "the label found no clear spot: {unclear:?}");
     }
 
     /// A board as it grows, line by line, since that places things differently from laying it out whole.

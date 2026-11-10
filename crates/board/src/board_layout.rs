@@ -42,10 +42,33 @@ pub struct Row {
     pub id: String,
     pub prefix: String,
     pub text: String,
+    /// The text as written: one line, or several when it is too long for one.
+    pub lines: Vec<String>,
     pub x: f64,
     pub y: f64,
+    /// The widest line.
     pub w: f64,
     pub size: f64,
+}
+
+/// The widest a list item is written before it goes on to another line: about eighteen Chinese
+/// characters, or thirty letters.
+pub const ROW_MAX: f64 = 18.0 * FONT;
+/// The step from one line of a broken item to the next.
+pub const ROW_LEADING: f64 = 8.0;
+
+impl Row {
+    /// An item written at its place, broken into lines if it is long. A formula keeps to one line.
+    fn new(id: &str, prefix: String, text: String, x: f64, y: f64, size: f64, formula: bool) -> Self {
+        let lines = if formula { vec![text.clone()] } else { wrap(&text, size, ROW_MAX) };
+        let w = lines.iter().map(|l| text_width(l, size)).fold(0.0, f64::max);
+        Self { id: id.to_string(), prefix, text, lines, x, y, w, size }
+    }
+
+    /// How much taller than one line the item is.
+    pub fn extra(&self) -> f64 {
+        (self.lines.len().max(1) - 1) as f64 * (self.size + ROW_LEADING)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -108,7 +131,7 @@ impl Layout {
             }
             for row in &r.rows {
                 let pre = if row.prefix.is_empty() { 0.0 } else { 30.0 };
-                out.push(Rect { id: row.id.clone(), x: r.rect.x + row.x, y: r.rect.y + row.y, w: row.w + pre, h: row.size + 8.0 });
+                out.push(Rect { id: row.id.clone(), x: r.rect.x + row.x, y: r.rect.y + row.y, w: row.w + pre, h: row.size + 8.0 + row.extra() });
             }
         }
         // Last, as something written over a page should be what a click finds.
@@ -127,6 +150,44 @@ pub fn text_width(s: &str, size: f64) -> f64 {
     s.chars()
         .map(|c| if matches!(c as u32, 0x2E80..=0x9FFF | 0xFF00..=0xFFEF) { size } else { size * 0.62 })
         .sum()
+}
+
+/// Punctuation that never starts a line, and so stays with the text before it.
+const NO_LINE_START: &str = "，。、；：？！）」』】》〉”’…,.;:?!)]}%";
+
+/// Text broken into lines no wider than `max` where it can be: Chinese and Japanese between any two
+/// characters, other scripts between words, and closing punctuation kept on the line it closes.
+pub fn wrap(s: &str, size: f64, max: f64) -> Vec<String> {
+    if text_width(s, size) <= max {
+        return vec![s.to_string()];
+    }
+    let wide = |c: char| matches!(c as u32, 0x2E80..=0x9FFF | 0xFF00..=0xFFEF);
+    // The pieces a line may break between: one wide character, or a word with the spaces after it.
+    let mut pieces: Vec<String> = vec![];
+    for c in s.chars() {
+        let joins = pieces.last().is_some_and(|p| {
+            let last = p.chars().last().expect("pieces are never empty");
+            // Spaces end a word; letters run on in a word; a closing mark stays with what it closes.
+            c == ' ' || NO_LINE_START.contains(c) || (last != ' ' && !wide(last) && !wide(c))
+        });
+        match pieces.last_mut() {
+            Some(p) if joins => p.push(c),
+            _ => pieces.push(c.to_string()),
+        }
+    }
+    let mut lines: Vec<String> = vec![];
+    let mut line = String::new();
+    for p in pieces {
+        if !line.is_empty() && text_width(line.trim_end(), size) + text_width(p.trim_end(), size) > max {
+            lines.push(line.trim_end().to_string());
+            line.clear();
+        }
+        line.push_str(&p);
+    }
+    if !line.trim().is_empty() {
+        lines.push(line.trim_end().to_string());
+    }
+    lines
 }
 
 /// A stable offset, so the same id never jitters between layouts.
@@ -185,8 +246,9 @@ fn topic_region(g: &Graph, head: &Node) -> Region {
                 index += 1;
             }
             let x = 8.0 + (d as f64 - 1.0) * 30.0;
-            rows.push(Row { id: c.id.clone(), prefix, text: c.label.clone(), x, y: *y, w: text_width(&c.label, size), size });
-            *y += if c.kind == Kind::Formula { size + 30.0 } else { size + 16.0 };
+            let row = Row::new(&c.id, prefix, c.label.clone(), x, *y, size, c.kind == Kind::Formula);
+            *y += row.extra() + if c.kind == Kind::Formula { size + 30.0 } else { size + 16.0 };
+            rows.push(row);
             walk(g, &c.id, depth + 1, y, rows);
         }
     }
@@ -198,7 +260,7 @@ fn topic_region(g: &Graph, head: &Node) -> Region {
     boxes.insert(&head.id, Rect { id: head.id.clone(), x: 0.0, y: 0.0, w: title_w, h: TITLE });
     for r in &rows {
         let pre = if r.prefix.is_empty() { 0.0 } else { 30.0 };
-        boxes.insert(&r.id, Rect { id: r.id.clone(), x: r.x, y: r.y, w: r.w + pre, h: r.size + 8.0 });
+        boxes.insert(&r.id, Rect { id: r.id.clone(), x: r.x, y: r.y, w: r.w + pre, h: r.size + 8.0 + r.extra() });
     }
     // A topic's region contains its children, so explicit edges take a lane outside the text.
     let mut links = vec![];
@@ -242,8 +304,9 @@ fn loose_region(g: &Graph, loose: &[&Node]) -> Region {
         seen.push(n.id.clone());
         let host = if depth == 0 { n.parent.as_deref().and_then(|p| g.nodes.iter().find(|o| o.id == p)) } else { None };
         let text = host.map_or_else(|| n.label.clone(), |h| format!("{}{}{}", h.label, if en { ": " } else { "：" }, n.label));
-        rows.push(Row { id: n.id.clone(), prefix: prefix_for(n, depth + 1, 0), w: text_width(&text, FONT), text, x: 8.0 + depth as f64 * 30.0, y: *y, size: FONT });
-        *y += if n.kind == Kind::Formula { FONT + 30.0 } else { FONT + 16.0 };
+        let row = Row::new(&n.id, prefix_for(n, depth + 1, 0), text, 8.0 + depth as f64 * 30.0, *y, FONT, n.kind == Kind::Formula);
+        *y += row.extra() + if n.kind == Kind::Formula { FONT + 30.0 } else { FONT + 16.0 };
+        rows.push(row);
         for c in g.children(&n.id) {
             walk(g, c, depth + 1, en, y, rows, seen);
         }
@@ -632,12 +695,13 @@ impl StableLayout {
             let mut next = f64::NEG_INFINITY;
             for n in notes {
                 let y = host_y(n).max(next);
-                rows.push(Row { id: n.id.clone(), prefix: prefix_for(n, 1, 0), text: n.label.clone(), x: page_w + 28.0, y, w: text_width(&n.label, SMALL), size: SMALL });
-                next = y + SMALL + 14.0;
+                let row = Row::new(&n.id, prefix_for(n, 1, 0), n.label.clone(), page_w + 28.0, y, SMALL, n.kind == Kind::Formula);
+                next = y + SMALL + 14.0 + row.extra();
+                rows.push(row);
             }
             if !rows.is_empty() {
                 for row in &rows {
-                    out.anchors.insert(row.id.clone(), Rect { id: row.id.clone(), x: row.x, y: row.y, w: row.w + 30.0, h: row.size + 8.0 });
+                    out.anchors.insert(row.id.clone(), Rect { id: row.id.clone(), x: row.x, y: row.y, w: row.w + 30.0, h: row.size + 8.0 + row.extra() });
                 }
                 out.regions.push(Region { rect: Rect { id: MARGIN_REGION.into(), x: 0.0, y: 0.0, w: page.w, h: page.h }, head: None, title: None, rows, links: vec![] });
             }
@@ -683,6 +747,36 @@ impl StableLayout {
             }
         };
         out
+    }
+}
+
+#[cfg(test)]
+mod wrap_tests {
+    use super::*;
+
+    #[test]
+    fn text_breaks_where_its_script_allows() {
+        assert_eq!(wrap("短信验证", 16.0, 200.0), ["短信验证"]);
+        assert_eq!(wrap("用户输入抖音账号", 16.0, 70.0), ["用户输入", "抖音账号"]);
+        assert_eq!(wrap("用户输入，抖音账号", 16.0, 80.0), ["用户输入，", "抖音账号"]);
+        // A closing mark never starts a line: it goes down with the character before it.
+        assert_eq!(wrap("用户输入，抖音账号", 16.0, 70.0), ["用户输", "入，抖音", "账号"]);
+        assert_eq!(wrap("forwards every request", 16.0, 90.0), ["forwards", "every", "request"]);
+        assert_eq!(wrap("ログインして確認", 16.0, 70.0), ["ログイン", "して確認"]);
+    }
+
+    #[test]
+    fn a_long_item_takes_more_lines_and_the_next_one_moves_down() {
+        let mut g = Graph::default();
+        g.apply(&crate::graph::parse_ops("T 「登录流程」\nL 「登录流程」 「用户输入抖音账号并完成短信验证后跳转到首页继续浏览推荐内容」\nL 「登录流程」 「短信验证」"));
+        let l = StableLayout::default().layout(&g, &mut crate::sugiyama::first_diagram);
+        let rows = &l.regions[0].rows;
+        assert!(rows[0].lines.len() >= 2 && rows[0].w <= ROW_MAX, "{:?}", rows[0].lines);
+        assert_eq!(rows[0].lines.concat(), rows[0].text);
+        assert!(rows[1].y >= rows[0].y + rows[0].size + rows[0].extra(), "the next item clears the long one");
+        let targets = l.targets();
+        let long = targets.iter().find(|t| t.id == rows[0].id).unwrap();
+        assert!(long.h > rows[0].size + 8.0, "a click anywhere on it finds it");
     }
 }
 

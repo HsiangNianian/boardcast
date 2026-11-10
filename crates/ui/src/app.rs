@@ -5,6 +5,7 @@ use boardcast_board::board_layout::{target_at, Bounds as BoardBounds, Rect, Stab
 use boardcast_board::check::check;
 use boardcast_board::compose::{compose, ink_boxes, InkBox, Owner, Style};
 use boardcast_board::graph::{parse_ops, Graph, Kind, Op, Ref, Utterance};
+use boardcast_agent::sound::Glossary;
 use boardcast_board::follow;
 use boardcast_board::sugiyama::first_diagram;
 use boardcast_agent::settings::Settings;
@@ -884,6 +885,8 @@ enum DownloadUpdate {
 }
 
 struct SettingsForm {
+    /// How names are written, as one line of entries apart by semicolons.
+    glossary: Entity<InputState>,
     base_url: Entity<InputState>,
     model: Entity<InputState>,
     key: Entity<InputState>,
@@ -971,6 +974,8 @@ struct Workbench {
     needs_model: bool,
     notice: Option<String>,
     status: String,
+    /// What recognition wrote for the line being added, when the glossary rewrote it.
+    heard: Option<String>,
     /// Another board a line seemed to be about, offered rather than turned to: its place, number and title.
     page_hint: Option<(usize, u32, String)>,
     /// Lines left after turning to a board before another is offered, so the meeting does not bounce.
@@ -1287,7 +1292,10 @@ impl Workbench {
                 Event::Spoken { meeting, sentence } => {
                     if meeting == self.session().meeting() {
                         let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds);
+                        let mut sentence = sentence;
+                        sentence.text = self.as_glossary_writes(&sentence.text);
                         self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
+                        self.keep_heard_text();
                         if self.follow_pages(&sentence.text, cx) {
                             continue;
                         }
@@ -2057,6 +2065,20 @@ impl Workbench {
         cx.notify();
     }
 
+    /// A line with its names written as the glossary has them. What was heard is kept for the line.
+    fn as_glossary_writes(&mut self, heard: &str) -> String {
+        let written = Glossary::parse(&self.form.saved.glossary).correct(heard);
+        self.heard = (written != heard).then(|| heard.to_string());
+        written
+    }
+
+    /// The text recognition gave, on the line just added, when the glossary changed it.
+    fn keep_heard_text(&mut self) {
+        if let (Some(heard), Some(line)) = (self.heard.take(), self.live.lines.last_mut()) {
+            line["rawText"] = serde_json::Value::from(heard);
+        }
+    }
+
     /// Follow the material being talked about. A line asking for a board, or agreeing to the one offered,
     /// turns to it and is not drawn; it stays in the transcript. Otherwise a board the line is clearly
     /// about is offered. True when the line was such a request.
@@ -2508,6 +2530,7 @@ impl Workbench {
             enabled: self.form.remote,
             diarize: self.form.saved.diarize,
             turn_pages: self.form.saved.turn_pages,
+            glossary: self.form.saved.glossary.clone(),
             system_speech: self.form.saved.system_speech,
             speech_language: self.form.saved.speech_language.clone(),
             interface_language: self.form.saved.interface_language.clone(),
@@ -4057,6 +4080,12 @@ impl Render for Workbench {
                 "With pages imported, saying \u{201c}go to page 5\u{201d} always turns to it. When what is said is about another page, it is offered at the board's corner; with this on, the board turns by itself.",
                 "导入了多页材料时，说「翻到第5页」总会翻过去。讲到另一页的内容时，画布角落会给出建议；打开这项后会直接翻过去。",
             )))
+            .child(div().text_sm().child(tr("Glossary", "术语表")))
+            .child(Input::new(&self.form.glossary).small())
+            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
+                "Names as they should be written, apart by semicolons. Recognition is corrected to them, and the board writes them so. Chinese is matched by sound; for other ways a name is heard, add them after an equals sign: API = A P I, エーピーアイ.",
+                "名字应该怎么写，用分号隔开。识别结果会改成这些写法，板书也照着写。中文按读音匹配；其他听错的写法写在等号后面，例如：API = A P I, エーピーアイ。",
+            )))
             .when(self.speech_helper.is_some(), |d| {
                 let system = self.form.saved.system_speech;
                 let language = self.form.saved.speech_language.clone();
@@ -4468,6 +4497,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let reads_meetings = store.is_some();
     let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone() };
     let pipeline = Pipeline::start(backend, guidance, resources.voice, speech, Script { turns, wav });
+    pipeline.session().set_glossary(Glossary::parse(&settings.glossary));
     // Everything slow happens away from the window, which has to appear straight away.
     let (startup, starting) = channel::<Startup>();
     let probe_binaries = binaries.clone();
@@ -4571,6 +4601,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let ink = Rc::new(RefCell::new(state));
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Type a line, Enter puts it on the board", "输入一句话，回车上板")));
             let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
+            let glossary = cx.new(|cx| InputState::new(window, cx).placeholder("鉴权; OpenAI; API = A P I, エーピーアイ").default_value(settings.glossary.clone()));
             let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
             let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
             let editor = cx.new(|cx| TextareaState::new(window, cx));
@@ -4583,6 +4614,16 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {
                         this.submit(window, cx);
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&glossary, window, |this: &mut Workbench, field, event, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.form.saved.glossary = field.read(cx).value().to_string();
+                        this.session().set_glossary(Glossary::parse(&this.form.saved.glossary));
+                        if let Err(e) = this.form.saved.save() {
+                            this.form.note = Some(format!("{e:#}"));
+                        }
                     }
                 })
                 .detach();
@@ -4648,7 +4689,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     inputs: vec![],
                     library_query,
                     label_input,
-                    form: SettingsForm { base_url, model, key, remote, saved: settings, note: None, probing: None },
+                    form: SettingsForm { glossary, base_url, model, key, remote, saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,
                     import: ImportState::Idle,
@@ -4687,6 +4728,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     needs_model: false,
                     notice: None,
                     status: tr("Starting…", "启动中…").into(),
+                    heard: None,
                     page_hint: None,
                     page_quiet: 0,
                     level: 0.0,

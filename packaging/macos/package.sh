@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build the Mac apps: target/package/boardcast-<version>-<arch>-macos[-<variant>].zip, holding boardcast.app,
-# one per variant in VARIANTS (default "full"; see packaging/models.sh). "apple" carries no speech models
+# one per variant in VARIANTS (default "all"; see packaging/models.sh). "none" carries no speech models
 # and recognizes with Apple's own SpeechAnalyzer, or SFSpeechRecognizer before macOS 26.
 # They are signed only ad hoc, which Apple silicon requires to run at all, so a downloaded copy has to
 # be opened with Control-click the first time.
@@ -10,7 +10,7 @@ set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
 . packaging/models.sh
-variants="${VARIANTS:-full}"
+variants="${VARIANTS:-all}"
 
 cargo build --release -p boardcast-tools
 for what in glyphs "llama" voice pdfium; do

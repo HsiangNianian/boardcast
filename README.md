@@ -183,7 +183,7 @@ See [speech evaluation](eval/asr/README.md) for the configurations, reference qu
 <details>
 <summary><strong>Releases</strong></summary>
 
-Raise the workspace version, then run the [Release GPUI app](.github/workflows/gpui-release.yml) workflow. It builds every package, writes the update manifest and publishes `v<version>` as the latest release, which is where installed copies look for updates. A pre-release goes to the rolling `gpui-latest` tag instead. Use Conventional Commits; [CHANGELOG.md](CHANGELOG.md) records each release.
+Raise the workspace version, merge it, then push an annotated tag whose message is the release notes: `git tag -a v<version> -m "…"` and `git push origin v<version>`. The [Release](.github/workflows/release.yml) workflow then builds every package for Linux (all, ja, en) and the Mac (all, ja, en, none), writes the update manifest and publishes `v<version>` as the latest release, which is where installed copies look for updates. A version with a pre-release part, such as `0.23.0-1`, is published as a pre-release, which installed copies are not offered. Use Conventional Commits; [CHANGELOG.md](CHANGELOG.md) records each release.
 
 </details>
 

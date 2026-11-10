@@ -49,10 +49,10 @@ fn platform() -> String {
     format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS)
 }
 
-/// Which package the resources in `lib` came from: empty for the full one, or a name like "ja". A
-/// package from before variants has no record of one, and was the full one.
+/// Which package the resources in `lib` came from: empty for the one with every model ("all", once
+/// "full"), or a name like "ja". A package from before variants has no record of one, and had every model.
 pub fn variant_of(lib: &Path) -> String {
-    fs::read_to_string(lib.join("variant")).map(|v| v.trim().to_string()).ok().filter(|v| v != "full").unwrap_or_default()
+    fs::read_to_string(lib.join("variant")).map(|v| v.trim().to_string()).ok().filter(|v| v != "full" && v != "all").unwrap_or_default()
 }
 
 /// The manifest's key for a platform and variant: `x86_64-linux` for the full package, `x86_64-linux-ja` for another.

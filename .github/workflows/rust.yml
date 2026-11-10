@@ -67,7 +67,7 @@ jobs:
       # The script ends by running each packaged app's self-check. A second variant checks the model selection.
       - run: sh packaging/linux/package.sh
         env:
-          VARIANTS: full ja
+          VARIANTS: all ja
       # Its own target folder: the cache keeps compiled crates but not the speech library they were
       # built against, so rebuilding that crate in the restored folder cannot find it.
       - name: How speech is heard, with the packaged models
@@ -104,7 +104,7 @@ jobs:
       # The script ends by running each packaged app's self-check, and builds and self-tests the Apple speech helper.
       - run: sh packaging/macos/package.sh
         env:
-          VARIANTS: full apple
+          VARIANTS: all none
       - name: Core crates and speech, with the packaged models
         run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-audio
         env:

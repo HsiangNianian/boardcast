@@ -183,7 +183,7 @@ target/release/asr-eval run . --suite meetings     # 9 段约 10 分钟、跨行
 <details>
 <summary><strong>发布</strong></summary>
 
-提高 workspace 版本号，然后运行 [Release GPUI app](.github/workflows/gpui-release.yml) 工作流。它构建全部安装包、写出更新清单，并把 `v<version>` 发布为最新版本，安装版就从这里检查更新。预发布版本则发到滚动的 `gpui-latest` 标签。提交信息使用 Conventional Commits；每个版本记录在 [CHANGELOG.md](CHANGELOG.md)。
+提高 workspace 版本号并合并，然后推送一个带注释的 tag，注释就是发版说明：`git tag -a v<version> -m "…"`，再 `git push origin v<version>`。[Release](.github/workflows/release.yml) 工作流随即构建 Linux（all、ja、en）和 Mac（all、ja、en、none）的全部安装包、写出更新清单，并把 `v<version>` 发布为最新版本，安装版就从这里检查更新。带预发布部分的版本（如 `0.23.0-1`）发布为预发布版，不会推送给已安装的用户。提交信息使用 Conventional Commits；每个版本记录在 [CHANGELOG.md](CHANGELOG.md)。
 
 </details>
 

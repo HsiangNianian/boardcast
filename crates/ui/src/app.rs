@@ -54,6 +54,8 @@ use std::time::{Duration, Instant};
 const INK_RGB: u32 = 0x1e_1e_1e;
 /// What the board stores, and what each is called on its button.
 const MARKS: [(&str, &str); 5] = [("划掉", "Strike"), ("圈出", "Circle"), ("下划线", "Underline"), ("星标", "Star"), ("高亮", "Highlight")];
+/// More meetings than this, and the list gets a search box.
+const LIBRARY_SEARCH_FROM: usize = 5;
 const AUTOSAVE_AFTER: Duration = Duration::from_millis(500);
 const RETRY_SAVE_AFTER: Duration = Duration::from_secs(5);
 #[derive(Clone, Copy, PartialEq)]
@@ -829,6 +831,8 @@ struct Workbench {
     last_attempt: Option<Instant>,
     panel: Panel,
     library: Vec<Info>,
+    /// What the meeting list is narrowed to.
+    library_query: Entity<InputState>,
     form: SettingsForm,
     summary: SummaryPanel,
     replay: Option<Replaying>,
@@ -3180,7 +3184,11 @@ impl Render for Workbench {
         );
         let title_bar = floating_bar("title-bar")
             .child(icon_button("library", "folder-open", tr("Meetings", "会议")).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
-            .child(icon_button("new", "file-plus", tr("New meeting", "新建会议")).when(self.store.is_some(), |d| d.on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
+            .child(match self.store {
+                Some(_) => icon_button("new", "file-plus", tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))),
+                // A sample has nowhere to keep a meeting, so the button says why instead of doing nothing.
+                None => icon_button("new", "file-plus", tr("A sample is not saved, so it cannot start a new meeting", "示例不会保存，不能从这里新建会议")).disabled(true),
+            })
             .when(pages > 1, |d| {
                 d.content(Separator::vertical().h(px(18.)).mx_1())
                     .child(icon_button("previous", "chevron-left", tr("Previous board", "上一张板")).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx))))
@@ -3321,26 +3329,61 @@ impl Render for Workbench {
                         d.child(div().mt_1().child(button(("retry-line", i), tr("Draw it again", "重新上板")).on_click(cx.listener(move |this, _, _, cx| this.retry_line(i, cx)))))
                     })
             }));
-        let library = div().id("library-list").flex_1().overflow_y_scroll().p_2().flex().flex_col().gap_1().when(self.library.is_empty(), |d| {
-            d.child(div().p_2().text_sm().text_color(rgb(FAINT)).child(tr("No meetings yet.", "还没有会议。")))
-        });
-        let library = library.children(self.library.iter().enumerate().map(|(i, m)| {
-            let id = m.id.clone();
-            let current = id == self.live.id();
-            let detail = match &m.read_error {
-                Some(_) => tr("Could not be read", "无法读取").to_string(),
-                None => format!("{} · {} {}", local_time(m.updated_at), m.lines, tr("lines", "句")),
-            };
-            div()
-                .id(("meeting", i))
-                .p_2()
-                .rounded_md()
-                .cursor_pointer()
-                .when(current, |d| d.bg(rgb(SELECTED)))
-                .child(div().text_sm().overflow_hidden().whitespace_nowrap().child(m.title.clone()))
-                .child(div().text_xs().text_color(rgb(if m.read_error.is_some() { DANGER } else { FAINT })).child(detail))
-                .when(m.read_error.is_none(), |d| d.on_click(cx.listener(move |this, _, _, cx| this.open_meeting(&id, cx))))
-        }));
+        let query = self.library_query.read(cx).value().trim().to_lowercase();
+        let found: Vec<(usize, &Info)> = self.library.iter().enumerate().filter(|(_, m)| query.is_empty() || m.title.to_lowercase().contains(&query)).collect();
+        let library = div()
+            .id("library")
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            // A handful of meetings reads at a glance; past that, a search finds one.
+            .when(self.library.len() > LIBRARY_SEARCH_FROM, |d| d.child(div().p_2().pb_0().child(Input::new(&self.library_query).small().cleanable(true))))
+            .child(
+                div()
+                    .id("library-list")
+                    .flex_1()
+                    .overflow_y_scroll()
+                    .p_2()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .when(self.store.is_none(), |d| {
+                        d.child(div().p_2().text_sm().text_color(rgb(FAINT)).child(tr("This is a sample, which is not saved, so there are no meetings to list here.", "这是示例，不会保存，这里没有会议可以列出。")))
+                    })
+                    .when(self.store.is_some() && self.library.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .p_2()
+                                .flex()
+                                .flex_col()
+                                .items_start()
+                                .gap_2()
+                                .child(div().text_sm().text_color(rgb(FAINT)).child(tr("No meetings yet. A meeting is saved here as soon as something is said or typed.", "还没有会议。开始说话或输入后，会议会自动保存在这里。")))
+                                .child(button("library-new", tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))),
+                        )
+                    })
+                    .when(!self.library.is_empty() && found.is_empty(), |d| {
+                        d.child(div().p_2().text_sm().text_color(rgb(FAINT)).child(tr("No meeting has that in its name.", "没有名称里含这些字的会议。")))
+                    })
+                    .children(found.into_iter().map(|(i, m)| {
+                        let id = m.id.clone();
+                        let current = id == self.live.id();
+                        let detail = match &m.read_error {
+                            Some(error) => format!("{}{error}", tr("Could not be read, and the file is left as it is: ", "无法读取，文件保持原样：")),
+                            None => format!("{} · {} {}", local_time(m.updated_at), m.lines, tr("lines", "句")),
+                        };
+                        div()
+                            .id(("meeting", i))
+                            .p_2()
+                            .rounded_md()
+                            .when(m.read_error.is_none(), |d| d.cursor_pointer().hover(|d| d.bg(rgb(SELECTED))))
+                            .when(current, |d| d.bg(rgb(SELECTED)))
+                            .child(div().text_sm().overflow_hidden().whitespace_nowrap().when(m.read_error.is_some(), |d| d.text_color(rgb(MUTED))).child(m.title.clone()))
+                            .child(div().text_xs().text_color(rgb(if m.read_error.is_some() { DANGER } else { FAINT })).child(detail))
+                            .when(m.read_error.is_none(), |d| d.on_click(cx.listener(move |this, _, _, cx| this.open_meeting(&id, cx))))
+                    })),
+            );
         let field = |label: &'static str, input: &Entity<InputState>| div().flex().flex_col().gap_1().child(div().text_xs().text_color(rgb(MUTED)).child(label)).child(Input::new(input));
         let local_only = self.live.local_only();
         let current_model = boardcast_models::current(&self.models);
@@ -3926,6 +3969,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let arxiv_input = cx.new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
             let speaker_name = cx.new(|cx| InputState::new(window, cx));
             let title_input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Meeting name", "会议名称")));
+            let library_query = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Search meetings", "搜索会议")));
             let view = cx.new(|cx| {
                 cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {
@@ -3942,6 +3986,12 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 cx.subscribe_in(&title_input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
                         this.finish_title(window, cx);
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&library_query, window, |_: &mut Workbench, _, event, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        cx.notify();
                     }
                 })
                 .detach();
@@ -3980,6 +4030,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     last_attempt: None,
                     panel: Panel::Transcript,
                     library: vec![],
+                    library_query,
                     form: SettingsForm { base_url, model, key, remote, saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,

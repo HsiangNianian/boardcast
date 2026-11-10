@@ -2085,6 +2085,20 @@ impl Workbench {
         cx.notify();
     }
 
+    /// A new meeting with a template's topics already on the board, for the model to fill.
+    fn new_meeting_from(&mut self, topics: Vec<String>, cx: &mut Context<Self>) {
+        if self.leave() {
+            let mut live = Live::new();
+            let ops: String = topics.iter().map(|t| format!("T 「{t}」\n")).collect();
+            let mut graph = Graph::default();
+            graph.apply(&parse_ops(&ops));
+            live.change_board(graph, serde_json::Value::Null);
+            self.show(live);
+            self.panel = Panel::Transcript;
+        }
+        cx.notify();
+    }
+
     fn open_meeting(&mut self, id: &str, cx: &mut Context<Self>) {
         let Some(store) = self.store.clone() else { return };
         if id != self.live.id() && self.leave() {
@@ -3185,6 +3199,17 @@ fn local_time(ms: f64) -> String {
     chrono::Local.timestamp_millis_opt(ms as i64).single().map_or(String::new(), |t| t.format("%Y-%m-%d %H:%M").to_string())
 }
 
+/// Meetings that keep to a shape, with the topics they start from.
+fn templates() -> Vec<(&'static str, Vec<String>)> {
+    let topics = |list: [(&'static str, &'static str); 3]| list.iter().map(|(en, zh)| tr(en, zh).to_string()).collect::<Vec<_>>();
+    vec![
+        (tr("Weekly meeting", "周会"), topics([("Last week", "上周进展"), ("This week", "本周计划"), ("Risks", "风险")])),
+        (tr("Retrospective", "复盘"), topics([("Went well", "做得好的"), ("To improve", "要改进的"), ("Actions", "行动项")])),
+        (tr("Stand-up", "站会"), topics([("Yesterday", "昨天"), ("Today", "今天"), ("Blocked", "阻塞")])),
+        (tr("Design review", "方案评审"), [("Background", "背景"), ("Options", "方案"), ("Risks", "风险"), ("Decision", "结论")].iter().map(|(en, zh)| tr(en, zh).to_string()).collect()),
+    ]
+}
+
 /// A section of a panel, numbered in the website's manual style: a hairline, then "01 / board model".
 fn manual_label(number: &str, name: &str) -> gpui_kit::Div {
     div()
@@ -3964,6 +3989,23 @@ impl Render for Workbench {
                     .gap_1()
                     .when(self.store.is_none(), |d| {
                         d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(tr("This is a sample, which is not saved, so there are no meetings to list here.", "这是示例，不会保存，这里没有会议可以列出。")))
+                    })
+                    .when(self.store.is_some() && query.is_empty(), |d| {
+                        d.child(manual_label("+", tr("New from a template", "从模板新建")).mt_0().mb_1()).children(templates().into_iter().enumerate().map(|(i, (name, topics))| {
+                            let shown = topics.join(" · ");
+                            div()
+                                .id(("template", i))
+                                .py_1()
+                                .px_2()
+                                .cursor_pointer()
+                                .border_b_1()
+                                .border_color(rgb(pal().line))
+                                .hover(|d| d.bg(rgb(pal().selected)))
+                                .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(topics.clone(), cx)))
+                                .child(div().text_sm().child(name))
+                                .child(div().text_xs().text_color(rgb(pal().muted)).child(shown))
+                        }))
+                        .child(manual_label("·", tr("Meetings", "会议")).mb_1())
                     })
                     .when(self.store.is_some() && self.library.is_empty(), |d| {
                         d.child(

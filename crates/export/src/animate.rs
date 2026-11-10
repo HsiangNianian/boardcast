@@ -225,7 +225,7 @@ pub fn gif(board: &Composed, nodes: &[Value], steps: &[Value]) -> anyhow::Result
         let mut encoder = gif::Encoder::new(&mut bytes, pw as u16, ph as u16, &[])?;
         encoder.set_repeat(gif::Repeat::Infinite)?;
         // Each frame is only what changed, laid over the frames before.
-        let mut write = |encoder: &mut gif::Encoder<&mut Vec<u8>>, mut rgba: Vec<u8>, (left, top, w, h): (u32, u32, u32, u32), ms: u32| -> anyhow::Result<()> {
+        let write = |encoder: &mut gif::Encoder<&mut Vec<u8>>, mut rgba: Vec<u8>, (left, top, w, h): (u32, u32, u32, u32), ms: u32| -> anyhow::Result<()> {
             let mut frame = gif::Frame::from_rgba_speed(w as u16, h as u16, &mut rgba, 10);
             (frame.left, frame.top) = (left as u16, top as u16);
             frame.delay = (ms / 10).min(u32::from(u16::MAX)) as u16;

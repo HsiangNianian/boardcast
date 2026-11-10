@@ -1,13 +1,14 @@
-//! The look of the window: quiet paper, one accent, and everything else in a few shades of ink. The
-//! components come from the kit, and this sets the colors they use.
+//! The look of the window, shared with the website: black and white, light type, one red for what is
+//! marked or recording, and square corners. The components come from the kit; this sets what they use.
 
 use gpui_kit::component::{Icon, Theme, ThemeMode};
 use boardcast_board::compose::PAPER;
-use gpui_kit::{rgb, App, AssetSource, Hsla, Result, SharedString, WindowAppearance};
+use gpui_kit::{px, rgb, App, AssetSource, Hsla, Result, SharedString, WindowAppearance};
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// The colors of the window and the board. Light is paper and marker; dark is a chalkboard.
+/// The colors of the window and the board. Dark is the website's black sheet with chalk on it; light is
+/// the same sheet in white paper and marker.
 pub struct Palette {
     /// The board itself.
     pub paper: u32,
@@ -36,49 +37,66 @@ pub struct Palette {
 
 const LIGHT: Palette = Palette {
     paper: PAPER,
-    surface: 0xff_fe_fa,
-    line: 0xe6_e4_dd,
-    hover: 0xf1_ef_e8,
-    selected: 0xec_ef_e7,
-    text: 0x1e_1f_1b,
-    muted: 0x62_66_5c,
-    faint: 0x85_8a_80,
-    accent: 0x28_61_43,
-    strong: 0x24_27_20,
-    strong_hover: 0x3a_3e_33,
-    recording: 0xc7_44_32,
-    danger: 0xa3_28_26,
-    danger_soft: 0xfb_ec_ea,
-    warning: 0x80_53_00,
-    track: 0xe4_e4_df,
+    surface: 0xff_ff_ff,
+    line: 0xe2_e2_e2,
+    hover: 0xf2_f2_f2,
+    selected: 0xec_ec_ec,
+    text: 0x11_11_11,
+    muted: 0x55_55_55,
+    faint: 0x8a_8a_8a,
+    accent: 0x3b_5b_db,
+    strong: 0x11_11_11,
+    strong_hover: 0x33_33_33,
+    recording: 0xe8_43_2a,
+    danger: 0xc8_32_1e,
+    danger_soft: 0xfd_ec_eb,
+    warning: 0x8a_5a_00,
+    track: 0xe2_e2_e2,
     on_strong: 0xff_ff_ff,
     jumped: 0xff_f3_bf,
     ink: [0x1e_1e_1e, 0xe0_31_31, 0x19_71_c2],
 };
 
 const DARK: Palette = Palette {
-    paper: 0x24_2b_27,
-    surface: 0x2d_31_2e,
-    line: 0x40_45_41,
-    hover: 0x38_3d_39,
-    selected: 0x3a_43_3d,
-    text: 0xe9_e9_e4,
-    muted: 0xad_b1_a9,
-    faint: 0x8d_92_89,
-    accent: 0x74_c4_97,
-    strong: 0xe9_e9_e4,
-    strong_hover: 0xd0_d2_cb,
-    recording: 0xe2_5d_4a,
-    danger: 0xff_8f_85,
-    danger_soft: 0x4b_2c_29,
+    paper: 0x07_07_07,
+    surface: 0x00_00_00,
+    line: 0x26_26_26,
+    hover: 0x14_14_14,
+    selected: 0x1f_1f_1f,
+    text: 0xf2_f2_f2,
+    muted: 0xc4_c4_c4,
+    faint: 0x8a_8a_8a,
+    accent: 0x9f_b4_ff,
+    strong: 0xf2_f2_f2,
+    strong_hover: 0xc4_c4_c4,
+    recording: 0xff_5a_36,
+    danger: 0xff_5a_36,
+    danger_soft: 0x2a_12_0d,
     warning: 0xe6_b5_5e,
-    track: 0x40_45_41,
-    on_strong: 0x1e_1f_1b,
-    jumped: 0x5c_51_24,
-    ink: [0xec_ea_e2, 0xff_8b_7b, 0x93_c7_ff],
+    track: 0x26_26_26,
+    on_strong: 0x00_00_00,
+    jumped: 0x2a_24_10,
+    ink: [0xec_ec_e6, 0xff_5a_36, 0x9f_b4_ff],
 };
 
+/// The interface face and the one for labels, numbers and keys, bundled so every platform looks alike.
+pub const SANS: &str = "DM Sans";
+pub const MONO: &str = "JetBrains Mono";
+
 static DARK_MODE: AtomicBool = AtomicBool::new(false);
+/// Whether the system's appearance decides, rather than a choice in Settings.
+static FOLLOW_SYSTEM: AtomicBool = AtomicBool::new(true);
+
+/// Take the choice from Settings: "light" or "dark" settle the palette now, before anything is drawn;
+/// anything else waits for the system's appearance in `apply`.
+pub fn choose(appearance: &str) {
+    FOLLOW_SYSTEM.store(!matches!(appearance, "light" | "dark"), Ordering::Relaxed);
+    DARK_MODE.store(appearance == "dark", Ordering::Relaxed);
+}
+
+pub fn is_dark() -> bool {
+    DARK_MODE.load(Ordering::Relaxed)
+}
 
 /// The palette in use, chosen once the system's appearance is known.
 pub fn pal() -> &'static Palette {
@@ -122,10 +140,16 @@ pub fn icon(name: &str) -> Icon {
     Icon::empty().path(format!("icons/{name}.svg"))
 }
 
-/// Follow the system's light or dark appearance, and put that palette into the kit's theme.
+/// Settle light or dark, following the system unless Settings chose, and put that palette into the kit's theme.
 pub fn apply(cx: &mut App) {
-    let dark = matches!(cx.window_appearance(), WindowAppearance::Dark | WindowAppearance::VibrantDark);
-    DARK_MODE.store(dark, Ordering::Relaxed);
+    let fonts = vec![Cow::Borrowed(&include_bytes!("../fonts/DMSans.ttf")[..]), Cow::Borrowed(&include_bytes!("../fonts/JetBrainsMono.ttf")[..])];
+    if let Err(e) = cx.text_system().add_fonts(fonts) {
+        eprintln!("fonts: {e:#}");
+    }
+    if FOLLOW_SYSTEM.load(Ordering::Relaxed) {
+        DARK_MODE.store(matches!(cx.window_appearance(), WindowAppearance::Dark | WindowAppearance::VibrantDark), Ordering::Relaxed);
+    }
+    let dark = is_dark();
     Theme::change(if dark { ThemeMode::Dark } else { ThemeMode::Light }, None, cx);
     let p = pal();
     let color = |value: u32| -> Hsla { rgb(value).into() };
@@ -155,6 +179,11 @@ pub fn apply(cx: &mut App) {
         theme.button_danger_foreground = color(p.on_strong);
         theme.button_success = color(p.accent);
         theme.button_success_foreground = color(p.on_strong);
-        theme.progress_bar = color(p.accent);
+        theme.progress_bar = color(p.strong);
+        theme.font_family = SANS.into();
+        theme.mono_font_family = MONO.into();
+        // Square, as on the website; just enough rounding to keep edges from looking cut.
+        theme.radius = px(2.);
+        theme.radius_lg = px(3.);
     });
 }

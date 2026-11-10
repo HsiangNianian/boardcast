@@ -3,10 +3,10 @@
 
 use crate::store::{new_id, Loaded, Origin};
 use boardcast_board::graph::{Graph, Kind};
-use boardcast_board::speakers::{identify_sentence, raised_by, rename_by, rename_by_in_steps, rename_voice, Voice};
+use boardcast_board::speakers::{identify_sentence, move_sentence, raised_by, rename_by, rename_by_in_steps, rename_voice, Voice};
 use boardcast_board::steps::{diff, ink_only, replay};
 use serde_json::{json, Map, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const UNTITLED: &str = "Untitled meeting";
@@ -93,6 +93,9 @@ pub struct Live {
     voices: Vec<Voice>,
     /// A file's voices stay as written unless this meeting changed them.
     voices_changed: bool,
+    /// The voiceprint each line joined its speaker's voice with, by the line's place, while the meeting is
+    /// open: what moving one line to someone else takes from one voice and gives the other. Not saved.
+    prints: HashMap<usize, Vec<f64>>,
     /// What the replay record has reached, to diff the next change against.
     recorded: Graph,
     undo: History<Snap>,
@@ -159,6 +162,7 @@ impl Live {
         Self {
             voices: raw.get("voices").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
             voices_changed: false,
+            prints: HashMap::new(),
             memory: raw.get("layout").cloned().unwrap_or(Value::Null),
             history: array(&raw, "history"),
             lines,
@@ -367,6 +371,8 @@ impl Live {
         let print: Vec<f64> = voiceprint.iter().map(|x| f64::from(*x)).collect();
         let taken: Vec<&str> = self.lines.iter().filter_map(|l| l["speaker"].as_str()).collect();
         let name = identify_sentence(&mut self.voices, &print, seconds, &taken)?;
+        // The line this voice is for is the next one added.
+        self.prints.insert(self.lines.len(), print);
         self.voices_changed = true;
         self.touch();
         Some(name)
@@ -389,6 +395,22 @@ impl Live {
         let lines = self.lines.iter().filter(|l| l["speaker"] == who).count();
         let raised: Vec<usize> = self.boards().iter().map(|graph| raised_by(graph, who)).collect();
         (lines, raised.iter().sum(), raised.iter().filter(|n| **n > 0).count())
+    }
+
+    /// Put one line down to someone else, leaving the speaker's other lines as they are. Its voiceprint, when
+    /// this meeting heard it, moves too, so later lines in that voice go to the right person.
+    pub fn move_line(&mut self, index: usize, to: &str) {
+        let Some(line) = self.lines.get_mut(index) else { return };
+        let from = line["speaker"].as_str().unwrap_or_default().to_string();
+        if from == to || to.is_empty() {
+            return;
+        }
+        line["speaker"] = json!(to);
+        if let Some(print) = self.prints.get(&index) {
+            move_sentence(&mut self.voices, print, &from, to);
+            self.voices_changed = true;
+        }
+        self.touch();
     }
 
     /// Give a speaker a new name everywhere it is written. Taking a name someone has joins the two.
@@ -1112,6 +1134,23 @@ mod tests {
         assert_eq!(raw["graph"]["nodes"][0]["label"], "二");
         assert_eq!(raw["pages"][0]["graph"]["nodes"].as_array().unwrap().len(), 2, "the first board keeps its edit");
         assert_eq!(raw["pages"][1]["thumb"], "t2");
+    }
+
+    #[test]
+    fn one_line_moves_to_someone_else_with_its_voice() {
+        let mut live = Live::new();
+        for (print, text) in [([1.0, 0.0], "我先说"), ([1.0, 0.0], "接着说"), ([0.7, 0.7], "其实这句是另一个人")] {
+            let who = live.identify_voice(&print, 3.0);
+            live.add_line(who.as_deref(), text, None);
+        }
+        assert_eq!(live.lines[2]["speaker"], "A", "close enough to be taken for A");
+        live.move_line(2, "B");
+        assert_eq!(live.lines.iter().map(|l| l["speaker"].as_str().unwrap()).collect::<Vec<_>>(), ["A", "A", "B"]);
+        // B now has a voice, so a later line in it goes to B, not A.
+        assert_eq!(live.identify_voice(&[0.6, 0.8], 3.0).as_deref(), Some("B"));
+        live.move_line(9, "C");
+        live.move_line(0, "");
+        assert_eq!(live.lines[0]["speaker"], "A");
     }
 
     #[test]

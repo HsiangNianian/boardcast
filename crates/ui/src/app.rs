@@ -937,6 +937,8 @@ struct Workbench {
     speaker: Option<String>,
     /// The speaker being looked at in the speakers panel, and the name being written for them.
     speaker_chosen: Option<String>,
+    /// The transcript line whose speaker was clicked, which can be given to someone else alone.
+    speaker_line: Option<usize>,
     speaker_name: Entity<InputState>,
     /// The meeting's name while it is being changed in the title bar.
     title_input: Entity<InputState>,
@@ -2050,6 +2052,7 @@ impl Workbench {
         self.summary.reset();
         self.speaker = None;
         self.speaker_chosen = None;
+        self.speaker_line = None;
         self.speaker_hovered = None;
         self.jumped_line = None;
         self.live = live;
@@ -2793,6 +2796,16 @@ impl Workbench {
         cx.notify();
     }
 
+    /// Give one line to someone else, leaving the rest of its speaker's lines alone.
+    fn move_line(&mut self, index: usize, to: String, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.editable() {
+            return;
+        }
+        self.live.move_line(index, &to);
+        self.speaker_hovered = None;
+        self.choose_speaker(to, window, cx);
+    }
+
     fn rename_speaker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let to = self.speaker_name.read(cx).value().trim().to_string();
         let Some(from) = self.speaker_chosen.clone() else { return };
@@ -2830,6 +2843,46 @@ impl Workbench {
                 .child(div().text_xs().text_color(rgb(pal().faint)).child(format!("{lines} {}", tr("lines", "句"))))
                 .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx)))
         }).collect::<Vec<_>>();
+        // A line picked in the transcript can go to someone else on its own, when it is still this speaker's.
+        let one_line = self.speaker_line.filter(|_| editable).and_then(|i| {
+            let line = self.live.lines.get(i)?;
+            let from = line["speaker"].as_str().filter(|s| Some(*s) == self.speaker_chosen.as_deref())?.to_string();
+            let said = line["text"].as_str().unwrap_or_default();
+            let text: String = if said.chars().count() > 40 { said.chars().take(40).chain(['…']).collect() } else { said.to_string() };
+            let someone_new = boardcast_board::speakers::next_name(names.iter().map(String::as_str));
+            let others: Vec<(String, bool)> = names.iter().filter(|n| **n != from).map(|n| (n.clone(), false)).chain([(someone_new, true)]).collect();
+            Some(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .p_2()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(pal().line))
+                    .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Only this line was someone else:", "只有这一句是别人说的：")))
+                    .child(div().text_sm().child(format!("“{text}”")))
+                    .child(div().flex().flex_wrap().gap_1().children(others.into_iter().enumerate().map(|(k, (name, new))| {
+                        let to = name.clone();
+                        div()
+                            .id(("move-line", k))
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .px_2()
+                            .py_1()
+                            .rounded_sm()
+                            .cursor_pointer()
+                            .text_xs()
+                            .border_1()
+                            .border_color(rgb(pal().line))
+                            .child(speaker_badge(&names, &name))
+                            .child(if new { tr("Someone new ({name})", "新的人（{name}）").replace("{name}", &name) } else { name.clone() })
+                            .on_click(cx.listener(move |this, _, window, cx| this.move_line(i, to.clone(), window, cx)))
+                    })))
+                    .child(div().text_xs().text_color(rgb(pal().faint)).child(tr("Its voice moves too, so later lines in that voice follow.", "声纹也一起挪过去，之后同样声音的句子会跟着走。"))),
+            )
+        });
         let editing = self.speaker_chosen.clone().filter(|name| editable && names.contains(name)).map(|from| {
             let to = self.speaker_name.read(cx).value().trim().to_string();
             let merging = to != from && names.contains(&to);
@@ -2880,6 +2933,7 @@ impl Workbench {
             .gap_2()
             .when(names.is_empty(), |d| d.child(div().text_sm().text_color(rgb(pal().faint)).child(tr("Nobody has spoken yet.", "还没有人说话。"))))
             .children(rows)
+            .when_some(one_line, |d, one_line| d.child(one_line))
             .when_some(editing, |d, editing| d.child(editing))
     }
 
@@ -3986,7 +4040,10 @@ impl Render for Workbench {
                                 .cursor_pointer()
                                 .child(speaker_badge(&speakers, &name))
                                 .child(div().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name))
-                                .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx))),
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.choose_speaker(picked.clone(), window, cx);
+                                    this.speaker_line = Some(i);
+                                })),
                         )
                     })
                     .child(div().text_sm().when(manual, |d| d.text_color(rgb(pal().faint))).child(l["text"].as_str().unwrap_or_default().to_string()))
@@ -4938,6 +4995,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     arxiv_input,
                     speaker: None,
                     speaker_chosen: None,
+                    speaker_line: None,
                     speaker_name,
                     title_input,
                     editing_title: false,

@@ -17,11 +17,15 @@ pub struct Settings {
     pub enabled: bool,
     /// Tell speakers apart by voice.
     pub diarize: bool,
+    /// Recognize speech with the system's recognizer, such as Apple's, rather than the bundled models.
+    pub system_speech: bool,
+    /// The language the system's recognizer listens for: "auto" for the system's own, or a locale like "ja-JP".
+    pub speech_language: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true }
+        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, system_speech: false, speech_language: "auto".into() }
     }
 }
 
@@ -48,13 +52,21 @@ impl Settings {
     fn parse(text: &str) -> Self {
         let v: Value = serde_json::from_str(text).unwrap_or(Value::Null);
         let text = |key: &str| v[key].as_str().unwrap_or_default().to_string();
-        Self { base_url: text("baseUrl"), api_key: text("apiKey"), model: text("model"), enabled: v["enabled"].as_bool().unwrap_or(false), diarize: v["diarize"].as_bool().unwrap_or(true) }
+        Self {
+            base_url: text("baseUrl"),
+            api_key: text("apiKey"),
+            model: text("model"),
+            enabled: v["enabled"].as_bool().unwrap_or(false),
+            diarize: v["diarize"].as_bool().unwrap_or(true),
+            system_speech: v["systemSpeech"].as_bool().unwrap_or(false),
+            speech_language: v["speechLanguage"].as_str().filter(|l| !l.is_empty()).unwrap_or("auto").to_string(),
+        }
     }
 
     pub fn save(&self) -> Result<()> {
         let dir = config_dir()?;
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize }))?;
+        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "systemSpeech": self.system_speech, "speechLanguage": self.speech_language }))?;
         let tmp = dir.join("remote.json.tmp");
         // Private from the first byte: the key must never sit in a file others can read.
         let _ = fs::remove_file(&tmp);
@@ -106,7 +118,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("boardcast-settings-{}", std::process::id()));
         std::env::set_var("BOARDCAST_CONFIG", &dir);
-        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false };
+        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, system_speech: true, speech_language: "ja-JP".into() };
         s.save().unwrap();
         assert_eq!(Settings::load(), s);
         assert_eq!(fs::metadata(dir.join("remote.json")).unwrap().permissions().mode() & 0o777, 0o600);

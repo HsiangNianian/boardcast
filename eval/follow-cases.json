@@ -1,0 +1,38 @@
+{
+  "about": "Following prepared material (#148): a deck of five pages, and lines said while page 1 (board 0) is in view. 'asked' is the board a line asks for outright, 'suggested' the board it is clearly about, null for neither. Checked by the board crate's test follow_cases.",
+  "pages": [
+    { "no": 1, "blocks": ["Introduction", "Meetings lose what was said, and notes come too late.", "We draw the board as people talk."] },
+    { "no": 2, "blocks": ["Related work", "Speech recognition and diagram generation have been studied apart.", "Whiteboard capture records strokes but not meaning."] },
+    { "no": 3, "blocks": ["Methods", "A local model turns each sentence into board operations.", "Layout keeps every region in place as the meeting grows."] },
+    { "no": 4, "blocks": ["评测结果", "在二十八场会议上测试了板书质量和延迟。", "本地模型的首笔延迟中位数是三百毫秒。"] },
+    { "no": 5, "blocks": ["結論と今後", "会議の板書は自動で書ける。", "次は複数人の同時編集と話者の区別を改善する。"] }
+  ],
+  "lines": [
+    { "text": "Let's go to page 3.", "asked": 2 },
+    { "text": "Next slide please.", "asked": 1 },
+    { "text": "翻到第四页", "asked": 3 },
+    { "text": "看一下第五页的结论", "asked": 4 },
+    { "text": "5ページを見てください", "asked": 4 },
+    { "text": "page 9 has the appendix", "asked": null, "suggested": null },
+    { "text": "我们有三个方案，第2个更好", "asked": null, "suggested": null },
+    { "text": "A local model turns each sentence into board operations, as the method says.", "suggested": 2 },
+    { "text": "Layout keeps every region in place while the meeting grows.", "suggested": 2 },
+    { "text": "Speech recognition and diagram generation were studied apart before us.", "suggested": 1 },
+    { "text": "Whiteboard capture only records strokes, not meaning.", "suggested": 1 },
+    { "text": "我们在二十八场会议上测了板书质量和延迟", "suggested": 3 },
+    { "text": "首笔延迟的中位数大概三百毫秒", "suggested": 3 },
+    { "text": "会議の板書は自動で書けるというのが結論です", "suggested": 4 },
+    { "text": "次は話者の区別を改善したい", "suggested": 4 },
+    { "text": "Meetings lose what was said, that's the problem.", "suggested": null },
+    { "text": "I think the model is fine.", "suggested": null },
+    { "text": "Can everyone hear me?", "suggested": null },
+    { "text": "Let's take a five minute break.", "suggested": null },
+    { "text": "好的我们继续", "suggested": null },
+    { "text": "这个问题之后再说", "suggested": null },
+    { "text": "質問はありますか", "suggested": null },
+    { "text": "The model was slow yesterday on my laptop.", "suggested": null },
+    { "text": "We should talk about the board later.", "suggested": null },
+    { "text": "Any questions about the related work?", "suggested": 1 },
+    { "text": "其实板书这个想法很早就有", "suggested": null }
+  ]
+}

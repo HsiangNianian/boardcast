@@ -23,7 +23,7 @@ pub const WARNING: u32 = 0x80_53_00;
 pub const TRACK: u32 = 0xe4_e4_df;
 pub const ON_STRONG: u32 = 0xff_ff_ff;
 
-gpui_kit_assets::icon_assets!(ExtraIcons, [FileDown, FilePlus, Import, RotateCcw, Sparkles, Users, WandSparkles]);
+gpui_kit_assets::icon_assets!(ExtraIcons, [FileDown, FilePlus, Import, Pencil, RotateCcw, Sparkles, Trash, Users, WandSparkles]);
 
 /// The icons the toolkit carries, and the few more this window asks for.
 pub struct Assets;

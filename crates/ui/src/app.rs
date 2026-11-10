@@ -4,7 +4,7 @@ use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
 use boardcast_board::board_layout::{target_at, Bounds as BoardBounds, Rect, StableLayout};
 use boardcast_board::check::check;
 use boardcast_board::compose::{compose, ink_boxes, InkBox, Owner, Style, PAPER};
-use boardcast_board::graph::{parse_ops, Graph, Utterance};
+use boardcast_board::graph::{parse_ops, Graph, Kind, Op, Ref, Utterance};
 use boardcast_board::sugiyama::first_diagram;
 use boardcast_agent::settings::Settings;
 use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
@@ -72,6 +72,10 @@ const TOOLBAR_W: f32 = 290.0;
 const TOOLBAR_W_WITH_UNITS: f32 = 520.0;
 const TOOLBAR_W_SPEAKER: f32 = 110.0;
 const TOOLBAR_H: f32 = 36.0;
+/// Room for rewriting and removing, which imported text does not offer.
+const TOOLBAR_W_EDIT: f32 = 72.0;
+/// The bar while a label is being rewritten.
+const TOOLBAR_W_EDITING: f32 = 300.0;
 const PREPARING_PAGE_AFTER: Duration = Duration::from_secs(5);
 /// How much of the progress bar is estimated, ahead of the part that counts real tokens.
 const ESTIMATED_SHARE: f32 = 0.7;
@@ -210,6 +214,8 @@ struct Ink {
     view: Option<View>,
     /// The user zoomed or panned: new content must not move the view until they return to latest.
     reading: bool,
+    /// A label is being rewritten in the selection's bar.
+    editing: bool,
     canvas: Bounds<Pixels>,
     /// What floats over each side of the canvas, as left, top, right and bottom. The whole board fits
     /// between them, while the board still runs on underneath.
@@ -382,7 +388,11 @@ impl Ink {
         // Imported text also offers how much to mark, which makes the bar wider.
         let has_text = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| !n.rows().is_empty());
         let raised = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| by_of_node(n).is_some());
-        let width = if has_text { TOOLBAR_W_WITH_UNITS } else { TOOLBAR_W } + if raised { TOOLBAR_W_SPEAKER } else { 0.0 };
+        let fixed = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| n.kind == Kind::Region);
+        let width = match self.editing {
+            true => TOOLBAR_W_EDITING,
+            false => (if has_text { TOOLBAR_W_WITH_UNITS } else { TOOLBAR_W }) + if raised { TOOLBAR_W_SPEAKER } else { 0.0 } + if fixed { 0.0 } else { TOOLBAR_W_EDIT },
+        };
         Some((x.clamp(8.0, (w - width - 8.0).max(8.0)), y.clamp(8.0, (h - TOOLBAR_H - 8.0).max(8.0))))
     }
 
@@ -834,6 +844,8 @@ struct Workbench {
     last_attempt: Option<Instant>,
     panel: Panel,
     library: Vec<Info>,
+    /// The label being written for the selected thing on the board.
+    label_input: Entity<InputState>,
     /// What the meeting list is narrowed to.
     library_query: Entity<InputState>,
     form: SettingsForm,
@@ -2196,6 +2208,54 @@ impl Workbench {
         cx.notify();
     }
 
+    /// Apply a change made by hand, as a mark is: at once, undoable and in the replay.
+    fn edit_board(&mut self, ops: &[Op], cx: &mut Context<Self>) {
+        if !self.editable() {
+            return;
+        }
+        let graph = self.session().edit(ops);
+        self.next_batch += 1;
+        let mut ink = self.ink.borrow_mut();
+        ink.update(&graph, self.next_batch);
+        let memory = ink.board.snapshot();
+        drop(ink);
+        self.live.change_board(graph, memory);
+        cx.notify();
+    }
+
+    fn start_label(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(label) = self.live.graph.nodes.iter().find(|n| n.id == id).map(|n| n.label.clone()) else { return };
+        self.label_input.update(cx, |state, cx| {
+            state.set_value(label, window, cx);
+            state.focus(window, cx);
+            state.select_all(window, cx);
+        });
+        self.ink.borrow_mut().editing = true;
+        cx.notify();
+    }
+
+    /// Put the new label on the board, or leave the old one when `keep` is false or nothing changed.
+    fn finish_label(&mut self, keep: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let id = {
+            let mut ink = self.ink.borrow_mut();
+            if !std::mem::take(&mut ink.editing) {
+                return;
+            }
+            ink.selected.clone()
+        };
+        let label = self.label_input.read(cx).value().trim().to_string();
+        if let Some(id) = id.filter(|_| keep && !label.is_empty()) {
+            self.edit_board(&[Op::R(Ref::Id(id), label)], cx);
+        }
+        window.focus(&self.focus, cx);
+        cx.notify();
+    }
+
+    fn remove(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.ink.borrow_mut().selected = None;
+        self.edit_board(&[Op::D(Ref::Id(id.to_string()))], cx);
+    }
+
     fn step(&mut self, forward: bool, cx: &mut Context<Self>) {
         if !self.editable() {
             return;
@@ -2221,6 +2281,10 @@ impl Workbench {
     }
 
     fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if event.keystroke.key == "escape" && self.ink.borrow().editing {
+            self.finish_label(false, window, cx);
+            return;
+        }
         // Text fields keep their own undo.
         if !self.focus.is_focused(window) {
             return;
@@ -3065,6 +3129,8 @@ impl Render for Workbench {
         };
         if let Some(((x, y), id)) = toolbar.filter(|_| self.editable()) {
             let has_text = self.live.graph.nodes.iter().find(|n| n.id == id).is_some_and(|n| !n.rows().is_empty());
+            let fixed = self.live.graph.nodes.iter().find(|n| n.id == id).is_some_and(|n| n.kind == Kind::Region);
+            let editing = self.ink.borrow().editing;
             let raised = self.live.graph.nodes.iter().find(|n| n.id == id).and_then(|n| by_of_node(n)).map(str::to_string);
             let unit_now = self.ink.borrow().mark_unit;
             let active: Vec<String> = self
@@ -3091,7 +3157,8 @@ impl Render for Workbench {
                     .bg(rgb(SURFACE))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .when_some(raised.clone(), |d, who| {
+                    .when(editing, |d| d.child(div().w(px(TOOLBAR_W_EDITING - 16.0)).child(Input::new(&self.label_input).small())))
+                    .when_some(raised.clone().filter(|_| !editing), |d, who| {
                         let (speakers, source) = (self.live.speakers(), id.clone());
                         d.child(
                             div()
@@ -3108,7 +3175,7 @@ impl Render for Workbench {
                                 .on_click(cx.listener(move |this, _, _, cx| this.jump_to_source(&source, cx))),
                         )
                     })
-                    .when(has_text, |d| {
+                    .when(has_text && !editing, |d| {
                         let units = [(MarkUnit::Word, "unit-word", tr("Word", "词")), (MarkUnit::Sentence, "unit-sentence", tr("Sentence", "句")), (MarkUnit::Block, "unit-block", tr("Block", "段"))];
                         d.children(units.into_iter().map(|(unit, name, label)| {
                             let chooser = self.ink.clone();
@@ -3129,7 +3196,7 @@ impl Render for Workbench {
                                 }))
                         }))
                     })
-                    .children(MARKS.iter().map(|(mark, english)| {
+                    .children(MARKS.iter().filter(|_| !editing).map(|(mark, english)| {
                         let on = active.iter().any(|m| m == mark);
                         let id = id.clone();
                         let label = if tr("en", "zh") == "zh" { *mark } else { *english };
@@ -3143,7 +3210,14 @@ impl Render for Workbench {
                             .when(on, |d| d.bg(rgb(STRONG)).text_color(rgb(ON_STRONG)))
                             .child(label)
                             .on_click(cx.listener(move |this, _, _, cx| this.mark(&id, mark, cx)))
-                    })),
+                    }))
+                    // Imported text stays as it was printed, so only what was written can change.
+                    .when(!fixed && !editing, |d| {
+                        let (rewrite, removed) = (id.clone(), id.clone());
+                        d.child(Separator::vertical().h(px(18.)))
+                            .child(icon_button("rewrite", "pencil", tr("Change the words", "改字")).on_click(cx.listener(move |this, _, window, cx| this.start_label(&rewrite, window, cx))))
+                            .child(icon_button("remove", "trash", tr("Remove, with what hangs under it", "删除（连同下面挂着的）")).on_click(cx.listener(move |this, _, _, cx| this.remove(&removed, cx))))
+                    }),
             );
         }
         if reading {
@@ -3970,6 +4044,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 view: None,
                 reading: false,
                 canvas: Bounds::new(point(px(0.), px(0.)), size(px(960.), px(756.))),
+                editing: false,
                 dpr: 1.0,
                 zoomed_at: Instant::now(),
                 generation: 0,
@@ -4033,6 +4108,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let arxiv_input = cx.new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
             let speaker_name = cx.new(|cx| InputState::new(window, cx));
             let title_input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Meeting name", "会议名称")));
+            let label_input = cx.new(|cx| InputState::new(window, cx));
             let library_query = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Search meetings", "搜索会议")));
             let view = cx.new(|cx| {
                 cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
@@ -4050,6 +4126,12 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 cx.subscribe_in(&title_input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
                         this.finish_title(window, cx);
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&label_input, window, |this: &mut Workbench, _, event, window, cx| {
+                    if matches!(event, InputEvent::PressEnter { .. } | InputEvent::Blur) {
+                        this.finish_label(true, window, cx);
                     }
                 })
                 .detach();
@@ -4095,6 +4177,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     panel: Panel::Transcript,
                     library: vec![],
                     library_query,
+                    label_input,
                     form: SettingsForm { base_url, model, key, remote, saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,

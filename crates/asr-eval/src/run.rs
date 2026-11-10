@@ -132,7 +132,7 @@ pub fn run(root: &Path, options: &Options) -> Result<()> {
     let mut hearing = if options.vad {
         let recognizers = match options.engine.as_str() {
             "routed" => Recognizers::load(&models),
-            _ => Recognizers { system: None, sense_voice: Some(load_sense_voice(&models.join("sense-voice"))?), english: None, japanese: None },
+            _ => Recognizers { system: None, sense_voice: Some(load_sense_voice(&models.join("sense-voice"))?), english: None, japanese: None, sense_voice_dir: Some(models.join("sense-voice")), chinese: None },
         };
         ensure!(!recognizers.is_empty(), "no speech models in {}; fetch them first", models.display());
         Hearing::Ear(Box::new(Ear::with(&models, recognizers)?))

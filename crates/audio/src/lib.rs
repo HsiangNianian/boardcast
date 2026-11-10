@@ -5,7 +5,7 @@
 use anyhow::{anyhow, Context, Result};
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, OfflineTransducerModelConfig, SileroVadModelConfig, SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, VadModelConfig, VoiceActivityDetector, Wave};
 use std::collections::VecDeque;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::thread;
@@ -131,6 +131,12 @@ pub trait Recognizer: Send {
     fn recognize(&mut self, samples: &[f32]) -> Result<String>;
 }
 
+/// Whether recognized text is Korean: it has Hangul. Nobody here speaks Korean, so SenseVoice heard
+/// a short Chinese word that way, as with 哦 written 어.
+pub fn is_korean(text: &str) -> bool {
+    text.chars().any(|c| matches!(c as u32, 0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7AF))
+}
+
 /// Whether recognized text is English rather than another language: letters, and no Chinese, Japanese
 /// or Korean. Chinese with English terms stays with SenseVoice, which handles that mix.
 pub fn is_english(text: &str) -> bool {
@@ -196,10 +202,15 @@ fn load_sense_voice_if_there(dir: &Path) -> Option<OfflineRecognizer> {
     recognizer.ok()
 }
 
-/// SenseVoice, from `dir`.
+/// SenseVoice, from `dir`, telling the language by itself.
 pub fn load_sense_voice(dir: &Path) -> Result<OfflineRecognizer> {
+    load_sense_voice_for(dir, "auto")
+}
+
+/// SenseVoice, from `dir`, hearing one language: "zh", "en", "ja", or "auto" to tell.
+pub fn load_sense_voice_for(dir: &Path, language: &str) -> Result<OfflineRecognizer> {
     let mut config = OfflineRecognizerConfig::default();
-    config.model_config.sense_voice = OfflineSenseVoiceModelConfig { model: Some(dir.join("model.int8.onnx").to_string_lossy().to_string()), language: Some("auto".into()), use_itn: true };
+    config.model_config.sense_voice = OfflineSenseVoiceModelConfig { model: Some(dir.join("model.int8.onnx").to_string_lossy().to_string()), language: Some(language.into()), use_itn: true };
     config.model_config.tokens = Some(dir.join("tokens.txt").to_string_lossy().to_string());
     config.model_config.num_threads = 2;
     OfflineRecognizer::create(&config).context("loading SenseVoice")
@@ -220,17 +231,24 @@ pub struct Recognizers {
     pub english: Option<OfflineRecognizer>,
     /// Recognizes Japanese again, as it does Japanese better.
     pub japanese: Option<OfflineRecognizer>,
+    /// Where SenseVoice came from, so it can be loaded again told to hear Chinese.
+    pub sense_voice_dir: Option<PathBuf>,
+    /// SenseVoice for Chinese only, loaded the first time a sentence comes out as Korean.
+    pub chinese: Option<OfflineRecognizer>,
 }
 
 impl Recognizers {
     /// Whatever models are in `models`: `sense-voice/`, `parakeet-en/` and `reazon-ja/`.
     pub fn load(models: &Path) -> Self {
-        Self { system: None, sense_voice: load_sense_voice_if_there(&models.join("sense-voice")), english: load_parakeet(&models.join("parakeet-en")), japanese: load_reazon(&models.join("reazon-ja")) }
+        let dir = models.join("sense-voice");
+        let sense_voice = load_sense_voice_if_there(&dir);
+        let sense_voice_dir = sense_voice.is_some().then_some(dir);
+        Self { system: None, sense_voice, english: load_parakeet(&models.join("parakeet-en")), japanese: load_reazon(&models.join("reazon-ja")), sense_voice_dir, chinese: None }
     }
 
     /// Only the system's recognizer, for when it was chosen and nothing else needs loading.
     pub fn system(recognizer: Box<dyn Recognizer>) -> Self {
-        Self { system: Some(recognizer), sense_voice: None, english: None, japanese: None }
+        Self { system: Some(recognizer), sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None }
     }
 
     /// The models there, by name, for saying what hears.
@@ -254,7 +272,7 @@ impl Recognizers {
             };
         }
         let (text, engine) = match (&self.sense_voice, &self.japanese, &self.english) {
-            (Some(asr), _, _) => (recognize(asr, samples), Engine::SenseVoice),
+            (Some(asr), _, _) => (self.not_korean(recognize(asr, samples), samples), Engine::SenseVoice),
             (None, Some(japanese), _) if samples.len() >= MIN_JAPANESE => (recognize(japanese, samples), Engine::Reazon),
             (None, Some(_), None) => return (String::new(), Engine::Reazon),
             (None, _, Some(english)) => (recognize(english, samples), Engine::Parakeet),
@@ -273,6 +291,21 @@ impl Recognizers {
             }
         }
         (text, engine)
+    }
+}
+
+impl Recognizers {
+    /// Korean from SenseVoice is Chinese it misheard: read the sentence again as Chinese. Should that
+    /// fail as well, nothing is written rather than Korean.
+    fn not_korean(&mut self, text: String, samples: &[f32]) -> String {
+        if !is_korean(&text) {
+            return text;
+        }
+        if self.chinese.is_none() {
+            self.chinese = self.sense_voice_dir.as_ref().and_then(|dir| load_sense_voice_for(dir, "zh").map_err(|e| eprintln!("{e:#}")).ok());
+        }
+        let again = self.chinese.as_ref().map(|zh| recognize(zh, samples)).unwrap_or_default();
+        if is_korean(&again) { String::new() } else { again }
     }
 }
 
@@ -572,6 +605,20 @@ mod tests {
     }
 
     #[test]
+    fn sense_voice_can_be_told_to_hear_chinese() {
+        let Some(models) = models() else { return };
+        let zh = load_sense_voice_for(&models.join("sense-voice"), "zh").unwrap();
+        // Silence comes out as nothing, Korean least of all.
+        assert!(!is_korean(&recognize(&zh, &vec![0.0; SAMPLE_RATE as usize])));
+    }
+
+    #[test]
+    fn hangul_is_korean_and_nothing_else_is() {
+        assert!(is_korean("어") && is_korean("네, 알겠습니다"));
+        assert!(!is_korean("哦") && !is_korean("こんにちは") && !is_korean("Release notes") && !is_korean(""));
+    }
+
+    #[test]
     fn kana_goes_to_reazon_and_chinese_does_not() {
         assert!(is_japanese("はい、そうです"));
         assert!(is_japanese("サーバーを再起動します"));
@@ -590,9 +637,9 @@ mod tests {
 
     #[test]
     fn the_system_recognizer_takes_every_sentence_and_nothing_is_no_ear() {
-        let mut asr = Recognizers { system: Some(Box::new(Fixed("こんにちは"))), sense_voice: None, english: None, japanese: None };
+        let mut asr = Recognizers { system: Some(Box::new(Fixed("こんにちは"))), sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None };
         assert_eq!(asr.hear(&[0.0; 16_000]), ("こんにちは".to_string(), Engine::System));
-        let none = Recognizers { system: None, sense_voice: None, english: None, japanese: None };
+        let none = Recognizers { system: None, sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None };
         assert!(none.is_empty());
         assert!(Ear::with(Path::new("/nowhere"), none).is_err());
     }

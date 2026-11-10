@@ -11,6 +11,8 @@ on:
     paths:
       - 'landing/**'
       - 'crates/site/**'
+      - 'crates/demo/**'
+      - 'crates/board/**'
       - 'Cargo.lock'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
@@ -39,7 +41,10 @@ jobs:
           tool: trunk
       - name: Build the website
         working-directory: landing
-        run: trunk build --release
+        # The demo is a page of its own under demo/, built after the site, which empties dist/ first.
+        run: |
+          trunk build --release
+          trunk build --release demo/index.html --dist dist/demo
       - uses: actions/upload-pages-artifact@v4
         with:
           path: landing/dist

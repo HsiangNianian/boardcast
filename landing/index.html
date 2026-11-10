@@ -14,12 +14,13 @@
     <link data-trunk rel="css" href="style.css" />
     <link data-trunk rel="copy-dir" href="fonts" />
     <link data-trunk rel="copy-dir" href="public/licenses" />
+    <link data-trunk rel="copy-dir" href="public/media" />
     <link data-trunk rel="copy-file" href="public/favicon.png" />
   </head>
   <body>
 <div class="frame" aria-hidden="true"><div class="ruler top" id="ruler-top"></div><div class="ruler left" id="ruler-left"></div></div>
 <div class="titleblock label" aria-hidden="true">
-  <div><b>boardcast</b></div><div>sheet <b id="tb-n">01</b> / 07</div>
+  <div><b>boardcast</b></div><div>sheet <b id="tb-n">01</b> / 08</div>
   <div>title <b id="tb-title">talk</b></div><div>rev <span data-version></span></div>
   <div>time <b id="tb-time">14:02:04</b></div><div>scale 1:1</div>
 </div>
@@ -48,7 +49,7 @@
       <div class="cta"><a class="solid" href="#get">download <span>↓</span></a><a href="#story">see it write <span>→</span></a></div>
     </div>
     <div class="hero-rail label">
-      <div class="chapters"><span class="on">01 talk</span><span>02 four lines</span><span>03 the app</span></div>
+      <div class="chapters"><span class="on">01 talk</span><span>02 four lines</span><span>03 the app</span><span>04 the real app</span></div>
       <button class="replay-open label" id="again">↺ hear it again</button>
       <span>all on your machine.</span>
     </div>
@@ -113,8 +114,25 @@
   </div>
 </section>
 
+<!-- ———————————————— the real app ———————————————— -->
+<section class="block wrap" id="real" data-sheet="04 the real app">
+  <div class="head"><h2>the real app,<br><em>not a mock-up.</em></h2><p>Recorded from boardcast itself: a release review, drawn as each line comes in by the local board model on the computer's own graphics card. Then try it below, in your browser, with the same board code.</p></div>
+  <figure class="shot">
+    <video src="./media/release-review.mp4" poster="./media/release-review.webp" autoplay muted loop playsinline preload="metadata" aria-label="The boardcast window: a release checklist written, starred, crossed out and questioned as the meeting goes"></video>
+    <figcaption class="label"><span>release review · recorded on linux · qwen3.5 4b · real time</span><span>01</span></figcaption>
+  </figure>
+  <div class="shots">
+    <figure class="shot"><img src="./media/en-upload-branch.webp" alt="A flow chart: an upload API sends files to a virus scanner, which branches to object storage or a circled quarantine" loading="lazy" width="1600" height="1000"><figcaption class="label"><span>upload pipeline · a flow that branches</span><span>02</span></figcaption></figure>
+    <figure class="shot"><img src="./media/en-platform-groups.webp" alt="Clients grouped in a box, both forwarding to a backend, beside a BFF layer list" loading="lazy" width="1600" height="1000"><figcaption class="label"><span>service groups · boxes and lists on one board</span><span>03</span></figcaption></figure>
+  </div>
+  <div class="try">
+    <div class="try-head label"><span>web demo · five sample meetings, replayed by the app's board code</span><a href="./demo/">open full screen →</a></div>
+    <iframe src="./demo/?embed" title="boardcast web demo" loading="lazy"></iframe>
+  </div>
+</section>
+
 <!-- ———————————————— during ———————————————— -->
-<section class="block wrap" id="during" data-sheet="04 during">
+<section class="block wrap" id="during" data-sheet="05 during">
   <div class="head"><h2>during the meeting,<br><em>one click is enough.</em></h2><p>Marking, rewriting, circling: each takes a single click. Every card shows what it really does.</p></div>
   <div class="bento">
     <div class="card w4"><span class="k label">02 / circle</span><svg class="pict" data-icon="lasso" viewBox="0 0 64 64"></svg>
@@ -143,7 +161,7 @@
 </section>
 
 <!-- ———————————————— after ———————————————— -->
-<section class="block wrap" id="after" data-sheet="05 after">
+<section class="block wrap" id="after" data-sheet="06 after">
   <div class="head"><h2>after the meeting,<br><em>it is already sorted.</em></h2><p>Each of these is made of dots. Point at one and it scatters, then gathers again.</p></div>
   <div class="dots">
     <div class="dot-card"><canvas data-icon="doc"></canvas><span class="label">summary</span><h4>summary</h4><p>Conclusions, decisions and to-dos to edit, tick off and copy.</p></div>
@@ -153,7 +171,7 @@
   </div>
 </section>
 
-<section class="block wrap" id="get" data-sheet="06 specs">
+<section class="block wrap" id="get" data-sheet="07 specs">
   <div class="head"><h2>specs.</h2><p>What is inside, written down like a product manual.</p></div>
   <div class="specs">
     <dl><dt>speech</dt><dd>parakeet · reazonspeech · sensevoice</dd><dt>speakers</dt><dd>cam++ voiceprints</dd><dt>board model</dt><dd>qwen3.5 4b / 9b · minicpm5</dd><dt>runtime</dt><dd>llama.cpp · vulkan / metal</dd></dl>
@@ -166,7 +184,7 @@
   </div>
 </section>
 
-<section class="now wrap" id="now-sheet" data-sheet="07 now">
+<section class="now wrap" id="now-sheet" data-sheet="08 now">
   <span class="label">your local time</span>
   <div class="clock" id="now">--<span class="sep">:</span>--</div>
   <p>your next meeting. let the board draw itself.</p>

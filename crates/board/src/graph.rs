@@ -678,6 +678,9 @@ pub struct Utterance {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speaker: Option<String>,
     pub text: String,
+    /// What was circled on the board while this was said, as node ids, first circled first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pointing: Vec<String>,
 }
 
 impl Utterance {
@@ -709,6 +712,23 @@ pub fn board_is_english(recent: &[Utterance], next: &Utterance) -> bool {
 
 const ENGLISH_BOARD: &str = "这场会说的是英文：板上的名字、条目、问题、备注都用英文写，照原话的叫法，不要翻译成中文。名字 1 到 4 个词，条目最多 8 个词。";
 
+/// The most a line can point at; past that, the latest circled count.
+pub const MAX_POINTED: usize = 8;
+
+/// 「当前手指着：n4（库存服务）、n5（Redis）」, for what is still on the board, as the older app said it.
+fn pointing_line(g: &Graph, ids: &[String]) -> Option<String> {
+    let live: Vec<&Node> = ids.iter().filter_map(|id| g.nodes.iter().find(|n| &n.id == id)).collect();
+    let shown: Vec<String> = live[live.len().saturating_sub(MAX_POINTED)..]
+        .iter()
+        .map(|n| {
+            let name: String = n.label.chars().take(16).collect();
+            let more = if n.label.chars().count() > 16 { "…" } else { "" };
+            format!("{}（{name}{more}）", n.id)
+        })
+        .collect();
+    (!shown.is_empty()).then(|| format!("当前手指着：{}", shown.join("、")))
+}
+
 pub fn user_message(g: &Graph, recent: &[Utterance], next: &Utterance) -> String {
     let mut parts = vec![];
     if board_is_english(recent, next) {
@@ -716,8 +736,12 @@ pub fn user_message(g: &Graph, recent: &[Utterance], next: &Utterance) -> String
     }
     parts.push(format!("白板：\n{}", g.describe()));
     if !recent.is_empty() {
-        let lines: Vec<String> = recent.iter().map(Utterance::line).collect();
+        let lines: Vec<String> = recent.iter().map(|u| pointing_line(g, &u.pointing).map_or_else(|| u.line(), |p| format!("{p}\n{}", u.line()))).collect();
         parts.push(format!("前文（已经画过了）：\n{}", lines.join("\n")));
+    }
+    // Only when something is circled, so the prompt is otherwise exactly what the evaluation measured.
+    if let Some(pointed) = pointing_line(g, &next.pointing) {
+        parts.push(pointed);
     }
     parts.push(format!("新的一句：{}", next.line()));
     parts.join("\n")
@@ -757,6 +781,22 @@ pub fn grammar(g: &Graph, max_ops: usize, english: bool) -> String {
 
 #[cfg(test)]
 mod tests {
+    mod pointing {
+        use super::super::*;
+
+        #[test]
+        fn what_is_circled_is_named_only_while_it_is_on_the_board() {
+            let mut g = Graph::default();
+            g.apply(&parse_ops("N 库存服务\nN Redis"));
+            let ids: Vec<String> = g.nodes.iter().map(|n| n.id.clone()).collect();
+            let next = Utterance { speaker: None, text: "连起来".into(), pointing: vec![ids[0].clone(), ids[1].clone(), "n99".into()] };
+            let message = user_message(&g, &[], &next);
+            assert!(message.contains(&format!("当前手指着：{}（库存服务）、{}（Redis）\n新的一句：连起来", ids[0], ids[1])), "{message}");
+            let plain = Utterance { speaker: None, text: "连起来".into(), pointing: vec![] };
+            assert!(!user_message(&g, &[], &plain).contains("手指着"));
+        }
+    }
+
     mod imported_pages {
         use super::super::*;
         use crate::board_layout::StableLayout;
@@ -953,7 +993,7 @@ mod tests {
                 recent.clear();
             }
             let at = format!("step {i} of {}: {}", s.file, s.text);
-            let next = Utterance { speaker: s.speaker.clone(), text: s.text.clone() };
+            let next = Utterance { speaker: s.speaker.clone(), text: s.text.clone(), pointing: vec![] };
             let context = &recent[recent.len().saturating_sub(2)..];
             assert_eq!(g.describe(), s.describe, "describe, {at}");
             assert_eq!(user_message(&g, context, &next), s.user, "user message, {at}");

@@ -40,7 +40,7 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Value> {
     let (mut hard_steps, mut hints_sent, mut model_ms, mut soft_total) = (0, 0, 0_u128, 0);
     let (mut tokens_in, mut tokens_out, mut empty) = (0_u64, 0_u64, 0);
     for turn in &case.turns {
-        let next = Utterance { speaker: turn.speaker.clone(), text: turn.text.clone() };
+        let next = Utterance { speaker: turn.speaker.clone(), text: turn.text.clone(), pointing: vec![] };
         let recent = &history[history.len().saturating_sub(2)..];
         if options.guidance.hint && hint.is_some() {
             hints_sent += 1;

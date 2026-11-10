@@ -1,0 +1,85 @@
+/* The web demo: the app's window, in its dark appearance, around the board the app's own code draws. */
+
+@font-face { font-family: 'DM Sans Variable'; font-style: normal; font-display: swap; font-weight: 100 1000; src: url('../fonts/dm-sans-latin-wght-normal.woff2') format('woff2-variations'); }
+@font-face { font-family: 'JetBrains Mono Variable'; font-style: normal; font-display: swap; font-weight: 100 800; src: url('../fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations'); }
+
+:root {
+  --bg: #000; --paper: #070707; --line: #262626; --grid: #151515; --text: #f2f2f2; --muted: #c4c4c4; --faint: #8a8a8a;
+  --accent: #9fb4ff; --rec: #ff5a36;
+  --sans: 'DM Sans Variable', system-ui, sans-serif; --mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg); color: var(--text); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased; }
+body { max-width: 1440px; margin: 0 auto; padding: 32px 40px 40px; }
+a { color: inherit; text-decoration: none; }
+.mono { font: 400 12px var(--mono); color: var(--faint); }
+
+.top { display: grid; grid-template-columns: 160px 1fr auto; gap: 40px; align-items: start; padding-bottom: 28px; }
+.brand { font-size: 32px; line-height: 1.05; font-weight: 300; letter-spacing: -.03em; }
+.intro h1 { font-size: clamp(36px, 4.4vw, 64px); font-weight: 200; letter-spacing: -.035em; line-height: 1; }
+.intro p { margin-top: 14px; max-width: 46em; font-size: 15px; line-height: 1.65; color: var(--muted); }
+.get { display: inline-flex; gap: 22px; align-items: center; padding: 14px 16px; background: var(--text); color: var(--bg); font-size: 16px; white-space: nowrap; }
+.get:hover { background: var(--muted); }
+
+.samples { display: flex; flex-wrap: wrap; gap: 1px; background: var(--line); border: 1px solid var(--line); border-bottom: 0; }
+.samples button { all: unset; cursor: pointer; flex: 1 1 auto; padding: 12px 16px; background: var(--bg); font: 400 12px var(--mono); color: var(--faint); text-align: left; }
+.samples button:hover { color: var(--text); }
+.samples button.on { color: var(--bg); background: var(--text); }
+
+.window { border: 1px solid var(--line); background: var(--paper); display: flex; flex-direction: column; height: min(760px, calc(100vh - 120px)); min-height: 460px; }
+.titlebar { display: flex; gap: 22px; align-items: center; height: 34px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.titlebar .name { font-size: 16px; color: var(--text); }
+.titlebar .state.hot { color: var(--text); }
+.titlebar .icons { margin-left: auto; display: flex; gap: 12px; }
+.titlebar .icons i { width: 12px; height: 12px; border: 2px solid var(--muted); }
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 340px; }
+.canvas { position: relative; overflow: hidden; background-color: var(--paper);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 72px 72px; }
+.coords { position: absolute; left: 14px; top: 12px; font-size: 10px; }
+.board { position: absolute; inset: 30px 0 58px; width: 100%; height: calc(100% - 88px); }
+.dock { position: absolute; left: 0; right: 0; bottom: 0; display: flex; height: 56px; border-top: 1px solid var(--line); background: var(--bg); }
+.dock button { all: unset; cursor: default; display: flex; gap: 10px; align-items: center; padding: 0 18px; border-right: 1px solid var(--line); font-size: 15px; color: var(--text); }
+.dock button svg { width: 20px; height: 20px; color: var(--text); }
+.dock button small { display: block; font: 400 10px var(--mono); color: var(--faint); }
+.dock .listen, #replay { cursor: pointer; }
+.dock .listen { background: var(--text); color: var(--bg); }
+.dock .listen small { color: #666; }
+.dock .listen .rec { width: 26px; height: 26px; display: grid; place-items: center; background: var(--bg); }
+.dock .listen .rec::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--rec); }
+.dock .listen.on .rec::after { border-radius: 0; animation: pulse 1.2s ease-in-out infinite; }
+.dock .listen.paused .rec::after { animation: none; border-radius: 50%; }
+.dock #replay:hover, .dock .listen:hover { opacity: .85; }
+@keyframes pulse { 50% { opacity: .35; } }
+
+.side { border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+.side-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.side-head b { font-size: 20px; font-weight: 300; }
+.side-head span { color: var(--muted); }
+.lines { flex: 1; min-height: 0; overflow: hidden auto; list-style: none; padding: 10px 16px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
+.lines li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; }
+.lines .who { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--faint); font: 400 10px var(--mono); }
+.lines .name { font: 400 11px var(--mono); color: var(--faint); }
+.lines p { margin-top: 3px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.lines li.live p { color: var(--text); }
+.lines li.live p::after { content: '▍'; color: var(--faint); }
+.lines li.drawn .who { border-color: var(--text); background: var(--text); color: var(--bg); }
+.input { margin: 10px; padding: 10px 12px; border: 1px solid var(--line); font-size: 13px; color: var(--faint); }
+.foot { margin-top: 16px; }
+.foot a:hover { color: var(--text); }
+
+/* Embedded in the website: the window alone, filling its frame. */
+html.embed body { padding: 0; max-width: none; }
+html.embed .top, html.embed .foot { display: none; }
+html.embed .window { height: calc(100vh - 41px); min-height: 0; }
+html.embed .samples { border-left: 0; border-right: 0; }
+
+@media (max-width: 900px) {
+  body { padding: 20px 16px; }
+  .top { grid-template-columns: 1fr; gap: 16px; } .brand { display: none; }
+  .body { grid-template-columns: 1fr; } .side { display: none; }
+  .dock button span { display: none; } .dock button { padding: 0 14px; } .titlebar .sample, .titlebar .icons { display: none; }
+  .window { height: 70vh; }
+  .titlebar .mono:not(.state) { display: none; } .titlebar .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .samples { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .samples button { flex: 0 0 auto; }
+  .intro p { font-size: 14px; }
+}

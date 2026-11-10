@@ -144,6 +144,17 @@ body.drawing-lasso { user-select: none; cursor: crosshair; }
 .replay-open:hover { color: var(--fg); }
 
 /* ———————————————— signals: one meeting, four lines ———————————————— */
+/* The real app: footage and stills in a thin frame, then the live demo. */
+.shot { border: 1px solid var(--hair); background: var(--l1); }
+.shot video, .shot img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; }
+.shot figcaption { display: flex; justify-content: space-between; gap: 16px; padding: 10px 14px; border-top: 1px solid var(--hair); }
+.shots { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
+.try { margin-top: 48px; border: 1px solid var(--hair); }
+.try-head { display: flex; justify-content: space-between; gap: 16px; padding: 12px 14px; border-bottom: 1px solid var(--hair); }
+.try-head a { color: var(--fg); }
+.try-head a:hover { color: var(--link); }
+.try iframe { display: block; width: 100%; height: min(720px, 80vh); border: 0; background: #070707; }
+
 /* Top only: the sides are .wrap's padding. */
 section.block { padding-top: 140px; }
 .head { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: end; padding-bottom: 28px; }
@@ -347,6 +358,8 @@ footer { display: flex; justify-content: space-between; gap: 16px; padding-top: 
   .dl a { padding: 28px 20px; }
   .now { padding-top: 96px; padding-bottom: 80px; } .now p { font-size: 17px; }
   footer { flex-direction: column; }
+  .shots { grid-template-columns: 1fr; gap: 16px; } .shot figcaption span:last-child { display: none; }
+  .try-head span { display: none; } .try iframe { height: 560px; }
 }
 
 footer a:hover { color: var(--fg); }

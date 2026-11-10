@@ -1,0 +1,22 @@
+[package]
+name = "boardcast-demo"
+description = "The app's board in a web page, replaying the sample meetings; landing/demo holds its page"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+boardcast-board.workspace = true
+js-sys = "0.3"
+serde.workspace = true
+serde_json.workspace = true
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+
+[dependencies.web-sys]
+version = "0.3"
+features = ["Document", "DomRect", "DomTokenList", "Element", "Event", "EventTarget", "HtmlElement", "KeyboardEvent", "Location", "MediaQueryList", "Node", "Performance", "Text", "UrlSearchParams", "Window"]

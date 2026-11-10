@@ -36,3 +36,6 @@ codegen-units = 4
 # The website is downloaded by every visitor, so it is built for size.
 [profile.release.package.boardcast-site]
 opt-level = "s"
+
+[profile.release.package.boardcast-demo]
+opt-level = "s"

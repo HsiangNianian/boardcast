@@ -206,9 +206,27 @@ fn boards_text(boards: &[Graph], english: bool) -> String {
     parts.join("\n\n")
 }
 
+/// The topics of the template a meeting was started from, kept on its first board.
+pub fn template_topics(boards: &[Graph]) -> Vec<String> {
+    boards.iter().find_map(|g| g.extra.get("template")).and_then(|t| serde_json::from_value(t.clone()).ok()).unwrap_or_default()
+}
+
+/// How a meeting started from a template has its conclusions laid out: one part per topic of the template.
+fn template_rule(topics: &[String], english: bool) -> Option<String> {
+    if topics.is_empty() {
+        return None;
+    }
+    Some(if english {
+        format!("This meeting follows a template with the topics {}. Under Conclusions, give each topic that was discussed its own part, starting with \"#### topic\"; leave out topics nobody spoke to.", topics.join(" / "))
+    } else {
+        format!("这场会按模板开，话题是：{}。「结论」里按这些话题分小节，每个小节以「#### 话题」开头；没人说到的话题不写。", topics.join(" / "))
+    })
+}
+
 fn messages(boards: &[Graph], said: &str, partial: bool, english: bool) -> Vec<Value> {
     let w = words(english);
-    let rules = format!("{}\n{}", w.rules, w.sections.map(|s| format!("### {s}")).join("\n"));
+    let structure = template_rule(&template_topics(boards), english).map_or_else(String::new, |r| format!("{r}\n"));
+    let rules = format!("{structure}{}\n{}", w.rules, w.sections.map(|s| format!("### {s}")).join("\n"));
     let system = if partial { format!("{}\n{}", w.partial, w.facts) } else { format!("{}\n{}\n{rules}", w.system, w.facts) };
     let user = if partial { format!("{}\n{said}", w.fragment) } else { format!("{}\n{}\n\n{said}", w.board_intro, boards_text(boards, english)) };
     vec![json!({ "role": "system", "content": system }), json!({ "role": "user", "content": user })]
@@ -478,6 +496,20 @@ mod tests {
 
     fn lines_of(v: &Value) -> Vec<Line> {
         Line::spoken(v.as_array().unwrap())
+    }
+
+    #[test]
+    fn a_template_meeting_is_summed_up_by_its_topics() {
+        let mut board = Graph::default();
+        board.extra.insert("template".into(), json!(["做得好的", "要改进的", "行动项"]));
+        let asked = messages(&[board], "A：上线很顺利", false, false);
+        let system = asked[0]["content"].as_str().unwrap();
+        assert!(system.contains("做得好的 / 要改进的 / 行动项") && system.contains("#### 话题"), "{system}");
+        assert!(!messages(&[Graph::default()], "A：好", false, false)[0]["content"].as_str().unwrap().contains("模板"));
+        // A topic part survives tidying and reads as a heading.
+        let tidied = tidy("### 结论\n#### 做得好的\n- 上线顺利\n### 决定\n- 无", false);
+        assert!(tidied.contains("#### 做得好的"), "{tidied}");
+        assert_eq!(blocks(&tidied)[1], Block::Heading("做得好的".into()));
     }
 
     #[test]

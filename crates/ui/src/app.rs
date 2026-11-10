@@ -2118,6 +2118,8 @@ impl Workbench {
             let ops: String = topics.iter().map(|t| format!("T 「{t}」\n")).collect();
             let mut graph = Graph::default();
             graph.apply(&parse_ops(&ops));
+            // Kept so the summary can follow the same structure.
+            graph.extra.insert("template".into(), serde_json::json!(topics));
             live.change_board(graph, serde_json::Value::Null);
             self.show(live);
             self.panel = Panel::Transcript;

@@ -6,8 +6,11 @@
 //! Chinese is compared by pinyin without tones, character by character, any reading of a character
 //! counting. English words are compared by their sounds in the CMU Pronouncing Dictionary, without
 //! stress, so "cash" is cache and "cue" is queue; and without case or spaces, so "open ai" is OpenAI and
-//! "A P I" is API. Japanese kana are compared as katakana. Kanji read alike, such as 公正 for 構成, need
-//! a written alias in the glossary: that takes a Japanese reading dictionary this does not have yet.
+//! "A P I" is API. Japanese is compared by its readings, kana as katakana and each kanji by its on and kun
+//! readings from KANJIDIC2, allowing a later kanji's first sound to voice and a final one to double: 構成
+//! and 公正 both read コウセイ, 認証 is にんしょう. That covers the Sino-Japanese words names mostly are;
+//! a word read irregularly needs an alias. It is only tried on lines with kana, as a Chinese line's
+//! characters have Japanese readings too, and Chinese is compared by pinyin.
 
 use pinyin::ToPinyinMulti;
 use std::collections::{HashMap, HashSet};
@@ -35,9 +38,77 @@ fn cmu() -> &'static HashMap<String, Vec<String>> {
     })
 }
 
-/// Load the dictionary now, away from the window, rather than on the first English line.
+/// Load the dictionaries now, away from the window, rather than on the first line that needs one.
 pub fn warm() {
     cmu();
+    kanji();
+}
+
+/// Each kanji's readings, in katakana.
+fn kanji() -> &'static HashMap<char, Vec<String>> {
+    static KANJI: OnceLock<HashMap<char, Vec<String>>> = OnceLock::new();
+    KANJI.get_or_init(|| {
+        let mut text = String::new();
+        let packed: &[u8] = include_bytes!("../../../assets/dictionaries/kanji-readings.tsv.gz");
+        if flate2::read::GzDecoder::new(packed).read_to_string(&mut text).is_err() {
+            return HashMap::new();
+        }
+        text.lines()
+            .filter_map(|l| {
+                let (k, r) = l.split_once('\t')?;
+                Some((k.chars().next()?, r.split(',').map(str::to_string).collect()))
+            })
+            .collect()
+    })
+}
+
+/// The voiced form of a sound, as the second part of a compound often takes: コ → ゴ, ホ → ボ.
+fn voiced(c: char) -> Option<char> {
+    let n = c as u32;
+    // カ to ト and ハ to ホ, where the voiced form comes next in the table.
+    let plain = matches!(n, 0x30AB..=0x30C8 if (n - 0x30AB) % 2 == 0) || matches!(n, 0x30CF..=0x30DB if (n - 0x30CF) % 3 == 0);
+    plain.then(|| char::from_u32(n + 1)).flatten()
+}
+
+/// How a Japanese word can be read, in katakana. Empty if a character has no reading here.
+fn read(word: &str) -> HashSet<String> {
+    let mut ways: HashSet<String> = [String::new()].into();
+    for (i, c) in word.chars().enumerate() {
+        let parts: Vec<String> = if matches!(c as u32, 0x3041..=0x30FF) {
+            vec![katakana(&c.to_string())]
+        } else if let Some(readings) = kanji().get(&c) {
+            let mut parts = readings.clone();
+            for r in readings {
+                let mut chars: Vec<char> = r.chars().collect();
+                if i > 0 {
+                    if let Some(v) = chars.first().copied().and_then(voiced) {
+                        let mut voiced_form = chars.clone();
+                        voiced_form[0] = v;
+                        parts.push(voiced_form.into_iter().collect());
+                    }
+                }
+                if matches!(chars.last(), Some('ク' | 'キ' | 'ツ' | 'チ')) {
+                    chars.pop();
+                    chars.push('ッ');
+                    parts.push(chars.into_iter().collect());
+                }
+            }
+            parts
+        } else {
+            return HashSet::new();
+        };
+        ways = ways.iter().flat_map(|w| parts.iter().map(move |p| format!("{w}{p}"))).take(256).collect();
+    }
+    if ways.contains("") { HashSet::new() } else { ways }
+}
+
+fn japanese(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| is_han(c) || matches!(c as u32, 0x3041..=0x30FF))
+}
+
+/// Whether two Japanese words, written differently, can be read the same.
+pub fn read_alike(a: &str, b: &str) -> bool {
+    japanese(a) && japanese(b) && a != b && katakana(a) != katakana(b) && !read(a).is_disjoint(&read(b))
 }
 
 /// How a run of English words can be said, each way as one string of sounds. Empty if a word is unknown.
@@ -129,6 +200,9 @@ impl Glossary {
             }
             if kana(&term.text) {
                 out = replace_kana(&out, &term.text);
+            }
+            if japanese(&term.text) && term.text.chars().any(is_han) && has_kana(&out) {
+                out = replace_read(&out, &term.text, &self.terms);
             }
             if term.text.chars().all(|c| c.is_ascii()) {
                 out = replace_said(&out, &term.text, &self.terms);
@@ -267,6 +341,31 @@ fn replace_said(text: &str, name: &str, terms: &[Term]) -> String {
     }
 }
 
+fn has_kana(s: &str) -> bool {
+    s.chars().any(|c| matches!(c as u32, 0x3040..=0x30FF))
+}
+
+/// Japanese runs read like `name` become `name`, unless they are another name already. The shortest run
+/// that fits is taken, from the left.
+fn replace_read(text: &str, name: &str, terms: &[Term]) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let wanted = read(name);
+    for start in 0..chars.len() {
+        for end in start + 1..=(start + 10).min(chars.len()) {
+            let run: String = chars[start..end].iter().collect();
+            if !japanese(&run) || run == name || terms.iter().any(|t| t.text == run) {
+                continue;
+            }
+            if !read(&run).is_disjoint(&wanted) {
+                let before: String = chars[..start].iter().collect();
+                let after: String = chars[end..].iter().collect();
+                return format!("{before}{name}{}", replace_read(&after, name, terms));
+            }
+        }
+    }
+    text.to_string()
+}
+
 fn replace_kana(text: &str, name: &str) -> String {
     let (key, chars): (Vec<char>, Vec<char>) = (katakana(name).chars().collect(), text.chars().collect());
     let mut out = String::new();
@@ -303,6 +402,25 @@ pub fn board_hints(text: &str, labels: &[&str]) -> Vec<(String, String)> {
             }
         }
     }
+    if has_kana(text) {
+        let chars: Vec<char> = text.chars().collect();
+        for label in labels.iter().filter(|l| japanese(l) && l.chars().any(is_han) && !text.contains(*l)) {
+            let wanted = read(label);
+            for start in 0..chars.len() {
+                for end in start + 2..=(start + 10).min(chars.len()) {
+                    let run: String = chars[start..end].iter().collect();
+                    if !japanese(&run) || labels.contains(&run.as_str()) || read(&run).is_disjoint(&wanted) {
+                        continue;
+                    }
+                    let others = labels.iter().filter(|l| *l != label && read_alike(&run, l)).count();
+                    if others == 0 && !out.iter().any(|(w, _)| *w == run) {
+                        out.push((run, (*label).to_string()));
+                    }
+                }
+            }
+        }
+        return out;
+    }
     for label in labels.iter().filter(|l| han(l) && !text.contains(*l)) {
         let size = label.chars().count();
         for start in 0..chars.len().saturating_sub(size - 1) {
@@ -331,9 +449,11 @@ pub fn note(glossary: &Glossary, text: &str, labels: &[&str], english: bool) -> 
     (!parts.is_empty()).then(|| parts.join("\n"))
 }
 
-/// Which label a word in a line means: the label itself, a glossary spelling of it, or the only label
+/// Which label a word in `line` means: the label itself, a glossary spelling of it, or the only label
 /// that reads like it; among several that read alike, the one pointed at. None when it can't be told.
-pub fn resolve(word: &str, labels: &[&str], glossary: &Glossary, pointed: &[usize]) -> Option<usize> {
+pub fn resolve(word: &str, line: &str, labels: &[&str], glossary: &Glossary, pointed: &[usize]) -> Option<usize> {
+    // Japanese when the line has kana; otherwise Chinese characters go by pinyin.
+    let japanese_case = has_kana(line) || labels.iter().any(|l| has_kana(l));
     if let Some(i) = labels.iter().position(|l| *l == word) {
         return Some(i);
     }
@@ -344,7 +464,7 @@ pub fn resolve(word: &str, labels: &[&str], glossary: &Glossary, pointed: &[usiz
     let alike: Vec<usize> = labels
         .iter()
         .enumerate()
-        .filter(|(_, l)| (han(l) && han(word) && sound_alike(word, l)) || (kana(word) && katakana(word) == katakana(l)) || said_alike(word, l))
+        .filter(|(_, l)| (japanese_case && read_alike(word, l)) || (!japanese_case && han(l) && han(word) && sound_alike(word, l)) || (kana(word) && katakana(word) == katakana(l)) || said_alike(word, l))
         .map(|(i, _)| i)
         .collect();
     match alike.as_slice() {
@@ -377,6 +497,8 @@ mod tests {
         let cache = Glossary::parse("cache; queue");
         assert_eq!(cache.correct("clear the cash and the cue"), "clear the cache and the queue");
         assert_eq!(cache.correct("cashier"), "cashier", "a word of its own");
+        let ja = Glossary::parse("構成; 認証");
+        assert_eq!(ja.correct("こうせいを見直して、にんしょうも確認"), "構成を見直して、認証も確認");
     }
 
     #[test]
@@ -389,6 +511,9 @@ mod tests {
         assert_eq!(super::note(&Glossary::default(), "加一个支付服务", &["缓存"], false), None, "nothing to say");
         assert_eq!(board_hints("circle the service cash", &["service cache", "API"]), [("service cash".to_string(), "service cache".to_string())]);
         assert!(board_hints("circle cite", &["site", "sight"]).is_empty(), "two labels said alike");
+        assert_eq!(board_hints("公正に下線を引いて", &["構成", "認証"]), [("公正".to_string(), "構成".to_string())]);
+        assert_eq!(board_hints("にんしょうに丸をつけて", &["構成", "認証"]), [("にんしょう".to_string(), "認証".to_string())]);
+        assert!(board_hints("公正一下格式", &["構成"]).is_empty(), "a Chinese line is not read as Japanese");
     }
 
     /// The pronunciation cases kept from the earlier app, for what this matching covers. English and
@@ -396,7 +521,7 @@ mod tests {
     #[test]
     fn the_kept_pronunciation_cases_resolve() {
         let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!("../../../eval/phonetic-cases.json")).unwrap();
-        let needs_dictionary = ["ja-kanji-homophone", "ja-negated-delete", "ja-sound-delete-blocked", "ja-kana-reading", "ja-mixed-connect", "ja-negated-circle", "ja-collision", "ja-pointed-collision"];
+        let needs_dictionary: [&str; 0] = [];
         let (mut checked, mut skipped, mut wrong) = (0, 0, vec![]);
         for case in &cases {
             let id = case["id"].as_str().unwrap();
@@ -408,7 +533,7 @@ mod tests {
             let glossary = Glossary::parse(case["glossary"].as_str().unwrap_or(""));
             let pointed: Vec<usize> = case["pointing"].as_array().map_or(vec![], |p| p.iter().map(|i| i.as_u64().unwrap() as usize - 1).collect());
             for (target, want) in case["targets"].as_array().unwrap().iter().zip(case["resolved"].as_array().unwrap()) {
-                let got = resolve(target.as_str().unwrap(), &labels, &glossary, &pointed).map(|i| labels[i]);
+                let got = resolve(target.as_str().unwrap(), case["text"].as_str().unwrap(), &labels, &glossary, &pointed).map(|i| labels[i]);
                 if got != want.as_str() {
                     wrong.push(format!("{id}: {target} → {got:?}, want {want}"));
                 }

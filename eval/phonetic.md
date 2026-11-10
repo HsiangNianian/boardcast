@@ -1,6 +1,10 @@
 # Phonetic label and command evaluation
 
-This suite measured the earlier app's pronunciation matching, which the GPUI app does not have yet. Its runner and CI job were removed with the earlier app's tooling (#150); the cases in `phonetic-cases.json` stay, to measure the matching again once it is rebuilt in Rust (#117).
+These cases measured the earlier app's pronunciation matching. They now run against the GPUI app's own
+matching in `crates/agent/src/sound.rs` (#117), as the test `the_kept_pronunciation_cases_resolve`:
+Chinese by pinyin without tones, English by the CMU Pronouncing Dictionary, Japanese by KANJIDIC2's kanji
+readings. All 45 resolve as expected. The command cases below (negation, deletion blocked by sound) are
+checked only for which label a word resolves to; what the board then does is the model's.
 
 The fixtures in [phonetic-cases.json](phonetic-cases.json) are **synthetic transcript perturbations**, not recorded speech. They check the shared production resolver against exact-name lookup with glossary correction, then check explicit commands, required abstentions and delegation. Reported correctness includes expected abstentions; wrong matches count incorrect non-empty selections. These numbers do not measure ASR accuracy or guarantee an LLM's decisions. Audio model comparisons remain in [asr/](asr/README.md).
 

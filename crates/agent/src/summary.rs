@@ -47,7 +47,7 @@ const ZH: Words = Words {
     too_long: "会议记录太长，下面是逐段记下的要点：",
     partial: "你在帮人整理会议记录。这是一场长会议中的一段，记下这一段里的要点：说了什么结论、定了什么、谁要做什么、还有什么没定。每条一行，以「- 」开头。",
     system: "你在帮人写会议摘要。",
-    facts: "保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。",
+    facts: "保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答或定下来了，就写进结论或决定，不再列在待讨论。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：待办不写负责人括号。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。",
     rules: "只根据给出的内容写，不要编造；没有的部分写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办写成「- [ ] 事情（负责人：某某）」，没提到负责人就不写括号。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：",
 };
 
@@ -65,7 +65,7 @@ const EN: Words = Words {
     too_long: "The transcript is too long; these are the notes taken part by part:",
     partial: "You are helping someone tidy up meeting notes. This is one part of a long meeting; note its key points: conclusions reached, what was decided, who will do what, and what is still open. One point per line, starting with '- '.",
     system: "You are helping someone write a meeting summary.",
-    facts: "Preserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.",
+    facts: "Preserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered or settled later in the meeting goes under Conclusions or Decisions, not Open questions.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: give such to-dos no owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.",
     rules: "Write only from what is given, never make things up; write \"None\" for an empty section.\nWrite in English, one short point per line, starting with \"- \".\nWrite to-dos as \"- [ ] task (owner: name)\"; leave out the parentheses if no owner was mentioned.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:",
 };
 
@@ -304,6 +304,14 @@ pub fn name_ids(text: &str, boards: &[Graph]) -> String {
     out
 }
 
+static LETTER_OWNER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s*[(（]\s*(?:负责人|owner)\s*[:：]\s*[A-Z]\s*[)）]").expect("valid"));
+
+/// Speakers nobody named are lettered A, B, C as they come, so a letter says who spoke, not who owns the
+/// work. Such an owner is taken off a to-do.
+pub fn no_letter_owners(text: &str) -> String {
+    LETTER_OWNER.replace_all(text, "").into_owned()
+}
+
 static BOLD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\*\*(.+?)\*\*").expect("valid"));
 static STRUCK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"~~(.+?)~~").expect("valid"));
 static CODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`([^`]+)`").expect("valid"));
@@ -452,7 +460,7 @@ pub fn summarize(provider: &Provider, boards: &[Graph], lines: &[Line], cancel: 
     let total = if parts.len() > 1 { parts.len() + 1 } else { 1 };
     progress(Step::Writing { done: total - 1, total });
     let reply = ask(provider, &messages(boards, &said, false, english), if remote { 4096 } else { 1024 }, cancel)?;
-    let tidied = name_ids(&tidy(&reply, english), boards);
+    let tidied = no_letter_owners(&name_ids(&tidy(&reply, english), boards));
     if tidied.is_empty() {
         bail!("The model returned no summary.");
     }
@@ -470,6 +478,14 @@ mod tests {
 
     fn lines_of(v: &Value) -> Vec<Line> {
         Line::spoken(v.as_array().unwrap())
+    }
+
+    #[test]
+    fn a_lettered_speaker_is_no_owner() {
+        assert_eq!(no_letter_owners("- [ ] 写完重试逻辑（负责人：B）"), "- [ ] 写完重试逻辑");
+        assert_eq!(no_letter_owners("- [ ] Finish the retry logic (owner: A)"), "- [ ] Finish the retry logic");
+        assert_eq!(no_letter_owners("- [ ] 写文档（负责人：王芳）"), "- [ ] 写文档（负责人：王芳）");
+        assert_eq!(no_letter_owners("- [ ] Ship it (owner: Maya)"), "- [ ] Ship it (owner: Maya)");
     }
 
     #[test]
@@ -605,3 +621,4 @@ mod tests {
         assert_eq!(*calls.lock().unwrap(), 0);
     }
 }
+

@@ -1,7 +1,8 @@
 //! The drawing sheet around the page: rulers on two edges and a title block that follows the section in view.
 //! Also the large clock at the end, which shows the reader's own time.
 
-use crate::util::{append, append_text, clear, data, el, interval, q, qa, set_style, set_text, text, two};
+use crate::util::{append, append_text, clear, data, el, interval, on_passive, q, qa, set_style, set_text, text, two, win};
+use std::rc::Rc;
 
 pub fn init() {
     let top = q("#ruler-top");
@@ -11,10 +12,29 @@ pub fn init() {
         append(&top, &s);
     }
     let left = q("#ruler-left");
-    for i in 0..8 {
+    let labels: Vec<_> = (0..8).map(|i| {
         let s = el("span", "", &(i + 1).to_string());
         set_style(&s, "top", &format!("{}%", (f64::from(i) + 0.5) / 8.0 * 100.0));
         append(&left, &s);
+        s
+    }).collect();
+    let number_ruler = Rc::new(move || {
+        let height = f64::from(left.client_height());
+        if height <= 0.0 {
+            return;
+        }
+        let offset = (win().scroll_y().unwrap_or(0.0).max(0.0) * 8.0 / height) as usize;
+        for (i, label) in labels.iter().enumerate() {
+            let value = (offset + i + 1).to_string();
+            if text(label) != value {
+                set_text(label, &value);
+            }
+        }
+    });
+    number_ruler();
+    for event in ["scroll", "resize"] {
+        let update = number_ruler.clone();
+        on_passive(&win(), event, move |_| update());
     }
 
     // The meeting's clock, running from when the page opened.
@@ -28,12 +48,14 @@ pub fn init() {
 
     let n = q("#tb-n");
     let title = q("#tb-title");
+    let titleblock = q(".titleblock");
     let io = crate::util::observer(Some("-45% 0px -45% 0px"), None, move |entry, _| {
         if !entry.is_intersecting() {
             return;
         }
         let sheet = data(&entry.target(), "sheet").unwrap_or_default();
         let (no, rest) = sheet.split_once(' ').unwrap_or((&sheet, ""));
+        let _ = titleblock.class_list().toggle_with_force("on-hero", no == "01");
         if text(&n) == no {
             return;
         }

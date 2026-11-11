@@ -101,7 +101,7 @@ async fn write(h: Rc<Hero>) {
         append(&h.host, &hit);
     }
 
-    // A note inviting the reader to try it, with an arrow down to the words that can be circled. Circling
+    // A note inviting the reader to try it, with an arrow up to the words that can be circled. Circling
     // needs a mouse or a pen, so a touch screen gets no note.
     if !fine_pointer() {
         return;
@@ -112,9 +112,9 @@ async fn write(h: Rc<Hero>) {
     let nx = (w - size * 3.2).min(w - width - 8.0).max(size * 0.8);
     let note = text_strokes("drag a circle around any word", nx, y2 + size * 0.62, note_size, 5);
     pen_draw(&h.svg, &note.strokes, Pen { class: "w note", speed: 1.4, lift: 12.0 }).await;
-    let a: Pt = (nx - size * 0.05, y2 + size * 0.58);
-    let b: Pt = (a.0 - size * 0.7, a.1 + size * 0.35);
-    let arrow = [hand(&[a, b], 4.0, 3), hand(&[(b.0 + 16.0, b.1 - 2.0), b], 1.0, 4), hand(&[(b.0 + 4.0, b.1 - 15.0), b], 1.0, 5)];
+    let a: Pt = (nx - size * 0.05, y2 + size * 0.5);
+    let b: Pt = (a.0 - size * 0.5, y2 + size * 0.18);
+    let arrow = [hand(&[a, b], 4.0, 3), hand(&[(b.0 + 16.0, b.1 + 2.0), b], 1.0, 4), hand(&[(b.0 + 4.0, b.1 + 15.0), b], 1.0, 5)];
     pen_draw(&h.svg, &arrow, Pen { class: "w note", speed: 1.4, lift: 4.0 }).await;
 }
 
@@ -166,7 +166,7 @@ async fn again(h: Rc<Hero>) {
 }
 
 pub fn init() {
-    let h = Rc::new(Hero { svg: q("#ink"), said: q("#said"), host: q("#hero"), run: Cell::new(0) });
+    let h = Rc::new(Hero { svg: q("#ink"), said: q("#said"), host: q("#hero-writing"), run: Cell::new(0) });
     {
         let h = h.clone();
         crate::util::on(&q("#again"), "click", move |_| wasm_bindgen_futures::spawn_local(again(h.clone())));

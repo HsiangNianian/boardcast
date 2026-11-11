@@ -36,7 +36,6 @@ impl Card {
         let e = s * s * (3.0 - 2.0 * s);
         let (w, h) = self.size.get();
         self.ctx.clear_rect(0.0, 0.0, w, h);
-        self.ctx.set_fill_style_str("#f2f2f2");
         for d in self.dots.borrow().iter() {
             let pulse = if reduced() { 1.0 } else { 0.55 + 0.45 * (t / 600.0 + d.ph).sin() };
             self.ctx.set_global_alpha((1.0 - s * 0.6) * pulse);
@@ -44,6 +43,17 @@ impl Card {
             let _ = self.ctx.arc(d.x + d.sx * e, d.y + d.sy * e, 1.7, 0.0, std::f64::consts::TAU);
             self.ctx.fill();
         }
+    }
+
+    fn recolor(&self) {
+        if let Some(canvas) = self.ctx.canvas() {
+            if let Ok(Some(style)) = win().get_computed_style(&canvas) {
+                if let Ok(color) = style.get_property_value("color") {
+                    self.ctx.set_fill_style_str(&color);
+                }
+            }
+        }
+        self.draw(now());
     }
 
     /// Animate while the card is on screen.
@@ -102,7 +112,7 @@ pub fn init() {
                     }
                 }
                 drop(dots);
-                card.draw(now());
+                card.recolor();
             })
         };
         img.set_onload(Some(onload.unchecked_ref()));
@@ -115,6 +125,10 @@ pub fn init() {
         {
             let card = card.clone();
             crate::util::on(&holder, "pointerleave", move |_| card.aim.set(0.0));
+        }
+        {
+            let card = card.clone();
+            crate::util::on(&win(), "boardcast-theme-change", move |_| card.recolor());
         }
         let io = crate::util::observer(None, None, move |entry, _| {
             card.visible.set(entry.is_intersecting());

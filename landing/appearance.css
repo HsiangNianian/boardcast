@@ -1,0 +1,56 @@
+/* Shared by the landing, documents and the real WASM demo. */
+:root {
+  color-scheme: dark;
+  --board-ink: #ecece6;
+  --board-red: #ff5a36;
+  --board-blue: #9fb4ff;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+  color-scheme: light;
+  --bg: #fff;
+  --l1: #f8f9f6;
+  --l2: #f0f2ed;
+  --l3: #e4e8df;
+  --fg: #252820;
+  --grey: #51574e;
+  --dim: #666c61;
+  --faint: #767c71;
+  --hair: #dce1d6;
+  --link: #355fc1;
+  --accent: #b43e27;
+  --paper: #fdfefa;
+  --grid: #e9ede3;
+  --board-ink: #1e1e1e;
+  --board-red: #c12e2e;
+  --board-blue: #1971c2;
+  --text: var(--fg);
+  --muted: var(--grey);
+  --line: var(--hair);
+  --rec: var(--accent);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fff;
+  --l1: #f8f9f6;
+  --l2: #f0f2ed;
+  --l3: #e4e8df;
+  --fg: #252820;
+  --grey: #51574e;
+  --dim: #666c61;
+  --faint: #767c71;
+  --hair: #dce1d6;
+  --link: #355fc1;
+  --accent: #b43e27;
+  --paper: #fdfefa;
+  --grid: #e9ede3;
+  --board-ink: #1e1e1e;
+  --board-red: #c12e2e;
+  --board-blue: #1971c2;
+  --text: var(--fg);
+  --muted: var(--grey);
+  --line: var(--hair);
+  --rec: var(--accent);
+}
+:where(a, button, summary):focus-visible { outline: 2px solid var(--link, var(--accent)); outline-offset: 4px; }

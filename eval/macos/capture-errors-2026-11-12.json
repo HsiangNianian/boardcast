@@ -1,0 +1,88 @@
+{
+  "date": "2026-11-12",
+  "captured_at_utc": "2026-11-11T19:35:08.765526+00:00",
+  "base_commit": "c4f97257cd00fd15accd9fc3cf2f15d123651519",
+  "scope": "Attribute setup/capture/recognition failures to their source and retain errors reported after recognition drains; no physical device was opened.",
+  "changes": {
+    "diagnostics": "Capture failure_source retains the first reported failing source; tracks[].failure_stage retains each track's first reported preparing/capture/recognition stage. Existing capture-level failure_stage remains.",
+    "completion": "Previously the status loop stopped when the recognition workers reported Finished. Capture callbacks can drop their PCM senders before their thread reports a capture error. The receiver now drains until all capture and recognition status senders close, then joins the workers.",
+    "privacy": "New fields contain only fixed source/stage labels, never helper paths, input filenames, error text, meeting text or audio.",
+    "cancellation": "A queued capture cancelled before starting stays stopped with all failure fields null.",
+    "reporting": "run_jobs reports the final capture error once; both runtime failure scenarios verify exactly one Failed and one CaptureStopped event. This does not count separate device-fallback notices as the same failure."
+  },
+  "source_sha256": {
+    "crates/ui/src/listen.rs": "9f1e3f84b8180ebb6106340ad52e078ed8e56910d9de74307f4fc1aeb4744840",
+    "crates/ui/src/pipeline.rs": "91260c308f82afdefb5de59a82ee080e1e2cba316c15fa6ba58504af42a23731",
+    "crates/ui/src/app.rs": "fd58c888c3c5df67c1ae64d06487fbe115415db698d12401621cb0b3ac37fdb0",
+    "crates/audio/src/lib.rs": "762022a7abde6054d800d282130c133e7557b83569ade284eb6f409157f265b8",
+    "crates/audio/src/system.rs": "26a0b1a705ffdb28021d14d472e0fc046c6b0b215bc5b7077c0212bd91dd9dfb"
+  },
+  "regression": {
+    "command": "cargo test -p boardcast-ui failed_setup_keeps_the_source_without_copying_the_error_or_reporting_twice",
+    "before": "failed: failure_source was null instead of system",
+    "before_log_sha256": "874bc0f33d2948bbcfc58a363ab3f27f9dff562906da60d7a7092d0903bb4a9c",
+    "after": "passes as part of the final regular UI suite"
+  },
+  "validation": {
+    "regular_ui": {
+      "command": "cargo test -p boardcast-ui",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 1,
+      "log_sha256": "0fb038f205ffbb9538a5216bafcc3598b207a0b83534b625350a71618f6d430d"
+    },
+    "two_sources": {
+      "command": "BOARDCAST_VOICE_DIR=<installed voice models> BOARDCAST_AUTO_AUDIO=<verified shared fixtures> cargo test -p boardcast-ui both_sources_can_recognize_while_the_other_is_waiting -- --ignored",
+      "passed": 1,
+      "failed": 0,
+      "scenarios": 6,
+      "duration_seconds": 103.58,
+      "log_sha256": "aab3e7d62fd394dcdeb8b063572e7fffa8e87c025cf65cb3e6ec68774b987747",
+      "cases": [
+        "English manual/manual barrier",
+        "English Auto/manual barrier",
+        "Chinese/Japanese Auto/Auto",
+        "Japanese/Chinese Auto/Auto",
+        "injected system recognition error",
+        "missing system WAV capture error"
+      ],
+      "assertions": [
+        "Original meeting/capture/source identities survive.",
+        "WAV endpoints remain unknown.",
+        "Successes have no source failure and drain queues.",
+        "Each injected runtime failure has system as first failure source and its actual stage.",
+        "Each job emits exactly one CaptureStopped; failed scenarios emit exactly one Failed.",
+        "Both helpers write their closed marker after EOF.",
+        "Diagnostic JSON excludes injected error text and private-missing-audio filename."
+      ],
+      "fixtures_sha256": {
+        "en-ami-00.wav": "1ba52982e2448f4687880d04a2947d16fd2e9fc112254bf9fff9480af028478f",
+        "zh-alimeeting-00.wav": "a2b1fc398956c3aac2985134df4fc2ae8a08d6468810b5fde4f30fa3ddb36de9",
+        "ja-fleurs-00.wav": "9f391ecfc8924923a0ccccfcee4917613898e3573feb7ce3e442afdde3eaa503"
+      },
+      "model_sha256": {
+        "silero_vad.onnx": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
+        "sense-voice/model.int8.onnx": "c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51"
+      },
+      "limitations": "Real VAD and SenseVoice language probing with stand-in Apple helpers. CAM++ was unavailable; no speaker embedding or Apple recognition accuracy was measured. The capture-error scenario does not force every possible cross-thread delivery ordering."
+    },
+    "build": {
+      "command": "cargo build --release -p boardcast-ui",
+      "result": "passed",
+      "log_sha256": "eb45ee46f0ee24f592d9aa665c7154f6a95f3e7ff67579085fa84579c82079b0",
+      "binary_sha256": "efd64164bf5a74a7c386c475f2efe7bddb6d4b7014b0d0968082b4da737c92e9"
+    }
+  },
+  "previous_ci": {
+    "head": "1bd7b0511b2ad497cdd845f5250803bd75779953",
+    "rust_run": "https://github.com/HsiangNianian/boardcast/actions/runs/43083824955",
+    "rust": "core plus Linux, Apple Silicon Mac, Intel Mac and Windows packages passed",
+    "eval_run": "https://github.com/HsiangNianian/boardcast/actions/runs/43083825098",
+    "eval_at_capture": "summary 36/45; ASR complete; board suites still in progress"
+  },
+  "remaining": [
+    "Physical Mac permission transitions, clock calibration, two-source Apple capacity, acoustic/interim/display latency and long meetings remain unverified.",
+    "The full old diagnostic ZIP and cold/warm comparison remain outstanding.",
+    "This change adds diagnostic attribution and reliable status draining; it does not establish a measured latency improvement."
+  ]
+}

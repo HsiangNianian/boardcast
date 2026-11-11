@@ -1,0 +1,910 @@
+{
+  "decision": "Rejected: explicit fact/decision/task categorization did not fix the three factual failures; production final-summary rules and sampler were restored.",
+  "model": {
+    "name": "Qwen3.5-4B-Q4_K_M.gguf",
+    "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "llama_cpp": "b11954 (f1a7dea99)",
+    "runtime": "CPU, four threads, 4096 context, one slot",
+    "temperature": 0,
+    "repeat_penalty": 1.05,
+    "repeat_last_n": 256,
+    "enable_thinking": false
+  },
+  "baseline": {
+    "report": {
+      "label": "baseline-raw",
+      "repeat": 1,
+      "cases_sha256": "5a2a198d31313d40274d1c70bc0c2c1556b2ebf479d46867b82f9dd7ce543b82",
+      "summary_source_sha256": "18f631b6d26dbbf5a508cf2c89c52e689ca1f00a06c13b40487d1876ec1baad8",
+      "agent_source_sha256": "6e6911354a07ea6318fdd32c50b36d655517c037eb05bbdfa77180cfc7b97d71",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+          "failures": [
+            "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+          ],
+          "elapsed_ms": 8450
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+          "failures": [
+            "Open questions has \"what are the two\""
+          ],
+          "elapsed_ms": 7214
+        },
+        {
+          "case": "zh-stated-date-corrected",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [
+            "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+          ],
+          "elapsed_ms": 3964
+        }
+      ]
+    },
+    "raw_exchanges": [
+      {
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？"
+              }
+            }
+          ],
+          "created": 1794408994,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 30,
+            "prompt_tokens": 582,
+            "total_tokens": 612,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-ritWZoV9Wf0OucceR6JI9VoxnrdM3lZE",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 582,
+            "prompt_ms": 5657.746,
+            "prompt_per_token_ms": 9.721213058419243,
+            "prompt_per_second": 102.86782050661164,
+            "predicted_n": 30,
+            "predicted_ms": 2754.199,
+            "predicted_per_token_ms": 94.97237931034483,
+            "predicted_per_second": 10.529377143772109
+          }
+        }
+      },
+      {
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are helping someone write a meeting summary.\nPreserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.\nWrite only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:\n### Conclusions\n### Decisions\n### To-dos\n### Open questions"
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?"
+              }
+            }
+          ],
+          "created": 1794409001,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 38,
+            "prompt_tokens": 627,
+            "total_tokens": 665,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-DckVutQgLxfBlrby6EoFjN5yFmuvqkI1",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 627,
+            "prompt_ms": 3805.603,
+            "prompt_per_token_ms": 6.0695422647527915,
+            "prompt_per_second": 164.75707003594437,
+            "predicted_n": 38,
+            "predicted_ms": 3340.296,
+            "predicted_per_token_ms": 90.27827027027027,
+            "predicted_per_second": 11.076862649298148
+          }
+        }
+      },
+      {
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无"
+              }
+            }
+          ],
+          "created": 1794409005,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 37,
+            "prompt_tokens": 577,
+            "total_tokens": 614,
+            "prompt_tokens_details": {
+              "cached_tokens": 518
+            }
+          },
+          "id": "chatcmpl-9SBEsmNSGi5JEbWb6CMQDylmbYc8jQz1",
+          "timings": {
+            "cache_n": 518,
+            "prompt_n": 59,
+            "prompt_ms": 610.426,
+            "prompt_per_token_ms": 10.346203389830508,
+            "prompt_per_second": 96.65381225570339,
+            "predicted_n": 37,
+            "predicted_ms": 3227.939,
+            "predicted_per_token_ms": 89.66497222222222,
+            "predicted_per_second": 11.152627109744019
+          }
+        }
+      }
+    ]
+  },
+  "candidate": {
+    "report": {
+      "label": "categories-probe",
+      "repeat": 1,
+      "cases_sha256": "5a2a198d31313d40274d1c70bc0c2c1556b2ebf479d46867b82f9dd7ce543b82",
+      "summary_source_sha256": "b12d4e4f611b8002d6df7ee5eb0cb4a91b1d38c090d0b12d78f92f932a52164b",
+      "agent_source_sha256": "6e6911354a07ea6318fdd32c50b36d655517c037eb05bbdfa77180cfc7b97d71",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n无\n### 待讨论\n失败标准的具体数量",
+          "failures": [
+            "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+          ],
+          "elapsed_ms": 6517
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 1,
+          "summary": "### 结论\n三次重试不满足要求时，采用动态缩小字号作为兜底方案。\n会议决定不再执行硬切操作。\n\n### 决定\n- 使用动态缩小字号替代硬切方案。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 5943
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n三次重试仍不满足要求。\n建议缩小字号，需稍后验证。\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n三次重试不满足要求之后怎么办。\n是否缩小字号（需验证）。",
+          "failures": [],
+          "elapsed_ms": 5655
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 4479
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n- [ ] 接口文档，周五前\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 3573
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n- [ ] 小王负责查卡顿问题\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 3583
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n\n### To-dos\n\n### Open questions\n- What are the two failure criteria?",
+          "failures": [
+            "Open questions has \"what are the two\""
+          ],
+          "elapsed_ms": 7032
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 1,
+          "summary": "### Conclusions\n- If three retries fail, the font size will be shrunk as a fallback.\n\n### Decisions\n\n### To-dos\n\n### Open questions",
+          "failures": [],
+          "elapsed_ms": 3687
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n缓存保留时间为十分钟。\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n刷新负责人是谁",
+          "failures": [],
+          "elapsed_ms": 3546
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+          "failures": [],
+          "elapsed_ms": 4240
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 1,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警还是来得太晚。\n### 决定\n无\n\n### 待办\n- [ ] 下次发布前补上告警测试，负责人：小王\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 10556
+        },
+        {
+          "case": "en-template-custom",
+          "run": 1,
+          "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": [],
+          "elapsed_ms": 10094
+        },
+        {
+          "case": "zh-stated-date-beside-tentative-date",
+          "run": 1,
+          "summary": "### 结论\n桌面版周四发布。\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n移动版发布日期是否定为周五。",
+          "failures": [],
+          "elapsed_ms": 5756
+        },
+        {
+          "case": "zh-stated-date-corrected",
+          "run": 1,
+          "summary": "### 结论\n- 部署原计划周一上线，后更正为周二上线，周只做预演。\n\n### 决定\n- 部署定于周二上线，周只做预演。\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+          "failures": [
+            "结论/决定/待办 has \"周一上线\""
+          ],
+          "elapsed_ms": 5844
+        },
+        {
+          "case": "zh-explicit-condition-not-an-event",
+          "run": 1,
+          "summary": "### 结论\n- 测试尚未开始，测试报告由小林于周五前整理。\n- 若周四测试失败，部署日期待定，可能顺延。\n\n### 决定\n- 无\n\n### 待办\n- 小林整理测试报告，截止时间：周五\n\n### 待讨论\n- 若周四测试失败，部署日期是否顺延及具体安排",
+          "failures": [],
+          "elapsed_ms": 7649
+        }
+      ]
+    },
+    "rule_replacements": {
+      "ZH": [
+        "结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。",
+        "结论保留直接陈述的现状、结果和日程；陈述的事实不要求另一个人再同意。决定只写明确接受的选择。明确分派或承诺的未来工作必须写进待办，不能只放在结论。建议、疑问和猜测放待讨论；数量或条件尚未确定时，问题本身也不能假定它们已经确定。"
+      ],
+      "EN": [
+        "Conclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.",
+        "Conclusions retain directly stated facts, results and schedules; a stated fact does not require another speaker's agreement. Decisions contain explicitly accepted choices. Explicitly assigned or promised future work must appear in To-dos, not only in Conclusions. Suggestions, questions and guesses belong in Open questions. If even the count is uncertain, ask about the count or phrase the question without a fixed count; do not assume an uncertain number or condition as its premise."
+      ]
+    },
+    "raw_replies": [
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n无\n### 决定\n无\n### 待办\n无\n### 待讨论\n失败标准的具体数量"
+            }
+          }
+        ],
+        "created": 1794409096,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 29,
+          "prompt_tokens": 615,
+          "total_tokens": 644,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        },
+        "id": "chatcmpl-ldZNqF8YrnPt473G5NVBwaqJzMMxDm6O",
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 615,
+          "prompt_ms": 3859.742,
+          "prompt_per_token_ms": 6.27600325203252,
+          "prompt_per_second": 159.33707486148037,
+          "predicted_n": 29,
+          "predicted_ms": 2536.957,
+          "predicted_per_token_ms": 90.60560714285714,
+          "predicted_per_second": 11.036844534613714
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n三次重试不满足要求时，采用动态缩小字号作为兜底方案。\n会议决定不再执行硬切操作。\n\n### 决定\n- 使用动态缩小字号替代硬切方案。\n\n### 待办\n无\n\n### 待讨论\n无"
+            }
+          }
+        ],
+        "created": 1794409102,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 60,
+          "prompt_tokens": 614,
+          "total_tokens": 674,
+          "prompt_tokens_details": {
+            "cached_tokens": 551
+          }
+        },
+        "id": "chatcmpl-mWJAqTY9lTyyKVvyO341KIhIr667yV5O",
+        "timings": {
+          "cache_n": 551,
+          "prompt_n": 63,
+          "prompt_ms": 609.612,
+          "prompt_per_token_ms": 9.676380952380951,
+          "prompt_per_second": 103.34442235389068,
+          "predicted_n": 60,
+          "predicted_ms": 5309.293,
+          "predicted_per_token_ms": 89.98801694915254,
+          "predicted_per_second": 11.112590697104116
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n三次重试仍不满足要求。\n建议缩小字号，需稍后验证。\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n三次重试不满足要求之后怎么办。\n是否缩小字号（需验证）。"
+            }
+          }
+        ],
+        "created": 1794409107,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 57,
+          "prompt_tokens": 611,
+          "total_tokens": 668,
+          "prompt_tokens_details": {
+            "cached_tokens": 551
+          }
+        },
+        "id": "chatcmpl-o9YKa51EwXm9eHM4QrVx8viaHRRkXdhO",
+        "timings": {
+          "cache_n": 551,
+          "prompt_n": 60,
+          "prompt_ms": 593.523,
+          "prompt_per_token_ms": 9.892050000000001,
+          "prompt_per_second": 101.09128037161153,
+          "predicted_n": 57,
+          "predicted_ms": 5038.221,
+          "predicted_per_token_ms": 89.96823214285713,
+          "predicted_per_second": 11.115034453629566
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无"
+            }
+          }
+        ],
+        "created": 1794409112,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 41,
+          "prompt_tokens": 624,
+          "total_tokens": 665,
+          "prompt_tokens_details": {
+            "cached_tokens": 551
+          }
+        },
+        "id": "chatcmpl-og2MPlXrf6oLH838JbkTGkP56FIu3mBQ",
+        "timings": {
+          "cache_n": 551,
+          "prompt_n": 73,
+          "prompt_ms": 838.955,
+          "prompt_per_token_ms": 11.492534246575342,
+          "prompt_per_second": 87.0130102329684,
+          "predicted_n": 41,
+          "predicted_ms": 3615.631,
+          "predicted_per_token_ms": 90.39077499999999,
+          "predicted_per_second": 11.06307585038407
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n无\n### 决定\n无\n### 待办\n- [ ] 接口文档，周五前\n### 待讨论\n无"
+            }
+          }
+        ],
+        "created": 1794409115,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 34,
+          "prompt_tokens": 595,
+          "total_tokens": 629,
+          "prompt_tokens_details": {
+            "cached_tokens": 551
+          }
+        },
+        "id": "chatcmpl-wAeB4BJ6tQO2xjUh8L6NVohKfHEYnXiE",
+        "timings": {
+          "cache_n": 551,
+          "prompt_n": 44,
+          "prompt_ms": 574.465,
+          "prompt_per_token_ms": 13.056022727272728,
+          "prompt_per_second": 76.59300392539144,
+          "predicted_n": 34,
+          "predicted_ms": 2974.994,
+          "predicted_per_token_ms": 90.15133333333334,
+          "predicted_per_second": 11.092459346136495
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n无\n### 决定\n无\n### 待办\n- [ ] 小王负责查卡顿问题\n### 待讨论\n无"
+            }
+          }
+        ],
+        "created": 1794409119,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 34,
+          "prompt_tokens": 612,
+          "total_tokens": 646,
+          "prompt_tokens_details": {
+            "cached_tokens": 551
+          }
+        },
+        "id": "chatcmpl-ey2cyAwuIizKgE8Vf3wMzduZFfEXwtBG",
+        "timings": {
+          "cache_n": 551,
+          "prompt_n": 61,
+          "prompt_ms": 592.402,
+          "prompt_per_token_ms": 9.711508196721311,
+          "prompt_per_second": 102.97061792499011,
+          "predicted_n": 34,
+          "predicted_ms": 2973.433,
+          "predicted_per_token_ms": 90.1040303030303,
+          "predicted_per_second": 11.098282692093617
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n\n### To-dos\n\n### Open questions\n- What are the two failure criteria?"
+            }
+          }
+        ],
+        "created": 1794409126,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 32,
+          "prompt_tokens": 682,
+          "total_tokens": 714,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        },
+        "id": "chatcmpl-vtfehrW0bz8Rrqu55vB8OxcDVVUp6auc",
+        "timings": {
+          "cache_n": 0,
+          "prompt_n": 682,
+          "prompt_ms": 4116.598,
+          "prompt_per_token_ms": 6.036067448680352,
+          "prompt_per_second": 165.67077960976513,
+          "predicted_n": 32,
+          "predicted_ms": 2785.571,
+          "predicted_per_token_ms": 89.85712903225806,
+          "predicted_per_second": 11.128777546865615
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### Conclusions\n- If three retries fail, the font size will be shrunk as a fallback.\n\n### Decisions\n\n### To-dos\n\n### Open questions"
+            }
+          }
+        ],
+        "created": 1794409130,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 35,
+          "prompt_tokens": 685,
+          "total_tokens": 720,
+          "prompt_tokens_details": {
+            "cached_tokens": 619
+          }
+        },
+        "id": "chatcmpl-mbLuq42Mu7MI4mMcNKUoiR6NnLqDJfO3",
+        "timings": {
+          "cache_n": 619,
+          "prompt_n": 66,
+          "prompt_ms": 617.687,
+          "prompt_per_token_ms": 9.358893939393939,
+          "prompt_per_second": 106.8502332087287,
+          "predicted_n": 35,
+          "predicted_ms": 3051.374,
+          "predicted_per_token_ms": 89.74629411764705,
+          "predicted_per_second": 11.142521369061939
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n缓存保留时间为十分钟。\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n刷新负责人是谁"
+            }
+          }
+        ],
+        "created": 1794409133,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 32,
+          "prompt_tokens": 613,
+          "total_tokens": 645,
+          "prompt_tokens_details": {
+            "cached_tokens": 551
+          }
+        },
+        "id": "chatcmpl-HdHlaobQV5ZdLUdqJkCkBlbcZUw26pFO",
+        "timings": {
+          "cache_n": 551,
+          "prompt_n": 62,
+          "prompt_ms": 622.256,
+          "prompt_per_token_ms": 10.036387096774193,
+          "prompt_per_second": 99.63744825280914,
+          "predicted_n": 32,
+          "predicted_ms": 2776.505,
+          "predicted_per_token_ms": 89.56467741935484,
+          "predicted_per_second": 11.165115856085258
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?"
+            }
+          }
+        ],
+        "created": 1794409138,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 40,
+          "prompt_tokens": 687,
+          "total_tokens": 727,
+          "prompt_tokens_details": {
+            "cached_tokens": 619
+          }
+        },
+        "id": "chatcmpl-7nMjWAjla1P5ZCriZ12FIe7Mu8OiMhTb",
+        "timings": {
+          "cache_n": 619,
+          "prompt_n": 68,
+          "prompt_ms": 612.907,
+          "prompt_per_token_ms": 9.013338235294118,
+          "prompt_per_second": 110.94668522304362,
+          "predicted_n": 40,
+          "predicted_ms": 3521.697,
+          "predicted_per_token_ms": 90.29992307692308,
+          "predicted_per_second": 11.074206554396929
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警还是来得太晚。\n#### 预算\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 下次发布前补上告警测试，负责人：小王\n\n### 待讨论\n无"
+            }
+          }
+        ],
+        "created": 1794409148,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 74,
+          "prompt_tokens": 725,
+          "total_tokens": 799,
+          "prompt_tokens_details": {
+            "cached_tokens": 99
+          }
+        },
+        "id": "chatcmpl-VXDMvtDO2cZhWEjOisUTpt1sfRZggRzw",
+        "timings": {
+          "cache_n": 99,
+          "prompt_n": 626,
+          "prompt_ms": 3862.181,
+          "prompt_per_token_ms": 6.16961821086262,
+          "prompt_per_second": 162.0845838141713,
+          "predicted_n": 74,
+          "predicted_ms": 6581.74,
+          "predicted_per_token_ms": 90.16082191780822,
+          "predicted_per_second": 11.09129196838526
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n#### Hiring\n- None\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None"
+            }
+          }
+        ],
+        "created": 1794409158,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 68,
+          "prompt_tokens": 776,
+          "total_tokens": 844,
+          "prompt_tokens_details": {
+            "cached_tokens": 166
+          }
+        },
+        "id": "chatcmpl-f6SbqRDIQXasp6M6R5rRr0DTZKv8vTqd",
+        "timings": {
+          "cache_n": 166,
+          "prompt_n": 610,
+          "prompt_ms": 3899.618,
+          "prompt_per_token_ms": 6.392816393442623,
+          "prompt_per_second": 156.42557809508523,
+          "predicted_n": 68,
+          "predicted_ms": 6049.667,
+          "predicted_per_token_ms": 90.29353731343284,
+          "predicted_per_second": 11.074989747369566
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n桌面版周四发布。\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n移动版发布日期是否定为周五。"
+            }
+          }
+        ],
+        "created": 1794409164,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 35,
+          "prompt_tokens": 612,
+          "total_tokens": 647,
+          "prompt_tokens_details": {
+            "cached_tokens": 209
+          }
+        },
+        "id": "chatcmpl-3PAebGxFtQOYpbqfAEPd5osKmO6hK0AR",
+        "timings": {
+          "cache_n": 209,
+          "prompt_n": 403,
+          "prompt_ms": 2562.864,
+          "prompt_per_token_ms": 6.359464019851116,
+          "prompt_per_second": 157.2459560866281,
+          "predicted_n": 35,
+          "predicted_ms": 3049.722,
+          "predicted_per_token_ms": 89.69770588235295,
+          "predicted_per_second": 11.148557147176037
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n- 部署原计划周一上线，后更正为周二上线，周只做预演。\n\n### 决定\n- 部署定于周二上线，周只做预演。\n\n### 待办\n- 无\n\n### 待讨论\n- 无"
+            }
+          }
+        ],
+        "created": 1794409170,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 59,
+          "prompt_tokens": 610,
+          "total_tokens": 669,
+          "prompt_tokens_details": {
+            "cached_tokens": 551
+          }
+        },
+        "id": "chatcmpl-hY4m3erHUcqS6RDFHExK21QbRkglKAEK",
+        "timings": {
+          "cache_n": 551,
+          "prompt_n": 59,
+          "prompt_ms": 605.835,
+          "prompt_per_token_ms": 10.268389830508475,
+          "prompt_per_second": 97.38625203231902,
+          "predicted_n": 59,
+          "predicted_ms": 5214.592,
+          "predicted_per_token_ms": 89.90675862068964,
+          "predicted_per_second": 11.122634330739588
+        }
+      },
+      {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "### 结论\n- 测试尚未开始，测试报告由小林于周五前整理。\n- 若周四测试失败，部署日期待定，可能顺延。\n\n### 决定\n- 无\n\n### 待办\n- 小林整理测试报告，截止时间：周五\n\n### 待讨论\n- 若周四测试失败，部署日期是否顺延及具体安排"
+            }
+          }
+        ],
+        "created": 1794409177,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 79,
+          "prompt_tokens": 618,
+          "total_tokens": 697,
+          "prompt_tokens_details": {
+            "cached_tokens": 551
+          }
+        },
+        "id": "chatcmpl-3FNAbU7uvikO2zPn8oePEF3AAMyYXWOu",
+        "timings": {
+          "cache_n": 551,
+          "prompt_n": 67,
+          "prompt_ms": 608.116,
+          "prompt_per_token_ms": 9.076358208955224,
+          "prompt_per_second": 110.17634793361793,
+          "predicted_n": 79,
+          "predicted_ms": 7024.218,
+          "predicted_per_token_ms": 90.05407692307692,
+          "predicted_per_second": 11.104438956763586
+        }
+      }
+    ]
+  },
+  "manual_review": [
+    "The three baseline errors already occur in raw model replies while the dates and uncertainty are present in the request. Cleanup did not remove the Monday character.",
+    "The candidate passes 12/15 automatic checks. Wednesday deployment remains omitted, the English question still presupposes two criteria, and the Monday rehearsal loses its date.",
+    "The Monday candidate mentions Monday launch as a withdrawn historical plan. The checker also flags this mention; it is not itself a current launch assertion. The missing Monday rehearsal date is the real unresolved failure.",
+    "These synthetic probes do not establish real-meeting reliability."
+  ]
+}

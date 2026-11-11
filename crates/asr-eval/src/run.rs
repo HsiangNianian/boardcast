@@ -84,14 +84,14 @@ fn engine_name(engine: Engine) -> &'static str {
 }
 
 /// How recordings are heard: as the app does, or in fixed windows through SenseVoice alone.
-enum Hearing {
+pub(crate) enum Hearing {
     Ear(Box<Ear>),
     Windows(OfflineRecognizer),
 }
 
 impl Hearing {
     /// Each sentence with the recognizer that wrote it, and how long it was.
-    fn hear(&mut self, samples: &[f32]) -> Vec<(String, &'static str, f64)> {
+    pub(crate) fn hear(&mut self, samples: &[f32]) -> Vec<(String, &'static str, f64)> {
         match self {
             Self::Windows(asr) => {
                 let window = SAMPLE_RATE as usize * 10;

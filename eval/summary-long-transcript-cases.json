@@ -1,0 +1,886 @@
+[
+  {
+    "id": "zh-long-transcript-late-correction",
+    "why": "Multiple transcript chunks must retain completed checks, a confirmed retention period and later launch correction, a named task and two explicitly unresolved questions.",
+    "lines": [
+      [
+        "A",
+        "服务切换最初打算周五做，暂时还没定。缓存过期后谁负责刷新？"
+      ],
+      [
+        "B",
+        "先确认缓存保留十分钟。刷新负责人下次讨论。"
+      ],
+      [
+        "C",
+        "第1个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第2个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第3个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第4个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第5个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第6个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第7个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第8个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第9个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第10个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第11个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第12个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第13个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第14个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第15个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第16个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第17个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第18个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第19个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第20个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "好，缓存保留十分钟。小林周三前整理演练报告。"
+      ],
+      [
+        "A",
+        "如果周四切换失败，要回滚吗？"
+      ],
+      [
+        "B",
+        "回滚方案还要讨论，切换还没开始。"
+      ],
+      [
+        "C",
+        "第21个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第22个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第23个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第24个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第25个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第26个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第27个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第28个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第29个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第30个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第31个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第32个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第33个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第34个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第35个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第36个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第37个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第38个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第39个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第40个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第41个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第42个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第43个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第44个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第45个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第46个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第47个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第48个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第49个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第50个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第51个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第52个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第53个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第54个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第55个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第56个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第57个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第58个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第59个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第60个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第61个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第62个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第63个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第64个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第65个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第66个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第67个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第68个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第69个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第70个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第71个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第72个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第73个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第74个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第75个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第76个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第77个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第78个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第79个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "第80个服务区域的配置校验已经完成，检查包括入口路由、缓存键格式、旧数据兼容性、日志字段和测试账户访问权限。记录中的响应均返回预期结果，旧版本回放与新版本回放的数据一致，本次检查没有发现失败请求，结果已保存在对应区域的检查记录里。"
+      ],
+      [
+        "C",
+        "周五的切换计划撤回，已经确认改为周四切换。"
+      ],
+      [
+        "A",
+        "同意周四切换。小林的演练报告仍要在周三前交。"
+      ]
+    ],
+    "checks": [
+      {
+        "in": [
+          "决定"
+        ],
+        "any": [
+          "周四",
+          "星期四"
+        ]
+      },
+      {
+        "in": [
+          "结论",
+          "决定"
+        ],
+        "any": [
+          "十分钟",
+          "10分钟",
+          "10 分钟"
+        ]
+      },
+      {
+        "in": [
+          "待办"
+        ],
+        "any": [
+          "小林"
+        ]
+      },
+      {
+        "in": [
+          "待办"
+        ],
+        "any": [
+          "周三",
+          "星期三"
+        ]
+      },
+      {
+        "in": [
+          "待办"
+        ],
+        "any": [
+          "演练报告"
+        ]
+      },
+      {
+        "in": [
+          "待讨论"
+        ],
+        "any": [
+          "刷新"
+        ]
+      },
+      {
+        "in": [
+          "待讨论"
+        ],
+        "any": [
+          "回滚"
+        ]
+      },
+      {
+        "in": [
+          "决定"
+        ],
+        "absent": [
+          "执行回滚",
+          "立即回滚"
+        ]
+      },
+      {
+        "in": [
+          "结论",
+          "决定"
+        ],
+        "absent": [
+          "切换已经失败",
+          "切换失败了"
+        ]
+      },
+      {
+        "in": [
+          "结论",
+          "决定"
+        ],
+        "any": [
+          "校验",
+          "检查"
+        ]
+      },
+      {
+        "in": [
+          "结论",
+          "决定"
+        ],
+        "absent": [
+          "缓存保留时间暂定",
+          "暂定为十分钟",
+          "暂定十分钟"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "en-long-transcript-count-and-task",
+    "why": "A replica-count question survives repeated completed-check facts; a confirmed launch and named task remain.",
+    "lines": [
+      [
+        "A",
+        "How many replicas do we need? Could it be three?"
+      ],
+      [
+        "B",
+        "The replica count is still undecided. The configuration migration is complete."
+      ],
+      [
+        "C",
+        "For service region 1, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 2, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 3, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 4, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 5, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 6, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 7, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 8, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 9, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 10, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 11, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 12, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 13, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 14, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 15, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 16, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 17, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 18, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 19, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 20, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "Sam will verify the metrics by Tuesday."
+      ],
+      [
+        "A",
+        "We had considered a Friday launch, but that proposal is withdrawn. We will launch on Monday."
+      ],
+      [
+        "B",
+        "Agreed, launch on Monday."
+      ],
+      [
+        "C",
+        "For service region 21, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 22, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 23, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 24, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 25, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 26, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 27, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 28, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 29, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 30, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 31, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 32, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 33, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 34, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 35, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 36, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 37, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 38, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 39, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 40, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 41, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 42, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 43, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 44, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 45, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 46, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 47, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 48, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 49, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 50, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 51, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 52, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 53, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 54, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 55, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 56, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 57, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 58, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 59, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 60, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 61, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 62, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 63, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 64, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 65, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 66, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 67, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 68, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 69, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 70, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 71, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 72, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 73, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 74, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 75, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 76, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 77, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 78, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 79, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "C",
+        "For service region 80, the configuration checks are complete. Routes, cache keys, legacy data, log fields and test accounts returned the expected results. Recorded requests matched both versions; no failed requests were observed during this check."
+      ],
+      [
+        "B",
+        "The replica count remains undecided. Sam still owns verifying the metrics by Tuesday."
+      ]
+    ],
+    "checks": [
+      {
+        "in": [
+          "结论",
+          "Conclusions"
+        ],
+        "any": [
+          "migration"
+        ]
+      },
+      {
+        "in": [
+          "Decisions"
+        ],
+        "any": [
+          "Monday"
+        ]
+      },
+      {
+        "in": [
+          "To-dos"
+        ],
+        "any": [
+          "Sam"
+        ]
+      },
+      {
+        "in": [
+          "To-dos"
+        ],
+        "any": [
+          "Tuesday"
+        ]
+      },
+      {
+        "in": [
+          "To-dos"
+        ],
+        "any": [
+          "metrics"
+        ]
+      },
+      {
+        "in": [
+          "Open questions"
+        ],
+        "any": [
+          "replica"
+        ]
+      },
+      {
+        "in": [
+          "Open questions"
+        ],
+        "absent": [
+          "what are the three",
+          "which three",
+          "which are the three",
+          "owner",
+          "who owns",
+          "who decides",
+          "who will decide",
+          "who is responsible"
+        ]
+      },
+      {
+        "in": [
+          "Conclusions",
+          "Decisions"
+        ],
+        "absent": [
+          "three replicas",
+          "three replica",
+          "3 replicas"
+        ]
+      }
+    ]
+  }
+]

@@ -16,6 +16,7 @@
 //! The speech models are read from <root>/resources/voice, where the packages take them from too.
 
 mod corpus;
+mod own_voice;
 mod run;
 mod score;
 mod speakers;
@@ -30,6 +31,12 @@ fn main() -> Result<()> {
         return run::compare(&args.map(PathBuf::from).collect::<Vec<_>>());
     }
     let root = PathBuf::from(args.next().context("the boardcast checkout")?);
+    if command == "own-voice" {
+        if args.next().is_some() {
+            bail!("usage: asr-eval own-voice <root>");
+        }
+        return own_voice::run(&root);
+    }
     let mut options = run::Options { suite: "quick".into(), engine: "routed".into(), vad: true, enhance: "none".into(), only: None, output: None };
     let mut reuse = false;
     while let Some(flag) = args.next() {

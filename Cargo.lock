@@ -722,6 +722,7 @@ name = "boardcast-asr-eval"
 version = "0.27.0"
 dependencies = [
  "anyhow",
+ "boardcast-agent",
  "boardcast-audio",
  "boardcast-board",
  "serde",
@@ -741,6 +742,7 @@ dependencies = [
  "cpal",
  "serde_json",
  "sherpa-onnx",
+ "sherpa-onnx-sys",
 ]
 
 [[package]]
@@ -885,6 +887,7 @@ dependencies = [
  "sys-locale",
  "tiny-skia",
  "windows-sys 0.61.2",
+ "zip",
 ]
 
 [[package]]

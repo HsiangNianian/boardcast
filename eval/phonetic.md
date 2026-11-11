@@ -8,14 +8,23 @@ checked only for which label a word resolves to; what the board then does is the
 
 The fixtures in [phonetic-cases.json](phonetic-cases.json) are **synthetic transcript perturbations**, not recorded speech. They check the shared production resolver against exact-name lookup with glossary correction, then check explicit commands, required abstentions and delegation. Reported correctness includes expected abstentions; wrong matches count incorrect non-empty selections. These numbers do not measure ASR accuracy or guarantee an LLM's decisions. Audio model comparisons remain in [asr/](asr/README.md).
 
-Examples include `健全 → 鉴权`, `cash → cache`, `公正 → 構成`, kana readings, mixed Japanese/English commands and `API = A P I, エーピーアイ`. Negative cases cover homophone collisions, multiple pointed targets, negation, unknown names, questions, whole-word boundaries and deletion with an inexact target. Engine tests also cover raw-text retention, late revisions, reference repair and preserving newly introduced concepts.
+Examples include `健全 → 鉴权`, `cash → cache`, `公正 → 構成`, kana readings, mixed Japanese/English commands and `API = A P I, エーピーアイ`. Negative cases cover homophone collisions, multiple pointed targets, negation, unknown names, questions, whole-word boundaries and deletion with an inexact target. Raw-text retention and the board model's behavior require separate integration checks; these resolver fixtures do not establish them.
 
 ## Production behavior
 
-- Exact names and aliases have priority. A pronunciation match is restricted to existing, confirmed nodes on the current board. Multiple candidates remain ambiguous unless a single candidate is explicitly pointed at. Recent utterances go to the board agent as context; recency alone does not automatically choose a homophone.
-- Whole positive commands can circle, underline, star, highlight or connect resolved targets. Whole negated commands produce no action. Deleting through this path requires an exact name or explicit alias. Questions, revisions and more complex instructions use the agent. Command verbs use explicit multilingual forms, not unrestricted phonetic substitution.
-- General utterances give the agent bounded pronunciation hints. Named references can be repaired to existing IDs; new labels, rename text and permanent aliases are not rewritten by this layer. Introducing a new concept disables automatic reference substitution. Original ASR text is unchanged by phonetics; explicit glossary corrections retain it in `rawText`, also shown in the transcript tooltip.
-- This first version requires identical pronunciation keys, with Chinese tones and English stress removed. It does not do general fuzzy spelling, acoustic rescoring or arbitrary intent correction. English out-of-dictionary names and mixed-script labels need explicit aliases. Japanese reading depends on kana in the current/recent text; an isolated all-kanji utterance may need an alias. One-character/very short readings are intentionally conservative.
-- `pinyin-pro`, `kuromoji`/IPADIC and `cmu-pronouncing-dictionary` run in a worker in the web/desktop app, and directly under Node in Eval. Dictionaries load only when needed, from bundled same-origin assets. Japanese compressed assets add about 17.8 MB; CMU data adds about 3.9 MB before HTTP compression. Exported replay HTML does not include them. A worker/dictionary failure falls back to the normal agent rather than dropping the transcript.
+The Rust implementation is `crates/agent/src/sound.rs`. The saved glossary can contain names and explicit aliases;
+correction is applied to each recognized sentence before it reaches the board model. The original remains in
+`rawText`. The model also receives the glossary and bounded hints about possible existing board labels.
 
-Rust alternatives were considered: [rust-pinyin](https://github.com/mozillazg/rust-pinyin), [Lindera](https://github.com/lindera/lindera) (including WASM), and [cmudict](https://docs.rs/cmudict/latest/cmudict/). The current implementation stays in the existing TypeScript board engine so desktop, web and Eval share the same behavior; it adds no Python runtime or native helper process. Distribution notices are in [public/licenses/](../public/licenses/).
+Chinese uses tone-free pinyin, English uses the bundled CMU Pronouncing Dictionary, and Japanese uses bundled
+KANJIDIC2 readings. Unknown names need explicit aliases; Japanese reading matches are limited to text with kana.
+Ambiguous label matches are left unresolved. These tests check label matching, not whether a model correctly
+executes a negated command, deletes a node or interprets a whole meeting.
+
+## Recorded-speech acceptance
+
+Use [the own-voice recorder and comparison](asr/own-voice/README.md) for #117. Record the 30 sentences yourself,
+then run `cargo run --release -p boardcast-asr-eval -- own-voice .`. The comparison recognizes each recording once
+and scores those same sentences before and after the production glossary correction, including harmful changes.
+The reference and vocabulary are fixed before recording. No recordings have been supplied for the current
+acceptance run yet; the 45 passing synthetic cases are not a measured improvement in ASR accuracy.

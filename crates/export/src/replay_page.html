@@ -156,16 +156,29 @@ aside p{margin:2px 0}
     const list = $('lines')
     list.replaceChildren()
     let last = null
-    for (const line of DATA.lines.slice(0, count)) {
+    let latest = -1
+    for (const line of transcriptLines(count)) {
       const row = document.createElement('div')
       row.className = 'line' + (line.m ? ' manual' : '')
       if (line.s) paragraph(row, line.s, 'b')
       paragraph(row, line.t)
       list.append(row)
-      last = row
+      if (line.i > latest) { latest = line.i; last = row }
     }
     if (last && !atEnd) last.classList.add('now')
     if (last && follow) last.scrollIntoView({ block: 'end' })
+  }
+
+  function transcriptLines(count) {
+    const visible = DATA.lines.filter(line => line.i < count)
+    const captures = new Map()
+    // Restore the original slots before filling each capture with its visible lines in time order.
+    for (const line of [...visible].reverse()) {
+      if (!line.k) continue
+      if (!captures.has(line.k)) captures.set(line.k, [])
+      captures.get(line.k).push(line)
+    }
+    return visible.sort((a, b) => a.i - b.i).map(line => line.k ? captures.get(line.k).pop() : line)
   }
 
   function showBar() {

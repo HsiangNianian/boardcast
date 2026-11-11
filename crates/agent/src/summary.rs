@@ -3,7 +3,7 @@
 //! The Markdown here is what a meeting stores, so `blocks` reads it for display and to tick to-dos.
 
 use crate::Provider;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use boardcast_board::graph::{is_english, Graph, Kind};
 use regex::Regex;
 use serde_json::{json, Value};
@@ -13,7 +13,6 @@ use std::sync::LazyLock;
 
 /// The most text in one part; a small local model's context is limited.
 const CHUNK: usize = 3000;
-const BOARD_LIMIT: usize = 1500;
 
 struct Words {
     sections: [&'static str; 4],
@@ -31,6 +30,7 @@ struct Words {
     system: &'static str,
     facts: &'static str,
     rules: &'static str,
+    example: [&'static str; 2],
 }
 
 const ZH: Words = Words {
@@ -45,10 +45,14 @@ const ZH: Words = Words {
     board_intro: "白板上的内容：",
     part: |n| format!("第 {n} 段："),
     too_long: "会议记录太长，下面是逐段记下的要点：",
-    partial: "你在帮人整理会议记录。这是一场长会议中的一段，记下这一段里的要点：说了什么结论、定了什么、谁要做什么、还有什么没定。每条一行，以「- 」开头。",
+    partial: "你在帮人整理会议记录。这是一场长会议中的一段，记下这一段里的要点：说了什么结论、定了什么、谁要做什么、还有什么没定。每条一行，以「- 」开头。这只是部分材料，没看到的内容不等于未解决的问题。只记录本段明确提出的未决事项，不因缺少上下文而补问题。保留事实所属的主体、组别和日期，不从片段编号推断板号或组别，也不自行合计数量。",
     system: "你在帮人写会议摘要。",
-    facts: "保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：待办不写负责人括号。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。",
-    rules: "只根据给出的内容写，不要编造；没有的部分写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办写成「- [ ] 事情（负责人：某某）」，没提到负责人就不写括号。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：",
+    facts: "保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。",
+    rules: "只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：",
+    example: [
+        "白板上的内容：\n（空）\n\n会议记录：\n> 培训手册周五发给大家。\n> 更正一下，手册周六发送，周五只是校对。\n> 好，就定周六发送。\n> 要请四位讲师吧？\n> 人数还没确认。\n> 小陈周四前联系讲师。",
+        "### 结论\n- 周五校对培训手册。\n\n### 决定\n- 周六发送培训手册。\n\n### 待办\n- [ ] 小陈周四前联系讲师。\n\n### 待讨论\n- 讲师人数是否为四位尚未确认。",
+    ],
 };
 
 const EN: Words = Words {
@@ -63,10 +67,14 @@ const EN: Words = Words {
     board_intro: "On the whiteboard:",
     part: |n| format!("Part {n}:"),
     too_long: "The transcript is too long; these are the notes taken part by part:",
-    partial: "You are helping someone tidy up meeting notes. This is one part of a long meeting; note its key points: conclusions reached, what was decided, who will do what, and what is still open. One point per line, starting with '- '.",
+    partial: "You are helping someone tidy up meeting notes. This is one part of a long meeting; note its key points: conclusions reached, what was decided, who will do what, and what is still open. One point per line, starting with '- '. This is only part of the source: missing context is not an unresolved question. Record only explicitly raised open issues; do not invent questions about unseen material. Preserve the subject, group and date of each fact; a fragment number is not a board or group number. Do not calculate additional totals.",
     system: "You are helping someone write a meeting summary.",
-    facts: "Preserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: give such to-dos no owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.",
-    rules: "Write only from what is given, never make things up; write \"None\" for an empty section.\nWrite in English, one short point per line, starting with \"- \".\nWrite to-dos as \"- [ ] task (owner: name)\"; leave out the parentheses if no owner was mentioned.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:",
+    facts: "Preserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.",
+    rules: "Write only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:",
+    example: [
+        "On the whiteboard:\n(empty)\n\nTranscript:\n> The training handbook goes out on Friday.\n> Correction: it goes out on Saturday; Friday is only for proofreading.\n> Agreed, send it on Saturday.\n> We need four instructors, right?\n> The number is not confirmed.\n> Maya will contact the instructors by Thursday.",
+        "### Conclusions\n- Proofread the training handbook on Friday.\n\n### Decisions\n- Send the training handbook on Saturday.\n\n### To-dos\n- [ ] Maya will contact the instructors by Thursday.\n\n### Open questions\n- Whether four instructors are needed remains unconfirmed.",
+    ],
 };
 
 fn words(english: bool) -> &'static Words {
@@ -86,8 +94,8 @@ pub struct Line {
 impl Line {
     /// The spoken lines of a stored transcript.
     pub fn spoken(lines: &[Value]) -> Vec<Self> {
-        lines
-            .iter()
+        boardcast_board::steps::transcript_order(lines)
+            .into_iter().map(|i| &lines[i])
             .filter(|l| !l["manual"].as_bool().unwrap_or(false))
             .map(|l| Self {
                 speaker: l["speaker"].as_str().map(str::to_string),
@@ -136,6 +144,7 @@ fn to_base36(mut n: u32) -> String {
     digits.iter().rev().collect()
 }
 
+// Automatic speaker letters are not names. Leave them out of the model input, keeping the saved transcript intact.
 fn transcript(lines: &[Line], english: bool) -> String {
     let w = words(english);
     let many = lines.iter().map(|l| l.page).collect::<HashSet<_>>().len() > 1;
@@ -146,7 +155,8 @@ fn transcript(lines: &[Line], english: bool) -> String {
             page = Some(l.page);
             out.push((w.page_mark)(l.page + 1));
         }
-        out.push(l.speaker.as_ref().map_or_else(|| l.text.clone(), |s| format!("{s}{}{}", w.colon, l.text)));
+        let text = l.speaker.as_ref().filter(|s| !(s.len() == 1 && s.as_bytes()[0].is_ascii_uppercase())).map_or_else(|| l.text.clone(), |s| format!("{s}{}{}", w.colon, l.text));
+        out.push(format!("> {}", text.replace('\n', "\n> ")));
     }
     out.join("\n")
 }
@@ -177,31 +187,25 @@ fn board_text(g: &Graph) -> String {
         touched.insert(&e.from);
         touched.insert(&e.to);
     }
+    let topics = template_topics(std::slice::from_ref(g));
     let mut out = g.clone();
+    // Blank template topics are an agenda, not statements made in the meeting.
+    out.nodes.retain(|n| !(n.kind == Kind::Topic && topics.contains(&n.label) && n.marks.is_empty() && !touched.contains(n.id.as_str())));
     out.nodes.retain(|n| n.kind != Kind::Region || !n.marks.is_empty() || n.extra.get("spans").and_then(Value::as_array).is_some_and(|s| !s.is_empty()) || touched.contains(n.id.as_str()));
     out.describe()
-}
-
-fn cut(text: String, max: usize) -> String {
-    if text.encode_utf16().count() > max {
-        let kept: Vec<u16> = text.encode_utf16().take(max).collect();
-        format!("{}\n……", String::from_utf16_lossy(&kept))
-    } else {
-        text
-    }
 }
 
 fn boards_text(boards: &[Graph], english: bool) -> String {
     let w = words(english);
     let live: Vec<&Graph> = boards.iter().filter(|g| !g.nodes.is_empty()).collect();
     if live.len() <= 1 {
-        return cut(board_text(live.first().copied().or(boards.first()).unwrap_or(&Graph::default())), BOARD_LIMIT);
+        return board_text(live.first().copied().or(boards.first()).unwrap_or(&Graph::default()));
     }
     let parts: Vec<String> = boards
         .iter()
         .enumerate()
         .filter(|(_, g)| !g.nodes.is_empty())
-        .map(|(i, g)| format!("{}{}\n{}", w.board.replace("{}", &(i + 1).to_string()), w.colon.trim(), cut(board_text(g), BOARD_LIMIT)))
+        .map(|(i, g)| format!("{}{}\n{}", w.board.replace("{}", &(i + 1).to_string()), w.colon.trim(), board_text(g)))
         .collect();
     parts.join("\n\n")
 }
@@ -217,19 +221,48 @@ fn template_rule(topics: &[String], english: bool) -> Option<String> {
         return None;
     }
     Some(if english {
-        format!("This meeting follows a template with the topics {}. Under Conclusions, give each topic that was discussed its own part, starting with \"#### topic\"; leave out topics nobody spoke to.", topics.join(" / "))
+        format!("Keep the four sections above. Within Conclusions, group the confirmed facts under this meeting's template topics: {}. Write each discussed topic as a separate heading line \"#### topic\", followed by its facts on separate bullet lines. A topic's name on the board alone is not evidence it was discussed. Omit undiscussed topics from every section, including Open questions, headings and empty placeholders.", topics.join(" / "))
     } else {
-        format!("这场会按模板开，话题是：{}。「结论」里按这些话题分小节，每个小节以「#### 话题」开头；没人说到的话题不写。", topics.join(" / "))
+        format!("保留上面的四个栏目。这场会按模板开，话题是：{}。仅在「结论」里，将已确认的事实按讨论过的话题分小节。每个「#### 话题」必须独占一行，事实另起一行以「- 」开头。板上只有话题名称不算讨论过；没讨论过的话题在任何栏目都不要写，不要凭模板添加待讨论事项，也不要填「无」。", topics.join(" / "))
     })
 }
 
 fn messages(boards: &[Graph], said: &str, partial: bool, english: bool) -> Vec<Value> {
     let w = words(english);
-    let structure = template_rule(&template_topics(boards), english).map_or_else(String::new, |r| format!("{r}\n"));
-    let rules = format!("{structure}{}\n{}", w.rules, w.sections.map(|s| format!("### {s}")).join("\n"));
+    let structure = template_rule(&template_topics(boards), english).map_or_else(String::new, |r| format!("\n{r}"));
+    let rules = format!("{}\n{}{structure}", w.rules, w.sections.map(|s| format!("### {s}")).join("\n"));
     let system = if partial { format!("{}\n{}", w.partial, w.facts) } else { format!("{}\n{}\n{rules}", w.system, w.facts) };
     let user = if partial { format!("{}\n{said}", w.fragment) } else { format!("{}\n{}\n\n{said}", w.board_intro, boards_text(boards, english)) };
     vec![json!({ "role": "system", "content": system }), json!({ "role": "user", "content": user })]
+}
+
+/// An unused template topic sometimes survives as a heading followed only by "None".
+fn no_empty_topics(text: &str, topics: &[String], english: bool) -> String {
+    let rows: Vec<&str> = text.lines().collect();
+    let mut out = vec![];
+    let mut i = 0;
+    while i < rows.len() {
+        let line = rows[i];
+        if line.strip_prefix("#### ").is_some_and(|t| topics.iter().any(|topic| topic == t.trim())) {
+            let end = (i + 1..rows.len()).find(|&j| rows[j].starts_with('#')).unwrap_or(rows.len());
+            if rows[i + 1..end].iter().all(|l| matches!(l.trim(), "" | "None" | "- None" | "无" | "- 无")) {
+                i = end;
+                continue;
+            }
+        }
+        out.push(line);
+        i += 1;
+    }
+    for section in words(english).sections {
+        let heading = format!("### {section}");
+        if let Some(start) = out.iter().position(|l| *l == heading) {
+            let end = (start + 1..out.len()).find(|&j| out[j].starts_with("### ")).unwrap_or(out.len());
+            if out[start + 1..end].iter().all(|l| l.trim().is_empty()) {
+                out.insert(start + 1, if english { "- None" } else { "- 无" });
+            }
+        }
+    }
+    out.join("\n")
 }
 
 static HEADING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*(?:#{1,6}\s*)?(?:\*\*|【)?\s*(结论|决定|待办|待办事项|待讨论)\s*(?:\*\*|】)?\s*[:：]?\s*(?:\*\*)?\s*$").expect("valid"));
@@ -285,7 +318,18 @@ pub fn tidy(text: &str, english: bool) -> String {
             out.push_str(&format!("\n\n### {section}\n- {}", w.none));
         }
     }
-    out.trim().to_string()
+    let mut section = "";
+    out.trim().lines().map(|line| {
+        if let Some(name) = line.strip_prefix("### ") { section = name; }
+        if section == w.sections[2] && BULLET.is_match(line) && !DONE.is_match(line) && !OPEN.is_match(line) {
+            let content = BULLET.replace(line, "");
+            let content = content.trim().trim_end_matches(['.', '。']);
+            if !content.is_empty() && !content.eq_ignore_ascii_case(w.none) {
+                return BULLET.replace(line, "${1}- [ ] ").into_owned();
+            }
+        }
+        line.to_string()
+    }).collect::<Vec<_>>().join("\n")
 }
 
 static ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b([ng]\d+)\b(?:\s*[(（]([^)）\n]*)[)）])?").expect("valid"));
@@ -295,9 +339,13 @@ static ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b([ng]\d+)\b(?:\s*[(
 /// `n6 (Login)` or `n6 Login`, is simply dropped.
 pub fn name_ids(text: &str, boards: &[Graph]) -> String {
     let label = |id: &str| {
-        boards.iter().find_map(|g| {
-            g.nodes.iter().find(|n| n.id == id).map(|n| n.label.clone()).or_else(|| g.groups.iter().find(|x| x.id == id).map(|x| x.label.clone()))
-        })
+        let mut names = boards.iter().flat_map(|g| {
+            g.nodes.iter().filter(|n| n.id == id).map(|n| &n.label)
+                .chain(g.groups.iter().filter(|x| x.id == id).map(|x| &x.label))
+        });
+        let first = names.next()?;
+        // IDs restart on each board; an ambiguous reference must not acquire the first board's meaning.
+        names.all(|name| name == first).then(|| first.clone())
     };
     let mut out = String::with_capacity(text.len());
     let mut last = 0;
@@ -425,11 +473,13 @@ pub enum Step {
 /// lines may repeat, and only list items and sentences of some length count, as `- 无` can fairly recur.
 fn drop_repeated_lines(text: &str) -> String {
     let mut seen = std::collections::HashSet::new();
+    let mut section = String::new();
     let kept: Vec<&str> = text
         .split('\n')
         .filter(|line| {
             let line = line.trim();
-            line.starts_with('#') || line.chars().count() < 8 || seen.insert(line.to_string())
+            if line.starts_with('#') { section = line.to_string(); return true; }
+            line.chars().count() < 8 || seen.insert((section.clone(), line.to_string()))
         })
         .collect();
     kept.join("\n")
@@ -443,18 +493,77 @@ fn ask(provider: &Provider, messages: &[Value], tokens: u32, cancel: &AtomicBool
     if cancel.load(Ordering::Relaxed) {
         bail!("cancelled");
     }
-    let again = provider.chat(messages, (tokens * 2).min(8192))?;
+    let mut retry = (tokens * 2).min(8192);
+    if let Some((capacity, _)) = provider.local_summary_context()? {
+        retry = retry.min(u32::try_from(capacity.saturating_sub(provider.prompt_tokens(messages)?)).unwrap_or(u32::MAX));
+        ensure!(retry > 0, "No room for a summary reply in the local model's context.");
+    }
+    let again = provider.chat(messages, retry)?;
     if again.trim().is_empty() {
         return Err(anyhow!("The model returned no text."));
     }
     Ok(drop_repeated_lines(&again))
 }
 
+/// A collection of boards or intermediate notes can outgrow the context even after transcript chunking.
+fn compact(provider: &Provider, request: &mut [Value], output: u32, capacity: usize, english: bool, preserve: &str, cancel: &AtomicBool, progress: &mut dyn FnMut(Step)) -> Result<()> {
+    let w = words(english);
+    let user = request.len() - 1;
+    let mut size = provider.prompt_tokens(request)?;
+    if size.saturating_add(output as usize) <= capacity { return Ok(()); }
+    let mut fixed = request.to_vec();
+    fixed[user]["content"] = json!(preserve);
+    // Keep a short original transcript verbatim; second-hand notes can change a question's certainty.
+    let preserve = if provider.prompt_tokens(&fixed)?.saturating_add(output as usize + 600) <= capacity { preserve } else { "" };
+    while size.saturating_add(output as usize) > capacity {
+        if cancel.load(Ordering::Relaxed) { bail!("cancelled"); }
+        let source = request[user]["content"].as_str().expect("summary user text").strip_suffix(preserve).expect("original transcript suffix").to_string();
+        let mut empty = request.to_vec();
+        empty[user]["content"] = json!(preserve);
+        ensure!(provider.prompt_tokens(&empty)?.saturating_add(output as usize) < capacity,
+            "The summary instructions alone exceed the local model's context. Shorten the meeting template.");
+        let mut batches = vec![];
+        let mut rest = source.as_str();
+        while !rest.is_empty() {
+            if cancel.load(Ordering::Relaxed) { bail!("cancelled"); }
+            let mut end = rest.len();
+            let mut part = messages(&[], "", true, english);
+            loop {
+                part[1]["content"] = json!(format!("{}\n{}", w.fragment, &rest[..end]));
+                if provider.prompt_tokens(&part)?.saturating_add(600) <= capacity { break; }
+                end = rest[..end].char_indices().nth(rest[..end].chars().count() / 2).map_or(0, |(i, _)| i);
+                ensure!(end > 0, "A summary fragment cannot fit in the local model's context.");
+                // Keep complete source lines together where possible; never drop a UTF-8 fragment.
+                if let Some(at) = rest[..end].rfind("\n\n").filter(|i| *i >= end / 2) { end = at + 2; }
+                else if let Some(at) = rest[..end].rfind('\n').filter(|i| *i > 0) { end = at + 1; }
+            }
+            batches.push(part);
+            rest = &rest[end..];
+        }
+        let mut notes = vec![];
+        for (i, batch) in batches.iter().enumerate() {
+            if cancel.load(Ordering::Relaxed) { bail!("cancelled"); }
+            progress(Step::Writing { done: i, total: batches.len() + 1 });
+            let note = ask(provider, batch, 600, cancel)?;
+            notes.push(format!("{}\n{}", (w.part)(i + 1), note));
+        }
+        request[user]["content"] = json!(format!("{}\n{}\n\n{preserve}", w.too_long, notes.join("\n\n")));
+        let reduced = provider.prompt_tokens(request)?;
+        ensure!(reduced < size, "The model did not shorten the meeting notes enough to fit its context.");
+        size = reduced;
+        progress(Step::Writing { done: batches.len(), total: batches.len() + 1 });
+    }
+    Ok(())
+}
+
 /// Write the summary. Between requests it notices `cancel`; a request already sent cannot be recalled,
 /// so the caller also ignores anything arriving after it cancelled.
 pub fn summarize(provider: &Provider, boards: &[Graph], lines: &[Line], cancel: &AtomicBool, progress: &mut dyn FnMut(Step)) -> Result<String> {
+    if cancel.load(Ordering::Relaxed) { bail!("cancelled"); }
     let english = is_english(lines.iter().map(|l| l.text.as_str()));
     let w = words(english);
+    let context = provider.local_summary_context()?;
+    let capacity = context.map(|(size, _)| size);
     // A remote model may reason before writing, so it gets more room.
     let remote = matches!(provider, Provider::Remote { .. });
     let parts = chunks(lines, CHUNK);
@@ -467,7 +576,10 @@ pub fn summarize(provider: &Provider, boards: &[Graph], lines: &[Line], cancel: 
                 bail!("cancelled");
             }
             progress(Step::Writing { done: i, total: parts.len() + 1 });
-            let reply = ask(provider, &messages(boards, &transcript(part, english), true, english), if remote { 2048 } else { 600 }, cancel)?;
+            let tokens = if remote { 2048 } else { 600 };
+            let mut request = messages(boards, &transcript(part, english), true, english);
+            if let Some(capacity) = capacity { compact(provider, &mut request, tokens, capacity, english, "", cancel, progress)?; }
+            let reply = ask(provider, &request, tokens, cancel)?;
             notes.push(format!("{}\n{}", (w.part)(i + 1), reply.trim()));
         }
         said = format!("{}\n{}", w.too_long, notes.join("\n\n"));
@@ -477,8 +589,15 @@ pub fn summarize(provider: &Provider, boards: &[Graph], lines: &[Line], cancel: 
     }
     let total = if parts.len() > 1 { parts.len() + 1 } else { 1 };
     progress(Step::Writing { done: total - 1, total });
-    let reply = ask(provider, &messages(boards, &said, false, english), if remote { 4096 } else { 1024 }, cancel)?;
-    let tidied = no_letter_owners(&name_ids(&tidy(&reply, english), boards));
+    let tokens = if remote { 4096 } else { 1024 };
+    let mut request = messages(boards, &said, false, english);
+    if context.is_some_and(|(_, example)| example) {
+        request.splice(1..1, [json!({ "role": "user", "content": w.example[0] }), json!({ "role": "assistant", "content": w.example[1] })]);
+    }
+    if let Some(capacity) = capacity { compact(provider, &mut request, tokens, capacity, english, if parts.len() == 1 { &said } else { "" }, cancel, progress)?; }
+    if cancel.load(Ordering::Relaxed) { bail!("cancelled"); }
+    let reply = ask(provider, &request, tokens, cancel)?;
+    let tidied = no_empty_topics(&no_letter_owners(&name_ids(&tidy(&reply, english), boards)), &template_topics(boards), english);
     if tidied.is_empty() {
         bail!("The model returned no summary.");
     }
@@ -496,6 +615,99 @@ mod tests {
 
     fn lines_of(v: &Value) -> Vec<Line> {
         Line::spoken(v.as_array().unwrap())
+    }
+
+    #[test]
+    fn only_empty_template_placeholders_are_removed() {
+        let topics = vec!["Latency".into(), "Hiring".into()];
+        let text = "### Conclusions\n#### Latency\n- No alerts fired.\n#### Hiring\n- None\n\n### Decisions\n- None";
+        let cleaned = no_empty_topics(text, &topics, true);
+        assert!(cleaned.contains("#### Latency\n- No alerts fired."));
+        assert!(!cleaned.contains("#### Hiring"));
+        assert!(cleaned.contains("### Decisions\n- None"));
+        assert_eq!(no_empty_topics("### Conclusions\n#### Hiring\n- None", &topics, true), "### Conclusions\n- None");
+        assert_eq!(no_empty_topics(text, &[], true), text);
+        let real = text.replace("#### Hiring\n- None", "#### Hiring\n- No hiring this quarter.");
+        assert_eq!(no_empty_topics(&real, &topics, true), real);
+    }
+
+    #[test]
+    fn empty_template_topics_are_not_revived_in_other_sections() {
+        let topics = vec!["预算".into(), "要改进的".into()];
+        let text = "### 结论\n- 发布没有停机。\n### 决定\n#### 预算\n无\n### 待办\n#### 要改进的\n- [ ] 小王补上告警测试。\n#### 预算\n- 无\n### 待讨论\n#### 预算\n无";
+        let cleaned = no_empty_topics(text, &topics, false);
+        assert_eq!(cleaned, "### 结论\n- 发布没有停机。\n### 决定\n- 无\n### 待办\n#### 要改进的\n- [ ] 小王补上告警测试。\n### 待讨论\n- 无");
+    }
+
+    #[test]
+    fn plain_todo_bullets_are_tickable_and_empty_sections_are_not_tasks() {
+        for english in [false, true] {
+            let w = words(english);
+            let text = format!("### {}\n\n### {}\n\n### {}\n  * Nora: Wednesday guide\n- [x] Earlier task\n- {}.\n\n### {}\n- Is rollback needed?",
+                w.sections[0], w.sections[1], w.sections[2], w.none, w.sections[3]);
+            let cleaned = no_empty_topics(&tidy(&text, english), &[], english);
+            for section in &w.sections[..2] {
+                assert!(cleaned.contains(&format!("### {section}\n- {}", w.none)));
+            }
+            let read = blocks(&cleaned);
+            let tasks: Vec<_> = read.iter().filter_map(|b| match b {
+                Block::Todo { done, text, line } => Some((*done, text.as_str(), *line)),
+                _ => None,
+            }).collect();
+            assert_eq!(tasks.len(), 2, "None is not work");
+            assert_eq!(tasks[0].1, "Nora: Wednesday guide");
+            assert!(!tasks[0].0 && tasks[1].0);
+            let ticked = toggle_todo(&cleaned, tasks[0].2);
+            assert!(ticked.contains("  - [x] Nora: Wednesday guide"));
+            assert_eq!(toggle_todo(&ticked, tasks[0].2), cleaned);
+            assert!(read.contains(&Block::Bullet("Is rollback needed?".into())));
+        }
+    }
+
+    #[test]
+    fn repeated_facts_in_different_sections_do_not_empty_a_decision() {
+        let text = "### Conclusions\n- Cache lifetime is ten minutes.\n### Decisions\n- Cache lifetime is ten minutes.\n- Cache lifetime is ten minutes.";
+        assert_eq!(drop_repeated_lines(text), "### Conclusions\n- Cache lifetime is ten minutes.\n### Decisions\n- Cache lifetime is ten minutes.");
+    }
+
+    #[test]
+    fn a_blank_template_is_not_evidence_of_discussion() {
+        let mut graph: Graph = serde_json::from_value(json!({"nodes":[{"id":"n1","kind":"topic","label":"Budget"}],"template":["Budget"]})).unwrap();
+        assert!(!board_text(&graph).contains("Budget"));
+        graph.nodes[0].marks.push("confirmed".into());
+        assert!(board_text(&graph).contains("Budget"));
+    }
+
+    #[test]
+    fn board_material_keeps_the_tail_for_context_aware_summarization() {
+        let nodes: Vec<Value> = (0..100).map(|i| json!({"id":format!("n{i}"),"kind":"item","label":format!("检查项目{i}已经完成，后续由小林核对。") })).collect();
+        let board: Graph = serde_json::from_value(json!({"nodes":nodes})).unwrap();
+        let text = boards_text(&[board.clone(), board], false);
+        assert!(text.len() > 3000 && text.contains("第 2 张板"));
+        assert_eq!(text.matches("检查项目99已经完成").count(), 2);
+    }
+
+    #[test]
+    fn summary_input_omits_automatic_letters_but_keeps_names_dates_and_source_lines() {
+        let source = json!([{"speaker":"A","text":"我周五前写接口文档。"},{"speaker":"小王","text":"我周四补测试。"}]);
+        let lines = Line::spoken(source.as_array().unwrap());
+        assert_eq!(transcript(&lines, false), "> 我周五前写接口文档。\n> 小王：我周四补测试。");
+        assert_eq!(lines[0].speaker.as_deref(), Some("A"));
+        assert_eq!(lines[0].text, "我周五前写接口文档。");
+    }
+
+    #[test]
+    fn summary_reads_corrections_in_capture_order_even_if_they_finish_first() {
+        let source = json!([
+            {"speaker":"小王", "text":"改到周五。", "capture":{"key":"capture", "startSeconds":4}},
+            {"text":"手工备注", "manual":true},
+            {"speaker":"小林", "text":"周四上线。", "capture":{"key":"capture", "startSeconds":1}}
+        ]);
+        let lines = Line::spoken(source.as_array().unwrap());
+        assert_eq!(transcript(&lines, false), "> 小林：周四上线。\n> 小王：改到周五。");
+        let ordered = lines_of(&json!([{"speaker":"小林", "text":"周四上线。"}, {"speaker":"小王", "text":"改到周五。"}]));
+        assert_eq!(fingerprint(&[], &lines), fingerprint(&[], &ordered));
+        assert_eq!(source[0]["text"], "改到周五。");
     }
 
     #[test]
@@ -538,13 +750,25 @@ mod tests {
     }
 
     #[test]
+    fn repeated_board_ids_do_not_replace_a_fact_with_another_boards_label() {
+        let boards: Vec<Graph> = serde_json::from_value(json!([
+            {"nodes":[{"id":"n1","kind":"item","label":"登录"},{"id":"n2","kind":"item","label":"发布"}],"groups":[{"id":"g1","label":"客户端"}]},
+            {"nodes":[{"id":"n1","kind":"item","label":"计费"},{"id":"n2","kind":"item","label":"发布"}],"groups":[{"id":"g1","label":"服务端"}]}
+        ])).unwrap();
+        let reply = "### 结论\n- 第 2 张板的 n1（计费）已经完成\n- n1 待核对\n- g1 的部署已完成\n- n2 的检查已完成";
+        assert_eq!(name_ids(reply, &boards), reply.replace("n2", "发布"));
+        let reversed = vec![boards[1].clone(), boards[0].clone()];
+        assert_eq!(name_ids(reply, &boards), name_ids(reply, &reversed));
+    }
+
+    #[test]
     fn a_model_going_round_in_a_loop_is_cut_back_to_one_pass() {
         let looped = "### 待办\n- 固定切分在第四步切翻的原因\n- 提示词中语气词的处理逻辑\n- 无\n\n- 固定切分在第四步切翻的原因\n- 提示词中语气词的处理逻辑\n- 无\n### 待办\n- 另一件新的事情要做";
         assert_eq!(drop_repeated_lines(looped), "### 待办\n- 固定切分在第四步切翻的原因\n- 提示词中语气词的处理逻辑\n- 无\n\n- 无\n### 待办\n- 另一件新的事情要做");
     }
 
     #[test]
-    fn everything_matches_the_typescript_engine_on_recorded_meetings() {
+    fn recorded_meetings_keep_their_fingerprints_and_current_summary_inputs() {
         let g = goldens();
         let cases = g["summaries"].as_array().unwrap();
         assert!(cases.len() >= 20);
@@ -631,6 +855,81 @@ mod tests {
     }
 
     #[test]
+    fn oversized_material_is_all_read_in_order_before_the_final_summary() {
+        let seen = Arc::new(Mutex::new(vec![]));
+        let log = seen.clone();
+        let provider = scripted(move |said| {
+            let source = said.strip_prefix("会议记录（片段）：\n").unwrap();
+            log.lock().unwrap().push(source.to_string());
+            Ok(source.lines().filter_map(|l| l.split_once(':').map(|(id, _)| id)).collect::<Vec<_>>().join("\n"))
+        });
+        let source = (0..40).map(|i| format!("事实{i}:{}\n", "演练结果🦀".repeat(20))).collect::<String>();
+        let mut request = messages(&[], &source, false, false);
+        let original = request[1]["content"].as_str().unwrap().to_string();
+        let system = request[0].clone();
+        let mut steps = vec![];
+        compact(&provider, &mut request, 1024, 4096, false, "", &AtomicBool::new(false), &mut |Step::Writing { done, total }| steps.push((done, total))).unwrap();
+        let read = seen.lock().unwrap();
+        assert!(read.len() > 1);
+        assert_eq!(read.join(""), original, "every source character reaches exactly one first-pass request");
+        assert_eq!(request[0], system, "retain the final instructions and template rule");
+        assert!(provider.prompt_tokens(&request).unwrap() + 1024 <= 4096);
+        let final_text = request[1]["content"].as_str().unwrap();
+        let mut last = 0;
+        for i in 0..40 {
+            let at = final_text.find(&format!("事实{i}\n")).or_else(|| final_text.strip_suffix(&format!("事实{i}")).map(str::len)).unwrap();
+            assert!(at >= last); last = at;
+        }
+        assert_eq!(steps.last(), Some(&(read.len(), read.len() + 1)));
+    }
+
+    #[test]
+    fn context_reduction_can_be_cancelled_and_must_actually_shorten_the_notes() {
+        let cancel = Arc::new(AtomicBool::new(false));
+        for stop in [true, false] {
+            let cancellation = cancel.clone();
+            let calls = Arc::new(Mutex::new(0));
+            let count = calls.clone();
+            let provider = scripted(move |said| {
+                *count.lock().unwrap() += 1;
+                cancellation.store(stop, Ordering::Relaxed);
+                Ok(said.to_string())
+            });
+            cancel.store(false, Ordering::Relaxed);
+            let mut request = messages(&[], &"完整材料🦀\n".repeat(1000), false, false);
+            let error = compact(&provider, &mut request, 1024, 4096, false, "", &cancel, &mut |_| {}).unwrap_err();
+            if stop {
+                assert_eq!(*calls.lock().unwrap(), 1);
+                assert_eq!(error.to_string(), "cancelled");
+            } else {
+                assert!(error.to_string().contains("did not shorten"));
+            }
+        }
+    }
+
+    #[test]
+    fn a_short_original_transcript_is_not_replaced_with_board_notes() {
+        let transcript = "会议记录：\n> If deployment fails, should we roll back?\n> That is still undecided.";
+        let seen = Arc::new(Mutex::new(vec![]));
+        let log = seen.clone();
+        let provider = scripted(move |said| {
+            assert!(!said.contains("should we roll back"));
+            log.lock().unwrap().push(said.strip_prefix("会议记录（片段）：\n").unwrap().to_string());
+            Ok("- 板书中的检查均已完成。".into())
+        });
+        let source = format!("白板上的内容：\n{}\n\n{transcript}", "检查已完成。\n".repeat(2000));
+        let mut request = messages(&[], "", false, false);
+        request[1]["content"] = json!(source);
+        request.splice(1..1, [json!({ "role": "user", "content": ZH.example[0] }), json!({ "role": "assistant", "content": ZH.example[1] })]);
+        let instructions = request[..3].to_vec();
+        compact(&provider, &mut request, 1024, 4096, false, transcript, &AtomicBool::new(false), &mut |_| {}).unwrap();
+        assert_eq!(seen.lock().unwrap().join("") + transcript, source);
+        assert_eq!(request[..3], instructions, "examples are neither source material nor replaceable notes");
+        assert!(request.last().unwrap()["content"].as_str().unwrap().ends_with(transcript));
+        assert!(provider.prompt_tokens(&request).unwrap() + 1024 <= 4096);
+    }
+
+    #[test]
     fn an_empty_reply_gets_one_retry_then_an_error() {
         let calls = Arc::new(Mutex::new(0));
         let count = calls.clone();
@@ -640,6 +939,44 @@ mod tests {
         });
         assert!(summarize(&provider, &[Graph::default()], &[line("先做登录")], &AtomicBool::new(false), &mut |_| {}).is_err());
         assert_eq!(*calls.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn an_empty_local_reply_retries_only_within_the_remaining_context() {
+        use std::io::{BufRead, Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            for (path, response, maximum) in [
+                ("/v1/chat/completions", json!({"choices":[{"message":{"content":""}}]}), Some(1024)),
+                ("/props", json!({"default_generation_settings":{"n_ctx":4096}}), None),
+                ("/apply-template", json!({"prompt":"rendered source"}), None),
+                ("/tokenize", json!({"tokens":vec![1; 2400]}), None),
+                ("/v1/chat/completions", json!({"choices":[{"message":{"content":"The source was retained."}}]}), Some(1696)),
+            ] {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+                let mut reader = std::io::BufReader::new(&mut stream);
+                let mut first = String::new(); reader.read_line(&mut first).unwrap();
+                assert!(first.contains(path));
+                let mut size = 0;
+                loop {
+                    let mut line = String::new(); reader.read_line(&mut line).unwrap();
+                    if line == "\r\n" { break; }
+                    if let Some(n) = line.to_ascii_lowercase().strip_prefix("content-length:") { size = n.trim().parse::<usize>().unwrap(); }
+                }
+                let mut body = vec![0; size]; reader.read_exact(&mut body).unwrap();
+                if let Some(maximum) = maximum {
+                    let value: Value = serde_json::from_slice(&body).unwrap();
+                    assert_eq!(value["max_tokens"], maximum);
+                }
+                let body = response.to_string();
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            }
+        });
+        let request = vec![json!({"role":"user","content":"Keep the source."})];
+        assert_eq!(ask(&Provider::Local { base }, &request, 1024, &AtomicBool::new(false)).unwrap(), "The source was retained.");
+        server.join().unwrap();
     }
 
     #[test]

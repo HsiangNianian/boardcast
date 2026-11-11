@@ -1,0 +1,951 @@
+{
+  "date": "2026-11-12",
+  "captured_at_utc": "2026-11-11T19:23:25.914849+00:00",
+  "base_commit": "1bd7b0511b2ad497cdd845f5250803bd75779953",
+  "scope": "Correct a summary evaluation false positive without regenerating summaries or changing production inference.",
+  "defect": {
+    "input_case": "zh-stated-date-beside-tentative-date",
+    "valid_output": "### 待讨论\n- 移动版发布日期",
+    "before": "The section-wide required uncertainty keyword rejects an open topic that asserts no date; a qualifier in another item can also mask a definite date.",
+    "after": "Require the existing uncertainty terms separately in each item mentioning 周五 or 星期五. A bare topic remains valid. The separate requirement to retain 移动版 remains.",
+    "regression_failed_before": true,
+    "failed_assertion": "- 移动版发布日期",
+    "regression_passed_after": true
+  },
+  "checks": {
+    "before_case": {
+      "id": "zh-stated-date-beside-tentative-date",
+      "why": "Retain a stated schedule without promoting a separate proposed date to a fact.",
+      "lines": [
+        [
+          "A",
+          "桌面版周四发布，这是已经定下来的安排。"
+        ],
+        [
+          "B",
+          "移动版要不周五发布？"
+        ],
+        [
+          "C",
+          "移动版的日期还没定，先别按周五排。"
+        ]
+      ],
+      "checks": [
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "any": [
+            "桌面版"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "any": [
+            "周四",
+            "星期四"
+          ]
+        },
+        {
+          "in": [
+            "决定",
+            "待办"
+          ],
+          "absent": [
+            "周五",
+            "星期五"
+          ]
+        },
+        {
+          "in": [
+            "待讨论"
+          ],
+          "any": [
+            "移动版"
+          ]
+        },
+        {
+          "in": [
+            "待讨论"
+          ],
+          "any": [
+            "未定",
+            "未确定",
+            "没定",
+            "待定",
+            "待确定",
+            "待确认",
+            "未确认",
+            "是否",
+            "是不是"
+          ]
+        }
+      ]
+    },
+    "after_case": {
+      "id": "zh-stated-date-beside-tentative-date",
+      "why": "Retain a stated schedule without promoting a separate proposed date to a fact.",
+      "lines": [
+        [
+          "A",
+          "桌面版周四发布，这是已经定下来的安排。"
+        ],
+        [
+          "B",
+          "移动版要不周五发布？"
+        ],
+        [
+          "C",
+          "移动版的日期还没定，先别按周五排。"
+        ]
+      ],
+      "checks": [
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "any": [
+            "桌面版"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "any": [
+            "周四",
+            "星期四"
+          ]
+        },
+        {
+          "in": [
+            "决定",
+            "待办"
+          ],
+          "absent": [
+            "周五",
+            "星期五"
+          ]
+        },
+        {
+          "in": [
+            "待讨论"
+          ],
+          "any": [
+            "移动版"
+          ]
+        },
+        {
+          "in": [
+            "待讨论"
+          ],
+          "each_with": [
+            "周五",
+            "星期五"
+          ],
+          "any": [
+            "未定",
+            "未确定",
+            "没定",
+            "待定",
+            "待确定",
+            "待确认",
+            "未确认",
+            "是否",
+            "是不是"
+          ]
+        }
+      ]
+    },
+    "utterances_and_boards_unchanged": true,
+    "other_checks_unchanged": true
+  },
+  "source_hashes_before": {
+    "crates/tools/src/summary_eval.rs": "54d9d6054e4cbaeaa0d817ff09712763cda56a19c3bbc110cafeeca144be6f3a",
+    "eval/summary-cases.json": "17f78105bd27994ba951b27973be6c69639ef9469d8bc873f54b0be2ebb7601c",
+    "crates/agent/src/summary.rs": "ca425f089ae74065e666f7ab88f625dfc62afdaaa201dcd8160523963b70978a",
+    "crates/agent/src/lib.rs": "2fc28d170172c1f0cb64409a2c5f4aa9f5fabe000d7c49e14d4005fe4af9f830"
+  },
+  "source_hashes_after": {
+    "crates/tools/src/summary_eval.rs": "aea3d60b237fdf29530cc4c2c7ec77c22297f93b1c62f88b40e013d7ed4e9696",
+    "eval/summary-cases.json": "d7bcaa57b2e5faa0f0e478e36891c65c987669c2cf1cb1174c9a088382d38181",
+    "crates/agent/src/summary.rs": "ca425f089ae74065e666f7ab88f625dfc62afdaaa201dcd8160523963b70978a",
+    "crates/agent/src/lib.rs": "2fc28d170172c1f0cb64409a2c5f4aa9f5fabe000d7c49e14d4005fe4af9f830"
+  },
+  "rescoring": {
+    "method": "A temporary in-module Rust test calls the original and current failures() functions over the same frozen reports. It was removed after the run; no LLM calls or Python scoring implementation were used.",
+    "test_source": "\n#[cfg(test)]\nmod frozen_rescore_once {\n    use super::*;\n    use serde_json::Value;\nfn before(summary: &str, checks: &[Check]) -> Vec<String> {\n    let parts = sections(summary);\n    let mut out = vec![];\n    for check in checks {\n        if !parts.iter().any(|(name, _)| check.sections.contains(name)) {\n            out.push(format!(\"missing section {}\", check.sections.join(\"/\")));\n        }\n        let text: String = parts.iter().filter(|(name, _)| check.sections.contains(name)).map(|(_, body)| body.to_lowercase()).collect();\n        let place = check.sections.join(\"/\");\n        if !check.any.is_empty() && !check.any.iter().any(|w| text.contains(&w.to_lowercase())) {\n            out.push(format!(\"{place} lacks any of {:?}\", check.any));\n        }\n        for w in check.absent.iter().filter(|w| text.contains(&w.to_lowercase())) {\n            out.push(format!(\"{place} has \\\"{w}\\\"\"));\n        }\n        for item in blocks(&text) {\n            let (Block::Bullet(item) | Block::Paragraph(item) | Block::Todo { text: item, .. }) = item else { continue };\n            for w in check.absent_items.iter().filter(|w| item.trim().trim_end_matches(['.', '。']).eq_ignore_ascii_case(w)) {\n                out.push(format!(\"{place} has standalone \\\"{w}\\\"\"));\n            }\n        }\n    }\n    out\n}\n\n    #[test]\n    fn rescore_frozen_reports() {\n        let root = PathBuf::from(\"/tmp/boardcast-summary-source-s8jyqbhd\");\n        let before_cases: Vec<Case> = serde_json::from_slice(&std::fs::read(root.join(\"before-cases.json\")).unwrap()).unwrap();\n        let cases: Vec<Case> = serde_json::from_str(include_str!(\"../../../eval/summary-cases.json\")).unwrap();\n        let reports: Vec<Value> = serde_json::from_slice(&std::fs::read(root.join(\"rescore-input.json\")).unwrap()).unwrap();\n        let mut results = vec![];\n        for report in reports {\n            let mut answers = vec![];\n            for answer in report[\"report\"][\"answers\"].as_array().unwrap() {\n                let id = answer[\"case\"].as_str().unwrap();\n                let summary = answer[\"summary\"].as_str().unwrap();\n                assert!(!summary.is_empty());\n                let old_case = before_cases.iter().find(|c| c.id == id).unwrap();\n                let case = cases.iter().find(|c| c.id == id).unwrap();\n                let before_failures = before(summary, &old_case.checks);\n                let after_failures = failures(summary, &case.checks);\n                answers.push(json!({\"case\":id,\"run\":answer[\"run\"],\"summary\":summary,\"original_failures\":answer[\"failures\"],\"before_failures\":before_failures,\"after_failures\":after_failures}));\n            }\n            let before = answers.iter().filter(|a| a[\"before_failures\"].as_array().unwrap().is_empty()).count();\n            let after = answers.iter().filter(|a| a[\"after_failures\"].as_array().unwrap().is_empty()).count();\n            assert_eq!(json!(before), report[\"expected_before\"]);\n            assert_eq!(json!(after), report[\"expected_after\"]);\n            results.push(json!({\"name\":report[\"name\"],\"before_passed\":before,\"after_passed\":after,\"total\":answers.len(),\"answers\":answers}));\n        }\n        std::fs::write(root.join(\"rescored.json\"), serde_json::to_vec_pretty(&results).unwrap()).unwrap();\n    }\n}\n",
+    "test_log": "   Compiling boardcast-tools v0.27.0 (/home/hsiangnianian/.codex/worktrees/2995/boardcast/crates/tools)\n    Finished `test` profile [optimized + debuginfo] target(s) in 1.39s\n     Running unittests src/main.rs (target/debug/deps/boardcast_tools-8c02de6171e6ecc3)\n\nrunning 1 test\ntest summary_eval::frozen_rescore_once::rescore_frozen_reports ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s\n\n",
+    "frozen_inputs": [
+      {
+        "path": "eval/summary-options-2026-11-12.json",
+        "json_pointer": "/existing_9b_option/report_original",
+        "sha256": "861d3064d6db2ffa8e10ecc20b763c533ffec6b79f945b62337b6feaac9976b7"
+      },
+      {
+        "path": "eval/summary-grounding-2026-11-12.json",
+        "json_pointer": "/final_short",
+        "sha256": "26747563dc50cac2c362ec6de4329f3e70704a78fa7efb935aaeedea6f2e89fb"
+      }
+    ],
+    "results": [
+      {
+        "name": "frozen-9b",
+        "before_passed": 11,
+        "after_passed": 12,
+        "total": 15,
+        "answers": [
+          {
+            "case": "zh-guess-stays-open",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准是否应该有两个\n部署上线的具体负责人是谁",
+            "original_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "before_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "after_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ]
+          },
+          {
+            "case": "zh-answered-question-closes",
+            "run": 1,
+            "summary": "### 结论\n- 三次重试后不满足要求时采用动态缩小字号兜底\n- 不做硬切，改用缩小字号方案\n\n### 决定\n- 确定使用动态缩小字号作为兜底方案\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-tentative-answer-stays-open",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试后不满足要求的后续方案\n- 是否缩小字号（需稍后验证）",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-withdrawn-plan",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n- 采用方案二，按词换行\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-letter-is-no-owner",
+            "run": 1,
+            "summary": "### 结论\n- 接口文档由发言人负责编写\n- 接口文档将于周五前发出\n\n### 决定\n- 接口文档由发言人负责编写\n- 接口文档将于周五前发出\n\n### 待办\n- [ ] 编写接口文档（周五前）\n\n### 待讨论\n- 无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-in-the-moment-is-no-todo",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，截止时间：无，负责人：无\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [
+              "待办 lacks any of [\"小王\"]"
+            ],
+            "after_failures": [
+              "待办 lacks any of [\"小王\"]"
+            ]
+          },
+          {
+            "case": "en-guess-stays-open",
+            "run": 1,
+            "summary": "### Conclusions\n- None\n### Decisions\n- None\n### To-dos\n- None\n### Open questions\n- What are the two failure criteria?\n- Who checks the failure criteria?\n- Ship on Wednesday",
+            "original_failures": [
+              "Open questions has \"what are the two\"",
+              "Conclusions/Decisions lacks any of [\"Wednesday\"]"
+            ],
+            "before_failures": [
+              "Open questions has \"what are the two\"",
+              "Conclusions/Decisions lacks any of [\"Wednesday\"]"
+            ],
+            "after_failures": [
+              "Open questions has \"what are the two\"",
+              "Conclusions/Decisions lacks any of [\"Wednesday\"]"
+            ]
+          },
+          {
+            "case": "en-answered-question-closes",
+            "run": 1,
+            "summary": "### Conclusions\n- Shrinking the font is the fallback if three retries still don't fit.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-partial-answer-stays-open",
+            "run": 1,
+            "summary": "### 结论\n- 缓存保留时间定为十分钟\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-partial-answer-stays-open",
+            "run": 1,
+            "summary": "### Conclusions\nCache lifetime is ten minutes.\n\n### Decisions\nNone\n\n### To-dos\nNone\n\n### Open questions\nWho will refresh the cache?",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-template-retro",
+            "run": 1,
+            "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机\n#### 要改进的\n- 告警来得太晚\n### 决定\n无\n\n### 待办\n- [ ] 下次发布前由小王补上告警测试\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-template-custom",
+            "run": 1,
+            "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-stated-date-beside-tentative-date",
+            "run": 1,
+            "summary": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期",
+            "original_failures": [
+              "待讨论 lacks any of [\"未定\", \"未确定\", \"没定\", \"待定\", \"待确定\", \"待确认\", \"未确认\", \"是否\", \"是不是\"]"
+            ],
+            "before_failures": [
+              "待讨论 lacks any of [\"未定\", \"未确定\", \"没定\", \"待定\", \"待确定\", \"待确认\", \"未确认\", \"是否\", \"是不是\"]"
+            ],
+            "after_failures": []
+          },
+          {
+            "case": "zh-stated-date-corrected",
+            "run": 1,
+            "summary": "### 结论\n- 部署于周二正式上线\n- 周一只进行预演\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-explicit-condition-not-an-event",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          }
+        ]
+      },
+      {
+        "name": "frozen-4b-short",
+        "before_passed": 12,
+        "after_passed": 12,
+        "total": 15,
+        "answers": [
+          {
+            "case": "zh-guess-stays-open",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+            "original_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "before_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "after_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ]
+          },
+          {
+            "case": "zh-answered-question-closes",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-tentative-answer-stays-open",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-withdrawn-plan",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-letter-is-no-owner",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-in-the-moment-is-no-todo",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-guess-stays-open",
+            "run": 1,
+            "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+            "original_failures": [
+              "Open questions has \"what are the two\""
+            ],
+            "before_failures": [
+              "Open questions has \"what are the two\""
+            ],
+            "after_failures": [
+              "Open questions has \"what are the two\""
+            ]
+          },
+          {
+            "case": "en-answered-question-closes",
+            "run": 1,
+            "summary": "### Conclusions\n- Shrinking the font is the fallback if three retries still don't fit.\n\n### Decisions\n- No decisions were made.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-partial-answer-stays-open",
+            "run": 1,
+            "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-partial-answer-stays-open",
+            "run": 1,
+            "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-template-retro",
+            "run": 1,
+            "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n#### 要改进的\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 小王补上告警测试，下次发布前。\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-template-custom",
+            "run": 1,
+            "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-stated-date-beside-tentative-date",
+            "run": 1,
+            "summary": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-stated-date-corrected",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ],
+            "before_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ],
+            "after_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ]
+          },
+          {
+            "case": "zh-explicit-condition-not-an-event",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          }
+        ]
+      },
+      {
+        "name": "ci-1bd7b05",
+        "before_passed": 36,
+        "after_passed": 36,
+        "total": 45,
+        "answers": [
+          {
+            "case": "zh-guess-stays-open",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+            "original_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "before_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "after_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ]
+          },
+          {
+            "case": "zh-guess-stays-open",
+            "run": 2,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+            "original_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "before_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "after_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ]
+          },
+          {
+            "case": "zh-guess-stays-open",
+            "run": 3,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+            "original_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "before_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "after_failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ]
+          },
+          {
+            "case": "zh-answered-question-closes",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-answered-question-closes",
+            "run": 2,
+            "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-answered-question-closes",
+            "run": 3,
+            "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-tentative-answer-stays-open",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-tentative-answer-stays-open",
+            "run": 2,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-tentative-answer-stays-open",
+            "run": 3,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-withdrawn-plan",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-withdrawn-plan",
+            "run": 2,
+            "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-withdrawn-plan",
+            "run": 3,
+            "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-letter-is-no-owner",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-letter-is-no-owner",
+            "run": 2,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-letter-is-no-owner",
+            "run": 3,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-in-the-moment-is-no-todo",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，小王负责\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-in-the-moment-is-no-todo",
+            "run": 2,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，小王负责\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-in-the-moment-is-no-todo",
+            "run": 3,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，小王负责\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-guess-stays-open",
+            "run": 1,
+            "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+            "original_failures": [
+              "Open questions has \"what are the two\""
+            ],
+            "before_failures": [
+              "Open questions has \"what are the two\""
+            ],
+            "after_failures": [
+              "Open questions has \"what are the two\""
+            ]
+          },
+          {
+            "case": "en-guess-stays-open",
+            "run": 2,
+            "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+            "original_failures": [
+              "Open questions has \"what are the two\""
+            ],
+            "before_failures": [
+              "Open questions has \"what are the two\""
+            ],
+            "after_failures": [
+              "Open questions has \"what are the two\""
+            ]
+          },
+          {
+            "case": "en-guess-stays-open",
+            "run": 3,
+            "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+            "original_failures": [
+              "Open questions has \"what are the two\""
+            ],
+            "before_failures": [
+              "Open questions has \"what are the two\""
+            ],
+            "after_failures": [
+              "Open questions has \"what are the two\""
+            ]
+          },
+          {
+            "case": "en-answered-question-closes",
+            "run": 1,
+            "summary": "### Conclusions\n- If three retries fail, the font will be shrunk as a fallback.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-answered-question-closes",
+            "run": 2,
+            "summary": "### Conclusions\n- If three retries fail, the font will be shrunk as a fallback.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-answered-question-closes",
+            "run": 3,
+            "summary": "### Conclusions\n- If three retries fail, the font will be shrunk as a fallback.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-partial-answer-stays-open",
+            "run": 1,
+            "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-partial-answer-stays-open",
+            "run": 2,
+            "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-partial-answer-stays-open",
+            "run": 3,
+            "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-partial-answer-stays-open",
+            "run": 1,
+            "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-partial-answer-stays-open",
+            "run": 2,
+            "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-partial-answer-stays-open",
+            "run": 3,
+            "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-template-retro",
+            "run": 1,
+            "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n#### 要改进的\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 下次发布前补上告警测试，负责人：小王\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-template-retro",
+            "run": 2,
+            "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n#### 要改进的\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 下次发布前补上告警测试，负责人：小王\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-template-retro",
+            "run": 3,
+            "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n#### 要改进的\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 下次发布前补上告警测试，负责人：小王\n\n### 待讨论\n无",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-template-custom",
+            "run": 1,
+            "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-template-custom",
+            "run": 2,
+            "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "en-template-custom",
+            "run": 3,
+            "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-stated-date-beside-tentative-date",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n桌面版周四发布\n\n### 待办\n无\n\n### 待讨论\n移动版发布日期是否定为周五",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-stated-date-beside-tentative-date",
+            "run": 2,
+            "summary": "### 结论\n无\n\n### 决定\n桌面版周四发布\n\n### 待办\n无\n\n### 待讨论\n移动版发布日期是否定为周五",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-stated-date-beside-tentative-date",
+            "run": 3,
+            "summary": "### 结论\n无\n\n### 决定\n桌面版周四发布\n\n### 待办\n无\n\n### 待讨论\n移动版发布日期是否定为周五",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-stated-date-corrected",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ],
+            "before_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ],
+            "after_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ]
+          },
+          {
+            "case": "zh-stated-date-corrected",
+            "run": 2,
+            "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ],
+            "before_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ],
+            "after_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ]
+          },
+          {
+            "case": "zh-stated-date-corrected",
+            "run": 3,
+            "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+            "original_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ],
+            "before_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ],
+            "after_failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ]
+          },
+          {
+            "case": "zh-explicit-condition-not-an-event",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-explicit-condition-not-an-event",
+            "run": 2,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          },
+          {
+            "case": "zh-explicit-condition-not-an-event",
+            "run": 3,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+            "original_failures": [],
+            "before_failures": [],
+            "after_failures": []
+          }
+        ]
+      }
+    ]
+  },
+  "ci_summary": {
+    "run": "https://github.com/HsiangNianian/boardcast/actions/runs/43083825098",
+    "head": "1bd7b0511b2ad497cdd845f5250803bd75779953",
+    "artifact_id": 13885653605,
+    "artifact_name": "summary-report",
+    "report_sha256": "66234466be435a7c094674d47619034d7a9daa61becbf1565757a4e3af7188ef",
+    "report_metadata": {
+      "label": "qwen3.5-4b-q4km-cpu",
+      "repeat": 3,
+      "cases_sha256": "17f78105bd27994ba951b27973be6c69639ef9469d8bc873f54b0be2ebb7601c",
+      "summary_source_sha256": "ca425f089ae74065e666f7ab88f625dfc62afdaaa201dcd8160523963b70978a",
+      "agent_source_sha256": "2fc28d170172c1f0cb64409a2c5f4aa9f5fabe000d7c49e14d4005fe4af9f830"
+    },
+    "model_sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "summary_step": "failure",
+    "remaining_text_suites_at_capture": "dev in progress; pointing pending; this is not a completed full Eval run"
+  },
+  "validation": {
+    "command": "cargo test -p boardcast-tools",
+    "passed": 14,
+    "failed": 0,
+    "log_sha256": "7b57eedb91103d22d86980847b21835b8c2276595ac4f2697f26e46fe86005ea",
+    "new_report_field": "checker_source_sha256 includes the evaluation implementation in addition to case and production source hashes.",
+    "temporary_test_removed": true
+  },
+  "remaining": [
+    "Keyword checks remain bounded assertions, not a general semantic judge.",
+    "4B retains the missing Wednesday deployment, English count presupposition and missing Monday rehearsal.",
+    "9B retains missing Wednesday deployment, unconfirmed quantity and missing named task owner; previously recorded invented-owner questions also remain.",
+    "No summary model, sampler, prompt, production source or default was changed.",
+    "Long transcripts, real Mac capture and long-meeting/user acceptance were not retested by this checker-only change."
+  ]
+}

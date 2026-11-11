@@ -1,0 +1,3140 @@
+{
+  "date": "2026-11-12 Asia/Shanghai",
+  "scope": "Reject incomplete model output, retain generation failures in eval reports, and normalize existing To-do bullets and empty main sections. Prompt and self-review experiments below were rejected. #68 is still open.",
+  "model": {
+    "name": "Qwen3.5-4B-Q4_K_M.gguf",
+    "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "llama_cpp": "b11954 (f1a7dea99)",
+    "runtime": "CPU, four threads, 4096 context, one slot",
+    "temperature": 0,
+    "repeat_penalty": 1.05,
+    "repeat_last_n": 256,
+    "enable_thinking": false
+  },
+  "final_short": {
+    "label": "safety-final-short",
+    "repeat": 1,
+    "cases_sha256": "7682142731c13b5bad2ed53c1a550ce50158e8361ac8cada1853a3349b70a4d7",
+    "summary_source_sha256": "154f50d596156ad88d2b83e6fe2318b01dab1df68efcca4963186f32af62d591",
+    "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+    "answers": [
+      {
+        "case": "zh-guess-stays-open",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+        "failures": [
+          "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+        ],
+        "elapsed_ms": 3889
+      },
+      {
+        "case": "zh-answered-question-closes",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 4512
+      },
+      {
+        "case": "zh-tentative-answer-stays-open",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+        "failures": [],
+        "elapsed_ms": 4551
+      },
+      {
+        "case": "zh-withdrawn-plan",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 4604
+      },
+      {
+        "case": "zh-letter-is-no-owner",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 3692
+      },
+      {
+        "case": "zh-in-the-moment-is-no-todo",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 3778
+      },
+      {
+        "case": "en-guess-stays-open",
+        "run": 1,
+        "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+        "failures": [
+          "Open questions has \"what are the two\""
+        ],
+        "elapsed_ms": 4663
+      },
+      {
+        "case": "en-answered-question-closes",
+        "run": 1,
+        "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback instead of making a hard cut.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+        "failures": [],
+        "elapsed_ms": 3959
+      },
+      {
+        "case": "zh-partial-answer-stays-open",
+        "run": 1,
+        "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+        "failures": [],
+        "elapsed_ms": 4745
+      },
+      {
+        "case": "en-partial-answer-stays-open",
+        "run": 1,
+        "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+        "failures": [],
+        "elapsed_ms": 4387
+      },
+      {
+        "case": "zh-template-retro",
+        "run": 1,
+        "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 9071
+      },
+      {
+        "case": "en-template-custom",
+        "run": 1,
+        "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+        "failures": [],
+        "elapsed_ms": 7970
+      },
+      {
+        "case": "zh-stated-date-beside-tentative-date",
+        "run": 1,
+        "summary": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+        "failures": [],
+        "elapsed_ms": 4483
+      },
+      {
+        "case": "zh-stated-date-corrected",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [
+          "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+        ],
+        "elapsed_ms": 3910
+      },
+      {
+        "case": "zh-explicit-condition-not-an-event",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+        "failures": [],
+        "elapsed_ms": 4768
+      }
+    ]
+  },
+  "final_long_transcript": {
+    "label": "safety-final-long",
+    "repeat": 1,
+    "cases_sha256": "f3d668783ae0018ef45df79eabdd936be08673a23ae87518a76c2308d7b4270f",
+    "summary_source_sha256": "154f50d596156ad88d2b83e6fe2318b01dab1df68efcca4963186f32af62d591",
+    "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+    "answers": [
+      {
+        "case": "zh-long-transcript-late-correction",
+        "run": 1,
+        "summary": "### 结论\n- 缓存保留时间确定为十分钟\n- 第 1 至 80 个服务区域的配置校验已完成，未发现失败请求，结果已保存\n- 服务切换计划确认为周四执行\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小林整理演练报告（周三前）\n\n### 待讨论\n- 刷新缓存过期数据的负责人是谁\n- 若周四切换失败是否回滚的方案是什么",
+        "failures": [
+          "决定 lacks any of [\"周四\", \"星期四\"]"
+        ],
+        "elapsed_ms": 75234
+      },
+      {
+        "case": "en-long-transcript-count-and-task",
+        "run": 1,
+        "summary": "### Conclusions\nConfiguration checks for service regions 1 through 11 are complete with expected results.\nConfiguration checks for service regions 12 through 22 are complete with expected results.\nConfiguration checks for service regions 23 through 34 are complete with expected results.\nConfiguration checks for service regions 35 through 46 are complete with expected results.\nConfiguration checks for service regions 47 through 58 are complete with expected results.\nConfiguration checks for service regions 59 through 70 are complete with expected results.\nConfiguration checks for service regions 71 through 80 are complete with expected results.\nLaunch date confirmed as Monday.\n\n### Decisions\nNone\n\n### To-dos\nNone\n\n### Open questions\nHow many replicas are needed?\nWho owns the decision on the replica count?\nWho owns the launch?\nMetrics verification to be completed by Sam by Tuesday.",
+        "failures": [
+          "结论/Conclusions lacks any of [\"migration\"]",
+          "Decisions lacks any of [\"Monday\"]",
+          "To-dos lacks any of [\"Sam\"]",
+          "To-dos lacks any of [\"Tuesday\"]",
+          "To-dos lacks any of [\"metrics\"]"
+        ],
+        "elapsed_ms": 86385
+      }
+    ]
+  },
+  "final_todo_format": {
+    "label": "safety-final-format",
+    "repeat": 1,
+    "cases_sha256": "0d8d80f00783f9538b11e0cc7ba155829d61a9ee818f0ca6a9fcf5f46f88531c",
+    "summary_source_sha256": "154f50d596156ad88d2b83e6fe2318b01dab1df68efcca4963186f32af62d591",
+    "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+    "answers": [
+      {
+        "case": "en-conditional-raw-control",
+        "run": 1,
+        "summary": "### Conclusions\n- All readiness checks are complete.\n\n### Decisions\n- None\n\n### To-dos\n- [ ] Nora will write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday? (Rollback still needs discussion.)",
+        "failures": [],
+        "elapsed_ms": 5998
+      }
+    ]
+  },
+  "validation": {
+    "agent_tests": 48,
+    "tools_tests": 13,
+    "ui_cargo_check": "passed",
+    "captured_calls": 110,
+    "actual_prompt_counts_match_preflight": true,
+    "max_prompt_plus_reserved_output": 4057,
+    "final_source_calls": 29,
+    "final_source_finish_reasons": "all stop"
+  },
+  "original_long_transcript_report": {
+    "label": "long-transcript-before-neutral",
+    "repeat": 1,
+    "cases_sha256": "e38817ecaaf326eee7c86aa2c70abe77277b51ce5951d02e95ccee3420417a7e",
+    "summary_source_sha256": "f7e12a51765e59c9f9aa948d8d637cfcf43d4c75dabf917785b502aeb2ee1f57",
+    "agent_source_sha256": "33d8c7a9f9b9b2488ebfead72d56147a958194cc3a554de6b1ad9f102677da0a",
+    "answers": [
+      {
+        "case": "zh-long-transcript-late-correction",
+        "run": 1,
+        "summary": "### 结论\n- 缓存保留时间确定为十分钟\n- 第 1 至 80 个服务区域的配置校验已完成，未发现失败请求，结果已保存\n- 服务切换计划确认为周四执行\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小林整理演练报告（周三前）\n\n### 待讨论\n- 刷新缓存过期数据的负责人是谁\n- 若周四切换失败是否回滚的方案是什么",
+        "failures": [],
+        "elapsed_ms": 78477
+      },
+      {
+        "case": "en-long-transcript-count-and-task",
+        "run": 1,
+        "summary": "### Conclusions\nConfiguration checks for service regions 1 through 11 are complete with expected results.\nConfiguration checks for service regions 12 through 22 are complete with expected results.\nConfiguration checks for service regions 23 through 34 are complete with expected results.\nConfiguration checks for service regions 35 through 46 are complete with expected results.\nConfiguration checks for service regions 47 through 58 are complete with expected results.\nConfiguration checks for service regions 59 through 70 are complete with expected results.\nConfiguration checks for service regions 71 through 80 are complete with expected results.\nLaunch date confirmed as Monday.\n\n### Decisions\nNone\n\n### To-dos\nNone\n\n### Open questions\nHow many replicas are needed?\nWho owns the decision on the replica count?\nWho owns the launch?\nMetrics verification to be completed by Sam by Tuesday.",
+        "failures": [
+          "结论/Conclusions lacks any of [\"migration\"]",
+          "Decisions lacks any of [\"Monday\"]",
+          "To-dos lacks any of [\"Sam\"]",
+          "To-dos lacks any of [\"Tuesday\"]",
+          "To-dos lacks any of [\"metrics\"]"
+        ],
+        "elapsed_ms": 89106
+      }
+    ]
+  },
+  "original_long_transcript_rescored": {
+    "passed": 0,
+    "total": 2,
+    "answers": [
+      {
+        "case": "zh-long-transcript-late-correction",
+        "run": 1,
+        "failures": [
+          "决定 lacks any of ['周四', '星期四']"
+        ]
+      },
+      {
+        "case": "en-long-transcript-count-and-task",
+        "run": 1,
+        "failures": [
+          "结论/Conclusions lacks any of ['migration']",
+          "Decisions lacks any of ['Monday']",
+          "To-dos lacks any of ['Sam']",
+          "To-dos lacks any of ['Tuesday']",
+          "To-dos lacks any of ['metrics']"
+        ]
+      }
+    ]
+  },
+  "checker_changes": {
+    "source_utterances_and_boards_unchanged": true,
+    "initial_long_checks": {
+      "zh-long-transcript-late-correction": [
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "any": [
+            "周四",
+            "星期四"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "any": [
+            "十分钟",
+            "10分钟",
+            "10 分钟"
+          ]
+        },
+        {
+          "in": [
+            "待办"
+          ],
+          "any": [
+            "小林"
+          ]
+        },
+        {
+          "in": [
+            "待办"
+          ],
+          "any": [
+            "周三",
+            "星期三"
+          ]
+        },
+        {
+          "in": [
+            "待办"
+          ],
+          "any": [
+            "演练报告"
+          ]
+        },
+        {
+          "in": [
+            "待讨论"
+          ],
+          "any": [
+            "刷新"
+          ]
+        },
+        {
+          "in": [
+            "待讨论"
+          ],
+          "any": [
+            "回滚"
+          ]
+        },
+        {
+          "in": [
+            "决定"
+          ],
+          "absent": [
+            "执行回滚",
+            "立即回滚"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "absent": [
+            "切换已经失败",
+            "切换失败了"
+          ]
+        }
+      ],
+      "en-long-transcript-count-and-task": [
+        {
+          "in": [
+            "结论",
+            "Conclusions"
+          ],
+          "any": [
+            "migration"
+          ]
+        },
+        {
+          "in": [
+            "Decisions"
+          ],
+          "any": [
+            "Monday"
+          ]
+        },
+        {
+          "in": [
+            "To-dos"
+          ],
+          "any": [
+            "Sam"
+          ]
+        },
+        {
+          "in": [
+            "To-dos"
+          ],
+          "any": [
+            "Tuesday"
+          ]
+        },
+        {
+          "in": [
+            "To-dos"
+          ],
+          "any": [
+            "metrics"
+          ]
+        },
+        {
+          "in": [
+            "Open questions"
+          ],
+          "any": [
+            "replica"
+          ]
+        },
+        {
+          "in": [
+            "Open questions"
+          ],
+          "absent": [
+            "what are the three",
+            "which three",
+            "which are the three"
+          ]
+        },
+        {
+          "in": [
+            "Conclusions",
+            "Decisions"
+          ],
+          "absent": [
+            "three replicas",
+            "three replica",
+            "3 replicas"
+          ]
+        }
+      ]
+    },
+    "current_long_checks": {
+      "zh-long-transcript-late-correction": [
+        {
+          "in": [
+            "决定"
+          ],
+          "any": [
+            "周四",
+            "星期四"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "any": [
+            "十分钟",
+            "10分钟",
+            "10 分钟"
+          ]
+        },
+        {
+          "in": [
+            "待办"
+          ],
+          "any": [
+            "小林"
+          ]
+        },
+        {
+          "in": [
+            "待办"
+          ],
+          "any": [
+            "周三",
+            "星期三"
+          ]
+        },
+        {
+          "in": [
+            "待办"
+          ],
+          "any": [
+            "演练报告"
+          ]
+        },
+        {
+          "in": [
+            "待讨论"
+          ],
+          "any": [
+            "刷新"
+          ]
+        },
+        {
+          "in": [
+            "待讨论"
+          ],
+          "any": [
+            "回滚"
+          ]
+        },
+        {
+          "in": [
+            "决定"
+          ],
+          "absent": [
+            "执行回滚",
+            "立即回滚"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "absent": [
+            "切换已经失败",
+            "切换失败了"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "any": [
+            "校验",
+            "检查"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "absent": [
+            "缓存保留时间暂定",
+            "暂定为十分钟",
+            "暂定十分钟"
+          ]
+        }
+      ],
+      "en-long-transcript-count-and-task": [
+        {
+          "in": [
+            "结论",
+            "Conclusions"
+          ],
+          "any": [
+            "migration"
+          ]
+        },
+        {
+          "in": [
+            "Decisions"
+          ],
+          "any": [
+            "Monday"
+          ]
+        },
+        {
+          "in": [
+            "To-dos"
+          ],
+          "any": [
+            "Sam"
+          ]
+        },
+        {
+          "in": [
+            "To-dos"
+          ],
+          "any": [
+            "Tuesday"
+          ]
+        },
+        {
+          "in": [
+            "To-dos"
+          ],
+          "any": [
+            "metrics"
+          ]
+        },
+        {
+          "in": [
+            "Open questions"
+          ],
+          "any": [
+            "replica"
+          ]
+        },
+        {
+          "in": [
+            "Open questions"
+          ],
+          "absent": [
+            "what are the three",
+            "which three",
+            "which are the three"
+          ]
+        },
+        {
+          "in": [
+            "Conclusions",
+            "Decisions"
+          ],
+          "absent": [
+            "three replicas",
+            "three replica",
+            "3 replicas"
+          ]
+        }
+      ]
+    },
+    "explanation": "The initial long checker missed that the explicitly agreed Thursday launch was absent from Decisions, that completed checks disappeared, and that confirmed ten-minute retention was downgraded to tentative. Both frozen baseline and grouped-prompt outputs score 0/2 under the current checks. The review probe also exposed a two-items wording missing from the Chinese uncertainty check; it is now rejected.",
+    "short_checks_sha256_before": "5a2a198d31313d40274d1c70bc0c2c1556b2ebf479d46867b82f9dd7ce543b82",
+    "short_checks_sha256_after": "7682142731c13b5bad2ed53c1a550ce50158e8361ac8cada1853a3349b70a4d7"
+  },
+  "rejected_neutral_prompt": {
+    "prompts": {
+      "ZH": "压缩这段材料，供之后整理完整会议使用。合并重复表达，保留独立事实、进展、原有主体、日期、任务及负责人。按材料的顺序保留确认、更正和撤回。疑问仍写成疑问，猜测和条件保留原有措辞，已经做过的操作保持完成状态。每条一行，以「- 」开头。只写材料里有的信息，不评价材料是否完整，不补写未提及的问题或计划，不填写空栏目，不从片段编号推断组别，也不自行合计数量。",
+      "EN": "Condense this excerpt for later use in the complete meeting summary. Combine repetition while retaining independent facts, progress, original subjects, dates, tasks and named owners. Preserve confirmations, corrections and withdrawals in source order. Keep questions as questions and retain the wording of uncertainty and conditions; completed actions remain completed. One point per line, starting with \"- \". Write only information present in the excerpt. Do not assess its completeness, add unmentioned questions or plans, fill empty categories, infer groups from fragment numbers, or calculate extra totals."
+    },
+    "partial_included_final_fact_rules": false,
+    "summary_source_sha256": "8de49939f00687f0c18a26dd329652ba8d46b2781520966964317cfe62550b59",
+    "probe": [
+      {
+        "case": "completed-board-fragment",
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "压缩这段材料，供之后整理完整会议使用。合并重复表达，保留独立事实、进展、原有主体、日期、任务及负责人。按材料的顺序保留确认、更正和撤回。疑问仍写成疑问，猜测和条件保留原有措辞，已经做过的操作保持完成状态。每条一行，以「- 」开头。只写材料里有的信息，不评价材料是否完整，不补写未提及的问题或计划，不填写空栏目，不从片段编号推断组别，也不自行合计数量。"
+            },
+            {
+              "role": "user",
+              "content": "会议记录（片段）：\n第 10 张板：\nn1 第10组服务的检查项目1已经完成，延迟为81毫秒。\nn2 第10组服务的检查项目2已经完成，延迟为82毫秒。\nn3 第10组服务的检查项目3已经完成，延迟为83毫秒。\nn4 第10组服务的检查项目4已经完成，延迟为84毫秒。\nn5 第10组服务的检查项目5已经完成，延迟为85毫秒。\nn6 第10组服务的检查项目6已经完成，延迟为86毫秒。\nn7 第10组服务的检查项目7已经完成，延迟为87毫秒。\nn8 第10组服务的检查项目8已经完成，延迟为88毫秒。\nn9 第10组服务的检查项目9已经完成，延迟为89毫秒。\nn10 第10组服务的检查项目10已经完成，延迟为90毫秒。\nn11 第10组服务的检查项目11已经完成，延迟为91毫秒。\nn12 第10组服务的检查项目12已经完成，延迟为92毫秒。\nn13 第10组服务的检查项目13已经完成，延迟为93毫秒。\nn14 第10组服务的检查项目14已经完成，延迟为94毫秒。\nn15 第10组服务的检查项目15已经完成，延迟为95毫秒。\nn16 第10组服务的检查项目16已经完成，延迟为96毫秒。\nn17 第10组服务的检查项目17已经完成，延迟为97毫秒。\nn18 第10组服务的检查项目18已经完成，延迟为98毫秒。\nn19 第10组服务的检查项目19已经完成，延迟为99毫秒。\nn20 第10组服务的检查项目20已经完成，延迟为100毫秒。\nn21 第10组服务的检查项目21已经完成，延迟为101毫秒。\nn22 第10组服务的检查项目22已经完成，延迟为102毫秒。\nn23 第10组服务的检查项目23已经完成，延迟为103毫秒。\nn24 第10组服务的检查项目24已经完成，延迟为104毫秒。\nn25 第10组服务的检查项目25已经完成，延迟为105毫秒。\nn26 第10组服务的检查项目26已经完成，延迟为106毫秒。\nn27 第10组服务的检查项目27已经完成，延迟为107毫秒。\nn28 第10组服务的检查项目28已经完成，延迟为108毫秒。\nn29 第10组服务的检查项目29已经完成，延迟为109毫秒。\nn30 第10组服务的检查项目30已经完成，延迟为110毫秒。\nn31 第10组服务的检查项目31已经完成，延迟为111毫秒。\nn32 第10组服务的检查项目32已经完成，延迟为112毫秒。\nn33 第10组服务的检查项目33已经完成，延迟为113毫秒。\nn34 第10组服务的检查项目34已经完成，延迟为114毫秒。\nn35 第10组服务的检查项目35已经完成，延迟为115毫秒。\nn36 第10组服务的检查项目36已经完成，延迟为116毫秒。\nn37 第10组服务的检查项目37已经完成，延迟为117毫秒。\nn38 第10组服务的检查项目38已经完成，延迟为118毫秒。\nn39 第10组服务的检查项目39已经完成，延迟为119毫秒。\nn40 第10组服务的检查项目40已经完成，延迟为120毫秒。\n\n第 11 张板：\nn1 第11组服务的检查项目1已经完成，延迟为81毫秒。\nn2 第11组服务的检查项目2已经完成，延迟为82毫秒。\nn3 第11组服务的检查项目3已经完成，延迟为83毫秒。\nn4 第11组服务的检查项目4已经完成，延迟为84毫秒。\nn5 第11组服务的检查项目5已经完成，延迟为85毫秒。\nn6 第11组服务的检查项目6已经完成，延迟为86毫秒。\nn7 第11组服务的检查项目7已经完成，延迟为87毫秒。\nn8 第11组服务的检查项目8已经完成，延迟为88毫秒。\nn9 第11组服务的检查项目9已经完成，延迟为89毫秒。\nn10 第11组服务的检查项目10已经完成，延迟为90毫秒。\nn11 第11组服务的检查项目11已经完成，延迟为91毫秒。\nn12 第11组服务的检查项目12已经完成，延迟为92毫秒。\nn13 第11组服务的检查项目13已经完成，延迟为93毫秒。\nn14 第11组服务的检查项目14已经完成，延迟为94毫秒。\nn15 第11组服务的检查项目15已经完成，延迟为95毫秒。\nn16 第11组服务的检查项目16已经完成，延迟为96毫秒。\nn17 第11组服务的检查项目17已经完成，延迟为97毫秒。\nn18 第11组服务的检查项目18已经完成，延迟为98毫秒。\nn19 第11组服务的检查项目19已经完成，延迟为99毫秒。\nn20 第11组服务的检查项目20已经完成，延迟为100毫秒。\nn21 第11组服务的检查项目21已经完成，延迟为101毫秒。\nn22 第11组服务的检查项目22已经完成，延迟为102毫秒。\nn23 第11组服务的检查项目23已经完成，延迟为103毫秒。\nn24 第11组服务的检查项目24已经完成，延迟为104毫秒。\nn25 第11组服务的检查项目25已经完成，延迟为105毫秒。\nn26 第11组服务的检查项目26已经完成，延迟为106毫秒。\nn27 第11组服务的检查项目27已经完成，延迟为107毫秒。\nn28 第11组服务的检查项目28已经完成，延迟为108毫秒。\nn29 第11组服务的检查项目29已经完成，延迟为109毫秒。\nn30 第11组服务的检查项目30已经完成，延迟为110毫秒。\nn31 第11组服务的检查项目31已经完成，延迟为111毫秒。\nn32 第11组服务的检查项目32已经完成，延迟为112毫秒。\nn33 第11组服务的检查项目33已经完成，延迟为113毫秒。\nn34 第11组服务的检查项目34已经完成，延迟为114毫秒。\nn35 第11组服务的检查项目35已经完成，延迟为115毫秒。\nn36 第11组服务的检查项目36已经完成，延迟为116毫秒。\nn37 第11组服务的检查项目37已经完成，延迟为117毫秒。\nn38 第11组服务的检查项目38已经完成，延迟为118毫秒。\nn39 第11组服务的检查项目39已经完成，延迟为119毫秒。\nn40 第11组服务的检查项目40已经完成，延迟为120毫秒。\n\n第 12 张板：\nn1 第12组服务的检查项目1已经完成，延迟为81毫秒。\nn2 第12组服务的检查项目2已经完成，延迟为82毫秒。\nn3 第12组服务的检查项目3已经完成，延迟为83毫秒。\nn4 第12组服务的检查项目4已经完成，延迟为84毫秒。\nn5 第12组服务的检查项目5已经完成，延迟为85毫秒。\nn6 第12组服务的检查项目6已经完成，延迟为86毫秒。\nn7 第12组服务的检查项目7已经完成，延迟为87毫秒。\nn8 第12组服务的检查项目8已经完成，延迟为88毫秒。\nn9 第12组服务的检查项目9已经完成，延迟为89毫秒。\nn10 第12组服务的检查项目10已经完成，延迟为90毫秒。\nn11 第12组服务的检查项目11已经完成，延迟为91毫秒。\nn12 第12组服务的检查项目12已经完成，延迟为92毫秒。\nn13 第12组服务的检查项目13已经完成，延迟为93毫秒。\nn14 第12组服务的检查项目14已经完成，延迟为94毫秒。\nn15 第12组服务的检查项目15已经完成，延迟为95毫秒。\nn16 第12组服务的检查项目16已经完成，延迟为96毫秒。\nn17 第12组服务的检查项目17已经完成，延迟为97毫秒。\nn18 第12组服务的检查项目18已经完成，延迟为98毫秒。\nn19 第12组服务的检查项目19已经完成，延迟为99毫秒。\nn20 第12组服务的检查项目20已经完成，延迟为100毫秒。\nn21 第12组服务的检查项目21已经完成，延迟为101毫秒。\nn22 第12组服务的检查项目22已经完成，延迟为102毫秒。\nn23 第12组服务的检查项目23已经完成，延迟为103毫秒。\nn24 第12组服务的检查项目24已经完成，延迟为104毫秒。\nn25 第12组服务的检查项目25已经完成，延迟为105毫秒。\nn26 第12组服务的检查项目26已经完成，延迟为106毫秒。\nn27 第12组服务的检查项目27已经完成，延迟为107毫秒。\nn28 第12组服务的检查项目28已经完成，延迟为108毫秒。\nn29 第12组服务的检查项目29已经完成，延迟为109毫秒。\nn30 第12组服务的检查项目30已经完成，延迟为110毫秒。\nn31 第12组服务的检查项目31已经完成，延迟为111毫秒。\nn32 第12组服务的检查项目32已经完成，延迟为112毫秒。\nn33 第12组服务的检查项目33已经完成，延迟为113毫秒。\nn34 第12组服务的检查项目34已经完成，延迟为114毫秒。\nn35 第12组服务的检查项目35已经完成，延迟为115毫秒。\nn36 第12组服务的检查项目36已经完成，延迟为116毫秒。\nn37 第12组服务的检查项目37已经完成，延迟为117毫秒。\nn38 第12组服务的检查项目38已经完成，延迟为118毫秒。\nn39 第12组服务的检查项目39已经完成，延迟为119毫秒。\nn40 第12组服务的检查项目40已经完成，延迟为120毫秒。\n\n"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 600,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- 第 10 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。"
+              }
+            }
+          ],
+          "created": 1794412396,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 108,
+            "prompt_tokens": 2808,
+            "total_tokens": 2916,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-ajZj1K0wxmgaBMEYXKp6Ta7xMRIMFkHI",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 2808,
+            "prompt_ms": 17111.87,
+            "prompt_per_token_ms": 6.0939707977207975,
+            "prompt_per_second": 164.09661831231773,
+            "predicted_n": 108,
+            "predicted_ms": 9934.596,
+            "predicted_per_token_ms": 92.84669158878505,
+            "predicted_per_second": 10.770443005432732
+          }
+        },
+        "elapsed_ms": 27053
+      },
+      {
+        "case": "conditional-question-and-task",
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Condense this excerpt for later use in the complete meeting summary. Combine repetition while retaining independent facts, progress, original subjects, dates, tasks and named owners. Preserve confirmations, corrections and withdrawals in source order. Keep questions as questions and retain the wording of uncertainty and conditions; completed actions remain completed. One point per line, starting with \"- \". Write only information present in the excerpt. Do not assess its completeness, add unmentioned questions or plans, fill empty categories, infer groups from fragment numbers, or calculate extra totals."
+            },
+            {
+              "role": "user",
+              "content": "Transcript (excerpt):\n> All readiness checks are complete. If deployment fails on Thursday, should we roll back?\n> Rollback still needs discussion. Deployment has not started.\n> Nora will write the rollout guide by Wednesday."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 600,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- All readiness checks are complete.\n- Deployment has not started.\n- If deployment fails on Thursday, rollback is still pending discussion.\n- Nora will write the rollout guide by Wednesday."
+              }
+            }
+          ],
+          "created": 1794412401,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 40,
+            "prompt_tokens": 171,
+            "total_tokens": 211,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-ivFlkxy0QzPSi8gkIDbbmijOlo2ht7sF",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 171,
+            "prompt_ms": 1237.478,
+            "prompt_per_token_ms": 7.236713450292398,
+            "prompt_per_second": 138.1842747911478,
+            "predicted_n": 40,
+            "predicted_ms": 3508.288,
+            "predicted_per_token_ms": 89.95610256410257,
+            "predicted_per_second": 11.116533192257876
+          }
+        },
+        "elapsed_ms": 4886
+      }
+    ],
+    "termination": {
+      "status": "stopped after a reproduced failure, before a complete suite result",
+      "reason": "Multiple partial replies hit max_tokens=600 with finish_reason=length and omit entire later service groups. A full-suite score would not establish faithful summarization.",
+      "label": "neutral-context",
+      "cancelled_pids": [
+        2369349,
+        2369350
+      ]
+    },
+    "partial_stdout": "zh-many-boards-context: 结论/决定 lacks any of [\"周五\"]; 待讨论 lacks any of [\"无\"]\n### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 联合演练的具体安排（小林提出周五开始，但具体细节未定）\n\nzh-many-boards-context: 0/1\nzh-many-boards-late-correction: 1/1\n",
+    "observed_cut_off_reply": {
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "request": {
+        "model": "local",
+        "messages": [
+          {
+            "role": "system",
+            "content": "压缩这段材料，供之后整理完整会议使用。合并重复表达，保留独立事实、进展、原有主体、日期、任务及负责人。按材料的顺序保留确认、更正和撤回。疑问仍写成疑问，猜测和条件保留原有措辞，已经做过的操作保持完成状态。每条一行，以「- 」开头。只写材料里有的信息，不评价材料是否完整，不补写未提及的问题或计划，不填写空栏目，不从片段编号推断组别，也不自行合计数量。"
+          },
+          {
+            "role": "user",
+            "content": "会议记录（片段）：\n第 3 张板：\nn1 第3组服务的检查项目1已经完成，延迟为81毫秒。\nn2 第3组服务的检查项目2已经完成，延迟为82毫秒。\nn3 第3组服务的检查项目3已经完成，延迟为83毫秒。\nn4 第3组服务的检查项目4已经完成，延迟为84毫秒。\nn5 第3组服务的检查项目5已经完成，延迟为85毫秒。\nn6 第3组服务的检查项目6已经完成，延迟为86毫秒。\nn7 第3组服务的检查项目7已经完成，延迟为87毫秒。\nn8 第3组服务的检查项目8已经完成，延迟为88毫秒。\nn9 第3组服务的检查项目9已经完成，延迟为89毫秒。\nn10 第3组服务的检查项目10已经完成，延迟为90毫秒。\nn11 第3组服务的检查项目11已经完成，延迟为91毫秒。\nn12 第3组服务的检查项目12已经完成，延迟为92毫秒。\nn13 第3组服务的检查项目13已经完成，延迟为93毫秒。\nn14 第3组服务的检查项目14已经完成，延迟为94毫秒。\nn15 第3组服务的检查项目15已经完成，延迟为95毫秒。\nn16 第3组服务的检查项目16已经完成，延迟为96毫秒。\nn17 第3组服务的检查项目17已经完成，延迟为97毫秒。\nn18 第3组服务的检查项目18已经完成，延迟为98毫秒。\nn19 第3组服务的检查项目19已经完成，延迟为99毫秒。\nn20 第3组服务的检查项目20已经完成，延迟为100毫秒。\nn21 第3组服务的检查项目21已经完成，延迟为101毫秒。\nn22 第3组服务的检查项目22已经完成，延迟为102毫秒。\nn23 第3组服务的检查项目23已经完成，延迟为103毫秒。\nn24 第3组服务的检查项目24已经完成，延迟为104毫秒。\nn25 第3组服务的检查项目25已经完成，延迟为105毫秒。\nn26 第3组服务的检查项目26已经完成，延迟为106毫秒。\nn27 第3组服务的检查项目27已经完成，延迟为107毫秒。\nn28 第3组服务的检查项目28已经完成，延迟为108毫秒。\nn29 第3组服务的检查项目29已经完成，延迟为109毫秒。\nn30 第3组服务的检查项目30已经完成，延迟为110毫秒。\nn31 第3组服务的检查项目31已经完成，延迟为111毫秒。\nn32 第3组服务的检查项目32已经完成，延迟为112毫秒。\nn33 第3组服务的检查项目33已经完成，延迟为113毫秒。\nn34 第3组服务的检查项目34已经完成，延迟为114毫秒。\nn35 第3组服务的检查项目35已经完成，延迟为115毫秒。\nn36 第3组服务的检查项目36已经完成，延迟为116毫秒。\nn37 第3组服务的检查项目37已经完成，延迟为117毫秒。\nn38 第3组服务的检查项目38已经完成，延迟为118毫秒。\nn39 第3组服务的检查项目39已经完成，延迟为119毫秒。\nn40 第3组服务的检查项目40已经完成，延迟为120毫秒。\n\n第 4 张板：\nn1 第4组服务的检查项目1已经完成，延迟为81毫秒。\nn2 第4组服务的检查项目2已经完成，延迟为82毫秒。\nn3 第4组服务的检查项目3已经完成，延迟为83毫秒。\nn4 第4组服务的检查项目4已经完成，延迟为84毫秒。\nn5 第4组服务的检查项目5已经完成，延迟为85毫秒。\nn6 第4组服务的检查项目6已经完成，延迟为86毫秒。\nn7 第4组服务的检查项目7已经完成，延迟为87毫秒。\nn8 第4组服务的检查项目8已经完成，延迟为88毫秒。\nn9 第4组服务的检查项目9已经完成，延迟为89毫秒。\nn10 第4组服务的检查项目10已经完成，延迟为90毫秒。\nn11 第4组服务的检查项目11已经完成，延迟为91毫秒。\nn12 第4组服务的检查项目12已经完成，延迟为92毫秒。\nn13 第4组服务的检查项目13已经完成，延迟为93毫秒。\nn14 第4组服务的检查项目14已经完成，延迟为94毫秒。\nn15 第4组服务的检查项目15已经完成，延迟为95毫秒。\nn16 第4组服务的检查项目16已经完成，延迟为96毫秒。\nn17 第4组服务的检查项目17已经完成，延迟为97毫秒。\nn18 第4组服务的检查项目18已经完成，延迟为98毫秒。\nn19 第4组服务的检查项目19已经完成，延迟为99毫秒。\nn20 第4组服务的检查项目20已经完成，延迟为100毫秒。\nn21 第4组服务的检查项目21已经完成，延迟为101毫秒。\nn22 第4组服务的检查项目22已经完成，延迟为102毫秒。\nn23 第4组服务的检查项目23已经完成，延迟为103毫秒。\nn24 第4组服务的检查项目24已经完成，延迟为104毫秒。\nn25 第4组服务的检查项目25已经完成，延迟为105毫秒。\nn26 第4组服务的检查项目26已经完成，延迟为106毫秒。\nn27 第4组服务的检查项目27已经完成，延迟为107毫秒。\nn28 第4组服务的检查项目28已经完成，延迟为108毫秒。\nn29 第4组服务的检查项目29已经完成，延迟为109毫秒。\nn30 第4组服务的检查项目30已经完成，延迟为110毫秒。\nn31 第4组服务的检查项目31已经完成，延迟为111毫秒。\nn32 第4组服务的检查项目32已经完成，延迟为112毫秒。\nn33 第4组服务的检查项目33已经完成，延迟为113毫秒。\nn34 第4组服务的检查项目34已经完成，延迟为114毫秒。\nn35 第4组服务的检查项目35已经完成，延迟为115毫秒。\nn36 第4组服务的检查项目36已经完成，延迟为116毫秒。\nn37 第4组服务的检查项目37已经完成，延迟为117毫秒。\nn38 第4组服务的检查项目38已经完成，延迟为118毫秒。\nn39 第4组服务的检查项目39已经完成，延迟为119毫秒。\nn40 第4组服务的检查项目40已经完成，延迟为120毫秒。\n\n"
+          }
+        ],
+        "temperature": 0,
+        "repeat_penalty": 1.05,
+        "repeat_last_n": 256,
+        "max_tokens": 600,
+        "cache_prompt": true,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      },
+      "response": {
+        "choices": [
+          {
+            "finish_reason": "length",
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "- 第 3 组服务检查项目 1 已完成，延迟 81 毫秒\n- 第 3 组服务检查项目 2 已完成，延迟 82 毫秒\n- 第 3 组服务检查项目 3 已完成，延迟 83 毫秒\n- 第 3 组服务检查项目 4 已完成，延迟 84 毫秒\n- 第 3 组服务检查项目 5 已完成，延迟 85 毫秒\n- 第 3 组服务检查项目 6 已完成，延迟 86 毫秒\n- 第 3 组服务检查项目 7 已完成，延迟 87 毫秒\n- 第 3 组服务检查项目 8 已完成，延迟 88 毫秒\n- 第 3 组服务检查项目 9 已完成，延迟 89 毫秒\n- 第 3 组服务检查项目 10 已完成，延迟 90 毫秒\n- 第 3 组服务检查项目 11 已完成，延迟 91 毫秒\n- 第 3 组服务检查项目 12 已完成，延迟 92 毫秒\n- 第 3 组服务检查项目 13 已完成，延迟 93 毫秒\n- 第 3 组服务检查项目 14 已完成，延迟 94 毫秒\n- 第 3 组服务检查项目 15 已完成，延迟 95 毫秒\n- 第 3 组服务检查项目 16 已完成，延迟 96 毫秒\n- 第 3 组服务检查项目 17 已完成，延迟 97 毫秒\n- 第 3 组服务检查项目 18 已完成，延迟 98 毫秒\n- 第 3 组服务检查项目 19 已完成，延迟 99 毫秒\n- 第 3 组服务检查项目 20 已完成，延迟 100 毫秒\n- 第 3 组服务检查项目 21 已完成，延迟 101 毫秒\n- 第 3 组服务检查项目 22 已完成，延迟 102 毫秒\n- 第 3 组服务检查项目 23 已完成，延迟 103 毫秒\n- 第 3 组服务检查项目 24 已完成，延迟 104 毫秒\n- 第 3 组服务检查项目 25 已完成，延迟 105 毫秒\n- 第 3 组服务检查项目 26 已完成，延迟 106 毫秒\n- 第 "
+            }
+          }
+        ],
+        "created": 1794412897,
+        "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+        "system_fingerprint": "b11954-f1a7dea99",
+        "object": "chat.completion",
+        "usage": {
+          "completion_tokens": 600,
+          "prompt_tokens": 1834,
+          "total_tokens": 2434,
+          "prompt_tokens_details": {
+            "cached_tokens": 114
+          }
+        },
+        "id": "chatcmpl-iRi0QQGFWytBOZijZfUXcmhVP9hQpQYm",
+        "timings": {
+          "cache_n": 114,
+          "prompt_n": 1720,
+          "prompt_ms": 9695.065,
+          "prompt_per_token_ms": 5.6366656976744185,
+          "prompt_per_second": 177.40984717482553,
+          "predicted_n": 600,
+          "predicted_ms": 55096.589,
+          "predicted_per_token_ms": 91.98094991652755,
+          "predicted_per_second": 10.871816402282182
+        }
+      }
+    }
+  },
+  "rejected_grouped_prompt": {
+    "prompts": {
+      "ZH": "提炼这段材料的要点，供之后整理完整会议使用，不逐行复述明细。同一主体、同一状态的重复数据合并表达，保留其范围及全部例外。保留不同的结论、进展、主体、日期、任务及负责人。按材料的顺序保留确认、更正和撤回。疑问仍写成疑问，猜测和条件保留原有措辞，已经做过的操作保持完成状态。每条一行，以「- 」开头。只写材料里有的信息，不评价材料是否完整，不补写未提及的问题或计划，不填写空栏目，不从片段编号推断组别，也不自行合计数量。",
+      "EN": "Summarize this excerpt's key information for the complete meeting summary, not each input row. Group repeated data about the same subject and outcome, retaining their scope and all exceptions. Preserve distinct conclusions, progress, subjects, dates, tasks and named owners. Preserve confirmations, corrections and withdrawals in source order. Keep questions as questions and retain the wording of uncertainty and conditions; completed actions remain completed. One point per line, starting with \"- \". Write only information present in the excerpt. Do not assess its completeness, add unmentioned questions or plans, fill empty categories, infer groups from fragment numbers, or calculate extra totals."
+    },
+    "partial_included_final_fact_rules": false,
+    "summary_source_sha256": "2ca4d09c5f15daa67c92b27e0f6a1d71aeb4f43f079ca06e7dcd6a862886d3c5",
+    "context_report": {
+      "label": "grouped-context",
+      "repeat": 1,
+      "cases_sha256": "0d8d80f00783f9538b11e0cc7ba155829d61a9ee818f0ca6a9fcf5f46f88531c",
+      "summary_source_sha256": "2ca4d09c5f15daa67c92b27e0f6a1d71aeb4f43f079ca06e7dcd6a862886d3c5",
+      "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+      "answers": [
+        {
+          "case": "zh-many-boards-context",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 联合演练的具体安排（小林提出周五开始，但具体细节未定）",
+          "failures": [
+            "结论/决定 lacks any of [\"周五\"]",
+            "待讨论 lacks any of [\"无\"]"
+          ],
+          "elapsed_ms": 108343
+        },
+        {
+          "case": "zh-many-boards-late-correction",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 十二组服务检查完成，延迟范围均为 81 毫秒至 120 毫秒。\n- 上线时间由周五改为周四。\n- 第 12 组服务旧上线安排（周五）已撤回。\n\n### 待办\n- [ ] 小林于周三前补回归测试\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 53964
+        },
+        {
+          "case": "en-many-boards-conditional",
+          "run": 1,
+          "summary": "### Conclusions\n- All readiness checks for service groups 1 through 12 have completed successfully with no failures observed.\n\n### Decisions\n- None\n\n### To-dos\n- [ ] Nora to write the rollout guide by Wednesday.\n\n### Open questions\n- Whether to roll back if deployment fails on Thursday.",
+          "failures": [],
+          "elapsed_ms": 81551
+        },
+        {
+          "case": "en-conditional-raw-control",
+          "run": 1,
+          "summary": "### Conclusions\n- All readiness checks are complete.\n\n### Decisions\n- None\n\n### To-dos\n- [ ] Nora will write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday? (Rollback still needs discussion.)",
+          "failures": [],
+          "elapsed_ms": 5899
+        }
+      ]
+    },
+    "short_report": {
+      "label": "grouped-short",
+      "repeat": 1,
+      "cases_sha256": "5a2a198d31313d40274d1c70bc0c2c1556b2ebf479d46867b82f9dd7ce543b82",
+      "summary_source_sha256": "2ca4d09c5f15daa67c92b27e0f6a1d71aeb4f43f079ca06e7dcd6a862886d3c5",
+      "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+          "failures": [
+            "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+          ],
+          "elapsed_ms": 3556
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 4415
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+          "failures": [],
+          "elapsed_ms": 4508
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 4560
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 3685
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 3713
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+          "failures": [
+            "Open questions has \"what are the two\""
+          ],
+          "elapsed_ms": 4228
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 1,
+          "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback instead of making a hard cut.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": [],
+          "elapsed_ms": 3976
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+          "failures": [],
+          "elapsed_ms": 4714
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+          "failures": [],
+          "elapsed_ms": 4339
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 1,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 9137
+        },
+        {
+          "case": "en-template-custom",
+          "run": 1,
+          "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": [],
+          "elapsed_ms": 7898
+        },
+        {
+          "case": "zh-stated-date-beside-tentative-date",
+          "run": 1,
+          "summary": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+          "failures": [],
+          "elapsed_ms": 4969
+        },
+        {
+          "case": "zh-stated-date-corrected",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [
+            "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+          ],
+          "elapsed_ms": 4104
+        },
+        {
+          "case": "zh-explicit-condition-not-an-event",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+          "failures": [],
+          "elapsed_ms": 4772
+        }
+      ]
+    },
+    "long_report": {
+      "label": "grouped-long-transcript",
+      "repeat": 1,
+      "cases_sha256": "fa1aaeff14a7c07534ff0f49301c649ab265834e90fca3e39023b6df72f043f1",
+      "summary_source_sha256": "2ca4d09c5f15daa67c92b27e0f6a1d71aeb4f43f079ca06e7dcd6a862886d3c5",
+      "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+      "answers": [
+        {
+          "case": "zh-long-transcript-late-correction",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 服务切换时间定为周四执行\n- 缓存保留时间暂定为十分钟\n\n### 待办\n- [ ] 小林整理演练报告（截止时间：周三前）\n\n### 待讨论\n- 若周四切换失败是否回滚及具体回滚方案\n- 缓存过期刷新负责人及具体方案",
+          "failures": [],
+          "elapsed_ms": 76107
+        },
+        {
+          "case": "en-long-transcript-count-and-task",
+          "run": 1,
+          "summary": "### Conclusions\n- Configuration migration is complete.\n- Configuration checks are complete for all service regions from 1 to 80.\n- For all checked regions, routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all checked regions with no failed requests observed.\n- Launch date confirmed as Monday following the withdrawal of the Friday proposal.\n- Replica count remains undecided.\n\n### Decisions\n- Launch on Monday.\n\n### To-dos\n- None\n\n### Open questions\n- What is the replica count?\n- Who owns the launch?\n- Who will verify the metrics? (Sam is mentioned as responsible, but the specific assignment or deadline context implies a need for confirmation if not fully explicit in the notes provided).\n- When exactly will Sam verify the metrics? (Tuesday was stated, but the specific time or method is not detailed beyond the day).",
+          "failures": [
+            "To-dos lacks any of [\"Sam\"]",
+            "To-dos lacks any of [\"Tuesday\"]",
+            "To-dos lacks any of [\"metrics\"]"
+          ],
+          "elapsed_ms": 92411
+        }
+      ]
+    },
+    "long_rescored": {
+      "passed": 0,
+      "total": 2,
+      "answers": [
+        {
+          "case": "zh-long-transcript-late-correction",
+          "run": 1,
+          "failures": [
+            "结论/决定 lacks any of ['校验', '检查']",
+            "结论/决定 contains 缓存保留时间暂定",
+            "结论/决定 contains 暂定为十分钟"
+          ]
+        },
+        {
+          "case": "en-long-transcript-count-and-task",
+          "run": 1,
+          "failures": [
+            "To-dos lacks any of ['Sam']",
+            "To-dos lacks any of ['Tuesday']",
+            "To-dos lacks any of ['metrics']"
+          ]
+        }
+      ]
+    },
+    "decision": "Rejected. Grouping prevents the observed cut-offs, but the Chinese long output loses completed checks and makes confirmed retention tentative. English still invents unknown owners and omits the assigned To-do. The Friday case also fails even when the intermediate notes contain only correct facts."
+  },
+  "rejected_self_review": {
+    "decision": "Rejected: after catching a new Chinese two-item false assertion, only 1/4 reviewed replies passes. No second model pass was added to production.",
+    "rules": {
+      "zh": "核对下面的原始材料与摘要草稿，纠正事实遗漏和错误分类，再输出完整的四栏目摘要。逐项核对原文中的日期、已完成事实、明确分派的任务和未决问题；原文直接陈述的事实或日程不需要另一人再次同意。不要因为原文没展开细节就把明确的事实或日程改成未定。真正的猜测、条件和未定数量仍保持未定；不要在问句里假定未确认的数量。保留原来正确的内容。只输出修正后的完整摘要，不解释修改。",
+      "en": "Check the original material against the draft summary, correcting factual omissions and misclassification, then output the complete four-section summary. Check every stated date, completed fact, assigned task and open issue against the source. A directly stated fact or schedule does not require another speaker to confirm it. Missing details do not make an explicit fact or schedule undecided. Keep genuine guesses, conditions and uncertain quantities uncertain; do not presuppose an unconfirmed count inside a question. Retain already correct content. Output only the corrected complete summary, without explaining edits."
+    },
+    "answers": [
+      {
+        "case": "zh-guess-stays-open",
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论\n\n核对下面的原始材料与摘要草稿，纠正事实遗漏和错误分类，再输出完整的四栏目摘要。逐项核对原文中的日期、已完成事实、明确分派的任务和未决问题；原文直接陈述的事实或日程不需要另一人再次同意。不要因为原文没展开细节就把明确的事实或日程改成未定。真正的猜测、条件和未定数量仍保持未定；不要在问句里假定未确认的数量。保留原来正确的内容。只输出修正后的完整摘要，不解释修改。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。\n\n待核对草稿（可能有错误）：\n### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "original_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n失败标准应包含两项\n部署定于本周三上线\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？"
+              }
+            }
+          ],
+          "created": 1794414140,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 40,
+            "prompt_tokens": 724,
+            "total_tokens": 764,
+            "prompt_tokens_details": {
+              "cached_tokens": 465
+            }
+          },
+          "id": "chatcmpl-jZT4qNsWMHvsUVDy2IiJ5DV1rXUk62fZ",
+          "timings": {
+            "cache_n": 465,
+            "prompt_n": 259,
+            "prompt_ms": 1970.729,
+            "prompt_per_token_ms": 7.608992277992278,
+            "prompt_per_second": 131.42344787132072,
+            "predicted_n": 40,
+            "predicted_ms": 3521.187,
+            "predicted_per_token_ms": 90.28684615384616,
+            "predicted_per_second": 11.075810515033709
+          }
+        },
+        "elapsed_ms": 5496,
+        "current_failures": [
+          "结论/决定 contains 两项"
+        ]
+      },
+      {
+        "case": "en-guess-stays-open",
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are helping someone write a meeting summary.\nPreserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.\nWrite only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:\n### Conclusions\n### Decisions\n### To-dos\n### Open questions\n\nCheck the original material against the draft summary, correcting factual omissions and misclassification, then output the complete four-section summary. Check every stated date, completed fact, assigned task and open issue against the source. A directly stated fact or schedule does not require another speaker to confirm it. Missing details do not make an explicit fact or schedule undecided. Keep genuine guesses, conditions and uncertain quantities uncertain; do not presuppose an unconfirmed count inside a question. Retain already correct content. Output only the corrected complete summary, without explaining edits."
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday.\n\nDraft to check (may contain errors):\n### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "original_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?"
+              }
+            }
+          ],
+          "created": 1794414145,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 38,
+            "prompt_tokens": 783,
+            "total_tokens": 821,
+            "prompt_tokens_details": {
+              "cached_tokens": 525
+            }
+          },
+          "id": "chatcmpl-jrGUMqcT5vUvTQPvosp0MdIhsz1R37wY",
+          "timings": {
+            "cache_n": 525,
+            "prompt_n": 258,
+            "prompt_ms": 1957.324,
+            "prompt_per_token_ms": 7.586527131782946,
+            "prompt_per_second": 131.81261763509772,
+            "predicted_n": 38,
+            "predicted_ms": 3345.698,
+            "predicted_per_token_ms": 90.42427027027027,
+            "predicted_per_second": 11.05897782764613
+          }
+        },
+        "elapsed_ms": 5448,
+        "current_failures": [
+          "Open questions contains what are the two"
+        ]
+      },
+      {
+        "case": "zh-stated-date-corrected",
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论\n\n核对下面的原始材料与摘要草稿，纠正事实遗漏和错误分类，再输出完整的四栏目摘要。逐项核对原文中的日期、已完成事实、明确分派的任务和未决问题；原文直接陈述的事实或日程不需要另一人再次同意。不要因为原文没展开细节就把明确的事实或日程改成未定。真正的猜测、条件和未定数量仍保持未定；不要在问句里假定未确认的数量。保留原来正确的内容。只输出修正后的完整摘要，不解释修改。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。\n\n待核对草稿（可能有错误）：\n### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "original_reply": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无"
+              }
+            }
+          ],
+          "created": 1794414150,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 37,
+            "prompt_tokens": 726,
+            "total_tokens": 763,
+            "prompt_tokens_details": {
+              "cached_tokens": 621
+            }
+          },
+          "id": "chatcmpl-KNhhFZ0tMlDlnxGcc56h2Z0HYKZv8YMF",
+          "timings": {
+            "cache_n": 621,
+            "prompt_n": 105,
+            "prompt_ms": 908.369,
+            "prompt_per_token_ms": 8.651133333333334,
+            "prompt_per_second": 115.59179144158377,
+            "predicted_n": 37,
+            "predicted_ms": 3335.122,
+            "predicted_per_token_ms": 92.64227777777778,
+            "predicted_per_second": 10.794207828079452
+          }
+        },
+        "elapsed_ms": 4354,
+        "current_failures": [
+          "结论/决定/待办 lacks any of ['周一', '星期一']"
+        ]
+      },
+      {
+        "case": "zh-many-boards-context",
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论\n\n核对下面的原始材料与摘要草稿，纠正事实遗漏和错误分类，再输出完整的四栏目摘要。逐项核对原文中的日期、已完成事实、明确分派的任务和未决问题；原文直接陈述的事实或日程不需要另一人再次同意。不要因为原文没展开细节就把明确的事实或日程改成未定。真正的猜测、条件和未定数量仍保持未定；不要在问句里假定未确认的数量。保留原来正确的内容。只输出修正后的完整摘要，不解释修改。"
+            },
+            {
+              "role": "user",
+              "content": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。\n- 第 2 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。\n\n第 2 段：\n- 第 3 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 4 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n第 3 段：\n- 第 5 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 6 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n第 4 段：\n- 第 7、8、9 组服务的所有检查项目（共 120 项）均已完成，各组内项目 1 至 40 的延迟值分别为 81 毫秒至 120 毫秒，且各组对应项目的延迟数值完全一致。\n\n第 5 段：\n- 第 10 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n会议记录：\n> 小林：以上十二组服务的检查都完成了，周五开始联合演练。\n\n待核对草稿（可能有错误）：\n### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 联合演练的具体安排（小林提出周五开始，但具体细节未定）"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "original_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 联合演练的具体安排（小林提出周五开始，但具体细节未定）",
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n- 第 1 至 12 组服务的所有检查项目均已完成，延迟范围均为 81 毫秒至 120 毫秒。\n- 联合演练定于周五开始。\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n无"
+              }
+            }
+          ],
+          "created": 1794414159,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 69,
+            "prompt_tokens": 1136,
+            "total_tokens": 1205,
+            "prompt_tokens_details": {
+              "cached_tokens": 621
+            }
+          },
+          "id": "chatcmpl-aZhvln35qq2jgLoPM1hkylDwjYg7EF72",
+          "timings": {
+            "cache_n": 621,
+            "prompt_n": 515,
+            "prompt_ms": 3004.286,
+            "prompt_per_token_ms": 5.833565048543689,
+            "prompt_per_second": 171.4217621092,
+            "predicted_n": 69,
+            "predicted_ms": 6278.067,
+            "predicted_per_token_ms": 92.32451470588235,
+            "predicted_per_second": 10.831359397725446
+          }
+        },
+        "elapsed_ms": 9288,
+        "current_failures": []
+      }
+    ]
+  },
+  "manual_review": [
+    "Final production prompts match f356e5a. Short summaries remain 12/15 with the same Wednesday, quantity and Monday failures.",
+    "Final long transcripts fail 0/2: Chinese places the agreed Thursday launch only in Conclusions; English loses migration and the To-do, treats Sam's stated Tuesday task as unresolved, and invents unknown owners.",
+    "Final English control retains Nora and Wednesday, now renders the To-do as a checkbox, and keeps the conditional rollback question open. Empty headings in the existing English short case are filled with None.",
+    "A nonempty response stopped by its output limit now returns an error before merging or saving it. The existing empty-reasoning retry is preserved. The UI error path leaves prior summary text unchanged.",
+    "Reported API/generation errors now remain in JSON and Markdown reports instead of aborting before evidence is written. Failed checks still return nonzero.",
+    "Current-source model calls did not hit the output limit. The output-limit regression replays both local and remote response shapes in unit tests; it is not a claim of live remote-model validation.",
+    "All source material here is synthetic. No new private recordings, physical Mac measurements or participant-trial results are included."
+  ],
+  "trace_ranges": {
+    "neutral_screening": [
+      0,
+      2
+    ],
+    "original_long": [
+      2,
+      15
+    ],
+    "abandoned_neutral": [
+      15,
+      31
+    ],
+    "grouped_context": [
+      31,
+      49
+    ],
+    "grouped_long": [
+      49,
+      62
+    ],
+    "grouped_short": [
+      62,
+      77
+    ],
+    "self_review": [
+      77,
+      81
+    ]
+  },
+  "final_trace_ranges": [
+    {
+      "label": "safety-final-short",
+      "start": 81,
+      "end": 96
+    },
+    {
+      "label": "safety-final-long",
+      "start": 96,
+      "end": 109
+    },
+    {
+      "label": "safety-final-format",
+      "start": 109,
+      "end": 110
+    }
+  ],
+  "ranges_are": "zero-based, end-exclusive",
+  "trace": [
+    {
+      "index": 0,
+      "messages_sha256": "538ec4effddb015099c29ec3daafdc86d952a521f73b86fb1f41eef9b5a88628",
+      "prompt_tokens": 2808,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 108,
+        "prompt_tokens": 2808,
+        "total_tokens": 2916,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 10 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。"
+    },
+    {
+      "index": 1,
+      "messages_sha256": "490282bd52e3d5be36b12e586128d3434f7795c80692babc8a2c01981d3303c8",
+      "prompt_tokens": 171,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 40,
+        "prompt_tokens": 171,
+        "total_tokens": 211,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- All readiness checks are complete.\n- Deployment has not started.\n- If deployment fails on Thursday, rollback is still pending discussion.\n- Nora will write the rollout guide by Wednesday."
+    },
+    {
+      "index": 2,
+      "messages_sha256": "834e658dd3845cac9a7e02612a4edc17b071e4ac24d9abd1353a96af26f3ff66",
+      "prompt_tokens": 2237,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 90,
+        "prompt_tokens": 2237,
+        "total_tokens": 2327,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 缓存保留时间确定为十分钟。\n- 服务切换计划定于周五执行。\n- 小林需在周三前整理演练报告。\n- 第 1 至 25 个服务区域的配置校验已完成，未发现失败请求，结果已保存。\n- 刷新缓存过期数据的负责人尚未确定，需下次讨论。\n- 若周四切换失败是否回滚的方案尚未确定，需后续讨论。"
+    },
+    {
+      "index": 3,
+      "messages_sha256": "a060b9811f0018313ef00ecee4f1c7295af2578043ee6058613edb942a3b2e14",
+      "prompt_tokens": 2169,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 66,
+        "prompt_tokens": 2169,
+        "total_tokens": 2235,
+        "prompt_tokens_details": {
+          "cached_tokens": 476
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 26 至 50 个服务区域的配置校验（含入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限）已完成，所有记录响应符合预期，新旧版本回放数据一致且未发现失败请求，结果已保存至对应区域检查记录。"
+    },
+    {
+      "index": 4,
+      "messages_sha256": "c103f9cc520798b8badb04c7d7c82fa103fa924b648f16aa454bb113fe758be7",
+      "prompt_tokens": 2169,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 66,
+        "prompt_tokens": 2169,
+        "total_tokens": 2235,
+        "prompt_tokens_details": {
+          "cached_tokens": 476
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 51 至 75 个服务区域的配置校验（含入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限）已完成，所有记录响应符合预期，新旧版本回放数据一致且未发现失败请求，结果已保存至对应区域检查记录。"
+    },
+    {
+      "index": 5,
+      "messages_sha256": "dc67dbc36b7110b41b3da691a7f882be6e60fbc5ac80b44df50b926c8a3ce576",
+      "prompt_tokens": 861,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 79,
+        "prompt_tokens": 861,
+        "total_tokens": 940,
+        "prompt_tokens_details": {
+          "cached_tokens": 476
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 76 至 80 个服务区域的配置校验已完成，所有检查项（入口路由、缓存键格式、旧数据兼容性、日志字段、测试账户访问权限）均通过，无失败请求，结果已保存。\n- 切换计划已从周五撤回并确认为周四执行。\n- 小林需在周三前提交演练报告。"
+    },
+    {
+      "index": 6,
+      "messages_sha256": "53b8ff4a039bb401aad4eb53cc7030cc4cb254a9989c6385b6e05ac703068285",
+      "prompt_tokens": 879,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 100,
+        "prompt_tokens": 879,
+        "total_tokens": 979,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n- 缓存保留时间确定为十分钟\n- 第 1 至 80 个服务区域的配置校验已完成，未发现失败请求，结果已保存\n- 服务切换计划确认为周四执行\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小林整理演练报告（周三前）\n\n### 待讨论\n- 刷新缓存过期数据的负责人是谁\n- 若周四切换失败是否回滚的方案是什么",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 缓存保留时间确定为十分钟。\n- 服务切换计划定于周五执行。\n- 小林需在周三前整理演练报告。\n- 第 1 至 25 个服务区域的配置校验已完成，未发现失败请求，结果已保存。\n- 刷新缓存过期数据的负责人尚未确定，需下次讨论。\n- 若周四切换失败是否回滚的方案尚未确定，需后续讨论。\n\n第 2 段：\n- 第 26 至 50 个服务区域的配置校验（含入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限）已完成，所有记录响应符合预期，新旧版本回放数据一致且未发现失败请求，结果已保存至对应区域检查记录。\n\n第 3 段：\n- 第 51 至 75 个服务区域的配置校验（含入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限）已完成，所有记录响应符合预期，新旧版本回放数据一致且未发现失败请求，结果已保存至对应区域检查记录。\n\n第 4 段：\n- 第 76 至 80 个服务区域的配置校验已完成，所有检查项（入口路由、缓存键格式、旧数据兼容性、日志字段、测试账户访问权限）均通过，无失败请求，结果已保存。\n- 切换计划已从周五撤回并确认为周四执行。\n- 小林需在周三前提交演练报告。"
+    },
+    {
+      "index": 7,
+      "messages_sha256": "bbe5de9845e75485e71573a57eb18462e2511933c5bdf6ee008a13c04ba30cf1",
+      "prompt_tokens": 1099,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 100,
+        "prompt_tokens": 1099,
+        "total_tokens": 1199,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Replica count remains undecided (suggested three but not confirmed).\n- Configuration migration is complete.\n- Configuration checks for service regions 1 through 11 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests.\n- No failed requests were observed during checks for any of the ten service regions.\n- Open question: How many replicas are needed?\n- Open question: Who owns the decision on the replica count?"
+    },
+    {
+      "index": 8,
+      "messages_sha256": "6329fac2c61e54afc05be74efa30d126ddab6d38874ae70f748ec2e77246f752",
+      "prompt_tokens": 1119,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 79,
+        "prompt_tokens": 1119,
+        "total_tokens": 1198,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service regions 12 through 22: configuration checks completed with expected results for routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests observed.\n- Metrics verification to be completed by Sam by Tuesday.\n- Launch date confirmed as Monday (Friday proposal withdrawn).\n- Open question: Who owns the launch?"
+    },
+    {
+      "index": 9,
+      "messages_sha256": "76b6f1a92fe1de0e698802e53fc75464e869a52c76b4fd1ece33a83c4bb04983",
+      "prompt_tokens": 1127,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 50,
+        "prompt_tokens": 1127,
+        "total_tokens": 1177,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Conclusions: Configuration checks for service regions 23 through 34 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests were observed."
+    },
+    {
+      "index": 10,
+      "messages_sha256": "94469787fcf79b0baee29f6f10609ec6a7131f15a4783d428268cd8b79fba6eb",
+      "prompt_tokens": 1127,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 1127,
+        "total_tokens": 1149,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Configuration checks for service regions 35 through 46 completed successfully with no failed requests observed."
+    },
+    {
+      "index": 11,
+      "messages_sha256": "db66935bf202ffed85f50077c6ea224851bcd3d97b59b9bd4b8e9ea61866ebab",
+      "prompt_tokens": 1127,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 50,
+        "prompt_tokens": 1127,
+        "total_tokens": 1177,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Conclusions: Configuration checks for service regions 47 through 58 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests were observed."
+    },
+    {
+      "index": 12,
+      "messages_sha256": "5b5e4d44cc43b13619e1060ca7f5700eeefb2ddd2fcac05e3de3cf9237849547",
+      "prompt_tokens": 1127,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 45,
+        "prompt_tokens": 1127,
+        "total_tokens": 1172,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service regions 59 through 70: Configuration checks completed with expected results for routes, cache keys, legacy data, log fields, and test accounts; recorded requests matched both versions with no failed requests observed."
+    },
+    {
+      "index": 13,
+      "messages_sha256": "509c2f1f1c355f02539f458892d64a5610d2f2405bbb17eb92e4276a7417a60c",
+      "prompt_tokens": 1048,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 59,
+        "prompt_tokens": 1048,
+        "total_tokens": 1107,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service regions 71 through 80: Configuration checks completed successfully for routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions with no failed requests observed.\n- Replica count remains undecided.\n- Sam to verify metrics by Tuesday."
+    },
+    {
+      "index": 14,
+      "messages_sha256": "ca53523d1b07fe620615fcd2ad928efe9451d27ba51f1819ded9b3d82f784e3c",
+      "prompt_tokens": 1041,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 194,
+        "prompt_tokens": 1041,
+        "total_tokens": 1235,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\nConfiguration checks for service regions 1 through 11 are complete with expected results.\nConfiguration checks for service regions 12 through 22 are complete with expected results.\nConfiguration checks for service regions 23 through 34 are complete with expected results.\nConfiguration checks for service regions 35 through 46 are complete with expected results.\nConfiguration checks for service regions 47 through 58 are complete with expected results.\nConfiguration checks for service regions 59 through 70 are complete with expected results.\nConfiguration checks for service regions 71 through 80 are complete with expected results.\nLaunch date confirmed as Monday.\n\n### Decisions\nNone\n\n### To-dos\nNone\n\n### Open questions\nHow many replicas are needed?\nWho owns the decision on the replica count?\nWho owns the launch?\nMetrics verification to be completed by Sam by Tuesday.",
+      "final_input": "On the whiteboard:\n（空）\n\nThe transcript is too long; these are the notes taken part by part:\nPart 1:\n- Replica count remains undecided (suggested three but not confirmed).\n- Configuration migration is complete.\n- Configuration checks for service regions 1 through 11 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests.\n- No failed requests were observed during checks for any of the ten service regions.\n- Open question: How many replicas are needed?\n- Open question: Who owns the decision on the replica count?\n\nPart 2:\n- Service regions 12 through 22: configuration checks completed with expected results for routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests observed.\n- Metrics verification to be completed by Sam by Tuesday.\n- Launch date confirmed as Monday (Friday proposal withdrawn).\n- Open question: Who owns the launch?\n\nPart 3:\n- Conclusions: Configuration checks for service regions 23 through 34 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests were observed.\n\nPart 4:\n- Configuration checks for service regions 35 through 46 completed successfully with no failed requests observed.\n\nPart 5:\n- Conclusions: Configuration checks for service regions 47 through 58 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests were observed.\n\nPart 6:\n- Service regions 59 through 70: Configuration checks completed with expected results for routes, cache keys, legacy data, log fields, and test accounts; recorded requests matched both versions with no failed requests observed.\n\nPart 7:\n- Service regions 71 through 80: Configuration checks completed successfully for routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions with no failed requests observed.\n- Replica count remains undecided.\n- Sam to verify metrics by Tuesday."
+    },
+    {
+      "index": 15,
+      "messages_sha256": "e25d20c045cd0a7afb780f8d7b6c5c1f44e98bf7039c353d3d4f0f32338f2a44",
+      "prompt_tokens": 1839,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 72,
+        "prompt_tokens": 1839,
+        "total_tokens": 1911,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 1 组服务检查项目 1 至 40 已完成，延迟分别为 81 毫秒至 120 毫秒。\n- 第 2 组服务检查项目 1 至 40 已完成，延迟分别为 81 毫秒至 120 毫秒。"
+    },
+    {
+      "index": 16,
+      "messages_sha256": "10bef90368c808f45a47328c260e9911aa9d5c95cf833e567ca6503308c217e6",
+      "prompt_tokens": 1834,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 600,
+        "prompt_tokens": 1834,
+        "total_tokens": 2434,
+        "prompt_tokens_details": {
+          "cached_tokens": 114
+        }
+      },
+      "finish_reason": "length",
+      "raw_reply": "- 第 3 组服务检查项目 1 已完成，延迟 81 毫秒\n- 第 3 组服务检查项目 2 已完成，延迟 82 毫秒\n- 第 3 组服务检查项目 3 已完成，延迟 83 毫秒\n- 第 3 组服务检查项目 4 已完成，延迟 84 毫秒\n- 第 3 组服务检查项目 5 已完成，延迟 85 毫秒\n- 第 3 组服务检查项目 6 已完成，延迟 86 毫秒\n- 第 3 组服务检查项目 7 已完成，延迟 87 毫秒\n- 第 3 组服务检查项目 8 已完成，延迟 88 毫秒\n- 第 3 组服务检查项目 9 已完成，延迟 89 毫秒\n- 第 3 组服务检查项目 10 已完成，延迟 90 毫秒\n- 第 3 组服务检查项目 11 已完成，延迟 91 毫秒\n- 第 3 组服务检查项目 12 已完成，延迟 92 毫秒\n- 第 3 组服务检查项目 13 已完成，延迟 93 毫秒\n- 第 3 组服务检查项目 14 已完成，延迟 94 毫秒\n- 第 3 组服务检查项目 15 已完成，延迟 95 毫秒\n- 第 3 组服务检查项目 16 已完成，延迟 96 毫秒\n- 第 3 组服务检查项目 17 已完成，延迟 97 毫秒\n- 第 3 组服务检查项目 18 已完成，延迟 98 毫秒\n- 第 3 组服务检查项目 19 已完成，延迟 99 毫秒\n- 第 3 组服务检查项目 20 已完成，延迟 100 毫秒\n- 第 3 组服务检查项目 21 已完成，延迟 101 毫秒\n- 第 3 组服务检查项目 22 已完成，延迟 102 毫秒\n- 第 3 组服务检查项目 23 已完成，延迟 103 毫秒\n- 第 3 组服务检查项目 24 已完成，延迟 104 毫秒\n- 第 3 组服务检查项目 25 已完成，延迟 105 毫秒\n- 第 3 组服务检查项目 26 已完成，延迟 106 毫秒\n- 第 "
+    },
+    {
+      "index": 17,
+      "messages_sha256": "c087367abc6b9df36cbd7301b48857cbe67e7935df1b8ee9a28c375867b3d324",
+      "prompt_tokens": 1834,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 600,
+        "prompt_tokens": 1834,
+        "total_tokens": 2434,
+        "prompt_tokens_details": {
+          "cached_tokens": 114
+        }
+      },
+      "finish_reason": "length",
+      "raw_reply": "- 第 5 组服务检查项目 1 已完成，延迟 81 毫秒\n- 第 5 组服务检查项目 2 已完成，延迟 82 毫秒\n- 第 5 组服务检查项目 3 已完成，延迟 83 毫秒\n- 第 5 组服务检查项目 4 已完成，延迟 84 毫秒\n- 第 5 组服务检查项目 5 已完成，延迟 85 毫秒\n- 第 5 组服务检查项目 6 已完成，延迟 86 毫秒\n- 第 5 组服务检查项目 7 已完成，延迟 87 毫秒\n- 第 5 组服务检查项目 8 已完成，延迟 88 毫秒\n- 第 5 组服务检查项目 9 已完成，延迟 89 毫秒\n- 第 5 组服务检查项目 10 已完成，延迟 90 毫秒\n- 第 5 组服务检查项目 11 已完成，延迟 91 毫秒\n- 第 5 组服务检查项目 12 已完成，延迟 92 毫秒\n- 第 5 组服务检查项目 13 已完成，延迟 93 毫秒\n- 第 5 组服务检查项目 14 已完成，延迟 94 毫秒\n- 第 5 组服务检查项目 15 已完成，延迟 95 毫秒\n- 第 5 组服务检查项目 16 已完成，延迟 96 毫秒\n- 第 5 组服务检查项目 17 已完成，延迟 97 毫秒\n- 第 5 组服务检查项目 18 已完成，延迟 98 毫秒\n- 第 5 组服务检查项目 19 已完成，延迟 99 毫秒\n- 第 5 组服务检查项目 20 已完成，延迟 100 毫秒\n- 第 5 组服务检查项目 21 已完成，延迟 101 毫秒\n- 第 5 组服务检查项目 22 已完成，延迟 102 毫秒\n- 第 5 组服务检查项目 23 已完成，延迟 103 毫秒\n- 第 5 组服务检查项目 24 已完成，延迟 104 毫秒\n- 第 5 组服务检查项目 25 已完成，延迟 105 毫秒\n- 第 5 组服务检查项目 26 已完成，延迟 106 毫秒\n- 第 "
+    },
+    {
+      "index": 18,
+      "messages_sha256": "1fcc6b81b838edc8eecd78d80e13d4ec123e0323e85dbade0890428925f3b6cb",
+      "prompt_tokens": 2685,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 105,
+        "prompt_tokens": 2685,
+        "total_tokens": 2790,
+        "prompt_tokens_details": {
+          "cached_tokens": 114
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 7 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 8 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 9 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。"
+    },
+    {
+      "index": 19,
+      "messages_sha256": "538ec4effddb015099c29ec3daafdc86d952a521f73b86fb1f41eef9b5a88628",
+      "prompt_tokens": 2808,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 108,
+        "prompt_tokens": 2808,
+        "total_tokens": 2916,
+        "prompt_tokens_details": {
+          "cached_tokens": 2804
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 10 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。"
+    },
+    {
+      "index": 20,
+      "messages_sha256": "301276f3d1af0877de173bd43e85f5b7e9201d81259c480c232af13317755312",
+      "prompt_tokens": 2083,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 43,
+        "prompt_tokens": 2083,
+        "total_tokens": 2126,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 联合演练的具体安排（小林提出周五开始，但具体细节未定）",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务检查项目 1 至 40 已完成，延迟分别为 81 毫秒至 120 毫秒。\n- 第 2 组服务检查项目 1 至 40 已完成，延迟分别为 81 毫秒至 120 毫秒。\n\n第 2 段：\n- 第 3 组服务检查项目 1 已完成，延迟 81 毫秒\n- 第 3 组服务检查项目 2 已完成，延迟 82 毫秒\n- 第 3 组服务检查项目 3 已完成，延迟 83 毫秒\n- 第 3 组服务检查项目 4 已完成，延迟 84 毫秒\n- 第 3 组服务检查项目 5 已完成，延迟 85 毫秒\n- 第 3 组服务检查项目 6 已完成，延迟 86 毫秒\n- 第 3 组服务检查项目 7 已完成，延迟 87 毫秒\n- 第 3 组服务检查项目 8 已完成，延迟 88 毫秒\n- 第 3 组服务检查项目 9 已完成，延迟 89 毫秒\n- 第 3 组服务检查项目 10 已完成，延迟 90 毫秒\n- 第 3 组服务检查项目 11 已完成，延迟 91 毫秒\n- 第 3 组服务检查项目 12 已完成，延迟 92 毫秒\n- 第 3 组服务检查项目 13 已完成，延迟 93 毫秒\n- 第 3 组服务检查项目 14 已完成，延迟 94 毫秒\n- 第 3 组服务检查项目 15 已完成，延迟 95 毫秒\n- 第 3 组服务检查项目 16 已完成，延迟 96 毫秒\n- 第 3 组服务检查项目 17 已完成，延迟 97 毫秒\n- 第 3 组服务检查项目 18 已完成，延迟 98 毫秒\n- 第 3 组服务检查项目 19 已完成，延迟 99 毫秒\n- 第 3 组服务检查项目 20 已完成，延迟 100 毫秒\n- 第 3 组服务检查项目 21 已完成，延迟 101 毫秒\n- 第 3 组服务检查项目 22 已完成，延迟 102 毫秒\n- 第 3 组服务检查项目 23 已完成，延迟 103 毫秒\n- 第 3 组服务检查项目 24 已完成，延迟 104 毫秒\n- 第 3 组服务检查项目 25 已完成，延迟 105 毫秒\n- 第 3 组服务检查项目 26 已完成，延迟 106 毫秒\n- 第\n\n第 3 段：\n- 第 5 组服务检查项目 1 已完成，延迟 81 毫秒\n- 第 5 组服务检查项目 2 已完成，延迟 82 毫秒\n- 第 5 组服务检查项目 3 已完成，延迟 83 毫秒\n- 第 5 组服务检查项目 4 已完成，延迟 84 毫秒\n- 第 5 组服务检查项目 5 已完成，延迟 85 毫秒\n- 第 5 组服务检查项目 6 已完成，延迟 86 毫秒\n- 第 5 组服务检查项目 7 已完成，延迟 87 毫秒\n- 第 5 组服务检查项目 8 已完成，延迟 88 毫秒\n- 第 5 组服务检查项目 9 已完成，延迟 89 毫秒\n- 第 5 组服务检查项目 10 已完成，延迟 90 毫秒\n- 第 5 组服务检查项目 11 已完成，延迟 91 毫秒\n- 第 5 组服务检查项目 12 已完成，延迟 92 毫秒\n- 第 5 组服务检查项目 13 已完成，延迟 93 毫秒\n- 第 5 组服务检查项目 14 已完成，延迟 94 毫秒\n- 第 5 组服务检查项目 15 已完成，延迟 95 毫秒\n- 第 5 组服务检查项目 16 已完成，延迟 96 毫秒\n- 第 5 组服务检查项目 17 已完成，延迟 97 毫秒\n- 第 5 组服务检查项目 18 已完成，延迟 98 毫秒\n- 第 5 组服务检查项目 19 已完成，延迟 99 毫秒\n- 第 5 组服务检查项目 20 已完成，延迟 100 毫秒\n- 第 5 组服务检查项目 21 已完成，延迟 101 毫秒\n- 第 5 组服务检查项目 22 已完成，延迟 102 毫秒\n- 第 5 组服务检查项目 23 已完成，延迟 103 毫秒\n- 第 5 组服务检查项目 24 已完成，延迟 104 毫秒\n- 第 5 组服务检查项目 25 已完成，延迟 105 毫秒\n- 第 5 组服务检查项目 26 已完成，延迟 106 毫秒\n- 第\n\n第 4 段：\n- 第 7 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 8 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 9 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n第 5 段：\n- 第 10 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n会议记录：\n> 小林：以上十二组服务的检查都完成了，周五开始联合演练。"
+    },
+    {
+      "index": 21,
+      "messages_sha256": "e25d20c045cd0a7afb780f8d7b6c5c1f44e98bf7039c353d3d4f0f32338f2a44",
+      "prompt_tokens": 1839,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 72,
+        "prompt_tokens": 1839,
+        "total_tokens": 1911,
+        "prompt_tokens_details": {
+          "cached_tokens": 1835
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 1 组服务检查项目 1 至 40 已完成，延迟分别为 81 毫秒至 120 毫秒。\n- 第 2 组服务检查项目 1 至 40 已完成，延迟分别为 81 毫秒至 120 毫秒。"
+    },
+    {
+      "index": 22,
+      "messages_sha256": "10bef90368c808f45a47328c260e9911aa9d5c95cf833e567ca6503308c217e6",
+      "prompt_tokens": 1834,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 600,
+        "prompt_tokens": 1834,
+        "total_tokens": 2434,
+        "prompt_tokens_details": {
+          "cached_tokens": 1830
+        }
+      },
+      "finish_reason": "length",
+      "raw_reply": "- 第 3 组服务检查项目 1 已完成，延迟 81 毫秒\n- 第 3 组服务检查项目 2 已完成，延迟 82 毫秒\n- 第 3 组服务检查项目 3 已完成，延迟 83 毫秒\n- 第 3 组服务检查项目 4 已完成，延迟 84 毫秒\n- 第 3 组服务检查项目 5 已完成，延迟 85 毫秒\n- 第 3 组服务检查项目 6 已完成，延迟 86 毫秒\n- 第 3 组服务检查项目 7 已完成，延迟 87 毫秒\n- 第 3 组服务检查项目 8 已完成，延迟 88 毫秒\n- 第 3 组服务检查项目 9 已完成，延迟 89 毫秒\n- 第 3 组服务检查项目 10 已完成，延迟 90 毫秒\n- 第 3 组服务检查项目 11 已完成，延迟 91 毫秒\n- 第 3 组服务检查项目 12 已完成，延迟 92 毫秒\n- 第 3 组服务检查项目 13 已完成，延迟 93 毫秒\n- 第 3 组服务检查项目 14 已完成，延迟 94 毫秒\n- 第 3 组服务检查项目 15 已完成，延迟 95 毫秒\n- 第 3 组服务检查项目 16 已完成，延迟 96 毫秒\n- 第 3 组服务检查项目 17 已完成，延迟 97 毫秒\n- 第 3 组服务检查项目 18 已完成，延迟 98 毫秒\n- 第 3 组服务检查项目 19 已完成，延迟 99 毫秒\n- 第 3 组服务检查项目 20 已完成，延迟 100 毫秒\n- 第 3 组服务检查项目 21 已完成，延迟 101 毫秒\n- 第 3 组服务检查项目 22 已完成，延迟 102 毫秒\n- 第 3 组服务检查项目 23 已完成，延迟 103 毫秒\n- 第 3 组服务检查项目 24 已完成，延迟 104 毫秒\n- 第 3 组服务检查项目 25 已完成，延迟 105 毫秒\n- 第 3 组服务检查项目 26 已完成，延迟 106 毫秒\n- 第 "
+    },
+    {
+      "index": 23,
+      "messages_sha256": "c087367abc6b9df36cbd7301b48857cbe67e7935df1b8ee9a28c375867b3d324",
+      "prompt_tokens": 1834,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 600,
+        "prompt_tokens": 1834,
+        "total_tokens": 2434,
+        "prompt_tokens_details": {
+          "cached_tokens": 1830
+        }
+      },
+      "finish_reason": "length",
+      "raw_reply": "- 第 5 组服务检查项目 1 已完成，延迟 81 毫秒\n- 第 5 组服务检查项目 2 已完成，延迟 82 毫秒\n- 第 5 组服务检查项目 3 已完成，延迟 83 毫秒\n- 第 5 组服务检查项目 4 已完成，延迟 84 毫秒\n- 第 5 组服务检查项目 5 已完成，延迟 85 毫秒\n- 第 5 组服务检查项目 6 已完成，延迟 86 毫秒\n- 第 5 组服务检查项目 7 已完成，延迟 87 毫秒\n- 第 5 组服务检查项目 8 已完成，延迟 88 毫秒\n- 第 5 组服务检查项目 9 已完成，延迟 89 毫秒\n- 第 5 组服务检查项目 10 已完成，延迟 90 毫秒\n- 第 5 组服务检查项目 11 已完成，延迟 91 毫秒\n- 第 5 组服务检查项目 12 已完成，延迟 92 毫秒\n- 第 5 组服务检查项目 13 已完成，延迟 93 毫秒\n- 第 5 组服务检查项目 14 已完成，延迟 94 毫秒\n- 第 5 组服务检查项目 15 已完成，延迟 95 毫秒\n- 第 5 组服务检查项目 16 已完成，延迟 96 毫秒\n- 第 5 组服务检查项目 17 已完成，延迟 97 毫秒\n- 第 5 组服务检查项目 18 已完成，延迟 98 毫秒\n- 第 5 组服务检查项目 19 已完成，延迟 99 毫秒\n- 第 5 组服务检查项目 20 已完成，延迟 100 毫秒\n- 第 5 组服务检查项目 21 已完成，延迟 101 毫秒\n- 第 5 组服务检查项目 22 已完成，延迟 102 毫秒\n- 第 5 组服务检查项目 23 已完成，延迟 103 毫秒\n- 第 5 组服务检查项目 24 已完成，延迟 104 毫秒\n- 第 5 组服务检查项目 25 已完成，延迟 105 毫秒\n- 第 5 组服务检查项目 26 已完成，延迟 106 毫秒\n- 第 "
+    },
+    {
+      "index": 24,
+      "messages_sha256": "1fcc6b81b838edc8eecd78d80e13d4ec123e0323e85dbade0890428925f3b6cb",
+      "prompt_tokens": 2685,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 105,
+        "prompt_tokens": 2685,
+        "total_tokens": 2790,
+        "prompt_tokens_details": {
+          "cached_tokens": 2681
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 7 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 8 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 9 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。"
+    },
+    {
+      "index": 25,
+      "messages_sha256": "f467b4c1cbe3ef6da2bb24aa1e78b0366663c0c09927479fa8cfa09c6436ee67",
+      "prompt_tokens": 2823,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 125,
+        "prompt_tokens": 2823,
+        "total_tokens": 2948,
+        "prompt_tokens_details": {
+          "cached_tokens": 2292
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 10 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务旧上线安排为周五上线。"
+    },
+    {
+      "index": 26,
+      "messages_sha256": "4d6a7d4a0d18fe4918c451daf552ffc38d3b882f5f6eb3668f221c0c8a7fb724",
+      "prompt_tokens": 2138,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 137,
+        "prompt_tokens": 2138,
+        "total_tokens": 2275,
+        "prompt_tokens_details": {
+          "cached_tokens": 1567
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 十二组服务检查完成，延迟范围 81 至 120 毫秒（第 1、2、7、8、9、10、11、12 组）；第 3 组延迟 81 至 106 毫秒；第 5 组延迟 81 至 106 毫秒。\n- 上线时间由周五改为周四。\n- 回归测试于周三前完成。\n\n### 待办\n- [ ] 小林：周三前补回归测试\n\n### 待讨论\n无",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务检查项目 1 至 40 已完成，延迟分别为 81 毫秒至 120 毫秒。\n- 第 2 组服务检查项目 1 至 40 已完成，延迟分别为 81 毫秒至 120 毫秒。\n\n第 2 段：\n- 第 3 组服务检查项目 1 已完成，延迟 81 毫秒\n- 第 3 组服务检查项目 2 已完成，延迟 82 毫秒\n- 第 3 组服务检查项目 3 已完成，延迟 83 毫秒\n- 第 3 组服务检查项目 4 已完成，延迟 84 毫秒\n- 第 3 组服务检查项目 5 已完成，延迟 85 毫秒\n- 第 3 组服务检查项目 6 已完成，延迟 86 毫秒\n- 第 3 组服务检查项目 7 已完成，延迟 87 毫秒\n- 第 3 组服务检查项目 8 已完成，延迟 88 毫秒\n- 第 3 组服务检查项目 9 已完成，延迟 89 毫秒\n- 第 3 组服务检查项目 10 已完成，延迟 90 毫秒\n- 第 3 组服务检查项目 11 已完成，延迟 91 毫秒\n- 第 3 组服务检查项目 12 已完成，延迟 92 毫秒\n- 第 3 组服务检查项目 13 已完成，延迟 93 毫秒\n- 第 3 组服务检查项目 14 已完成，延迟 94 毫秒\n- 第 3 组服务检查项目 15 已完成，延迟 95 毫秒\n- 第 3 组服务检查项目 16 已完成，延迟 96 毫秒\n- 第 3 组服务检查项目 17 已完成，延迟 97 毫秒\n- 第 3 组服务检查项目 18 已完成，延迟 98 毫秒\n- 第 3 组服务检查项目 19 已完成，延迟 99 毫秒\n- 第 3 组服务检查项目 20 已完成，延迟 100 毫秒\n- 第 3 组服务检查项目 21 已完成，延迟 101 毫秒\n- 第 3 组服务检查项目 22 已完成，延迟 102 毫秒\n- 第 3 组服务检查项目 23 已完成，延迟 103 毫秒\n- 第 3 组服务检查项目 24 已完成，延迟 104 毫秒\n- 第 3 组服务检查项目 25 已完成，延迟 105 毫秒\n- 第 3 组服务检查项目 26 已完成，延迟 106 毫秒\n- 第\n\n第 3 段：\n- 第 5 组服务检查项目 1 已完成，延迟 81 毫秒\n- 第 5 组服务检查项目 2 已完成，延迟 82 毫秒\n- 第 5 组服务检查项目 3 已完成，延迟 83 毫秒\n- 第 5 组服务检查项目 4 已完成，延迟 84 毫秒\n- 第 5 组服务检查项目 5 已完成，延迟 85 毫秒\n- 第 5 组服务检查项目 6 已完成，延迟 86 毫秒\n- 第 5 组服务检查项目 7 已完成，延迟 87 毫秒\n- 第 5 组服务检查项目 8 已完成，延迟 88 毫秒\n- 第 5 组服务检查项目 9 已完成，延迟 89 毫秒\n- 第 5 组服务检查项目 10 已完成，延迟 90 毫秒\n- 第 5 组服务检查项目 11 已完成，延迟 91 毫秒\n- 第 5 组服务检查项目 12 已完成，延迟 92 毫秒\n- 第 5 组服务检查项目 13 已完成，延迟 93 毫秒\n- 第 5 组服务检查项目 14 已完成，延迟 94 毫秒\n- 第 5 组服务检查项目 15 已完成，延迟 95 毫秒\n- 第 5 组服务检查项目 16 已完成，延迟 96 毫秒\n- 第 5 组服务检查项目 17 已完成，延迟 97 毫秒\n- 第 5 组服务检查项目 18 已完成，延迟 98 毫秒\n- 第 5 组服务检查项目 19 已完成，延迟 99 毫秒\n- 第 5 组服务检查项目 20 已完成，延迟 100 毫秒\n- 第 5 组服务检查项目 21 已完成，延迟 101 毫秒\n- 第 5 组服务检查项目 22 已完成，延迟 102 毫秒\n- 第 5 组服务检查项目 23 已完成，延迟 103 毫秒\n- 第 5 组服务检查项目 24 已完成，延迟 104 毫秒\n- 第 5 组服务检查项目 25 已完成，延迟 105 毫秒\n- 第 5 组服务检查项目 26 已完成，延迟 106 毫秒\n- 第\n\n第 4 段：\n- 第 7 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 8 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 9 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n第 5 段：\n- 第 10 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务旧上线安排为周五上线。\n\n会议记录：\n> 小林：这十二组服务的检查都完成了。白板上的周五上线安排已经撤回，改为周四上线。\n> 小陈：同意，按周四上线。小林周三前补回归测试。\n> 小林：我会在周三前补好。"
+    },
+    {
+      "index": 27,
+      "messages_sha256": "cb64dfd71f97464f512b49c7d96603a8bd41ad9e8b7ed420292affa09d270b81",
+      "prompt_tokens": 1458,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 1458,
+        "total_tokens": 1500,
+        "prompt_tokens_details": {
+          "cached_tokens": 111
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service Group 1 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 2 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 28,
+      "messages_sha256": "288202e06172786da817c018b2c9bc62a33fb6a5cdeee2ba3a5a6c8547faf4cf",
+      "prompt_tokens": 3438,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 38,
+        "prompt_tokens": 3438,
+        "total_tokens": 3476,
+        "prompt_tokens_details": {
+          "cached_tokens": 111
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Readiness checkpoints 1 through 25 for service groups 3, 4, 5, 6, and 7 have all completed successfully with no failures observed."
+    },
+    {
+      "index": 29,
+      "messages_sha256": "d4e57eefc049fd3ae128a3121f53a0abb548757bc3d6eb8aab8c7ba0dcf42c3a",
+      "prompt_tokens": 1452,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 1452,
+        "total_tokens": 1494,
+        "prompt_tokens_details": {
+          "cached_tokens": 111
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service group 8 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 9 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 30,
+      "messages_sha256": "67e5aff5c55b5d8c45aa1a7405fffa97c86d1c78b37172f0f55a918973fd9bfd",
+      "prompt_tokens": 2192,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 32,
+        "prompt_tokens": 2192,
+        "total_tokens": 2224,
+        "prompt_tokens_details": {
+          "cached_tokens": 111
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service groups 10, 11, and 12 readiness checkpoints (1–25 each) completed successfully with no failures observed."
+    },
+    {
+      "index": 31,
+      "messages_sha256": "030128c4e871514aec97b00052e4fd060b995f068e6f30c936bcc1b0d4eae4a2",
+      "prompt_tokens": 1859,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 1859,
+        "total_tokens": 1929,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 1 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。\n- 第 2 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。"
+    },
+    {
+      "index": 32,
+      "messages_sha256": "396a23f44e12a562424e8dc3a3cbb0193b137f704280d0f0ec64dd12ca59db47",
+      "prompt_tokens": 1854,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 1854,
+        "total_tokens": 1924,
+        "prompt_tokens_details": {
+          "cached_tokens": 134
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 3 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 4 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。"
+    },
+    {
+      "index": 33,
+      "messages_sha256": "8b13fe567c3c9a093bd0b650d9f36509e97b063ee6b2852fbbb8a29c1a050694",
+      "prompt_tokens": 1854,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 1854,
+        "total_tokens": 1924,
+        "prompt_tokens_details": {
+          "cached_tokens": 134
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 5 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 6 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。"
+    },
+    {
+      "index": 34,
+      "messages_sha256": "cb79bf06f592c93d766f9491b72c43f04c6f3082540628c31df377bf57bcd9ab",
+      "prompt_tokens": 2705,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 65,
+        "prompt_tokens": 2705,
+        "total_tokens": 2770,
+        "prompt_tokens_details": {
+          "cached_tokens": 134
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 7、8、9 组服务的所有检查项目（共 120 项）均已完成，各组内项目 1 至 40 的延迟值分别为 81 毫秒至 120 毫秒，且各组对应项目的延迟数值完全一致。"
+    },
+    {
+      "index": 35,
+      "messages_sha256": "404b8b75298f639254199f7577a8103e76f98d97f76332982e817697943e684b",
+      "prompt_tokens": 2828,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 108,
+        "prompt_tokens": 2828,
+        "total_tokens": 2936,
+        "prompt_tokens_details": {
+          "cached_tokens": 134
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 10 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。"
+    },
+    {
+      "index": 36,
+      "messages_sha256": "80ba04f5f33cb61a451d6c10daf27ab50c2221acf3d966efd38433685f8623a2",
+      "prompt_tokens": 981,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 43,
+        "prompt_tokens": 981,
+        "total_tokens": 1024,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 联合演练的具体安排（小林提出周五开始，但具体细节未定）",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。\n- 第 2 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。\n\n第 2 段：\n- 第 3 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 4 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n第 3 段：\n- 第 5 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 6 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n第 4 段：\n- 第 7、8、9 组服务的所有检查项目（共 120 项）均已完成，各组内项目 1 至 40 的延迟值分别为 81 毫秒至 120 毫秒，且各组对应项目的延迟数值完全一致。\n\n第 5 段：\n- 第 10 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n会议记录：\n> 小林：以上十二组服务的检查都完成了，周五开始联合演练。"
+    },
+    {
+      "index": 37,
+      "messages_sha256": "030128c4e871514aec97b00052e4fd060b995f068e6f30c936bcc1b0d4eae4a2",
+      "prompt_tokens": 1859,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 1859,
+        "total_tokens": 1929,
+        "prompt_tokens_details": {
+          "cached_tokens": 1855
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 1 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。\n- 第 2 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。"
+    },
+    {
+      "index": 38,
+      "messages_sha256": "396a23f44e12a562424e8dc3a3cbb0193b137f704280d0f0ec64dd12ca59db47",
+      "prompt_tokens": 1854,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 1854,
+        "total_tokens": 1924,
+        "prompt_tokens_details": {
+          "cached_tokens": 1850
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 3 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 4 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。"
+    },
+    {
+      "index": 39,
+      "messages_sha256": "8b13fe567c3c9a093bd0b650d9f36509e97b063ee6b2852fbbb8a29c1a050694",
+      "prompt_tokens": 1854,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 1854,
+        "total_tokens": 1924,
+        "prompt_tokens_details": {
+          "cached_tokens": 1850
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 5 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 6 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。"
+    },
+    {
+      "index": 40,
+      "messages_sha256": "cb79bf06f592c93d766f9491b72c43f04c6f3082540628c31df377bf57bcd9ab",
+      "prompt_tokens": 2705,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 65,
+        "prompt_tokens": 2705,
+        "total_tokens": 2770,
+        "prompt_tokens_details": {
+          "cached_tokens": 2701
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 7、8、9 组服务的所有检查项目（共 120 项）均已完成，各组内项目 1 至 40 的延迟值分别为 81 毫秒至 120 毫秒，且各组对应项目的延迟数值完全一致。"
+    },
+    {
+      "index": 41,
+      "messages_sha256": "78c69e2b0d29c8e266ab743f5746ed2b5df7690a7794bedf5fe592a539482a78",
+      "prompt_tokens": 2843,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 119,
+        "prompt_tokens": 2843,
+        "total_tokens": 2962,
+        "prompt_tokens_details": {
+          "cached_tokens": 2312
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 10 组服务检查项目 1-40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1-40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1-40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务旧上线安排为周五上线。"
+    },
+    {
+      "index": 42,
+      "messages_sha256": "ce697c5c5479a7230ae498575c0d9744536eedeb10047daf5f5ca005f032e4aa",
+      "prompt_tokens": 1030,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 88,
+        "prompt_tokens": 1030,
+        "total_tokens": 1118,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 十二组服务检查完成，延迟范围均为 81 毫秒至 120 毫秒。\n- 上线时间由周五改为周四。\n- 第 12 组服务旧上线安排（周五）已撤回。\n\n### 待办\n- [ ] 小林于周三前补回归测试\n\n### 待讨论\n无",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。\n- 第 2 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。\n\n第 2 段：\n- 第 3 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 4 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n第 3 段：\n- 第 5 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 6 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n第 4 段：\n- 第 7、8、9 组服务的所有检查项目（共 120 项）均已完成，各组内项目 1 至 40 的延迟值分别为 81 毫秒至 120 毫秒，且各组对应项目的延迟数值完全一致。\n\n第 5 段：\n- 第 10 组服务检查项目 1-40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1-40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1-40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务旧上线安排为周五上线。\n\n会议记录：\n> 小林：这十二组服务的检查都完成了。白板上的周五上线安排已经撤回，改为周四上线。\n> 小陈：同意，按周四上线。小林周三前补回归测试。\n> 小林：我会在周三前补好。"
+    },
+    {
+      "index": 43,
+      "messages_sha256": "9b90b3f708f43a08e57d2377d2f1515790656776082be25f58a380413f83322d",
+      "prompt_tokens": 1477,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 46,
+        "prompt_tokens": 1477,
+        "total_tokens": 1523,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service group 1 readiness checkpoints 1 through 25 have all completed successfully with no failures observed.\n- Service group 2 readiness checkpoints 1 through 25 have all completed successfully with no failures observed."
+    },
+    {
+      "index": 44,
+      "messages_sha256": "1984a3074ae9e01824ff14a2cb2ab94e199756ec0a69185ae1fe15e6677ba628",
+      "prompt_tokens": 3457,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 135,
+        "prompt_tokens": 3457,
+        "total_tokens": 3592,
+        "prompt_tokens_details": {
+          "cached_tokens": 130
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Readiness checkpoints 1 through 25 for service group 3 on Board 3 completed successfully with no failures observed.\n- Readiness checkpoints 1 through 25 for service group 4 on Board 4 completed successfully with no failures observed.\n- Readiness checkpoints 1 through 25 for service group 5 on Board 5 completed successfully with no failures observed.\n- Readiness checkpoints 1 through 25 for service group 6 on Board 6 completed successfully with no failures observed.\n- Readiness checkpoints 1 through 25 for service group 7 on Board 7 completed successfully with no failures observed."
+    },
+    {
+      "index": 45,
+      "messages_sha256": "b2709fbccf84e1fd22d01c1031a5390d3c0f01b03a61685bf324a435d282f40a",
+      "prompt_tokens": 1471,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 1471,
+        "total_tokens": 1513,
+        "prompt_tokens_details": {
+          "cached_tokens": 130
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service group 8 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 9 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 46,
+      "messages_sha256": "fd90f2a979aff11573b4a18ef2735e8cac853dd66f969fd56b8cca4a12e038d8",
+      "prompt_tokens": 2211,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 32,
+        "prompt_tokens": 2211,
+        "total_tokens": 2243,
+        "prompt_tokens_details": {
+          "cached_tokens": 130
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service groups 10, 11, and 12 each completed readiness checkpoints 1 through 25 successfully with no failures observed."
+    },
+    {
+      "index": 47,
+      "messages_sha256": "76ab3a76a42f33d870b5903a7f0df316d43b29a8f9121fe579a414e3aa44e084",
+      "prompt_tokens": 913,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 65,
+        "prompt_tokens": 913,
+        "total_tokens": 978,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- All readiness checks for service groups 1 through 12 have completed successfully with no failures observed.\n\n### Decisions\n- None\n\n### To-dos\n- Nora to write the rollout guide by Wednesday.\n\n### Open questions\n- Whether to roll back if deployment fails on Thursday.",
+      "final_input": "The transcript is too long; these are the notes taken part by part:\nPart 1:\n- Service group 1 readiness checkpoints 1 through 25 have all completed successfully with no failures observed.\n- Service group 2 readiness checkpoints 1 through 25 have all completed successfully with no failures observed.\n\nPart 2:\n- Readiness checkpoints 1 through 25 for service group 3 on Board 3 completed successfully with no failures observed.\n- Readiness checkpoints 1 through 25 for service group 4 on Board 4 completed successfully with no failures observed.\n- Readiness checkpoints 1 through 25 for service group 5 on Board 5 completed successfully with no failures observed.\n- Readiness checkpoints 1 through 25 for service group 6 on Board 6 completed successfully with no failures observed.\n- Readiness checkpoints 1 through 25 for service group 7 on Board 7 completed successfully with no failures observed.\n\nPart 3:\n- Service group 8 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 9 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nPart 4:\n- Service groups 10, 11, and 12 each completed readiness checkpoints 1 through 25 successfully with no failures observed.\n\nTranscript:\n> All readiness checks are complete. If deployment fails on Thursday, should we roll back?\n> Rollback still needs discussion. Deployment has not started.\n> Nora will write the rollout guide by Wednesday."
+    },
+    {
+      "index": 48,
+      "messages_sha256": "8172a2b67a1d922e7c500ee2593bf2dce121847f14b940eb6cd2436d5126b85b",
+      "prompt_tokens": 632,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 58,
+        "prompt_tokens": 632,
+        "total_tokens": 690,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- All readiness checks are complete.\n\n### Decisions\n- None\n\n### To-dos\n- Nora will write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday? (Rollback still needs discussion.)",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> All readiness checks are complete. If deployment fails on Thursday, should we roll back?\n> Rollback still needs discussion. Deployment has not started.\n> Nora will write the rollout guide by Wednesday."
+    },
+    {
+      "index": 49,
+      "messages_sha256": "f788e35b4d54a8bf799eb4209050f02dd0d1f94657a10f2701f5711005fcd1ac",
+      "prompt_tokens": 1895,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 130,
+        "prompt_tokens": 1895,
+        "total_tokens": 2025,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 服务切换原定周五执行，目前尚未最终确定时间；若周四切换失败是否回滚尚待讨论，回滚方案未定。\n- 缓存保留时间暂定为十分钟，过期刷新负责人及具体方案需下次讨论。\n- 第 1 至 25 个服务区域已完成配置校验，检查项涵盖入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限；所有区域响应均符合预期，新旧版本回放数据一致且未发现失败请求，结果已保存至对应区域检查记录。\n- 小林需在周三前整理演练报告。"
+    },
+    {
+      "index": 50,
+      "messages_sha256": "5ff8eb189ce4b8a8da09f07ae304e96ea22f65d4317e895083da3fa2b5e4f050",
+      "prompt_tokens": 1827,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 68,
+        "prompt_tokens": 1827,
+        "total_tokens": 1895,
+        "prompt_tokens_details": {
+          "cached_tokens": 134
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 26 至 50 个服务区域已完成配置校验，检查项涵盖入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限；所有记录响应均符合预期，新旧版本回放数据一致，未发现失败请求，结果已保存至对应区域检查记录。"
+    },
+    {
+      "index": 51,
+      "messages_sha256": "757838b6046df73f3bc4d6eea970c0be96c677a4ff0c2adafcab8cae2fd7e2bd",
+      "prompt_tokens": 1827,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 68,
+        "prompt_tokens": 1827,
+        "total_tokens": 1895,
+        "prompt_tokens_details": {
+          "cached_tokens": 134
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 51 至 75 个服务区域已完成配置校验，检查项涵盖入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限；所有记录响应均符合预期，新旧版本回放数据一致，未发现失败请求，结果已保存至对应区域检查记录。"
+    },
+    {
+      "index": 52,
+      "messages_sha256": "d310d7468a15e0506ecb583f5333a8c07a75b62033bce94ad0a72be004b7d5d0",
+      "prompt_tokens": 519,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 97,
+        "prompt_tokens": 519,
+        "total_tokens": 616,
+        "prompt_tokens_details": {
+          "cached_tokens": 134
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 76 至 80 个服务区域配置校验已完成，检查范围涵盖入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限，所有记录响应符合预期且新旧版本回放数据一致，未发现失败请求，结果已保存至对应区域检查记录。\n- 周五切换计划已撤回并确认为周四切换。\n- 同意周四切换，小林需于周三前提交演练报告。"
+    },
+    {
+      "index": 53,
+      "messages_sha256": "ab4e0224ce4073cebe804b8d0f38c986a319848327254c361e433d5883b19bdb",
+      "prompt_tokens": 941,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 76,
+        "prompt_tokens": 941,
+        "total_tokens": 1017,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 服务切换时间定为周四执行\n- 缓存保留时间暂定为十分钟\n\n### 待办\n- 小林整理演练报告（截止时间：周三前）\n\n### 待讨论\n- 若周四切换失败是否回滚及具体回滚方案\n- 缓存过期刷新负责人及具体方案",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 服务切换原定周五执行，目前尚未最终确定时间；若周四切换失败是否回滚尚待讨论，回滚方案未定。\n- 缓存保留时间暂定为十分钟，过期刷新负责人及具体方案需下次讨论。\n- 第 1 至 25 个服务区域已完成配置校验，检查项涵盖入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限；所有区域响应均符合预期，新旧版本回放数据一致且未发现失败请求，结果已保存至对应区域检查记录。\n- 小林需在周三前整理演练报告。\n\n第 2 段：\n- 第 26 至 50 个服务区域已完成配置校验，检查项涵盖入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限；所有记录响应均符合预期，新旧版本回放数据一致，未发现失败请求，结果已保存至对应区域检查记录。\n\n第 3 段：\n- 第 51 至 75 个服务区域已完成配置校验，检查项涵盖入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限；所有记录响应均符合预期，新旧版本回放数据一致，未发现失败请求，结果已保存至对应区域检查记录。\n\n第 4 段：\n- 第 76 至 80 个服务区域配置校验已完成，检查范围涵盖入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限，所有记录响应符合预期且新旧版本回放数据一致，未发现失败请求，结果已保存至对应区域检查记录。\n- 周五切换计划已撤回并确认为周四切换。\n- 同意周四切换，小林需于周三前提交演练报告。"
+    },
+    {
+      "index": 54,
+      "messages_sha256": "c30bf98003beeaf9db099a005ff1e5038818759c227ed0c82d14a45e36fb3d8f",
+      "prompt_tokens": 695,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 100,
+        "prompt_tokens": 695,
+        "total_tokens": 795,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Replica count remains undecided with three considered as a possibility.\n- Configuration migration is complete.\n- Configuration checks are complete for all ten service regions (regions 1 through 10).\n- For each of the ten service regions, routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all ten service regions.\n- No failed requests were observed during the configuration checks in any of the ten service regions."
+    },
+    {
+      "index": 55,
+      "messages_sha256": "284b5e2b8c64024f1fc1abf0af5afb28c1c9fcca860e09386935fb2f831c64e4",
+      "prompt_tokens": 715,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 75,
+        "prompt_tokens": 715,
+        "total_tokens": 790,
+        "prompt_tokens_details": {
+          "cached_tokens": 130
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Configuration checks for service regions 12 through 22 are complete with routes, cache keys, legacy data, log fields, and test accounts returning expected results.\n- Recorded requests matched both versions across all checked regions with no failed requests observed.\n- Sam will verify metrics by Tuesday.\n- Launch date confirmed as Monday following withdrawal of the Friday proposal."
+    },
+    {
+      "index": 56,
+      "messages_sha256": "3fd7919e537b53f815ff05379d517853d9c8d153dcf516b43d205309a3593aab",
+      "prompt_tokens": 723,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 64,
+        "prompt_tokens": 723,
+        "total_tokens": 787,
+        "prompt_tokens_details": {
+          "cached_tokens": 130
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Configuration checks for service regions 23 through 34 are complete.\n- For all checked regions (23–34), routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all regions with no failed requests observed."
+    },
+    {
+      "index": 57,
+      "messages_sha256": "73143ea9efa9a33e92e6c2a74bad9be59a75bb2989f3d8a22212620f4e716318",
+      "prompt_tokens": 723,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 64,
+        "prompt_tokens": 723,
+        "total_tokens": 787,
+        "prompt_tokens_details": {
+          "cached_tokens": 130
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Configuration checks for service regions 35 through 46 are complete.\n- For all checked regions (35–46), routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all regions with no failed requests observed."
+    },
+    {
+      "index": 58,
+      "messages_sha256": "dfb742bbfe4c42edb03ba409b6b6b5924803d0ee9ea06e1a851b7d8fdfab2193",
+      "prompt_tokens": 723,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 64,
+        "prompt_tokens": 723,
+        "total_tokens": 787,
+        "prompt_tokens_details": {
+          "cached_tokens": 130
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Configuration checks for service regions 47 through 58 are complete.\n- For all checked regions (47–58), routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all regions with no failed requests observed."
+    },
+    {
+      "index": 59,
+      "messages_sha256": "727489c61ce307cb3b022f1155a23f6d052244cb901277623cc8987970b3e2e4",
+      "prompt_tokens": 723,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 64,
+        "prompt_tokens": 723,
+        "total_tokens": 787,
+        "prompt_tokens_details": {
+          "cached_tokens": 130
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Configuration checks for service regions 59 through 70 are complete.\n- For all checked regions (59–70), routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all regions with no failed requests observed."
+    },
+    {
+      "index": 60,
+      "messages_sha256": "6f3323602c1f16840910cccf9f5128dfc99dd17afca7e50b1f1e099015b61db5",
+      "prompt_tokens": 644,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 74,
+        "prompt_tokens": 644,
+        "total_tokens": 718,
+        "prompt_tokens_details": {
+          "cached_tokens": 130
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service regions 71 through 80 have completed configuration checks with routes, cache keys, legacy data, log fields, and test accounts returning expected results.\n- Recorded requests for regions 71 through 80 matched both versions with no failed requests observed.\n- Replica count remains undecided.\n- Sam is responsible for verifying metrics by Tuesday."
+    },
+    {
+      "index": 61,
+      "messages_sha256": "8ba2312d8e147eacea55d0ffdd3bdd2bfb18999a429c18c1d9b55be3d3a26458",
+      "prompt_tokens": 1141,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 194,
+        "prompt_tokens": 1141,
+        "total_tokens": 1335,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- Configuration migration is complete.\n- Configuration checks are complete for all service regions from 1 to 80.\n- For all checked regions, routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all checked regions with no failed requests observed.\n- Launch date confirmed as Monday following the withdrawal of the Friday proposal.\n- Replica count remains undecided.\n\n### Decisions\n- Launch on Monday.\n\n### To-dos\n- None\n\n### Open questions\n- What is the replica count?\n- Who owns the launch?\n- Who will verify the metrics? (Sam is mentioned as responsible, but the specific assignment or deadline context implies a need for confirmation if not fully explicit in the notes provided).\n- When exactly will Sam verify the metrics? (Tuesday was stated, but the specific time or method is not detailed beyond the day).",
+      "final_input": "On the whiteboard:\n（空）\n\nThe transcript is too long; these are the notes taken part by part:\nPart 1:\n- Replica count remains undecided with three considered as a possibility.\n- Configuration migration is complete.\n- Configuration checks are complete for all ten service regions (regions 1 through 10).\n- For each of the ten service regions, routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all ten service regions.\n- No failed requests were observed during the configuration checks in any of the ten service regions.\n\nPart 2:\n- Configuration checks for service regions 12 through 22 are complete with routes, cache keys, legacy data, log fields, and test accounts returning expected results.\n- Recorded requests matched both versions across all checked regions with no failed requests observed.\n- Sam will verify metrics by Tuesday.\n- Launch date confirmed as Monday following withdrawal of the Friday proposal.\n\nPart 3:\n- Configuration checks for service regions 23 through 34 are complete.\n- For all checked regions (23–34), routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all regions with no failed requests observed.\n\nPart 4:\n- Configuration checks for service regions 35 through 46 are complete.\n- For all checked regions (35–46), routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all regions with no failed requests observed.\n\nPart 5:\n- Configuration checks for service regions 47 through 58 are complete.\n- For all checked regions (47–58), routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all regions with no failed requests observed.\n\nPart 6:\n- Configuration checks for service regions 59 through 70 are complete.\n- For all checked regions (59–70), routes, cache keys, legacy data, log fields, and test accounts returned expected results.\n- Recorded requests matched both versions across all regions with no failed requests observed.\n\nPart 7:\n- Service regions 71 through 80 have completed configuration checks with routes, cache keys, legacy data, log fields, and test accounts returning expected results.\n- Recorded requests for regions 71 through 80 matched both versions with no failed requests observed.\n- Replica count remains undecided.\n- Sam is responsible for verifying metrics by Tuesday."
+    },
+    {
+      "index": 62,
+      "messages_sha256": "19020c2a6097281c7bfce0ba61217e0a4134e7ebeea2f65bff5cd09c5a658bbb",
+      "prompt_tokens": 582,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 30,
+        "prompt_tokens": 582,
+        "total_tokens": 612,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+    },
+    {
+      "index": 63,
+      "messages_sha256": "f441ea942e1df7526fad3acebcf4732aef96a4b4c71504eb301515f78ad01b2a",
+      "prompt_tokens": 581,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 581,
+        "total_tokens": 623,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 三次重试还是不满足要求，之后怎么办？\n> 这时就动态缩小字号兜底。\n> 好，那就不做硬切了，就用缩小字号。"
+    },
+    {
+      "index": 64,
+      "messages_sha256": "69198506a0771b97e509df199e5a5ab5c236782b6af76467c62668b81579dbac",
+      "prompt_tokens": 578,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 43,
+        "prompt_tokens": 578,
+        "total_tokens": 621,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 三次重试还是不满足要求，之后怎么办？\n> 也许可以缩小字号，不过得稍后验证一下。\n> 嗯，先记下来。"
+    },
+    {
+      "index": 65,
+      "messages_sha256": "2eff2cedbd38f76b935ef51ed2e83d04f92b840eb0f03f1718aebb877bf7d7c9",
+      "prompt_tokens": 591,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 41,
+        "prompt_tokens": 591,
+        "total_tokens": 632,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 我们先用方案一，直接硬切。\n> 硬切会把字从中间切断，不太好。\n> 那方案一撤回，改用方案二，按词换行。\n> 同意方案二。"
+    },
+    {
+      "index": 66,
+      "messages_sha256": "350eea65599bbdd11264f771cc16ae55369f6a6992c268308bae570245e236cd",
+      "prompt_tokens": 562,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 34,
+        "prompt_tokens": 562,
+        "total_tokens": 596,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 接口文档我来写，周五前发给大家。\n> 好的，没问题。"
+    },
+    {
+      "index": 67,
+      "messages_sha256": "0931c59e59449e54a88d19f3a900940b30e8b48e0a5bdd7f4a204819ebe439a6",
+      "prompt_tokens": 579,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 34,
+        "prompt_tokens": 579,
+        "total_tokens": 613,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 我们先看一下这段视频。\n> 嗯，这里卡顿很明显。\n> 卡顿问题要查一下，小王负责。\n> 好，我来查。"
+    },
+    {
+      "index": 68,
+      "messages_sha256": "eb366c56be2533e88fccc0faa42302823d48ad793372bf0a00d066658e3404a3",
+      "prompt_tokens": 627,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 38,
+        "prompt_tokens": 627,
+        "total_tokens": 665,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+    },
+    {
+      "index": 69,
+      "messages_sha256": "e1ca952a5ed07db4793ae97f35f150aa7abcc1fb7a240e5fca7d9a81e960b0f8",
+      "prompt_tokens": 630,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 37,
+        "prompt_tokens": 630,
+        "total_tokens": 667,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- If three retries fail, shrink the font as a fallback instead of making a hard cut.\n\n### Decisions\n\n### To-dos\n\n### Open questions",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> If three retries still don't fit, what do we do then?\n> Then we shrink the font as a fallback.\n> Good, so no hard cut, we shrink the font."
+    },
+    {
+      "index": 70,
+      "messages_sha256": "e39d29725dd11dfde515975a637db42802776e7f87a5e2068350772909b55992",
+      "prompt_tokens": 580,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 44,
+        "prompt_tokens": 580,
+        "total_tokens": 624,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 缓存保留多久，过期后谁来刷新？\n> 保留十分钟。刷新负责人还没有定。\n> 好，保留时间就定十分钟，负责人下次讨论。"
+    },
+    {
+      "index": 71,
+      "messages_sha256": "93fbbbba914c00af96eeb798af598f8e3f2786ead407b65bda7829e291b6efd4",
+      "prompt_tokens": 632,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 40,
+        "prompt_tokens": 632,
+        "total_tokens": 672,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> How long should the cache live, and who will refresh it?\n> Ten minutes. We have not chosen a refresh owner.\n> Agreed on ten minutes. We will discuss ownership next time."
+    },
+    {
+      "index": 72,
+      "messages_sha256": "5b192b65432d82314db226263243f6a6f065b86a6d99b067af3a9a910c145f66",
+      "prompt_tokens": 692,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 78,
+        "prompt_tokens": 692,
+        "total_tokens": 770,
+        "prompt_tokens_details": {
+          "cached_tokens": 465
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 小李：做得好的方面，这次发布没有停机。\n> 小王：要改进的方面，告警还是来得太晚。\n> 小李：同意，下次发布前由小王补上告警测试。\n> 小王：我来补。"
+    },
+    {
+      "index": 73,
+      "messages_sha256": "2e1b5cd1345f20a5fc68153def4fbb206bc3b54d85cb57d35cd195efce5a39d1",
+      "prompt_tokens": 721,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 68,
+        "prompt_tokens": 721,
+        "total_tokens": 789,
+        "prompt_tokens_details": {
+          "cached_tokens": 525
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n#### Hiring\n- None\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> Mina: For Latency, the measured p95 is eighty milliseconds.\n> Ravi: For Rollout, the canary has finished without errors.\n> Mina: We agree to enable the release tomorrow."
+    },
+    {
+      "index": 74,
+      "messages_sha256": "f0ec282f43cfc816371c7ed79f1a0f16f047ae76d0e697334121c3e6bcd28310",
+      "prompt_tokens": 579,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 41,
+        "prompt_tokens": 579,
+        "total_tokens": 620,
+        "prompt_tokens_details": {
+          "cached_tokens": 465
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 桌面版周四发布，这是已经定下来的安排。\n> 移动版要不周五发布？\n> 移动版的日期还没定，先别按周五排。"
+    },
+    {
+      "index": 75,
+      "messages_sha256": "33e12b7197826b9077e363b91d5f79ffce317b7d285a13a4d3412ad66c83eb75",
+      "prompt_tokens": 577,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 37,
+        "prompt_tokens": 577,
+        "total_tokens": 614,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+    },
+    {
+      "index": 76,
+      "messages_sha256": "2f5bebf2f9153e5a7e28291202e550736667fa9d301a2fabfaa1307ee97a5faa",
+      "prompt_tokens": 585,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 46,
+        "prompt_tokens": 585,
+        "total_tokens": 631,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+    },
+    {
+      "index": 77,
+      "messages_sha256": "acb046e59e39e92047c60972c7e2881ea14d6efc8ece9ff65172c3154ffc0a7c",
+      "prompt_tokens": 724,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 40,
+        "prompt_tokens": 724,
+        "total_tokens": 764,
+        "prompt_tokens_details": {
+          "cached_tokens": 465
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n失败标准应包含两项\n部署定于本周三上线\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。\n\n待核对草稿（可能有错误）：\n### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？"
+    },
+    {
+      "index": 78,
+      "messages_sha256": "01f84d44ca983360ab985bca53fe733189597ecb9f175c9a67711ad97816d9e1",
+      "prompt_tokens": 783,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 38,
+        "prompt_tokens": 783,
+        "total_tokens": 821,
+        "prompt_tokens_details": {
+          "cached_tokens": 525
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday.\n\nDraft to check (may contain errors):\n### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?"
+    },
+    {
+      "index": 79,
+      "messages_sha256": "a2c44e1a35e402202c41d0c9e3338a2d04422ee5df3c96cd889834c41759503c",
+      "prompt_tokens": 726,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 37,
+        "prompt_tokens": 726,
+        "total_tokens": 763,
+        "prompt_tokens_details": {
+          "cached_tokens": 621
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。\n\n待核对草稿（可能有错误）：\n### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无"
+    },
+    {
+      "index": 80,
+      "messages_sha256": "b53c4bd124066bf8d56b8034a5829cb84e1b00d0b707f97febabc0d388bc240f",
+      "prompt_tokens": 1136,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 69,
+        "prompt_tokens": 1136,
+        "total_tokens": 1205,
+        "prompt_tokens_details": {
+          "cached_tokens": 621
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n- 第 1 至 12 组服务的所有检查项目均已完成，延迟范围均为 81 毫秒至 120 毫秒。\n- 联合演练定于周五开始。\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。\n- 第 2 组服务已完成全部 40 项检查，延迟范围从 81 毫秒至 120 毫秒递增。\n\n第 2 段：\n- 第 3 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 4 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n第 3 段：\n- 第 5 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 6 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n第 4 段：\n- 第 7、8、9 组服务的所有检查项目（共 120 项）均已完成，各组内项目 1 至 40 的延迟值分别为 81 毫秒至 120 毫秒，且各组对应项目的延迟数值完全一致。\n\n第 5 段：\n- 第 10 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 11 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n- 第 12 组服务检查项目 1 至 40 已完成，延迟分别为 81 至 120 毫秒。\n\n会议记录：\n> 小林：以上十二组服务的检查都完成了，周五开始联合演练。\n\n待核对草稿（可能有错误）：\n### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 联合演练的具体安排（小林提出周五开始，但具体细节未定）"
+    },
+    {
+      "index": 81,
+      "messages_sha256": "19020c2a6097281c7bfce0ba61217e0a4134e7ebeea2f65bff5cd09c5a658bbb",
+      "prompt_tokens": 582,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 30,
+        "prompt_tokens": 582,
+        "total_tokens": 612,
+        "prompt_tokens_details": {
+          "cached_tokens": 465
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+    },
+    {
+      "index": 82,
+      "messages_sha256": "f441ea942e1df7526fad3acebcf4732aef96a4b4c71504eb301515f78ad01b2a",
+      "prompt_tokens": 581,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 581,
+        "total_tokens": 623,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 三次重试还是不满足要求，之后怎么办？\n> 这时就动态缩小字号兜底。\n> 好，那就不做硬切了，就用缩小字号。"
+    },
+    {
+      "index": 83,
+      "messages_sha256": "69198506a0771b97e509df199e5a5ab5c236782b6af76467c62668b81579dbac",
+      "prompt_tokens": 578,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 43,
+        "prompt_tokens": 578,
+        "total_tokens": 621,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 三次重试还是不满足要求，之后怎么办？\n> 也许可以缩小字号，不过得稍后验证一下。\n> 嗯，先记下来。"
+    },
+    {
+      "index": 84,
+      "messages_sha256": "2eff2cedbd38f76b935ef51ed2e83d04f92b840eb0f03f1718aebb877bf7d7c9",
+      "prompt_tokens": 591,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 41,
+        "prompt_tokens": 591,
+        "total_tokens": 632,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 我们先用方案一，直接硬切。\n> 硬切会把字从中间切断，不太好。\n> 那方案一撤回，改用方案二，按词换行。\n> 同意方案二。"
+    },
+    {
+      "index": 85,
+      "messages_sha256": "350eea65599bbdd11264f771cc16ae55369f6a6992c268308bae570245e236cd",
+      "prompt_tokens": 562,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 34,
+        "prompt_tokens": 562,
+        "total_tokens": 596,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 接口文档我来写，周五前发给大家。\n> 好的，没问题。"
+    },
+    {
+      "index": 86,
+      "messages_sha256": "0931c59e59449e54a88d19f3a900940b30e8b48e0a5bdd7f4a204819ebe439a6",
+      "prompt_tokens": 579,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 34,
+        "prompt_tokens": 579,
+        "total_tokens": 613,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 我们先看一下这段视频。\n> 嗯，这里卡顿很明显。\n> 卡顿问题要查一下，小王负责。\n> 好，我来查。"
+    },
+    {
+      "index": 87,
+      "messages_sha256": "eb366c56be2533e88fccc0faa42302823d48ad793372bf0a00d066658e3404a3",
+      "prompt_tokens": 627,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 38,
+        "prompt_tokens": 627,
+        "total_tokens": 665,
+        "prompt_tokens_details": {
+          "cached_tokens": 525
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+    },
+    {
+      "index": 88,
+      "messages_sha256": "e1ca952a5ed07db4793ae97f35f150aa7abcc1fb7a240e5fca7d9a81e960b0f8",
+      "prompt_tokens": 630,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 37,
+        "prompt_tokens": 630,
+        "total_tokens": 667,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- If three retries fail, shrink the font as a fallback instead of making a hard cut.\n\n### Decisions\n\n### To-dos\n\n### Open questions",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> If three retries still don't fit, what do we do then?\n> Then we shrink the font as a fallback.\n> Good, so no hard cut, we shrink the font."
+    },
+    {
+      "index": 89,
+      "messages_sha256": "e39d29725dd11dfde515975a637db42802776e7f87a5e2068350772909b55992",
+      "prompt_tokens": 580,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 44,
+        "prompt_tokens": 580,
+        "total_tokens": 624,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 缓存保留多久，过期后谁来刷新？\n> 保留十分钟。刷新负责人还没有定。\n> 好，保留时间就定十分钟，负责人下次讨论。"
+    },
+    {
+      "index": 90,
+      "messages_sha256": "93fbbbba914c00af96eeb798af598f8e3f2786ead407b65bda7829e291b6efd4",
+      "prompt_tokens": 632,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 40,
+        "prompt_tokens": 632,
+        "total_tokens": 672,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> How long should the cache live, and who will refresh it?\n> Ten minutes. We have not chosen a refresh owner.\n> Agreed on ten minutes. We will discuss ownership next time."
+    },
+    {
+      "index": 91,
+      "messages_sha256": "5b192b65432d82314db226263243f6a6f065b86a6d99b067af3a9a910c145f66",
+      "prompt_tokens": 692,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 78,
+        "prompt_tokens": 692,
+        "total_tokens": 770,
+        "prompt_tokens_details": {
+          "cached_tokens": 465
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 小李：做得好的方面，这次发布没有停机。\n> 小王：要改进的方面，告警还是来得太晚。\n> 小李：同意，下次发布前由小王补上告警测试。\n> 小王：我来补。"
+    },
+    {
+      "index": 92,
+      "messages_sha256": "2e1b5cd1345f20a5fc68153def4fbb206bc3b54d85cb57d35cd195efce5a39d1",
+      "prompt_tokens": 721,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 68,
+        "prompt_tokens": 721,
+        "total_tokens": 789,
+        "prompt_tokens_details": {
+          "cached_tokens": 525
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n#### Hiring\n- None\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> Mina: For Latency, the measured p95 is eighty milliseconds.\n> Ravi: For Rollout, the canary has finished without errors.\n> Mina: We agree to enable the release tomorrow."
+    },
+    {
+      "index": 93,
+      "messages_sha256": "f0ec282f43cfc816371c7ed79f1a0f16f047ae76d0e697334121c3e6bcd28310",
+      "prompt_tokens": 579,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 41,
+        "prompt_tokens": 579,
+        "total_tokens": 620,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 桌面版周四发布，这是已经定下来的安排。\n> 移动版要不周五发布？\n> 移动版的日期还没定，先别按周五排。"
+    },
+    {
+      "index": 94,
+      "messages_sha256": "33e12b7197826b9077e363b91d5f79ffce317b7d285a13a4d3412ad66c83eb75",
+      "prompt_tokens": 577,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 37,
+        "prompt_tokens": 577,
+        "total_tokens": 614,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+    },
+    {
+      "index": 95,
+      "messages_sha256": "2f5bebf2f9153e5a7e28291202e550736667fa9d301a2fabfaa1307ee97a5faa",
+      "prompt_tokens": 585,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 46,
+        "prompt_tokens": 585,
+        "total_tokens": 631,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+    },
+    {
+      "index": 96,
+      "messages_sha256": "834e658dd3845cac9a7e02612a4edc17b071e4ac24d9abd1353a96af26f3ff66",
+      "prompt_tokens": 2237,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 90,
+        "prompt_tokens": 2237,
+        "total_tokens": 2327,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 缓存保留时间确定为十分钟。\n- 服务切换计划定于周五执行。\n- 小林需在周三前整理演练报告。\n- 第 1 至 25 个服务区域的配置校验已完成，未发现失败请求，结果已保存。\n- 刷新缓存过期数据的负责人尚未确定，需下次讨论。\n- 若周四切换失败是否回滚的方案尚未确定，需后续讨论。"
+    },
+    {
+      "index": 97,
+      "messages_sha256": "a060b9811f0018313ef00ecee4f1c7295af2578043ee6058613edb942a3b2e14",
+      "prompt_tokens": 2169,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 66,
+        "prompt_tokens": 2169,
+        "total_tokens": 2235,
+        "prompt_tokens_details": {
+          "cached_tokens": 476
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 26 至 50 个服务区域的配置校验（含入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限）已完成，所有记录响应符合预期，新旧版本回放数据一致且未发现失败请求，结果已保存至对应区域检查记录。"
+    },
+    {
+      "index": 98,
+      "messages_sha256": "c103f9cc520798b8badb04c7d7c82fa103fa924b648f16aa454bb113fe758be7",
+      "prompt_tokens": 2169,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 66,
+        "prompt_tokens": 2169,
+        "total_tokens": 2235,
+        "prompt_tokens_details": {
+          "cached_tokens": 476
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 51 至 75 个服务区域的配置校验（含入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限）已完成，所有记录响应符合预期，新旧版本回放数据一致且未发现失败请求，结果已保存至对应区域检查记录。"
+    },
+    {
+      "index": 99,
+      "messages_sha256": "dc67dbc36b7110b41b3da691a7f882be6e60fbc5ac80b44df50b926c8a3ce576",
+      "prompt_tokens": 861,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 79,
+        "prompt_tokens": 861,
+        "total_tokens": 940,
+        "prompt_tokens_details": {
+          "cached_tokens": 476
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- 第 76 至 80 个服务区域的配置校验已完成，所有检查项（入口路由、缓存键格式、旧数据兼容性、日志字段、测试账户访问权限）均通过，无失败请求，结果已保存。\n- 切换计划已从周五撤回并确认为周四执行。\n- 小林需在周三前提交演练报告。"
+    },
+    {
+      "index": 100,
+      "messages_sha256": "53b8ff4a039bb401aad4eb53cc7030cc4cb254a9989c6385b6e05ac703068285",
+      "prompt_tokens": 879,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 100,
+        "prompt_tokens": 879,
+        "total_tokens": 979,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### 结论\n- 缓存保留时间确定为十分钟\n- 第 1 至 80 个服务区域的配置校验已完成，未发现失败请求，结果已保存\n- 服务切换计划确认为周四执行\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小林整理演练报告（周三前）\n\n### 待讨论\n- 刷新缓存过期数据的负责人是谁\n- 若周四切换失败是否回滚的方案是什么",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 缓存保留时间确定为十分钟。\n- 服务切换计划定于周五执行。\n- 小林需在周三前整理演练报告。\n- 第 1 至 25 个服务区域的配置校验已完成，未发现失败请求，结果已保存。\n- 刷新缓存过期数据的负责人尚未确定，需下次讨论。\n- 若周四切换失败是否回滚的方案尚未确定，需后续讨论。\n\n第 2 段：\n- 第 26 至 50 个服务区域的配置校验（含入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限）已完成，所有记录响应符合预期，新旧版本回放数据一致且未发现失败请求，结果已保存至对应区域检查记录。\n\n第 3 段：\n- 第 51 至 75 个服务区域的配置校验（含入口路由、缓存键格式、旧数据兼容性、日志字段及测试账户访问权限）已完成，所有记录响应符合预期，新旧版本回放数据一致且未发现失败请求，结果已保存至对应区域检查记录。\n\n第 4 段：\n- 第 76 至 80 个服务区域的配置校验已完成，所有检查项（入口路由、缓存键格式、旧数据兼容性、日志字段、测试账户访问权限）均通过，无失败请求，结果已保存。\n- 切换计划已从周五撤回并确认为周四执行。\n- 小林需在周三前提交演练报告。"
+    },
+    {
+      "index": 101,
+      "messages_sha256": "bbe5de9845e75485e71573a57eb18462e2511933c5bdf6ee008a13c04ba30cf1",
+      "prompt_tokens": 1099,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 100,
+        "prompt_tokens": 1099,
+        "total_tokens": 1199,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Replica count remains undecided (suggested three but not confirmed).\n- Configuration migration is complete.\n- Configuration checks for service regions 1 through 11 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests.\n- No failed requests were observed during checks for any of the ten service regions.\n- Open question: How many replicas are needed?\n- Open question: Who owns the decision on the replica count?"
+    },
+    {
+      "index": 102,
+      "messages_sha256": "6329fac2c61e54afc05be74efa30d126ddab6d38874ae70f748ec2e77246f752",
+      "prompt_tokens": 1119,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 79,
+        "prompt_tokens": 1119,
+        "total_tokens": 1198,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service regions 12 through 22: configuration checks completed with expected results for routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests observed.\n- Metrics verification to be completed by Sam by Tuesday.\n- Launch date confirmed as Monday (Friday proposal withdrawn).\n- Open question: Who owns the launch?"
+    },
+    {
+      "index": 103,
+      "messages_sha256": "76b6f1a92fe1de0e698802e53fc75464e869a52c76b4fd1ece33a83c4bb04983",
+      "prompt_tokens": 1127,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 50,
+        "prompt_tokens": 1127,
+        "total_tokens": 1177,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Conclusions: Configuration checks for service regions 23 through 34 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests were observed."
+    },
+    {
+      "index": 104,
+      "messages_sha256": "94469787fcf79b0baee29f6f10609ec6a7131f15a4783d428268cd8b79fba6eb",
+      "prompt_tokens": 1127,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 22,
+        "prompt_tokens": 1127,
+        "total_tokens": 1149,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Configuration checks for service regions 35 through 46 completed successfully with no failed requests observed."
+    },
+    {
+      "index": 105,
+      "messages_sha256": "db66935bf202ffed85f50077c6ea224851bcd3d97b59b9bd4b8e9ea61866ebab",
+      "prompt_tokens": 1127,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 50,
+        "prompt_tokens": 1127,
+        "total_tokens": 1177,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Conclusions: Configuration checks for service regions 47 through 58 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests were observed."
+    },
+    {
+      "index": 106,
+      "messages_sha256": "5b5e4d44cc43b13619e1060ca7f5700eeefb2ddd2fcac05e3de3cf9237849547",
+      "prompt_tokens": 1127,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 45,
+        "prompt_tokens": 1127,
+        "total_tokens": 1172,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service regions 59 through 70: Configuration checks completed with expected results for routes, cache keys, legacy data, log fields, and test accounts; recorded requests matched both versions with no failed requests observed."
+    },
+    {
+      "index": 107,
+      "messages_sha256": "509c2f1f1c355f02539f458892d64a5610d2f2405bbb17eb92e4276a7417a60c",
+      "prompt_tokens": 1048,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 59,
+        "prompt_tokens": 1048,
+        "total_tokens": 1107,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "- Service regions 71 through 80: Configuration checks completed successfully for routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions with no failed requests observed.\n- Replica count remains undecided.\n- Sam to verify metrics by Tuesday."
+    },
+    {
+      "index": 108,
+      "messages_sha256": "ca53523d1b07fe620615fcd2ad928efe9451d27ba51f1819ded9b3d82f784e3c",
+      "prompt_tokens": 1041,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 194,
+        "prompt_tokens": 1041,
+        "total_tokens": 1235,
+        "prompt_tokens_details": {
+          "cached_tokens": 525
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\nConfiguration checks for service regions 1 through 11 are complete with expected results.\nConfiguration checks for service regions 12 through 22 are complete with expected results.\nConfiguration checks for service regions 23 through 34 are complete with expected results.\nConfiguration checks for service regions 35 through 46 are complete with expected results.\nConfiguration checks for service regions 47 through 58 are complete with expected results.\nConfiguration checks for service regions 59 through 70 are complete with expected results.\nConfiguration checks for service regions 71 through 80 are complete with expected results.\nLaunch date confirmed as Monday.\n\n### Decisions\nNone\n\n### To-dos\nNone\n\n### Open questions\nHow many replicas are needed?\nWho owns the decision on the replica count?\nWho owns the launch?\nMetrics verification to be completed by Sam by Tuesday.",
+      "final_input": "On the whiteboard:\n（空）\n\nThe transcript is too long; these are the notes taken part by part:\nPart 1:\n- Replica count remains undecided (suggested three but not confirmed).\n- Configuration migration is complete.\n- Configuration checks for service regions 1 through 11 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests.\n- No failed requests were observed during checks for any of the ten service regions.\n- Open question: How many replicas are needed?\n- Open question: Who owns the decision on the replica count?\n\nPart 2:\n- Service regions 12 through 22: configuration checks completed with expected results for routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests observed.\n- Metrics verification to be completed by Sam by Tuesday.\n- Launch date confirmed as Monday (Friday proposal withdrawn).\n- Open question: Who owns the launch?\n\nPart 3:\n- Conclusions: Configuration checks for service regions 23 through 34 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests were observed.\n\nPart 4:\n- Configuration checks for service regions 35 through 46 completed successfully with no failed requests observed.\n\nPart 5:\n- Conclusions: Configuration checks for service regions 47 through 58 are complete with expected results across routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions; no failed requests were observed.\n\nPart 6:\n- Service regions 59 through 70: Configuration checks completed with expected results for routes, cache keys, legacy data, log fields, and test accounts; recorded requests matched both versions with no failed requests observed.\n\nPart 7:\n- Service regions 71 through 80: Configuration checks completed successfully for routes, cache keys, legacy data, log fields, test accounts, and recorded requests matching both versions with no failed requests observed.\n- Replica count remains undecided.\n- Sam to verify metrics by Tuesday."
+    },
+    {
+      "index": 109,
+      "messages_sha256": "8172a2b67a1d922e7c500ee2593bf2dce121847f14b940eb6cd2436d5126b85b",
+      "prompt_tokens": 632,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 58,
+        "prompt_tokens": 632,
+        "total_tokens": 690,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "finish_reason": "stop",
+      "raw_reply": "### Conclusions\n- All readiness checks are complete.\n\n### Decisions\n- None\n\n### To-dos\n- Nora will write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday? (Rollback still needs discussion.)",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> All readiness checks are complete. If deployment fails on Thursday, should we roll back?\n> Rollback still needs discussion. Deployment has not started.\n> Nora will write the rollout guide by Wednesday."
+    }
+  ]
+}

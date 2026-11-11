@@ -11,6 +11,7 @@ publish.workspace = true
 anyhow.workspace = true
 cpal = "0.18"
 sherpa-onnx = "2.0.1"
+sherpa-onnx-sys = "2.0.1"
 serde_json.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]

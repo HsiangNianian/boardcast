@@ -51,6 +51,10 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      # rust-cache drops native libraries but can retain sherpa's completed-download directory.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       - run: sh packaging/linux/package.sh
         env:
           VARIANTS: ${{ env.LINUX_VARIANTS }}
@@ -120,6 +124,10 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      # rust-cache drops native libraries but can retain sherpa's completed-download directory.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       - run: sh packaging/macos/package.sh
         env:
           VARIANTS: ${{ env.MAC_VARIANTS }}
@@ -184,6 +192,10 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      # rust-cache drops native libraries but can retain sherpa's completed-download directory.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       - run: sh packaging/windows/package.sh
         env:
           VARIANTS: ${{ env.WINDOWS_VARIANTS }}

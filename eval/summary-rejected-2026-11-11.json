@@ -1,0 +1,353 @@
+{
+  "date": "2026-11-11",
+  "model": {
+    "name": "Qwen3.5-4B-Q4_K_M.gguf",
+    "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "llama_build": "b11954",
+    "device": "CPU",
+    "threads": 4,
+    "context": 4096
+  },
+  "scope": "Rejected synthetic short-meeting probes; one generation per case. Production summary sources were restored and still match summary-2026-11-11.json. No model improvement is claimed.",
+  "experiments": [
+    {
+      "label": "qwen35-thinking256-probe",
+      "repeat": 1,
+      "cases_sha256": "79dd8aba19e222e69ef2577a30102504e0a4f746006a3dedf76566365fe13457",
+      "summary_source_sha256": "584b219a4b1eb9601979ce656e27c4380ed4c7c84f7895b006dc8b030294088a",
+      "agent_source_sha256": "7697b17e0c2acaed625decb7fbc41d3191348f2cb5191e8f7a78d5ef024a25fc",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n部署这周三上线\n\n### 待办\n无\n\n### 待讨论\n失败标准应该有两个",
+          "failures": [],
+          "elapsed_ms": 25500
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 1,
+          "summary": "### 结论\n三次重试还是不满足要求，之后怎么办？这时就动态缩小字号兜底。\n\n### 决定\n用缩小字号。不做硬切了。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 28408
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试还是不满足要求，之后怎么办？\n- 缩小字号，后续得验证一下。",
+          "failures": [],
+          "elapsed_ms": 28121
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 方案二，按词换行。\n\n### 待办\n无\n\n### 待讨论\n- 方案一撤回原因",
+          "failures": [],
+          "elapsed_ms": 27542
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 1,
+          "summary": "### 结论\n接口文档周五前发给大家。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+          "failures": [
+            "待办 lacks any of [\"接口文档\"]",
+            "待办 lacks any of [\"周五\", \"星期五\"]"
+          ],
+          "elapsed_ms": 24922
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 1,
+          "summary": "### 结论\n- 确认视频中存在明显卡顿问题。\n\n### 决定\n- 指定小王负责排查卡顿问题。\n\n### 待办\n- 无\n\n### 待讨论\n- 卡顿问题的具体排查方案（已说明“我来查”但未明确方法）",
+          "failures": [
+            "待办 lacks any of [\"卡顿\"]"
+          ],
+          "elapsed_ms": 29864
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Deployment is scheduled for Wednesday.\n- There should be two failure criteria.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Number of failure criteria: not sure if it should be two; needs checking.",
+          "failures": [
+            "Conclusions/Decisions has \"two failure\""
+          ],
+          "elapsed_ms": 28013
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 1,
+          "summary": "### Conclusions\n- If three retries don't fit, we shrink the font.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": [],
+          "elapsed_ms": 26372
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 缓存保留时间定为十分钟\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 缓存刷新负责人是谁（下次讨论）",
+          "failures": [],
+          "elapsed_ms": 28046
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Cache will live for ten minutes\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": [
+            "Open questions lacks any of [\"owner\", \"who\", \"refresh\"]"
+          ],
+          "elapsed_ms": 25484
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 1,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警还是来得太晚。\n\n### 决定\n无\n\n### 待办\n- [ ] 下次发布前补上告警测试，负责人小王\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 43313
+        },
+        {
+          "case": "en-template-custom",
+          "run": 1,
+          "summary": "### Conclusions\n#### Latency\n- p95 is eighty milliseconds\n\n#### Rollout\n- canary finished without errors\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": [
+            "Decisions lacks any of [\"tomorrow\"]"
+          ],
+          "elapsed_ms": 41419
+        }
+      ],
+      "passed": 7,
+      "total": 12,
+      "decision": "rejected",
+      "reason": "A 256-token reasoning budget and the recommended thinking sampler regressed tasks, confirmed dates, open questions and custom-template structure.",
+      "sampling": {
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0,
+        "enable_thinking": true,
+        "reasoning_budget_tokens": 256,
+        "max_tokens": 1280
+      }
+    },
+    {
+      "label": "qwen3.5-example-probe",
+      "repeat": 1,
+      "cases_sha256": "79dd8aba19e222e69ef2577a30102504e0a4f746006a3dedf76566365fe13457",
+      "summary_source_sha256": "0b6fe10e0f50d488c88c4ae72337a3cb27a1ecfbad8cd3fe515f59407d7ebe3b",
+      "agent_source_sha256": "6e6911354a07ea6318fdd32c50b36d655517c037eb05bbdfa77180cfc7b97d71",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 部署这周三上线。\n### 决定\n- 无\n### 待办\n- 无\n### 待讨论\n- 失败标准应该有两个吧？",
+          "failures": [],
+          "elapsed_ms": 5617
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 1,
+          "summary": "### 结论\n- 三次重试不满足要求时，采用动态缩小字号兜底。\n### 决定\n- 不做硬切，改用缩小字号。\n### 待办\n- 无\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 6374
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 无\n### 决定\n- 无\n### 待办\n- 无\n### 待讨论\n- 三次重试不满足要求，之后怎么办？（建议缩小字号，需稍后验证）",
+          "failures": [],
+          "elapsed_ms": 6270
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 1,
+          "summary": "### 结论\n- 无\n### 决定\n- 改用方案二，按词换行。\n### 待办\n- 无\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 5513
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 1,
+          "summary": "### 结论\n- 无\n### 决定\n- 无\n### 待办\n- [ ] 周五前发接口文档。\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 4807
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 1,
+          "summary": "### 结论\n- 无\n### 决定\n- 无\n### 待办\n- [ ] 小王负责查卡顿问题。\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 5230
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- We ship on Wednesday.\n### Decisions\n- None\n### To-dos\n- None\n### Open questions\n- How many failure criteria are needed? (Suggested: two)",
+          "failures": [],
+          "elapsed_ms": 4082
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 1,
+          "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback instead of making a hard cut.\n### Decisions\n- None\n### To-dos\n- None\n### Open questions\n- None",
+          "failures": [],
+          "elapsed_ms": 5626
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 缓存保留时间定为十分钟。\n### 决定\n- 无\n### 待办\n- 无\n### 待讨论\n- 缓存刷新负责人是谁？",
+          "failures": [],
+          "elapsed_ms": 5359
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- The cache should live for ten minutes.\n### Decisions\n- None\n### To-dos\n- None\n### Open questions\n- Who will refresh the cache?",
+          "failures": [],
+          "elapsed_ms": 5269
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 1,
+          "summary": "### 结论\n- 本次发布没有停机。\n- 告警来得太晚。\n### 决定\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 下次发布前补上告警测试。\n### 待讨论\n- 无",
+          "failures": [
+            "结论 lacks any of [\"#### 做得好的\"]",
+            "结论 lacks any of [\"#### 要改进的\"]",
+            "待办 lacks any of [\"小王\"]"
+          ],
+          "elapsed_ms": 20506
+        },
+        {
+          "case": "en-template-custom",
+          "run": 1,
+          "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is eighty milliseconds.\n#### Rollout\n- The canary rollout finished without errors.\n- The release is enabled for tomorrow.\n### Decisions\n- None\n### To-dos\n- None\n### Open questions\n- None",
+          "failures": [
+            "Decisions lacks any of [\"tomorrow\"]"
+          ],
+          "elapsed_ms": 20131
+        }
+      ],
+      "passed": 10,
+      "total": 12,
+      "decision": "rejected",
+      "reason": "A plain bilingual example retained the missing date and uncertain number but regressed template headings, a named task owner and the Decisions section.",
+      "summary_patch_against_c39109b": "--- a/crates/agent/src/summary.rs\n+++ b/crates/agent/src/summary.rs\n@@ -31,6 +31,7 @@\n     system: &'static str,\n     facts: &'static str,\n     rules: &'static str,\n+    example: [&'static str; 2],\n }\n \n const ZH: Words = Words {\n@@ -47,6 +48,10 @@\n     too_long: \"会议记录太长，下面是逐段记下的要点：\",\n     partial: \"你在帮人整理会议记录。这是一场长会议中的一段，记下这一段里的要点：说了什么结论、定了什么、谁要做什么、还有什么没定。每条一行，以「- 」开头。\",\n     system: \"你在帮人写会议摘要。\",\n+    example: [\n+        \"会议记录：\\n> 缓存需要保留五天吗？\\n> 不确定，保留多久还没有定。\\n> 支付服务本周六上线。\\n> 验收报告我来写，周四前提交。\",\n+        \"### 结论\\n- 支付服务本周六上线。\\n### 决定\\n- 无\\n### 待办\\n- [ ] 周四前提交验收报告。\\n### 待讨论\\n- 缓存是否需要保留五天？\",\n+    ],\n     facts: \"保留原话的主体、否定和进展，区分已有成果与后续工作。\\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\",\n     rules: \"只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\\n用简体中文，每条一行，以「- 」开头，简短。\\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\\n严格按下面的格式输出，不要别的话：\",\n };\n@@ -65,6 +70,10 @@\n     too_long: \"The transcript is too long; these are the notes taken part by part:\",\n     partial: \"You are helping someone tidy up meeting notes. This is one part of a long meeting; note its key points: conclusions reached, what was decided, who will do what, and what is still open. One point per line, starting with '- '.\",\n     system: \"You are helping someone write a meeting summary.\",\n+    example: [\n+        \"Transcript:\\n> Should we retain the cache for five days?\\n> Not sure, the retention period is undecided.\\n> The payment service launches on Saturday.\\n> I will submit the acceptance report by Thursday.\",\n+        \"### Conclusions\\n- The payment service launches on Saturday.\\n### Decisions\\n- None\\n### To-dos\\n- [ ] Submit the acceptance report by Thursday.\\n### Open questions\\n- Should the cache be retained for five days?\",\n+    ],\n     facts: \"Preserve subjects, negations and progress; distinguish existing work from future work.\\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\\nConclusions and Decisions hold only what the meeting confirmed; a guess (\\\"it should be two, right?\\\"), even about a number or a criterion, goes under Open questions.\\nA question that is answered and accepted later in the meeting (\\\"what then?\\\" \\\"then we shrink the font\\\" \\\"good\\\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\\nAn answer given as a maybe (\\\"perhaps\\\", \\\"we could\\\", \\\"needs checking\\\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\\nA choice the meeting explicitly agreed on (\\\"agreed\\\", \\\"let's go with\\\", \\\"we'll use\\\") goes under Decisions; a withdrawn plan is no decision.\\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \\\"Launch on Friday\\\" and Open questions asks \\\"Who owns the launch?\\\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.\",\n     rules: \"Write only from what is given, never make things up; write \\\"None\\\" only for an empty main section among the four below.\\nWrite in English, one short point per line, starting with \\\"- \\\".\\nStart each To-do with \\\"- [ ] \\\", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\\nOutput exactly the format below and nothing else:\",\n };\n@@ -234,7 +243,13 @@\n     let rules = format!(\"{}\\n{}{structure}\", w.rules, w.sections.map(|s| format!(\"### {s}\")).join(\"\\n\"));\n     let system = if partial { format!(\"{}\\n{}\", w.partial, w.facts) } else { format!(\"{}\\n{}\\n{rules}\", w.system, w.facts) };\n     let user = if partial { format!(\"{}\\n{said}\", w.fragment) } else { format!(\"{}\\n{}\\n\\n{said}\", w.board_intro, boards_text(boards, english)) };\n-    vec![json!({ \"role\": \"system\", \"content\": system }), json!({ \"role\": \"user\", \"content\": user })]\n+    let mut out = vec![json!({ \"role\": \"system\", \"content\": system })];\n+    if !partial {\n+        out.push(json!({ \"role\": \"user\", \"content\": w.example[0] }));\n+        out.push(json!({ \"role\": \"assistant\", \"content\": w.example[1] }));\n+    }\n+    out.push(json!({ \"role\": \"user\", \"content\": user }));\n+    out\n }\n \n /// An unused template topic sometimes survives as a heading followed only by \"None\".\n",
+      "sampling": {
+        "temperature": 0,
+        "repeat_penalty": 1.05,
+        "repeat_last_n": 256,
+        "enable_thinking": false,
+        "max_tokens": 1024
+      }
+    },
+    {
+      "label": "qwen3.5-complete-example",
+      "repeat": 1,
+      "cases_sha256": "79dd8aba19e222e69ef2577a30102504e0a4f746006a3dedf76566365fe13457",
+      "summary_source_sha256": "5a0726b568dd163fed32af4218f655cfb553f4b8c5f4d379b36a0d181cfeff5f",
+      "agent_source_sha256": "6e6911354a07ea6318fdd32c50b36d655517c037eb05bbdfa77180cfc7b97d71",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 部署这周三上线。\n### 决定\n- 无\n### 待办\n- 无\n### 待讨论\n- 失败标准应该有两个吧？",
+          "failures": [],
+          "elapsed_ms": 13509
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n- 改用缩小字号作为兜底方案，不做硬切。\n### 待办\n无\n### 待讨论\n- 三次重试不满足要求后的后续处理方案。",
+          "failures": [
+            "待讨论 has \"三次重试\""
+          ],
+          "elapsed_ms": 5779
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n无\n### 待讨论\n- 三次重试不满足要求，之后怎么办？（建议缩小字号，需稍后验证）",
+          "failures": [],
+          "elapsed_ms": 5443
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n- 改用方案二，按词换行。\n### 待办\n无\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 5098
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n- [ ] 周五前发接口文档。\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 4976
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n- [ ] 小王负责查卡顿问题。\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 4671
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n### Decisions\nNone\n### To-dos\nNone\n### Open questions\n- How many failure criteria are needed? (Suggested: two)",
+          "failures": [],
+          "elapsed_ms": 14113
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 1,
+          "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback.\n### Decisions\n- No hard cut; use font shrinking instead.\n### To-dos\n- None\n### Open questions\n- None",
+          "failures": [],
+          "elapsed_ms": 5787
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n无\n### 待讨论\n- 缓存保留十分钟，刷新负责人是谁。",
+          "failures": [
+            "结论/决定 lacks any of [\"十分钟\", \"10分钟\", \"10 分钟\"]"
+          ],
+          "elapsed_ms": 4804
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\nNone\n### Decisions\n- Cache lifetime set to ten minutes.\n### To-dos\nNone\n### Open questions\n- Who will refresh the cache?",
+          "failures": [],
+          "elapsed_ms": 5173
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 1,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 16511
+        },
+        {
+          "case": "en-template-custom",
+          "run": 1,
+          "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": [],
+          "elapsed_ms": 15752
+        }
+      ],
+      "passed": 10,
+      "total": 12,
+      "decision": "rejected",
+      "reason": "Adding an explicit decision to the example and excluding templates left an answered question open and demoted an agreed duration into an unresolved question.",
+      "summary_patch_against_c39109b": "--- a/crates/agent/src/summary.rs\n+++ b/crates/agent/src/summary.rs\n@@ -31,6 +31,7 @@\n     system: &'static str,\n     facts: &'static str,\n     rules: &'static str,\n+    example: [&'static str; 2],\n }\n \n const ZH: Words = Words {\n@@ -47,6 +48,10 @@\n     too_long: \"会议记录太长，下面是逐段记下的要点：\",\n     partial: \"你在帮人整理会议记录。这是一场长会议中的一段，记下这一段里的要点：说了什么结论、定了什么、谁要做什么、还有什么没定。每条一行，以「- 」开头。\",\n     system: \"你在帮人写会议摘要。\",\n+    example: [\n+        \"会议记录：\\n> 缓存需要保留五天吗？\\n> 不确定，保留多久还没有定。\\n> 支付服务本周六上线。\\n> 审计日志保留三十天，就这样定了。\\n> 验收报告我来写，周四前提交。\",\n+        \"### 结论\\n- 支付服务本周六上线。\\n### 决定\\n- 审计日志保留三十天。\\n### 待办\\n- [ ] 周四前提交验收报告。\\n### 待讨论\\n- 缓存是否需要保留五天？\",\n+    ],\n     facts: \"保留原话的主体、否定和进展，区分已有成果与后续工作。\\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\",\n     rules: \"只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\\n用简体中文，每条一行，以「- 」开头，简短。\\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\\n严格按下面的格式输出，不要别的话：\",\n };\n@@ -65,6 +70,10 @@\n     too_long: \"The transcript is too long; these are the notes taken part by part:\",\n     partial: \"You are helping someone tidy up meeting notes. This is one part of a long meeting; note its key points: conclusions reached, what was decided, who will do what, and what is still open. One point per line, starting with '- '.\",\n     system: \"You are helping someone write a meeting summary.\",\n+    example: [\n+        \"Transcript:\\n> Should we retain the cache for five days?\\n> Not sure, the retention period is undecided.\\n> The payment service launches on Saturday.\\n> We agree to retain audit logs for thirty days.\\n> I will submit the acceptance report by Thursday.\",\n+        \"### Conclusions\\n- The payment service launches on Saturday.\\n### Decisions\\n- Retain audit logs for thirty days.\\n### To-dos\\n- [ ] Submit the acceptance report by Thursday.\\n### Open questions\\n- Should the cache be retained for five days?\",\n+    ],\n     facts: \"Preserve subjects, negations and progress; distinguish existing work from future work.\\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\\nConclusions and Decisions hold only what the meeting confirmed; a guess (\\\"it should be two, right?\\\"), even about a number or a criterion, goes under Open questions.\\nA question that is answered and accepted later in the meeting (\\\"what then?\\\" \\\"then we shrink the font\\\" \\\"good\\\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\\nAn answer given as a maybe (\\\"perhaps\\\", \\\"we could\\\", \\\"needs checking\\\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\\nA choice the meeting explicitly agreed on (\\\"agreed\\\", \\\"let's go with\\\", \\\"we'll use\\\") goes under Decisions; a withdrawn plan is no decision.\\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \\\"Launch on Friday\\\" and Open questions asks \\\"Who owns the launch?\\\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.\",\n     rules: \"Write only from what is given, never make things up; write \\\"None\\\" only for an empty main section among the four below.\\nWrite in English, one short point per line, starting with \\\"- \\\".\\nStart each To-do with \\\"- [ ] \\\", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\\nOutput exactly the format below and nothing else:\",\n };\n@@ -234,7 +243,14 @@\n     let rules = format!(\"{}\\n{}{structure}\", w.rules, w.sections.map(|s| format!(\"### {s}\")).join(\"\\n\"));\n     let system = if partial { format!(\"{}\\n{}\", w.partial, w.facts) } else { format!(\"{}\\n{}\\n{rules}\", w.system, w.facts) };\n     let user = if partial { format!(\"{}\\n{said}\", w.fragment) } else { format!(\"{}\\n{}\\n\\n{said}\", w.board_intro, boards_text(boards, english)) };\n-    vec![json!({ \"role\": \"system\", \"content\": system }), json!({ \"role\": \"user\", \"content\": user })]\n+    let mut out = vec![json!({ \"role\": \"system\", \"content\": system })];\n+    // The plain example has no topic headings; template summaries use their own structure.\n+    if !partial && structure.is_empty() {\n+        out.push(json!({ \"role\": \"user\", \"content\": w.example[0] }));\n+        out.push(json!({ \"role\": \"assistant\", \"content\": w.example[1] }));\n+    }\n+    out.push(json!({ \"role\": \"user\", \"content\": user }));\n+    out\n }\n \n /// An unused template topic sometimes survives as a heading followed only by \"None\".\n",
+      "sampling": {
+        "temperature": 0,
+        "repeat_penalty": 1.05,
+        "repeat_last_n": 256,
+        "enable_thinking": false,
+        "max_tokens": 1024
+      }
+    }
+  ]
+}

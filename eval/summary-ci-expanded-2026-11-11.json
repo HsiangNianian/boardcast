@@ -1,0 +1,894 @@
+{
+  "label": "qwen3.5-4b-q4km-cpu",
+  "repeat": 3,
+  "cases_sha256": "5a2a198d31313d40274d1c70bc0c2c1556b2ebf479d46867b82f9dd7ce543b82",
+  "summary_source_sha256": "18f631b6d26dbbf5a508cf2c89c52e689ca1f00a06c13b40487d1876ec1baad8",
+  "agent_source_sha256": "6e6911354a07ea6318fdd32c50b36d655517c037eb05bbdfa77180cfc7b97d71",
+  "answers": [
+    {
+      "case": "zh-guess-stays-open",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+      "failures": [
+        "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+      ],
+      "elapsed_ms": 28916
+    },
+    {
+      "case": "zh-guess-stays-open",
+      "run": 2,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+      "failures": [
+        "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+      ],
+      "elapsed_ms": 4127
+    },
+    {
+      "case": "zh-guess-stays-open",
+      "run": 3,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+      "failures": [
+        "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+      ],
+      "elapsed_ms": 4117
+    },
+    {
+      "case": "zh-answered-question-closes",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 8505
+    },
+    {
+      "case": "zh-answered-question-closes",
+      "run": 2,
+      "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 5677
+    },
+    {
+      "case": "zh-answered-question-closes",
+      "run": 3,
+      "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 5680
+    },
+    {
+      "case": "zh-tentative-answer-stays-open",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+      "failures": [],
+      "elapsed_ms": 8461
+    },
+    {
+      "case": "zh-tentative-answer-stays-open",
+      "run": 2,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+      "failures": [],
+      "elapsed_ms": 5803
+    },
+    {
+      "case": "zh-tentative-answer-stays-open",
+      "run": 3,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+      "failures": [],
+      "elapsed_ms": 5799
+    },
+    {
+      "case": "zh-withdrawn-plan",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 8653
+    },
+    {
+      "case": "zh-withdrawn-plan",
+      "run": 2,
+      "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 5531
+    },
+    {
+      "case": "zh-withdrawn-plan",
+      "run": 3,
+      "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 5553
+    },
+    {
+      "case": "zh-letter-is-no-owner",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 6661
+    },
+    {
+      "case": "zh-letter-is-no-owner",
+      "run": 2,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 4627
+    },
+    {
+      "case": "zh-letter-is-no-owner",
+      "run": 3,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 4616
+    },
+    {
+      "case": "zh-in-the-moment-is-no-todo",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，小王负责\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 7471
+    },
+    {
+      "case": "zh-in-the-moment-is-no-todo",
+      "run": 2,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，小王负责\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 4785
+    },
+    {
+      "case": "zh-in-the-moment-is-no-todo",
+      "run": 3,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，小王负责\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 4762
+    },
+    {
+      "case": "en-guess-stays-open",
+      "run": 1,
+      "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+      "failures": [
+        "Open questions has \"what are the two\""
+      ],
+      "elapsed_ms": 31632
+    },
+    {
+      "case": "en-guess-stays-open",
+      "run": 2,
+      "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+      "failures": [
+        "Open questions has \"what are the two\""
+      ],
+      "elapsed_ms": 5109
+    },
+    {
+      "case": "en-guess-stays-open",
+      "run": 3,
+      "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+      "failures": [
+        "Open questions has \"what are the two\""
+      ],
+      "elapsed_ms": 5098
+    },
+    {
+      "case": "en-answered-question-closes",
+      "run": 1,
+      "summary": "### Conclusions\n- If three retries fail, the font will be shrunk as a fallback.\n\n### Decisions\n\n### To-dos\n\n### Open questions",
+      "failures": [],
+      "elapsed_ms": 7536
+    },
+    {
+      "case": "en-answered-question-closes",
+      "run": 2,
+      "summary": "### Conclusions\n- If three retries fail, the font will be shrunk as a fallback.\n\n### Decisions\n\n### To-dos\n\n### Open questions",
+      "failures": [],
+      "elapsed_ms": 4573
+    },
+    {
+      "case": "en-answered-question-closes",
+      "run": 3,
+      "summary": "### Conclusions\n- If three retries fail, the font will be shrunk as a fallback.\n\n### Decisions\n\n### To-dos\n\n### Open questions",
+      "failures": [],
+      "elapsed_ms": 4586
+    },
+    {
+      "case": "zh-partial-answer-stays-open",
+      "run": 1,
+      "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+      "failures": [],
+      "elapsed_ms": 8796
+    },
+    {
+      "case": "zh-partial-answer-stays-open",
+      "run": 2,
+      "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+      "failures": [],
+      "elapsed_ms": 5834
+    },
+    {
+      "case": "zh-partial-answer-stays-open",
+      "run": 3,
+      "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+      "failures": [],
+      "elapsed_ms": 5846
+    },
+    {
+      "case": "en-partial-answer-stays-open",
+      "run": 1,
+      "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+      "failures": [],
+      "elapsed_ms": 8262
+    },
+    {
+      "case": "en-partial-answer-stays-open",
+      "run": 2,
+      "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+      "failures": [],
+      "elapsed_ms": 5339
+    },
+    {
+      "case": "en-partial-answer-stays-open",
+      "run": 3,
+      "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+      "failures": [],
+      "elapsed_ms": 5364
+    },
+    {
+      "case": "zh-template-retro",
+      "run": 1,
+      "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n#### 要改进的\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 下次发布前补上告警测试，负责人：小王\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 40275
+    },
+    {
+      "case": "zh-template-retro",
+      "run": 2,
+      "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n#### 要改进的\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 下次发布前补上告警测试，负责人：小王\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 13684
+    },
+    {
+      "case": "zh-template-retro",
+      "run": 3,
+      "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n#### 要改进的\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 下次发布前补上告警测试，负责人：小王\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 13810
+    },
+    {
+      "case": "en-template-custom",
+      "run": 1,
+      "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+      "failures": [],
+      "elapsed_ms": 34902
+    },
+    {
+      "case": "en-template-custom",
+      "run": 2,
+      "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+      "failures": [],
+      "elapsed_ms": 9082
+    },
+    {
+      "case": "en-template-custom",
+      "run": 3,
+      "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+      "failures": [],
+      "elapsed_ms": 9055
+    },
+    {
+      "case": "zh-stated-date-beside-tentative-date",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n桌面版周四发布\n\n### 待办\n无\n\n### 待讨论\n移动版发布日期是否定为周五",
+      "failures": [],
+      "elapsed_ms": 21553
+    },
+    {
+      "case": "zh-stated-date-beside-tentative-date",
+      "run": 2,
+      "summary": "### 结论\n无\n\n### 决定\n桌面版周四发布\n\n### 待办\n无\n\n### 待讨论\n移动版发布日期是否定为周五",
+      "failures": [],
+      "elapsed_ms": 4478
+    },
+    {
+      "case": "zh-stated-date-beside-tentative-date",
+      "run": 3,
+      "summary": "### 结论\n无\n\n### 决定\n桌面版周四发布\n\n### 待办\n无\n\n### 待讨论\n移动版发布日期是否定为周五",
+      "failures": [],
+      "elapsed_ms": 4515
+    },
+    {
+      "case": "zh-stated-date-corrected",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+      "failures": [
+        "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+      ],
+      "elapsed_ms": 7424
+    },
+    {
+      "case": "zh-stated-date-corrected",
+      "run": 2,
+      "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+      "failures": [
+        "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+      ],
+      "elapsed_ms": 4716
+    },
+    {
+      "case": "zh-stated-date-corrected",
+      "run": 3,
+      "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+      "failures": [
+        "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+      ],
+      "elapsed_ms": 4718
+    },
+    {
+      "case": "zh-explicit-condition-not-an-event",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+      "failures": [],
+      "elapsed_ms": 9136
+    },
+    {
+      "case": "zh-explicit-condition-not-an-event",
+      "run": 2,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+      "failures": [],
+      "elapsed_ms": 6132
+    },
+    {
+      "case": "zh-explicit-condition-not-an-event",
+      "run": 3,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+      "failures": [],
+      "elapsed_ms": 6113
+    }
+  ],
+  "ci_run": "https://github.com/HsiangNianian/boardcast/actions/runs/43036127338",
+  "head": "24994417d3a23624d57b985cb740abc8ca5af457",
+  "model_sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+  "passed": 36,
+  "total": 45,
+  "note": "Unmodified full CI outputs for the expanded 15-case suite, three repetitions each. The original 12 cases score 30/36; the three new cases score 6/9. The Chinese Wednesday date, English unconfirmed quantity and Chinese Monday rehearsal date each fail all three repetitions. Both template cases pass all three repetitions. Prompts and sampler are unchanged. This confirms that the earlier CI pass on the English quantity case was not a stable fix.",
+  "manual_review": [
+    "Read each of the 15 distinct outputs against all source turns: settled/tentative/withdrawn/partial answers, conditional questions, named task ownership and deadline, and template topic facts remain as recorded by the checks; the three factual failures above remain open.",
+    "The English answered-question output leaves three section headings empty rather than writing None. This is a presentation limitation, not an additional semantic failure in these checks.",
+    "The CI model hash matches the frozen local model. Runtime equivalence is not established, and repeated deterministic outputs are not independent meetings."
+  ],
+  "follow_up": {
+    "ci_run": "https://github.com/HsiangNianian/boardcast/actions/runs/43042362889",
+    "head": "5e79a53b9d445fb8dea58c9f824e992921603a28",
+    "report_sha256": "6dbf5c9c2e6c1504e8935716653665b1cd29cea00b89a0c16f693753a4679e7a",
+    "model_sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "passed": 36,
+    "total": 45,
+    "answers": "Every case, run, output and failure is identical to answers above; only elapsed_ms differs.",
+    "elapsed_ms": [
+      28906,
+      4156,
+      4178,
+      8535,
+      5691,
+      5677,
+      8428,
+      5871,
+      5863,
+      8722,
+      5630,
+      5746,
+      6800,
+      4690,
+      4748,
+      7639,
+      4834,
+      4839,
+      31716,
+      5204,
+      5140,
+      7565,
+      4642,
+      4648,
+      8879,
+      5924,
+      5941,
+      8447,
+      5437,
+      5442,
+      39987,
+      13740,
+      13763,
+      34756,
+      9042,
+      9192,
+      21647,
+      4585,
+      4559,
+      7485,
+      4907,
+      4990,
+      9336,
+      6274,
+      6279
+    ],
+    "status": "Text job completed and uploaded its report. This is not a claim that the whole Eval workflow completed."
+  },
+  "context_follow_up": {
+    "ci_run": "https://github.com/HsiangNianian/boardcast/actions/runs/43051546186",
+    "head": "f356e5a64b5471ca25e8bcd5a748c996f1ba8f98",
+    "report_sha256": "67011f5d9519a8838b7d51a9a12825b87f502937c854dbab204db6f55c0e3c59",
+    "cases_sha256": "5a2a198d31313d40274d1c70bc0c2c1556b2ebf479d46867b82f9dd7ce543b82",
+    "summary_source_sha256": "f7e12a51765e59c9f9aa948d8d637cfcf43d4c75dabf917785b502aeb2ee1f57",
+    "agent_source_sha256": "33d8c7a9f9b9b2488ebfead72d56147a958194cc3a554de6b1ad9f102677da0a",
+    "model_sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "passed": 36,
+    "total": 45,
+    "answers": "Every case, run, output and failure is identical to answers above; only elapsed_ms differs.",
+    "elapsed_ms": [
+      30812,
+      5355,
+      5118,
+      10107,
+      7334,
+      7177,
+      10045,
+      7260,
+      7090,
+      10143,
+      7260,
+      7014,
+      8096,
+      6016,
+      5957,
+      8739,
+      5742,
+      5741,
+      33040,
+      6284,
+      6337,
+      8626,
+      5652,
+      5691,
+      10605,
+      7666,
+      8288,
+      10764,
+      7561,
+      7773,
+      48679,
+      21891,
+      22925,
+      45053,
+      17899,
+      19052,
+      28335,
+      9706,
+      9987,
+      13176,
+      10577,
+      10834,
+      16943,
+      13985,
+      14198
+    ],
+    "note": "The context-budget code is present, but these short inputs do not need reduction. Source hashes differ from the original run and are recorded here. The later two-items checker addition is not part of this run. Text evaluation completed; this is not a full-workflow pass."
+  },
+  "output_follow_up": {
+    "label": "qwen3.5-4b-q4km-cpu",
+    "repeat": 3,
+    "cases_sha256": "7682142731c13b5bad2ed53c1a550ce50158e8361ac8cada1853a3349b70a4d7",
+    "summary_source_sha256": "154f50d596156ad88d2b83e6fe2318b01dab1df68efcca4963186f32af62d591",
+    "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+    "answers": [
+      {
+        "case": "zh-guess-stays-open",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+        "failures": [
+          "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+        ],
+        "elapsed_ms": 15050
+      },
+      {
+        "case": "zh-guess-stays-open",
+        "run": 2,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+        "failures": [
+          "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+        ],
+        "elapsed_ms": 4985
+      },
+      {
+        "case": "zh-guess-stays-open",
+        "run": 3,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+        "failures": [
+          "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+        ],
+        "elapsed_ms": 5061
+      },
+      {
+        "case": "zh-answered-question-closes",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n- 不做硬切，改用动态缩小字号作为兜底方案。\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 7977
+      },
+      {
+        "case": "zh-answered-question-closes",
+        "run": 2,
+        "summary": "### 结论\n无\n\n### 决定\n- 不做硬切，改用动态缩小字号作为兜底方案。\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 6721
+      },
+      {
+        "case": "zh-answered-question-closes",
+        "run": 3,
+        "summary": "### 结论\n无\n\n### 决定\n- 不做硬切，改用动态缩小字号作为兜底方案。\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 6661
+      },
+      {
+        "case": "zh-tentative-answer-stays-open",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+        "failures": [],
+        "elapsed_ms": 8207
+      },
+      {
+        "case": "zh-tentative-answer-stays-open",
+        "run": 2,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+        "failures": [],
+        "elapsed_ms": 7033
+      },
+      {
+        "case": "zh-tentative-answer-stays-open",
+        "run": 3,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+        "failures": [],
+        "elapsed_ms": 7219
+      },
+      {
+        "case": "zh-withdrawn-plan",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 8564
+      },
+      {
+        "case": "zh-withdrawn-plan",
+        "run": 2,
+        "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 6857
+      },
+      {
+        "case": "zh-withdrawn-plan",
+        "run": 3,
+        "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 6889
+      },
+      {
+        "case": "zh-letter-is-no-owner",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 6826
+      },
+      {
+        "case": "zh-letter-is-no-owner",
+        "run": 2,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 5623
+      },
+      {
+        "case": "zh-letter-is-no-owner",
+        "run": 3,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 5741
+      },
+      {
+        "case": "zh-in-the-moment-is-no-todo",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，小王负责\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 6908
+      },
+      {
+        "case": "zh-in-the-moment-is-no-todo",
+        "run": 2,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，小王负责\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 5797
+      },
+      {
+        "case": "zh-in-the-moment-is-no-todo",
+        "run": 3,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，小王负责\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 5797
+      },
+      {
+        "case": "en-guess-stays-open",
+        "run": 1,
+        "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+        "failures": [
+          "Open questions has \"what are the two\""
+        ],
+        "elapsed_ms": 17312
+      },
+      {
+        "case": "en-guess-stays-open",
+        "run": 2,
+        "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+        "failures": [
+          "Open questions has \"what are the two\""
+        ],
+        "elapsed_ms": 6334
+      },
+      {
+        "case": "en-guess-stays-open",
+        "run": 3,
+        "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+        "failures": [
+          "Open questions has \"what are the two\""
+        ],
+        "elapsed_ms": 6556
+      },
+      {
+        "case": "en-answered-question-closes",
+        "run": 1,
+        "summary": "### Conclusions\n- If three retries fail, the font will be shrunk as a fallback.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+        "failures": [],
+        "elapsed_ms": 6868
+      },
+      {
+        "case": "en-answered-question-closes",
+        "run": 2,
+        "summary": "### Conclusions\n- If three retries fail, the font will be shrunk as a fallback.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+        "failures": [],
+        "elapsed_ms": 5689
+      },
+      {
+        "case": "en-answered-question-closes",
+        "run": 3,
+        "summary": "### Conclusions\n- If three retries fail, the font will be shrunk as a fallback.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+        "failures": [],
+        "elapsed_ms": 5682
+      },
+      {
+        "case": "zh-partial-answer-stays-open",
+        "run": 1,
+        "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+        "failures": [],
+        "elapsed_ms": 8462
+      },
+      {
+        "case": "zh-partial-answer-stays-open",
+        "run": 2,
+        "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+        "failures": [],
+        "elapsed_ms": 7357
+      },
+      {
+        "case": "zh-partial-answer-stays-open",
+        "run": 3,
+        "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+        "failures": [],
+        "elapsed_ms": 7234
+      },
+      {
+        "case": "en-partial-answer-stays-open",
+        "run": 1,
+        "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+        "failures": [],
+        "elapsed_ms": 7762
+      },
+      {
+        "case": "en-partial-answer-stays-open",
+        "run": 2,
+        "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+        "failures": [],
+        "elapsed_ms": 6548
+      },
+      {
+        "case": "en-partial-answer-stays-open",
+        "run": 3,
+        "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+        "failures": [],
+        "elapsed_ms": 6583
+      },
+      {
+        "case": "zh-template-retro",
+        "run": 1,
+        "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n- 无",
+        "failures": [],
+        "elapsed_ms": 23379
+      },
+      {
+        "case": "zh-template-retro",
+        "run": 2,
+        "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n- 无",
+        "failures": [],
+        "elapsed_ms": 12985
+      },
+      {
+        "case": "zh-template-retro",
+        "run": 3,
+        "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n- 无",
+        "failures": [],
+        "elapsed_ms": 12900
+      },
+      {
+        "case": "en-template-custom",
+        "run": 1,
+        "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+        "failures": [],
+        "elapsed_ms": 21544
+      },
+      {
+        "case": "en-template-custom",
+        "run": 2,
+        "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+        "failures": [],
+        "elapsed_ms": 11197
+      },
+      {
+        "case": "en-template-custom",
+        "run": 3,
+        "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+        "failures": [],
+        "elapsed_ms": 11246
+      },
+      {
+        "case": "zh-stated-date-beside-tentative-date",
+        "run": 1,
+        "summary": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+        "failures": [],
+        "elapsed_ms": 14134
+      },
+      {
+        "case": "zh-stated-date-beside-tentative-date",
+        "run": 2,
+        "summary": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+        "failures": [],
+        "elapsed_ms": 6779
+      },
+      {
+        "case": "zh-stated-date-beside-tentative-date",
+        "run": 3,
+        "summary": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+        "failures": [],
+        "elapsed_ms": 6774
+      },
+      {
+        "case": "zh-stated-date-corrected",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [
+          "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+        ],
+        "elapsed_ms": 6825
+      },
+      {
+        "case": "zh-stated-date-corrected",
+        "run": 2,
+        "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [
+          "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+        ],
+        "elapsed_ms": 5901
+      },
+      {
+        "case": "zh-stated-date-corrected",
+        "run": 3,
+        "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [
+          "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+        ],
+        "elapsed_ms": 5860
+      },
+      {
+        "case": "zh-explicit-condition-not-an-event",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期顺延还是其他安排？",
+        "failures": [],
+        "elapsed_ms": 9143
+      },
+      {
+        "case": "zh-explicit-condition-not-an-event",
+        "run": 2,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期顺延还是其他安排？",
+        "failures": [],
+        "elapsed_ms": 8005
+      },
+      {
+        "case": "zh-explicit-condition-not-an-event",
+        "run": 3,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期顺延还是其他安排？",
+        "failures": [],
+        "elapsed_ms": 7947
+      }
+    ],
+    "ci_run": "https://github.com/HsiangNianian/boardcast/actions/runs/43060105257",
+    "head": "caa1600faf02cc109bff6b1af02757beff1dc6c4",
+    "merge_commit": "1477e2a6bb74e3e56a70a23f2bbfcbf6766ccd49",
+    "report_sha256": "d0a427a74cb6eeff27cdcb5ffd3765617dee3a8e2f42917d70ed6c20f5a8b4b3",
+    "model_sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "passed": 36,
+    "total": 45,
+    "changed_summaries_from_original": [
+      {
+        "case": "zh-answered-question-closes",
+        "run": 1
+      },
+      {
+        "case": "zh-answered-question-closes",
+        "run": 2
+      },
+      {
+        "case": "zh-answered-question-closes",
+        "run": 3
+      },
+      {
+        "case": "en-answered-question-closes",
+        "run": 1
+      },
+      {
+        "case": "en-answered-question-closes",
+        "run": 2
+      },
+      {
+        "case": "en-answered-question-closes",
+        "run": 3
+      },
+      {
+        "case": "zh-template-retro",
+        "run": 1
+      },
+      {
+        "case": "zh-template-retro",
+        "run": 2
+      },
+      {
+        "case": "zh-template-retro",
+        "run": 3
+      },
+      {
+        "case": "en-template-custom",
+        "run": 1
+      },
+      {
+        "case": "en-template-custom",
+        "run": 2
+      },
+      {
+        "case": "en-template-custom",
+        "run": 3
+      },
+      {
+        "case": "zh-stated-date-beside-tentative-date",
+        "run": 1
+      },
+      {
+        "case": "zh-stated-date-beside-tentative-date",
+        "run": 2
+      },
+      {
+        "case": "zh-stated-date-beside-tentative-date",
+        "run": 3
+      },
+      {
+        "case": "zh-explicit-condition-not-an-event",
+        "run": 1
+      },
+      {
+        "case": "zh-explicit-condition-not-an-event",
+        "run": 2
+      },
+      {
+        "case": "zh-explicit-condition-not-an-event",
+        "run": 3
+      }
+    ],
+    "note": "All 45 outputs retained. Eighteen differ from the original CI outputs: empty sections are filled and several model wordings differ. The same three cases fail all repetitions; template cases pass 6/6. Source hashes verified against caa1600. Matching model file hashes do not establish identical runtime conditions."
+  }
+}

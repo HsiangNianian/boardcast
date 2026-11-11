@@ -1,0 +1,98 @@
+[
+  {
+    "id":"zh-confirmed-count-beside-tentative-price",
+    "why":"A confirmed count and schedule stay confirmed beside a tentative price; names and dates must not come from the example.",
+    "lines":[["A","参会人数已核对，一共五人。场地定在周日启用。"],["B","票价可能是八十元，不过还要核实。"],["A","小赵周二前确认场地钥匙。"]],
+    "checks":[
+      {"in":["结论","决定"],"any":["五人","5人","五位","5位"]},
+      {"in":["结论","决定"],"any":["周日","星期日","星期天"]},
+      {"in":["待办"],"any":["小赵"]},{"in":["待办"],"any":["周二","星期二"]},{"in":["待办"],"any":["钥匙"]},
+      {"in":["待讨论"],"any":["票价"]},
+      {"in":["结论","决定","待办","待讨论"],"absent":["讲师","培训手册","小陈","周六"]}
+    ]
+  },
+  {
+    "id":"en-confirmed-count-beside-tentative-price",
+    "why":"Confirmed quantity and timing must survive even though the example's quantity is unconfirmed.",
+    "lines":[["A","We counted nine monitors. They ship on Thursday."],["B","The unit price might be sixty dollars, but we still need to check."],["A","Lena will confirm the delivery address by Tuesday."]],
+    "checks":[
+      {"in":["Conclusions","Decisions"],"any":["nine monitors","9 monitors"]},
+      {"in":["Conclusions","Decisions"],"any":["Thursday"]},
+      {"in":["To-dos"],"any":["Lena"]},{"in":["To-dos"],"any":["Tuesday"]},{"in":["To-dos"],"any":["address"]},
+      {"in":["Open questions"],"any":["price","cost"]},
+      {"in":["Conclusions","Decisions","To-dos","Open questions"],"absent":["instructor","handbook","Maya","Saturday"]}
+    ]
+  },
+  {
+    "id":"zh-earlier-corrected-date-keeps-distinct-work",
+    "why":"A correction moves work earlier in the week; the former date remains a separate activity.",
+    "lines":[["A","货物安排周六入库。"],["B","改为周四入库，周六只做盘点。"],["A","同意，就按周四入库安排。"],["B","小田周三前发货运清单。"]],
+    "checks":[
+      {"in":["决定"],"any":["周四","星期四"]},{"in":["决定"],"any":["入库"]},
+      {"in":["结论","决定","待办"],"any":["周六","星期六"]},{"in":["结论","决定","待办"],"any":["盘点"]},
+      {"in":["待办"],"any":["小田"]},{"in":["待办"],"any":["周三","星期三"]},{"in":["待办"],"any":["清单"]},
+      {"in":["待讨论"],"absent":["入库","盘点"]},
+      {"in":["结论"],"each_with":["周六入库","周六进行入库"],"any":["原计划","原定","原安排","曾","之前","旧"]},
+      {"in":["决定","待办"],"absent":["周六入库","周六进行入库"]},
+      {"in":["结论","决定","待办","待讨论"],"absent":["讲师","手册","小陈"]}
+    ]
+  },
+  {
+    "id":"en-earlier-corrected-date-keeps-distinct-work",
+    "why":"A date correction must not reuse the example's later Saturday deadline or owner.",
+    "lines":[["A","The exhibition opens on Sunday."],["B","Correction: it opens on Thursday; Sunday is only for cleaning."],["A","Agreed, open on Thursday."],["B","Amir will send the guest list by Wednesday."]],
+    "checks":[
+      {"in":["Decisions"],"any":["Thursday"]},{"in":["Decisions"],"any":["open"]},
+      {"in":["Conclusions","Decisions","To-dos"],"any":["Sunday"]},{"in":["Conclusions","Decisions","To-dos"],"any":["clean"]},
+      {"in":["To-dos"],"any":["Amir"]},{"in":["To-dos"],"any":["Wednesday"]},{"in":["To-dos"],"any":["guest list"]},
+      {"in":["Open questions"],"absent":["open","Sunday","clean"]},
+      {"in":["Conclusions","Decisions","To-dos","Open questions"],"absent":["handbook","instructor","Maya","Saturday"]}
+    ]
+  },
+  {
+    "id":"zh-guess-without-any-task",
+    "why":"An uncertain number is not a task and must not erase the unrelated factual date.",
+    "lines":[["A","车辆可能需要七辆吧？"],["B","现在还不知道，数量没确定。"],["A","仓库周二已经清空了。"]],
+    "checks":[
+      {"in":["结论","决定"],"any":["周二","星期二"]},{"in":["结论","决定"],"any":["清空"]},
+      {"in":["结论","决定"],"absent":["七辆","7辆"]},
+      {"in":["待讨论"],"any":["车辆","车的数量","用车"]},{"in":["待讨论"],"absent":["哪七辆","七辆车分别"]},
+      {"in":["待办"],"absent":["清空","确认","核实","车辆","联系"]},
+      {"in":["结论","决定","待办","待讨论"],"absent":["培训","讲师","小陈"]}
+    ]
+  },
+  {
+    "id":"en-guess-without-any-task",
+    "why":"An unresolved quantity has no implied owner, task, or confirmed count.",
+    "lines":[["A","We might need seven vans, right?"],["B","We don't know the number yet."],["A","The warehouse was emptied on Tuesday."]],
+    "checks":[
+      {"in":["Conclusions","Decisions"],"any":["Tuesday"]},{"in":["Conclusions","Decisions"],"any":["emptied","empty","cleared"]},
+      {"in":["Conclusions","Decisions"],"absent":["seven vans","7 vans"]},
+      {"in":["Open questions"],"any":["van"]},{"in":["Open questions"],"absent":["which seven","the seven vans"],"absent_items":["Seven vans","7 vans"]},
+      {"in":["To-dos"],"absent":["confirm","check","van","empty","contact"]},
+      {"in":["Conclusions","Decisions","To-dos","Open questions"],"absent":["instructor","handbook","Maya"]}
+    ]
+  },
+  {
+    "id":"zh-guessed-count-later-confirmed",
+    "why":"A later answer confirms a formerly guessed number; it must not remain an open question because the example did.",
+    "lines":[["A","需要六张桌子吧？"],["B","我核对过座位图，确定六张就够了。"],["A","好，那就租六张桌子。"],["B","小周周日取桌子。"]],
+    "checks":[
+      {"in":["决定"],"any":["六张","6张"]},{"in":["决定"],"any":["租"]},
+      {"in":["待讨论"],"absent":["桌","数量","六张","6张"]},
+      {"in":["待办"],"any":["小周"]},{"in":["待办"],"any":["周日","星期日","星期天"]},{"in":["待办"],"any":["取"]},
+      {"in":["结论","决定","待办","待讨论"],"absent":["四位","讲师","手册","小陈"]}
+    ]
+  },
+  {
+    "id":"en-guessed-count-later-confirmed",
+    "why":"A confirmed answer supersedes a numerical guess, including in Open questions.",
+    "lines":[["A","We need six tables, right?"],["B","I checked the seating plan: exactly six are enough."],["A","Agreed, rent six tables."],["B","Jules will collect the tables on Sunday."]],
+    "checks":[
+      {"in":["Decisions"],"any":["six tables","6 tables"]},{"in":["Decisions"],"any":["rent"]},
+      {"in":["Open questions"],"absent":["table","number","six"]},
+      {"in":["To-dos"],"any":["Jules"]},{"in":["To-dos"],"any":["Sunday"]},{"in":["To-dos"],"any":["collect","pick up"]},
+      {"in":["Conclusions","Decisions","To-dos","Open questions"],"absent":["instructor","handbook","Maya"]}
+    ]
+  }
+]

@@ -34,19 +34,18 @@ The desktop app is a native rewrite in Rust on [GPUI](crates/README.md). The ear
 
    | Package | Recognizes | Speech models |
    |---|---|---|
-   | `…-macos.zip`, `…-linux.tar.gz` | Japanese, English and Chinese, each with its best model | about 1.1 GB |
+   | `…-macos.zip`, `…-linux.tar.gz`, `…-windows.zip` | Japanese, English and Chinese, each with its best model | about 1.1 GB |
    | `…-ja` | Japanese, with ReazonSpeech | about 160 MB |
    | `…-en` | English, with Parakeet | about 660 MB |
-   | `…-sensevoice` | Chinese, English, Japanese, Korean and Cantonese, with SenseVoice | about 230 MB |
-   | `…-macos-apple.zip` | Whatever your Mac's own recognizer supports | none |
+   | `…-macos-none.zip` | Whatever your Mac's own recognizer supports | none |
 
-   Packages are built for macOS on Apple Silicon and for Linux x64. There is no Windows package of the current app yet.
+   Packages are built for macOS on Apple Silicon and Intel, Linux x64 and Windows x64.
 
-2. **macOS:** the app is signed only ad hoc, so open it with Control-click › Open the first time. **Linux:** unpack the archive and run `./install.sh` (into `~/.local`, no root needed; `--uninstall` removes it and keeps your data). Later versions then install themselves.
+2. **macOS:** the app is signed only ad hoc, so open it with Control-click › Open the first time. **Linux:** unpack the archive and run `./install.sh` (into `~/.local`, no root needed; `--uninstall` removes it and keeps your data). **Windows:** unpack the zip and run `bin\boardcast.exe`.
 3. On first launch, Settings opens on **Board model**: download a model that runs on this computer, or set up a remote one. Speech recognition is already included.
 4. Click **Start listening** (or press `Space`), or type a line in the transcript's input and press Enter.
 
-An installed copy looks for a new version shortly after starting. It installs in the background and waits for you to restart, so a meeting is never interrupted.
+An installed Linux copy looks for a new version shortly after starting. It installs in the background and waits for you to restart, so a meeting is never interrupted. On macOS and Windows, download the new package manually.
 
 ## What you can do
 
@@ -58,6 +57,8 @@ An installed copy looks for a new version shortly after starting. It installs in
 | **Tell speakers apart** by voice and give them real names; the same voice keeps its name. | **Find a meeting** again in the meeting list and carry on where it stopped. |
 
 Boards are drawn stroke by stroke in Chinese, Japanese and English. Light mode uses whiteboard markers; when the system is dark, the board becomes a chalkboard. The interface is in English or Chinese, following the system or your choice in Settings; board labels and summaries follow the meeting's language.
+
+Start a meeting from a weekly sync, design review, retrospective or stand-up template, or save this board's topics as your own template. Summaries use the template's topics. In Settings, a glossary corrects names by their Chinese, English or Japanese pronunciation and gives the board model their preferred spelling; the original transcript is retained.
 
 ### Circle and refer
 
@@ -80,6 +81,7 @@ Use **Import** or drop a file on the board:
 | **Markdown** | Key points, a Mermaid flow chart and the transcript. |
 | **PNG / SVG** | This board, as it looks on screen; SVG stays sharp at any size. |
 | **Animated SVG** | This board, written out stroke by stroke in the order of the meeting. |
+| **GIF** | The board writing itself, ready to paste into chats and documents. |
 | **Replay page** | One `.html` file for someone who missed the meeting. Nothing to install. |
 | **Whole meeting PDF** | A page per board, then the summary and transcript, with selectable text. |
 
@@ -87,11 +89,13 @@ Exports always use marker on white paper, whatever the window's theme.
 
 ### Online meetings and recordings
 
-In **Settings › Speech › Listen to**, choose a microphone or, on Linux, the **Monitor of …** input of the speakers or headphones that play the meeting. That is how the other side of an online call, or a recording playing in a media player, is heard. One input is heard at a time. On a Mac, any package can use Apple's own recognizer instead, from the same section.
+In **Settings › Speech › Listen to**, choose a microphone or, on Linux, the **Monitor of …** input of the speakers or headphones that play the meeting. That is how the other side of an online call, or a recording playing in a media player, is heard. The v0.27.0 packages hear one input at a time. On a Mac, any package can use Apple's own recognizer instead, from the same section.
 
-### Not in this app yet
+### Release status and remaining work
 
-These were in the earlier app and have not been rebuilt yet: free editing and export with Excalidraw, the glossary and pronunciation correction ([#117](https://github.com/HsiangNianian/boardcast/issues/117)), hearing the microphone and system audio together, system audio on macOS ([#34](https://github.com/HsiangNianian/boardcast/issues/34)), a Windows package, a global microphone shortcut and the diagnostics bundle.
+The changes in [#206](https://github.com/HsiangNianian/boardcast/pull/206) restore Mac microphone/system/both capture with separate recognition workers, a shared capture clock, Apple language choices and bounded diagnostics for capture, board-model queue/generation and drawing, including failed requests. Timed captions, summary input and text exports follow audio order within each new capture; replay reveals only lines already received. They are not in v0.27.0; real Mac permissions, two-source transcription, clock calibration and long meetings still need [acceptance](eval/macos/README.md). Auto uses the multilingual speech package to choose Chinese, Japanese or English independently after about five seconds of each source's opening speech, then keeps that language for the capture; initial captions wait for detection. Manual choices remain available; “System language” follows the OS locale. On macOS 26, SpeechAnalyzer can show temporary captions per source while speech continues; only finals enter the meeting and board. Auto switches to streaming after its opening sentences. This restores the Tauri streaming approach but still needs physical Mac verification. Settings can preview and save a local diagnostics ZIP; raw model-server logs are not captured. A global microphone shortcut remains outstanding. Excalidraw free editing and export were dropped from the GPUI app.
+
+Compared with the latest release, **v0.27.0**, `main` also has PDF page selection ([#202](https://github.com/HsiangNianian/boardcast/pull/202)) and changing the speaker of one transcript line ([#201](https://github.com/HsiangNianian/boardcast/pull/201)); these are not in that release's packages. Reassigning a line does not yet change ownership of its board content, and voice statistics persist in the meeting file. Individual sentence voiceprints are kept only while the meeting is open, so reassigning an older line cannot recalculate its voice statistics after reopening.
 
 ## Shortcuts
 
@@ -126,6 +130,7 @@ Downloads can be paused and resumed, check free space and verify SHA-256, trying
 |---|---|---|
 | Linux | `~/.local/share/games.mmstudio.boardcast/` | `~/.config/games.mmstudio.boardcast/` |
 | macOS | `~/Library/Application Support/games.mmstudio.boardcast/` | the same folder |
+| Windows | `%APPDATA%\games.mmstudio.boardcast\` | the same folder |
 
 `BOARDCAST_DATA` and `BOARDCAST_CONFIG` move them elsewhere.
 
@@ -148,7 +153,7 @@ Everything is Rust, the website included: it is built with [Trunk](https://trunk
 
 | Set | Current size | Purpose |
 |---|---|---|
-| [`eval/cases.json`](eval/cases.json) | 28 meetings | Development and regression, including English and a real-meeting regression |
+| [`eval/cases.json`](eval/cases.json) | 30 meetings | Development and regression, including English, pre-filled templates and a real-meeting regression |
 | [`eval/holdout.json`](eval/holdout.json) | 27 meetings | Held out from prompt tuning |
 | [`eval/pointing.json`](eval/pointing.json) | 18 cases | Chinese and English pointing cases with fixed starting boards |
 | [`eval/revisions.json`](eval/revisions.json) | 3 cases | Transcription revisions that must keep node identity and unrelated content; not run until the GPUI app revises transcripts |
@@ -160,6 +165,15 @@ cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://1
 cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set holdout --label my-model
 cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
 ```
+
+Summary confidence, dates, assigned tasks and template structure have [repeatable model checks](eval/summary.md), including retained failures and rejected changes. Real microphone glossary comparisons use the [own-voice recorder](eval/asr/own-voice/README.md); real Mac measurements and the target-user trial use [the acceptance plan](eval/macos/README.md) and [trial kit](docs/trials/README.md).
+
+Draft PR #206 also checks the local model's actual token budget and summarizes oversized board material in stages, keeping short original speech when it fits. Cut-off replies now fail explicitly, evaluation failures remain in reports, and To-do bullets receive working checkboxes. Ambiguous board IDs no longer acquire another board's labels during cleanup. Long-input checks still expose factual errors; generating within the context limit does not complete summary acceptance.
+
+Draft PR #206 now adds a worked summary example only for the measured Qwen3.5-4B Q4_K_M model. The [latest local comparison](eval/summary-examples-2026-11-12.json) improves the original fifteen cases from 12/15 to 45/45 over three repetitions; eight additional cases improve from 3/8 to 7/8. The [same-commit CI summary](https://github.com/HsiangNianian/boardcast/actions/runs/43103679484/artifacts/13894110457) scores 42/45: all three repetitions lose Monday from the rehearsal date, while both templates pass 6/6. Large-board checks are 4/4 and long-transcript checks are 1/2 locally. A confirmed shipment date can still disappear and long notes can still invent an owner question, so summary acceptance remains open. The same example regressed 9B, which keeps its earlier prompt, as do unknown local and remote models. These are synthetic Linux checks; physical Mac acceptance remains separate.
+The [earlier comparisons](eval/summary-options-2026-11-12.json) and [checker correction](eval/summary-checker-2026-11-12.json) retain prior outputs, rejected changes and corrected scores, including the older 36/45 CI result.
+Capture diagnostics now identify the failing source and distinguish preparation, capture and recognition errors. [Regression evidence](eval/macos/capture-errors-2026-11-12.json) covers file-capture errors, one final failure report per job and helper shutdown; physical Mac acceptance remains open.
+Settings → **Export diagnostics…** previews a frozen snapshot of `info.json`, `timing.json` and `errors.txt` before saving locally. It excludes meeting text, audio, keys, paths and error bodies. Stored per-line timings keep the old report names; the complete current capture/board report is under `timing.json.runtime`, with missing measurements left null. [Native GUI export evidence](eval/macos/diagnostic-zip-2026-11-12.json) checks cancellation, save/retry, byte-for-byte preview agreement and privacy on Linux.
 
 Speech recognition has its own suites:
 
@@ -177,7 +191,7 @@ See [speech evaluation](eval/asr/README.md) for the configurations, reference qu
 <details>
 <summary><strong>Releases</strong></summary>
 
-Raise the workspace version, merge it, then push an annotated tag whose message is the release notes: `git tag -a v<version> -m "…"` and `git push origin v<version>`. The [Release](.github/workflows/release.yml) workflow then builds every package for Linux (all, ja, en) and the Mac, Apple silicon and Intel (all, ja, en, none), writes the update manifest and publishes `v<version>` as the latest release, which is where installed copies look for updates. A version with a pre-release part, such as `0.23.0-1`, is published as a pre-release, which installed copies are not offered. Use Conventional Commits; [CHANGELOG.md](CHANGELOG.md) records each release.
+Raise the workspace version, merge it, then push an annotated tag whose message is the release notes: `git tag -a v<version> -m "…"` and `git push origin v<version>`. The [Release](.github/workflows/release.yml) workflow builds Linux (all, ja, en) and Mac packages, Apple silicon and Intel (all, ja, en, none), writes the update manifest and publishes `v<version>` as the latest release. Windows x64 packages (all, ja, en) are built and attached separately; a failed Windows build does not block the other packages. A version with a pre-release part, such as `0.23.0-1`, is published as a pre-release, which installed copies are not offered. Use Conventional Commits; current release notes are on GitHub Releases, while [CHANGELOG.md](CHANGELOG.md) records the earlier app through 0.21.0.
 
 </details>
 

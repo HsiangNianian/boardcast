@@ -4,8 +4,9 @@
     "why": "A guess nobody confirmed is not a conclusion (#68).",
     "lines": [["A", "失败标准应该有两个吧？"], ["B", "我也说不准，回头再对一下。"], ["A", "行，那先往下说部署。"], ["B", "部署这周三上线。"]],
     "checks": [
-      { "in": ["结论", "决定"], "absent": ["两个"] },
-      { "in": ["待讨论"], "any": ["失败标准", "两个"] }
+      { "in": ["结论", "决定"], "absent": ["两个", "两项"] },
+      { "in": ["待讨论"], "any": ["失败标准", "两个"] },
+      { "in": ["结论", "决定"], "any": ["周三", "星期三"] }
     ]
   },
   {
@@ -41,6 +42,8 @@
     "lines": [["A", "接口文档我来写，周五前发给大家。"], ["B", "好的，没问题。"]],
     "checks": [
       { "in": ["待办"], "any": ["接口文档"] },
+      { "in": ["待办"], "any": ["周五", "星期五"] },
+      { "in": ["结论", "决定", "待办"], "absent": ["由A", "由 A", "负责人：A", "负责人: A"] },
       { "in": ["待办"], "absent": ["负责人：A", "负责人: A", "周四", "下周"] }
     ]
   },
@@ -50,6 +53,7 @@
     "lines": [["A", "我们先看一下这段视频。"], ["B", "嗯，这里卡顿很明显。"], ["A", "卡顿问题要查一下，小王负责。"], ["C", "好，我来查。"]],
     "checks": [
       { "in": ["待办"], "any": ["卡顿"] },
+      { "in": ["待办"], "any": ["小王"] },
       { "in": ["待办"], "absent": ["看一下", "看视频"] }
     ]
   },
@@ -59,7 +63,10 @@
     "lines": [["A", "There should be two failure criteria, right?"], ["B", "Not sure, we'll have to check."], ["A", "Okay, moving on to deployment."], ["B", "We ship on Wednesday."]],
     "checks": [
       { "in": ["Conclusions", "Decisions"], "absent": ["two failure", "two criteria"] },
-      { "in": ["Open questions"], "any": ["criteri"] }
+      { "in": ["Open questions"], "any": ["criteri"] },
+      { "in": ["Open questions"], "absent": ["what are the two", "which are the two"] },
+      { "in": ["Open questions"], "absent_items": ["two failure criteria"] },
+      { "in": ["Conclusions", "Decisions"], "any": ["Wednesday"] }
     ]
   },
   {
@@ -67,8 +74,144 @@
     "why": "A question answered and accepted later leaves Open questions.",
     "lines": [["A", "If three retries still don't fit, what do we do then?"], ["B", "Then we shrink the font as a fallback."], ["A", "Good, so no hard cut, we shrink the font."]],
     "checks": [
-      { "in": ["Conclusions", "Decisions"], "any": ["shrink"] },
+      { "in": ["Conclusions", "Decisions"], "any": ["shrink", "shrunk"] },
       { "in": ["Open questions"], "absent": ["what do we do", "three retries"] }
+    ]
+  },
+  {
+    "id": "zh-partial-answer-stays-open",
+    "why": "An accepted retention period does not settle the unanswered owner question.",
+    "lines": [["A", "缓存保留多久，过期后谁来刷新？"], ["B", "保留十分钟。刷新负责人还没有定。"], ["A", "好，保留时间就定十分钟，负责人下次讨论。"]],
+    "checks": [
+      {"in": ["结论", "决定"], "any": ["十分钟", "10分钟", "10 分钟"]},
+      {"in": ["待讨论"], "any": ["负责人", "谁来刷新", "谁刷新"]},
+      {"in": ["待讨论"], "absent": ["保留多久", "保留多长"]},
+      {"in": ["待办"], "absent": ["负责人：A", "负责人：B", "小王"]}
+    ]
+  },
+  {
+    "id": "en-partial-answer-stays-open",
+    "why": "Answer one part while retaining the unresolved responsibility.",
+    "lines": [["A", "How long should the cache live, and who will refresh it?"], ["B", "Ten minutes. We have not chosen a refresh owner."], ["A", "Agreed on ten minutes. We will discuss ownership next time."]],
+    "checks": [
+      {"in": ["Conclusions", "Decisions"], "any": ["ten minutes", "10 minutes", "ten-minute", "10-minute"]},
+      {"in": ["Open questions"], "any": ["owner", "who", "refresh"]},
+      {"in": ["Open questions"], "absent": ["how long"]},
+      {"in": ["To-dos"], "absent": ["owner: A", "owner: B", "Alice"]}
+    ]
+  },
+  {
+    "id": "zh-template-retro",
+    "why": "A retrospective summary follows its discussed template topics and preserves assigned work.",
+    "lines": [["小李", "做得好的方面，这次发布没有停机。"], ["小王", "要改进的方面，告警还是来得太晚。"], ["小李", "同意，下次发布前由小王补上告警测试。"], ["小王", "我来补。"]],
+    "boards": [{"nodes": [{"id": "n1", "kind": "topic", "label": "做得好的"}, {"id": "n2", "kind": "topic", "label": "要改进的"}, {"id": "n3", "kind": "topic", "label": "预算"}], "template": ["做得好的", "要改进的", "预算"]}],
+    "checks": [
+      {"in": ["结论"], "any": ["#### 做得好的"]},
+      {"in": ["结论"], "any": ["#### 要改进的"]},
+      {"in": ["结论", "决定", "待办", "待讨论"], "absent": ["预算"]},
+      {"in": ["待办"], "any": ["告警"]},
+      {"in": ["待办"], "any": ["小王"]}
+    ]
+  },
+  {
+    "id": "en-template-custom",
+    "why": "A saved custom template retains its own headings and omits an undiscussed topic.",
+    "lines": [["Mina", "For Latency, the measured p95 is eighty milliseconds."], ["Ravi", "For Rollout, the canary has finished without errors."], ["Mina", "We agree to enable the release tomorrow."]],
+    "boards": [{"nodes": [{"id": "n1", "kind": "topic", "label": "Latency"}, {"id": "n2", "kind": "topic", "label": "Rollout"}, {"id": "n3", "kind": "topic", "label": "Hiring"}], "template": ["Latency", "Rollout", "Hiring"]}],
+    "checks": [
+      {"in": ["Conclusions"], "any": ["#### Latency"]},
+      {"in": ["Conclusions"], "any": ["#### Rollout"]},
+      {"in": ["Conclusions", "Decisions", "To-dos", "Open questions"], "absent": ["Hiring"]},
+      {"in": ["Decisions"], "any": ["tomorrow"]}
+    ]
+  },
+  {
+    "id": "zh-stated-date-beside-tentative-date",
+    "why": "Retain a stated schedule without promoting a separate proposed date to a fact.",
+    "lines": [["A", "桌面版周四发布，这是已经定下来的安排。"], ["B", "移动版要不周五发布？"], ["C", "移动版的日期还没定，先别按周五排。"]],
+    "checks": [
+      {"in": ["结论", "决定"], "any": ["桌面版"]},
+      {"in": ["结论", "决定"], "any": ["周四", "星期四"]},
+      {"in": ["决定", "待办"], "absent": ["周五", "星期五"]},
+      {"in": ["待讨论"], "any": ["移动版"]},
+      {"in": ["待讨论"], "each_with": ["周五", "星期五"], "any": ["未定", "未确定", "没定", "待定", "待确定", "待确认", "未确认", "是否", "是不是"]}
+    ]
+  },
+  {
+    "id": "zh-stated-date-corrected",
+    "why": "Keep the later corrected deployment date and the earlier day's separate rehearsal.",
+    "lines": [["A", "部署周一上线。"], ["B", "更正一下，部署改到周二上线，周一只做预演。"], ["A", "收到，就按周二安排。"]],
+    "checks": [
+      {"in": ["结论", "决定"], "any": ["周二", "星期二"]},
+      {"in": ["结论", "决定", "待办"], "any": ["周一", "星期一"]},
+      {"in": ["结论", "决定", "待办"], "any": ["预演", "演练"]},
+      {"in": ["结论", "决定", "待办"], "absent": ["周一上线", "周一部署", "星期一上线", "星期一部署"]},
+      {"in": ["待讨论"], "absent": ["上线", "部署", "预演", "日期"]}
+    ]
+  },
+  {
+    "id": "zh-explicit-condition-not-an-event",
+    "why": "A future conditional question does not assert that its premise happened.",
+    "lines": [
+      [
+        "A",
+        "如果周四测试失败，部署日期怎么办？"
+      ],
+      [
+        "B",
+        "先别确定，可能要顺延，等测试结果再讨论。"
+      ],
+      [
+        "C",
+        "现在测试还没开始，测试报告由小林周五前整理。"
+      ]
+    ],
+    "checks": [
+      {
+        "in": [
+          "结论",
+          "决定"
+        ],
+        "absent": [
+          "测试已失败",
+          "测试已经失败",
+          "周四测试失败。"
+        ]
+      },
+      {
+        "in": [
+          "决定"
+        ],
+        "absent": [
+          "顺延",
+          "推迟"
+        ]
+      },
+      {
+        "in": [
+          "待讨论"
+        ],
+        "any": [
+          "部署",
+          "日期"
+        ]
+      },
+      {
+        "in": [
+          "待办"
+        ],
+        "any": [
+          "小林"
+        ]
+      },
+      {
+        "in": [
+          "待办"
+        ],
+        "any": [
+          "周五"
+        ]
+      }
     ]
   }
 ]

@@ -109,7 +109,7 @@ pub fn replay_page(doc: &Doc, pages: &[Page], glyphs: &mut Glyphs) -> String {
         json!({ "play": "播放", "pause": "暂停", "end": "跳到结尾", "replay": "boardcast 回放", "summary": "摘要", "transcript": "会议记录", "count": "{} 句", "board": "板书", "boardN": "第 {} 张板" })
     };
     let note = doc.omits_visuals.then(|| if doc.english { "Imported pages and free-edit content are not included." } else { "导入页和自由编辑内容没有包含在内。" });
-    let lines: Vec<Value> = doc.lines.iter().map(|l| json!({ "s": l.speaker, "t": l.text, "m": l.manual })).collect();
+    let lines: Vec<Value> = doc.lines.iter().map(|l| json!({ "i": l.index, "k": l.capture_key, "s": l.speaker, "t": l.text, "m": l.manual })).collect();
     let boards: Vec<Value> = pages.iter().map(|page| board_data(page, glyphs)).collect();
     let data = json!({ "title": doc.title, "began": doc.began, "summary": doc.summary.trim(), "words": words, "note": note, "lines": lines, "boards": boards });
     let licenses = format!(
@@ -157,7 +157,7 @@ mod tests {
             began: "2026-01-02 03:04".into(),
             summary: "### 结论\n- 好".into(),
             boards: vec![],
-            lines: vec![Said { speaker: Some("A".into()), text: text.into(), page: 0, manual: false }],
+            lines: vec![Said { index: 0, capture_key: None, speaker: Some("A".into()), text: text.into(), page: 0, manual: false }],
             english: false,
             omits_visuals: false,
         }
@@ -181,6 +181,25 @@ mod tests {
         assert!(sizes.windows(2).all(|w| w[0] < w[1]), "{sizes:?}");
         assert_eq!(frames[3]["l"], 3);
         assert_eq!(frames[3]["t"].as_f64(), Some(3000.0));
+    }
+
+    #[test]
+    fn ordered_text_exports_keep_replay_receipt_indices() {
+        let mut doc = doc("meeting", "unused");
+        doc.lines = Said::from_stored(json!([
+            {"text":"Later correction", "capture":{"key":"capture", "startSeconds":5}},
+            {"text":"Manual note", "manual":true},
+            {"text":"Earlier proposal", "capture":{"key":"capture", "startSeconds":1}}
+        ]).as_array().unwrap());
+        assert_eq!(doc.lines.iter().map(|line| line.index).collect::<Vec<_>>(), [2, 1, 0]);
+        let markdown = crate::markdown::markdown(&doc, 0);
+        assert!(markdown.find("Earlier proposal").unwrap() < markdown.find("Later correction").unwrap());
+        let data = embedded(&replay_page(&doc, &[page(&["T 「proposal」"])], &mut glyphs()));
+        assert_eq!(data["boards"][0]["frames"][1]["l"], 1);
+        assert_eq!(data["lines"][0]["i"], 2, "this early proposal must stay hidden at replay line count 1");
+        assert_eq!(data["lines"][0]["k"], "capture");
+        assert!(data["lines"][1]["k"].is_null());
+        assert_eq!(data["lines"][2]["i"], 0);
     }
 
     #[test]

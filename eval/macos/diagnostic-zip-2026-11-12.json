@@ -1,0 +1,150 @@
+{
+  "date": "2026-11-12",
+  "captured_at_utc": "2026-11-11T20:05:17.697582+00:00",
+  "base_commit": "322497f79a76fb5eeac340fa71c83d839c5ae2f1",
+  "scope": "Preview/copy/save a local diagnostic ZIP using the old Tauri filenames. Synthetic Linux GUI acceptance, not Mac hardware or latency acceptance.",
+  "legacy_reference": "4f9ab26a46f07cc5575460fd7431f1a995e705cc:src/ui/DiagnosticsPanel.tsx and src/engine/diagnostics.ts",
+  "source_sha256": {
+    "crates/ui/src/diagnostics.rs": "6c71894a9b6d6b270a3c59c1c162c7610c9b9baf1f525e76905e4ca7bf06e052",
+    "crates/ui/src/app.rs": "f8374df0d3a0680910d4cdd2d24dde803aebc1b8e48ae0f8e5ca46d4d2582902",
+    "crates/ui/src/pipeline.rs": "b58fa63f43ac9e87de16978e0080ede68ef9fc8ccf6f96463f6576c32a16657d",
+    "crates/ui/src/main.rs": "08fdcf7e0375259ea3f31593362d1f5c4343dcdc2d5964fe275eb108bffc34df",
+    "crates/ui/Cargo.toml": "8ec29c23efe215254c391863762872b031144ce87034fca65ec44f82d08eb621",
+    "Cargo.lock": "9176d8f26869bdec3c6f99464776ae01b342fa1dd2843960db4f5ded6d0b5a34",
+    "crates/export/src/lib.rs": "c3cd52991b1e104aee25455dcf50d1eacd1bf229b29101235ef63c06460e1618"
+  },
+  "binary_sha256": "8a102d77e29c47441d16d233fe83acacfde20328f12abbdee5bfa8c9fcf6f76f",
+  "validation": {
+    "ui_tests": {
+      "command": "cargo test -p boardcast-ui",
+      "passed": 11,
+      "ignored": 1,
+      "log_sha256": "59a84e343d8c9f991ce1e825b4b00e47347de7d8368b9832c049b2ca37e180da",
+      "ignored_boundary": "Existing real-model two-source test was not rerun for this export-only change; six scenarios passed at base commit 322497f."
+    },
+    "release_build": {
+      "command": "cargo build --release -p boardcast-ui",
+      "passed": true,
+      "log_sha256": "1f62631b83a71a1d0e847a2df51e89b83e83e774fb58d7d5142eec0355724b29"
+    },
+    "regressions": [
+      "Old numeric percentile ranks; missing stages remain null; private line text never enters timing fields.",
+      "ZIP has exactly the three previewed UTF-8 files; complete runtime JSON and structured source/stage errors are retained."
+    ],
+    "archive_self_check": "Verified ZIP CRC, names, every file byte against the actual clipboard, private markers, request populations and unmeasured latency nulls."
+  },
+  "gui": {
+    "sandbox": "local:boardcast-diagnostic-zip",
+    "image": "ghcr.io/trycua/linux@sha256:71dbd9f077adcbe5e27f2041391bac69afce8093f1ce757e02c9167495ac7dc4",
+    "runtime": "Local runc, Ubuntu 24.04.5, software graphics; xdg-desktop-portal/gtk installed for the native save dialog.",
+    "app_pid": 752,
+    "window_id": 29360129,
+    "fixture": {
+      "cases": [
+        {
+          "id": "diagnostic-zip",
+          "turns": [
+            {
+              "speaker": "PRIVATE_SPEAKER",
+              "text": "PRIVATE_MEETING_TEXT one"
+            },
+            {
+              "speaker": "PRIVATE_SPEAKER",
+              "text": "PRIVATE_MEETING_TEXT two"
+            },
+            {
+              "speaker": "PRIVATE_SPEAKER",
+              "text": "PRIVATE_MEETING_TEXT three"
+            }
+          ]
+        }
+      ],
+      "remote": {
+        "enabled": true,
+        "baseUrl": "http://127.0.0.1:18876",
+        "apiKey": "sk-PRIVATE_TEST_KEY_12345",
+        "model": "PRIVATE_MODEL_NAME",
+        "interfaceLanguage": "en"
+      },
+      "server": "from http.server import BaseHTTPRequestHandler, HTTPServer\nimport json,time\nclass Handler(BaseHTTPRequestHandler):\n    calls=0\n    def do_POST(self):\n        body=self.rfile.read(int(self.headers.get('Content-Length','0')))\n        Handler.calls+=1\n        time.sleep(.15)\n        if Handler.calls==3:\n            payload={'error': {'message':'PRIVATE_ERROR_RESPONSE'}};status=400\n        else:\n            payload={'choices':[{'finish_reason':'stop','message':{'content':'E 「Alpha」 -> 「Beta」' if Handler.calls==1 else '-'}}]};status=200\n        self.send_response(status);self.send_header('Content-Type','application/json');self.end_headers();self.wfile.write(json.dumps(payload).encode())\n    def log_message(self,*args): pass\nHTTPServer(('127.0.0.1',18876),Handler).serve_forever()\n",
+      "note": "All names, text, errors and credentials are synthetic; only the loopback fixture received model requests. No recording was started."
+    },
+    "actions": [
+      "Opened Settings and Export diagnostics through native window input.",
+      "Selected info.json, timing.json and errors.txt; clicked Copy file for each and independently read the clipboard.",
+      "Missing desktop portal produced a visible error and re-enabled Save; no ZIP or temporary output was created.",
+      "Installed the desktop portal in the disposable sandbox; opened the native save dialog and cancelled. No ZIP or temporary output was created.",
+      "Saved boardcast-diagnostics.zip in the sandbox home and observed the Saved notice. Downloaded and verified the real archive.",
+      "Made the sibling .boardcast-diagnostics.zip.part a directory, chose the existing ZIP and confirmed native Replace. The app displayed Is a directory (os error 21); the existing ZIP hash and mtime stayed unchanged.",
+      "Removed only the injected directory, retried and confirmed Replace. Saved notice returned; mtime advanced and the frozen archive bytes stayed identical, with no temporary output remaining.",
+      "Clicked Refresh; selection returned to info.json and the previous notice cleared."
+    ],
+    "original_saved_mtime_ns": 1794427175009413530,
+    "retry_saved_mtime_ns": 1794427358272234901,
+    "assertions": {
+      "cancel_created_no_file": true,
+      "preview_equals_zip_bytes": true,
+      "write_error_preserved_existing_archive": true,
+      "retry_succeeded": true,
+      "requests_retained": 3,
+      "applied_including_no_op": 2,
+      "failed_requests": 1,
+      "animations_completed": 1,
+      "legacy_completed_lines": 2,
+      "checked_private_markers_absent": [
+        "PRIVATE_",
+        "sk-",
+        "18876",
+        "127.0.0.1",
+        "/tmp/boardcast",
+        "/home/cua"
+      ],
+      "unmeasured_physical_latencies_null": true
+    },
+    "archive": {
+      "bytes": 5417,
+      "sha256": "6becc13e9a5fec656fb196b89b7b74632af542818e39b32db0671f3d244b63b3",
+      "crc_error": null,
+      "files": {
+        "info.json": {
+          "bytes": 799,
+          "sha256": "c7c2b228a052be4a913ffe4391d56f0773bfe8d07e4036824330655af8b6186b",
+          "text": "{\n  \"version\": \"0.27.0\",\n  \"platform\": {\n    \"os\": \"linux\",\n    \"arch\": \"x86_64\"\n  },\n  \"userAgent\": \"GPUI\",\n  \"screen\": \"1280x749@1\",\n  \"model\": {\n    \"state\": \"configured\",\n    \"backend\": \"remote\",\n    \"model\": null,\n    \"url\": null,\n    \"device\": null,\n    \"message\": null,\n    \"models_dir\": null,\n    \"gpus\": null\n  },\n  \"voice\": {\n    \"listening\": false,\n    \"source\": \"microphone\",\n    \"diarize\": true,\n    \"device\": null,\n    \"choice\": null,\n    \"error\": null\n  },\n  \"speechModels\": {\n    \"apple_helper_available\": false\n  },\n  \"installedModels\": [],\n  \"omissions\": \"Device names, paths, endpoints, custom model names, keys and error bodies are excluded. This GPUI build does not capture raw llama-server logs. Helper availability does not establish native speech capability or permission.\"\n}"
+        },
+        "timing.json": {
+          "bytes": 4197,
+          "sha256": "07d5cc4ed88c99205ceee5c9c9b3724d1e2d98298327c7894d1c9278aae8e3d2",
+          "text": "{\n  \"model\": null,\n  \"lines\": 2,\n  \"spoken\": 0,\n  \"softBreaks\": 0,\n  \"totalMs\": null,\n  \"timing_basis\": \"Stored completed, non-manual, non-failed meeting lines; spoken counts lines with ASR metadata. Missing stages remain null; totalMs is a stage sum only when all five stages were measured, not acoustic-to-screen latency. Runtime capture, request and drawing populations are separate.\",\n  \"waitMs\": null,\n  \"asrMs\": null,\n  \"voiceprintMs\": null,\n  \"queueMs\": null,\n  \"modelMs\": {\n    \"n\": 2,\n    \"p50\": 150,\n    \"p95\": 150,\n    \"max\": 150\n  },\n  \"runtime\": {\n    \"version\": 1,\n    \"captures\": [],\n    \"board\": {\n      \"requests\": {\n        \"batches_seen\": 3,\n        \"ignored_queued_lines\": 0,\n        \"recent_limit\": 128,\n        \"groups\": [\n          {\n            \"backend\": \"remote\",\n            \"outcome\": \"applied\",\n            \"batches\": 2,\n            \"lines\": 2,\n            \"queue_ms\": {\n              \"n\": 2,\n              \"p50\": 0,\n              \"p95\": 0,\n              \"max\": 0\n            },\n            \"provider_ms\": {\n              \"n\": 2,\n              \"p50\": 0,\n              \"p95\": 0,\n              \"max\": 0\n            },\n            \"generation_ms\": {\n              \"n\": 2,\n              \"p50\": 150,\n              \"p95\": 151,\n              \"max\": 151\n            }\n          },\n          {\n            \"backend\": \"remote\",\n            \"outcome\": \"failed\",\n            \"batches\": 1,\n            \"lines\": 1,\n            \"queue_ms\": {\n              \"n\": 1,\n              \"p50\": 0,\n              \"p95\": 0,\n              \"max\": 0\n            },\n            \"provider_ms\": {\n              \"n\": 1,\n              \"p50\": 0,\n              \"p95\": 0,\n              \"max\": 0\n            },\n            \"generation_ms\": {\n              \"n\": 1,\n              \"p50\": 150,\n              \"p95\": 150,\n              \"max\": 150\n            }\n          }\n        ],\n        \"recent\": [\n          {\n            \"id\": 1,\n            \"backend\": \"remote\",\n            \"outcome\": \"applied\",\n            \"lines\": 1,\n            \"queue_ms\": 0,\n            \"provider_ms\": 0,\n            \"generation_ms\": 151\n          },\n          {\n            \"id\": 2,\n            \"backend\": \"remote\",\n            \"outcome\": \"applied\",\n            \"lines\": 1,\n            \"queue_ms\": 0,\n            \"provider_ms\": 0,\n            \"generation_ms\": 150\n          },\n          {\n            \"id\": 3,\n            \"backend\": \"remote\",\n            \"outcome\": \"failed\",\n            \"lines\": 1,\n            \"queue_ms\": 0,\n            \"provider_ms\": 0,\n            \"generation_ms\": 150\n          }\n        ],\n        \"timing_basis\": \"monotonic wall time; queue starts at submission of the oldest line in a batch and includes initial model readiness; provider is lookup/startup; generation includes prompt preparation, retries and reply validation; not acoustic or screen latency; request order does not establish cold/warm cache state\"\n      },\n      \"drawing\": {\n        \"completed\": 1,\n        \"interrupted\": 0,\n        \"pending\": 0,\n        \"start_after_result_ms\": {\n          \"n\": 1,\n          \"p50\": 15,\n          \"p95\": 15,\n          \"max\": 15\n        },\n        \"done_after_result_ms\": {\n          \"n\": 1,\n          \"p50\": 671,\n          \"p95\": 671,\n          \"max\": 671\n        },\n        \"recent\": [\n          {\n            \"request\": 1,\n            \"start_after_result_ms\": 15,\n            \"done_after_result_ms\": 671,\n            \"strokes\": 43\n          }\n        ],\n        \"timing_basis\": \"UI receipt of a board result to animation advance/completion; only batches with new strokes; not physical display presentation\"\n      }\n    },\n    \"limits\": {\n      \"captures\": 20,\n      \"recent_timings_per_track\": 128,\n      \"queued_packets_per_track\": 300,\n      \"recent_board_requests\": 128,\n      \"recent_drawings\": 128\n    },\n    \"speech_to_first_partial_ms\": null,\n    \"sentence_end_to_final_ms\": null,\n    \"screen_present_ms\": null,\n    \"timing_basis\": \"capture timestamps (native on Mac, callback estimates elsewhere), monotonic arrival at Rust, recognition, receipt by UI; audio_end_to_final_ms starts at the captured segment end, not acoustic speech end; no acoustic onset or screen presentation measurement\"\n  }\n}"
+        },
+        "errors.txt": {
+          "bytes": 111,
+          "sha256": "a5ec060102c41c67bf0f75f9ac807ae4dad6bb27d34aab7d63c451c5ec561c62",
+          "text": "board request 3 failed\nOnly retained structured failures are listed; no error bodies or raw logs are included.\n"
+        }
+      }
+    },
+    "local_artifact_dir": "/tmp/boardcast-diagnostic-zip-0q0ybssc",
+    "screenshots_sha256": {
+      "diagnostics-info.png": "403aa4fafe50e4fb1b5a62ffaab8bda3c1a35c5718753850ca011f6b79aff310",
+      "diagnostics-portal-error.png": "44bd1c908757744428c814236ce514d0834a803aecf25910e61c44587cd11efd",
+      "diagnostics-saved.png": "203da01cfb3dd6f17ecb93afff6cfe44bd9dd3d4cc874ad70b773517a82eabc9",
+      "diagnostics-write-error.png": "d2d5b34da49fc18d8e2e4e6a76b0871b63a18c0613ee0a8d9df4f5d7aaa4ea8f"
+    },
+    "app_log_sha256": "0768dc6fae2e69444fa7986af906f82ac8ace8b55a73655d1e5c3fda1c6d7ac8",
+    "cleanup": "Driver session ended and only the owned disposable Space was deleted."
+  },
+  "compatibility": [
+    "info.json, timing.json and errors.txt retain their names; Copy diagnostics retains its existing JSON shape.",
+    "Root timing fields summarize stored completed non-manual non-failed lines; runtime captures, board requests and drawings have distinct bounded populations.",
+    "spoken counts rows with ASR metadata. Missing stage measurements remain null; totalMs requires all five stages and is only a stage sum, not acoustic-to-screen latency.",
+    "Arbitrary device/model names, endpoints, paths, keys and error bodies are omitted. Known model catalog IDs and fixed structured failure stages may appear.",
+    "The old optional llama-server.log is not supplied because GPUI does not capture it. This does not claim complete old raw-log compatibility.",
+    "Helper-file availability does not establish native speech capability or permission."
+  ],
+  "unverified": [
+    "Mac and Windows native save dialogs",
+    "Real Mac permissions, two-source Apple accuracy/capacity and calibration",
+    "Physical first-partial/final/screen timing, cold/warm comparisons and long meetings",
+    "Target-user retention and payment willingness"
+  ]
+}

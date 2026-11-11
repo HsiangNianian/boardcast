@@ -6,17 +6,23 @@ on:
     paths:
       - 'crates/**'
       - 'packaging/**'
+      - 'scripts/build-apple-speech.sh'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'assets/demos/**'
+      - 'eval/macos/**'
+      - 'eval/asr/corpus.json'
       - '.github/workflows/rust.yml'
   pull_request:
     paths:
       - 'crates/**'
       - 'packaging/**'
+      - 'scripts/build-apple-speech.sh'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'assets/demos/**'
+      - 'eval/macos/**'
+      - 'eval/asr/corpus.json'
       - '.github/workflows/rust.yml'
 
 jobs:
@@ -27,7 +33,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # The window and audio crates need system libraries and native downloads, and have no tests yet.
+      # The window and audio crates run their tests in the package jobs, with native libraries installed.
+      - run: python3 eval/macos/test_watch.py
+      - run: node crates/export/tests/transcript-order.cjs
       - run: cargo run -q -p boardcast-tools -- fetch pdfium
       - run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-export -p boardcast-import -p boardcast-update -p boardcast-tools
       - name: Check the recorded boards for layout defects
@@ -50,6 +58,10 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      # rust-cache drops native libraries but can retain sherpa's completed-download directory.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       # The script ends by running each packaged app's self-check. A second variant checks the model selection.
       - run: sh packaging/linux/package.sh
         env:
@@ -57,9 +69,30 @@ jobs:
       # Its own target folder: the cache keeps compiled crates but not the speech library they were
       # built against, so rebuilding that crate in the restored folder cannot find it.
       - name: How speech is heard, with the packaged models
-        run: cargo test -p boardcast-audio
+        run: cargo test -p boardcast-audio -p boardcast-ui
         env:
           BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
+          CARGO_TARGET_DIR: ${{ runner.temp }}/audio-tests
+      - name: Independent recognition and opening language selection
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, urllib.request
+          corpus = json.loads(pathlib.Path('eval/asr/corpus.json').read_text())
+          target = pathlib.Path(os.environ['BOARDCAST_AUTO_AUDIO'])
+          target.mkdir(parents=True, exist_ok=True)
+          for name in ['zh-alimeeting-00', 'ja-fleurs-00', 'en-ami-00']:
+              sample = next(s for s in corpus['samples'] if s['id'] == name)
+              with urllib.request.urlopen(corpus['baseUrl'] + '/' + sample['file'], timeout=60) as response:
+                  audio = response.read(sample['bytes'] + 1)
+              assert len(audio) == sample['bytes'] and hashlib.sha256(audio).hexdigest() == sample['sha256']
+              (target / sample['file']).write_bytes(audio)
+          PY
+          cargo test -p boardcast-audio auto_routes_real_opening_speech_and_preserves_the_pcm -- --ignored
+          cargo test -p boardcast-ui both_sources_can_recognize_while_the_other_is_waiting -- --ignored
+          cargo test -p boardcast-ui native_sources_emit_partials_and_finalize_after_manual_or_auto_start -- --ignored
+        env:
+          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
+          BOARDCAST_AUTO_AUDIO: ${{ runner.temp }}/auto-audio
           CARGO_TARGET_DIR: ${{ runner.temp }}/audio-tests
       - name: Install from the package and check again
         run: |
@@ -98,10 +131,16 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      # rust-cache drops native libraries but can retain sherpa's completed-download directory.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       # The script ends by running each packaged app's self-check, and builds and self-tests the Apple speech helper.
       - run: sh packaging/macos/package.sh
         env:
           VARIANTS: all none
+      - name: Check the Mac measurement tool against the runner process
+        run: python3 eval/macos/watch.py --pid $$ --minutes 0.01
       - name: Core crates and speech, with the packaged models
         run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-audio
         env:
@@ -129,6 +168,10 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      # rust-cache drops native libraries but can retain sherpa's completed-download directory.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       - run: sh packaging/windows/package.sh
         env:
           VARIANTS: all

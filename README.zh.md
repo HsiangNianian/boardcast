@@ -34,19 +34,18 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
    | 安装包 | 能识别 | 语音模型 |
    |---|---|---|
-   | `…-macos.zip`、`…-linux.tar.gz` | 日语、英语和中文，各用最合适的模型 | 约 1.1 GB |
+   | `…-macos.zip`、`…-linux.tar.gz`、`…-windows.zip` | 日语、英语和中文，各用最合适的模型 | 约 1.1 GB |
    | `…-ja` | 日语，用 ReazonSpeech | 约 160 MB |
    | `…-en` | 英语，用 Parakeet | 约 660 MB |
-   | `…-sensevoice` | 中文、英语、日语、韩语和粤语，用 SenseVoice | 约 230 MB |
-   | `…-macos-apple.zip` | Mac 自带识别器支持的语言 | 无 |
+   | `…-macos-none.zip` | Mac 自带识别器支持的语言 | 无 |
 
-   目前提供 Apple Silicon 的 macOS 和 x64 的 Linux 安装包，现在的应用还没有 Windows 安装包。
+   提供 Apple Silicon / Intel 的 macOS、x64 的 Linux 和 Windows 安装包。
 
-2. **macOS：** 应用只做了临时签名，第一次打开请按住 Control 点击 › 打开。**Linux：** 解压后运行 `./install.sh`（装到 `~/.local`，不需要 root；`--uninstall` 卸载并保留数据）。之后的版本会自动安装。
+2. **macOS：** 应用只做了临时签名，第一次打开请按住 Control 点击 › 打开。**Linux：** 解压后运行 `./install.sh`（装到 `~/.local`，不需要 root；`--uninstall` 卸载并保留数据）。**Windows：** 解压 zip 后运行 `bin\boardcast.exe`。
 3. 第一次启动时，设置会停在**板书模型**：下载一个在本机运行的模型，或者设置远程模型。语音识别已经内置。
 4. 点**开始收音**（或按 `空格`），也可以在转写下方的输入框里打一句话，回车上板。
 
-安装版启动后不久会检查新版本，在后台安装，等你重启后生效，不会打断正在开的会。
+Linux 安装版启动后不久会检查新版本，在后台安装，等你重启后生效，不会打断正在开的会。macOS 和 Windows 暂时需要手动下载新包。
 
 ## 能做什么
 
@@ -58,6 +57,8 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 | **按声音区分说话人**，并改成真名；同一个声音之后都沿用这个名字。 | **找回会议**：在会议列表里找到之前的会，接着开。 |
 
 板书按笔顺一笔一笔写出中文、日文和英文。浅色是白板马克笔；系统为深色时，画布变成粉笔黑板。界面语言是英文或中文，跟随系统或在设置里选择；板书和摘要跟随会议本身的语言。
+
+新会议可以从周会、方案评审、复盘或站会模板开始，也可以把当前板的话题存成自己的模板；摘要会按模板话题组织。在设置里填写术语表后，中英日名字可以按读音纠错，并把规范写法交给板书模型；识别原文仍会保留。
 
 ### 圈着说
 
@@ -80,6 +81,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 | **Markdown** | 要点、Mermaid 流程图和会议记录。 |
 | **PNG / SVG** | 当前这张板，和画面上一样；SVG 放大不糊。 |
 | **动态 SVG** | 当前这张板，按会议顺序逐笔写出。 |
+| **GIF** | 板书逐笔写出的动图，可以直接贴进群聊和文档。 |
 | **回放网页** | 一个 `.html` 文件，发给没参会的人，双击就能看。 |
 | **整场会 PDF** | 每张板一页，后面是摘要和会议记录，文字可以选中复制。 |
 
@@ -87,11 +89,13 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
 ### 线上会议和录音
 
-在**设置 › 语音 › 收音来源**里选择麦克风；在 Linux 上也可以选播放会议声音的扬声器或耳机对应的 **Monitor of …** 输入，这样就能收到线上会议里对方的声音，或者播放器里正在放的录音。一次只收一个来源。在 Mac 上，任何安装包都可以在同一处改用 Apple 自带的识别器。
+在**设置 › 语音 › 收音来源**里选择麦克风；在 Linux 上也可以选播放会议声音的扬声器或耳机对应的 **Monitor of …** 输入，这样就能收到线上会议里对方的声音，或者播放器里正在放的录音。v0.27.0 安装包一次只收一个来源。在 Mac 上，任何安装包都可以在同一处改用 Apple 自带的识别器。
 
-### 现在的应用还没有
+### 发布状态和剩余工作
 
-下面这些旧版有，还没有在新版里重做：用 Excalidraw 自由编辑和导出、术语表与读音纠错（[#117](https://github.com/HsiangNianian/boardcast/issues/117)）、同时收麦克风和系统声音、macOS 的系统声音（[#34](https://github.com/HsiangNianian/boardcast/issues/34)）、Windows 安装包、全局收音快捷键和诊断包。
+[#206](https://github.com/HsiangNianian/boardcast/pull/206) 恢复了 Mac 麦克风、系统及双路收音，两路分别运行识别、共用采集时钟，并提供独立的 Apple 语言选择，以及有限容量的收音、板书排队／生成和绘制诊断，失败请求也会保留。新录制的带时间字幕、摘要输入和文字导出按该次录制的音频顺序排列，回放只显示当时已收到的句子。这些尚未进入 v0.27.0；真实 Mac 的授权、双路转写、时钟校准和长会仍需按[验收计划](eval/macos/README.md)核对。「自动探测」使用多语种语音包，积累每路约 5 秒开场语音后独立选择中、日或英语，保持到本次收音结束，首批字幕会等待探测；仍可手动选语言，「跟随系统」则使用操作系统的语言设置。macOS 26 的 SpeechAnalyzer 现可在讲话中按声源显示临时文字，定稿后才进入会议和板书；自动探测在首批句子处理完后接续流式识别。这部分参照旧 Tauri 实现，仍待 Mac 真机验证。设置中现可预览并保存本地诊断 ZIP；尚不收集模型服务的原始日志，全局收音快捷键也仍未迁回。Excalidraw 自由编辑和导出已从 GPUI 版移除。
+
+相对最新正式版 **v0.27.0**，`main` 还增加了 PDF 选页导入（[#202](https://github.com/HsiangNianian/boardcast/pull/202)）和单句改说话人（[#201](https://github.com/HsiangNianian/boardcast/pull/201)）；这两项尚未进入该版本的安装包。改单句暂不修改对应板书内容的归属，说话人的声纹统计会随会议保存；逐句声纹只在会议打开期间保留，因此重新打开后改旧句子无法重算对应的声纹统计。
 
 ## 快捷键
 
@@ -126,6 +130,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 |---|---|---|
 | Linux | `~/.local/share/games.mmstudio.boardcast/` | `~/.config/games.mmstudio.boardcast/` |
 | macOS | `~/Library/Application Support/games.mmstudio.boardcast/` | 同一个目录 |
+| Windows | `%APPDATA%\games.mmstudio.boardcast\` | 同一个目录 |
 
 可以用 `BOARDCAST_DATA` 和 `BOARDCAST_CONFIG` 改到别处。
 
@@ -148,10 +153,19 @@ sh packaging/linux/package.sh           # target/package/boardcast-<version>-<ar
 
 | 用例集 | 当前规模 | 用途 |
 |---|---|---|
-| [`eval/cases.json`](eval/cases.json) | 28 场会 | 开发与回归，包含英文和一场真实会议的回归 |
+| [`eval/cases.json`](eval/cases.json) | 30 场会 | 开发与回归，包含英文、预填模板和一场真实会议的回归 |
 | [`eval/holdout.json`](eval/holdout.json) | 27 场会 | 不参与提示词调整的留出集 |
 | [`eval/pointing.json`](eval/pointing.json) | 18 个用例 | 中英文圈着说，起始板固定 |
 | [`eval/revisions.json`](eval/revisions.json) | 3 个用例 | 转写修订，必须保留节点身份和无关内容；等 GPUI 版支持转写修订后再跑 |
+
+摘要可信度、日期、待办归属和模板结构使用[重复模型评测](eval/summary.md)，保留失败结果及未采用的改动。术语表实录对照从[自己的录音](eval/asr/own-voice/README.md)开始；Mac 长会和目标用户试用分别使用[验收计划](eval/macos/README.md)及[试用材料](docs/trials/README.md)。
+
+草稿 PR #206 还按本地模型的实际 token 预算分段整理过大的白板材料，并在容量允许时保留较短的原始发言。被截断的回复会明确失败，评测失败也会写入报告，待办列表项会补上可操作的勾选框。不同白板的编号含义有冲突时，清理过程不再套用另一张板的名称。长输入用例仍暴露事实错误；不再超出上下文，不等于摘要验收通过。
+
+草稿 PR #206 现仅为已测过的 Qwen3.5-4B Q4_K_M 加入摘要示例。[最新本地对照](eval/summary-examples-2026-11-12.json)中，原 15 个用例从 12/15 提升到三轮 45/45；新增 8 例从 3/8 提升到 7/8。[同一提交的 CI 摘要](https://github.com/HsiangNianian/boardcast/actions/runs/43103679484/artifacts/13894110457)为 42/45：三轮均漏掉预演日期中的“周一”，两个模板仍通过 6/6。本地多白板为 4/4、长转写为 1/2。仍会漏掉已确认的发货日期，长笔记仍会虚构负责人问题，因此摘要验收继续开放。同一示例使 9B 回退，9B、未知本地模型和远程模型均保留原提示词。这些是 Linux 合成用例，Mac 真机验收另行跟踪。
+[此前模型对照](eval/summary-options-2026-11-12.json)及[检查器修正](eval/summary-checker-2026-11-12.json)保留历史输出、未采用改动和修正前后分数，包括此前的 CI 36/45。
+收音诊断现可定位失败来源，区分准备、采集和识别阶段。[回归证据](eval/macos/capture-errors-2026-11-12.json)用文件输入检查采集错误收尾、每次采集只报一次失败及 helper 退出；Mac 真机验收仍开放。
+设置 → **导出诊断…** 可先查看 `info.json`、`timing.json` 和 `errors.txt` 的固定快照，再保存到本机，不含会议文字、音频、密钥、路径或错误正文。已有逐句计时沿用旧报告字段，完整的当前收音／板书报告位于 `timing.json.runtime`，未测项保持 null。[原生界面导出证据](eval/macos/diagnostic-zip-2026-11-12.json)在 Linux 核对了取消、保存与重试、预览内容逐字节一致及隐私边界。
 
 先启动可用的 llama-server，然后运行：
 
@@ -177,7 +191,7 @@ target/release/asr-eval run . --suite meetings     # 9 段约 10 分钟、跨行
 <details>
 <summary><strong>发布</strong></summary>
 
-提高 workspace 版本号并合并，然后推送一个带注释的 tag，注释就是发版说明：`git tag -a v<version> -m "…"`，再 `git push origin v<version>`。[Release](.github/workflows/release.yml) 工作流随即构建 Linux（all、ja、en）和 Mac（Apple 芯片与 Intel，各 all、ja、en、none）的全部安装包、写出更新清单，并把 `v<version>` 发布为最新版本，安装版就从这里检查更新。带预发布部分的版本（如 `0.23.0-1`）发布为预发布版，不会推送给已安装的用户。提交信息使用 Conventional Commits；每个版本记录在 [CHANGELOG.md](CHANGELOG.md)。
+提高 workspace 版本号并合并，然后推送一个带注释的 tag，注释就是发版说明：`git tag -a v<version> -m "…"`，再 `git push origin v<version>`。[Release](.github/workflows/release.yml) 工作流构建 Linux（all、ja、en）和 Mac（Apple 芯片与 Intel，各 all、ja、en、none）安装包、写出更新清单，并把 `v<version>` 发布为最新版本。Windows x64（all、ja、en）单独构建并追加附件，Windows 构建失败不会阻止其他包发布。带预发布部分的版本（如 `0.23.0-1`）发布为预发布版，不会推送给已安装的用户。提交信息使用 Conventional Commits；新版发版说明在 GitHub Releases，[CHANGELOG.md](CHANGELOG.md) 保留旧应用截至 0.21.0 的记录。
 
 </details>
 

@@ -68,11 +68,14 @@ jobs:
           curl -fL --retry 3 -o ~/models/model.gguf "$MODEL_URL"
 
       - name: Start llama-server
+        id: server
         run: |
           server=$(find ~/llama -type f -name llama-server | head -1)
           chmod +x "$server"
           export LD_LIBRARY_PATH="$(dirname "$server"):${LD_LIBRARY_PATH:-}"
-          nohup "$server" -m ~/models/model.gguf --host 127.0.0.1 --port 8080 -c 4096 --jinja -np 1 > ~/llama-server.log 2>&1 &
+          mkdir -p eval/reports
+          sha256sum ~/models/model.gguf > eval/reports/model-sha256.txt
+          nohup "$server" -m ~/models/model.gguf --alias "${MODEL_URL##*/}" --host 127.0.0.1 --port 8080 -c 4096 --jinja -np 1 > ~/llama-server.log 2>&1 &
           for i in $(seq 1 120); do
             curl -sf http://127.0.0.1:8080/health && exit 0
             sleep 2
@@ -80,10 +83,25 @@ jobs:
           cat ~/llama-server.log
           exit 1
 
+      - name: Summary certainty and template topics
+        id: summary
+        run: target/release/boardcast-tools summary-eval . --llm http://127.0.0.1:8080 --label "$LABEL" --repeat 3
+      # Keep summary evidence before the longer board suites or a later push can cancel the job.
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() && steps.summary.outcome != 'skipped' }}
+        with:
+          name: summary-report
+          path: |
+            eval/reports/summary-*
+            eval/reports/model-sha256.txt
+          if-no-files-found: error
+
       # The board model as the app runs it. Transcript revisions are not in the GPUI app yet, so
-      # eval/revisions.json waits for them (#150).
+      # eval/revisions.json waits for them (#150). Summary failures must not skip these checks.
       - run: target/release/boardcast-tools agent-eval . board-dev.json --llm http://127.0.0.1:8080 --set dev --label "$LABEL"
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
       - run: target/release/boardcast-tools agent-eval . board-pointing.json --llm http://127.0.0.1:8080 --set pointing --label "$LABEL"
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
 
       - uses: actions/upload-artifact@v6
         if: always()
@@ -117,6 +135,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: asr-linux
+      # rust-cache can leave empty native-library directories that sherpa mistakes for a complete download.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
+      - run: python3 eval/asr/own-voice/test_record.py
+      - run: cargo test -p boardcast-asr-eval
       - run: cargo build --release -p boardcast-asr-eval
       - uses: actions/cache@v5
         with:
@@ -154,6 +178,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: asr-linux
+      # rust-cache can leave empty native-library directories that sherpa mistakes for a complete download.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       - run: cargo build --release -p boardcast-asr-eval
       - uses: actions/download-artifact@v7
         with:

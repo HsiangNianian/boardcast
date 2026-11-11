@@ -12,7 +12,9 @@
 
 mod app;
 mod bench;
+mod diagnostics;
 mod i18n;
+mod listen;
 mod pipeline;
 mod raster;
 mod resources;

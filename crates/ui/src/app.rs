@@ -26,7 +26,7 @@ use boardcast_export::Kind as ExportKind;
 use boardcast_import::pdf::NewPage;
 use boardcast_board::spans::{span_at, Unit};
 use boardcast_board::speakers::{by_of_edge, by_of_node, first_seen, initial, said_at};
-use boardcast_board::steps::{clock, replay_to, Player};
+use boardcast_board::steps::{clock, replay_to, transcript_order, Player};
 use gpui_kit::base::input::{Textarea, TextareaState};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -202,6 +202,7 @@ struct Ink {
     drawn: HashSet<String>,
     last: Option<Instant>,
     timings: Vec<Timing>,
+    drawings: DrawingReport,
     graph: Option<Graph>,
     next_tidy_batch: u64,
     /// What a click can land on, in board coordinates.
@@ -267,6 +268,7 @@ fn raster_level(k: f32, dpr: f32) -> f32 {
 
 struct Timing {
     id: u64,
+    request: u64,
     text: String,
     asr_ms: Option<u128>,
     llm_ms: u128,
@@ -275,6 +277,39 @@ struct Timing {
     arrived: Instant,
     first_ink: Option<Instant>,
     strokes: usize,
+}
+
+struct Drawing {
+    request: u64,
+    start_ms: u128,
+    done_ms: u128,
+    strokes: usize,
+}
+
+#[derive(Default)]
+struct DrawingReport {
+    completed: usize,
+    interrupted: usize,
+    recent: VecDeque<Drawing>,
+}
+
+impl DrawingReport {
+    fn push(&mut self, drawing: Drawing) {
+        self.completed += 1;
+        if self.recent.len() == boardcast_agent::diagnostics::RECENT { self.recent.pop_front(); }
+        self.recent.push_back(drawing);
+    }
+
+    fn json(&self, pending: usize) -> serde_json::Value {
+        use boardcast_agent::diagnostics::stats;
+        serde_json::json!({ "completed": self.completed, "interrupted": self.interrupted, "pending": pending,
+            "start_after_result_ms": stats(self.recent.iter().map(|d| d.start_ms)),
+            "done_after_result_ms": stats(self.recent.iter().map(|d| d.done_ms)),
+            "recent": self.recent.iter().map(|d| serde_json::json!({ "request": d.request,
+                "start_after_result_ms": d.start_ms, "done_after_result_ms": d.done_ms, "strokes": d.strokes })).collect::<Vec<_>>(),
+            "timing_basis": "UI receipt of a board result to animation advance/completion; only batches with new strokes; not physical display presentation"
+        })
+    }
 }
 
 /// Whether a closed shape holds a point, by counting crossings.
@@ -475,6 +510,7 @@ impl Ink {
         self.queue.clear();
         self.finished.clear();
         self.drawn.clear();
+        self.drawings.interrupted += self.timings.len();
         self.timings.clear();
         self.targets.clear();
         self.live = 0.0;
@@ -726,6 +762,8 @@ impl Ink {
         let Some(i) = self.timings.iter().position(|t| t.id == id) else { return };
         let t = self.timings.remove(i);
         let first = t.first_ink.unwrap_or(now);
+        self.drawings.push(Drawing { request: t.request, start_ms: (first - t.arrived).as_millis(),
+            done_ms: (now - t.arrived).as_millis(), strokes: t.strokes });
         println!(
             "{{\"line\":{},\"batch\":{},\"asr_ms\":{},\"llm_ms\":{},\"to_board_ms\":{},\"to_first_ink_ms\":{},\"to_done_ms\":{},\"ui_delay_ms\":{},\"strokes\":{}}}",
             serde_json::Value::from(t.text),
@@ -759,6 +797,7 @@ enum Panel {
     Import,
     Speakers,
     Settings,
+    Diagnostics,
 }
 
 enum ImportSource {
@@ -906,6 +945,13 @@ struct SettingsForm {
     probing: Option<Receiver<Result<u128, String>>>,
 }
 
+struct DiagnosticPanel {
+    files: Vec<crate::diagnostics::File>,
+    selected: usize,
+    saving: bool,
+    note: Option<String>,
+}
+
 struct Workbench {
     ink: Rc<RefCell<Ink>>,
     pipeline: Pipeline,
@@ -929,6 +975,7 @@ struct Workbench {
     /// What the meeting list is narrowed to.
     library_query: Entity<InputState>,
     form: SettingsForm,
+    diagnostics: Option<DiagnosticPanel>,
     summary: SummaryPanel,
     replay: Option<Replaying>,
     import: ImportState,
@@ -947,6 +994,7 @@ struct Workbench {
     editing_title: bool,
     /// What recognizes speech, once the ear is ready.
     hearing: Option<String>,
+    partials: [Option<(u64, String)>; 2],
     /// The system's recognizer, where there is one to choose.
     speech_helper: Option<PathBuf>,
     /// When the microphone went on, so the title bar can count the time.
@@ -1169,6 +1217,9 @@ fn fingerprint_of(live: &Live) -> String {
 
 fn line_note(line: &serde_json::Value, model_loading: bool) -> String {
     let mut parts = vec![];
+    if let Some(source) = line["source"].as_str() {
+        parts.push(match source { "microphone" => tr("Microphone", "麦克风"), "system" => tr("System audio", "系统声音"), _ => source }.to_string());
+    }
     if let Some(ms) = line["heard"]["asrMs"].as_u64() {
         parts.push(format!("{} {ms} ms", tr("Heard", "识别")));
     }
@@ -1193,10 +1244,11 @@ impl Workbench {
 
     /// Turn the microphone on or off, counting the time it was on towards the meeting.
     fn toggle_mic(&mut self) {
+        self.partials = [None, None];
         let was_listening = self.pipeline.listening();
-        self.pipeline.toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()));
+        self.pipeline.toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()), &self.form.saved.capture_source);
         if !was_listening {
-            self.listening_since = Some(Instant::now());
+            self.hearing = Some(tr("Preparing audio…", "正在准备收音…").into());
         } else if let Some(since) = self.listening_since.take() {
             self.live.add_recorded(since.elapsed().as_secs_f64() * 1000.0);
         }
@@ -1243,16 +1295,19 @@ impl Workbench {
     }
 
     /// Hear with Apple's recognizer or the speech models, in `language` for Apple's.
-    fn choose_speech(&mut self, system: bool, language: Option<&str>, cx: &mut Context<Self>) {
+    fn choose_speech(&mut self, system: bool, language: Option<&str>, system_audio: bool, cx: &mut Context<Self>) {
+        self.partials = [None, None];
+        self.count_listening();
+        self.listening_since = None;
         let saved = &mut self.form.saved;
         saved.system_speech = system;
         if let Some(language) = language {
-            saved.speech_language = language.to_string();
+            if system_audio { saved.system_audio_language = language.to_string(); } else { saved.speech_language = language.to_string(); }
         }
         if let Err(e) = saved.save() {
             self.form.note = Some(format!("{e:#}"));
         }
-        self.pipeline.set_speech(Speech { helper: self.speech_helper.clone(), system, language: saved.speech_language.clone() });
+        self.pipeline.set_speech(Speech { helper: self.speech_helper.clone(), system, language: saved.speech_language.clone(), system_language: saved.system_audio_language.clone() });
         self.hearing = None;
         cx.notify();
     }
@@ -1309,22 +1364,50 @@ impl Workbench {
                         self.live.add_line(speaker.as_deref(), &text, asr_ms);
                     }
                 }
-                Event::Spoken { meeting, sentence } => {
+                Event::CaptureReady(id) => {
+                    if self.pipeline.current_capture(id) { self.listening_since = Some(Instant::now()); }
+                }
+                Event::CaptureStopped(id) => {
+                    for text in &mut self.partials {
+                        if text.as_ref().is_some_and(|(capture, _)| *capture == id) { *text = None; }
+                    }
+                    if self.pipeline.capture_stopped(id) {
+                        if let Some(since) = self.listening_since.take() { self.live.add_recorded(since.elapsed().as_secs_f64() * 1000.0); }
+                        self.level = 0.0;
+                    }
+                }
+                Event::Spoken { meeting, sentence, audio } => {
+                    crate::listen::keep(&mut audio.report.lock().unwrap().tracks[audio.source].ui_receive_ms, audio.ready.elapsed().as_millis());
                     if meeting == self.session().meeting() {
+                        if self.partials[audio.source].as_ref().is_some_and(|(id, _)| *id == audio.capture) { self.partials[audio.source] = None; }
                         let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds);
                         let mut sentence = sentence;
                         sentence.text = self.as_glossary_writes(&sentence.text);
-                        self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
+                        self.live.add_line(speaker.as_deref(), &sentence.text, sentence.asr_ms);
                         self.keep_heard_text();
+                        if let Some(line) = self.live.lines.last_mut() {
+                            line["heard"]["asrMs"] = serde_json::json!(sentence.asr_ms);
+                            line["source"] = serde_json::json!(crate::listen::SOURCES[audio.source]);
+                            line["capture"] = serde_json::json!({ "id": audio.capture, "key": audio.key, "sourceStartSeconds": sentence.start, "seconds": sentence.seconds,
+                                "startSeconds": audio.captured[0], "endSeconds": audio.captured[1] });
+                        }
                         if self.follow_pages(&sentence.text, cx) {
                             continue;
                         }
                         let renames = self.session().renames_seen();
                         let line = Utterance { speaker, text: sentence.text, pointing: self.take_pointing() };
-                        let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, asr_ms: Some(sentence.asr_ms), meeting, renames });
+                        let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, submitted: Instant::now(), asr_ms: sentence.asr_ms, meeting, renames });
                     }
                 }
-                Event::Agent(Update::Drawn { meeting, graph, ops, lines, asr_ms, llm_ms, ended }) => {
+                Event::Partial { meeting, text, audio } => {
+                    if !text.is_empty() {
+                        crate::listen::keep(&mut audio.report.lock().unwrap().tracks[audio.source].partial_ui_receive_ms, audio.ready.elapsed().as_millis());
+                    }
+                    if meeting == self.session().meeting() && (self.pipeline.current_capture(audio.capture) || (audio.capture == 0 && !self.pipeline.listening())) {
+                        self.partials[audio.source] = (!text.is_empty()).then_some((audio.capture, text));
+                    }
+                }
+                Event::Agent(Update::Drawn { request, meeting, graph, ops, lines, asr_ms, llm_ms, ended }) => {
                     if meeting != self.session().meeting() {
                         continue;
                     }
@@ -1337,7 +1420,7 @@ impl Workbench {
                     let mut ink = self.ink.borrow_mut();
                     let strokes = ink.update(&graph, id);
                     if strokes > 0 {
-                        ink.timings.push(Timing { id, text, asr_ms, llm_ms, batch: lines.len(), ended, arrived, first_ink: None, strokes });
+                        ink.timings.push(Timing { id, request, text, asr_ms, llm_ms, batch: lines.len(), ended, arrived, first_ink: None, strokes });
                     }
                     let memory = ink.board.snapshot();
                     drop(ink);
@@ -1382,7 +1465,9 @@ impl Workbench {
             } else if at.elapsed() < JUMP_SCROLLING {
                 // A list scrolls only once it has been laid out, which the transcript may not have
                 // been if another panel was showing. Newest first on screen.
-                self.transcript_scroll.scroll_to_item(self.live.lines.len().saturating_sub(line + 1));
+                if let Some(position) = self.transcript_order().iter().rev().position(|index| *index == line) {
+                    self.transcript_scroll.scroll_to_item(position);
+                }
                 changed = true;
             }
         }
@@ -1691,6 +1776,72 @@ impl Workbench {
         self.session().open(self.live.graph.clone(), history);
         self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
         self.show_page_image();
+        cx.notify();
+    }
+
+    fn open_diagnostics(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.panel = Panel::Diagnostics;
+        if !self.diagnostics.as_ref().is_some_and(|d| d.saving) {
+            let ink = self.ink.borrow();
+            let runtime = self.pipeline.diagnostics(ink.drawings.json(ink.timings.len()));
+            let catalog = boardcast_models::catalog();
+            let current = boardcast_models::current(&self.models);
+            let remote = !self.live.local_only() && self.form.saved.enabled && self.form.saved.is_complete();
+            let size = window.viewport_size();
+            let info = crate::diagnostics::Info {
+                screen: [f32::from(size.width), f32::from(size.height), window.scale_factor()],
+                backend: if remote { "remote" } else { "local" },
+                model: if remote { None } else { catalog.iter().find(|m| current.as_ref().is_some_and(|p| p.ends_with(&m.file))).map(|m| m.id) },
+                state: if self.needs_model { "no-model" } else if self.preparing.is_some() { "starting" } else { "configured" },
+                installed: catalog.iter().filter(|m| boardcast_models::installed(m, &self.models)).map(|m| m.id).collect(),
+                listening: self.pipeline.listening(),
+                source: match self.form.saved.capture_source.as_str() { "microphone" => "microphone", "system" => "system", "both" => "both", _ => "unknown" },
+                diarize: self.form.saved.diarize,
+                apple_helper: self.speech_helper.is_some(),
+            };
+            self.diagnostics = Some(DiagnosticPanel { files: crate::diagnostics::files(info, &self.live.lines, runtime), selected: 0, saving: false, note: None });
+        }
+        cx.notify();
+    }
+
+    fn save_diagnostics(&mut self, cx: &mut Context<Self>) {
+        let Some(state) = &mut self.diagnostics else { return };
+        if state.saving { return; }
+        state.saving = true;
+        state.note = None;
+        let files = state.files.clone();
+        let directory = self.export_dir.clone().unwrap_or_else(|| {
+            let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map_or_else(|| self.data.clone(), PathBuf::from);
+            Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
+        });
+        let answer = cx.prompt_for_new_path(&directory, Some("boardcast-diagnostics.zip"));
+        cx.spawn(async move |this, cx| {
+            let result = match answer.await {
+                Ok(Ok(Some(path))) => {
+                    let target = path.clone();
+                    cx.background_executor().spawn(async move {
+                        boardcast_export::write_file(&target, &crate::diagnostics::zip(&files)?)?;
+                        anyhow::Ok(Some(target))
+                    }).await
+                }
+                Ok(Ok(None)) | Err(_) => Ok(None),
+                Ok(Err(error)) => Err(error),
+            };
+            let _ = this.update(cx, |this, cx| {
+                if let Some(state) = &mut this.diagnostics {
+                    state.saving = false;
+                    state.note = match result {
+                        Ok(Some(path)) => {
+                            this.export_dir = path.parent().map(PathBuf::from);
+                            Some(format!("{} {}", tr("Saved to", "已保存到"), path.display()))
+                        }
+                        Ok(None) => None,
+                        Err(error) => Some(format!("{}{error:#}", tr("Could not save diagnostics: ", "无法保存诊断："))),
+                    };
+                }
+                cx.notify();
+            });
+        }).detach();
         cx.notify();
     }
 
@@ -2057,6 +2208,7 @@ impl Workbench {
         self.speaker_line = None;
         self.speaker_hovered = None;
         self.jumped_line = None;
+        self.partials = [None, None];
         self.live = live;
         self.live.adopt_summary_source(&fingerprint_of(&self.live));
         self.show_page_image();
@@ -2686,6 +2838,8 @@ impl Workbench {
             templates: self.form.saved.templates.clone(),
             system_speech: self.form.saved.system_speech,
             speech_language: self.form.saved.speech_language.clone(),
+            system_audio_language: self.form.saved.system_audio_language.clone(),
+            capture_source: self.form.saved.capture_source.clone(),
             interface_language: self.form.saved.interface_language.clone(),
             appearance: self.form.saved.appearance.clone(),
             input: self.form.saved.input.clone(),
@@ -2702,6 +2856,13 @@ impl Workbench {
             self.toggle_mic();
             self.toggle_mic();
         }
+        cx.notify();
+    }
+
+    fn choose_capture(&mut self, source: &str, cx: &mut Context<Self>) {
+        self.form.saved.capture_source = source.into();
+        if let Err(e) = self.form.saved.save() { self.form.note = Some(format!("{e:#}")); }
+        if self.pipeline.listening() { self.toggle_mic(); self.toggle_mic(); }
         cx.notify();
     }
 
@@ -2763,7 +2924,7 @@ impl Workbench {
     fn retry_line(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some((speaker, text)) = self.live.retry_line(index) else { return };
         let (meeting, renames) = (self.session().meeting(), self.session().renames_seen());
-        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting, renames });
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing: vec![] }, ended: Instant::now(), submitted: Instant::now(), asr_ms: None, meeting, renames });
         cx.notify();
     }
 
@@ -2806,6 +2967,11 @@ impl Workbench {
         self.transcript_open = true;
         self.jumped_line = Some((line, Instant::now()));
         cx.notify();
+    }
+
+    fn transcript_order(&self) -> Vec<usize> {
+        let shown = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&r.steps).min(self.live.lines.len()));
+        transcript_order(&self.live.lines[..shown])
     }
 
     /// A voice says who it is. A sentence too short to tell goes to whoever spoke last.
@@ -2981,7 +3147,7 @@ impl Workbench {
         let meeting = self.session().meeting();
         let renames = self.session().renames_seen();
         let pointing = self.take_pointing();
-        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing }, ended: Instant::now(), asr_ms: None, meeting, renames });
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing }, ended: Instant::now(), submitted: Instant::now(), asr_ms: None, meeting, renames });
         cx.notify();
     }
 
@@ -3113,6 +3279,38 @@ impl Workbench {
                 .child(Input::new(&self.arxiv_input))
                 .child(button("import-arxiv", tr("Download and read", "下载并读取")).on_click(cx.listener(|this, _, window, cx| this.import_arxiv(window, cx)))),
         }
+    }
+
+    fn diagnostics_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let panel = div().id("diagnostics-panel").flex_1().min_h_0().p_3().flex().flex_col().gap_2();
+        let Some(state) = &self.diagnostics else { return panel };
+        let file = &state.files[state.selected];
+        let copied = file.text.clone();
+        panel
+            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
+                "Review the files before saving. This snapshot contains system information and measurements, without meeting text, audio or keys. Nothing is uploaded.",
+                "保存前可以逐个查看文件。这份快照包含系统信息和测量记录，不含会议文字、音频或密钥，不会上传。")))
+            .child(div().flex().flex_wrap().gap_1().children(state.files.iter().enumerate().map(|(i, f)| {
+                button(("diagnostic-file", i), f.name).when(i == state.selected, |b| b.primary())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(state) = &mut this.diagnostics { state.selected = i; }
+                        cx.notify();
+                    }))
+            })))
+            .child(div().text_xs().text_color(rgb(pal().muted)).child(format!("{} · {} bytes", file.name, file.text.len())))
+            .child(div().id("diagnostic-preview").flex_1().min_h_0().overflow_y_scroll().p_2().rounded_md().bg(rgb(pal().track))
+                .font_family(theme::MONO).text_xs().child(file.text.clone()))
+            .when_some(state.note.clone(), |d, note| d.child(div().text_xs().child(note)))
+            .child(div().flex().flex_wrap().gap_2()
+                .child(button("copy-diagnostic-file", tr("Copy file", "复制此文件")).on_click(cx.listener(move |this, _, _, cx| {
+                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copied.clone()));
+                    if let Some(state) = &mut this.diagnostics { state.note = Some(tr("File copied", "已复制文件内容").into()); }
+                    cx.notify();
+                })))
+                .child(button("refresh-diagnostics", tr("Refresh", "刷新快照")).disabled(state.saving)
+                    .on_click(cx.listener(|this, _, window, cx| this.open_diagnostics(window, cx))))
+                .child(button("save-diagnostics", if state.saving { tr("Saving…", "正在保存…") } else { tr("Save ZIP…", "保存 ZIP…") }).primary().disabled(state.saving)
+                    .on_click(cx.listener(|this, _, _, cx| this.save_diagnostics(cx)))))
     }
 
     fn export_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
@@ -4032,7 +4230,13 @@ impl Render for Workbench {
             });
         // With the transcript away, the latest line still shows that the room is being heard.
         let transcript_shown = self.panel == Panel::Transcript && self.transcript_open;
-        let caption = self.live.lines.iter().rev().find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !transcript_shown && self.replay.is_none());
+        let transcript_order = self.transcript_order();
+        let partials = self.partials.iter().enumerate().filter_map(|(source, text)| {
+            let (_, text) = text.as_ref().filter(|_| self.replay.is_none())?;
+            let label = if source == 0 { tr("Microphone · live", "麦克风 · 临时文字") } else { tr("System audio · live", "系统音频 · 临时文字") };
+            Some((label, text.clone()))
+        }).collect::<Vec<_>>();
+        let caption = transcript_order.iter().rev().map(|&i| &self.live.lines[i]).find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| partials.is_empty() && !transcript_shown && self.replay.is_none());
         let banner = self.notice.clone().or_else(|| match &self.save {
             SaveState::Failed(error) => Some(format!("{}{error}", tr("Your meeting is still open here, but it was not saved: ", "这场会还在这里，但没有保存成功："))),
             _ => None,
@@ -4042,8 +4246,6 @@ impl Render for Workbench {
             ViewOnly::NewerFormat => tr("This meeting was saved by a newer version, so it is view-only.", "这场会是新版本保存的，只能查看。"),
             ViewOnly::ImportedContent => tr("This meeting has free-edit content, which this version does not show. It is view-only here, and its file is unchanged.", "这场会含自由编辑内容，这个版本不显示，这里只能查看，文件不会被改动。"),
         });
-        // During a replay the transcript has only reached that moment.
-        let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&r.steps).min(self.live.lines.len()));
         let replay_bar = self.replay_bar(window, cx);
         let transcript = div()
             .id("transcript")
@@ -4054,7 +4256,9 @@ impl Render for Workbench {
             .gap_3()
             .flex()
             .flex_col()
-            .children(self.live.lines[..shown_lines].iter().enumerate().rev().map(|(i, l)| {
+            .children(partials.iter().map(|(source, text)| div().text_sm().text_color(rgb(pal().faint)).child(div().text_xs().child(*source)).child(text.clone())))
+            .children(transcript_order.into_iter().rev().map(|i| {
+                let l = &self.live.lines[i];
                 let manual = l["manual"].as_bool().unwrap_or(false);
                 let note = line_note(l, self.preparing.is_some());
                 let jumped = self.jumped_line.is_some_and(|(line, _)| line == i);
@@ -4334,6 +4538,19 @@ impl Render for Workbench {
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))))
             .child(manual_label("02", tr("Speech", "语音")))
             .child(div().text_sm().child(tr("Listen to", "收音来源")))
+            .when(self.speech_helper.is_some(), |d| {
+                d.child(div().flex().flex_wrap().gap_2().children([
+                    ("microphone", tr("Microphone", "麦克风")), ("system", tr("System audio", "系统声音")), ("both", tr("Both", "两路一起收音")),
+                ].into_iter().map(|(id, label)| {
+                    button(gpui_kit::ElementId::Name(format!("capture-source-{id}").into()), label)
+                        .when(self.form.saved.capture_source == id, |b| b.primary())
+                        .on_click(cx.listener(move |this, _, _, cx| this.choose_capture(id, cx)))
+                })))
+                .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
+                    "System audio needs Screen & System Audio Recording permission. Use headphones to keep the microphone from hearing the same sound twice.",
+                    "系统声音需要「屏幕与系统音频录制」权限。双路收音请戴耳机，避免麦克风重复收到外放的声音。",
+                )))
+            })
             .child({
                 let chosen = self.form.saved.input.clone();
                 let rows = std::iter::once((String::new(), tr("The system's default input", "系统默认输入").to_string()))
@@ -4409,28 +4626,45 @@ impl Render for Workbench {
             .when(self.speech_helper.is_some(), |d| {
                 let system = self.form.saved.system_speech;
                 let language = self.form.saved.speech_language.clone();
-                let languages = [("auto", tr("System language", "跟随系统")), ("ja-JP", "日本語"), ("en-US", "English"), ("zh-CN", "中文")];
+                let languages = [("detect", tr("Auto", "自动探测")), ("auto", tr("System language", "跟随系统")), ("ja-JP", "日本語"), ("en-US", "English"), ("zh-CN", "中文")];
                 d.child(div().text_sm().child(tr("Recognize speech with", "语音识别")))
                     .child(
                         div()
                             .flex()
                             .gap_2()
-                            .child(button("speech-models", tr("Speech models", "语音模型")).when(!system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, cx))))
-                            .child(button("speech-apple", tr("Apple", "Apple")).when(system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, cx)))),
+                            .child(button("speech-models", tr("Speech models", "语音模型")).when(!system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, false, cx))))
+                            .child(button("speech-apple", tr("Apple", "Apple")).when(system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, false, cx)))),
                     )
                     .when(system, |d| {
-                        d.child(div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
+                        d.child(div().text_xs().child(tr("Microphone language", "麦克风语言")))
+                        .child(div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
                             button(gpui_kit::ElementId::Name(format!("speech-language-{id}").into()), label)
                                 .when(language == id, |b| b.primary())
-                                .on_click(cx.listener(move |this, _, _, cx| this.choose_speech(true, Some(id), cx)))
+                                .on_click(cx.listener(move |this, _, _, cx| this.choose_speech(true, Some(id), false, cx)))
                         })))
+                        .when(self.form.saved.capture_source != "microphone", |d| {
+                            d.child(div().text_xs().child(tr("System audio language", "系统声音语言")))
+                                .child(div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
+                                    button(gpui_kit::ElementId::Name(format!("system-language-{id}").into()), label)
+                                        .when(self.form.saved.system_audio_language == id, |b| b.primary())
+                                        .on_click(cx.listener(move |this, _, _, cx| this.choose_speech(true, Some(id), true, cx)))
+                                })))
+                        })
                         .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                            "Apple's recognizer hears one language at a time. On macOS 26 it uses SpeechAnalyzer; on older systems, or where that can't be used, the older recognizer.",
-                            "Apple 的识别一次只听一种语言。macOS 26 上用 SpeechAnalyzer，更早的系统或用不了时改用旧的识别器。",
+                            "Auto needs the multilingual speech package. It gathers about five seconds of speech to choose Chinese, Japanese or English per source, then keeps that language until restarted. Initial captions wait for detection; short or mixed speech may need a manual choice. System language follows this Mac's locale. Apple recognition stays on this device.",
+                            "自动探测需要多语种语音包，积累每路约 5 秒开场语音后选择中、日或英语，保持到下次启动收音。首批字幕会等待探测完成；过短或混合语音可能需要手动选择。跟随系统使用 Mac 的语言设置。Apple 识别始终在本机进行。",
                         )))
                     })
             })
             .when_some(self.hearing.clone(), |d, with| d.child(div().text_xs().text_color(rgb(pal().muted)).child(format!("{} {with}", tr("Hearing with", "当前识别：")))))
+            .child(button("copy-audio-diagnostics", tr("Copy diagnostics", "复制诊断")).on_click(cx.listener(|this, _, _, cx| {
+                let ink = this.ink.borrow();
+                let report = this.pipeline.diagnostics(ink.drawings.json(ink.timings.len()));
+                cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(serde_json::to_string_pretty(&report).expect("diagnostics serialize")));
+                this.notice = Some(tr("Diagnostics copied. No transcript or audio is included.", "诊断已复制，不含会议文字或音频。").into());
+                cx.notify();
+            })))
+            .child(button("export-diagnostics", tr("Export diagnostics…", "导出诊断…")).on_click(cx.listener(|this, _, window, cx| this.open_diagnostics(window, cx))))
             .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Language", "语言")))
             .child({
                 let chosen = self.form.saved.interface_language.clone();
@@ -4511,6 +4745,7 @@ impl Render for Workbench {
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
         let import_panel = (self.panel == Panel::Import).then(|| self.import_panel(cx));
         let speakers_panel = (self.panel == Panel::Speakers).then(|| self.speakers_panel(editable, cx));
+        let diagnostics_panel = (self.panel == Panel::Diagnostics).then(|| self.diagnostics_panel(cx));
         let side = div()
             .id("side")
             .occlude()
@@ -4543,6 +4778,7 @@ impl Render for Workbench {
                         Panel::Import => tr("Import", "导入"),
                         Panel::Speakers => tr("Speakers", "说话人"),
                         Panel::Settings => tr("Settings", "设置"),
+                        Panel::Diagnostics => tr("Diagnostics", "诊断"),
                     }))
                     .child(icon_button("close-panel", "x", if self.panel == Panel::Transcript { tr("Hide the transcript", "收起转写") } else { tr("Back to the transcript (Esc)", "回到转写（Esc）") }).on_click(cx.listener(|this, _, _, cx| {
                         if this.panel == Panel::Transcript {
@@ -4588,6 +4824,7 @@ impl Render for Workbench {
             .when_some(export_panel, |d, panel| d.child(panel))
             .when_some(import_panel, |d, panel| d.child(panel))
             .when_some(speakers_panel, |d, panel| d.child(panel))
+            .when_some(diagnostics_panel, |d, panel| d.child(panel))
             .when(self.panel == Panel::Settings, |d| d.child(settings));
         let preparing_page = self.preparing.as_ref().filter(|p| p.showing()).map(|p| {
             let fraction = p.fraction();
@@ -4654,6 +4891,12 @@ impl Render for Workbench {
                         div().occlude().max_w(px(560.)).px_3().py_1().bg(rgb(pal().strong)).text_color(rgb(pal().on_strong)).text_sm().overflow_hidden().whitespace_nowrap().child(text),
                     ),
                 )
+            })
+            .when(!transcript_shown && !partials.is_empty(), |d| {
+                d.child(div().absolute().bottom(px(16.)).left_0().right_0().flex().justify_center().child(
+                    div().occlude().max_w(px(560.)).px_3().py_1().bg(rgb(pal().strong)).text_color(rgb(pal().on_strong)).text_sm().flex().flex_col().gap_1()
+                        .children(partials.into_iter().map(|(source, text)| div().max_h(px(140.)).overflow_hidden().child(div().text_xs().child(source)).child(text))),
+                ))
             })
             .when_some(notices, |d, notices| d.child(notices));
         let main = div()
@@ -4828,7 +5071,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let store = start_board.is_none().then(|| Store::new(data.clone()));
     let reopen = if turns.is_empty() && wav.is_none() { open.or_else(|| store.as_ref().and_then(Store::last_opened)) } else { None };
     let reads_meetings = store.is_some();
-    let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone() };
+    let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone(), system_language: settings.system_audio_language.clone() };
     let pipeline = Pipeline::start(backend, guidance, resources.voice, speech, Script { turns, wav });
     pipeline.session().set_glossary(Glossary::parse(&settings.glossary));
     std::thread::spawn(boardcast_agent::sound::warm);
@@ -4858,6 +5101,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 drawn: HashSet::new(),
                 last: None,
                 timings: vec![],
+                drawings: DrawingReport::default(),
                 graph: None,
                 next_tidy_batch: 0,
                 targets: vec![],
@@ -5025,6 +5269,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     library_query,
                     label_input,
                     form: SettingsForm { glossary, base_url, model, key, remote, saved: settings, note: None, probing: None },
+                    diagnostics: None,
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,
                     import: ImportState::Idle,
@@ -5037,6 +5282,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     title_input,
                     editing_title: false,
                     hearing: None,
+                    partials: [None, None],
                     speech_helper: Speech::helper_path(),
                     listening_since: None,
                     clock_second: 0,
@@ -5169,7 +5415,25 @@ fn page_number(graph: &Graph) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{encloses, page_ranges};
+    use super::{encloses, page_ranges, Drawing, DrawingReport};
+
+    #[test]
+    fn drawing_timings_are_bounded_and_keep_request_identity() {
+        let mut report = DrawingReport::default();
+        assert!(report.json(0)["start_after_result_ms"].is_null());
+        for request in 1..=130 {
+            report.push(Drawing { request, start_ms: request as u128, done_ms: request as u128 + 7, strokes: 4 });
+        }
+        report.interrupted = 2;
+        let value = report.json(3);
+        assert_eq!(value["completed"], 130);
+        assert_eq!(value["interrupted"], 2);
+        assert_eq!(value["pending"], 3);
+        assert_eq!(value["recent"].as_array().unwrap().len(), 128);
+        assert_eq!(value["recent"][0]["request"], 3);
+        assert_eq!(value["start_after_result_ms"]["max"], 130);
+        assert_eq!(value["done_after_result_ms"]["max"], 137);
+    }
 
     #[test]
     fn pages_to_import_are_read_from_numbers_and_ranges() {

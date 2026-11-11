@@ -1,0 +1,1639 @@
+{
+  "scope": "Local context overflow and loss of board tails. This is not full summary faithfulness acceptance; #68 stays open.",
+  "model": {
+    "name": "Qwen3.5-4B-Q4_K_M.gguf",
+    "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "llama_cpp": "b11954 (f1a7dea99)",
+    "runtime": "CPU, four threads, 4096 context, one slot",
+    "temperature": 0,
+    "repeat_penalty": 1.05,
+    "repeat_last_n": 256,
+    "enable_thinking": false
+  },
+  "before": {
+    "summary_source_sha256": "18f631b6d26dbbf5a508cf2c89c52e689ca1f00a06c13b40487d1876ec1baad8",
+    "head": "5e79a53b9d445fb8dea58c9f824e992921603a28",
+    "error_log": "Error: summarizing zh-many-boards-context\n\nCaused by:\n    model answered 400: {\"error\":{\"code\":400,\"message\":\"request (10891 tokens) exceeds the available context size (4096 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":10891,\"n_ctx\":4096}}\n",
+    "input": "First context case: twelve boards with 40 completed checks each and a Friday drill transcript. Checks were later strengthened without changing source text. The old path also truncated each board at 1500 UTF-16 units."
+  },
+  "implementation": "Count the complete rendered prompt with the running local server tokenizer, reserve output capacity, reduce oversized source and intermediate notes by complete lines where possible, reject non-shrinking reductions, honor cancellation between calls, and bound an empty-reply retry. A short original transcript remains verbatim when room permits. Source meeting data and fingerprints are untouched.",
+  "final_short": {
+    "label": "context-final-short",
+    "repeat": 1,
+    "cases_sha256": "5a2a198d31313d40274d1c70bc0c2c1556b2ebf479d46867b82f9dd7ce543b82",
+    "summary_source_sha256": "f7e12a51765e59c9f9aa948d8d637cfcf43d4c75dabf917785b502aeb2ee1f57",
+    "agent_source_sha256": "33d8c7a9f9b9b2488ebfead72d56147a958194cc3a554de6b1ad9f102677da0a",
+    "answers": [
+      {
+        "case": "zh-guess-stays-open",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+        "failures": [
+          "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+        ],
+        "elapsed_ms": 3563
+      },
+      {
+        "case": "zh-answered-question-closes",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 4435
+      },
+      {
+        "case": "zh-tentative-answer-stays-open",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+        "failures": [],
+        "elapsed_ms": 4460
+      },
+      {
+        "case": "zh-withdrawn-plan",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 4568
+      },
+      {
+        "case": "zh-letter-is-no-owner",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 3617
+      },
+      {
+        "case": "zh-in-the-moment-is-no-todo",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 3687
+      },
+      {
+        "case": "en-guess-stays-open",
+        "run": 1,
+        "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+        "failures": [
+          "Open questions has \"what are the two\""
+        ],
+        "elapsed_ms": 4201
+      },
+      {
+        "case": "en-answered-question-closes",
+        "run": 1,
+        "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback instead of making a hard cut.\n\n### Decisions\n\n### To-dos\n\n### Open questions",
+        "failures": [],
+        "elapsed_ms": 3922
+      },
+      {
+        "case": "zh-partial-answer-stays-open",
+        "run": 1,
+        "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+        "failures": [],
+        "elapsed_ms": 4853
+      },
+      {
+        "case": "en-partial-answer-stays-open",
+        "run": 1,
+        "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+        "failures": [],
+        "elapsed_ms": 4388
+      },
+      {
+        "case": "zh-template-retro",
+        "run": 1,
+        "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 7416
+      },
+      {
+        "case": "en-template-custom",
+        "run": 1,
+        "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+        "failures": [],
+        "elapsed_ms": 8820
+      },
+      {
+        "case": "zh-stated-date-beside-tentative-date",
+        "run": 1,
+        "summary": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+        "failures": [],
+        "elapsed_ms": 4433
+      },
+      {
+        "case": "zh-stated-date-corrected",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [
+          "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+        ],
+        "elapsed_ms": 3956
+      },
+      {
+        "case": "zh-explicit-condition-not-an-event",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+        "failures": [],
+        "elapsed_ms": 4790
+      }
+    ]
+  },
+  "final_context": {
+    "label": "context-final-long",
+    "repeat": 1,
+    "cases_sha256": "becfa501b8164b8d4a07c2a263bbf6f159cbf3b0c945e70ff60622a98fdf57a1",
+    "summary_source_sha256": "f7e12a51765e59c9f9aa948d8d637cfcf43d4c75dabf917785b502aeb2ee1f57",
+    "agent_source_sha256": "33d8c7a9f9b9b2488ebfead72d56147a958194cc3a554de6b1ad9f102677da0a",
+    "answers": [
+      {
+        "case": "zh-many-boards-context",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 后续处理方案或下一步行动计划（小林提出周五开始联合演练，但具体方案未定）",
+        "failures": [
+          "结论/决定 lacks any of [\"周五\"]",
+          "待讨论 lacks any of [\"无\"]"
+        ],
+        "elapsed_ms": 53818
+      },
+      {
+        "case": "zh-many-boards-late-correction",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n- 十二组服务检查完成，延迟范围为 81 毫秒至 120 毫秒\n- 上线时间由周五改为周四\n- 第 12 组服务旧上线安排已撤回\n\n### 待办\n- [ ] 小林于周三前补回归测试\n\n### 待讨论\n无",
+        "failures": [],
+        "elapsed_ms": 57032
+      },
+      {
+        "case": "en-many-boards-conditional",
+        "run": 1,
+        "summary": "### Conclusions\n- All readiness checks for Service Groups 1 through 12 (checkpoints 1–25 each) completed successfully with no failures observed.\n\n### Decisions\n- None\n\n### To-dos\n- [ ] Nora to write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday?",
+        "failures": [],
+        "elapsed_ms": 36025
+      },
+      {
+        "case": "en-conditional-raw-control",
+        "run": 1,
+        "summary": "### Conclusions\n- All readiness checks are complete.\n\n### Decisions\n- None\n\n### To-dos\n- Nora will write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday? (Rollback still needs discussion.)",
+        "failures": [],
+        "elapsed_ms": 5884
+      }
+    ]
+  },
+  "validation": {
+    "agent_tests": 46,
+    "tools_tests": 12,
+    "ui_cargo_check": "passed",
+    "http_requests_failed": 0,
+    "chat_calls_verified": 83,
+    "max_prompt_plus_reserved_output": 3924,
+    "context": 4096,
+    "preflight_equals_actual_prompt_tokens": true
+  },
+  "manual_review": [
+    "Final short suite remains 12/15: Wednesday omission, English quantity presupposition and Monday rehearsal omission remain.",
+    "Final context suite is 3/4 automated semantic checks, not complete quality acceptance. All three large board cases now generate instead of exceeding context.",
+    "Chinese Friday drill fails: the last generated board note invents unresolved next steps; the final output then drops completed checks and downgrades the explicit Friday schedule to an open plan despite retaining the original transcript.",
+    "Chinese correction retains Thursday instead of the withdrawn Friday plan and Xiaolin's Wednesday regression-test task. It puts completed checks in Decisions rather than Conclusions, a classification defect outside the current checks.",
+    "English long input retains the conditional rollback question and Nora's Wednesday guide task without asserting a failure, decided rollback, scheduled Thursday deployment or invented rollback owner.",
+    "The English raw control also passes semantics but omits the checkbox on its To-do, a formatting defect outside the current checks.",
+    "Synthetic board stress tests do not establish long spoken-meeting reliability or physical Mac performance. The local model and final-summary sampler were unchanged."
+  ],
+  "trials": [
+    {
+      "decision": "Rejected. Weak Friday-only checks passed, but manual inspection found invented unresolved checks and 480 total checks attributed to only four groups.",
+      "report": {
+        "label": "many-boards-after",
+        "repeat": 1,
+        "cases_sha256": "b7d9e34ced34e932591e5551cc36df3e717dbad1f99a7a4301c019949e35f65b",
+        "summary_source_sha256": "926b0fd6fc8ae19429e1873f69c7390d554ad79103ffd012a5f6bcabbc0d8832",
+        "agent_source_sha256": "33d8c7a9f9b9b2488ebfead72d56147a958194cc3a554de6b1ad9f102677da0a",
+        "answers": [
+          {
+            "case": "zh-many-boards-context",
+            "run": 1,
+            "summary": "### 结论\n- 第 1 至 5 组服务的所有检查项目已完成，延迟范围在 81 毫秒至 120 毫秒之间。\n- 第 6 至 9 组服务的所有已记录检查项目已完成，延迟范围在 81 毫秒至 120 毫秒之间。\n- 第 9、10、11、12 组服务的所有检查项目（共 480 项）已完成，具体延迟数据已记录在白板中。\n\n### 决定\n- 周五开始进行联合演练。\n\n### 待办\n- 无\n\n### 待讨论\n- 第 4 组服务的检查项目状态及具体延迟数据。\n- 第 6 组服务剩余检查项目的完成情况及延迟数据。\n- 第 7 组服务剩余检查项目的完成情况及延迟数据。\n- 第 8 组服务剩余检查项目的完成情况及延迟数据。\n- 第 9 组剩余检查项目的完成情况及延迟数据。\n- 联合演练的具体安排或后续步骤。",
+            "failures": [],
+            "elapsed_ms": 126357
+          }
+        ]
+      }
+    },
+    {
+      "decision": "Intermediate result only: preserving line boundaries and explicit partial-source rules passed the Chinese case; held-out English failed later.",
+      "report": {
+        "label": "many-boards-boundaries",
+        "repeat": 1,
+        "cases_sha256": "607876b721c63d390dd4a7ebec7f88f8c5d31661c162ce99c8964da3f2ac544e",
+        "summary_source_sha256": "1c82402f3963eb2d97375b986224f7afeb6aa8edded9cbf765f937afd1399fe6",
+        "agent_source_sha256": "33d8c7a9f9b9b2488ebfead72d56147a958194cc3a554de6b1ad9f102677da0a",
+        "answers": [
+          {
+            "case": "zh-many-boards-context",
+            "run": 1,
+            "summary": "### 结论\n- 第 1 至 12 组服务的所有检查项目（共 480 项）已完成，延迟数据已记录（各组延迟范围均为 81 毫秒至 120 毫秒）。\n\n### 决定\n- 周五开始进行联合演练。\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+            "failures": [],
+            "elapsed_ms": 113231
+          }
+        ]
+      }
+    },
+    {
+      "decision": "Rejected as a complete solution. Chinese correction passed; English weak checks missed a scheduled Thursday deployment and decided rollback invented from a conditional question. Stronger checks now reject these Decisions.",
+      "report": {
+        "label": "context-heldout",
+        "repeat": 1,
+        "cases_sha256": "04a58e69a399dd7e8032751b026f1e966acd91117cf7d8fe64ce4665602df567",
+        "summary_source_sha256": "1c82402f3963eb2d97375b986224f7afeb6aa8edded9cbf765f937afd1399fe6",
+        "agent_source_sha256": "33d8c7a9f9b9b2488ebfead72d56147a958194cc3a554de6b1ad9f102677da0a",
+        "answers": [
+          {
+            "case": "zh-many-boards-late-correction",
+            "run": 1,
+            "summary": "### 结论\n- 第 1 至 9 组服务已完成全部 40 项检查，延迟范围均为 81 毫秒至 120 毫秒。\n- 第 10、11、12 组服务的所有检查项目（共 120 项）已完成，延迟数据已记录。\n\n### 决定\n- 上线时间由周五改为周四。\n\n### 待办\n- [ ] 小林需在周三前补完回归测试。\n\n### 待讨论\n- 无",
+            "failures": [],
+            "elapsed_ms": 58644
+          },
+          {
+            "case": "en-many-boards-conditional",
+            "run": 1,
+            "summary": "### Conclusions\nAll readiness checkpoints (1–25) for Service Groups 1 through 8 completed successfully with no failures observed.\nAll readiness checkpoints (1–25) for Service Groups 9 through 12 completed successfully with no failures observed.\n\n### Decisions\nDeployment is scheduled for Thursday.\nIf deployment fails, a rollback will be executed.\nNora will write the rollout guide by Wednesday.\n\n### To-dos\n- [ ] Nora writes the rollout guide by Wednesday.\n\n### Open questions\nWho owns the rollback plan?",
+            "failures": [],
+            "elapsed_ms": 93218
+          }
+        ]
+      }
+    },
+    {
+      "decision": "English long input and raw-transcript control pass after retaining the short original transcript.",
+      "report": {
+        "label": "context-verbatim",
+        "repeat": 1,
+        "cases_sha256": "01f1be599e0ce73a310ee240ebe7c958361b02712b99b6a8ab66fcb398e2b9df",
+        "summary_source_sha256": "d99e7bf0b76818a849b925a9aaab22046fe03bf6457924ee85f1ca4449b3c4ec",
+        "agent_source_sha256": "33d8c7a9f9b9b2488ebfead72d56147a958194cc3a554de6b1ad9f102677da0a",
+        "answers": [
+          {
+            "case": "en-many-boards-conditional",
+            "run": 1,
+            "summary": "### Conclusions\n- All readiness checks for Service Groups 1 through 12 (checkpoints 1–25 each) completed successfully with no failures observed.\n\n### Decisions\n- None\n\n### To-dos\n- [ ] Nora to write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday?",
+            "failures": [],
+            "elapsed_ms": 38483
+          },
+          {
+            "case": "en-conditional-raw-control",
+            "run": 1,
+            "summary": "### Conclusions\n- All readiness checks are complete.\n\n### Decisions\n- None\n\n### To-dos\n- Nora will write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday? (Rollback still needs discussion.)",
+            "failures": [],
+            "elapsed_ms": 5840
+          }
+        ]
+      }
+    },
+    {
+      "decision": "Chinese follow-up: retaining the original transcript does not prevent invented open issues in generated board notes.",
+      "report": {
+        "label": "context-verbatim-zh",
+        "repeat": 1,
+        "cases_sha256": "01f1be599e0ce73a310ee240ebe7c958361b02712b99b6a8ab66fcb398e2b9df",
+        "summary_source_sha256": "d99e7bf0b76818a849b925a9aaab22046fe03bf6457924ee85f1ca4449b3c4ec",
+        "agent_source_sha256": "33d8c7a9f9b9b2488ebfead72d56147a958194cc3a554de6b1ad9f102677da0a",
+        "answers": [
+          {
+            "case": "zh-many-boards-context",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 后续处理方案或下一步行动计划（小林提出周五开始联合演练，但具体方案未定）",
+            "failures": [
+              "结论/决定 lacks any of [\"周五\"]",
+              "待讨论 lacks any of [\"无\"]"
+            ],
+            "elapsed_ms": 53718
+          },
+          {
+            "case": "zh-many-boards-late-correction",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n- 十二组服务检查完成，延迟范围为 81 毫秒至 120 毫秒\n- 上线时间由周五改为周四\n- 第 12 组服务旧上线安排已撤回\n\n### 待办\n- [ ] 小林于周三前补回归测试\n\n### 待讨论\n无",
+            "failures": [],
+            "elapsed_ms": 57382
+          }
+        ]
+      }
+    }
+  ],
+  "trace_ranges": {
+    "initial_short": [
+      0,
+      15
+    ],
+    "line_boundary_trial": [
+      15,
+      21
+    ],
+    "heldout_before_verbatim": [
+      21,
+      32
+    ],
+    "english_verbatim_and_control": [
+      32,
+      38
+    ],
+    "chinese_verbatim": [
+      38,
+      50
+    ],
+    "final_short": [
+      50,
+      65
+    ],
+    "final_context": [
+      65,
+      83
+    ]
+  },
+  "trace_ranges_are": "zero-based, end-exclusive",
+  "trace": [
+    {
+      "index": 0,
+      "messages_sha256": "19020c2a6097281c7bfce0ba61217e0a4134e7ebeea2f65bff5cd09c5a658bbb",
+      "preflight_prompt_tokens": 582,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 30,
+        "prompt_tokens": 582,
+        "total_tokens": 612,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+    },
+    {
+      "index": 1,
+      "messages_sha256": "f441ea942e1df7526fad3acebcf4732aef96a4b4c71504eb301515f78ad01b2a",
+      "preflight_prompt_tokens": 581,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 581,
+        "total_tokens": 623,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 三次重试还是不满足要求，之后怎么办？\n> 这时就动态缩小字号兜底。\n> 好，那就不做硬切了，就用缩小字号。"
+    },
+    {
+      "index": 2,
+      "messages_sha256": "69198506a0771b97e509df199e5a5ab5c236782b6af76467c62668b81579dbac",
+      "preflight_prompt_tokens": 578,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 43,
+        "prompt_tokens": 578,
+        "total_tokens": 621,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 三次重试还是不满足要求，之后怎么办？\n> 也许可以缩小字号，不过得稍后验证一下。\n> 嗯，先记下来。"
+    },
+    {
+      "index": 3,
+      "messages_sha256": "2eff2cedbd38f76b935ef51ed2e83d04f92b840eb0f03f1718aebb877bf7d7c9",
+      "preflight_prompt_tokens": 591,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 41,
+        "prompt_tokens": 591,
+        "total_tokens": 632,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 我们先用方案一，直接硬切。\n> 硬切会把字从中间切断，不太好。\n> 那方案一撤回，改用方案二，按词换行。\n> 同意方案二。"
+    },
+    {
+      "index": 4,
+      "messages_sha256": "350eea65599bbdd11264f771cc16ae55369f6a6992c268308bae570245e236cd",
+      "preflight_prompt_tokens": 562,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 34,
+        "prompt_tokens": 562,
+        "total_tokens": 596,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 接口文档我来写，周五前发给大家。\n> 好的，没问题。"
+    },
+    {
+      "index": 5,
+      "messages_sha256": "0931c59e59449e54a88d19f3a900940b30e8b48e0a5bdd7f4a204819ebe439a6",
+      "preflight_prompt_tokens": 579,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 34,
+        "prompt_tokens": 579,
+        "total_tokens": 613,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 我们先看一下这段视频。\n> 嗯，这里卡顿很明显。\n> 卡顿问题要查一下，小王负责。\n> 好，我来查。"
+    },
+    {
+      "index": 6,
+      "messages_sha256": "eb366c56be2533e88fccc0faa42302823d48ad793372bf0a00d066658e3404a3",
+      "preflight_prompt_tokens": 627,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 38,
+        "prompt_tokens": 627,
+        "total_tokens": 665,
+        "prompt_tokens_details": {
+          "cached_tokens": 623
+        }
+      },
+      "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+    },
+    {
+      "index": 7,
+      "messages_sha256": "e1ca952a5ed07db4793ae97f35f150aa7abcc1fb7a240e5fca7d9a81e960b0f8",
+      "preflight_prompt_tokens": 630,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 37,
+        "prompt_tokens": 630,
+        "total_tokens": 667,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "raw_reply": "### Conclusions\n- If three retries fail, shrink the font as a fallback instead of making a hard cut.\n\n### Decisions\n\n### To-dos\n\n### Open questions",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> If three retries still don't fit, what do we do then?\n> Then we shrink the font as a fallback.\n> Good, so no hard cut, we shrink the font."
+    },
+    {
+      "index": 8,
+      "messages_sha256": "e39d29725dd11dfde515975a637db42802776e7f87a5e2068350772909b55992",
+      "preflight_prompt_tokens": 580,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 44,
+        "prompt_tokens": 580,
+        "total_tokens": 624,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 缓存保留多久，过期后谁来刷新？\n> 保留十分钟。刷新负责人还没有定。\n> 好，保留时间就定十分钟，负责人下次讨论。"
+    },
+    {
+      "index": 9,
+      "messages_sha256": "93fbbbba914c00af96eeb798af598f8e3f2786ead407b65bda7829e291b6efd4",
+      "preflight_prompt_tokens": 632,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 40,
+        "prompt_tokens": 632,
+        "total_tokens": 672,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "raw_reply": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> How long should the cache live, and who will refresh it?\n> Ten minutes. We have not chosen a refresh owner.\n> Agreed on ten minutes. We will discuss ownership next time."
+    },
+    {
+      "index": 10,
+      "messages_sha256": "5b192b65432d82314db226263243f6a6f065b86a6d99b067af3a9a910c145f66",
+      "preflight_prompt_tokens": 692,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 78,
+        "prompt_tokens": 692,
+        "total_tokens": 770,
+        "prompt_tokens_details": {
+          "cached_tokens": 66
+        }
+      },
+      "raw_reply": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 小李：做得好的方面，这次发布没有停机。\n> 小王：要改进的方面，告警还是来得太晚。\n> 小李：同意，下次发布前由小王补上告警测试。\n> 小王：我来补。"
+    },
+    {
+      "index": 11,
+      "messages_sha256": "2e1b5cd1345f20a5fc68153def4fbb206bc3b54d85cb57d35cd195efce5a39d1",
+      "preflight_prompt_tokens": 721,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 68,
+        "prompt_tokens": 721,
+        "total_tokens": 789,
+        "prompt_tokens_details": {
+          "cached_tokens": 111
+        }
+      },
+      "raw_reply": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n#### Hiring\n- None\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> Mina: For Latency, the measured p95 is eighty milliseconds.\n> Ravi: For Rollout, the canary has finished without errors.\n> Mina: We agree to enable the release tomorrow."
+    },
+    {
+      "index": 12,
+      "messages_sha256": "f0ec282f43cfc816371c7ed79f1a0f16f047ae76d0e697334121c3e6bcd28310",
+      "preflight_prompt_tokens": 579,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 41,
+        "prompt_tokens": 579,
+        "total_tokens": 620,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 桌面版周四发布，这是已经定下来的安排。\n> 移动版要不周五发布？\n> 移动版的日期还没定，先别按周五排。"
+    },
+    {
+      "index": 13,
+      "messages_sha256": "33e12b7197826b9077e363b91d5f79ffce317b7d285a13a4d3412ad66c83eb75",
+      "preflight_prompt_tokens": 577,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 37,
+        "prompt_tokens": 577,
+        "total_tokens": 614,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+    },
+    {
+      "index": 14,
+      "messages_sha256": "2f5bebf2f9153e5a7e28291202e550736667fa9d301a2fabfaa1307ee97a5faa",
+      "preflight_prompt_tokens": 585,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 46,
+        "prompt_tokens": 585,
+        "total_tokens": 631,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+    },
+    {
+      "index": 15,
+      "messages_sha256": "014a9a8551bcf16594201d9159703ded583e634246aa51db77ed9cdc125484f7",
+      "preflight_prompt_tokens": 2201,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2201,
+        "total_tokens": 2271,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "raw_reply": "- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 16,
+      "messages_sha256": "7938bb37a3ce947f5281803aa50cfa8b63c6696f703038dcce225d53f645cca9",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 476
+        }
+      },
+      "raw_reply": "- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 17,
+      "messages_sha256": "e2c3486438bc582aed0c0b9d31846f52f0f699fb669703f8fcd5abb1b7427b1d",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 476
+        }
+      },
+      "raw_reply": "- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 18,
+      "messages_sha256": "d14a9f11dd55891525cbd45932fd93673ee1a52503fad94bbf35dfe3da2d3a6f",
+      "preflight_prompt_tokens": 3047,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 102,
+        "prompt_tokens": 3047,
+        "total_tokens": 3149,
+        "prompt_tokens_details": {
+          "cached_tokens": 476
+        }
+      },
+      "raw_reply": "- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 19,
+      "messages_sha256": "9677c549698a9b9d59780dc02987a7665546af4d759c7d66f1666350150b5989",
+      "preflight_prompt_tokens": 3192,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 60,
+        "prompt_tokens": 3192,
+        "total_tokens": 3252,
+        "prompt_tokens_details": {
+          "cached_tokens": 476
+        }
+      },
+      "raw_reply": "- 结论：第 10、11、12 组服务的所有检查项目（共 120 项）已完成，延迟数据已记录。\n- 决定：周五开始进行联合演练。\n- 待讨论：无明确未决事项。"
+    },
+    {
+      "index": 20,
+      "messages_sha256": "5125323a14c2c556ffda9b0ea951f7657581967f2312969d3c7cb9c165109a5e",
+      "preflight_prompt_tokens": 948,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 85,
+        "prompt_tokens": 948,
+        "total_tokens": 1033,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n- 第 1 至 12 组服务的所有检查项目（共 480 项）已完成，延迟数据已记录（各组延迟范围均为 81 毫秒至 120 毫秒）。\n\n### 决定\n- 周五开始进行联合演练。\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 2 段：\n- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n\n第 3 段：\n- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 4 段：\n- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n\n第 5 段：\n- 结论：第 10、11、12 组服务的所有检查项目（共 120 项）已完成，延迟数据已记录。\n- 决定：周五开始进行联合演练。\n- 待讨论：无明确未决事项。"
+    },
+    {
+      "index": 21,
+      "messages_sha256": "014a9a8551bcf16594201d9159703ded583e634246aa51db77ed9cdc125484f7",
+      "preflight_prompt_tokens": 2201,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2201,
+        "total_tokens": 2271,
+        "prompt_tokens_details": {
+          "cached_tokens": 2197
+        }
+      },
+      "raw_reply": "- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 22,
+      "messages_sha256": "7938bb37a3ce947f5281803aa50cfa8b63c6696f703038dcce225d53f645cca9",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 2192
+        }
+      },
+      "raw_reply": "- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 23,
+      "messages_sha256": "e2c3486438bc582aed0c0b9d31846f52f0f699fb669703f8fcd5abb1b7427b1d",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 2192
+        }
+      },
+      "raw_reply": "- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 24,
+      "messages_sha256": "d14a9f11dd55891525cbd45932fd93673ee1a52503fad94bbf35dfe3da2d3a6f",
+      "preflight_prompt_tokens": 3047,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 102,
+        "prompt_tokens": 3047,
+        "total_tokens": 3149,
+        "prompt_tokens_details": {
+          "cached_tokens": 3043
+        }
+      },
+      "raw_reply": "- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 25,
+      "messages_sha256": "19af5f8c366bfbc69648806c518801f6d32377a034bca83a19c60772e9436460",
+      "preflight_prompt_tokens": 3245,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 102,
+        "prompt_tokens": 3245,
+        "total_tokens": 3347,
+        "prompt_tokens_details": {
+          "cached_tokens": 2676
+        }
+      },
+      "raw_reply": "- 结论：第 10、11、12 组服务的所有检查项目（共 120 项）已完成，延迟数据已记录。\n- 决定：上线时间由周五改为周四。\n- 待办：小林需在周三前补完回归测试。\n- 待讨论：无明确未决事项（注：原白板提及的“旧上线安排”已被明确撤回并替换为新方案，故不再作为待讨论项）。"
+    },
+    {
+      "index": 26,
+      "messages_sha256": "c3ccf1ffc4274bd2a70c71cbb8947f9acd89371065913692775e5736a74acc1d",
+      "preflight_prompt_tokens": 990,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 119,
+        "prompt_tokens": 990,
+        "total_tokens": 1109,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n- 第 1 至 9 组服务已完成全部 40 项检查，延迟范围均为 81 毫秒至 120 毫秒。\n- 第 10、11、12 组服务的所有检查项目（共 120 项）已完成，延迟数据已记录。\n\n### 决定\n- 上线时间由周五改为周四。\n\n### 待办\n- [ ] 小林需在周三前补完回归测试。\n\n### 待讨论\n- 无",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 2 段：\n- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n\n第 3 段：\n- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 4 段：\n- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n\n第 5 段：\n- 结论：第 10、11、12 组服务的所有检查项目（共 120 项）已完成，延迟数据已记录。\n- 决定：上线时间由周五改为周四。\n- 待办：小林需在周三前补完回归测试。\n- 待讨论：无明确未决事项（注：原白板提及的“旧上线安排”已被明确撤回并替换为新方案，故不再作为待讨论项）。"
+    },
+    {
+      "index": 27,
+      "messages_sha256": "b98aefaea40430f3362939f3766e4d5e9b9671a9c5f3cce57464fb9054fefefc",
+      "preflight_prompt_tokens": 1881,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 1881,
+        "total_tokens": 1923,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "raw_reply": "- Service Group 1 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 2 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 28,
+      "messages_sha256": "287c22edb8f8c283376164e64d5d4389a310727fb9621512c73cfc4fe6cfa794",
+      "preflight_prompt_tokens": 1875,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 1875,
+        "total_tokens": 1917,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "raw_reply": "- Service group 3 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 4 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 29,
+      "messages_sha256": "a0b9a3f0902ab42415c337452c83c15e27484d7ff3856238c408a2f03c50d1b0",
+      "preflight_prompt_tokens": 3199,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 84,
+        "prompt_tokens": 3199,
+        "total_tokens": 3283,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "raw_reply": "- Service Group 5 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 6 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 7 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 8 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 30,
+      "messages_sha256": "81b77747c353bf6c539b97683262d91341c000d7ed138264f9c24ec72ed2a118",
+      "preflight_prompt_tokens": 3324,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 97,
+        "prompt_tokens": 3324,
+        "total_tokens": 3421,
+        "prompt_tokens_details": {
+          "cached_tokens": 534
+        }
+      },
+      "raw_reply": "- Conclusions: All readiness checkpoints (1–25) for service groups 9, 10, 11, and 12 have completed successfully with no failures observed.\n- Decisions: Deployment is scheduled for Thursday; if it fails, a rollback will be executed.\n- To-dos: Nora to write the rollout guide by Wednesday.\n- Open questions: Who owns the rollback plan? (Note: Rollback strategy still needs discussion)."
+    },
+    {
+      "index": 31,
+      "messages_sha256": "e1af01bd008b3f04a02da9345b2faf1447067b6235efbbdd721dfb034fd68f57",
+      "preflight_prompt_tokens": 876,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 116,
+        "prompt_tokens": 876,
+        "total_tokens": 992,
+        "prompt_tokens_details": {
+          "cached_tokens": 205
+        }
+      },
+      "raw_reply": "### Conclusions\nAll readiness checkpoints (1–25) for Service Groups 1 through 8 completed successfully with no failures observed.\nAll readiness checkpoints (1–25) for Service Groups 9 through 12 completed successfully with no failures observed.\n\n### Decisions\nDeployment is scheduled for Thursday.\nIf deployment fails, a rollback will be executed.\nNora will write the rollout guide by Wednesday.\n\n### To-dos\n- [ ] Nora writes the rollout guide by Wednesday.\n\n### Open questions\nWho owns the rollback plan?",
+      "final_input": "The transcript is too long; these are the notes taken part by part:\nPart 1:\n- Service Group 1 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 2 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nPart 2:\n- Service group 3 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 4 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nPart 3:\n- Service Group 5 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 6 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 7 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 8 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nPart 4:\n- Conclusions: All readiness checkpoints (1–25) for service groups 9, 10, 11, and 12 have completed successfully with no failures observed.\n- Decisions: Deployment is scheduled for Thursday; if it fails, a rollback will be executed.\n- To-dos: Nora to write the rollout guide by Wednesday.\n- Open questions: Who owns the rollback plan? (Note: Rollback strategy still needs discussion)."
+    },
+    {
+      "index": 32,
+      "messages_sha256": "b98aefaea40430f3362939f3766e4d5e9b9671a9c5f3cce57464fb9054fefefc",
+      "preflight_prompt_tokens": 1881,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 1881,
+        "total_tokens": 1923,
+        "prompt_tokens_details": {
+          "cached_tokens": 1877
+        }
+      },
+      "raw_reply": "- Service Group 1 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 2 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 33,
+      "messages_sha256": "287c22edb8f8c283376164e64d5d4389a310727fb9621512c73cfc4fe6cfa794",
+      "preflight_prompt_tokens": 1875,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 1875,
+        "total_tokens": 1917,
+        "prompt_tokens_details": {
+          "cached_tokens": 1871
+        }
+      },
+      "raw_reply": "- Service group 3 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 4 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 34,
+      "messages_sha256": "a0b9a3f0902ab42415c337452c83c15e27484d7ff3856238c408a2f03c50d1b0",
+      "preflight_prompt_tokens": 3199,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 84,
+        "prompt_tokens": 3199,
+        "total_tokens": 3283,
+        "prompt_tokens_details": {
+          "cached_tokens": 3195
+        }
+      },
+      "raw_reply": "- Service Group 5 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 6 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 7 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 8 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 35,
+      "messages_sha256": "2e0e101b3ab93fd06bf524390f599a23f0f6f40a00c9c8b8d70cba903de0d989",
+      "preflight_prompt_tokens": 3277,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 87,
+        "prompt_tokens": 3277,
+        "total_tokens": 3364,
+        "prompt_tokens_details": {
+          "cached_tokens": 2808
+        }
+      },
+      "raw_reply": "- Service group 9 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 10 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 11 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 12 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 36,
+      "messages_sha256": "62c00f4c8e1c0a5acf97e709e8f12fc951e92db66ae3a8c1e01a720c05d44897",
+      "preflight_prompt_tokens": 913,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 76,
+        "prompt_tokens": 913,
+        "total_tokens": 989,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "raw_reply": "### Conclusions\n- All readiness checks for Service Groups 1 through 12 (checkpoints 1–25 each) completed successfully with no failures observed.\n\n### Decisions\n- None\n\n### To-dos\n- [ ] Nora to write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday?",
+      "final_input": "The transcript is too long; these are the notes taken part by part:\nPart 1:\n- Service Group 1 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 2 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nPart 2:\n- Service group 3 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 4 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nPart 3:\n- Service Group 5 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 6 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 7 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 8 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nPart 4:\n- Service group 9 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 10 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 11 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 12 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nTranscript:\n> All readiness checks are complete. If deployment fails on Thursday, should we roll back?\n> Rollback still needs discussion. Deployment has not started.\n> Nora will write the rollout guide by Wednesday."
+    },
+    {
+      "index": 37,
+      "messages_sha256": "8172a2b67a1d922e7c500ee2593bf2dce121847f14b940eb6cd2436d5126b85b",
+      "preflight_prompt_tokens": 632,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 58,
+        "prompt_tokens": 632,
+        "total_tokens": 690,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "raw_reply": "### Conclusions\n- All readiness checks are complete.\n\n### Decisions\n- None\n\n### To-dos\n- Nora will write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday? (Rollback still needs discussion.)",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> All readiness checks are complete. If deployment fails on Thursday, should we roll back?\n> Rollback still needs discussion. Deployment has not started.\n> Nora will write the rollout guide by Wednesday."
+    },
+    {
+      "index": 38,
+      "messages_sha256": "014a9a8551bcf16594201d9159703ded583e634246aa51db77ed9cdc125484f7",
+      "preflight_prompt_tokens": 2201,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2201,
+        "total_tokens": 2271,
+        "prompt_tokens_details": {
+          "cached_tokens": 2197
+        }
+      },
+      "raw_reply": "- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 39,
+      "messages_sha256": "7938bb37a3ce947f5281803aa50cfa8b63c6696f703038dcce225d53f645cca9",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 2192
+        }
+      },
+      "raw_reply": "- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 40,
+      "messages_sha256": "e2c3486438bc582aed0c0b9d31846f52f0f699fb669703f8fcd5abb1b7427b1d",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 2192
+        }
+      },
+      "raw_reply": "- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 41,
+      "messages_sha256": "d14a9f11dd55891525cbd45932fd93673ee1a52503fad94bbf35dfe3da2d3a6f",
+      "preflight_prompt_tokens": 3047,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 102,
+        "prompt_tokens": 3047,
+        "total_tokens": 3149,
+        "prompt_tokens_details": {
+          "cached_tokens": 3043
+        }
+      },
+      "raw_reply": "- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 42,
+      "messages_sha256": "b5c6c03dd16be423675b8f1e3ce65335071cfdb04cd8d8b15c0f7724da04edb9",
+      "preflight_prompt_tokens": 3170,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 128,
+        "prompt_tokens": 3170,
+        "total_tokens": 3298,
+        "prompt_tokens_details": {
+          "cached_tokens": 2729
+        }
+      },
+      "raw_reply": "- 第 10 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 11 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 未定事项：后续处理方案或下一步行动计划（本段未明确提及）。"
+    },
+    {
+      "index": 43,
+      "messages_sha256": "40479b5fbebb3c5ed86e7d1edad3a762d2c648f29c95507277f6d1fb3ae5f151",
+      "preflight_prompt_tokens": 1038,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 47,
+        "prompt_tokens": 1038,
+        "total_tokens": 1085,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 后续处理方案或下一步行动计划（小林提出周五开始联合演练，但具体方案未定）",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 2 段：\n- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n\n第 3 段：\n- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 4 段：\n- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n\n第 5 段：\n- 第 10 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 11 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 未定事项：后续处理方案或下一步行动计划（本段未明确提及）。\n\n会议记录：\n> 小林：以上十二组服务的检查都完成了，周五开始联合演练。"
+    },
+    {
+      "index": 44,
+      "messages_sha256": "014a9a8551bcf16594201d9159703ded583e634246aa51db77ed9cdc125484f7",
+      "preflight_prompt_tokens": 2201,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2201,
+        "total_tokens": 2271,
+        "prompt_tokens_details": {
+          "cached_tokens": 2197
+        }
+      },
+      "raw_reply": "- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 45,
+      "messages_sha256": "7938bb37a3ce947f5281803aa50cfa8b63c6696f703038dcce225d53f645cca9",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 2192
+        }
+      },
+      "raw_reply": "- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 46,
+      "messages_sha256": "e2c3486438bc582aed0c0b9d31846f52f0f699fb669703f8fcd5abb1b7427b1d",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 2192
+        }
+      },
+      "raw_reply": "- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 47,
+      "messages_sha256": "d14a9f11dd55891525cbd45932fd93673ee1a52503fad94bbf35dfe3da2d3a6f",
+      "preflight_prompt_tokens": 3047,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 102,
+        "prompt_tokens": 3047,
+        "total_tokens": 3149,
+        "prompt_tokens_details": {
+          "cached_tokens": 3043
+        }
+      },
+      "raw_reply": "- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 48,
+      "messages_sha256": "ba81ec32d65ae89bc29ca3bfd449859037d1604e4f4697842634d4bc6eecb5ae",
+      "preflight_prompt_tokens": 3185,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 127,
+        "prompt_tokens": 3185,
+        "total_tokens": 3312,
+        "prompt_tokens_details": {
+          "cached_tokens": 2729
+        }
+      },
+      "raw_reply": "- 第 10 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 11 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务的前 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务确认了旧的上线安排为周五上线。"
+    },
+    {
+      "index": 49,
+      "messages_sha256": "c2064b46bf8aba2725b153a0d77c631ca36063a0959573d129a0a2df669937e0",
+      "preflight_prompt_tokens": 1075,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 81,
+        "prompt_tokens": 1075,
+        "total_tokens": 1156,
+        "prompt_tokens_details": {
+          "cached_tokens": 522
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 十二组服务检查完成，延迟范围为 81 毫秒至 120 毫秒\n- 上线时间由周五改为周四\n- 第 12 组服务旧上线安排已撤回\n\n### 待办\n- [ ] 小林于周三前补回归测试\n\n### 待讨论\n无",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 2 段：\n- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n\n第 3 段：\n- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 4 段：\n- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n\n第 5 段：\n- 第 10 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 11 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务的前 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务确认了旧的上线安排为周五上线。\n\n会议记录：\n> 小林：这十二组服务的检查都完成了。白板上的周五上线安排已经撤回，改为周四上线。\n> 小陈：同意，按周四上线。小林周三前补回归测试。\n> 小林：我会在周三前补好。"
+    },
+    {
+      "index": 50,
+      "messages_sha256": "19020c2a6097281c7bfce0ba61217e0a4134e7ebeea2f65bff5cd09c5a658bbb",
+      "preflight_prompt_tokens": 582,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 30,
+        "prompt_tokens": 582,
+        "total_tokens": 612,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+    },
+    {
+      "index": 51,
+      "messages_sha256": "f441ea942e1df7526fad3acebcf4732aef96a4b4c71504eb301515f78ad01b2a",
+      "preflight_prompt_tokens": 581,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 581,
+        "total_tokens": 623,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 三次重试还是不满足要求，之后怎么办？\n> 这时就动态缩小字号兜底。\n> 好，那就不做硬切了，就用缩小字号。"
+    },
+    {
+      "index": 52,
+      "messages_sha256": "69198506a0771b97e509df199e5a5ab5c236782b6af76467c62668b81579dbac",
+      "preflight_prompt_tokens": 578,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 43,
+        "prompt_tokens": 578,
+        "total_tokens": 621,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 三次重试还是不满足要求，之后怎么办？\n> 也许可以缩小字号，不过得稍后验证一下。\n> 嗯，先记下来。"
+    },
+    {
+      "index": 53,
+      "messages_sha256": "2eff2cedbd38f76b935ef51ed2e83d04f92b840eb0f03f1718aebb877bf7d7c9",
+      "preflight_prompt_tokens": 591,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 41,
+        "prompt_tokens": 591,
+        "total_tokens": 632,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 我们先用方案一，直接硬切。\n> 硬切会把字从中间切断，不太好。\n> 那方案一撤回，改用方案二，按词换行。\n> 同意方案二。"
+    },
+    {
+      "index": 54,
+      "messages_sha256": "350eea65599bbdd11264f771cc16ae55369f6a6992c268308bae570245e236cd",
+      "preflight_prompt_tokens": 562,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 34,
+        "prompt_tokens": 562,
+        "total_tokens": 596,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 接口文档我来写，周五前发给大家。\n> 好的，没问题。"
+    },
+    {
+      "index": 55,
+      "messages_sha256": "0931c59e59449e54a88d19f3a900940b30e8b48e0a5bdd7f4a204819ebe439a6",
+      "preflight_prompt_tokens": 579,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 34,
+        "prompt_tokens": 579,
+        "total_tokens": 613,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 我们先看一下这段视频。\n> 嗯，这里卡顿很明显。\n> 卡顿问题要查一下，小王负责。\n> 好，我来查。"
+    },
+    {
+      "index": 56,
+      "messages_sha256": "eb366c56be2533e88fccc0faa42302823d48ad793372bf0a00d066658e3404a3",
+      "preflight_prompt_tokens": 627,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 38,
+        "prompt_tokens": 627,
+        "total_tokens": 665,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+    },
+    {
+      "index": 57,
+      "messages_sha256": "e1ca952a5ed07db4793ae97f35f150aa7abcc1fb7a240e5fca7d9a81e960b0f8",
+      "preflight_prompt_tokens": 630,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 37,
+        "prompt_tokens": 630,
+        "total_tokens": 667,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "raw_reply": "### Conclusions\n- If three retries fail, shrink the font as a fallback instead of making a hard cut.\n\n### Decisions\n\n### To-dos\n\n### Open questions",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> If three retries still don't fit, what do we do then?\n> Then we shrink the font as a fallback.\n> Good, so no hard cut, we shrink the font."
+    },
+    {
+      "index": 58,
+      "messages_sha256": "e39d29725dd11dfde515975a637db42802776e7f87a5e2068350772909b55992",
+      "preflight_prompt_tokens": 580,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 44,
+        "prompt_tokens": 580,
+        "total_tokens": 624,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 缓存保留多久，过期后谁来刷新？\n> 保留十分钟。刷新负责人还没有定。\n> 好，保留时间就定十分钟，负责人下次讨论。"
+    },
+    {
+      "index": 59,
+      "messages_sha256": "93fbbbba914c00af96eeb798af598f8e3f2786ead407b65bda7829e291b6efd4",
+      "preflight_prompt_tokens": 632,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 40,
+        "prompt_tokens": 632,
+        "total_tokens": 672,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "raw_reply": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> How long should the cache live, and who will refresh it?\n> Ten minutes. We have not chosen a refresh owner.\n> Agreed on ten minutes. We will discuss ownership next time."
+    },
+    {
+      "index": 60,
+      "messages_sha256": "5b192b65432d82314db226263243f6a6f065b86a6d99b067af3a9a910c145f66",
+      "preflight_prompt_tokens": 692,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 78,
+        "prompt_tokens": 692,
+        "total_tokens": 770,
+        "prompt_tokens_details": {
+          "cached_tokens": 688
+        }
+      },
+      "raw_reply": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 小李：做得好的方面，这次发布没有停机。\n> 小王：要改进的方面，告警还是来得太晚。\n> 小李：同意，下次发布前由小王补上告警测试。\n> 小王：我来补。"
+    },
+    {
+      "index": 61,
+      "messages_sha256": "2e1b5cd1345f20a5fc68153def4fbb206bc3b54d85cb57d35cd195efce5a39d1",
+      "preflight_prompt_tokens": 721,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 68,
+        "prompt_tokens": 721,
+        "total_tokens": 789,
+        "prompt_tokens_details": {
+          "cached_tokens": 360
+        }
+      },
+      "raw_reply": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n#### Hiring\n- None\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> Mina: For Latency, the measured p95 is eighty milliseconds.\n> Ravi: For Rollout, the canary has finished without errors.\n> Mina: We agree to enable the release tomorrow."
+    },
+    {
+      "index": 62,
+      "messages_sha256": "f0ec282f43cfc816371c7ed79f1a0f16f047ae76d0e697334121c3e6bcd28310",
+      "preflight_prompt_tokens": 579,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 41,
+        "prompt_tokens": 579,
+        "total_tokens": 620,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期是否定为周五",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 桌面版周四发布，这是已经定下来的安排。\n> 移动版要不周五发布？\n> 移动版的日期还没定，先别按周五排。"
+    },
+    {
+      "index": 63,
+      "messages_sha256": "33e12b7197826b9077e363b91d5f79ffce317b7d285a13a4d3412ad66c83eb75",
+      "preflight_prompt_tokens": 577,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 37,
+        "prompt_tokens": 577,
+        "total_tokens": 614,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+    },
+    {
+      "index": 64,
+      "messages_sha256": "2f5bebf2f9153e5a7e28291202e550736667fa9d301a2fabfaa1307ee97a5faa",
+      "preflight_prompt_tokens": 585,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 46,
+        "prompt_tokens": 585,
+        "total_tokens": 631,
+        "prompt_tokens_details": {
+          "cached_tokens": 518
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+      "final_input": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+    },
+    {
+      "index": 65,
+      "messages_sha256": "014a9a8551bcf16594201d9159703ded583e634246aa51db77ed9cdc125484f7",
+      "preflight_prompt_tokens": 2201,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2201,
+        "total_tokens": 2271,
+        "prompt_tokens_details": {
+          "cached_tokens": 2197
+        }
+      },
+      "raw_reply": "- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 66,
+      "messages_sha256": "7938bb37a3ce947f5281803aa50cfa8b63c6696f703038dcce225d53f645cca9",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 2192
+        }
+      },
+      "raw_reply": "- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 67,
+      "messages_sha256": "e2c3486438bc582aed0c0b9d31846f52f0f699fb669703f8fcd5abb1b7427b1d",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 2192
+        }
+      },
+      "raw_reply": "- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 68,
+      "messages_sha256": "d14a9f11dd55891525cbd45932fd93673ee1a52503fad94bbf35dfe3da2d3a6f",
+      "preflight_prompt_tokens": 3047,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 102,
+        "prompt_tokens": 3047,
+        "total_tokens": 3149,
+        "prompt_tokens_details": {
+          "cached_tokens": 3043
+        }
+      },
+      "raw_reply": "- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 69,
+      "messages_sha256": "b5c6c03dd16be423675b8f1e3ce65335071cfdb04cd8d8b15c0f7724da04edb9",
+      "preflight_prompt_tokens": 3170,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 128,
+        "prompt_tokens": 3170,
+        "total_tokens": 3298,
+        "prompt_tokens_details": {
+          "cached_tokens": 2729
+        }
+      },
+      "raw_reply": "- 第 10 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 11 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 未定事项：后续处理方案或下一步行动计划（本段未明确提及）。"
+    },
+    {
+      "index": 70,
+      "messages_sha256": "40479b5fbebb3c5ed86e7d1edad3a762d2c648f29c95507277f6d1fb3ae5f151",
+      "preflight_prompt_tokens": 1038,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 47,
+        "prompt_tokens": 1038,
+        "total_tokens": 1085,
+        "prompt_tokens_details": {
+          "cached_tokens": 559
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 后续处理方案或下一步行动计划（小林提出周五开始联合演练，但具体方案未定）",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 2 段：\n- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n\n第 3 段：\n- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 4 段：\n- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n\n第 5 段：\n- 第 10 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 11 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 未定事项：后续处理方案或下一步行动计划（本段未明确提及）。\n\n会议记录：\n> 小林：以上十二组服务的检查都完成了，周五开始联合演练。"
+    },
+    {
+      "index": 71,
+      "messages_sha256": "014a9a8551bcf16594201d9159703ded583e634246aa51db77ed9cdc125484f7",
+      "preflight_prompt_tokens": 2201,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2201,
+        "total_tokens": 2271,
+        "prompt_tokens_details": {
+          "cached_tokens": 2197
+        }
+      },
+      "raw_reply": "- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 72,
+      "messages_sha256": "7938bb37a3ce947f5281803aa50cfa8b63c6696f703038dcce225d53f645cca9",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 2192
+        }
+      },
+      "raw_reply": "- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 73,
+      "messages_sha256": "e2c3486438bc582aed0c0b9d31846f52f0f699fb669703f8fcd5abb1b7427b1d",
+      "preflight_prompt_tokens": 2196,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 70,
+        "prompt_tokens": 2196,
+        "total_tokens": 2266,
+        "prompt_tokens_details": {
+          "cached_tokens": 2192
+        }
+      },
+      "raw_reply": "- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。"
+    },
+    {
+      "index": 74,
+      "messages_sha256": "d14a9f11dd55891525cbd45932fd93673ee1a52503fad94bbf35dfe3da2d3a6f",
+      "preflight_prompt_tokens": 3047,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 102,
+        "prompt_tokens": 3047,
+        "total_tokens": 3149,
+        "prompt_tokens_details": {
+          "cached_tokens": 3043
+        }
+      },
+      "raw_reply": "- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。"
+    },
+    {
+      "index": 75,
+      "messages_sha256": "ba81ec32d65ae89bc29ca3bfd449859037d1604e4f4697842634d4bc6eecb5ae",
+      "preflight_prompt_tokens": 3185,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 127,
+        "prompt_tokens": 3185,
+        "total_tokens": 3312,
+        "prompt_tokens_details": {
+          "cached_tokens": 2729
+        }
+      },
+      "raw_reply": "- 第 10 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 11 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务的前 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务确认了旧的上线安排为周五上线。"
+    },
+    {
+      "index": 76,
+      "messages_sha256": "c2064b46bf8aba2725b153a0d77c631ca36063a0959573d129a0a2df669937e0",
+      "preflight_prompt_tokens": 1075,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 81,
+        "prompt_tokens": 1075,
+        "total_tokens": 1156,
+        "prompt_tokens_details": {
+          "cached_tokens": 559
+        }
+      },
+      "raw_reply": "### 结论\n无\n\n### 决定\n- 十二组服务检查完成，延迟范围为 81 毫秒至 120 毫秒\n- 上线时间由周五改为周四\n- 第 12 组服务旧上线安排已撤回\n\n### 待办\n- [ ] 小林于周三前补回归测试\n\n### 待讨论\n无",
+      "final_input": "会议记录太长，下面是逐段记下的要点：\n第 1 段：\n- 第 1 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 2 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 2 段：\n- 第 3 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 4 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n\n第 3 段：\n- 第 5 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n- 第 6 组服务已完成全部 40 项检查，各项延迟从 81 毫秒递增至 120 毫秒。\n\n第 4 段：\n- 第 7 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 8 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n- 第 9 组服务已完成全部 40 项检查，延迟范围从 81 毫秒到 120 毫秒。\n\n第 5 段：\n- 第 10 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 11 组服务的所有 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务的前 40 项检查项目已完成，延迟范围从 81 毫秒到 120 毫秒。\n- 第 12 组服务确认了旧的上线安排为周五上线。\n\n会议记录：\n> 小林：这十二组服务的检查都完成了。白板上的周五上线安排已经撤回，改为周四上线。\n> 小陈：同意，按周四上线。小林周三前补回归测试。\n> 小林：我会在周三前补好。"
+    },
+    {
+      "index": 77,
+      "messages_sha256": "b98aefaea40430f3362939f3766e4d5e9b9671a9c5f3cce57464fb9054fefefc",
+      "preflight_prompt_tokens": 1881,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 1881,
+        "total_tokens": 1923,
+        "prompt_tokens_details": {
+          "cached_tokens": 1877
+        }
+      },
+      "raw_reply": "- Service Group 1 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 2 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 78,
+      "messages_sha256": "287c22edb8f8c283376164e64d5d4389a310727fb9621512c73cfc4fe6cfa794",
+      "preflight_prompt_tokens": 1875,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 42,
+        "prompt_tokens": 1875,
+        "total_tokens": 1917,
+        "prompt_tokens_details": {
+          "cached_tokens": 1871
+        }
+      },
+      "raw_reply": "- Service group 3 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 4 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 79,
+      "messages_sha256": "a0b9a3f0902ab42415c337452c83c15e27484d7ff3856238c408a2f03c50d1b0",
+      "preflight_prompt_tokens": 3199,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 84,
+        "prompt_tokens": 3199,
+        "total_tokens": 3283,
+        "prompt_tokens_details": {
+          "cached_tokens": 3195
+        }
+      },
+      "raw_reply": "- Service Group 5 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 6 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 7 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 8 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 80,
+      "messages_sha256": "2e0e101b3ab93fd06bf524390f599a23f0f6f40a00c9c8b8d70cba903de0d989",
+      "preflight_prompt_tokens": 3277,
+      "max_tokens": 600,
+      "usage": {
+        "completion_tokens": 87,
+        "prompt_tokens": 3277,
+        "total_tokens": 3364,
+        "prompt_tokens_details": {
+          "cached_tokens": 3273
+        }
+      },
+      "raw_reply": "- Service group 9 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 10 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 11 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 12 readiness checkpoints 1 through 25 completed successfully with no failures observed."
+    },
+    {
+      "index": 81,
+      "messages_sha256": "62c00f4c8e1c0a5acf97e709e8f12fc951e92db66ae3a8c1e01a720c05d44897",
+      "preflight_prompt_tokens": 913,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 76,
+        "prompt_tokens": 913,
+        "total_tokens": 989,
+        "prompt_tokens_details": {
+          "cached_tokens": 360
+        }
+      },
+      "raw_reply": "### Conclusions\n- All readiness checks for Service Groups 1 through 12 (checkpoints 1–25 each) completed successfully with no failures observed.\n\n### Decisions\n- None\n\n### To-dos\n- [ ] Nora to write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday?",
+      "final_input": "The transcript is too long; these are the notes taken part by part:\nPart 1:\n- Service Group 1 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 2 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nPart 2:\n- Service group 3 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 4 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nPart 3:\n- Service Group 5 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 6 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 7 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service Group 8 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nPart 4:\n- Service group 9 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 10 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 11 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n- Service group 12 readiness checkpoints 1 through 25 completed successfully with no failures observed.\n\nTranscript:\n> All readiness checks are complete. If deployment fails on Thursday, should we roll back?\n> Rollback still needs discussion. Deployment has not started.\n> Nora will write the rollout guide by Wednesday."
+    },
+    {
+      "index": 82,
+      "messages_sha256": "8172a2b67a1d922e7c500ee2593bf2dce121847f14b940eb6cd2436d5126b85b",
+      "preflight_prompt_tokens": 632,
+      "max_tokens": 1024,
+      "usage": {
+        "completion_tokens": 58,
+        "prompt_tokens": 632,
+        "total_tokens": 690,
+        "prompt_tokens_details": {
+          "cached_tokens": 564
+        }
+      },
+      "raw_reply": "### Conclusions\n- All readiness checks are complete.\n\n### Decisions\n- None\n\n### To-dos\n- Nora will write the rollout guide by Wednesday.\n\n### Open questions\n- Should we roll back if deployment fails on Thursday? (Rollback still needs discussion.)",
+      "final_input": "On the whiteboard:\n（空）\n\nTranscript:\n> All readiness checks are complete. If deployment fails on Thursday, should we roll back?\n> Rollback still needs discussion. Deployment has not started.\n> Nora will write the rollout guide by Wednesday."
+    }
+  ]
+}

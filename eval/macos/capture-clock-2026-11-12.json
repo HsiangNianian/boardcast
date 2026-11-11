@@ -1,0 +1,165 @@
+{
+  "captured_at_utc": "2026-11-11T17:31:00.429757+00:00",
+  "base_commit": "56051ad9a259221a79bab6febd2ea8021070d261",
+  "source_sha256": {
+    "crates/audio/src/timing.rs": "d52af762785685791f2a15b7969debc16e863fad9fe9a05e02a4d4a770f24f5c",
+    "crates/audio/src/lib.rs": "762022a7abde6054d800d282130c133e7557b83569ade284eb6f409157f265b8",
+    "crates/audio/src/system.rs": "26a0b1a705ffdb28021d14d472e0fc046c6b0b215bc5b7077c0212bd91dd9dfb",
+    "crates/audio/apple/system-audio.swift": "46c61826f7869f6f1a98aa3f975d1081c565be4756e434becef8284d064e0f87",
+    "crates/ui/src/listen.rs": "db1df4104c3cf89deb1b1141e212aa15fca553619d66604b04e83c9d6010054d",
+    "crates/ui/src/app.rs": "9756b7e8b2bd100f888c48759d459db0ab42ec11daad86d9a65fed946b064f60",
+    "crates/ui/src/pipeline.rs": "870787ee0d9c62f089f85ed79c2c1c5fe566eddcf04c8ead71d63b63a8ba5272"
+  },
+  "scope": "Native capture timestamp propagation and bounded captured-segment-end latency; no physical Mac measurements or caption reordering.",
+  "local": {
+    "platform": "Linux",
+    "voice_models": "Installed VAD and SenseVoice; CAM++ missing, speaker embedding not exercised.",
+    "regular_command": "BOARDCAST_VOICE_DIR=<voice models> cargo test -p boardcast-audio -p boardcast-ui --no-fail-fast",
+    "regular_passed": {
+      "audio": 24,
+      "ui": 6
+    },
+    "explicit_command": "BOARDCAST_VOICE_DIR=<voice models> BOARDCAST_AUTO_AUDIO=<verified corpus fixtures> cargo test -p boardcast-audio -p boardcast-ui -- --ignored",
+    "explicit_passed": [
+      "three concurrent opening-language probes plus PCM/bounds/stop/silence checks",
+      "five two-source capture-job scenarios"
+    ],
+    "clock_cases": [
+      "different starts on one monotonic clock",
+      "delayed delivery does not move capture time",
+      "native gaps across partial VAD windows",
+      "Auto waiting copies endpoints before retention pruning",
+      "bounded timestamps",
+      "unknown file/padding times remain unknown",
+      "shared capture origin and signed offsets",
+      "malformed helper timestamps rejected"
+    ],
+    "logs": {
+      "tests.log": {
+        "sha256": "f125755b8aaeb54bffa5f9108b8da48dbee4efd7916383d1f99a37285b50d4a5",
+        "results": [
+          "test result: ok. 24 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 6.13s",
+          "test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      },
+      "auto-lifecycle.log": {
+        "sha256": "31bb611b4814b5f6e9555806b720e59d5a23d208264c7098b945e5cc840a7533",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 24 filtered out; finished in 2.51s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 104.44s",
+          "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ]
+      },
+      "coarse-clock-before.log": {
+        "sha256": "d946e6cc52f8e6e12a528492b6f1567b0ad07d0a0cd75f5a66605bff44c35c15",
+        "results": [
+          "test result: FAILED. 5 passed; 2 failed; 1 ignored; 0 measured; 17 filtered out; finished in 0.05s"
+        ]
+      },
+      "coarse-clock-after.log": {
+        "sha256": "961f9b79e7dddeca7f0be1505852dd2c845ab33cad5bee0d7174d96c053615be",
+        "results": [
+          "test result: ok. 24 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 6.12s"
+        ]
+      }
+    }
+  },
+  "fixture_collision": {
+    "observed_ci": "https://github.com/HsiangNianian/boardcast/actions/runs/43065074856",
+    "ci_failed_tests": [
+      "stopped_auto_startup_shares_the_transcription_deadline",
+      "stopping_keeps_a_prompt_final_reply"
+    ],
+    "ci_symptom": "The delayed helper returned another fixture's 1600 samples, sum 800.0; the immediate helper exceeded the finalization budget.",
+    "reproduction": "A process-local LD_PRELOAD shim fixes CLOCK_REALTIME while leaving monotonic time intact. The same parallel helper tests fail before the unique-directory fix and pass after it.",
+    "shim_source": "#define _GNU_SOURCE\n#include <dlfcn.h>\n#include <time.h>\n\nint clock_gettime(clockid_t clock, struct timespec *time) {\n    if (clock == CLOCK_REALTIME) {\n        time->tv_sec = 1794417600;\n        time->tv_nsec = 0;\n        return 0;\n    }\n    int (*actual)(clockid_t, struct timespec *) = dlsym(RTLD_NEXT, \"clock_gettime\");\n    return actual(clock, time);\n}\n",
+    "commands": [
+      "cc -shared -fPIC coarse-clock.c -ldl -o coarse-clock.so",
+      "LD_PRELOAD=<absolute shim path> <audio test binary> system::tests:: --test-threads=8",
+      "BOARDCAST_VOICE_DIR=<voice models> LD_PRELOAD=<absolute shim path> <rebuilt audio test binary> --test-threads=8"
+    ],
+    "before_output": "\nrunning 8 tests\ntest system::tests::auto_routes_real_opening_speech_and_preserves_the_pcm ... ignored, needs BOARDCAST_VOICE_DIR, BOARDCAST_AUTO_AUDIO and Python 3; uses no audio device\ntest system::tests::invalid_audio_is_not_forwarded ... ok\ntest system::tests::a_missing_helper_is_an_error ... ok\ntest system::tests::sentences_go_to_the_helper_and_text_comes_back ... ok\ntest system::tests::stopped_auto_startup_shares_the_transcription_deadline ... FAILED\ntest system::tests::stopping_bounds_an_inflight_request_and_later_queued_sentences ... FAILED\ntest system::tests::stopping_keeps_a_prompt_final_reply ... ok\ntest system::tests::system_capture_requires_ready_routes_audio_and_surfaces_errors ... ok\n\nfailures:\n\n---- system::tests::stopped_auto_startup_shares_the_transcription_deadline stdout ----\nSpeechAnalyzer fallback: no analyzer here\n\nthread 'system::tests::stopped_auto_startup_shares_the_transcription_deadline' (2582488) panicked at crates/audio/src/system.rs:285:48:\ncalled `Result::unwrap_err()` on an `Ok` value: \"1600 samples, sum 800.0\"\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n---- system::tests::stopping_bounds_an_inflight_request_and_later_queued_sentences stdout ----\nSpeechAnalyzer fallback: no analyzer here\n\nthread 'system::tests::stopping_bounds_an_inflight_request_and_later_queued_sentences' (2582489) panicked at crates/audio/src/system.rs:261:52:\ncalled `Result::unwrap_err()` on an `Ok` value: \"1600 samples, sum 800.0\"\n\n\nfailures:\n    system::tests::stopped_auto_startup_shares_the_transcription_deadline\n    system::tests::stopping_bounds_an_inflight_request_and_later_queued_sentences\n\ntest result: FAILED. 5 passed; 2 failed; 1 ignored; 0 measured; 17 filtered out; finished in 0.05s\n\n",
+    "fix": "Append an atomic per-process sequence and use exclusive directory creation. Production deadlines are unchanged.",
+    "after_passed": 24
+  },
+  "previous_ci": {
+    "head": "56051ad9a259221a79bab6febd2ea8021070d261",
+    "rust_run": 43065074856,
+    "rust_conclusion": "failure",
+    "rust_jobs": [
+      {
+        "name": "linux package",
+        "conclusion": "success"
+      },
+      {
+        "name": "core crates",
+        "conclusion": "success"
+      },
+      {
+        "name": "windows package",
+        "conclusion": "success"
+      },
+      {
+        "name": "macos package (macos-26)",
+        "conclusion": "success"
+      },
+      {
+        "name": "macos package (macos-15-intel)",
+        "conclusion": "failure"
+      }
+    ],
+    "eval_run": 43065075003,
+    "asr": [
+      {
+        "engine": "routed",
+        "vad": true,
+        "commit": "892097f484e21858c379ce1982bfd412ca7d3238",
+        "checks": {
+          "enforced": true,
+          "passed": true,
+          "failures": []
+        },
+        "report_sha256": "8160ee2c64794d6248cce987942e62bfd061c5d937e32273fe96f01654f6af5f"
+      },
+      {
+        "engine": "sensevoice",
+        "vad": true,
+        "commit": "892097f484e21858c379ce1982bfd412ca7d3238",
+        "checks": {
+          "enforced": false,
+          "passed": true,
+          "failures": []
+        },
+        "report_sha256": "c9c4062693753750247b95824f91be17b7c8bb3c5a48bdcc81dcaf3627c6918c"
+      },
+      {
+        "engine": "sensevoice",
+        "vad": false,
+        "commit": "892097f484e21858c379ce1982bfd412ca7d3238",
+        "checks": {
+          "enforced": false,
+          "passed": false,
+          "failures": [
+            "silence: speech hallucinated on silence"
+          ]
+        },
+        "report_sha256": "3eadcf85b7192ecceb752cf4ed6aa5990d0ceea26f5e5d460adff36ce96f0b14"
+      }
+    ],
+    "asr_merge_parents": [
+      "20c17271e3a4174c7847d457a0d1d70a9f39ed2f",
+      "56051ad9a259221a79bab6febd2ea8021070d261"
+    ],
+    "text_status_at_capture": "still running; no new summary score"
+  },
+  "unverified": [
+    "native Swift timestamp self-test on new Mac CI",
+    "physical permissions and capture clock calibration",
+    "Apple recognition accuracy and simultaneous capacity",
+    "chronological caption merging",
+    "acoustic onset/last-spoken-sound/screen-present latency",
+    "30-minute physical-device resource/battery/temperature acceptance",
+    "target-user trial outcomes"
+  ]
+}

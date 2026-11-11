@@ -1,0 +1,2730 @@
+{
+  "date": "2026-11-12 Asia/Shanghai",
+  "captured_at_utc": "2026-11-11T18:23:38.759246+00:00",
+  "base_commit": "2a1e17e51c6a0eabef70a88a6b4771cd685c1e55",
+  "scope": "Synthetic summary investigations. No prompt, sampler, model selection or generation architecture change was adopted. Add one missing named-owner acceptance assertion; move CI summary generation/artifact upload before long board suites without suppressing failures or skipping board/ASR coverage.",
+  "runtime": {
+    "llama_cpp": "b11954 (f1a7dea99)",
+    "device": "Linux CPU, four generation/batch threads, one slot, 4096 context",
+    "temperature": 0,
+    "repeat_penalty": 1.05,
+    "repeat_last_n": 256,
+    "enable_thinking": false
+  },
+  "models": {
+    "4b": {
+      "file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4"
+    },
+    "9b": {
+      "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+    }
+  },
+  "production_source_sha256": {
+    "crates/agent/src/summary.rs": "ca425f089ae74065e666f7ab88f625dfc62afdaaa201dcd8160523963b70978a",
+    "crates/agent/src/lib.rs": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+    "crates/tools/src/summary_eval.rs": "54d9d6054e4cbaeaa0d817ff09712763cda56a19c3bbc110cafeeca144be6f3a"
+  },
+  "baseline_4b_screen": {
+    "label": "brief-baseline",
+    "repeat": 1,
+    "cases_sha256": "9f5b4157bfbd831a69c014e2a93ee4a0c3197b00d0183ed30f5e7884013a295f",
+    "summary_source_sha256": "ca425f089ae74065e666f7ab88f625dfc62afdaaa201dcd8160523963b70978a",
+    "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+    "answers": [
+      {
+        "case": "zh-guess-stays-open",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+        "failures": [
+          "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+        ],
+        "elapsed_ms": 7338
+      },
+      {
+        "case": "en-guess-stays-open",
+        "run": 1,
+        "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+        "failures": [
+          "Open questions has \"what are the two\""
+        ],
+        "elapsed_ms": 7604
+      },
+      {
+        "case": "zh-stated-date-corrected",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+        "failures": [
+          "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+        ],
+        "elapsed_ms": 4368
+      },
+      {
+        "case": "zh-explicit-condition-not-an-event",
+        "run": 1,
+        "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延？",
+        "failures": [],
+        "elapsed_ms": 5419
+      }
+    ]
+  },
+  "rejected_brief_rules": {
+    "decision": "Reject: 1/4, same automated count as the original 4B screening control, and Monday rehearsal became Sunday. Fewer instructions did not remove the date/quantity errors. Only four screening cases, not a full-suite score.",
+    "rules": {
+      "old": {
+        "ZH": "保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。",
+        "EN": "Preserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting."
+      },
+      "candidate": {
+        "ZH": "按发言先后整理会议记录与白板中有依据的内容，保留主体、否定、日期和条件。后来的明确更正、回答或撤回优先于旧说法。\n结论记录直接陈述的事实、已有成果和日程，不要求另一人再确认；决定记录明确接受的选择；待办记录明确承诺或分派的会后工作，保留已知人名和截止时间。已完成或当场完成的操作不算待办，自动字母编号不是人名。\n待讨论只保留实际提出且尚未解决的问题、猜测或暂定事项。部分回答只解决对应部分，未回答部分仍保留。问题中的数量、条件若未确认，改写后也不能作为已知前提。不要因材料没说而补问题。\n保留每项独立事实和任务，不因还有未决事项而漏掉已明确的内容。不要从笔迹标记推断决定。",
+        "EN": "Summarize supported content from the transcript and whiteboard in speaking order, preserving subjects, negations, dates and conditions. Later explicit corrections, answers and withdrawals override older statements.\nConclusions contain directly stated facts, completed work and schedules; another speaker need not confirm them. Decisions contain explicitly accepted choices. To-dos contain explicitly promised or assigned work after the meeting, retaining stated names and deadlines. Completed or in-meeting actions are not To-dos; automatic letter labels are not names.\nOpen questions contain only actually raised, unresolved questions, guesses and tentative matters. A partial answer resolves only its part. Do not assume an unconfirmed quantity or condition even inside a question. Missing information alone is not an open question.\nRetain each distinct fact and task, including settled information beside an unresolved issue. Do not infer decisions from pen marks."
+      }
+    },
+    "report": {
+      "label": "brief-screen",
+      "repeat": 1,
+      "cases_sha256": "9f5b4157bfbd831a69c014e2a93ee4a0c3197b00d0183ed30f5e7884013a295f",
+      "summary_source_sha256": "ca425f089ae74065e666f7ab88f625dfc62afdaaa201dcd8160523963b70978a",
+      "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n无\n### 待讨论\n失败标准的具体数量及内容待定。",
+          "failures": [
+            "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+          ],
+          "elapsed_ms": 5763
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Deployment scheduled for Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+          "failures": [
+            "Open questions has \"what are the two\""
+          ],
+          "elapsed_ms": 6570
+        },
+        {
+          "case": "zh-stated-date-corrected",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n部署定于周二上线，周日为预演。\n### 待办\n无\n### 待讨论\n无",
+          "failures": [
+            "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+          ],
+          "elapsed_ms": 4254
+        },
+        {
+          "case": "zh-explicit-condition-not-an-event",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n- [ ] 小林于周五前整理测试报告\n### 待讨论\n- 若周四测试失败，部署日期是否顺延及具体安排",
+          "failures": [],
+          "elapsed_ms": 5594
+        }
+      ]
+    },
+    "calls": [
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 5678,
+        "original": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n按发言先后整理会议记录与白板中有依据的内容，保留主体、否定、日期和条件。后来的明确更正、回答或撤回优先于旧说法。\n结论记录直接陈述的事实、已有成果和日程，不要求另一人再确认；决定记录明确接受的选择；待办记录明确承诺或分派的会后工作，保留已知人名和截止时间。已完成或当场完成的操作不算待办，自动字母编号不是人名。\n待讨论只保留实际提出且尚未解决的问题、猜测或暂定事项。部分回答只解决对应部分，未回答部分仍保留。问题中的数量、条件若未确认，改写后也不能作为已知前提。不要因材料没说而补问题。\n保留每项独立事实和任务，不因还有未决事项而漏掉已明确的内容。不要从笔迹标记推断决定。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n### 决定\n无\n### 待办\n无\n### 待讨论\n失败标准的具体数量及内容待定。"
+              }
+            }
+          ],
+          "created": 1794420493,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 33,
+            "prompt_tokens": 377,
+            "total_tokens": 410,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-lF76bQ0Vyo4xTfsdrPlQw92BG0mqn0Dv",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 377,
+            "prompt_ms": 2671.103,
+            "prompt_per_token_ms": 7.085153846153847,
+            "prompt_per_second": 141.14019564202502,
+            "predicted_n": 33,
+            "predicted_ms": 3002.087,
+            "predicted_per_token_ms": 93.81521875,
+            "predicted_per_second": 10.659251380789431
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 6475,
+        "original": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are helping someone write a meeting summary.\nPreserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.\nWrite only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:\n### Conclusions\n### Decisions\n### To-dos\n### Open questions"
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are helping someone write a meeting summary.\nSummarize supported content from the transcript and whiteboard in speaking order, preserving subjects, negations, dates and conditions. Later explicit corrections, answers and withdrawals override older statements.\nConclusions contain directly stated facts, completed work and schedules; another speaker need not confirm them. Decisions contain explicitly accepted choices. To-dos contain explicitly promised or assigned work after the meeting, retaining stated names and deadlines. Completed or in-meeting actions are not To-dos; automatic letter labels are not names.\nOpen questions contain only actually raised, unresolved questions, guesses and tentative matters. A partial answer resolves only its part. Do not assume an unconfirmed quantity or condition even inside a question. Missing information alone is not an open question.\nRetain each distinct fact and task, including settled information beside an unresolved issue. Do not infer decisions from pen marks.\nWrite only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:\n### Conclusions\n### Decisions\n### To-dos\n### Open questions"
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### Conclusions\n- Deployment scheduled for Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?"
+              }
+            }
+          ],
+          "created": 1794420500,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 39,
+            "prompt_tokens": 381,
+            "total_tokens": 420,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-kWEXbcXAClStj1G9M6o44e6uiMhucs5R",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 381,
+            "prompt_ms": 2669.158,
+            "prompt_per_token_ms": 7.00566404199475,
+            "prompt_per_second": 142.74164361944852,
+            "predicted_n": 39,
+            "predicted_ms": 3746.581,
+            "predicted_per_token_ms": 98.59423684210526,
+            "predicted_per_second": 10.14258066220909
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 4180,
+        "original": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n按发言先后整理会议记录与白板中有依据的内容，保留主体、否定、日期和条件。后来的明确更正、回答或撤回优先于旧说法。\n结论记录直接陈述的事实、已有成果和日程，不要求另一人再确认；决定记录明确接受的选择；待办记录明确承诺或分派的会后工作，保留已知人名和截止时间。已完成或当场完成的操作不算待办，自动字母编号不是人名。\n待讨论只保留实际提出且尚未解决的问题、猜测或暂定事项。部分回答只解决对应部分，未回答部分仍保留。问题中的数量、条件若未确认，改写后也不能作为已知前提。不要因材料没说而补问题。\n保留每项独立事实和任务，不因还有未决事项而漏掉已明确的内容。不要从笔迹标记推断决定。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n### 决定\n部署定于周二上线，周日为预演。\n### 待办\n无\n### 待讨论\n无"
+              }
+            }
+          ],
+          "created": 1794420504,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 35,
+            "prompt_tokens": 372,
+            "total_tokens": 407,
+            "prompt_tokens_details": {
+              "cached_tokens": 313
+            }
+          },
+          "id": "chatcmpl-3PpJ4NW9rVk3NCQjXExDTPLmtDKdJz0H",
+          "timings": {
+            "cache_n": 313,
+            "prompt_n": 59,
+            "prompt_ms": 862.609,
+            "prompt_per_token_ms": 14.620491525423729,
+            "prompt_per_second": 68.3971532872947,
+            "predicted_n": 35,
+            "predicted_ms": 3212.034,
+            "predicted_per_token_ms": 94.47158823529412,
+            "predicted_per_second": 10.585193058354923
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 5511,
+        "original": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n按发言先后整理会议记录与白板中有依据的内容，保留主体、否定、日期和条件。后来的明确更正、回答或撤回优先于旧说法。\n结论记录直接陈述的事实、已有成果和日程，不要求另一人再确认；决定记录明确接受的选择；待办记录明确承诺或分派的会后工作，保留已知人名和截止时间。已完成或当场完成的操作不算待办，自动字母编号不是人名。\n待讨论只保留实际提出且尚未解决的问题、猜测或暂定事项。部分回答只解决对应部分，未回答部分仍保留。问题中的数量、条件若未确认，改写后也不能作为已知前提。不要因材料没说而补问题。\n保留每项独立事实和任务，不因还有未决事项而漏掉已明确的内容。不要从笔迹标记推断决定。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n### 决定\n无\n### 待办\n- [ ] 小林于周五前整理测试报告\n### 待讨论\n- 若周四测试失败，部署日期是否顺延及具体安排"
+              }
+            }
+          ],
+          "created": 1794420510,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 49,
+            "prompt_tokens": 380,
+            "total_tokens": 429,
+            "prompt_tokens_details": {
+              "cached_tokens": 313
+            }
+          },
+          "id": "chatcmpl-OsB3tShRSEZmL56k5hIes1UbGVzW6vMD",
+          "timings": {
+            "cache_n": 313,
+            "prompt_n": 67,
+            "prompt_ms": 827.252,
+            "prompt_per_token_ms": 12.347044776119402,
+            "prompt_per_second": 80.99104021507353,
+            "predicted_n": 49,
+            "predicted_ms": 4679.701,
+            "predicted_per_token_ms": 97.49377083333333,
+            "predicted_per_second": 10.257065568932715
+          }
+        }
+      }
+    ]
+  },
+  "existing_9b_option": {
+    "decision": "No recommendation/default change. Original automated checks scored 12/15; the added named-owner assertion re-scores the same frozen outputs to 11/15. Manual review also finds a false-positive date-label check, so these keyword counts are not a complete semantic assessment.",
+    "report_original": {
+      "label": "qwen35-9b-current",
+      "repeat": 1,
+      "cases_sha256": "9f5b4157bfbd831a69c014e2a93ee4a0c3197b00d0183ed30f5e7884013a295f",
+      "summary_source_sha256": "ca425f089ae74065e666f7ab88f625dfc62afdaaa201dcd8160523963b70978a",
+      "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准是否应该有两个\n部署上线的具体负责人是谁",
+          "failures": [
+            "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+          ],
+          "elapsed_ms": 12584
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 1,
+          "summary": "### 结论\n- 三次重试后不满足要求时采用动态缩小字号兜底\n- 不做硬切，改用缩小字号方案\n\n### 决定\n- 确定使用动态缩小字号作为兜底方案\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 11214
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试后不满足要求的后续方案\n- 是否缩小字号（需稍后验证）",
+          "failures": [],
+          "elapsed_ms": 8352
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 采用方案二，按词换行\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 7097
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 1,
+          "summary": "### 结论\n- 接口文档由发言人负责编写\n- 接口文档将于周五前发出\n\n### 决定\n- 接口文档由发言人负责编写\n- 接口文档将于周五前发出\n\n### 待办\n- [ ] 编写接口文档（周五前）\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 12023
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，截止时间：无，负责人：无\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 7354
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- None\n### Decisions\n- None\n### To-dos\n- None\n### Open questions\n- What are the two failure criteria?\n- Who checks the failure criteria?\n- Ship on Wednesday",
+          "failures": [
+            "Open questions has \"what are the two\"",
+            "Conclusions/Decisions lacks any of [\"Wednesday\"]"
+          ],
+          "elapsed_ms": 13217
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 1,
+          "summary": "### Conclusions\n- Shrinking the font is the fallback if three retries still don't fit.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": [],
+          "elapsed_ms": 6380
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 缓存保留时间定为十分钟\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁",
+          "failures": [],
+          "elapsed_ms": 7817
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\nCache lifetime is ten minutes.\n\n### Decisions\nNone\n\n### To-dos\nNone\n\n### Open questions\nWho will refresh the cache?",
+          "failures": [],
+          "elapsed_ms": 6782
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 1,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机\n#### 要改进的\n- 告警来得太晚\n### 决定\n无\n\n### 待办\n- [ ] 下次发布前由小王补上告警测试\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 18283
+        },
+        {
+          "case": "en-template-custom",
+          "run": 1,
+          "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": [],
+          "elapsed_ms": 16150
+        },
+        {
+          "case": "zh-stated-date-beside-tentative-date",
+          "run": 1,
+          "summary": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期",
+          "failures": [
+            "待讨论 lacks any of [\"未定\", \"未确定\", \"没定\", \"待定\", \"待确定\", \"待确认\", \"未确认\", \"是否\", \"是不是\"]"
+          ],
+          "elapsed_ms": 10815
+        },
+        {
+          "case": "zh-stated-date-corrected",
+          "run": 1,
+          "summary": "### 结论\n- 部署于周二正式上线\n- 周一只进行预演\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 8144
+        },
+        {
+          "case": "zh-explicit-condition-not-an-event",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延",
+          "failures": [],
+          "elapsed_ms": 8218
+        }
+      ]
+    },
+    "calls": [
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准是否应该有两个\n部署上线的具体负责人是谁"
+              }
+            }
+          ],
+          "created": 1794420690,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 36,
+            "prompt_tokens": 582,
+            "total_tokens": 618,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-JH7Vz2jUlpHdEDBpohN7P24XfrN0cBwv",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 582,
+            "prompt_ms": 7244.061,
+            "prompt_per_token_ms": 12.446840206185566,
+            "prompt_per_second": 80.34167575342065,
+            "predicted_n": 36,
+            "predicted_ms": 5231.806,
+            "predicted_per_token_ms": 149.48017142857142,
+            "predicted_per_second": 6.6898505028665065
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 三次重试还是不满足要求，之后怎么办？\n> 这时就动态缩小字号兜底。\n> 好，那就不做硬切了，就用缩小字号。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n- 三次重试后不满足要求时采用动态缩小字号兜底\n- 不做硬切，改用缩小字号方案\n\n### 决定\n- 确定使用动态缩小字号作为兜底方案\n\n### 待办\n- 无\n\n### 待讨论\n- 无"
+              }
+            }
+          ],
+          "created": 1794420701,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 65,
+            "prompt_tokens": 581,
+            "total_tokens": 646,
+            "prompt_tokens_details": {
+              "cached_tokens": 518
+            }
+          },
+          "id": "chatcmpl-7DTaqgv6jGA4m8VcUUTZyrhnmynSLeUR",
+          "timings": {
+            "cache_n": 518,
+            "prompt_n": 63,
+            "prompt_ms": 1311.275,
+            "prompt_per_token_ms": 20.81388888888889,
+            "prompt_per_second": 48.04484185239557,
+            "predicted_n": 65,
+            "predicted_ms": 9807.381,
+            "predicted_per_token_ms": 153.240328125,
+            "predicted_per_second": 6.525697329388958
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 三次重试还是不满足要求，之后怎么办？\n> 也许可以缩小字号，不过得稍后验证一下。\n> 嗯，先记下来。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试后不满足要求的后续方案\n- 是否缩小字号（需稍后验证）"
+              }
+            }
+          ],
+          "created": 1794420709,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 47,
+            "prompt_tokens": 578,
+            "total_tokens": 625,
+            "prompt_tokens_details": {
+              "cached_tokens": 518
+            }
+          },
+          "id": "chatcmpl-ymwaMdNwLh5K4IQa93FxR4oAR2bplS2y",
+          "timings": {
+            "cache_n": 518,
+            "prompt_n": 60,
+            "prompt_ms": 1244.73,
+            "prompt_per_token_ms": 20.7455,
+            "prompt_per_second": 48.203224795738834,
+            "predicted_n": 47,
+            "predicted_ms": 7010.358,
+            "predicted_per_token_ms": 152.39908695652176,
+            "predicted_per_second": 6.561719101934594
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 我们先用方案一，直接硬切。\n> 硬切会把字从中间切断，不太好。\n> 那方案一撤回，改用方案二，按词换行。\n> 同意方案二。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n\n### 决定\n- 采用方案二，按词换行\n\n### 待办\n无\n\n### 待讨论\n无"
+              }
+            }
+          ],
+          "created": 1794420716,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 35,
+            "prompt_tokens": 591,
+            "total_tokens": 626,
+            "prompt_tokens_details": {
+              "cached_tokens": 518
+            }
+          },
+          "id": "chatcmpl-mqj6hD718GK5CakPzIMGTHCKrWjKGjv8",
+          "timings": {
+            "cache_n": 518,
+            "prompt_n": 73,
+            "prompt_ms": 1772.688,
+            "prompt_per_token_ms": 24.283397260273976,
+            "prompt_per_second": 41.18039948372189,
+            "predicted_n": 35,
+            "predicted_ms": 5235.516,
+            "predicted_per_token_ms": 153.98576470588233,
+            "predicted_per_second": 6.49410678909204
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 接口文档我来写，周五前发给大家。\n> 好的，没问题。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n- 接口文档由发言人负责编写\n- 接口文档将于周五前发出\n\n### 决定\n- 接口文档由发言人负责编写\n- 接口文档将于周五前发出\n\n### 待办\n- [ ] 编写接口文档（周五前）\n\n### 待讨论\n- 无"
+              }
+            }
+          ],
+          "created": 1794420728,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 70,
+            "prompt_tokens": 562,
+            "total_tokens": 632,
+            "prompt_tokens_details": {
+              "cached_tokens": 518
+            }
+          },
+          "id": "chatcmpl-lnCYg9KZiWNuPcKMxoMMmkwPjOFOqXhs",
+          "timings": {
+            "cache_n": 518,
+            "prompt_n": 44,
+            "prompt_ms": 1403.908,
+            "prompt_per_token_ms": 31.906999999999996,
+            "prompt_per_second": 31.341085028363683,
+            "predicted_n": 70,
+            "predicted_ms": 10534.826,
+            "predicted_per_token_ms": 152.67863768115942,
+            "predicted_per_second": 6.549704760192528
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 我们先看一下这段视频。\n> 嗯，这里卡顿很明显。\n> 卡顿问题要查一下，小王负责。\n> 好，我来查。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，截止时间：无，负责人：无\n\n### 待讨论\n无"
+              }
+            }
+          ],
+          "created": 1794420736,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 40,
+            "prompt_tokens": 579,
+            "total_tokens": 619,
+            "prompt_tokens_details": {
+              "cached_tokens": 518
+            }
+          },
+          "id": "chatcmpl-YO28QWLJFnGxRwEtALqRVoHGqKDJkIHw",
+          "timings": {
+            "cache_n": 518,
+            "prompt_n": 61,
+            "prompt_ms": 1337.344,
+            "prompt_per_token_ms": 21.92367213114754,
+            "prompt_per_second": 45.612796707503826,
+            "predicted_n": 40,
+            "predicted_ms": 5920.777,
+            "predicted_per_token_ms": 151.81479487179487,
+            "predicted_per_second": 6.586973297592529
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are helping someone write a meeting summary.\nPreserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.\nWrite only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:\n### Conclusions\n### Decisions\n### To-dos\n### Open questions"
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### Conclusions\n### Decisions\n### To-dos\n### Open questions\n- What are the two failure criteria?\n- Who checks the failure criteria?\n- Ship on Wednesday"
+              }
+            }
+          ],
+          "created": 1794420749,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 39,
+            "prompt_tokens": 627,
+            "total_tokens": 666,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-Dq9iXt3KF5EGKMHqAxHj1Jdk9q4vWaam",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 627,
+            "prompt_ms": 7396.576,
+            "prompt_per_token_ms": 11.796771929824562,
+            "prompt_per_second": 84.76895255318136,
+            "predicted_n": 39,
+            "predicted_ms": 5646.794,
+            "predicted_per_token_ms": 148.59984210526315,
+            "predicted_per_second": 6.729482251344745
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are helping someone write a meeting summary.\nPreserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.\nWrite only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:\n### Conclusions\n### Decisions\n### To-dos\n### Open questions"
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> If three retries still don't fit, what do we do then?\n> Then we shrink the font as a fallback.\n> Good, so no hard cut, we shrink the font."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### Conclusions\n- Shrinking the font is the fallback if three retries still don't fit.\n\n### Decisions\n\n### To-dos\n\n### Open questions"
+              }
+            }
+          ],
+          "created": 1794420755,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 34,
+            "prompt_tokens": 630,
+            "total_tokens": 664,
+            "prompt_tokens_details": {
+              "cached_tokens": 564
+            }
+          },
+          "id": "chatcmpl-bQTMfbPp3Bj3YLfrRY9hPpPkEe868E3n",
+          "timings": {
+            "cache_n": 564,
+            "prompt_n": 66,
+            "prompt_ms": 1317.644,
+            "prompt_per_token_ms": 19.96430303030303,
+            "prompt_per_second": 50.089401993254626,
+            "predicted_n": 34,
+            "predicted_ms": 4964.349,
+            "predicted_per_token_ms": 150.43481818181817,
+            "predicted_per_second": 6.647397272029021
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 缓存保留多久，过期后谁来刷新？\n> 保留十分钟。刷新负责人还没有定。\n> 好，保留时间就定十分钟，负责人下次讨论。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n- 缓存保留时间定为十分钟\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁"
+              }
+            }
+          ],
+          "created": 1794420763,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 43,
+            "prompt_tokens": 580,
+            "total_tokens": 623,
+            "prompt_tokens_details": {
+              "cached_tokens": 518
+            }
+          },
+          "id": "chatcmpl-Epk3aORMZAhk8PDwzaaJT8zAWQqXo5EU",
+          "timings": {
+            "cache_n": 518,
+            "prompt_n": 62,
+            "prompt_ms": 1321.962,
+            "prompt_per_token_ms": 21.321967741935484,
+            "prompt_per_second": 46.89998653516516,
+            "predicted_n": 43,
+            "predicted_ms": 6308.06,
+            "predicted_per_token_ms": 150.19190476190477,
+            "predicted_per_second": 6.65814846402856
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are helping someone write a meeting summary.\nPreserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.\nWrite only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:\n### Conclusions\n### Decisions\n### To-dos\n### Open questions"
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> How long should the cache live, and who will refresh it?\n> Ten minutes. We have not chosen a refresh owner.\n> Agreed on ten minutes. We will discuss ownership next time."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### Conclusions\nCache lifetime is ten minutes.\n\n### Decisions\nNone\n\n### To-dos\nNone\n\n### Open questions\nWho will refresh the cache?"
+              }
+            }
+          ],
+          "created": 1794420770,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 35,
+            "prompt_tokens": 632,
+            "total_tokens": 667,
+            "prompt_tokens_details": {
+              "cached_tokens": 564
+            }
+          },
+          "id": "chatcmpl-YEQkHhu7hchvTMm7VIHHQGMmQDtAWN46",
+          "timings": {
+            "cache_n": 564,
+            "prompt_n": 68,
+            "prompt_ms": 1311.691,
+            "prompt_per_token_ms": 19.289573529411765,
+            "prompt_per_second": 51.84147790905023,
+            "predicted_n": 35,
+            "predicted_ms": 5247.437,
+            "predicted_per_token_ms": 154.33638235294117,
+            "predicted_per_second": 6.479353634926918
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论\n保留上面的四个栏目。这场会按模板开，话题是：做得好的 / 要改进的 / 预算。仅在「结论」里，将已确认的事实按讨论过的话题分小节。每个「#### 话题」必须独占一行，事实另起一行以「- 」开头。板上只有话题名称不算讨论过；没讨论过的话题在任何栏目都不要写，不要凭模板添加待讨论事项，也不要填「无」。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 小李：做得好的方面，这次发布没有停机。\n> 小王：要改进的方面，告警还是来得太晚。\n> 小李：同意，下次发布前由小王补上告警测试。\n> 小王：我来补。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n#### 做得好的\n- 这次发布没有停机\n#### 要改进的\n- 告警来得太晚\n#### 预算\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 下次发布前由小王补上告警测试\n\n### 待讨论\n无"
+              }
+            }
+          ],
+          "created": 1794420788,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 69,
+            "prompt_tokens": 692,
+            "total_tokens": 761,
+            "prompt_tokens_details": {
+              "cached_tokens": 66
+            }
+          },
+          "id": "chatcmpl-b5hN3v9C2thA6GfBOAXurkhuRztTZmAq",
+          "timings": {
+            "cache_n": 66,
+            "prompt_n": 626,
+            "prompt_ms": 7468.658,
+            "prompt_per_token_ms": 11.93076357827476,
+            "prompt_per_second": 83.8169320378574,
+            "predicted_n": 69,
+            "predicted_ms": 10618.261,
+            "predicted_per_token_ms": 156.15089705882355,
+            "predicted_per_second": 6.404061832723833
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are helping someone write a meeting summary.\nPreserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.\nWrite only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:\n### Conclusions\n### Decisions\n### To-dos\n### Open questions\nKeep the four sections above. Within Conclusions, group the confirmed facts under this meeting's template topics: Latency / Rollout / Hiring. Write each discussed topic as a separate heading line \"#### topic\", followed by its facts on separate bullet lines. A topic's name on the board alone is not evidence it was discussed. Omit undiscussed topics from every section, including Open questions, headings and empty placeholders."
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> Mina: For Latency, the measured p95 is eighty milliseconds.\n> Ravi: For Rollout, the canary has finished without errors.\n> Mina: We agree to enable the release tomorrow."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n\n### Open questions"
+              }
+            }
+          ],
+          "created": 1794420804,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 56,
+            "prompt_tokens": 721,
+            "total_tokens": 777,
+            "prompt_tokens_details": {
+              "cached_tokens": 111
+            }
+          },
+          "id": "chatcmpl-JmaRFrRNPEpYlxtKv9nRVRmpH7KYTTsk",
+          "timings": {
+            "cache_n": 111,
+            "prompt_n": 610,
+            "prompt_ms": 7452.909,
+            "prompt_per_token_ms": 12.217883606557377,
+            "prompt_per_second": 81.84723575720568,
+            "predicted_n": 56,
+            "predicted_ms": 8490.85,
+            "predicted_per_token_ms": 154.3790909090909,
+            "predicted_per_second": 6.477561139344117
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 桌面版周四发布，这是已经定下来的安排。\n> 移动版要不周五发布？\n> 移动版的日期还没定，先别按周五排。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n- 桌面版周四发布\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期"
+              }
+            }
+          ],
+          "created": 1794420815,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 38,
+            "prompt_tokens": 579,
+            "total_tokens": 617,
+            "prompt_tokens_details": {
+              "cached_tokens": 176
+            }
+          },
+          "id": "chatcmpl-BVfe7SRI1Tw4ZrglHM1aWZd17HWEVO3o",
+          "timings": {
+            "cache_n": 176,
+            "prompt_n": 403,
+            "prompt_ms": 4887.863,
+            "prompt_per_token_ms": 12.128692307692308,
+            "prompt_per_second": 82.44911937998262,
+            "predicted_n": 38,
+            "predicted_ms": 5717.577,
+            "predicted_per_token_ms": 154.52910810810812,
+            "predicted_per_second": 6.471272708701606
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n- 部署于周二正式上线\n- 周一只进行预演\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 无"
+              }
+            }
+          ],
+          "created": 1794420823,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 45,
+            "prompt_tokens": 577,
+            "total_tokens": 622,
+            "prompt_tokens_details": {
+              "cached_tokens": 518
+            }
+          },
+          "id": "chatcmpl-BVSDMrHL0z8wvNsYzaGhvj0TLCV4xp4n",
+          "timings": {
+            "cache_n": 518,
+            "prompt_n": 59,
+            "prompt_ms": 1336.423,
+            "prompt_per_token_ms": 22.651237288135594,
+            "prompt_per_second": 44.147698745082955,
+            "predicted_n": 45,
+            "predicted_ms": 6712.921,
+            "predicted_per_token_ms": 152.56638636363638,
+            "predicted_per_second": 6.554523731174551
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "你在帮人写会议摘要。\n保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。\n只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：\n### 结论\n### 决定\n### 待办\n### 待讨论"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 1024,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小林周五前整理测试报告\n\n### 待讨论\n- 如果周四测试失败，部署日期是否顺延"
+              }
+            }
+          ],
+          "created": 1794420831,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-9B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 45,
+            "prompt_tokens": 585,
+            "total_tokens": 630,
+            "prompt_tokens_details": {
+              "cached_tokens": 518
+            }
+          },
+          "id": "chatcmpl-jtOOc8p980xQawPzeGnxGGSRXKiaHyQy",
+          "timings": {
+            "cache_n": 518,
+            "prompt_n": 67,
+            "prompt_ms": 1376.064,
+            "prompt_per_token_ms": 20.53826865671642,
+            "prompt_per_second": 48.68959583275196,
+            "predicted_n": 45,
+            "predicted_ms": 6745.526,
+            "predicted_per_token_ms": 153.3074090909091,
+            "predicted_per_second": 6.522841954800857
+          }
+        }
+      }
+    ],
+    "rescored": {
+      "passed": 11,
+      "total": 15,
+      "added_failure": {
+        "case": "zh-in-the-moment-is-no-todo",
+        "failure": "待办 lacks any of [\"小王\"]"
+      },
+      "regenerated": false
+    },
+    "manual_review": [
+      {
+        "case": "zh-guess-stays-open",
+        "finding": "Wednesday deployment is omitted; an unstated deployment-owner question is invented."
+      },
+      {
+        "case": "en-guess-stays-open",
+        "finding": "The uncertain count is presupposed, an unstated checker-owner question is invented, and the stated Wednesday schedule is moved to Open questions."
+      },
+      {
+        "case": "zh-in-the-moment-is-no-todo",
+        "finding": "The task survives but its explicitly assigned owner 小王 is lost, already in the raw model response. The old checks passed it."
+      },
+      {
+        "case": "zh-stated-date-beside-tentative-date",
+        "finding": "The old checker rejects the bare label 移动版发布日期 under Open questions because it lacks an explicit uncertainty keyword. The label itself asserts neither Friday nor a confirmed date; this is a checker false positive, retained in the automated count and not silently rescored."
+      },
+      {
+        "case": "zh-stated-date-corrected",
+        "finding": "Both Tuesday deployment and the separate Monday rehearsal survive in this 9B run."
+      }
+    ]
+  },
+  "rejected_separate_sections": {
+    "decision": "Reject: 2/4, with 16 model calls. The Chinese Wednesday schedule survives, but the English count is still presupposed, Monday rehearsal is still lost and a deployment To-do is added without an explicit task assignment. No multi-call summary architecture was added to production.",
+    "method": "The temporary proxy replaces each final-summary request with four independent section-specific requests, 512 output tokens each, then assembles the sections for the existing production cleanup/checker. Intermediate-note calls were unchanged; no long-meeting case was run for this failed screening.",
+    "rules": {
+      "zh": [
+        "提取会议中直接陈述的事实、完成情况和日程，保留日期、主体和否定。陈述本身可作为事实，不需要另一人再确认。依据后面的明确更正更新旧事实，保留更正中同时说明的其他独立日程。猜测、问题和条件假设不能变成事实。",
+        "提取会上明确接受的选择和安排。后面的明确同意或更正优先；已撤回的方案不作为决定。仅仅提问、建议、推测或暂定的方案不能算决定，不从笔迹标记推断决定。",
+        "提取明确承诺或分派的会后工作，保留任务、已知人名和截止时间，包括和其他话题放在同一条发言里的任务。已经完成或当场完成的操作不是待办。自动字母编号不是人名，不用发言人、负责人等代称补人名；缺失的人名或日期省略，任务仍保留。每项以 - [ ] 开头。",
+        "只提取原文确实提出、到会末仍未解决的问题、猜测或暂定事项。明确回答并被接受的问题不再列出；部分回答只保留尚未回答的部分，暂定回答仍未解决。未确认的数量或条件不能成为问题的已知前提。不要因为材料没交代负责人、细节或方法就增添问题，也不要把已陈述的事实和日程变成未决项。"
+      ],
+      "en": [
+        "Extract directly stated facts, completed work and schedules, preserving dates, subjects and negations. A statement does not require confirmation by another speaker. Apply later explicit corrections to older facts, retaining any separate schedule stated in the correction. Guesses, questions and conditional premises must not become facts.",
+        "Extract explicitly accepted choices and arrangements. Later explicit agreement or corrections take precedence; withdrawn plans are not decisions. Mere questions, suggestions, guesses or tentative proposals are not decisions. Do not infer decisions from pen marks.",
+        "Extract explicitly promised or assigned work after the meeting, preserving tasks, stated names and deadlines, including a task stated alongside another topic. Completed or in-meeting actions are not To-dos. Automatic letter labels are not names; do not invent role placeholders. Omit an unknown owner or date but retain the task. Start each item with - [ ].",
+        "Extract only questions, guesses or tentative matters actually raised and still unresolved at the end. Remove questions explicitly answered and accepted later. For partial answers, retain only the unanswered part; tentative answers do not resolve it. Never assume an unconfirmed count or condition as a known premise in a question. Do not invent questions about owners, details or methods merely because they were not stated. Do not turn stated facts or schedules into open issues."
+      ]
+    },
+    "report": {
+      "label": "scoped-screen",
+      "repeat": 1,
+      "cases_sha256": "9f5b4157bfbd831a69c014e2a93ee4a0c3197b00d0183ed30f5e7884013a295f",
+      "summary_source_sha256": "ca425f089ae74065e666f7ab88f625dfc62afdaaa201dcd8160523963b70978a",
+      "agent_source_sha256": "1e579a7f891570b013c213a47fe7a85ef4524bd0a2ee20a170c38ea351a02e66",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 部署计划于本周三上线。\n\n### 决定\n- 部署于本周三上线\n\n### 待办\n- [ ] 失败标准确认，时间待定。\n- [ ] 部署，时间：本周三。\n\n### 待讨论\n- 失败标准的具体数量（暂定两个，需后续确认）",
+          "failures": [],
+          "elapsed_ms": 12566
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Two failure criteria are pending verification.\n- Deployment is scheduled for Wednesday.\n\n### Decisions\n- Ship on Wednesday.\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+          "failures": [
+            "Conclusions/Decisions has \"two failure\"",
+            "Open questions has \"what are the two\""
+          ],
+          "elapsed_ms": 11038
+        },
+        {
+          "case": "zh-stated-date-corrected",
+          "run": 1,
+          "summary": "### 结论\n- 部署改至周二上线，周只做预演。\n\n### 决定\n- 部署改至周二上线，周只做预演。\n\n### 待办\n- [ ] 部署任务，截止时间：周二\n\n### 待讨论\n- 无",
+          "failures": [
+            "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+          ],
+          "elapsed_ms": 7941
+        },
+        {
+          "case": "zh-explicit-condition-not-an-event",
+          "run": 1,
+          "summary": "### 结论\n- 无\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小林于周五前整理测试报告\n\n### 待讨论\n- 若周四测试失败，部署日期如何调整（暂定顺延，待测试结果确认）。",
+          "failures": [],
+          "elapsed_ms": 7237
+        }
+      ]
+    },
+    "calls": [
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 2553,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「结论」栏目。只依据给出的会议记录和白板，按发言顺序整理。提取会议中直接陈述的事实、完成情况和日程，保留日期、主体和否定。陈述本身可作为事实，不需要另一人再确认。依据后面的明确更正更新旧事实，保留更正中同时说明的其他独立日程。猜测、问题和条件假设不能变成事实。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- 部署计划于本周三上线。"
+              }
+            }
+          ],
+          "created": 1794420924,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 10,
+            "prompt_tokens": 180,
+            "total_tokens": 190,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-RYzWeZ2BIAL0QYbvXxUc54x3Aed3AHXh",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 180,
+            "prompt_ms": 1717.658,
+            "prompt_per_token_ms": 9.542544444444443,
+            "prompt_per_second": 104.79385302545676,
+            "predicted_n": 10,
+            "predicted_ms": 832.823,
+            "predicted_per_token_ms": 92.53588888888889,
+            "predicted_per_second": 10.806617972846572
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 2361,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「决定」栏目。只依据给出的会议记录和白板，按发言顺序整理。提取会上明确接受的选择和安排。后面的明确同意或更正优先；已撤回的方案不作为决定。仅仅提问、建议、推测或暂定的方案不能算决定，不从笔迹标记推断决定。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- 部署于本周三上线"
+              }
+            }
+          ],
+          "created": 1794420926,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 8,
+            "prompt_tokens": 167,
+            "total_tokens": 175,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-e6OWlLhoOeBVJvJe5MXr8YhPQCXPkA45",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 167,
+            "prompt_ms": 1639.12,
+            "prompt_per_token_ms": 9.815089820359281,
+            "prompt_per_second": 101.88393772268046,
+            "predicted_n": 8,
+            "predicted_ms": 665.371,
+            "predicted_per_token_ms": 95.053,
+            "predicted_per_second": 10.52044648774894
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 4202,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「待办」栏目。只依据给出的会议记录和白板，按发言顺序整理。提取明确承诺或分派的会后工作，保留任务、已知人名和截止时间，包括和其他话题放在同一条发言里的任务。已经完成或当场完成的操作不是待办。自动字母编号不是人名，不用发言人、负责人等代称补人名；缺失的人名或日期省略，任务仍保留。每项以 - [ ] 开头。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- [ ] 失败标准确认，时间待定。\n- [ ] 部署，时间：本周三。"
+              }
+            }
+          ],
+          "created": 1794420930,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 24,
+            "prompt_tokens": 197,
+            "total_tokens": 221,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-TL6WLMXgbATP5tUpce6FhfjnFHnJAPLv",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 197,
+            "prompt_ms": 1958.405,
+            "prompt_per_token_ms": 9.941142131979696,
+            "prompt_per_second": 100.59206343938052,
+            "predicted_n": 24,
+            "predicted_ms": 2162.102,
+            "predicted_per_token_ms": 94.00443478260868,
+            "predicted_per_second": 10.637795996673608
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 3334,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「待讨论」栏目。只依据给出的会议记录和白板，按发言顺序整理。只提取原文确实提出、到会末仍未解决的问题、猜测或暂定事项。明确回答并被接受的问题不再列出；部分回答只保留尚未回答的部分，暂定回答仍未解决。未确认的数量或条件不能成为问题的已知前提。不要因为材料没交代负责人、细节或方法就增添问题，也不要把已陈述的事实和日程变成未决项。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 失败标准应该有两个吧？\n> 我也说不准，回头再对一下。\n> 行，那先往下说部署。\n> 部署这周三上线。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- 失败标准的具体数量（暂定两个，需后续确认）"
+              }
+            }
+          ],
+          "created": 1794420934,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 15,
+            "prompt_tokens": 199,
+            "total_tokens": 214,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-iHyKUaF86zta4TJ5nQsWTcv3QDd7QAld",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 199,
+            "prompt_ms": 1950.607,
+            "prompt_per_token_ms": 9.802045226130653,
+            "prompt_per_second": 102.01952520420566,
+            "predicted_n": 15,
+            "predicted_ms": 1326.306,
+            "predicted_per_token_ms": 94.73614285714287,
+            "predicted_per_second": 10.55563346618352
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 3341,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Write only the Conclusions section of meeting notes. Use only the supplied transcript and whiteboard, in speaking order. Extract directly stated facts, completed work and schedules, preserving dates, subjects and negations. A statement does not require confirmation by another speaker. Apply later explicit corrections to older facts, retaining any separate schedule stated in the correction. Guesses, questions and conditional premises must not become facts.\nWrite concise English bullet points only, without a heading or any other section. Write - None if there is nothing for this section. Mention a board number only if labeled explicitly in the source."
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- Two failure criteria are pending verification.\n- Deployment is scheduled for Wednesday."
+              }
+            }
+          ],
+          "created": 1794420937,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 17,
+            "prompt_tokens": 187,
+            "total_tokens": 204,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-krZvYNMR0EvMFiwEvPOkDJtSxmj4NDCU",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 187,
+            "prompt_ms": 1723.049,
+            "prompt_per_token_ms": 9.214165775401069,
+            "prompt_per_second": 108.52854445810885,
+            "predicted_n": 17,
+            "predicted_ms": 1539.979,
+            "predicted_per_token_ms": 96.2486875,
+            "predicted_per_second": 10.389752068047681
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 2311,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Write only the Decisions section of meeting notes. Use only the supplied transcript and whiteboard, in speaking order. Extract explicitly accepted choices and arrangements. Later explicit agreement or corrections take precedence; withdrawn plans are not decisions. Mere questions, suggestions, guesses or tentative proposals are not decisions. Do not infer decisions from pen marks.\nWrite concise English bullet points only, without a heading or any other section. Write - None if there is nothing for this section. Mention a board number only if labeled explicitly in the source."
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- Ship on Wednesday."
+              }
+            }
+          ],
+          "created": 1794420939,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 6,
+            "prompt_tokens": 172,
+            "total_tokens": 178,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-YI8eqdkQECW3rydLw4UbVwFU92mPIfLe",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 172,
+            "prompt_ms": 1779.714,
+            "prompt_per_token_ms": 10.34717441860465,
+            "prompt_per_second": 96.64474179559187,
+            "predicted_n": 6,
+            "predicted_ms": 476.555,
+            "predicted_per_token_ms": 95.311,
+            "predicted_per_second": 10.491968398191185
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 2482,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Write only the To-dos section of meeting notes. Use only the supplied transcript and whiteboard, in speaking order. Extract explicitly promised or assigned work after the meeting, preserving tasks, stated names and deadlines, including a task stated alongside another topic. Completed or in-meeting actions are not To-dos. Automatic letter labels are not names; do not invent role placeholders. Omit an unknown owner or date but retain the task. Start each item with - [ ].\nWrite concise English bullet points only, without a heading or any other section. Write - None if there is nothing for this section. Mention a board number only if labeled explicitly in the source."
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- None"
+              }
+            }
+          ],
+          "created": 1794420942,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 3,
+            "prompt_tokens": 201,
+            "total_tokens": 204,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-wPWrJh0JbtC1CuKrcigTCPn1j8VFtenv",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 201,
+            "prompt_ms": 2218.442,
+            "prompt_per_token_ms": 11.03702487562189,
+            "prompt_per_second": 90.60412667989516,
+            "predicted_n": 3,
+            "predicted_ms": 185.421,
+            "predicted_per_token_ms": 92.7105,
+            "predicted_per_second": 10.78626477044132
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 2799,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Write only the Open questions section of meeting notes. Use only the supplied transcript and whiteboard, in speaking order. Extract only questions, guesses or tentative matters actually raised and still unresolved at the end. Remove questions explicitly answered and accepted later. For partial answers, retain only the unanswered part; tentative answers do not resolve it. Never assume an unconfirmed count or condition as a known premise in a question. Do not invent questions about owners, details or methods merely because they were not stated. Do not turn stated facts or schedules into open issues.\nWrite concise English bullet points only, without a heading or any other section. Write - None if there is nothing for this section. Mention a board number only if labeled explicitly in the source."
+            },
+            {
+              "role": "user",
+              "content": "On the whiteboard:\n（空）\n\nTranscript:\n> There should be two failure criteria, right?\n> Not sure, we'll have to check.\n> Okay, moving on to deployment.\n> We ship on Wednesday."
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- What are the two failure criteria?"
+              }
+            }
+          ],
+          "created": 1794420945,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 9,
+            "prompt_tokens": 216,
+            "total_tokens": 225,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "id": "chatcmpl-LECC5zRgVLWX4tvJxNvgo4wAmkIv16PS",
+          "timings": {
+            "cache_n": 0,
+            "prompt_n": 216,
+            "prompt_ms": 2009.536,
+            "prompt_per_token_ms": 9.303407407407407,
+            "prompt_per_second": 107.48749960189815,
+            "predicted_n": 9,
+            "predicted_ms": 712.089,
+            "predicted_per_token_ms": 89.011125,
+            "predicted_per_second": 11.234550737337607
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 2138,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「结论」栏目。只依据给出的会议记录和白板，按发言顺序整理。提取会议中直接陈述的事实、完成情况和日程，保留日期、主体和否定。陈述本身可作为事实，不需要另一人再确认。依据后面的明确更正更新旧事实，保留更正中同时说明的其他独立日程。猜测、问题和条件假设不能变成事实。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- 部署改至周二上线，周只做预演。"
+              }
+            }
+          ],
+          "created": 1794420947,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 14,
+            "prompt_tokens": 175,
+            "total_tokens": 189,
+            "prompt_tokens_details": {
+              "cached_tokens": 116
+            }
+          },
+          "id": "chatcmpl-BZkEwV3827gFjUmSyR8WFXp9WfFIc9zb",
+          "timings": {
+            "cache_n": 116,
+            "prompt_n": 59,
+            "prompt_ms": 844.358,
+            "prompt_per_token_ms": 14.31115254237288,
+            "prompt_per_second": 69.87557410482285,
+            "predicted_n": 14,
+            "predicted_ms": 1198.781,
+            "predicted_per_token_ms": 92.21392307692307,
+            "predicted_per_second": 10.844349384916844
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 2639,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「决定」栏目。只依据给出的会议记录和白板，按发言顺序整理。提取会上明确接受的选择和安排。后面的明确同意或更正优先；已撤回的方案不作为决定。仅仅提问、建议、推测或暂定的方案不能算决定，不从笔迹标记推断决定。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- 部署改至周二上线，周只做预演。"
+              }
+            }
+          ],
+          "created": 1794420950,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 14,
+            "prompt_tokens": 162,
+            "total_tokens": 176,
+            "prompt_tokens_details": {
+              "cached_tokens": 103
+            }
+          },
+          "id": "chatcmpl-c3831crLsozutywJWAiS6znY9mDNpvYg",
+          "timings": {
+            "cache_n": 103,
+            "prompt_n": 59,
+            "prompt_ms": 1289.237,
+            "prompt_per_token_ms": 21.851474576271187,
+            "prompt_per_second": 45.76350197830189,
+            "predicted_n": 14,
+            "predicted_ms": 1252.193,
+            "predicted_per_token_ms": 96.32253846153846,
+            "predicted_per_second": 10.38178619430072
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 1903,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「待办」栏目。只依据给出的会议记录和白板，按发言顺序整理。提取明确承诺或分派的会后工作，保留任务、已知人名和截止时间，包括和其他话题放在同一条发言里的任务。已经完成或当场完成的操作不是待办。自动字母编号不是人名，不用发言人、负责人等代称补人名；缺失的人名或日期省略，任务仍保留。每项以 - [ ] 开头。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- [ ] 部署任务，截止时间：周二"
+              }
+            }
+          ],
+          "created": 1794420952,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 11,
+            "prompt_tokens": 192,
+            "total_tokens": 203,
+            "prompt_tokens_details": {
+              "cached_tokens": 133
+            }
+          },
+          "id": "chatcmpl-jmDGFwN2TddE8YX8mMLvSiYB1ubPIJH2",
+          "timings": {
+            "cache_n": 133,
+            "prompt_n": 59,
+            "prompt_ms": 906.207,
+            "prompt_per_token_ms": 15.359440677966102,
+            "prompt_per_second": 65.10653746881232,
+            "predicted_n": 11,
+            "predicted_ms": 927.685,
+            "predicted_per_token_ms": 92.76849999999999,
+            "predicted_per_second": 10.779521065879043
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 1159,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「待讨论」栏目。只依据给出的会议记录和白板，按发言顺序整理。只提取原文确实提出、到会末仍未解决的问题、猜测或暂定事项。明确回答并被接受的问题不再列出；部分回答只保留尚未回答的部分，暂定回答仍未解决。未确认的数量或条件不能成为问题的已知前提。不要因为材料没交代负责人、细节或方法就增添问题，也不要把已陈述的事实和日程变成未决项。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 部署周一上线。\n> 更正一下，部署改到周二上线，周一只做预演。\n> 收到，就按周二安排。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- 无"
+              }
+            }
+          ],
+          "created": 1794420953,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 4,
+            "prompt_tokens": 194,
+            "total_tokens": 198,
+            "prompt_tokens_details": {
+              "cached_tokens": 135
+            }
+          },
+          "id": "chatcmpl-1lhFIZILqYgXq5lBvpdB1hAYQlnxSYv2",
+          "timings": {
+            "cache_n": 135,
+            "prompt_n": 59,
+            "prompt_ms": 816.211,
+            "prompt_per_token_ms": 13.834084745762713,
+            "prompt_per_second": 72.28523016719942,
+            "predicted_n": 4,
+            "predicted_ms": 276.947,
+            "predicted_per_token_ms": 92.31566666666667,
+            "predicted_per_second": 10.83239753454632
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 1325,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「结论」栏目。只依据给出的会议记录和白板，按发言顺序整理。提取会议中直接陈述的事实、完成情况和日程，保留日期、主体和否定。陈述本身可作为事实，不需要另一人再确认。依据后面的明确更正更新旧事实，保留更正中同时说明的其他独立日程。猜测、问题和条件假设不能变成事实。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- 无"
+              }
+            }
+          ],
+          "created": 1794420954,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 4,
+            "prompt_tokens": 183,
+            "total_tokens": 187,
+            "prompt_tokens_details": {
+              "cached_tokens": 116
+            }
+          },
+          "id": "chatcmpl-9gzxvOBQuwIIwUsojdtX9Oep1j6ff2xr",
+          "timings": {
+            "cache_n": 116,
+            "prompt_n": 67,
+            "prompt_ms": 966.591,
+            "prompt_per_token_ms": 14.426731343283583,
+            "prompt_per_second": 69.31577057928328,
+            "predicted_n": 4,
+            "predicted_ms": 264.404,
+            "predicted_per_token_ms": 88.13466666666666,
+            "predicted_per_second": 11.346273127486725
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 1170,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「决定」栏目。只依据给出的会议记录和白板，按发言顺序整理。提取会上明确接受的选择和安排。后面的明确同意或更正优先；已撤回的方案不作为决定。仅仅提问、建议、推测或暂定的方案不能算决定，不从笔迹标记推断决定。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- 无"
+              }
+            }
+          ],
+          "created": 1794420955,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 4,
+            "prompt_tokens": 170,
+            "total_tokens": 174,
+            "prompt_tokens_details": {
+              "cached_tokens": 103
+            }
+          },
+          "id": "chatcmpl-17AhHnfnHwvzX9u4HIKlx0fatYKs9Srf",
+          "timings": {
+            "cache_n": 103,
+            "prompt_n": 67,
+            "prompt_ms": 838.286,
+            "prompt_per_token_ms": 12.51173134328358,
+            "prompt_per_second": 79.92498980061697,
+            "predicted_n": 4,
+            "predicted_ms": 262.443,
+            "predicted_per_token_ms": 87.481,
+            "predicted_per_second": 11.431053600210332
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 2029,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「待办」栏目。只依据给出的会议记录和白板，按发言顺序整理。提取明确承诺或分派的会后工作，保留任务、已知人名和截止时间，包括和其他话题放在同一条发言里的任务。已经完成或当场完成的操作不是待办。自动字母编号不是人名，不用发言人、负责人等代称补人名；缺失的人名或日期省略，任务仍保留。每项以 - [ ] 开头。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- [ ] 小林于周五前整理测试报告"
+              }
+            }
+          ],
+          "created": 1794420957,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 12,
+            "prompt_tokens": 200,
+            "total_tokens": 212,
+            "prompt_tokens_details": {
+              "cached_tokens": 133
+            }
+          },
+          "id": "chatcmpl-hIL4oCvMNI6bYdN0oZzWkyzJoCnQ1u6O",
+          "timings": {
+            "cache_n": 133,
+            "prompt_n": 67,
+            "prompt_ms": 985.145,
+            "prompt_per_token_ms": 14.70365671641791,
+            "prompt_per_second": 68.01029290104503,
+            "predicted_n": 12,
+            "predicted_ms": 945.673,
+            "predicted_per_token_ms": 85.97027272727273,
+            "predicted_per_second": 11.631927738235099
+          }
+        }
+      },
+      {
+        "path": "/v1/chat/completions",
+        "status": 200,
+        "elapsed_ms": 2607,
+        "request": {
+          "model": "local",
+          "messages": [
+            {
+              "role": "system",
+              "content": "只写会议摘要中的「待讨论」栏目。只依据给出的会议记录和白板，按发言顺序整理。只提取原文确实提出、到会末仍未解决的问题、猜测或暂定事项。明确回答并被接受的问题不再列出；部分回答只保留尚未回答的部分，暂定回答仍未解决。未确认的数量或条件不能成为问题的已知前提。不要因为材料没交代负责人、细节或方法就增添问题，也不要把已陈述的事实和日程变成未决项。\n只输出简体中文简短列表，不写栏目标题或其他栏目。没有内容时写 - 无。仅在原文明确标注时提及板号。"
+            },
+            {
+              "role": "user",
+              "content": "白板上的内容：\n（空）\n\n会议记录：\n> 如果周四测试失败，部署日期怎么办？\n> 先别确定，可能要顺延，等测试结果再讨论。\n> 现在测试还没开始，测试报告由小林周五前整理。"
+            }
+          ],
+          "temperature": 0,
+          "repeat_penalty": 1.05,
+          "repeat_last_n": 256,
+          "max_tokens": 512,
+          "cache_prompt": true,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        },
+        "response": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "- 若周四测试失败，部署日期如何调整（暂定顺延，待测试结果确认）。"
+              }
+            }
+          ],
+          "created": 1794420960,
+          "model": "/home/hsiangnianian/.local/share/games.mmstudio.boardcast/models/Qwen3.5-4B-Q4_K_M.gguf",
+          "system_fingerprint": "b11954-f1a7dea99",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 20,
+            "prompt_tokens": 202,
+            "total_tokens": 222,
+            "prompt_tokens_details": {
+              "cached_tokens": 135
+            }
+          },
+          "id": "chatcmpl-SborrgHYQyC3hCHSdshyEaNVCOr6wmCE",
+          "timings": {
+            "cache_n": 135,
+            "prompt_n": 67,
+            "prompt_ms": 868.62,
+            "prompt_per_token_ms": 12.964477611940298,
+            "prompt_per_second": 77.1338444889595,
+            "predicted_n": 20,
+            "predicted_ms": 1670.327,
+            "predicted_per_token_ms": 87.91194736842105,
+            "predicted_per_second": 11.375018185061966
+          }
+        }
+      }
+    ]
+  },
+  "named_owner_check": {
+    "case": {
+      "id": "zh-in-the-moment-is-no-todo",
+      "why": "Something done there and then is not work for after the meeting.",
+      "lines": [
+        [
+          "A",
+          "我们先看一下这段视频。"
+        ],
+        [
+          "B",
+          "嗯，这里卡顿很明显。"
+        ],
+        [
+          "A",
+          "卡顿问题要查一下，小王负责。"
+        ],
+        [
+          "C",
+          "好，我来查。"
+        ]
+      ],
+      "checks": [
+        {
+          "in": [
+            "待办"
+          ],
+          "any": [
+            "卡顿"
+          ]
+        },
+        {
+          "in": [
+            "待办"
+          ],
+          "any": [
+            "小王"
+          ]
+        },
+        {
+          "in": [
+            "待办"
+          ],
+          "absent": [
+            "看一下",
+            "看视频"
+          ]
+        }
+      ]
+    },
+    "before_cases_sha256": "9f5b4157bfbd831a69c014e2a93ee4a0c3197b00d0183ed30f5e7884013a295f",
+    "after_cases_sha256": "17f78105bd27994ba951b27973be6c69639ef9469d8bc873f54b0be2ebb7601c",
+    "source_utterances_and_boards_unchanged": true,
+    "only_change": "Require 小王 in To-dos for the existing explicit assignment.",
+    "old_9b_false_pass": {
+      "case": "zh-in-the-moment-is-no-todo",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 查卡顿问题，截止时间：无，负责人：无\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 7354
+    },
+    "previous_4b_control_still_passes": {
+      "case": "zh-in-the-moment-is-no-todo",
+      "run": 1,
+      "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 4274
+    }
+  },
+  "ci_change": {
+    "workflow": ".github/workflows/eval.yml",
+    "summary_before_board_suites": true,
+    "early_artifact": "summary-report",
+    "summary_failure_still_fails_job": true,
+    "board_suites_after_summary_failure": "Both run if the server started successfully and the run is not cancelled.",
+    "asr_jobs_unchanged": true,
+    "conditions_reference": "https://docs.github.com/en/actions/reference/workflows-and-actions/expressions",
+    "static_validation": "actionlint 1.7.12 passes; ordering and success/summary-failure/server-failure/cancellation assertions pass. Live CI verification remains required."
+  },
+  "ci_on_base_commit": {
+    "rust_run": 43073720523,
+    "eval_run": 43073720723,
+    "merge_commit": "ef17d8fbc4fba4f6ce8c49e0140d9fabf057f311",
+    "verified_merge_parents": [
+      "20c17271e3a4174c7847d457a0d1d70a9f39ed2f",
+      "2a1e17e51c6a0eabef70a88a6b4771cd685c1e55"
+    ],
+    "asr": [
+      {
+        "engine": "routed",
+        "vad": true,
+        "commit": "ef17d8fbc4fba4f6ce8c49e0140d9fabf057f311",
+        "checks": {
+          "enforced": true,
+          "passed": true,
+          "failures": []
+        },
+        "sha256": "10c13a5f0e2cb3aea3a3ba8e6d36b8d06682600a3469fa1beaa545c1a4900c1b"
+      },
+      {
+        "engine": "sensevoice",
+        "vad": false,
+        "commit": "ef17d8fbc4fba4f6ce8c49e0140d9fabf057f311",
+        "checks": {
+          "enforced": false,
+          "passed": false,
+          "failures": [
+            "silence: speech hallucinated on silence"
+          ]
+        },
+        "sha256": "20245acece2899a0f06e43cfa8e277ead52cd95526fdd4d1b347e3d66d6bb58f"
+      },
+      {
+        "engine": "sensevoice",
+        "vad": true,
+        "commit": "ef17d8fbc4fba4f6ce8c49e0140d9fabf057f311",
+        "checks": {
+          "enforced": false,
+          "passed": true,
+          "failures": []
+        },
+        "sha256": "00c17f3067748213bdde074bacf2bf9245f22c9acb0ef27767bccde59107f955"
+      }
+    ]
+  },
+  "remaining": [
+    "Known summary semantic failures and real long-meeting acceptance",
+    "Physical Mac permissions, timestamp calibration and two-source Apple capacity/accuracy",
+    "Remaining 19 own-voice recordings and target-user trials",
+    "Merge/release"
+  ],
+  "validation": {
+    "checker_command": "cargo test -p boardcast-tools summary_eval::tests",
+    "checker_tests_passed": 7,
+    "checker_log_sha256": "cba122c92af0cabf4eae200ef4ad49f7077186f3716092c4f1e9146ca82b3b07",
+    "captured_calls": 35,
+    "actual_prompt_counts_match_preflight": true,
+    "all_calls_stop_normally": true,
+    "all_calls_fit_context": true,
+    "production_source_changed": false,
+    "owned_probe_servers_stopped": true
+  }
+}

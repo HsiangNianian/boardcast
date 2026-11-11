@@ -1,0 +1,799 @@
+{
+  "date": "2026-11-11",
+  "models": [
+    {
+      "label": "deepseek-flash-verified",
+      "repeat": 3,
+      "summary_source_sha256": "584b219a4b1eb9601979ce656e27c4380ed4c7c84f7895b006dc8b030294088a",
+      "agent_source_sha256": "6e6911354a07ea6318fdd32c50b36d655517c037eb05bbdfa77180cfc7b97d71",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 部署这周三上线\n\n### 待办\n- [ ] 再对一下失败标准\n\n### 待讨论\n- 失败标准是否应有两个（回头再对一下）",
+          "failures": []
+        },
+        {
+          "case": "zh-guess-stays-open",
+          "run": 2,
+          "summary": "### 结论\n- 无\n### 决定\n- 部署这周三上线\n### 待办\n- [ ] 核对失败标准（是否两个）\n### 待讨论\n- 失败标准是否应为两个；回头再对一下",
+          "failures": []
+        },
+        {
+          "case": "zh-guess-stays-open",
+          "run": 3,
+          "summary": "### 结论\n无\n### 决定\n- 部署这周三上线\n### 待办\n- [ ] 再对一下失败标准\n### 待讨论\n- 失败标准是否应该有两个",
+          "failures": []
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 1,
+          "summary": "### 结论\n- 三次重试仍不满足要求时，采用动态缩小字号兜底。\n### 决定\n- 采用动态缩小字号作为兜底方案。\n### 待办\n- 无\n### 待讨论\n- 无",
+          "failures": []
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 2,
+          "summary": "### 结论\n- 三次重试仍不满足要求时，采用动态缩小字号兜底。\n### 决定\n- 不做硬切，改用动态缩小字号兜底。\n### 待办\n无\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 3,
+          "summary": "### 结论\n- 三次重试仍不满足要求时，不做硬切，采用动态缩小字号兜底。\n### 决定\n- 采用动态缩小字号兜底。\n### 待办\n无\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 无\n### 决定\n- 无\n### 待办\n- 无\n### 待讨论\n- 三次重试仍不满足要求，之后怎么办；提到也许可缩小字号，但需稍后验证。",
+          "failures": []
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 2,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n无\n### 待讨论\n- 三次重试仍不满足要求后怎么办\n- 也许可以缩小字号，但需稍后验证",
+          "failures": []
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 3,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n无\n### 待讨论\n- 三次重试仍不满足要求后怎么办未定；提到也许可缩小字号，但需稍后验证。",
+          "failures": []
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 1,
+          "summary": "### 结论\n- 硬切会把字从中间切断，效果不好。\n- 方案二按词换行获得同意。\n\n### 决定\n- 撤回方案一，改用方案二（按词换行）。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 2,
+          "summary": "### 结论\n- 方案一硬切会切断字，已撤回。\n- 方案二按词换行获同意。\n### 决定\n- 采用方案二，按词换行。\n### 待办\n- 无\n### 待讨论\n- 无",
+          "failures": []
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 3,
+          "summary": "### 结论\n- 方案一硬切会从字中间切断，已撤回。\n- 已确认改用方案二，按词换行。\n### 决定\n- 采用方案二，按词换行。\n### 待办\n无\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 1,
+          "summary": "### 结论\n无\n### 决定\n无\n### 待办\n- [ ] 写接口文档，周五前发给大家\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 2,
+          "summary": "### 结论\n- 无\n### 决定\n- 无\n### 待办\n- [ ] 周五前写完接口文档并发给大家\n### 待讨论\n- 无",
+          "failures": []
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 3,
+          "summary": "### 结论\n无\n### 决定\n- 接口文档周五前发给大家。\n### 待办\n- [ ] 周五前写完接口文档并发给大家。\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 1,
+          "summary": "### 结论\n- 视频中存在明显卡顿\n### 决定\n- 无\n### 待办\n- [ ] 查卡顿问题，小王负责\n### 待讨论\n- 无",
+          "failures": []
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 2,
+          "summary": "### 结论\n- 视频中存在明显卡顿\n### 决定\n- 卡顿问题由小王负责排查\n### 待办\n- [ ] 小王排查卡顿问题\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 3,
+          "summary": "### 结论\n- 视频中卡顿明显。\n### 决定\n- 卡顿问题由小王负责排查。\n### 待办\n- [ ] 小王排查卡顿问题。\n### 待讨论\n- 无",
+          "failures": []
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Should there be two failure criteria? This still needs checking.",
+          "failures": []
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 2,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n### Decisions\n- None\n### To-dos\n- [ ] Check whether there should be two failure criteria.\n### Open questions\n- Should there be two failure criteria?",
+          "failures": []
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 3,
+          "summary": "### Conclusions\nNone\n### Decisions\n- Ship on Wednesday.\n### To-dos\nNone\n### Open questions\n- Whether there should be two failure criteria — not sure; to be checked.",
+          "failures": []
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 1,
+          "summary": "### Conclusions\n- None\n### Decisions\n- If three retries still don't fit, shrink the font as a fallback; no hard cut.\n### To-dos\n- None\n### Open questions\n- None",
+          "failures": []
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 2,
+          "summary": "### Conclusions\nNone\n### Decisions\n- If three retries still don’t fit, shrink the font as a fallback; no hard cut.\n### To-dos\nNone\n### Open questions\nNone",
+          "failures": []
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 3,
+          "summary": "### Conclusions\n- None\n### Decisions\n- If three retries still don't fit, shrink the font as a fallback; no hard cut.\n### To-dos\n- None\n### Open questions\n- None",
+          "failures": []
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 无\n### 决定\n- 缓存保留时间定为十分钟\n### 待办\n- 无\n### 待讨论\n- 缓存过期后的刷新负责人是谁，下次讨论",
+          "failures": []
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 2,
+          "summary": "### 结论\n- 无\n### 决定\n- 缓存保留时间定为十分钟。\n### 待办\n- 无\n### 待讨论\n- 缓存过期后的刷新负责人未定，下次讨论。",
+          "failures": []
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 3,
+          "summary": "### 结论\n- 缓存保留十分钟已确认\n### 决定\n- 缓存保留时间定为十分钟\n### 待办\n- 无\n### 待讨论\n- 缓存过期后的刷新负责人未定，下次讨论",
+          "failures": []
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- None\n### Decisions\n- The cache lifetime is ten minutes.\n### To-dos\n- [ ] Discuss cache refresh ownership next time.\n### Open questions\n- Who will own refreshing the cache?",
+          "failures": []
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 2,
+          "summary": "### Conclusions\nNone\n### Decisions\n- Cache lifetime is ten minutes.\n### To-dos\nNone\n### Open questions\n- Who will refresh the cache?",
+          "failures": []
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 3,
+          "summary": "### Conclusions\n- None\n### Decisions\n- Cache lifetime is ten minutes.\n### To-dos\n- None\n### Open questions\n- Who will refresh the cache? Ownership is to be discussed next time.",
+          "failures": []
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 1,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 下次发布前由小王补上告警测试。\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 2,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 小王在下次发布前补上告警测试。\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 3,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警还是来得太晚。\n### 决定\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 下次发布前由小王补上告警测试。\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "en-template-custom",
+          "run": 1,
+          "summary": "### Conclusions\n#### Latency\n- Measured p95 is eighty milliseconds.\n#### Rollout\n- The canary has finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\nNone\n\n### Open questions\nNone",
+          "failures": []
+        },
+        {
+          "case": "en-template-custom",
+          "run": 2,
+          "summary": "### Conclusions\n#### Latency\n- Measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary has finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\nNone\n\n### Open questions\nNone",
+          "failures": []
+        },
+        {
+          "case": "en-template-custom",
+          "run": 3,
+          "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary has finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\nNone\n\n### Open questions\nNone",
+          "failures": []
+        }
+      ],
+      "generation_cases_sha256": "70d38c6e543ea78579932b44b7c933dd0564060d9f90175729bf318349150df8",
+      "checked_cases_sha256": "79dd8aba19e222e69ef2577a30102504e0a4f746006a3dedf76566365fe13457",
+      "recheck_note": "Original model output retained unchanged; stronger checks added after manual review, then re-scored offline on 2026-11-11.",
+      "passed": 36,
+      "total": 36,
+      "model": {
+        "name": "deepseek-flash",
+        "temperature": 0.2,
+        "thinking": "enabled",
+        "reasoning_effort": "high"
+      },
+      "manual_review": "All distinct outputs read against the synthetic source: facts, question certainty, partial answers, retractions, owners, dates and template topics. No material mismatch found in these samples; this is not a general accuracy guarantee."
+    },
+    {
+      "label": "qwen35-4b-verified",
+      "repeat": 3,
+      "summary_source_sha256": "584b219a4b1eb9601979ce656e27c4380ed4c7c84f7895b006dc8b030294088a",
+      "agent_source_sha256": "6e6911354a07ea6318fdd32c50b36d655517c037eb05bbdfa77180cfc7b97d71",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+          "failures": [
+            "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+          ]
+        },
+        {
+          "case": "zh-guess-stays-open",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+          "failures": [
+            "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+          ]
+        },
+        {
+          "case": "zh-guess-stays-open",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准具体有哪些？",
+          "failures": [
+            "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+          ]
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n- 采用动态缩小字号作为兜底方案，不再执行硬切逻辑。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+          "failures": []
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+          "failures": []
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案（建议缩小字号，需后续验证）",
+          "failures": []
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n- 改用方案二，按词换行\n- 撤回方案一\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档，周五前\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 小王负责查卡顿问题\n\n### 待讨论\n无",
+          "failures": []
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+          "failures": [
+            "Open questions has \"what are the two\""
+          ]
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 2,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+          "failures": [
+            "Open questions has \"what are the two\""
+          ]
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 3,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+          "failures": [
+            "Open questions has \"what are the two\""
+          ]
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 1,
+          "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback.\n\n### Decisions\n- No hard cut will occur; font shrinking is the fallback mechanism.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": []
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 2,
+          "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback.\n\n### Decisions\n- No hard cut will occur; font shrinking is the fallback mechanism.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": []
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 3,
+          "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback.\n\n### Decisions\n- No hard cut will occur; font shrinking is the fallback mechanism.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": []
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+          "failures": []
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 2,
+          "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+          "failures": []
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 3,
+          "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存过期后的刷新负责人是谁。",
+          "failures": []
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+          "failures": []
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 2,
+          "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+          "failures": []
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 3,
+          "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+          "failures": []
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 1,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n- 无",
+          "failures": []
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 2,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n- 无",
+          "failures": []
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 3,
+          "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试（下次发布前）\n\n### 待讨论\n- 无",
+          "failures": []
+        },
+        {
+          "case": "en-template-custom",
+          "run": 1,
+          "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": []
+        },
+        {
+          "case": "en-template-custom",
+          "run": 2,
+          "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": []
+        },
+        {
+          "case": "en-template-custom",
+          "run": 3,
+          "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary rollout completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+          "failures": []
+        }
+      ],
+      "generation_cases_sha256": "70d38c6e543ea78579932b44b7c933dd0564060d9f90175729bf318349150df8",
+      "checked_cases_sha256": "79dd8aba19e222e69ef2577a30102504e0a4f746006a3dedf76566365fe13457",
+      "recheck_note": "Original model output retained unchanged; stronger checks added after manual review, then re-scored offline on 2026-11-11.",
+      "passed": 30,
+      "total": 36,
+      "model": {
+        "name": "Qwen3.5-4B-Q4_K_M.gguf",
+        "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+        "llama_build": "b11954",
+        "device": "CPU",
+        "threads": 4,
+        "context": 4096,
+        "temperature": 0,
+        "repeat_penalty": 1.05,
+        "enable_thinking": false
+      },
+      "manual_review": "All distinct outputs read; Qwen omits the confirmed Chinese deployment date and presupposes an unconfirmed number in the English question. Both template cases retain discussed topics and omit undiscussed topics. This is synthetic, short-meeting coverage only."
+    }
+  ],
+  "template_boards": {
+    "cases_sha256": "5ba69dac39efa38f309a5498add9ccf2b7e953cc2d7653944508131a2d98fb1c",
+    "repeat": 1,
+    "qwen35_4b": [
+      {
+        "id": "template-zh-retro",
+        "graph": {
+          "nodes": [
+            {
+              "id": "n1",
+              "kind": "topic",
+              "label": "做得好的",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n2",
+              "kind": "topic",
+              "label": "要改进的",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n3",
+              "kind": "topic",
+              "label": "行动项",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n4",
+              "label": "零停机",
+              "aliases": [],
+              "kind": "item",
+              "parent": "n1",
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n5",
+              "label": "告警太晚",
+              "aliases": [],
+              "kind": "item",
+              "parent": "n2",
+              "marks": [],
+              "ink": "ink"
+            }
+          ],
+          "edges": [],
+          "groups": [],
+          "nextNode": 6,
+          "nextGroup": 1,
+          "template": [
+            "做得好的",
+            "要改进的",
+            "行动项"
+          ]
+        },
+        "final_soft": [
+          {
+            "code": "empty_topic",
+            "detail": "行动项"
+          }
+        ],
+        "final_hard": [],
+        "fit_zoom": 1.0,
+        "hard_steps": 0,
+        "soft_over_turns": 3,
+        "hints_sent": 0,
+        "model_ms": 6453,
+        "turns": 2,
+        "tokens_out": 18,
+        "empty_replies": 0,
+        "errors": 0
+      },
+      {
+        "id": "template-en-custom",
+        "graph": {
+          "nodes": [
+            {
+              "id": "n1",
+              "kind": "topic",
+              "label": "Latency",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n2",
+              "kind": "topic",
+              "label": "Rollout",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n3",
+              "kind": "topic",
+              "label": "Hiring",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n4",
+              "label": "p95 latency: 80 ms",
+              "aliases": [],
+              "kind": "note",
+              "parent": "n1",
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n5",
+              "label": "Canary completed",
+              "aliases": [],
+              "kind": "item",
+              "parent": "n2",
+              "marks": [],
+              "ink": "ink"
+            }
+          ],
+          "edges": [],
+          "groups": [],
+          "nextNode": 6,
+          "nextGroup": 1,
+          "template": [
+            "Latency",
+            "Rollout",
+            "Hiring"
+          ]
+        },
+        "final_soft": [
+          {
+            "code": "empty_topic",
+            "detail": "Hiring"
+          }
+        ],
+        "final_hard": [],
+        "fit_zoom": 1.0,
+        "hard_steps": 0,
+        "soft_over_turns": 3,
+        "hints_sent": 0,
+        "model_ms": 41891,
+        "turns": 2,
+        "tokens_out": 24,
+        "empty_replies": 0,
+        "errors": 0
+      }
+    ],
+    "deepseek_flash_rules_only": [
+      {
+        "id": "template-zh-retro",
+        "graph": {
+          "nodes": [
+            {
+              "id": "n1",
+              "kind": "topic",
+              "label": "做得好的",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n2",
+              "kind": "topic",
+              "label": "要改进的",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n3",
+              "kind": "topic",
+              "label": "行动项",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n4",
+              "label": "发布零停机",
+              "aliases": [],
+              "kind": "item",
+              "parent": "n1",
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n5",
+              "label": "告警太晚",
+              "aliases": [],
+              "kind": "item",
+              "parent": "n2",
+              "marks": [],
+              "ink": "ink"
+            }
+          ],
+          "edges": [],
+          "groups": [],
+          "nextNode": 6,
+          "nextGroup": 1,
+          "template": [
+            "做得好的",
+            "要改进的",
+            "行动项"
+          ]
+        },
+        "final_soft": [
+          {
+            "code": "empty_topic",
+            "detail": "行动项"
+          }
+        ],
+        "final_hard": [],
+        "fit_zoom": 1.0,
+        "hard_steps": 0,
+        "soft_over_turns": 3,
+        "hints_sent": 0,
+        "model_ms": 1388,
+        "turns": 2,
+        "tokens_out": 38,
+        "empty_replies": 0,
+        "errors": 0
+      },
+      {
+        "id": "template-en-custom",
+        "graph": {
+          "nodes": [
+            {
+              "id": "n1",
+              "kind": "topic",
+              "label": "Latency",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n2",
+              "kind": "topic",
+              "label": "Rollout",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n3",
+              "kind": "topic",
+              "label": "Hiring",
+              "aliases": [],
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n4",
+              "label": "p95 latency 80 ms",
+              "aliases": [],
+              "kind": "item",
+              "parent": "n1",
+              "marks": [],
+              "ink": "ink"
+            },
+            {
+              "id": "n5",
+              "label": "Canary completed",
+              "aliases": [],
+              "kind": "item",
+              "parent": "n2",
+              "marks": [],
+              "ink": "ink"
+            }
+          ],
+          "edges": [],
+          "groups": [],
+          "nextNode": 6,
+          "nextGroup": 1,
+          "template": [
+            "Latency",
+            "Rollout",
+            "Hiring"
+          ]
+        },
+        "final_soft": [
+          {
+            "code": "empty_topic",
+            "detail": "Hiring"
+          }
+        ],
+        "final_hard": [],
+        "fit_zoom": 1.0,
+        "hard_steps": 0,
+        "soft_over_turns": 3,
+        "hints_sent": 0,
+        "model_ms": 3497,
+        "turns": 2,
+        "tokens_out": 377,
+        "empty_replies": 0,
+        "errors": 0
+      }
+    ],
+    "review": "All four final graphs retain the three template topics; both spoken facts have the correct parent. Qwen uses a note rather than an item for Latency, so strict item F1 is 0.67 on that case; do not report it as a perfect item score."
+  }
+}

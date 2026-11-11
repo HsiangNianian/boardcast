@@ -1,0 +1,151 @@
+{
+  "date": "2026-11-12",
+  "captured_at_utc": "2026-11-11T20:53:06.004114+00:00",
+  "base_commit": "ff8bcfd60b372f1f100351ab00ecfebe4161d1bd",
+  "scope": "Restore live SpeechAnalyzer partials from the former Tauri implementation. Linux protocol/GUI evidence only; Swift compilation and native Mac recognition remain unverified at capture time. Later same-source Mac compilation and native helper self-tests are verified in ci_follow_up; physical recognition remains unverified.",
+  "reference": {
+    "commit": "4f9ab26a46f07cc5575460fd7431f1a995e705cc",
+    "path": "src-tauri/apple-speech/main.swift",
+    "apple_api": "https://developer.apple.com/documentation/speech/speechtranscriber/reportingoption/volatileresults"
+  },
+  "behavior": {
+    "input": "Analyzer capability advertises streaming; UInt32.max switches the existing helper from sentence requests to continuous raw 16 kHz float32 PCM. Persistent pull-based conversion preserves samples split across reads; EOF finalizes once.",
+    "auto": "Opening detection and all queued original sentences finish first; the remaining retained PCM and pending VAD tail start the native stream at their original source offset. Manual Analyzer starts streaming immediately. Legacy Apple and file-evaluation defaults retain sentence mode.",
+    "display": "Microphone and system previews are separate and transient, shown in the transcript or floating over the board. Only finals enter glossary processing, meeting storage and board requests. Capture/meeting switches and stop clear previews; stale finals cannot clear a newer capture preview.",
+    "validation": "Native event ranges must be finite, nonnegative, ordered, nonoverlapping and bounded by supplied audio (100 ms tolerance). Repeated finalized ranges are ignored. Errors retain any valid final already received in the same batch.",
+    "stop": "One five-second helper finalization window; EOF closes input. A final received before a later timeout is preserved. This is not a bound on total device shutdown.",
+    "limits": "30 seconds of original PCM are retained for final voiceprints and capture endpoints. Later text survives, but evicted audio can leave speaker/start timestamps unknown. Live final ASR compute time is null because computation overlaps capture.",
+    "metrics": "Per-source nonempty partial counts, first/last receipt since capture preparation and bounded Rust-to-UI receipt stats. No acoustic-onset, last-spoken-sound or screen-presentation measurement."
+  },
+  "validation": {
+    "audio_regular": {
+      "passed": 28,
+      "ignored": 1,
+      "model": "installed Silero VAD and SenseVoice; CAM++ absent"
+    },
+    "ui_regular": {
+      "passed": 12,
+      "ignored": 2
+    },
+    "explicit_integration": {
+      "audio_tests_passed": 1,
+      "ui_tests_passed": 2,
+      "ui_duration_seconds": 139.53,
+      "scenarios": [
+        "Existing three-language Auto routing, PCM preservation and stop checks",
+        "Existing six dual-source jobs including recognition/capture failures",
+        "New dual manual Analyzer stream",
+        "New dual Auto opening-to-stream handoff"
+      ],
+      "assertions": [
+        "Both sources publish partials before their native EOF final",
+        "Exactly one native final per source",
+        "Native end position matches total captured PCM across handoff",
+        "Auto opening sentences keep measured sentence ASR time",
+        "Manual native ASR time remains absent",
+        "Queues drain and original meeting/capture/source identities survive"
+      ],
+      "apple_backend": "Python protocol fixture; not Apple speech recognition"
+    },
+    "release": "passed, 57.69 seconds",
+    "callers": "hear-file example, asr-eval and tools checks passed",
+    "initial_failure": "One pre-existing stopped-Auto test initially hit Linux ETXTBSY while spawning its unique temporary script. Full regular rerun passed; timeout expectations were not weakened.",
+    "log_sha256": {
+      "initial_regular": "56688727f53c7f85199fe26a034898c52a6637a927f8a640feada4dbde9f8f75",
+      "regular_audio": "9b1a3a7177f2a4dc5f9091bb7062d4c745b2649498cdedf940bc615c90e8fb49",
+      "regular_ui": "3dfac93935029e2207aafb7cafe36505afd4530ee8ec343a457dc470417d7d3b",
+      "integration": "5fe33f28d201759441160750d1dff579cafacb197d67f60c78ff544f7c073518",
+      "release": "43154cde17f8b3d1bfa321a1f2aaa21fe25339f4a363af75817df55866ad8846",
+      "example": "feb24a1e15f8bb4d6881bb1641e2e61dc43e68da617212079964ac7b6367ad04",
+      "callers": "9f9456d75d0dcf5489e64f2adbb032eb93e529cb6df95bf02f0689a97ae1b151"
+    }
+  },
+  "gui": {
+    "platform": "isolated Ubuntu 24.04 X11 Space; synthetic silent system packets, virtual microphone, protocol helper and loopback no-op board provider",
+    "image_digest": "sha256:71dbd9f077adcbe5e27f2041391bac69afce8093f1ce757e02c9167495ac7dc4",
+    "binary_sha256": "1386b9e247d3d252214763cff279d49f3c376551f18e9ea96f8dbd7f57d7f2b7",
+    "build_note": "After the GUI binary build, only audio doc comments, the CLI example formatting, test-only integration code, workflow and documentation changed; UI/runtime behavior is identical.",
+    "checks": [
+      "Separate en-US microphone and ja-JP system previews visible in transcript",
+      "Both previews visible after hiding transcript",
+      "No board requests and no stored lines before native finals",
+      "Stop clears previews and stores exactly two source-labeled finals, both heard.asrMs null",
+      "Starting another capture then creating a new meeting leaves it empty after old results drain",
+      "Board request count stays two after meeting switch",
+      "No speech helper remains after stop/switch",
+      "Copied diagnostics retain two stopped captures; partial counts match UI-receipt counts, queues empty and physical timing fields remain null"
+    ],
+    "capture_partial_counts": [
+      [
+        58,
+        60
+      ],
+      [
+        9,
+        9
+      ]
+    ],
+    "board_requests": 2,
+    "stored_final_lines": 2,
+    "artifacts_sha256": {
+      "20261111-204529-z5nd.json": "8bc3966e0dc6808da648c43794277e2b309c606c1532f9e51f187c9ef0003a1d",
+      "requests.jsonl": "e5bbc3a5a6fd97ed0a02bc79d1b25df0f113ed71f8ac7adf6be49170dd257cd1",
+      "boardcast-speech": "d87d51968a0d7490082f25830b29d80df125794b42d9f0a773378b8ab6f6a37f",
+      "app.log": "1f17af295076525fb0604f27d528802e94d2f2c7c995253239ea693e29ca0ec2",
+      "mock.py": "bcd837c13f208f6902e6240f7e6715e8c660106d906bb2b3395ed08a41d4d8a0",
+      "setup.py": "751737facbffd853ad93d5455f03c5a79f29134e798baec8e3e7aad40eaeb3ac",
+      "diagnostics.json": "7adc982a1c0c80c711123a0c4faa9cb4bdafa512e76d77ad8061f9ff4d592041",
+      "new-meeting.png": "945a265a9cb723716007d53831247b604ea9b9118bd32ee300cde5e579e06db8",
+      "finals-panel.png": "0e665f0a21bcd437ab4442ec40299c460d944b96348b277b164b269e72f9673e",
+      "partials-floating.png": "bafade746e42a1570576e55e6c900ddccfdca150394ba11ee1c2d9b5992f9c7b",
+      "partials-panel.png": "3ac118c16d76620f5b305fe7116f80d7e043ecacc7aa04a51679f37a5019fbf5"
+    },
+    "setup_limits": "The current Linux image pull failed for disk space; the existing pinned image was used. Host libc/libm/runtime libraries were copied into the isolated app directory to run the Arch-built binary; no system libraries were replaced. The Space was deleted after evidence download."
+  },
+  "source_sha256": {
+    "crates/audio/apple/speech.swift": "bac3643fe86ec0d105163118fc530a3461d4bf5560453d743a3cbe4f6cd3fcfa",
+    "crates/audio/src/helper.rs": "d2de8e1ffb81fd7b2acf7d779a20b248175adc2c05ea15574d4b8ba27a39c734",
+    "crates/audio/src/lib.rs": "f84ec938dc1e24257af0cd76b1e3e015b4745a0dfe3cf5461cbb0a99cd90d24b",
+    "crates/audio/src/system.rs": "569d9cd15be0ccba1f8741f5f00c149189be487f785eb728a7d4b6d26d971b0e",
+    "crates/audio/tests/streaming_helper.py": "8adc1f14e5457bc2d86663edf6992ba96d949b63fb248bc1321fbe3c5c3025d2",
+    "crates/audio/examples/hear-file.rs": "badb8c0b9506d5e2be86e98f38968d21dbaff434b8bf088c423053774f972c3b",
+    "crates/ui/src/app.rs": "b5c644d7509634d21c3ab99ac623abc437a3540ece92fb927d60b9aeb56dda31",
+    "crates/ui/src/listen.rs": "4db31ef1c4db8701bff5ba9cc46f0f6e43c8c930c3bc1feea051f5f8566b887b",
+    "crates/ui/src/pipeline.rs": "5276107bb6e8c47ca4383c28ffc4342121cab145aaf807dfe225c0c092383002",
+    ".github/workflows/rust.yml": "08dd4b62edf3de4a59965088feb10c6ad8049022da309d59070ed4e4bf3c1346"
+  },
+  "remaining": [
+    "Physical Mac microphone/system permissions, actual Analyzer partial/final quality, clock calibration and displayed latency",
+    "CAM++ speaker accuracy for native final ranges",
+    "Cold/warm, sustained dual-source load and 30-minute device/thermal/battery measurements",
+    "19 missing own-voice recordings and target-user trials remain unchanged; no private audio was transferred or used here"
+  ],
+  "ci_follow_up": {
+    "captured_at_utc": "2026-11-11T22:09:56.670339+00:00",
+    "commit": "45b2bbc29f4ab3989e6218e550c7f922fb312499",
+    "run": 43103679620,
+    "conclusion": "success",
+    "all_five_jobs_passed": true,
+    "source_hashes_unchanged": true,
+    "macs": [
+      {
+        "job": 130801337898,
+        "log_sha256": "d59662c43d9f39b1592b55f9dec33b6c323b5ad49f43f05f7c8efd65a87503fa",
+        "packaged_self_check": true,
+        "agent_passed": 53,
+        "audio_passed": 28,
+        "audio_ignored": 1
+      },
+      {
+        "job": 130801338146,
+        "log_sha256": "e5e2278de163f60d14648b2c93f046cff49129b15af16bb151cf75cf6a18e180",
+        "packaged_self_check": true,
+        "agent_passed": 53,
+        "audio_passed": 28,
+        "audio_ignored": 1
+      }
+    ],
+    "native_swift_self_test": "Both successful package scripts compile the Swift helper and run its self-test with set -eu.",
+    "physical_audio_acceptance": false
+  }
+}

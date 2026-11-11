@@ -11,7 +11,7 @@ is kept as frozen fixtures.
 | `boardcast-agent` | Prompts, the layout skill, local and remote models, request queueing | UI, audio |
 | `boardcast-meetings` | Meeting files, the open meeting's state, undo, the replay record | UI, audio, network |
 | `boardcast-models` | The board models too large for the installer: the catalog and downloading | UI, audio, board |
-| `boardcast-export` | Writing a meeting out as Markdown, PNG, SVG, animated SVG, PDF or a replay page | UI, audio |
+| `boardcast-export` | Writing a meeting out as Markdown, PNG, SVG, animated SVG, GIF, PDF or a replay page | UI, audio |
 | `boardcast-import` | Turning PDFs and images into boards: reading a page's layout, its picture and arXiv | UI, audio |
 | `boardcast-update` | Finding, verifying and installing a new version | UI, audio, board |
 | `boardcast-ui` | The GPUI window, tiled ink rendering, wiring the chain together | |
@@ -169,20 +169,24 @@ against Qwen 4B. Time is the model's per turn, and memory is the whole graphics 
 
 So Qwen stays the default, and the other three can be chosen in Settings with a note saying what they fall short on.
 
-## Not validated
+## Early migration validation limits (historical)
 
 Real clicks on the mark toolbar, the undo buttons and shortcuts, the library and settings panels, and the download
 button (the logic behind them has unit tests), a machine without this one's libraries, Mac and Windows, comparison with the Tauri app, icons, the pointing highlight, pencil drafts, real clicks in
 the speakers panel (it was driven by a test script), a live microphone with several people, imports and exports, renaming and deleting meetings, and auto-tidy in a live meeting (the repair itself
 has tests).
 
-## Migration order
+## Current state (2026-11-11)
 
-1. **Done:** crates, board, marks by voice and by hand, zoom, layout check, local and DeepSeek models.
-2. **Done:** save and reopen in the existing format, undo, a model and key setting.
-3. **Installable on Linux, done:** a package with its resources, model downloads, and automatic graphics selection.
-   In-app updates are done too, and the `gpui-latest` prerelease has been installed through them. Mac and Windows
-   are waiting until they can be tested. iPad is the main target and Mac the second.
-4. **Migrate the rest once the core is stable:** summary and to-dos are done, and so are replay and Markdown, PNG, SVG,
-   animated SVG, PDF and replay page export, imported pages can be marked, PDFs, arXiv papers and images can be imported, and speakers
-   are told apart by voice and can be renamed or merged. Pointing at a speaker shows what they raised on the board, and a selected item leads back to its line. The window is being redesigned, with the board filling it and the controls floating over it, built from `gpui-component` and colored through its theme. The website is Rust too, and the earlier app is retired. `.excalidraw` export is still open.
+The native app is released as v0.27.0 for Linux x64, Windows x64 and macOS on Apple Silicon and Intel. Linux
+supports in-app updates; Mac and Windows users download new packages manually. Mac packages are signed ad hoc,
+without Developer ID or notarization. Package CI is not a substitute for live microphone and long-meeting tests.
+
+Saving, undo, editing, local and remote models, summaries, replay across boards, imports, seven export formats,
+templates, multilingual pronunciation matching and voiceprint attribution are implemented. `main` also has PDF
+page selection and single-line speaker reassignment; these are newer than the v0.27.0 packages. Excalidraw free
+editing and export were dropped, not left as a pending migration.
+
+The remaining acceptance work and order are tracked in [development priorities](../docs/development-priorities.md)
+and [#42](https://github.com/HsiangNianian/boardcast/issues/42). iPad has a [technical plan](../docs/ipad-plan.md),
+but no validated client yet. The measurements and early validation limits above describe their original runs.

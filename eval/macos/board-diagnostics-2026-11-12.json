@@ -1,0 +1,245 @@
+{
+  "date": "2026-11-12",
+  "captured_at_utc": "2026-11-11T18:57:18.027434+00:00",
+  "base_commit": "7bb4e9512dd0eb0f5a58aa1382d7a814599be982",
+  "scope": "Bounded board queue/provider/generation/animation diagnostics for #71; capture fields retained. Synthetic Linux GUI and regression checks only, not a Mac latency benchmark.",
+  "legacy_reference": "4f9ab26a46f07cc5575460fd7431f1a995e705cc:src/engine/diagnostics.ts",
+  "source_sha256": {
+    "crates/agent/src/diagnostics.rs": "da867ea2778c6eb8e8fbc48eedaa51ce3d11624083751f2234bec10922c489c8",
+    "crates/agent/src/lib.rs": "2fc28d170172c1f0cb64409a2c5f4aa9f5fabe000d7c49e14d4005fe4af9f830",
+    "crates/ui/src/pipeline.rs": "91260c308f82afdefb5de59a82ee080e1e2cba316c15fa6ba58504af42a23731",
+    "crates/ui/src/app.rs": "fd58c888c3c5df67c1ae64d06487fbe115415db698d12401621cb0b3ac37fdb0"
+  },
+  "binary_sha256": "a0f8aeea5c465a9e8d40fdd35f23739bf8c04409bafbf919f6d375a70edadd12",
+  "validation": {
+    "agent_tests": {
+      "command": "cargo test -p boardcast-agent",
+      "passed": 52,
+      "log_sha256": "b2a428bfec9ecd747e96b37ed5c50173b62ec186c7a55ab663525586b4368fe8"
+    },
+    "ui_tests": {
+      "command": "cargo test -p boardcast-ui",
+      "passed": 7,
+      "ignored": 1,
+      "ignored_boundary": "Existing real-model audio fixture test; audio code unchanged.",
+      "log_sha256": "7cca2597aed4cc8d7e8e4499f241f82f510a24e360958506b78245125283413b"
+    },
+    "release_build": {
+      "command": "cargo build --release -p boardcast-ui",
+      "passed": true,
+      "log_sha256": "27c3ec6fb6a91302b52f0e2dc0956c0228d761edbaf3afe899af3767992dc49c"
+    },
+    "regressions": [
+      "Queue starts at oldest batch submission, not audio end; merged lines retain request identity.",
+      "Model failure retains measured generation duration. No model leaves generation null.",
+      "In-flight results superseded by meeting changes remain counted; stale queued lines are counted separately.",
+      "Recent request and drawing histories evict above 128, preserving IDs and aggregate sample counts."
+    ]
+  },
+  "gui": {
+    "sandbox": "local:boardcast-board-timing",
+    "image": "ghcr.io/trycua/linux@sha256:71dbd9f077adcbe5e27f2041391bac69afce8093f1ce757e02c9167495ac7dc4",
+    "runtime": "local runc, software graphics",
+    "app_pid": 900,
+    "window_id": 29360129,
+    "input": "Three synthetic scripted lines; loopback-only remote-provider fixture, 150 ms artificial delay per call.",
+    "responses": [
+      "E 「Alpha」 -> 「Beta」",
+      "-",
+      "HTTP 400 with a synthetic error marker"
+    ],
+    "actions": [
+      "Opened Settings in native GPUI app.",
+      "Scrolled to Copy diagnostics and clicked with native window input.",
+      "Observed copied notice and independently read system clipboard."
+    ],
+    "assertions": {
+      "requests_retained": 3,
+      "applied_including_no_op": 2,
+      "failed_requests": 1,
+      "animations_completed": 1,
+      "strokes": 43,
+      "drawing_matches_request_id": 1,
+      "synthetic_transcript_speaker_model_key_url_error_absent": true,
+      "unmeasured_physical_latencies_null": true
+    },
+    "clipboard_sha256": "491c80215a0d36d824ac0451a6d8a57c73b4edb27b4aa8cd89469bd6bae3070d",
+    "copied_diagnostics": {
+      "version": 1,
+      "captures": [],
+      "board": {
+        "requests": {
+          "batches_seen": 3,
+          "ignored_queued_lines": 0,
+          "recent_limit": 128,
+          "groups": [
+            {
+              "backend": "remote",
+              "outcome": "applied",
+              "batches": 2,
+              "lines": 2,
+              "queue_ms": {
+                "n": 2,
+                "p50": 0,
+                "p95": 0,
+                "max": 0
+              },
+              "provider_ms": {
+                "n": 2,
+                "p50": 0,
+                "p95": 0,
+                "max": 0
+              },
+              "generation_ms": {
+                "n": 2,
+                "p50": 151,
+                "p95": 151,
+                "max": 151
+              }
+            },
+            {
+              "backend": "remote",
+              "outcome": "failed",
+              "batches": 1,
+              "lines": 1,
+              "queue_ms": {
+                "n": 1,
+                "p50": 0,
+                "p95": 0,
+                "max": 0
+              },
+              "provider_ms": {
+                "n": 1,
+                "p50": 0,
+                "p95": 0,
+                "max": 0
+              },
+              "generation_ms": {
+                "n": 1,
+                "p50": 150,
+                "p95": 150,
+                "max": 150
+              }
+            }
+          ],
+          "recent": [
+            {
+              "id": 1,
+              "backend": "remote",
+              "outcome": "applied",
+              "lines": 1,
+              "queue_ms": 0,
+              "provider_ms": 0,
+              "generation_ms": 151
+            },
+            {
+              "id": 2,
+              "backend": "remote",
+              "outcome": "applied",
+              "lines": 1,
+              "queue_ms": 0,
+              "provider_ms": 0,
+              "generation_ms": 151
+            },
+            {
+              "id": 3,
+              "backend": "remote",
+              "outcome": "failed",
+              "lines": 1,
+              "queue_ms": 0,
+              "provider_ms": 0,
+              "generation_ms": 150
+            }
+          ],
+          "timing_basis": "monotonic wall time; queue starts at submission of the oldest line in a batch and includes initial model readiness; provider is lookup/startup; generation includes prompt preparation, retries and reply validation; not acoustic or screen latency; request order does not establish cold/warm cache state"
+        },
+        "drawing": {
+          "completed": 1,
+          "interrupted": 0,
+          "pending": 0,
+          "start_after_result_ms": {
+            "n": 1,
+            "p50": 13,
+            "p95": 13,
+            "max": 13
+          },
+          "done_after_result_ms": {
+            "n": 1,
+            "p50": 604,
+            "p95": 604,
+            "max": 604
+          },
+          "recent": [
+            {
+              "request": 1,
+              "start_after_result_ms": 13,
+              "done_after_result_ms": 604,
+              "strokes": 43
+            }
+          ],
+          "timing_basis": "UI receipt of a board result to animation advance/completion; only batches with new strokes; not physical display presentation"
+        }
+      },
+      "limits": {
+        "captures": 20,
+        "recent_timings_per_track": 128,
+        "queued_packets_per_track": 300,
+        "recent_board_requests": 128,
+        "recent_drawings": 128
+      },
+      "speech_to_first_partial_ms": null,
+      "sentence_end_to_final_ms": null,
+      "screen_present_ms": null,
+      "timing_basis": "capture timestamps (native on Mac, callback estimates elsewhere), monotonic arrival at Rust, recognition, receipt by UI; audio_end_to_final_ms starts at the captured segment end, not acoustic speech end; no acoustic onset or screen presentation measurement"
+    },
+    "screenshot": "board-diagnostics-2026-11-12/copied.png",
+    "screenshot_sha256": "d79602eee4c6ecad4140040729f592eccaccbaaec734aac75ab7fd8c18626d6a",
+    "sandbox_deleted": true
+  },
+  "baseline_ci": {
+    "commit": "7bb4e9512dd0eb0f5a58aa1382d7a814599be982",
+    "rust_url": "https://github.com/HsiangNianian/boardcast/actions/runs/43077658649",
+    "rust_conclusion": "success",
+    "rust_jobs": [
+      {
+        "name": "macos package (macos-26)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "core crates",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "windows package",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "linux package",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "macos package (macos-15-intel)",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "summary_url": "https://github.com/HsiangNianian/boardcast/actions/runs/43077658744/artifacts/13884485021",
+    "summary_passed": 36,
+    "summary_runs": 45,
+    "templates_passed": 6,
+    "templates_runs": 6,
+    "named_owner_passed": 3,
+    "named_owner_runs": 3,
+    "scope": "Baseline results, not this uncommitted diagnostics revision."
+  },
+  "remaining": [
+    "Physical Mac capture permissions, two-source capacity, calibration, acoustic onset/first partial and screen presentation are unverified.",
+    "No measured cold/warm cache grouping; request order does not establish cache state.",
+    "The complete previous diagnostics ZIP and its other files remain unported.",
+    "Summary date omissions and quantity presuppositions remain open; this change does not alter prompts, sampling, or model behavior."
+  ]
+}

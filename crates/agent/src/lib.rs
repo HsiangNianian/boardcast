@@ -6,6 +6,7 @@
 //! Other remote models have not been measured, so they go without.
 //! Hints from the checker did not help on either model, so they stay opt-in.
 
+pub mod diagnostics;
 pub mod settings;
 pub mod sound;
 pub mod summary;
@@ -92,7 +93,7 @@ impl Provider {
                 body
             }
             // Left to itself a small model can fall into repeating the same few lines until it runs out of room.
-            Self::Local { .. } => json!({ "model": "local", "messages": messages, "temperature": 0.2, "repeat_penalty": 1.15, "repeat_last_n": 256, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": false } }),
+            Self::Local { .. } => json!({ "model": "local", "messages": messages, "temperature": 0, "repeat_penalty": 1.05, "repeat_last_n": 256, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": false } }),
             #[cfg(test)]
             Self::Scripted(reply) => {
                 let said = messages.last().and_then(|m| m["content"].as_str()).unwrap_or_default().to_string();
@@ -100,7 +101,38 @@ impl Provider {
             }
         };
         let reply = self.send(&self.endpoint(), &body)?;
-        Ok(strip_thinking(message(&reply)?).to_string())
+        let text = strip_thinking(message(&reply)?);
+        if !text.is_empty() && reply["choices"][0]["finish_reason"] == "length" {
+            bail!("The model's reply reached its output limit before it finished.");
+        }
+        Ok(text.to_string())
+    }
+
+    fn local_summary_context(&self) -> Result<Option<(usize, bool)>> {
+        let Self::Local { base } = self else { return Ok(None) };
+        let props: Value = http().get(&format!("{base}/props")).timeout(Duration::from_secs(30)).call()?.into_json()?;
+        let size = props["default_generation_settings"]["n_ctx"].as_u64()
+            .and_then(|n| usize::try_from(n).ok()).filter(|n| *n > 0).context("missing local model context size")?;
+        // The example improves the measured 4B model but regresses 9B's tasks and template headings.
+        let example = ["model_path", "model_alias"].iter().any(|key| props[key].as_str()
+            .is_some_and(|name| name.rsplit(['/', '\\']).next() == Some("Qwen3.5-4B-Q4_K_M.gguf")));
+        Ok(Some((size, example)))
+    }
+
+    fn prompt_tokens(&self, messages: &[Value]) -> Result<usize> {
+        match self {
+            Self::Local { base } => {
+                let rendered = self.send(&format!("{base}/apply-template"), &json!({
+                    "messages": messages, "chat_template_kwargs": { "enable_thinking": false }
+                }))?;
+                let prompt = rendered["prompt"].as_str().context("missing rendered chat prompt")?;
+                let tokens = self.send(&format!("{base}/tokenize"), &json!({ "content": prompt, "add_special": false, "parse_special": true }))?;
+                Ok(tokens["tokens"].as_array().context("missing prompt tokens")?.len())
+            }
+            #[cfg(test)]
+            Self::Scripted(_) => Ok(messages.iter().filter_map(|m| m["content"].as_str()).map(|s| s.chars().count()).sum()),
+            _ => bail!("token counting requires the local model"),
+        }
     }
 
     fn endpoint(&self) -> String {
@@ -256,6 +288,8 @@ pub struct Said {
     pub line: Utterance,
     /// When speech ended or the line was submitted; end-to-end timings start here.
     pub ended: Instant,
+    /// When this line entered the board queue, independently of audio recognition.
+    pub submitted: Instant,
     pub asr_ms: Option<u128>,
     /// The meeting this was said in, from `Session::meeting`. A line from another meeting is dropped.
     pub meeting: u64,
@@ -270,7 +304,7 @@ pub enum Update {
     Ready,
     /// Nothing is installed and no remote model is set up, so the user has to choose.
     NoModel,
-    Drawn { meeting: u64, graph: Graph, ops: String, lines: Vec<Utterance>, asr_ms: Option<u128>, llm_ms: u128, ended: Instant },
+    Drawn { request: u64, meeting: u64, graph: Graph, ops: String, lines: Vec<Utterance>, asr_ms: Option<u128>, llm_ms: u128, ended: Instant },
     Failed { meeting: u64, message: String, lines: Vec<Utterance> },
     /// Something went wrong outside any line, like the local model failing to start.
     Broken(String),
@@ -534,6 +568,7 @@ pub struct Session {
     local_base: Arc<Mutex<Option<String>>>,
     /// Speakers renamed in this meeting, in order, for lines that were on their way at the time.
     renames: Arc<Mutex<Vec<(String, String)>>>,
+    timings: Arc<Mutex<diagnostics::Report>>,
 }
 
 fn rename_line(line: &mut Utterance, renames: &[(String, String)]) {
@@ -557,6 +592,7 @@ impl Session {
             meeting: Arc::new(AtomicU64::new(0)),
             local_base: Arc::new(Mutex::new(None)),
             renames: Arc::new(Mutex::new(vec![])),
+            timings: Arc::new(Mutex::new(diagnostics::Report::default())),
         };
         let (graph, history, hint, backend, guidance, meeting) =
             (session.graph.clone(), session.history.clone(), session.hint.clone(), session.backend.clone(), session.guidance.clone(), session.meeting.clone());
@@ -564,6 +600,7 @@ impl Session {
         let references = session.references.clone();
         let local_base = session.local_base.clone();
         let renames = session.renames.clone();
+        let timings = session.timings.clone();
         thread::spawn(move || {
             // Held for the thread's lifetime: the child's death signal is tied to this thread.
             let mut server: Option<(Child, String, PathBuf)> = None;
@@ -613,11 +650,14 @@ impl Session {
                     batch.push(more);
                 }
                 let current = meeting.load(Ordering::SeqCst);
+                let queued = batch.len();
                 batch.retain(|s| s.meeting == current);
+                timings.lock().expect("timings lock").ignored_lines += queued - batch.len();
                 if batch.is_empty() {
                     let _ = drained.send(());
                     continue;
                 }
+                let queue_ms = batch.iter().map(|s| s.submitted).min().expect("a batch").elapsed().as_millis();
                 let renames_seen = {
                     let renames = renames.lock().expect("renames lock");
                     for said in &mut batch {
@@ -647,16 +687,31 @@ impl Session {
                 };
                 let seen = graph.lock().expect("graph lock").clone();
                 let note = hint.lock().expect("hint lock").take();
-                let result = provider_now(&updates).and_then(|provider| {
+                let setup = Instant::now();
+                let provider = provider_now(&updates);
+                let provider_ms = setup.elapsed().as_millis();
+                let mut timing = diagnostics::Batch { backend: "unavailable", outcome: "failed", lines: batch.len(), queue_ms, provider_ms, generation_ms: None };
+                let result = provider.and_then(|provider| {
+                    timing.backend = match &provider {
+                        Provider::Local { .. } => "local",
+                        Provider::Remote { .. } => "remote",
+                        #[cfg(test)]
+                        Provider::Scripted(_) => "scripted",
+                    };
+                    let started = Instant::now();
                     let chosen = guidance.lock().expect("guidance lock").unwrap_or_else(|| provider.default_guidance());
                     let terms = glossary.lock().expect("glossary lock").clone();
                     let cited = references.lock().expect("references lock").clone();
-                    propose_with(&provider, &seen, &recent, &next, chosen, note.as_deref(), &terms, &cited)
+                    let result = propose_with(&provider, &seen, &recent, &next, chosen, note.as_deref(), &terms, &cited);
+                    timing.generation_ms = Some(started.elapsed().as_millis());
+                    result
                 });
                 // The lock is held across the check, so a meeting cannot open between it and the write.
                 let mut board = graph.lock().expect("graph lock");
                 if meeting.load(Ordering::SeqCst) != current {
                     drop(board);
+                    timing.outcome = "superseded";
+                    timings.lock().expect("timings lock").push(timing);
                     let _ = drained.send(());
                     continue;
                 }
@@ -667,12 +722,14 @@ impl Session {
                 }
                 history.lock().expect("history lock").extend(lines.iter().cloned());
                 let tail = &batch[batch.len() - 1];
+                timing.outcome = if result.is_ok() { "applied" } else { "failed" };
+                let request = timings.lock().expect("timings lock").push(timing);
                 let update = match result {
                     Ok(reply) => {
                         let before = board.clone();
                         board.apply(&parse_ops(&reply.ops));
                         attribute(&before, &mut board, &lines);
-                        Update::Drawn { meeting: current, graph: board.clone(), ops: reply.ops, lines, asr_ms: tail.asr_ms, llm_ms: reply.ms, ended: batch[0].ended }
+                        Update::Drawn { request, meeting: current, graph: board.clone(), ops: reply.ops, lines, asr_ms: tail.asr_ms, llm_ms: reply.ms, ended: batch[0].ended }
                     }
                     Err(e) => Update::Failed { meeting: current, message: format!("{e:#}"), lines },
                 };
@@ -682,6 +739,10 @@ impl Session {
             }
         });
         session
+    }
+
+    pub fn diagnostics(&self) -> Value {
+        self.timings.lock().expect("timings lock").json()
     }
 
     /// A handle on the meeting stamp, for threads that hear lines.
@@ -874,6 +935,40 @@ mod tests {
     }
 
     #[test]
+    fn summary_examples_follow_only_the_measured_local_model() {
+        for (body, example) in [
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"/models/Qwen3.5-4B-Q4_K_M.gguf"}"#, true),
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"C:\\models\\Qwen3.5-4B-Q4_K_M.gguf"}"#, true),
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"/models/model.gguf","model_alias":"Qwen3.5-4B-Q4_K_M.gguf"}"#, true),
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"/models/Qwen3.5-9B-Q4_K_M.gguf"}"#, false),
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"/Qwen3.5-4B-Q4_K_M.gguf/unknown.gguf"}"#, false),
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"Qwen3.5-4B-Q8_0.gguf"}"#, false),
+            (r#"{"default_generation_settings":{"n_ctx":4096}}"#, false),
+        ] {
+            let provider = Provider::Local { base: serve("200 OK", "application/json", body) };
+            assert_eq!(provider.local_summary_context().unwrap(), Some((4096, example)), "{body}");
+        }
+        assert_eq!(remote("http://127.0.0.1:0".into()).local_summary_context().unwrap(), None);
+    }
+
+    #[test]
+    fn a_cut_off_summary_is_not_accepted_but_empty_reasoning_can_retry() {
+        for local in [false, true] {
+            for (body, truncated) in [
+                (r#"{"choices":[{"message":{"content":"- Finish the"},"finish_reason":"length"}]}"#, true),
+                (r#"{"choices":[{"message":{"content":"- Finish the guide."},"finish_reason":"stop"}]}"#, false),
+                (r#"{"choices":[{"message":{"content":"","reasoning_content":"Still thinking"},"finish_reason":"length"}]}"#, false),
+            ] {
+                let base = serve("200 OK", "application/json", body);
+                let provider = if local { Provider::Local { base } } else { remote(base) };
+                let reply = provider.chat(&[json!({"role":"user","content":"Summarize."})], 600);
+                if truncated { assert!(reply.unwrap_err().to_string().contains("output limit")); }
+                else { assert_eq!(reply.unwrap(), message(&serde_json::from_str::<Value>(body).unwrap()).unwrap()); }
+            }
+        }
+    }
+
+    #[test]
     fn the_model_hears_the_glossary_and_the_labels_a_line_may_mean() {
         let seen = Arc::new(Mutex::new(String::new()));
         let heard = seen.clone();
@@ -924,7 +1019,7 @@ mod tests {
 
     impl Harness {
         fn say(&self, text: &str) {
-            self.said.send(Said { line: Utterance { speaker: None, text: text.into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: self.session.meeting(), renames: 0 }).unwrap();
+            self.said.send(Said { line: Utterance { speaker: None, text: text.into(), pointing: vec![] }, ended: Instant::now(), submitted: Instant::now(), asr_ms: None, meeting: self.session.meeting(), renames: 0 }).unwrap();
         }
 
         fn wait(&self) {
@@ -942,6 +1037,40 @@ mod tests {
         assert_eq!(lines[0].text, "甲调乙");
         assert_eq!(h.session.board().nodes.len(), 2);
         assert_eq!(h.session.history.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn board_queue_timings_start_at_submission_and_join_the_drawn_request() {
+        let (entered_tx, entered) = channel();
+        let (release, released) = channel::<()>();
+        let released = Mutex::new(released);
+        let calls = AtomicU64::new(0);
+        let h = harness(move |_| {
+            if calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                entered_tx.send(()).unwrap();
+                released.lock().unwrap().recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+            Ok("-".into())
+        });
+        h.say("private first line");
+        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        let oldest = Instant::now() - Duration::from_millis(200);
+        for submitted in [oldest, Instant::now()] {
+            h.said.send(Said { line: Utterance { speaker: None, text: "private queued line".into(), pointing: vec![] },
+                ended: oldest - Duration::from_secs(60), submitted, asr_ms: Some(123), meeting: h.session.meeting(), renames: 0 }).unwrap();
+        }
+        release.send(()).unwrap();
+        h.wait(); h.wait();
+        let _ = h.updates.recv_timeout(Duration::from_secs(5)).unwrap();
+        let Update::Drawn { request, lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("expected a drawing") };
+        let report = h.session.diagnostics();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(report["recent"][1]["id"], request);
+        assert_eq!(report["recent"][1]["lines"], 2);
+        let queue = report["recent"][1]["queue_ms"].as_u64().unwrap() as u128;
+        assert!(queue >= 200 && queue <= oldest.elapsed().as_millis(), "queue excludes audio time: {report}");
+        assert!(!report["recent"][1]["generation_ms"].is_null());
+        assert!(!report.to_string().contains("private"));
     }
 
     /// The old app's #60: a reply that arrives after switching meetings wrote into the new one.
@@ -963,6 +1092,7 @@ mod tests {
         assert!(h.session.board().nodes.is_empty(), "the old reply reached the new board");
         assert!(h.session.history.lock().unwrap().is_empty(), "the old line reached the new context");
         assert!(matches!(h.updates.recv_timeout(Duration::from_millis(100)), Err(RecvTimeoutError::Timeout)), "the UI heard about it");
+        assert_eq!(h.session.diagnostics()["recent"][0]["outcome"], "superseded");
     }
 
     #[test]
@@ -982,6 +1112,7 @@ mod tests {
         h.wait();
         assert!(matches!(h.updates.recv_timeout(Duration::from_millis(100)), Err(RecvTimeoutError::Timeout)));
         assert!(h.session.history.lock().unwrap().is_empty());
+        assert_eq!(h.session.diagnostics()["recent"][0]["outcome"], "superseded");
     }
 
     #[test]
@@ -994,13 +1125,14 @@ mod tests {
         });
         let stale = h.session.meeting();
         h.session.open(Graph::default(), vec![]);
-        h.said.send(Said { line: Utterance { speaker: None, text: "排队的旧话".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: stale, renames: 0 }).unwrap();
+        h.said.send(Said { line: Utterance { speaker: None, text: "排队的旧话".into(), pointing: vec![] }, ended: Instant::now(), submitted: Instant::now(), asr_ms: None, meeting: stale, renames: 0 }).unwrap();
         h.wait();
         h.say("新会议的话");
         h.wait();
         let seen = seen.lock().unwrap();
         assert_eq!(seen.len(), 1);
         assert!(seen[0].contains("新会议的话") && !seen[0].contains("排队的旧话"));
+        assert_eq!(h.session.diagnostics()["ignored_queued_lines"], 1);
     }
 
     #[test]
@@ -1013,7 +1145,7 @@ mod tests {
             release_rx.lock().unwrap().recv().unwrap();
             Ok("N n1 「网关」".into())
         });
-        let line = |renames| Said { line: Utterance { speaker: Some("B".into()), text: "网关".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: h.session.meeting(), renames };
+        let line = |renames| Said { line: Utterance { speaker: Some("B".into()), text: "网关".into(), pointing: vec![] }, ended: Instant::now(), submitted: Instant::now(), asr_ms: None, meeting: h.session.meeting(), renames };
         h.said.send(line(0)).unwrap();
         entered.recv_timeout(Duration::from_secs(5)).unwrap();
         // Renamed while the model is answering, with the name then given to someone else's next line.
@@ -1064,12 +1196,17 @@ mod tests {
         let session = Session::start(Backend::NoModel, None, said_rx, ready_tx, drained_tx, updates_tx);
         ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(matches!(updates.recv_timeout(Duration::from_secs(5)).unwrap(), Update::NoModel));
-        said.send(Said { line: Utterance { speaker: None, text: "这句没有模型".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
+        said.send(Said { line: Utterance { speaker: None, text: "这句没有模型".into(), pointing: vec![] }, ended: Instant::now(), submitted: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
         drained.recv_timeout(Duration::from_secs(5)).unwrap();
         let Update::Failed { lines, .. } = updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("expected a failure") };
         assert_eq!(lines[0].text, "这句没有模型");
+        let report = session.diagnostics();
+        assert_eq!(report["recent"][0]["backend"], "unavailable");
+        assert_eq!(report["recent"][0]["outcome"], "failed");
+        assert!(report["recent"][0]["generation_ms"].is_null());
+        assert!(!report.to_string().contains("这句没有模型"));
         session.set_backend(Backend::Ready(Provider::Scripted(Arc::new(|_| Ok("T 「现在有了」".into())))));
-        said.send(Said { line: Utterance { speaker: None, text: "再试".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
+        said.send(Said { line: Utterance { speaker: None, text: "再试".into(), pointing: vec![] }, ended: Instant::now(), submitted: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
         drained.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(session.board().nodes.len(), 1, "a model added later takes effect");
     }
@@ -1083,5 +1220,9 @@ mod tests {
         assert_eq!(lines[0].text, "这句没画上");
         assert!(message.contains("offline"));
         assert!(h.session.board().nodes.is_empty());
+        let report = h.session.diagnostics();
+        assert_eq!(report["recent"][0]["outcome"], "failed");
+        assert!(!report["recent"][0]["generation_ms"].is_null());
+        assert!(!report.to_string().contains("offline"));
     }
 }

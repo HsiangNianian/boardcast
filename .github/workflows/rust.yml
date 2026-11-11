@@ -68,21 +68,26 @@ jobs:
         env:
           BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
           CARGO_TARGET_DIR: ${{ runner.temp }}/audio-tests
-      - name: A waiting recognizer does not block the other audio source
+      - name: Independent recognition and opening language selection
         run: |
           python3 - <<'PY'
           import hashlib, json, os, pathlib, urllib.request
           corpus = json.loads(pathlib.Path('eval/asr/corpus.json').read_text())
-          sample = next(s for s in corpus['samples'] if s['id'] == 'en-ami-00')
-          with urllib.request.urlopen(corpus['baseUrl'] + '/' + sample['file'], timeout=60) as response:
-              audio = response.read(sample['bytes'] + 1)
-          assert len(audio) == sample['bytes'] and hashlib.sha256(audio).hexdigest() == sample['sha256']
-          pathlib.Path(os.environ['BOARDCAST_AUDIO_TEST_WAV']).write_bytes(audio)
+          target = pathlib.Path(os.environ['BOARDCAST_AUTO_AUDIO'])
+          target.mkdir(parents=True, exist_ok=True)
+          for name in ['zh-alimeeting-00', 'ja-fleurs-00', 'en-ami-00']:
+              sample = next(s for s in corpus['samples'] if s['id'] == name)
+              with urllib.request.urlopen(corpus['baseUrl'] + '/' + sample['file'], timeout=60) as response:
+                  audio = response.read(sample['bytes'] + 1)
+              assert len(audio) == sample['bytes'] and hashlib.sha256(audio).hexdigest() == sample['sha256']
+              (target / sample['file']).write_bytes(audio)
           PY
+          cargo test -p boardcast-audio auto_routes_real_opening_speech_and_preserves_the_pcm -- --ignored
           cargo test -p boardcast-ui both_sources_can_recognize_while_the_other_is_waiting -- --ignored
         env:
           BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
-          BOARDCAST_AUDIO_TEST_WAV: ${{ runner.temp }}/dual-source.wav
+          BOARDCAST_AUTO_AUDIO: ${{ runner.temp }}/auto-audio
+          BOARDCAST_AUDIO_TEST_WAV: ${{ runner.temp }}/auto-audio/en-ami-00.wav
           CARGO_TARGET_DIR: ${{ runner.temp }}/audio-tests
       - name: Install from the package and check again
         run: |

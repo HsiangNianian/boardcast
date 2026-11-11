@@ -26,7 +26,7 @@ pub struct Settings {
     pub templates: Vec<(String, Vec<String>)>,
     /// Recognize speech with the system's recognizer, such as Apple's, rather than the bundled models.
     pub system_speech: bool,
-    /// The language the system's recognizer listens for: "auto" for the system's own, or a locale like "ja-JP".
+    /// A locale, "auto" for the system's own language, or "detect" for opening-speech detection.
     pub speech_language: String,
     /// Apple language for the independent system-audio track.
     pub system_audio_language: String,

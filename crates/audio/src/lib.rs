@@ -12,6 +12,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 mod helper;
+mod language;
 pub mod system;
 
 pub const SAMPLE_RATE: i32 = 16_000;
@@ -131,6 +132,7 @@ pub fn is_japanese(text: &str) -> bool {
 pub trait Recognizer: Send {
     fn recognize(&mut self, samples: &[f32]) -> Result<String>;
     fn error(&self) -> Option<&str> { None }
+    fn identity(&self) -> Option<(&str, &str)> { None }
 }
 
 /// Text this short might have been made up from noise, so its sound is checked for a voice.
@@ -414,6 +416,11 @@ impl Ear {
 
     pub fn error(&self) -> Option<&str> {
         self.asr.system.as_ref().and_then(|s| s.error())
+    }
+
+    /// The actual system backend and locale, once an automatic language has been chosen.
+    pub fn identity(&self) -> Option<(&str, &str)> {
+        self.asr.system.as_ref().and_then(|s| s.identity())
     }
 
     pub fn feed(&mut self, samples: &[f32], heard: &mut impl Heard) {

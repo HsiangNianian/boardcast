@@ -35,7 +35,7 @@ pub struct Speech {
     pub helper: Option<PathBuf>,
     /// Use the system's recognizer rather than the bundled models.
     pub system: bool,
-    /// The language the system's recognizer listens for, or "auto".
+    /// A locale, "auto" for the OS locale, or "detect" for opening-speech detection per source.
     pub language: String,
     pub system_language: String,
 }

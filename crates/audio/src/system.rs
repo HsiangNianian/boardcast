@@ -1,13 +1,15 @@
 //! Apple's speech recognition and system audio capture, through the packaged Swift helper.
 
-use crate::{helper::Helper, Recognizer};
+use crate::{helper::Helper, language::Probe, Recognizer, SAMPLE_RATE};
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::Value;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+const UNFINISHED: &str = "Apple speech did not finish within five seconds after stopping. Some captured speech was not transcribed.";
 
 pub struct SystemSpeech {
     helper: Helper,
@@ -25,12 +27,24 @@ impl SystemSpeech {
     }
 
     pub fn start_with_stop(helper: &Path, locale: &str, stop: Arc<AtomicBool>) -> Result<Self> {
+        Self::launch(helper, locale, stop, false)
+    }
+
+    fn launch(helper: &Path, locale: &str, stop: Arc<AtomicBool>, finish: bool) -> Result<Self> {
+        ensure!(finish || !stop.load(Ordering::Relaxed), "audio cancelled");
         let mut command = Command::new(helper);
         command.args(["serve", locale]);
         let helper = Helper::spawn(command)?;
         let deadline = Instant::now() + Duration::from_secs(300);
+        let mut finish_by = None;
         loop {
-            let event = helper.next(deadline.saturating_duration_since(Instant::now()), &stop)?;
+            if stop.load(Ordering::Relaxed) {
+                ensure!(finish, "audio cancelled");
+                finish_by.get_or_insert_with(|| Instant::now() + Duration::from_secs(5));
+            }
+            let remaining = finish_by.unwrap_or(deadline).min(deadline).saturating_duration_since(Instant::now());
+            ensure!(!remaining.is_zero(), if finish_by.is_some() { UNFINISHED } else { "audio helper timed out" });
+            let Some(event) = helper.poll(remaining.min(Duration::from_millis(50)))? else { continue };
             match event["type"].as_str() {
                 Some("ready") => return Ok(Self {
                     helper,
@@ -38,7 +52,7 @@ impl SystemSpeech {
                     locale: event["locale"].as_str().context("missing speech locale")?.into(),
                     failure: None,
                     stop,
-                    finish_by: None,
+                    finish_by,
                 }),
                 Some("error") => bail!("{}", event["message"].as_str().unwrap_or("Apple speech recognition did not start")),
                 Some("fallback") => eprintln!("SpeechAnalyzer fallback: {}", event["message"].as_str().unwrap_or_default()),
@@ -51,7 +65,6 @@ impl SystemSpeech {
 
 impl Recognizer for SystemSpeech {
     fn recognize(&mut self, samples: &[f32]) -> Result<String> {
-        const UNFINISHED: &str = "Apple speech did not finish within five seconds after stopping. Some captured speech was not transcribed.";
         let result = (|| {
             ensure!(!samples.is_empty() && samples.len() <= 16_000 * 30 && samples.iter().all(|s| s.is_finite()), "invalid sentence samples");
             ensure!(self.finish_by.is_none_or(|end| Instant::now() < end), UNFINISHED);
@@ -83,6 +96,44 @@ impl Recognizer for SystemSpeech {
     }
 
     fn error(&self) -> Option<&str> { self.failure.as_deref() }
+    fn identity(&self) -> Option<(&str, &str)> { Some((&self.engine, &self.locale)) }
+}
+
+/// Each source chooses one opening language; the normal ear retains and segments the original PCM.
+pub struct AutoSpeech {
+    probe: Option<Probe>,
+    speech: Option<SystemSpeech>,
+    helper: PathBuf,
+    stop: Arc<AtomicBool>,
+    failure: Option<String>,
+}
+
+impl AutoSpeech {
+    pub fn load(models: &Path, helper: &Path, stop: Arc<AtomicBool>) -> Result<Self> {
+        Ok(Self { probe: Some(Probe::load(models)?), speech: None, helper: helper.into(), stop, failure: None })
+    }
+}
+
+impl Recognizer for AutoSpeech {
+    fn recognize(&mut self, samples: &[f32]) -> Result<String> {
+        let result = (|| {
+            if let Some(error) = &self.failure { bail!("{error}"); }
+            ensure!(!samples.is_empty() && samples.len() <= SAMPLE_RATE as usize * 30 && samples.iter().all(|s| s.is_finite()), "invalid sentence samples");
+            if self.speech.is_none() {
+                let probe = self.probe.take().context("language detection is unavailable")?;
+                let locale = probe.detect(&samples[..samples.len().min(SAMPLE_RATE as usize * 5)])?;
+                drop(probe);
+                // A short first utterance may only reach VAD when stopped; startup shares its finalization budget.
+                self.speech = Some(SystemSpeech::launch(&self.helper, locale, self.stop.clone(), true)?);
+            }
+            self.speech.as_mut().unwrap().recognize(samples)
+        })();
+        if let Err(e) = &result { self.failure = Some(format!("{e:#}")); }
+        result
+    }
+
+    fn error(&self) -> Option<&str> { self.failure.as_deref() }
+    fn identity(&self) -> Option<(&str, &str)> { self.speech.as_ref().and_then(Recognizer::identity) }
 }
 
 fn system_samples(event: &Value) -> Result<Vec<f32>> {
@@ -201,6 +252,81 @@ time.sleep(12)
         let again = Instant::now();
         assert!(speech.recognize(&[0.5; 1600]).is_err());
         assert!(again.elapsed() < Duration::from_millis(100), "the drain deadline was reset");
+    }
+
+    #[test]
+    fn stopped_auto_startup_shares_the_transcription_deadline() {
+        let Some(helper) = fake_helper(r#"
+import json, struct, sys, time
+time.sleep(2)
+print(json.dumps({'type':'ready','engine':'fake','locale':sys.argv[2]}), flush=True)
+n, = struct.unpack('<I', sys.stdin.buffer.read(4))
+sys.stdin.buffer.read(n * 4)
+time.sleep(4)
+print(json.dumps({'type':'text','text':'too late'}), flush=True)
+"#) else { return };
+        let stop = Arc::new(AtomicBool::new(true));
+        assert!(SystemSpeech::start_with_stop(&helper, "en-US", stop.clone()).is_err());
+        let started = Instant::now();
+        let mut speech = SystemSpeech::launch(&helper, "en-US", stop, true).unwrap();
+        assert!(speech.recognize(&[0.5; 1600]).unwrap_err().to_string().contains("after stopping"));
+        assert!(started.elapsed() < Duration::from_secs(8));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "needs BOARDCAST_VOICE_DIR, BOARDCAST_AUTO_AUDIO and Python 3; uses no audio device"]
+    fn auto_routes_real_opening_speech_and_preserves_the_pcm() {
+        let models = PathBuf::from(std::env::var_os("BOARDCAST_VOICE_DIR").expect("voice models"));
+        let audio = PathBuf::from(std::env::var_os("BOARDCAST_AUTO_AUDIO").expect("verified ASR samples"));
+        let helper = fake_helper(r#"
+import json, pathlib, struct, sys
+locale = sys.argv[2]
+output = pathlib.Path(__file__).parent / (locale + '.pcm')
+print(json.dumps({'type':'ready','engine':'fake','locale':locale}), flush=True)
+while True:
+    header = sys.stdin.buffer.read(4)
+    if len(header) < 4: break
+    n, = struct.unpack('<I', header)
+    body = sys.stdin.buffer.read(n * 4)
+    if len(body) != n * 4: break
+    with output.open('ab') as f: f.write(body)
+    print(json.dumps({'type':'text','text':locale}), flush=True)
+"#).expect("Python 3 helper");
+        std::thread::scope(|scope| {
+            for (file, locale) in [("zh-alimeeting-00.wav", "zh-CN"), ("ja-fleurs-00.wav", "ja-JP"), ("en-ami-00.wav", "en-US")] {
+                let (models, audio, helper) = (&models, &audio, &helper);
+                scope.spawn(move || {
+                    let wave = sherpa_onnx::Wave::read(&audio.join(file).to_string_lossy()).unwrap();
+                    assert_eq!(wave.sample_rate(), SAMPLE_RATE);
+                    let samples = &wave.samples()[..wave.samples().len().min(SAMPLE_RATE as usize * 8)];
+                    let stop = Arc::new(AtomicBool::new(locale == "ja-JP"));
+                    let mut speech = AutoSpeech::load(models, helper, stop.clone()).unwrap();
+                    assert!(speech.identity().is_none());
+                    assert_eq!(speech.recognize(samples).unwrap(), locale, "{file}");
+                    assert!(speech.probe.is_none(), "release SenseVoice after choosing Apple's language");
+                    assert_eq!(speech.identity(), Some(("fake", locale)));
+                    stop.store(true, Ordering::Relaxed);
+                    assert_eq!(speech.recognize(&[0.25; 32]).unwrap(), locale);
+                    drop(speech);
+                    let mut expected: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+                    expected.extend([0.25_f32; 32].iter().flat_map(|s| s.to_le_bytes()));
+                    assert_eq!(std::fs::read(helper.parent().unwrap().join(format!("{locale}.pcm"))).unwrap(), expected,
+                        "forward all opening PCM once, including samples outside the probe, then the next sentence");
+                });
+            }
+        });
+        let auto = AutoSpeech::load(&models, &helper, Arc::new(AtomicBool::new(false))).unwrap();
+        let mut ear = crate::Ear::with(&models, crate::Recognizers::system(Box::new(auto))).unwrap();
+        let mut unheard = |_: crate::Sentence| panic!("silence must not start automatic recognition");
+        for _ in 0..400 {
+            ear.feed(&[0.0; 1600], &mut unheard);
+            assert!(ear.audio.len() <= crate::RETAIN, "quiet Auto capture must keep bounded audio");
+        }
+        ear.finish(&mut unheard);
+        assert!(ear.identity().is_none() && ear.error().is_none());
+        drop(ear);
+        std::fs::remove_dir_all(helper.parent().unwrap()).unwrap();
     }
 
     #[test]

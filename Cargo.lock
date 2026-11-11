@@ -742,6 +742,7 @@ dependencies = [
  "cpal",
  "serde_json",
  "sherpa-onnx",
+ "sherpa-onnx-sys",
 ]
 
 [[package]]

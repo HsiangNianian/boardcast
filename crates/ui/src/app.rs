@@ -4450,7 +4450,7 @@ impl Render for Workbench {
             .when(self.speech_helper.is_some(), |d| {
                 let system = self.form.saved.system_speech;
                 let language = self.form.saved.speech_language.clone();
-                let languages = [("auto", tr("System language", "跟随系统")), ("ja-JP", "日本語"), ("en-US", "English"), ("zh-CN", "中文")];
+                let languages = [("detect", tr("Auto", "自动探测")), ("auto", tr("System language", "跟随系统")), ("ja-JP", "日本語"), ("en-US", "English"), ("zh-CN", "中文")];
                 d.child(div().text_sm().child(tr("Recognize speech with", "语音识别")))
                     .child(
                         div()
@@ -4475,8 +4475,8 @@ impl Render for Workbench {
                                 })))
                         })
                         .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                            "Apple's recognizer hears one language per source. System language follows this Mac's locale; it does not detect the spoken language. On macOS 26 it uses SpeechAnalyzer; fallback also requires on-device recognition, otherwise use the speech models.",
-                            "Apple 每路听一种语言，可以分别选择。跟随系统使用 Mac 的语言设置，不检测说话语言。macOS 26 用 SpeechAnalyzer；回退的旧识别器也必须支持本地识别，否则改用语音模型。",
+                            "Auto needs the multilingual speech package. It chooses Chinese, Japanese or English from each source's first utterance and keeps that language until restarted. Short or mixed speech may need a manual choice. System language follows this Mac's locale. Apple recognition stays on this device.",
+                            "自动探测需要多语种语音包，根据每路开场语音选择中、日或英语，保持到下次启动收音。过短或混合语音可能需要手动选择。跟随系统使用 Mac 的语言设置。Apple 识别始终在本机进行。",
                         )))
                     })
             })

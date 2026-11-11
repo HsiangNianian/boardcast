@@ -1,7 +1,7 @@
 //! One capture at a time; each source keeps its own detector, language and meeting stamp.
 use crate::pipeline::{Event, Speech};
 use anyhow::{bail, ensure, Result};
-use boardcast_audio::{capture, play_wav, system::SystemSpeech, Ear, Recognizers, Sentence};
+use boardcast_audio::{capture, play_wav, system::{AutoSpeech, SystemSpeech}, Ear, Recognizers, Sentence};
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -78,6 +78,11 @@ pub struct Heard {
 
 fn ear_for(models: &Path, speech: &Speech, locale: &str, stop: Arc<AtomicBool>) -> Result<(Ear, String, Option<String>, Option<String>)> {
     let system = |helper: &Path| -> Result<(Ear, String, Option<String>, Option<String>)> {
+        if locale == "detect" {
+            let recognizer = AutoSpeech::load(models, helper, stop.clone())?;
+            return Ok((Ear::with(models, Recognizers::system(Box::new(recognizer)))?,
+                crate::i18n::tr("Apple (detecting language)", "Apple（正在探测语言）").into(), None, None));
+        }
         let recognizer = SystemSpeech::start_with_stop(helper, locale, stop.clone())?;
         let with = format!("Apple {}", if recognizer.engine == "analyzer" { "SpeechAnalyzer" } else { "SFSpeechRecognizer" });
         let locale = recognizer.locale.clone();
@@ -87,6 +92,7 @@ fn ear_for(models: &Path, speech: &Speech, locale: &str, stop: Arc<AtomicBool>) 
     if let Some(helper) = speech.helper.as_deref().filter(|_| speech.system) {
         match system(helper) {
             Ok(ear) => return Ok(ear),
+            Err(e) if locale == "detect" => return Err(e),
             Err(e) if !stop.load(Ordering::Relaxed) => note = Some(format!("{e:#}")),
             Err(e) => return Err(e),
         }
@@ -191,9 +197,11 @@ fn run(job: &Job, models: &Path, events: &Sender<Event>) -> Result<()> {
                         }
                         let _ = events.send(Event::Level(frame.samples.iter().fold(0.0_f32, |p, s| p.max(s.abs()))));
                         ear.feed(&frame.samples, &mut |sentence| heard(job, source, sentence, events));
+                        refresh_identity(job, source, &ear, events);
                         if let Some(error) = ear.error() { bail!("{error}"); }
                     }
                     ear.finish(&mut |sentence| heard(job, source, sentence, events));
+                    refresh_identity(job, source, &ear, events);
                     if let Some(error) = ear.error() { bail!("{error}"); }
                     Ok(())
                 })();
@@ -266,6 +274,21 @@ fn run(job: &Job, models: &Path, events: &Sender<Event>) -> Result<()> {
     result
 }
 
+fn refresh_identity(job: &Job, source: usize, ear: &Ear, events: &Sender<Event>) {
+    let Some((engine, locale)) = ear.identity() else { return };
+    let name = format!("Apple {}", if engine == "analyzer" { "SpeechAnalyzer" } else { "SFSpeechRecognizer" });
+    let mut report = job.report.lock().unwrap();
+    let track = &mut report.tracks[source];
+    if track.engine.as_deref() == Some(&name) && track.locale.as_deref() == Some(locale) { return; }
+    track.engine = Some(name);
+    track.locale = Some(locale.into());
+    let names = report.tracks.iter().enumerate().filter_map(|(i, track)| {
+        track.engine.as_ref().map(|engine| format!("{}: {engine}{}", SOURCES[i], track.locale.as_ref().map_or(String::new(), |l| format!(" ({l})"))))
+    }).collect::<Vec<_>>();
+    drop(report);
+    let _ = events.send(Event::Hearing { with: names.join(" · "), note: None });
+}
+
 fn heard(job: &Job, source: usize, sentence: Sentence, events: &Sender<Event>) {
     {
         let mut report = job.report.lock().unwrap();
@@ -279,6 +302,15 @@ fn heard(job: &Job, source: usize, sentence: Sentence, events: &Sender<Event>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn missing_auto_detector_asks_for_a_manual_language() {
+        let models = std::env::temp_dir().join(format!("boardcast-missing-models-{}", std::process::id()));
+        assert!(!models.exists());
+        let speech = Speech { helper: Some("unused-helper".into()), system: true, language: "detect".into(), system_language: "auto".into() };
+        let error = ear_for(&models, &speech, "detect", Arc::new(AtomicBool::new(false))).err().unwrap();
+        assert!(error.to_string().contains("multilingual speech package"), "{error:#}");
+    }
+
     #[cfg(unix)]
     #[test]
     #[ignore = "needs BOARDCAST_VOICE_DIR, BOARDCAST_AUDIO_TEST_WAV and Python 3; uses no audio device"]
@@ -311,8 +343,8 @@ while True:
 (root / (locale + '.closed')).touch()
 "#).unwrap();
         std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let speech = Speech { helper: Some(helper), system: true, language: "en-US".into(), system_language: "ja-JP".into() };
-        for fail in [false, true] {
+        for (language, fail) in [("en-US", false), ("detect", false), ("detect", true)] {
+            let speech = Speech { helper: Some(helper.clone()), system: true, language: language.into(), system_language: "ja-JP".into() };
             if fail { std::fs::write(dir.join("fail"), "").unwrap(); }
             let report = Arc::new(Mutex::new(Report::new(9, "both", &speech)));
             let job = Job { id: 9, meeting: 17, input: None, source: "both".into(), speech: speech.clone(),
@@ -333,6 +365,10 @@ while True:
             } else {
                 assert!(result.is_ok(), "{result:?}");
                 assert!(spoken.iter().all(|n| *n > 0), "{spoken:?}");
+                let report = job.report.lock().unwrap();
+                assert_eq!(report.requested_languages, [language, "ja-JP"]);
+                assert_eq!(report.tracks[0].locale.as_deref(), Some("en-US"));
+                assert_eq!(report.tracks[1].locale.as_deref(), Some("ja-JP"));
             }
             assert!(job.stop.load(Ordering::Relaxed));
             for locale in ["en-US", "ja-JP"] {

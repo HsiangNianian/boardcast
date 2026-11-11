@@ -2,8 +2,10 @@
 
 `boardcast-tools summary-eval <root> [--llm <url> | --deepseek] [--repeat N] [--label name]`
 uses the production summary path on the synthetic meetings in `summary-cases.json`. It writes every resulting
-summary, its failed checks and the case/source SHA-256 hashes beside a timestamped Markdown report. A failed
+summary, its failed checks, generation duration and the case/source SHA-256 hashes beside a timestamped Markdown report. A failed
 semantic check returns a nonzero exit status; the existing Eval workflow runs this check and uploads its evidence.
+Generation duration includes the production summary calls and cleanup; it is not audio-to-screen latency.
+Model labels accept version dots (such as `qwen3.5-4b-q4km-cpu`); path separators remain invalid.
 
 The current prompt follows later answers, partial answers and withdrawals, retains stated deadlines and excludes
 automatic speaker letters from model input. Saved transcript lines and their fingerprints stay unchanged. A blank
@@ -40,6 +42,25 @@ check is expected to expose remaining model failures; a passing build does not c
 The earlier 17/24 and 20/24 measurements used eight cases and weaker checks; they are historical measurements,
 not directly comparable to the twelve-case result above. Three repeated runs of a deterministic local model are
 not three independent meetings. DeepSeek's passing result covers these short synthetic conversations only.
+
+## Rejected follow-up probes
+
+Each probe below ran all twelve cases once on the same local model and CPU server. None was adopted;
+the production source still matches the accepted report above. [Outputs and example patches](summary-rejected-2026-11-11.json)
+are retained so these local improvements are not mistaken for overall fixes.
+The thinking sampler follows [Qwen's model card](https://huggingface.co/Qwen/Qwen3.5-4B); the reasoning budget
+is an experimental cap, not a model recommendation.
+
+| Probe | Passed | Reason to reject |
+| --- | ---: | --- |
+| Thinking enabled, 256-token reasoning budget and the recommended thinking sampler | 7/12 | Lost tasks/dates, changed uncertainty and broke a custom-template result. |
+| One plain Chinese/English input-output example | 10/12 | Fixed the original two failures but lost template headings, a task owner and a decision. |
+| Example with an explicit decision, used only without a template | 10/12 | Kept an answered question open and treated an agreed duration as unresolved. |
+
+At `c39109b`, four-platform packaging and core checks passed, as did all three ASR jobs and their comparison.
+The text job stopped before calling the summary model because the default label contains a dot. `77007e5`
+fixes that validation and tests the actual CLI argument path; a rerun must reach the semantic checks before
+it can provide a CI summary result. Build success alone does not establish summary accuracy.
 
 ## Human review
 

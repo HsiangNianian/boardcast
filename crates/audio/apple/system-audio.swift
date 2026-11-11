@@ -25,6 +25,15 @@ func systemAudioSamples(_ buffer: CMSampleBuffer) throws -> [Float] {
     }
 }
 
+func systemAudioTime(_ time: CMTime, offset: Int) throws -> Int64 {
+    let stamp = CMTimeConvertScale(CMTimeAdd(time, CMTime(value: Int64(offset), timescale: 16_000)),
+                                   timescale: 1_000_000_000, method: .roundHalfAwayFromZero)
+    guard time.isNumeric, time.epoch == 0, stamp.isNumeric, stamp.timescale == 1_000_000_000, stamp.value >= 0 else {
+        throw Failure(message: "Invalid system audio timestamp")
+    }
+    return stamp.value
+}
+
 @available(macOS 13.0, *)
 final class SystemAudioOutput: NSObject, SCStreamOutput, SCStreamDelegate {
     let queue = DispatchQueue(label: "boardcast.system-audio")
@@ -35,8 +44,10 @@ final class SystemAudioOutput: NSObject, SCStreamOutput, SCStreamDelegate {
         guard type == .audio, started, buffer.isValid, buffer.numSamples > 0 else { return }
         do {
             let samples = try systemAudioSamples(buffer)
+            let time = CMSampleBufferGetOutputPresentationTimeStamp(buffer)
             for offset in stride(from: 0, to: samples.count, by: 1600) {
-                emit(["type": "audio", "samples": Array(samples[offset..<min(offset + 1600, samples.count)])])
+                emit(["type": "audio", "hostTimeNs": try systemAudioTime(time, offset: offset),
+                      "samples": Array(samples[offset..<min(offset + 1600, samples.count)])])
             }
         } catch {
             emit(["type": "error", "message": error.localizedDescription])
@@ -115,6 +126,16 @@ func systemAudioSelfTest() throws {
     let values: [Float] = [0, 0.25, -0.5, 1, -1]
     guard try systemAudioSamples(sample(16_000, 1, values)) == values else {
         throw Failure(message: "System audio samples changed")
+    }
+    let time = CMTime(value: 7, timescale: 3)
+    guard try systemAudioTime(time, offset: 1600) - systemAudioTime(time, offset: 0) == 100_000_000,
+          try systemAudioTime(CMSampleBufferGetOutputPresentationTimeStamp(sample(16_000, 1, values)), offset: 1) == 62_500 else {
+        throw Failure(message: "System audio packet timestamps changed")
+    }
+    for invalid in [CMTime.invalid, .indefinite, .positiveInfinity, CMTime(value: -1, timescale: 1)] {
+        do { _ = try systemAudioTime(invalid, offset: 0) }
+        catch { continue }
+        throw Failure(message: "Invalid system audio timestamp was accepted")
     }
     for invalid in [try sample(48_000, 1, values), try sample(16_000, 2, values), try sample(16_000, 1, [.nan])] {
         do {

@@ -1333,7 +1333,8 @@ impl Workbench {
                         self.keep_heard_text();
                         if let Some(line) = self.live.lines.last_mut() {
                             line["source"] = serde_json::json!(crate::listen::SOURCES[audio.source]);
-                            line["capture"] = serde_json::json!({ "id": audio.capture, "sourceStartSeconds": sentence.start, "seconds": sentence.seconds });
+                            line["capture"] = serde_json::json!({ "id": audio.capture, "sourceStartSeconds": sentence.start, "seconds": sentence.seconds,
+                                "startSeconds": audio.captured[0], "endSeconds": audio.captured[1] });
                         }
                         if self.follow_pages(&sentence.text, cx) {
                             continue;

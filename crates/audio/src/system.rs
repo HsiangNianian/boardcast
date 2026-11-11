@@ -1,6 +1,6 @@
 //! Apple's speech recognition and system audio capture, through the packaged Swift helper.
 
-use crate::{helper::Helper, language::Probe, Recognizer, SAMPLE_RATE};
+use crate::{helper::Helper, language::Probe, timing, Captured, Recognizer, SAMPLE_RATE};
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -147,24 +147,26 @@ impl Recognizer for AutoSpeech {
     fn identity(&self) -> Option<(&str, &str)> { self.speech.as_ref().and_then(Recognizer::identity) }
 }
 
-fn system_samples(event: &Value) -> Result<Vec<f32>> {
+fn system_samples(event: &Value) -> Result<Captured> {
     let values = event["samples"].as_array().context("missing system audio samples")?;
     ensure!(!values.is_empty() && values.len() <= 1600, "invalid system audio packet length");
-    values.iter().map(|v| {
+    let samples = values.iter().map(|v| {
         let sample = v.as_f64().context("invalid system audio sample")? as f32;
         ensure!(sample.is_finite(), "invalid system audio sample");
         Ok(sample)
-    }).collect()
+    }).collect::<Result<_>>()?;
+    let start = event.get("hostTimeNs").map(|v| v.as_u64().context("invalid system audio timestamp")).transpose()?.and_then(timing::host_time);
+    Ok(Captured { samples, start })
 }
 
 /// Preserve this stream as a separate source; EOF releases ScreenCaptureKit before the next start.
-pub fn capture(helper: &Path, stop: &AtomicBool, mut samples: impl FnMut(Vec<f32>) -> Result<()>, ready: impl FnOnce()) -> Result<()> {
+pub fn capture(helper: &Path, stop: &AtomicBool, mut samples: impl FnMut(Captured) -> Result<()>, ready: impl FnOnce()) -> Result<()> {
     let mut command = Command::new(helper);
     command.arg("system-audio");
     capture_from(Helper::spawn(command)?, stop, &mut samples, ready)
 }
 
-fn capture_from(helper: Helper, stop: &AtomicBool, samples: &mut impl FnMut(Vec<f32>) -> Result<()>, ready: impl FnOnce()) -> Result<()> {
+fn capture_from(helper: Helper, stop: &AtomicBool, samples: &mut impl FnMut(Captured) -> Result<()>, ready: impl FnOnce()) -> Result<()> {
     let event = helper.next(Duration::from_secs(120), stop)?;
     match event["type"].as_str() {
         Some("ready") => ready(),
@@ -202,10 +204,13 @@ while True:
 "#;
 
     fn fake_helper(source: &str) -> Option<std::path::PathBuf> {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         Command::new("python3").arg("--version").output().ok()?;
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
-        let dir = std::env::temp_dir().join(format!("boardcast-speech-test-{}-{stamp}", std::process::id()));
-        std::fs::create_dir_all(&dir).ok()?;
+        // Coarse wall clocks can give parallel tests the same timestamp and overwrite their scripts.
+        let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("boardcast-speech-test-{}-{stamp}-{sequence}", std::process::id()));
+        std::fs::create_dir(&dir).expect("unique speech test directory");
         let script = dir.join("fake.py");
         std::fs::write(&script, source).ok()?;
         let helper = dir.join("boardcast-speech");
@@ -357,7 +362,13 @@ while True:
         for event in [serde_json::json!({"samples":[]}), serde_json::json!({"samples":[1e100]}), serde_json::json!({"samples":["0"]}), serde_json::json!({"samples":vec![0; 1601]})] {
             assert!(system_samples(&event).is_err());
         }
-        assert_eq!(system_samples(&serde_json::json!({"samples":[0.25,-0.5,0]})).unwrap(), vec![0.25,-0.5,0.0]);
+        let untimed = system_samples(&serde_json::json!({"samples":[0.25,-0.5,0]})).unwrap();
+        assert_eq!(untimed.samples, vec![0.25,-0.5,0.0]);
+        assert!(untimed.start.is_none());
+        for stamp in [serde_json::json!(-1), serde_json::json!(1.5), serde_json::json!("12"), Value::Null] {
+            assert!(system_samples(&serde_json::json!({"samples":[0.25], "hostTimeNs":stamp})).is_err());
+        }
+        assert!(system_samples(&serde_json::json!({"samples":[0.25], "hostTimeNs":1_000_000_000})).is_ok());
     }
 
     #[cfg(unix)]
@@ -369,7 +380,7 @@ while True:
             let stop = AtomicBool::new(false);
             let mut heard = vec![];
             let result = capture_from(Helper::spawn(command).unwrap(), &stop, &mut |samples| {
-                heard.extend(samples); stop.store(true, Ordering::Relaxed); Ok(())
+                heard.extend(samples.samples); stop.store(true, Ordering::Relaxed); Ok(())
             }, || {});
             assert_eq!(result.is_ok(), expected, "{result:?}");
             heard

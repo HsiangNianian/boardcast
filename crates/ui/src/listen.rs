@@ -1,7 +1,7 @@
 //! One capture at a time; each source keeps its own detector, language and meeting stamp.
 use crate::pipeline::{Event, Speech};
 use anyhow::{bail, ensure, Result};
-use boardcast_audio::{capture, play_wav, system::{AutoSpeech, SystemSpeech}, Ear, Recognizers, Sentence};
+use boardcast_audio::{capture, play_wav, system::{AutoSpeech, SystemSpeech}, Captured, Ear, Recognizers, Sentence};
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -26,6 +26,7 @@ pub struct Track {
     pub queue_ms: VecDeque<u128>,
     pub asr_ms: VecDeque<u128>,
     pub ui_receive_ms: VecDeque<u128>,
+    pub audio_end_to_final_ms: VecDeque<u128>,
 }
 
 pub fn keep(values: &mut VecDeque<u128>, value: u128) {
@@ -73,6 +74,8 @@ pub struct Heard {
     pub capture: u64,
     pub source: usize,
     pub ready: Instant,
+    /// Seconds from this capture's common origin, shared by both sources.
+    pub captured: [Option<f64>; 2],
     pub report: Arc<Mutex<Report>>,
 }
 
@@ -105,11 +108,12 @@ fn ear_for(models: &Path, speech: &Speech, locale: &str, stop: Arc<AtomicBool>) 
     Ok((Ear::with(models, recognizers)?, with, None, note))
 }
 
-struct Frame { source: usize, samples: Vec<f32>, arrived: Instant }
+struct Frame { source: usize, samples: Vec<f32>, start: Option<Instant>, arrived: Instant }
 
 enum Status { Ready(usize), Failed(anyhow::Error), Finished }
 
-fn send_frame(tx: &SyncSender<Frame>, report: &Arc<Mutex<Report>>, source: usize, samples: Vec<f32>) -> Result<()> {
+fn send_frame(tx: &SyncSender<Frame>, report: &Arc<Mutex<Report>>, source: usize, captured: Captured) -> Result<()> {
+    let Captured { samples, start } = captured;
     ensure!(!samples.is_empty() && samples.len() <= 16_000 && samples.iter().all(|s| s.is_finite()), "invalid captured audio");
     let n = samples.len();
     let mut report = report.lock().unwrap();
@@ -119,7 +123,7 @@ fn send_frame(tx: &SyncSender<Frame>, report: &Arc<Mutex<Report>>, source: usize
     track.last_received_ms = Some(elapsed);
     track.peak = samples.iter().fold(0.0_f32, |p, s| p.max(s.abs()));
     track.queued_samples += n;
-    if tx.try_send(Frame { source, samples, arrived: Instant::now() }).is_err() {
+    if tx.try_send(Frame { source, samples, start, arrived: Instant::now() }).is_err() {
         track.queued_samples -= n;
         bail!("Speech recognition cannot keep up; capture stopped. Try a smaller speech model or one source.");
     }
@@ -196,7 +200,7 @@ fn run(job: &Job, models: &Path, events: &Sender<Event>) -> Result<()> {
                             keep(&mut track.queue_ms, frame.arrived.elapsed().as_millis());
                         }
                         let _ = events.send(Event::Level(frame.samples.iter().fold(0.0_f32, |p, s| p.max(s.abs()))));
-                        ear.feed(&frame.samples, &mut |sentence| heard(job, source, sentence, events));
+                        ear.feed_at(&frame.samples, frame.start, &mut |sentence| heard(job, source, sentence, events));
                         refresh_identity(job, source, &ear, events);
                         if let Some(error) = ear.error() { bail!("{error}"); }
                     }
@@ -290,12 +294,20 @@ fn refresh_identity(job: &Job, source: usize, ear: &Ear, events: &Sender<Event>)
 }
 
 fn heard(job: &Job, source: usize, sentence: Sentence, events: &Sender<Event>) {
-    {
+    let ready = Instant::now();
+    let captured = {
         let mut report = job.report.lock().unwrap();
         report.tracks[source].finals += 1;
         keep(&mut report.tracks[source].asr_ms, sentence.asr_ms);
-    }
-    let audio = Heard { capture: job.id, source, ready: Instant::now(), report: job.report.clone() };
+        if let Some(elapsed) = sentence.captured[1].and_then(|end| ready.checked_duration_since(end)) {
+            keep(&mut report.tracks[source].audio_end_to_final_ms, elapsed.as_millis());
+        }
+        sentence.captured.map(|time| time.map(|time| {
+            if time >= report.started { (time - report.started).as_secs_f64() }
+            else { -(report.started - time).as_secs_f64() }
+        }))
+    };
+    let audio = Heard { capture: job.id, source, ready, captured, report: job.report.clone() };
     let _ = events.send(Event::Spoken { meeting: job.meeting, sentence, audio });
 }
 
@@ -369,6 +381,7 @@ while True:
                     assert_eq!(meeting, 17);
                     assert_eq!(audio.capture, 9);
                     assert_eq!(sentence.text, format!("Recognized by {}", locales[audio.source]));
+                    assert_eq!(audio.captured, [None, None], "file input has no native capture clock");
                     spoken[audio.source] += 1;
                 }
             }
@@ -384,6 +397,7 @@ while True:
                     assert_eq!(track.locale.as_deref(), Some(locale));
                     assert_eq!(track.queued_samples, 0);
                     assert!(track.samples > 0 && track.finals > 0);
+                    assert!(track.audio_end_to_final_ms.is_empty());
                 }
             }
             assert!(job.stop.load(Ordering::Relaxed));
@@ -401,19 +415,51 @@ while True:
         let speech = Speech { helper: None, system: false, language: "zh-CN".into(), system_language: "ja-JP".into() };
         let report = Arc::new(Mutex::new(Report::new(1, "both", &speech)));
         let (tx, rx) = sync_channel(2);
-        send_frame(&tx, &report, 0, vec![0.25; 320]).unwrap();
-        send_frame(&tx, &report, 1, vec![-0.5; 1600]).unwrap();
-        assert!(send_frame(&tx, &report, 0, vec![0.0; 320]).is_err());
-        assert!(send_frame(&tx, &report, 0, vec![f32::NAN]).is_err());
-        assert!(send_frame(&tx, &report, 0, vec![]).is_err());
+        let start = Instant::now();
+        send_frame(&tx, &report, 0, Captured { samples: vec![0.25; 320], start: Some(start) }).unwrap();
+        send_frame(&tx, &report, 1, Captured { samples: vec![-0.5; 1600], start: Some(start + Duration::from_secs(2)) }).unwrap();
+        assert!(send_frame(&tx, &report, 0, Captured { samples: vec![0.0; 320], start: None }).is_err());
+        assert!(send_frame(&tx, &report, 0, Captured { samples: vec![f32::NAN], start: None }).is_err());
+        assert!(send_frame(&tx, &report, 0, Captured { samples: vec![], start: None }).is_err());
         let first = rx.recv().unwrap(); let second = rx.recv().unwrap();
         assert_eq!((first.source, first.samples[0]), (0, 0.25));
         assert_eq!((second.source, second.samples[0]), (1, -0.5));
+        assert_eq!(second.start.unwrap() - first.start.unwrap(), Duration::from_secs(2));
         let report = report.lock().unwrap();
         assert_eq!(report.tracks[0].queued_samples, 320);
         assert_eq!(report.tracks[1].queued_samples, 1600);
         assert_eq!(report.requested_languages, ["zh-CN", "ja-JP"]);
     }
+
+    #[test]
+    fn final_times_share_the_capture_origin_and_keep_untimed_input_unknown() {
+        let speech = Speech { helper: None, system: false, language: "detect".into(), system_language: "auto".into() };
+        let mut report = Report::new(3, "both", &speech);
+        report.started = Instant::now() - Duration::from_secs(10);
+        let origin = report.started;
+        let job = Job { id: 3, meeting: 7, input: None, source: "both".into(), speech,
+            stop: Arc::new(AtomicBool::new(false)), report: Arc::new(Mutex::new(report)), wavs: [None, None], done: None };
+        let (events, receive) = channel();
+        for (source, times, expected) in [
+            (0, [Some(origin - Duration::from_secs(1)), Some(origin)], [Some(-1.0), Some(0.0)]),
+            (1, [Some(origin + Duration::from_secs(2)), Some(origin + Duration::from_secs(3))], [Some(2.0), Some(3.0)]),
+            (0, [None, None], [None, None]),
+        ] {
+            heard(&job, source, Sentence { text: "test".into(), voiceprint: None, asr_ms: 5, ended: Instant::now(),
+                start: 0.0, seconds: 1.0, captured: times, engine: boardcast_audio::Engine::SenseVoice }, &events);
+            let Event::Spoken { meeting, sentence, audio } = receive.recv().unwrap() else { panic!("missing sentence") };
+            assert_eq!((meeting, audio.capture, audio.source), (7, 3, source));
+            assert_eq!(audio.captured, expected);
+            assert_eq!(sentence.start, 0.0);
+            if let Some(end) = times[1] {
+                assert_eq!(job.report.lock().unwrap().tracks[source].audio_end_to_final_ms.back(), Some(&(audio.ready - end).as_millis()));
+            }
+        }
+        let report = job.report.lock().unwrap();
+        assert_eq!(report.tracks[0].audio_end_to_final_ms.len(), 1);
+        assert_eq!(report.tracks[1].audio_end_to_final_ms.len(), 1);
+    }
+
     #[test]
     fn metrics_are_bounded() {
         let mut values = VecDeque::new();

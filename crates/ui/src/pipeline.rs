@@ -190,7 +190,7 @@ impl Pipeline {
             if self.current_capture(report.id) { value["elapsed_ms"] = serde_json::json!(report.started.elapsed().as_millis()); }
             for (i, track) in report.tracks.iter().enumerate() {
                 value["tracks"][i]["source"] = serde_json::json!(listen::SOURCES[i]);
-                for (name, values) in [("queue_ms", &track.queue_ms), ("asr_ms", &track.asr_ms), ("ui_receive_ms", &track.ui_receive_ms)] {
+                for (name, values) in [("queue_ms", &track.queue_ms), ("asr_ms", &track.asr_ms), ("ui_receive_ms", &track.ui_receive_ms), ("audio_end_to_final_ms", &track.audio_end_to_final_ms)] {
                     value["tracks"][i][name] = stats(values);
                 }
             }
@@ -199,7 +199,7 @@ impl Pipeline {
         serde_json::to_string_pretty(&serde_json::json!({ "version": 1, "captures": captures,
             "limits": { "captures": 20, "recent_timings_per_track": 128, "queued_packets_per_track": 300 },
             "speech_to_first_partial_ms": null, "sentence_end_to_final_ms": null, "screen_present_ms": null,
-            "timing_basis": "monotonic arrival at Rust, recognition, receipt by UI; no acoustic onset or screen presentation measurement"
+            "timing_basis": "capture timestamps (native on Mac, callback estimates elsewhere), monotonic arrival at Rust, recognition, receipt by UI; audio_end_to_final_ms starts at the captured segment end, not acoustic speech end; no acoustic onset or screen presentation measurement"
         })).expect("report serializes")
     }
 }

@@ -36,7 +36,10 @@ A virtual Mac CI package check does not establish microphone permission, sustain
    Temperature remains unmeasured. An interrupted run or an exited app is explicitly incomplete.
 5. Before stopping and after stopping, use Settings → **Copy audio diagnostics**, save each JSON locally,
    and match capture IDs to the source-switch sequence. Each source retains received samples, latest arrival,
-   level, maximum/current backlog and bounded queue/ASR/UI-receipt timings. Inspect counts as well as p50/p95/max.
+   level, maximum/current backlog and bounded queue/ASR/UI-receipt timings. When native capture timestamps
+   are available, `audio_end_to_final_ms` measures from the captured segment's end to the final recognition result.
+   That segment can contain VAD preroll and trailing silence; it is not a measurement of the last spoken sound.
+   Inspect counts as well as p50/p95/max.
    Each source has its own recognition worker and a queue capped at 300 packets (`queued_packets_per_track`). The last 20 captures and last
    128 timing samples per source are retained. No transcript, audio, API key or
    full error response is included. Actual acoustic onset → first partial, sentence end → final and screen
@@ -50,8 +53,36 @@ A virtual Mac CI package check does not establish microphone permission, sustain
 Report the two backends, languages, sources and cold/warm starts separately. Check the whole 30 minutes ran,
 peak memory, whether queues grew, remaining helpers, audible dropouts, transcript/source errors and subjective
 heat/noise. M1 8 GB and a larger-memory Mac are still separate #35 conditions; one M5 result cannot fill both.
-Do not close #34/#69/#70/#71 from protocol tests or package CI alone. Per-source clock alignment, partial-caption
-timing and actual two-source Apple capacity remain to be verified/finished; Auto's physical Mac path is unverified.
+Do not close #34/#69/#70/#71 from protocol tests or package CI alone. Native capture timestamps now share a
+monotonic clock in code; physical alignment/calibration, partial-caption timing and actual two-source Apple
+capacity remain to be verified/finished. Auto's physical Mac path is unverified.
+
+Mac microphone timestamps come from CPAL CoreAudio; system audio keeps ScreenCaptureKit's output presentation
+timestamp, including offsets when a buffer is split into packets. Both use the Mac host clock, correlated with
+Rust's monotonic clock when received. See Apple's [host clock](https://developer.apple.com/documentation/coremedia/cmclockgethosttimeclock())
+and [output timestamp](https://developer.apple.com/documentation/coremedia/cmsamplebuffergetoutputpresentationtimestamp(_:)) documentation.
+Each saved transcript line retains `capture.startSeconds` and `capture.endSeconds` relative to that capture's
+shared origin. `capture.sourceStartSeconds` and `capture.seconds` remain PCM-based; a capture gap can make elapsed
+time longer than the retained PCM. The display still appends final results in completion order; chronological
+merging of captions remains unfinished. Test delayed source startup and playback pauses, then compare the two sources'
+timestamps with an independently recorded reference. Auto waiting and recognition queues must not shift them.
+Untimed WAV input and artificial stop padding leave native endpoints unknown; diagnostic nulls mean unmeasured.
+Outside Mac, microphone time is estimated from callback arrival minus the device-reported delay.
+
+On 2026-11-12, local Linux checks passed 24 audio tests and 6 regular UI tests with the installed VAD/SenseVoice
+models; CAM++ was absent, so speaker embedding was not exercised. Clock regressions cover different source starts,
+delayed delivery, discontinuous packets across partial VAD windows, timestamp retention bounds, Auto waiting/stop,
+and unknown input/padding. These checks establish propagation and bookkeeping, not device accuracy. The Swift
+self-test also checks timestamp conversion, split offsets and invalid timestamps when run on Mac CI.
+The separate three-language Auto test and all five two-source lifecycle scenarios also passed after this change.
+WAV playback deliberately has no native capture timestamps and reports no captured-end latency.
+
+At `56051ad`, Linux, Apple Silicon, Windows and core CI passed; Intel packaging/self-checks passed but two audio
+tests read each other's simulated-helper protocol. Their temporary directories used only the wall clock and PID.
+Holding the test process's wall clock constant reproduced the unexpected `1600 samples, sum 800.0` reply locally.
+Test helpers now add an atomic sequence and create directories exclusively; under the same injected clock, all
+24 audio tests pass. This fixes test isolation without changing the production stop deadline. The next Mac CI
+must still confirm it. [Local clock/fixture evidence](capture-clock-2026-11-12.json) retains commands and results.
 
 The sampler parser can be tested anywhere: `python3 eval/macos/test_watch.py`.
 

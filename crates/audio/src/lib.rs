@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 
 mod helper;
 mod language;
+mod timing;
 pub mod system;
 
 pub const SAMPLE_RATE: i32 = 16_000;
@@ -105,8 +106,16 @@ pub struct Sentence {
     /// Where in the input it began, in seconds.
     pub start: f64,
     pub seconds: f64,
+    /// Capture times of the first sample and exclusive end, absent for untimed input/padding.
+    pub captured: [Option<Instant>; 2],
     /// Which recognizer wrote the text.
     pub engine: Engine,
+}
+
+pub struct Captured {
+    pub samples: Vec<f32>,
+    /// First sample on the process monotonic clock, not when a queued packet was delivered.
+    pub start: Option<Instant>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -366,7 +375,9 @@ pub struct Ear {
     level: VadLevel,
     /// The original samples: recognition must not hear the detector's gain.
     audio: VecDeque<f32>,
-    waiting: Vec<(Vec<f32>, usize, Instant)>,
+    waiting: Vec<(Vec<f32>, usize, Instant, [Option<Instant>; 2])>,
+    /// Sample-index ranges still retained by the detector; waiting sentences copy their endpoints.
+    times: VecDeque<(usize, usize, Instant)>,
 }
 
 impl Ear {
@@ -415,6 +426,7 @@ impl Ear {
             level: VadLevel::default(),
             audio: VecDeque::new(),
             waiting: vec![],
+            times: VecDeque::new(),
         })
     }
 
@@ -428,6 +440,14 @@ impl Ear {
     }
 
     pub fn feed(&mut self, samples: &[f32], heard: &mut impl Heard) {
+        self.feed_at(samples, None, heard);
+    }
+
+    pub fn feed_at(&mut self, samples: &[f32], start: Option<Instant>, heard: &mut impl Heard) {
+        if let Some(at) = start.filter(|_| !samples.is_empty()) {
+            let begin = self.fed + self.pending.len();
+            self.times.push_back((begin, begin + samples.len(), at));
+        }
         self.pending.extend_from_slice(samples);
         while self.pending.len() >= VAD_WINDOW {
             let chunk: Vec<f32> = self.pending.drain(..VAD_WINDOW).collect();
@@ -464,7 +484,18 @@ impl Ear {
             let keep_from = if self.in_speech { self.sent_until } else { self.fed.saturating_sub(PREROLL) };
             let discard = keep_from.saturating_sub(self.fed - self.audio.len()).min(self.audio.len());
             self.audio.drain(..discard);
+            while self.times.front().is_some_and(|(_, end, _)| *end <= self.fed - self.audio.len()) {
+                self.times.pop_front();
+            }
         }
+    }
+
+    fn captured(&self, start: usize, length: usize) -> [Option<Instant>; 2] {
+        let at = |sample, end| {
+            let &(begin, _, time) = self.times.iter().find(|&&(begin, finish, _)| begin <= sample && sample < finish)?;
+            time.checked_add(Duration::from_secs_f64((sample - begin + usize::from(end)) as f64 / f64::from(SAMPLE_RATE)))
+        };
+        [at(start, false), length.checked_sub(1).and_then(|last| at(start + last, true))]
     }
 
     /// End a sentence at a dip. What was sent stays recorded in `sent_until`, so the detector's own
@@ -483,22 +514,23 @@ impl Ear {
             return;
         }
         let ended = Instant::now();
-        let full = self.waiting.iter().map(|(pcm, _, _)| pcm.len()).sum::<usize>() + samples.len() >= RETAIN;
+        let captured = self.captured(start, samples.len());
+        let full = self.waiting.iter().map(|(pcm, _, _, _)| pcm.len()).sum::<usize>() + samples.len() >= RETAIN;
         if self.asr.system.as_mut().is_some_and(|s| !s.prepare(&[], full)) {
-            self.waiting.push((samples.to_vec(), start, ended));
+            self.waiting.push((samples.to_vec(), start, ended, captured));
             return;
         }
         self.hear_waiting(heard);
-        self.transcribe(samples, start, ended, heard);
+        self.transcribe(samples, start, ended, captured, heard);
     }
 
     fn hear_waiting(&mut self, heard: &mut impl Heard) {
-        for (samples, start, ended) in std::mem::take(&mut self.waiting) {
-            self.transcribe(&samples, start, ended, heard);
+        for (samples, start, ended, captured) in std::mem::take(&mut self.waiting) {
+            self.transcribe(&samples, start, ended, captured, heard);
         }
     }
 
-    fn transcribe(&mut self, samples: &[f32], start: usize, ended: Instant, heard: &mut impl Heard) {
+    fn transcribe(&mut self, samples: &[f32], start: usize, ended: Instant, captured: [Option<Instant>; 2], heard: &mut impl Heard) {
         let started = Instant::now();
         let (text, engine) = self.asr.hear(samples);
         // A word or two out of clicks, breath or hum: the recognizers find words in anything, but
@@ -508,7 +540,7 @@ impl Ear {
         }
         if !text.is_empty() {
             let asr_ms = started.elapsed().as_millis();
-            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine });
+            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), captured, engine });
         }
     }
 
@@ -568,14 +600,14 @@ impl Ear {
 }
 
 /// Feed a mono WAV in real time, so timings resemble a live meeting.
-pub fn play_wav(path: &Path, mut samples: impl FnMut(Vec<f32>) -> Result<()>) -> Result<()> {
+pub fn play_wav(path: &Path, mut samples: impl FnMut(Captured) -> Result<()>) -> Result<()> {
     let wave = Wave::read(&path.to_string_lossy()).with_context(|| format!("cannot read {}", path.display()))?;
     anyhow::ensure!(wave.sample_rate() == SAMPLE_RATE, "recording must be 16 kHz");
     for chunk in wave.samples().chunks(320) {
-        samples(chunk.to_vec())?;
+        samples(Captured { samples: chunk.to_vec(), start: None })?;
         thread::sleep(Duration::from_millis(20));
     }
-    samples(vec![0.0; SAMPLE_RATE as usize])?;
+    samples(Captured { samples: vec![0.0; SAMPLE_RATE as usize], start: None })?;
     Ok(())
 }
 
@@ -607,7 +639,7 @@ pub fn inputs() -> Vec<Input> {
 
 /// Live capture, mono at 16 kHz, until `stop` is set. `chosen` is an input's id; when it is gone,
 /// the default input is used and `fell_back` hears about it.
-pub fn capture(stop: &AtomicBool, mut samples: impl FnMut(Vec<f32>) -> Result<()> + Send + 'static, chosen: Option<&str>, fell_back: impl FnOnce(&str), ready: impl FnOnce()) -> Result<()> {
+pub fn capture(stop: &AtomicBool, mut samples: impl FnMut(Captured) -> Result<()> + Send + 'static, chosen: Option<&str>, fell_back: impl FnOnce(&str), ready: impl FnOnce()) -> Result<()> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     let host = input_host();
     let picked = chosen.and_then(|id| host.input_devices().ok()?.find(|d| d.id().is_ok_and(|d| d.to_string() == id)));
@@ -620,7 +652,8 @@ pub fn capture(stop: &AtomicBool, mut samples: impl FnMut(Vec<f32>) -> Result<()
     };
     let supported = device.default_input_config()?;
     let channels = supported.channels() as usize;
-    let ratio = f64::from(supported.sample_rate()) / f64::from(SAMPLE_RATE);
+    let input_rate = f64::from(supported.sample_rate());
+    let ratio = input_rate / f64::from(SAMPLE_RATE);
     let mut config = supported.config();
     if let cpal::SupportedBufferSize::Range { min, max } = *supported.buffer_size() {
         config.buffer_size = cpal::BufferSize::Fixed((supported.sample_rate() / 50).clamp(min, max));
@@ -628,7 +661,8 @@ pub fn capture(stop: &AtomicBool, mut samples: impl FnMut(Vec<f32>) -> Result<()
     let (errors, failure) = channel();
     let sending_errors = errors.clone();
     let mut position = 0.0_f64;
-    let mut send = move |mono: Vec<f32>| {
+    let mut send = move |mono: Vec<f32>, at: Option<Instant>| {
+        let start = at.and_then(|at| at.checked_add(Duration::from_secs_f64(position.floor() / input_rate)));
         let mut out = Vec::with_capacity((mono.len() as f64 / ratio) as usize + 1);
         while (position as usize) < mono.len() {
             out.push(mono[position as usize]);
@@ -636,29 +670,34 @@ pub fn capture(stop: &AtomicBool, mut samples: impl FnMut(Vec<f32>) -> Result<()
         }
         position -= mono.len() as f64;
         if !out.is_empty() {
-            if let Err(e) = samples(out) { let _ = sending_errors.send(e.to_string()); }
+            if let Err(e) = samples(Captured { samples: out, start }) { let _ = sending_errors.send(e.to_string()); }
         }
     };
     let on_error = move |e: cpal::Error| { let _ = errors.send(format!("microphone: {e}")); };
     let stream = match supported.sample_format() {
         cpal::SampleFormat::F32 => device.build_input_stream::<f32, _, _>(
             config,
-            move |data: &[f32], _| send(data.chunks(channels).map(|f| f.iter().sum::<f32>() / channels as f32).collect()),
+            move |data: &[f32], info| {
+                let at = timing::microphone(info);
+                send(data.chunks(channels).map(|f| f.iter().sum::<f32>() / channels as f32).collect(), at);
+            },
             on_error,
             None,
         )?,
         cpal::SampleFormat::I16 => device.build_input_stream::<i16, _, _>(
             config,
-            move |data: &[i16], _| {
-                send(data.chunks(channels).map(|f| f.iter().map(|&s| f32::from(s) / 32768.0).sum::<f32>() / channels as f32).collect());
+            move |data: &[i16], info| {
+                let at = timing::microphone(info);
+                send(data.chunks(channels).map(|f| f.iter().map(|&s| f32::from(s) / 32768.0).sum::<f32>() / channels as f32).collect(), at);
             },
             on_error,
             None,
         )?,
         cpal::SampleFormat::I32 => device.build_input_stream::<i32, _, _>(
             config,
-            move |data: &[i32], _| {
-                send(data.chunks(channels).map(|f| f.iter().map(|&s| s as f32 / 2_147_483_648.0).sum::<f32>() / channels as f32).collect());
+            move |data: &[i32], info| {
+                let at = timing::microphone(info);
+                send(data.chunks(channels).map(|f| f.iter().map(|&s| s as f32 / 2_147_483_648.0).sum::<f32>() / channels as f32).collect(), at);
             },
             on_error,
             None,
@@ -751,22 +790,54 @@ mod tests {
             let seen = Arc::new(Mutex::new(vec![]));
             let ready = Arc::new(AtomicBool::new(false));
             let mut ear = Ear::with(&models, Recognizers::system(Box::new(Waiting { ready: ready.clone(), seen: seen.clone() }))).unwrap();
+            let captured = Instant::now() - Duration::from_secs(60);
+            ear.times.push_back((1600, 1600 + first.len(), captured));
             let mut sentences = vec![];
             ear.hear(&first, 1600, &mut |s| sentences.push(s));
             assert!(sentences.is_empty() && seen.lock().unwrap().is_empty());
+            // Auto can still be waiting after the detector has discarded these packets.
+            ear.times.clear();
             if finish { ear.finish(&mut |s| sentences.push(s)); }
-            else { ready.store(!bounded, Ordering::Relaxed); ear.hear(&second, 16000, &mut |s| sentences.push(s)); }
+            else {
+                ear.times.push_back((16000, 16000 + second.len(), captured + Duration::from_secs(40)));
+                ready.store(!bounded, Ordering::Relaxed);
+                ear.hear(&second, 16000, &mut |s| sentences.push(s));
+            }
             let expected = if finish { vec![first.clone()] } else { vec![first.clone(), second.clone()] };
             assert_eq!(*seen.lock().unwrap(), expected);
             assert_eq!(sentences[0].start, 0.1);
             assert_eq!(sentences[0].seconds, first.len() as f64 / f64::from(SAMPLE_RATE));
+            assert_eq!(sentences[0].captured, [Some(captured), Some(captured + Duration::from_secs_f64(sentences[0].seconds))]);
             if !finish {
                 assert_eq!(sentences[1].start, 1.0);
                 assert!(sentences[0].ended <= sentences[1].ended);
+                assert_eq!(sentences[1].captured[0], Some(captured + Duration::from_secs(40)));
             }
             assert!(ear.waiting.is_empty());
             ear.finish(&mut |_| panic!("deferred sentences must not be repeated"));
         }
+    }
+
+    #[test]
+    fn capture_times_follow_partial_windows_gaps_and_retention() {
+        let Some(models) = models() else { return };
+        let mut ear = Ear::with(&models, Recognizers::system(Box::new(Fixed("unexpected silence")))).unwrap();
+        let start = Instant::now();
+        let mut silent = |_| panic!("silence must not produce a sentence");
+        ear.feed_at(&[0.0; 100], Some(start), &mut silent);
+        ear.feed_at(&[0.0; 600], Some(start + Duration::from_secs(2)), &mut silent);
+        assert_eq!((ear.fed, ear.pending.len()), (512, 188));
+        assert_eq!(ear.captured(90, 20), [Some(start + Duration::from_micros(5625)),
+            Some(start + Duration::from_secs(2) + Duration::from_micros(625))]);
+        ear.feed(&[0.0; 20], &mut silent);
+        assert_eq!(ear.captured(700, 20), [None, None]);
+        ear.finish(&mut silent);
+        assert_eq!(ear.captured(700, 324), [None, None]);
+        for second in 0..40 {
+            ear.feed_at(&[0.0; SAMPLE_RATE as usize], Some(start + Duration::from_secs(3 + second)), &mut silent);
+        }
+        assert!(ear.times.len() <= 3, "timestamps must be pruned with retained audio");
+        assert_eq!(ear.captured(0, 100), [None, None]);
     }
 
     #[test]

@@ -80,8 +80,9 @@ Auto reuses the Tauri probe of SenseVoice's [language/event metadata](https://gi
 Japanese or English. The ear now gathers five seconds of VAD-qualified original PCM across opening sentences;
 it collects context while speech arrives, without waiting for the next full sentence to end. Completed sentences
 wait for detection, then each is sent once with its original PCM and source-relative timestamp. Stopping flushes
-shorter opening speech. The probe is released before starting Apple's selected locale. This delays the initial
-captions; five seconds of speech is not a physical latency guarantee. Silence adds no probe context or waiting
+shorter opening speech. The ear also ends the context wait before retained sentences reach its 30-second audio
+limit, so fragmented speech cannot grow an unbounded queue. The probe is released before starting Apple's
+selected locale. This delays the initial captions; five seconds of speech is not a physical latency guarantee. Silence adds no probe context or waiting
 sentences. Short or mixed speech can still select the wrong language, so manual selection remains available.
 Missing models or inconclusive detection fail explicitly.
 

@@ -130,7 +130,7 @@ pub fn is_japanese(text: &str) -> bool {
 
 /// A recognizer outside this crate, such as the system's own, that takes a sentence and gives its text.
 pub trait Recognizer: Send {
-    /// Observe VAD-qualified chunks; an empty slice queries readiness or finishes a short capture.
+    /// Observe VAD-qualified chunks; `finished` asks to use the available context without waiting.
     fn prepare(&mut self, _samples: &[f32], _finished: bool) -> bool { true }
     fn recognize(&mut self, samples: &[f32]) -> Result<String>;
     fn error(&self) -> Option<&str> { None }
@@ -483,7 +483,8 @@ impl Ear {
             return;
         }
         let ended = Instant::now();
-        if self.asr.system.as_mut().is_some_and(|s| !s.prepare(&[], false)) {
+        let full = self.waiting.iter().map(|(pcm, _, _)| pcm.len()).sum::<usize>() + samples.len() >= RETAIN;
+        if self.asr.system.as_mut().is_some_and(|s| !s.prepare(&[], full)) {
             self.waiting.push((samples.to_vec(), start, ended));
             return;
         }
@@ -744,9 +745,9 @@ mod tests {
             }
         }
         let Some(models) = models() else { return };
-        let first = vec![0.25; VAD_WINDOW * 2];
         let second = vec![-0.5; VAD_WINDOW * 2];
-        for finish in [false, true] {
+        for (finish, bounded) in [(false, false), (true, false), (false, true)] {
+            let first = vec![0.25; if bounded { RETAIN - second.len() } else { second.len() }];
             let seen = Arc::new(Mutex::new(vec![]));
             let ready = Arc::new(AtomicBool::new(false));
             let mut ear = Ear::with(&models, Recognizers::system(Box::new(Waiting { ready: ready.clone(), seen: seen.clone() }))).unwrap();
@@ -754,7 +755,7 @@ mod tests {
             ear.hear(&first, 1600, &mut |s| sentences.push(s));
             assert!(sentences.is_empty() && seen.lock().unwrap().is_empty());
             if finish { ear.finish(&mut |s| sentences.push(s)); }
-            else { ready.store(true, Ordering::Relaxed); ear.hear(&second, 16000, &mut |s| sentences.push(s)); }
+            else { ready.store(!bounded, Ordering::Relaxed); ear.hear(&second, 16000, &mut |s| sentences.push(s)); }
             let expected = if finish { vec![first.clone()] } else { vec![first.clone(), second.clone()] };
             assert_eq!(*seen.lock().unwrap(), expected);
             assert_eq!(sentences[0].start, 0.1);

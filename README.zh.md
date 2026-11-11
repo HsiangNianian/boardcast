@@ -153,7 +153,7 @@ sh packaging/linux/package.sh           # target/package/boardcast-<version>-<ar
 
 | 用例集 | 当前规模 | 用途 |
 |---|---|---|
-| [`eval/cases.json`](eval/cases.json) | 28 场会 | 开发与回归，包含英文和一场真实会议的回归 |
+| [`eval/cases.json`](eval/cases.json) | 30 场会 | 开发与回归，包含英文、预填模板和一场真实会议的回归 |
 | [`eval/holdout.json`](eval/holdout.json) | 27 场会 | 不参与提示词调整的留出集 |
 | [`eval/pointing.json`](eval/pointing.json) | 18 个用例 | 中英文圈着说，起始板固定 |
 | [`eval/revisions.json`](eval/revisions.json) | 3 个用例 | 转写修订，必须保留节点身份和无关内容；等 GPUI 版支持转写修订后再跑 |
@@ -162,7 +162,7 @@ sh packaging/linux/package.sh           # target/package/boardcast-<version>-<ar
 
 草稿 PR #206 还按本地模型的实际 token 预算分段整理过大的白板材料，并在容量允许时保留较短的原始发言。被截断的回复会明确失败，评测失败也会写入报告，待办列表项会补上可操作的勾选框。不同白板的编号含义有冲突时，清理过程不再套用另一张板的名称。长输入用例仍暴露事实错误；不再超出上下文，不等于摘要验收通过。
 
-草稿 PR #206 现仅为已测过的 Qwen3.5-4B Q4_K_M 加入摘要示例。[最新本地对照](eval/summary-examples-2026-11-12.json)中，原 15 个用例从 12/15 提升到三轮 45/45；新增 8 例从 3/8 提升到 7/8，多白板为 4/4、长转写为 1/2。仍会漏掉已确认的发货日期，长笔记仍会虚构负责人问题，因此摘要验收继续开放。同一示例使 9B 回退，9B、未知本地模型和远程模型均保留原提示词。这些是 Linux 合成用例，当前 CI 与 Mac 真机验收另行跟踪。
+草稿 PR #206 现仅为已测过的 Qwen3.5-4B Q4_K_M 加入摘要示例。[最新本地对照](eval/summary-examples-2026-11-12.json)中，原 15 个用例从 12/15 提升到三轮 45/45；新增 8 例从 3/8 提升到 7/8。[同一提交的 CI 摘要](https://github.com/HsiangNianian/boardcast/actions/runs/43103679484/artifacts/13894110457)为 42/45：三轮均漏掉预演日期中的“周一”，两个模板仍通过 6/6。本地多白板为 4/4、长转写为 1/2。仍会漏掉已确认的发货日期，长笔记仍会虚构负责人问题，因此摘要验收继续开放。同一示例使 9B 回退，9B、未知本地模型和远程模型均保留原提示词。这些是 Linux 合成用例，Mac 真机验收另行跟踪。
 [此前模型对照](eval/summary-options-2026-11-12.json)及[检查器修正](eval/summary-checker-2026-11-12.json)保留历史输出、未采用改动和修正前后分数，包括此前的 CI 36/45。
 收音诊断现可定位失败来源，区分准备、采集和识别阶段。[回归证据](eval/macos/capture-errors-2026-11-12.json)用文件输入检查采集错误收尾、每次采集只报一次失败及 helper 退出；Mac 真机验收仍开放。
 设置 → **导出诊断…** 可先查看 `info.json`、`timing.json` 和 `errors.txt` 的固定快照，再保存到本机，不含会议文字、音频、密钥、路径或错误正文。已有逐句计时沿用旧报告字段，完整的当前收音／板书报告位于 `timing.json.runtime`，未测项保持 null。[原生界面导出证据](eval/macos/diagnostic-zip-2026-11-12.json)在 Linux 核对了取消、保存与重试、预览内容逐字节一致及隐私边界。

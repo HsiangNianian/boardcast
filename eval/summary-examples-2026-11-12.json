@@ -4700,6 +4700,1594 @@
     "The long English summary still invents a replica-count owner question; it is already present in intermediate notes. It now retains the completed migration, Monday launch and Sam Tuesday task.",
     "9B examples are rejected: 12/15 to 11/15 on the original short suite, with new task and template regressions. Its original behavior is preserved, including existing named-owner/date errors. Transfer improvement 5/8 to 7/8 does not justify those regressions.",
     "The earlier 4B large-input baseline was 3/4; candidate and exact final-source replay are 4/4. Word checks and synthetic inputs do not establish complete semantic reliability.",
-    "CI for this change and physical Mac/long-meeting/user acceptance remain separate boundaries."
-  ]
+    "Same-source CI is 42/45: Monday rehearsal is omitted in all three repetitions. Local thread-count checks did not reproduce it. Physical Mac, real long-meeting and target-user acceptance remain open."
+  ],
+  "ci_follow_up": {
+    "captured_at_utc": "2026-11-11T22:09:56.656571+00:00",
+    "commit": "45b2bbc29f4ab3989e6218e550c7f922fb312499",
+    "eval_run": 43103679484,
+    "eval_conclusion": "failure",
+    "only_failed_step": "Summary certainty and template topics",
+    "summary_artifact": 13894110457,
+    "final_artifact": 13894089604,
+    "summary_sha256": "c1069a168f396c674919b6fd592bb17fbe9151001e0cf26f6a5d19f3131bcd27",
+    "early_and_final_summary_identical": true,
+    "model_and_source_hashes_verified": true,
+    "summary_report": {
+      "label": "qwen3.5-4b-q4km-cpu",
+      "repeat": 3,
+      "cases_sha256": "d7bcaa57b2e5faa0f0e478e36891c65c987669c2cf1cb1174c9a088382d38181",
+      "checker_source_sha256": "a9aea9870e0d7590499d8db872073f708ddd97ac2041f923f46ece548df9f76a",
+      "summary_source_sha256": "c9276a77e0e6476f6899d3b1900bbc7ebf3a5ddacee6e41464ee0385e0f70193",
+      "agent_source_sha256": "363d6a84bf92ac36ff35dd4439dff2a0d4c20d9d4e8a4807209728130a66455f",
+      "answers": [
+        {
+          "case": "zh-guess-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 部署于本周三上线。\n\n### 待办\n无\n\n### 待讨论\n- 失败标准是否应为两个（需回头核对）。",
+          "failures": [],
+          "elapsed_ms": 35965
+        },
+        {
+          "case": "zh-guess-stays-open",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n- 部署于本周三上线。\n\n### 待办\n无\n\n### 待讨论\n- 失败标准是否应为两个（需回头核对）。",
+          "failures": [],
+          "elapsed_ms": 5836
+        },
+        {
+          "case": "zh-guess-stays-open",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n- 部署于本周三上线。\n\n### 待办\n无\n\n### 待讨论\n- 失败标准是否应为两个（需回头核对）。",
+          "failures": [],
+          "elapsed_ms": 6100
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 1,
+          "summary": "### 结论\n- 三次重试不满足要求时，采用动态缩小字号作为兜底方案。\n\n### 决定\n- 不做硬切，改用缩小字号方案。\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 10395
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 2,
+          "summary": "### 结论\n- 三次重试不满足要求时，采用动态缩小字号作为兜底方案。\n\n### 决定\n- 不做硬切，改用缩小字号方案。\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 7754
+        },
+        {
+          "case": "zh-answered-question-closes",
+          "run": 3,
+          "summary": "### 结论\n- 三次重试不满足要求时，采用动态缩小字号作为兜底方案。\n\n### 决定\n- 不做硬切，改用缩小字号方案。\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 7720
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案：考虑缩小字号，但需稍后验证。",
+          "failures": [],
+          "elapsed_ms": 8958
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案：考虑缩小字号，但需稍后验证。",
+          "failures": [],
+          "elapsed_ms": 6244
+        },
+        {
+          "case": "zh-tentative-answer-stays-open",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案：考虑缩小字号，但需稍后验证。",
+          "failures": [],
+          "elapsed_ms": 6236
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 改用方案二（按词换行）。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 8278
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n- 改用方案二（按词换行）。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 4918
+        },
+        {
+          "case": "zh-withdrawn-plan",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n- 改用方案二（按词换行）。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 4885
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档周五前发给大家。\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 7094
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档周五前发给大家。\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 4930
+        },
+        {
+          "case": "zh-letter-is-no-owner",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档周五前发给大家。\n\n### 待讨论\n无",
+          "failures": [],
+          "elapsed_ms": 4877
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 1,
+          "summary": "### 结论\n- 视频存在明显卡顿问题。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小王负责查卡顿问题。\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 8980
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 2,
+          "summary": "### 结论\n- 视频存在明显卡顿问题。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小王负责查卡顿问题。\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 6346
+        },
+        {
+          "case": "zh-in-the-moment-is-no-todo",
+          "run": 3,
+          "summary": "### 结论\n- 视频存在明显卡顿问题。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小王负责查卡顿问题。\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 6210
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+          "failures": [],
+          "elapsed_ms": 38275
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 2,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+          "failures": [],
+          "elapsed_ms": 5871
+        },
+        {
+          "case": "en-guess-stays-open",
+          "run": 3,
+          "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+          "failures": [],
+          "elapsed_ms": 5851
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 1,
+          "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback.\n\n### Decisions\nNone\n\n### To-dos\nNone\n\n### Open questions\nNone",
+          "failures": [],
+          "elapsed_ms": 8347
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 2,
+          "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback.\n\n### Decisions\nNone\n\n### To-dos\nNone\n\n### Open questions\nNone",
+          "failures": [],
+          "elapsed_ms": 5240
+        },
+        {
+          "case": "en-answered-question-closes",
+          "run": 3,
+          "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback.\n\n### Decisions\nNone\n\n### To-dos\nNone\n\n### Open questions\nNone",
+          "failures": [],
+          "elapsed_ms": 5208
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存刷新负责人是谁。",
+          "failures": [],
+          "elapsed_ms": 8885
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 2,
+          "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存刷新负责人是谁。",
+          "failures": [],
+          "elapsed_ms": 5711
+        },
+        {
+          "case": "zh-partial-answer-stays-open",
+          "run": 3,
+          "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存刷新负责人是谁。",
+          "failures": [],
+          "elapsed_ms": 5647
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 1,
+          "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+          "failures": [],
+          "elapsed_ms": 8513
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 2,
+          "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+          "failures": [],
+          "elapsed_ms": 5467
+        },
+        {
+          "case": "en-partial-answer-stays-open",
+          "run": 3,
+          "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+          "failures": [],
+          "elapsed_ms": 5542
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 1,
+          "summary": "### 结论\n#### 做得好的\n- 本次发布没有停机。\n\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试。\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 36836
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 2,
+          "summary": "### 结论\n#### 做得好的\n- 本次发布没有停机。\n\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试。\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 10348
+        },
+        {
+          "case": "zh-template-retro",
+          "run": 3,
+          "summary": "### 结论\n#### 做得好的\n- 本次发布没有停机。\n\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试。\n\n### 待讨论\n- 无",
+          "failures": [],
+          "elapsed_ms": 10303
+        },
+        {
+          "case": "en-template-custom",
+          "run": 1,
+          "summary": "### Conclusions\n#### Latency\n- Measured p95 latency is eighty milliseconds.\n#### Rollout\n- Canary deployment finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\nNone\n\n### Open questions\nNone",
+          "failures": [],
+          "elapsed_ms": 33552
+        },
+        {
+          "case": "en-template-custom",
+          "run": 2,
+          "summary": "### Conclusions\n#### Latency\n- Measured p95 latency is eighty milliseconds.\n#### Rollout\n- Canary deployment finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\nNone\n\n### Open questions\nNone",
+          "failures": [],
+          "elapsed_ms": 7909
+        },
+        {
+          "case": "en-template-custom",
+          "run": 3,
+          "summary": "### Conclusions\n#### Latency\n- Measured p95 latency is eighty milliseconds.\n#### Rollout\n- Canary deployment finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\nNone\n\n### Open questions\nNone",
+          "failures": [],
+          "elapsed_ms": 7697
+        },
+        {
+          "case": "zh-stated-date-beside-tentative-date",
+          "run": 1,
+          "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不排期至周五。",
+          "failures": [],
+          "elapsed_ms": 24063
+        },
+        {
+          "case": "zh-stated-date-beside-tentative-date",
+          "run": 2,
+          "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不排期至周五。",
+          "failures": [],
+          "elapsed_ms": 6559
+        },
+        {
+          "case": "zh-stated-date-beside-tentative-date",
+          "run": 3,
+          "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不排期至周五。",
+          "failures": [],
+          "elapsed_ms": 6769
+        },
+        {
+          "case": "zh-stated-date-corrected",
+          "run": 1,
+          "summary": "### 结论\n无\n\n### 决定\n- 部署改至周二上线，周只做预演。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [
+            "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+          ],
+          "elapsed_ms": 7911
+        },
+        {
+          "case": "zh-stated-date-corrected",
+          "run": 2,
+          "summary": "### 结论\n无\n\n### 决定\n- 部署改至周二上线，周只做预演。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [
+            "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+          ],
+          "elapsed_ms": 5286
+        },
+        {
+          "case": "zh-stated-date-corrected",
+          "run": 3,
+          "summary": "### 结论\n无\n\n### 决定\n- 部署改至周二上线，周只做预演。\n\n### 待办\n无\n\n### 待讨论\n无",
+          "failures": [
+            "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+          ],
+          "elapsed_ms": 5261
+        },
+        {
+          "case": "zh-explicit-condition-not-an-event",
+          "run": 1,
+          "summary": "### 结论\n- 测试报告由小林周五前整理。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小林周五前整理测试报告。\n\n### 待讨论\n- 若周四测试失败，部署日期是否顺延。",
+          "failures": [],
+          "elapsed_ms": 11120
+        },
+        {
+          "case": "zh-explicit-condition-not-an-event",
+          "run": 2,
+          "summary": "### 结论\n- 测试报告由小林周五前整理。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小林周五前整理测试报告。\n\n### 待讨论\n- 若周四测试失败，部署日期是否顺延。",
+          "failures": [],
+          "elapsed_ms": 8045
+        },
+        {
+          "case": "zh-explicit-condition-not-an-event",
+          "run": 3,
+          "summary": "### 结论\n- 测试报告由小林周五前整理。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小林周五前整理测试报告。\n\n### 待讨论\n- 若周四测试失败，部署日期是否顺延。",
+          "failures": [],
+          "elapsed_ms": 7947
+        }
+      ]
+    },
+    "board_reports": {
+      "dev": {
+        "file": "qwen3.5-4b-q4km-cpu-dev-1794434501.md",
+        "sha256": "89c0e44e293bc42e927aeb09ae93202ad0efb9fa062ed75f54168f77f30e5409",
+        "metrics": {
+          "Node F1": "0.860 (16 cases)",
+          "Edge F1": "0.534 (17 cases)",
+          "Topic recall": "0.952 (14 cases)",
+          "Item F1 (under the right topic)": "0.717 (14 cases)",
+          "Strike F1 (per case, counting strikes by mistake)": "1.000 (4 cases)",
+          "Marks found (strike, emphasis, question, formula)": "0.864 (11 cases)",
+          "Failed requests (the scores do not count while this is not zero)": "0",
+          "Groups right": "0.667 (3 cases)",
+          "Violations (left in, or a correction not made), per pass": "0.0",
+          "Latency per line p50 / p95": "8197 / 13020 ms",
+          "Output tokens per line p50": "14",
+          "Prompt tokens read per line p50 (after the prefix cache)": "116",
+          "Reading / writing per line p50": "5434 / 1879 ms"
+        }
+      },
+      "pointing": {
+        "file": "qwen3.5-4b-q4km-cpu-pointing-1794434794.md",
+        "sha256": "dd95c9914d1d991e3c359e992e3db28e0280a625c86de5fdc3be9e47086cfe0a",
+        "metrics": {
+          "Node F1": "-",
+          "Edge F1": "-",
+          "Topic recall": "1.000 (18 cases)",
+          "Item F1 (under the right topic)": "1.000 (18 cases)",
+          "Strike F1 (per case, counting strikes by mistake)": "1.000 (18 cases)",
+          "Marks found (strike, emphasis, question, formula)": "1.000 (18 cases)",
+          "Failed requests (the scores do not count while this is not zero)": "0",
+          "Groups right": "-",
+          "Violations (left in, or a correction not made), per pass": "0.0",
+          "Latency per line p50 / p95": "6099 / 50458 ms",
+          "Output tokens per line p50": "7",
+          "Prompt tokens read per line p50 (after the prefix cache)": "110",
+          "Reading / writing per line p50": "5262 / 859 ms"
+        }
+      }
+    },
+    "board_note": "Request/layout checks pass, not every semantic score. English prefilled-template latency is stored as a Note under Latency; the item scorer excludes notes, so that case retains Item F1 0.67. No scorer or source case was changed.",
+    "asr_comparison": "# ASR comparison\n\nLower is better. RTF includes speech detection and voiceprints, excludes loading, and is not live latency; compare timings on the same hardware only.\n\n| Configuration | zh | ja | en | zh-en | RTF p50 | Checks |\n|---|---:|---:|---:|---:|---:|---|\n| routed-none-vad-on-quick | — | 4.94% | 1.94% | 32.08% | 0.064 | pass |\n| sensevoice-none-vad-off-quick | — | 11.11% | 6.80% | 37.74% | 0.039 | fail |\n| sensevoice-none-vad-on-quick | — | 8.64% | 2.91% | 32.08% | 0.060 | pass |\n",
+    "server_log_sha256": "256d3af930532f6b5bd3bb4b12fe9557d3637161624591046719e8a79739b596",
+    "effective_threads": 2,
+    "jobs": [
+      {
+        "name": "ASR · sensevoice · VAD off",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-11T21:30:48Z",
+        "completed_at": "2026-11-11T21:33:16Z"
+      },
+      {
+        "name": "ASR · sensevoice · VAD on",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-11T21:30:46Z",
+        "completed_at": "2026-11-11T21:33:31Z"
+      },
+      {
+        "name": "text to board",
+        "status": "completed",
+        "conclusion": "failure",
+        "started_at": "2026-11-11T21:30:46Z",
+        "completed_at": "2026-11-11T22:06:39Z"
+      },
+      {
+        "name": "ASR · routed · VAD on",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-11T21:30:46Z",
+        "completed_at": "2026-11-11T21:33:18Z"
+      },
+      {
+        "name": "ASR comparison",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-11T21:33:35Z",
+        "completed_at": "2026-11-11T21:34:36Z"
+      }
+    ],
+    "runtime_investigation": {
+      "note": "All three cases repeat three times locally with production requests unchanged, including the CI failure. Changing thread count did not reproduce the CI omission. The CI log reports two threads; CPU/backend causes have not been established.",
+      "threads": {
+        "4": {
+          "effective_threads": 4,
+          "run": {
+            "commit": "45b2bbc29f4ab3989e6218e550c7f922fb312499",
+            "server_command": [
+              "/home/hsiangnianian/GITPROJECT/boardcast/resources/llama/llama-server",
+              "-m",
+              "/tmp/boardcast-summary-runtime-0mx4GzNE/threads-4/model.gguf",
+              "--host",
+              "127.0.0.1",
+              "--port",
+              "18865",
+              "-c",
+              "4096",
+              "--jinja",
+              "-np",
+              "1",
+              "-t",
+              "4",
+              "-tb",
+              "4",
+              "-ngl",
+              "0",
+              "--alias",
+              "Qwen3.5-4B-Q4_K_M.gguf"
+            ],
+            "server_pid": 3251490,
+            "version": "version: 0.7.0-dev (build 11954, commit f1a7dea99)\nbuilt with GNU 11.4.0 for Linux x86_64",
+            "source_hashes": {
+              "crates/agent/src/summary.rs": "c9276a77e0e6476f6899d3b1900bbc7ebf3a5ddacee6e41464ee0385e0f70193",
+              "crates/agent/src/lib.rs": "363d6a84bf92ac36ff35dd4439dff2a0d4c20d9d4e8a4807209728130a66455f",
+              "crates/tools/src/summary_eval.rs": "a9aea9870e0d7590499d8db872073f708ddd97ac2041f923f46ece548df9f76a",
+              "eval/summary-cases.json": "d7bcaa57b2e5faa0f0e478e36891c65c987669c2cf1cb1174c9a088382d38181"
+            },
+            "evaluations": [
+              {
+                "stage": "runtime-4",
+                "exit_code": 0
+              }
+            ],
+            "server_exit_code": 0
+          },
+          "report": {
+            "label": "runtime-4",
+            "repeat": 3,
+            "cases_sha256": "d7bcaa57b2e5faa0f0e478e36891c65c987669c2cf1cb1174c9a088382d38181",
+            "checker_source_sha256": "a9aea9870e0d7590499d8db872073f708ddd97ac2041f923f46ece548df9f76a",
+            "summary_source_sha256": "c9276a77e0e6476f6899d3b1900bbc7ebf3a5ddacee6e41464ee0385e0f70193",
+            "agent_source_sha256": "363d6a84bf92ac36ff35dd4439dff2a0d4c20d9d4e8a4807209728130a66455f",
+            "answers": [
+              {
+                "case": "en-guess-stays-open",
+                "run": 1,
+                "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+                "failures": [],
+                "elapsed_ms": 9619
+              },
+              {
+                "case": "en-guess-stays-open",
+                "run": 2,
+                "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+                "failures": [],
+                "elapsed_ms": 4426
+              },
+              {
+                "case": "en-guess-stays-open",
+                "run": 3,
+                "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+                "failures": [],
+                "elapsed_ms": 4563
+              },
+              {
+                "case": "zh-stated-date-beside-tentative-date",
+                "run": 1,
+                "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不排期至周五。",
+                "failures": [],
+                "elapsed_ms": 10377
+              },
+              {
+                "case": "zh-stated-date-beside-tentative-date",
+                "run": 2,
+                "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不排期至周五。",
+                "failures": [],
+                "elapsed_ms": 5098
+              },
+              {
+                "case": "zh-stated-date-beside-tentative-date",
+                "run": 3,
+                "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不排期至周五。",
+                "failures": [],
+                "elapsed_ms": 5101
+              },
+              {
+                "case": "zh-stated-date-corrected",
+                "run": 1,
+                "summary": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 周二正式部署。\n\n### 待办\n无\n\n### 待讨论\n无",
+                "failures": [],
+                "elapsed_ms": 4439
+              },
+              {
+                "case": "zh-stated-date-corrected",
+                "run": 2,
+                "summary": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 周二正式部署。\n\n### 待办\n无\n\n### 待讨论\n无",
+                "failures": [],
+                "elapsed_ms": 4131
+              },
+              {
+                "case": "zh-stated-date-corrected",
+                "run": 3,
+                "summary": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 周二正式部署。\n\n### 待办\n无\n\n### 待讨论\n无",
+                "failures": [],
+                "elapsed_ms": 4142
+              }
+            ]
+          },
+          "trace": {
+            "calls": [
+              {
+                "stage": "runtime-4",
+                "messages_sha256": "232e9251378d37cac654cd76899dcbd353dff10629af8dfa541ecdbb849da36b",
+                "message_count": 4,
+                "prompt_tokens": 771,
+                "reserved_output": 1024,
+                "completion_tokens": 42,
+                "finish_reason": "stop",
+                "elapsed_ms": 9537,
+                "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed."
+              },
+              {
+                "stage": "runtime-4",
+                "messages_sha256": "232e9251378d37cac654cd76899dcbd353dff10629af8dfa541ecdbb849da36b",
+                "message_count": 4,
+                "prompt_tokens": 771,
+                "reserved_output": 1024,
+                "completion_tokens": 42,
+                "finish_reason": "stop",
+                "elapsed_ms": 4337,
+                "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed."
+              },
+              {
+                "stage": "runtime-4",
+                "messages_sha256": "232e9251378d37cac654cd76899dcbd353dff10629af8dfa541ecdbb849da36b",
+                "message_count": 4,
+                "prompt_tokens": 771,
+                "reserved_output": 1024,
+                "completion_tokens": 42,
+                "finish_reason": "stop",
+                "elapsed_ms": 4472,
+                "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed."
+              },
+              {
+                "stage": "runtime-4",
+                "messages_sha256": "213fb4fc0fcb1ace0154ffacf2db62424800935d1aef07f2eb6ee56c4e3ff33d",
+                "message_count": 4,
+                "prompt_tokens": 715,
+                "reserved_output": 1024,
+                "completion_tokens": 49,
+                "finish_reason": "stop",
+                "elapsed_ms": 10279,
+                "raw_reply": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不排期至周五。"
+              },
+              {
+                "stage": "runtime-4",
+                "messages_sha256": "213fb4fc0fcb1ace0154ffacf2db62424800935d1aef07f2eb6ee56c4e3ff33d",
+                "message_count": 4,
+                "prompt_tokens": 715,
+                "reserved_output": 1024,
+                "completion_tokens": 49,
+                "finish_reason": "stop",
+                "elapsed_ms": 5001,
+                "raw_reply": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不排期至周五。"
+              },
+              {
+                "stage": "runtime-4",
+                "messages_sha256": "213fb4fc0fcb1ace0154ffacf2db62424800935d1aef07f2eb6ee56c4e3ff33d",
+                "message_count": 4,
+                "prompt_tokens": 715,
+                "reserved_output": 1024,
+                "completion_tokens": 49,
+                "finish_reason": "stop",
+                "elapsed_ms": 5012,
+                "raw_reply": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不排期至周五。"
+              },
+              {
+                "stage": "runtime-4",
+                "messages_sha256": "0124ecd7ffbe2763da84b024126778d951b777165e94070ee9d46e93fd032703",
+                "message_count": 4,
+                "prompt_tokens": 713,
+                "reserved_output": 1024,
+                "completion_tokens": 38,
+                "finish_reason": "stop",
+                "elapsed_ms": 4347,
+                "raw_reply": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 周二正式部署。\n\n### 待办\n无\n\n### 待讨论\n无"
+              },
+              {
+                "stage": "runtime-4",
+                "messages_sha256": "0124ecd7ffbe2763da84b024126778d951b777165e94070ee9d46e93fd032703",
+                "message_count": 4,
+                "prompt_tokens": 713,
+                "reserved_output": 1024,
+                "completion_tokens": 38,
+                "finish_reason": "stop",
+                "elapsed_ms": 4033,
+                "raw_reply": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 周二正式部署。\n\n### 待办\n无\n\n### 待讨论\n无"
+              },
+              {
+                "stage": "runtime-4",
+                "messages_sha256": "0124ecd7ffbe2763da84b024126778d951b777165e94070ee9d46e93fd032703",
+                "message_count": 4,
+                "prompt_tokens": 713,
+                "reserved_output": 1024,
+                "completion_tokens": 38,
+                "finish_reason": "stop",
+                "elapsed_ms": 4052,
+                "raw_reply": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 周二正式部署。\n\n### 待办\n无\n\n### 待讨论\n无"
+              }
+            ],
+            "maximum_prompt_plus_output": 1795,
+            "preflight_matches_actual": true,
+            "all_stopped_normally": true
+          }
+        },
+        "2": {
+          "effective_threads": 2,
+          "run": {
+            "commit": "45b2bbc29f4ab3989e6218e550c7f922fb312499",
+            "server_command": [
+              "/home/hsiangnianian/GITPROJECT/boardcast/resources/llama/llama-server",
+              "-m",
+              "/tmp/boardcast-summary-runtime-0mx4GzNE/threads-2/model.gguf",
+              "--host",
+              "127.0.0.1",
+              "--port",
+              "18865",
+              "-c",
+              "4096",
+              "--jinja",
+              "-np",
+              "1",
+              "-t",
+              "2",
+              "-tb",
+              "2",
+              "-ngl",
+              "0",
+              "--alias",
+              "Qwen3.5-4B-Q4_K_M.gguf"
+            ],
+            "server_pid": 3253669,
+            "version": "version: 0.7.0-dev (build 11954, commit f1a7dea99)\nbuilt with GNU 11.4.0 for Linux x86_64",
+            "source_hashes": {
+              "crates/agent/src/summary.rs": "c9276a77e0e6476f6899d3b1900bbc7ebf3a5ddacee6e41464ee0385e0f70193",
+              "crates/agent/src/lib.rs": "363d6a84bf92ac36ff35dd4439dff2a0d4c20d9d4e8a4807209728130a66455f",
+              "crates/tools/src/summary_eval.rs": "a9aea9870e0d7590499d8db872073f708ddd97ac2041f923f46ece548df9f76a",
+              "eval/summary-cases.json": "d7bcaa57b2e5faa0f0e478e36891c65c987669c2cf1cb1174c9a088382d38181"
+            },
+            "evaluations": [
+              {
+                "stage": "runtime-2",
+                "exit_code": 0
+              }
+            ],
+            "server_exit_code": 0
+          },
+          "report": {
+            "label": "runtime-2",
+            "repeat": 3,
+            "cases_sha256": "d7bcaa57b2e5faa0f0e478e36891c65c987669c2cf1cb1174c9a088382d38181",
+            "checker_source_sha256": "a9aea9870e0d7590499d8db872073f708ddd97ac2041f923f46ece548df9f76a",
+            "summary_source_sha256": "c9276a77e0e6476f6899d3b1900bbc7ebf3a5ddacee6e41464ee0385e0f70193",
+            "agent_source_sha256": "363d6a84bf92ac36ff35dd4439dff2a0d4c20d9d4e8a4807209728130a66455f",
+            "answers": [
+              {
+                "case": "en-guess-stays-open",
+                "run": 1,
+                "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+                "failures": [],
+                "elapsed_ms": 12810
+              },
+              {
+                "case": "en-guess-stays-open",
+                "run": 2,
+                "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+                "failures": [],
+                "elapsed_ms": 7548
+              },
+              {
+                "case": "en-guess-stays-open",
+                "run": 3,
+                "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+                "failures": [],
+                "elapsed_ms": 7111
+              },
+              {
+                "case": "zh-stated-date-beside-tentative-date",
+                "run": 1,
+                "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。",
+                "failures": [],
+                "elapsed_ms": 14532
+              },
+              {
+                "case": "zh-stated-date-beside-tentative-date",
+                "run": 2,
+                "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。",
+                "failures": [],
+                "elapsed_ms": 9020
+              },
+              {
+                "case": "zh-stated-date-beside-tentative-date",
+                "run": 3,
+                "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。",
+                "failures": [],
+                "elapsed_ms": 9314
+              },
+              {
+                "case": "zh-stated-date-corrected",
+                "run": 1,
+                "summary": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无",
+                "failures": [],
+                "elapsed_ms": 7782
+              },
+              {
+                "case": "zh-stated-date-corrected",
+                "run": 2,
+                "summary": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无",
+                "failures": [],
+                "elapsed_ms": 7445
+              },
+              {
+                "case": "zh-stated-date-corrected",
+                "run": 3,
+                "summary": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无",
+                "failures": [],
+                "elapsed_ms": 7442
+              }
+            ]
+          },
+          "trace": {
+            "calls": [
+              {
+                "stage": "runtime-2",
+                "messages_sha256": "232e9251378d37cac654cd76899dcbd353dff10629af8dfa541ecdbb849da36b",
+                "message_count": 4,
+                "prompt_tokens": 771,
+                "reserved_output": 1024,
+                "completion_tokens": 42,
+                "finish_reason": "stop",
+                "elapsed_ms": 12711,
+                "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed."
+              },
+              {
+                "stage": "runtime-2",
+                "messages_sha256": "232e9251378d37cac654cd76899dcbd353dff10629af8dfa541ecdbb849da36b",
+                "message_count": 4,
+                "prompt_tokens": 771,
+                "reserved_output": 1024,
+                "completion_tokens": 42,
+                "finish_reason": "stop",
+                "elapsed_ms": 7474,
+                "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed."
+              },
+              {
+                "stage": "runtime-2",
+                "messages_sha256": "232e9251378d37cac654cd76899dcbd353dff10629af8dfa541ecdbb849da36b",
+                "message_count": 4,
+                "prompt_tokens": 771,
+                "reserved_output": 1024,
+                "completion_tokens": 42,
+                "finish_reason": "stop",
+                "elapsed_ms": 7013,
+                "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed."
+              },
+              {
+                "stage": "runtime-2",
+                "messages_sha256": "213fb4fc0fcb1ace0154ffacf2db62424800935d1aef07f2eb6ee56c4e3ff33d",
+                "message_count": 4,
+                "prompt_tokens": 715,
+                "reserved_output": 1024,
+                "completion_tokens": 48,
+                "finish_reason": "stop",
+                "elapsed_ms": 14435,
+                "raw_reply": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。"
+              },
+              {
+                "stage": "runtime-2",
+                "messages_sha256": "213fb4fc0fcb1ace0154ffacf2db62424800935d1aef07f2eb6ee56c4e3ff33d",
+                "message_count": 4,
+                "prompt_tokens": 715,
+                "reserved_output": 1024,
+                "completion_tokens": 48,
+                "finish_reason": "stop",
+                "elapsed_ms": 8925,
+                "raw_reply": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。"
+              },
+              {
+                "stage": "runtime-2",
+                "messages_sha256": "213fb4fc0fcb1ace0154ffacf2db62424800935d1aef07f2eb6ee56c4e3ff33d",
+                "message_count": 4,
+                "prompt_tokens": 715,
+                "reserved_output": 1024,
+                "completion_tokens": 48,
+                "finish_reason": "stop",
+                "elapsed_ms": 9218,
+                "raw_reply": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。"
+              },
+              {
+                "stage": "runtime-2",
+                "messages_sha256": "0124ecd7ffbe2763da84b024126778d951b777165e94070ee9d46e93fd032703",
+                "message_count": 4,
+                "prompt_tokens": 713,
+                "reserved_output": 1024,
+                "completion_tokens": 40,
+                "finish_reason": "stop",
+                "elapsed_ms": 7683,
+                "raw_reply": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无"
+              },
+              {
+                "stage": "runtime-2",
+                "messages_sha256": "0124ecd7ffbe2763da84b024126778d951b777165e94070ee9d46e93fd032703",
+                "message_count": 4,
+                "prompt_tokens": 713,
+                "reserved_output": 1024,
+                "completion_tokens": 40,
+                "finish_reason": "stop",
+                "elapsed_ms": 7349,
+                "raw_reply": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无"
+              },
+              {
+                "stage": "runtime-2",
+                "messages_sha256": "0124ecd7ffbe2763da84b024126778d951b777165e94070ee9d46e93fd032703",
+                "message_count": 4,
+                "prompt_tokens": 713,
+                "reserved_output": 1024,
+                "completion_tokens": 40,
+                "finish_reason": "stop",
+                "elapsed_ms": 7356,
+                "raw_reply": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无"
+              }
+            ],
+            "maximum_prompt_plus_output": 1795,
+            "preflight_matches_actual": true,
+            "all_stopped_normally": true
+          }
+        },
+        "auto": {
+          "effective_threads": 6,
+          "run": {
+            "commit": "45b2bbc29f4ab3989e6218e550c7f922fb312499",
+            "server_command": [
+              "/home/hsiangnianian/GITPROJECT/boardcast/resources/llama/llama-server",
+              "-m",
+              "/tmp/boardcast-summary-runtime-0mx4GzNE/threads-auto/model.gguf",
+              "--host",
+              "127.0.0.1",
+              "--port",
+              "18865",
+              "-c",
+              "4096",
+              "--jinja",
+              "-np",
+              "1",
+              "-ngl",
+              "0",
+              "--alias",
+              "Qwen3.5-4B-Q4_K_M.gguf"
+            ],
+            "server_pid": 3256926,
+            "version": "version: 0.7.0-dev (build 11954, commit f1a7dea99)\nbuilt with GNU 11.4.0 for Linux x86_64",
+            "source_hashes": {
+              "crates/agent/src/summary.rs": "c9276a77e0e6476f6899d3b1900bbc7ebf3a5ddacee6e41464ee0385e0f70193",
+              "crates/agent/src/lib.rs": "363d6a84bf92ac36ff35dd4439dff2a0d4c20d9d4e8a4807209728130a66455f",
+              "crates/tools/src/summary_eval.rs": "a9aea9870e0d7590499d8db872073f708ddd97ac2041f923f46ece548df9f76a",
+              "eval/summary-cases.json": "d7bcaa57b2e5faa0f0e478e36891c65c987669c2cf1cb1174c9a088382d38181"
+            },
+            "evaluations": [
+              {
+                "stage": "runtime-auto",
+                "exit_code": 0
+              }
+            ],
+            "server_exit_code": 0
+          },
+          "report": {
+            "label": "runtime-auto",
+            "repeat": 3,
+            "cases_sha256": "d7bcaa57b2e5faa0f0e478e36891c65c987669c2cf1cb1174c9a088382d38181",
+            "checker_source_sha256": "a9aea9870e0d7590499d8db872073f708ddd97ac2041f923f46ece548df9f76a",
+            "summary_source_sha256": "c9276a77e0e6476f6899d3b1900bbc7ebf3a5ddacee6e41464ee0385e0f70193",
+            "agent_source_sha256": "363d6a84bf92ac36ff35dd4439dff2a0d4c20d9d4e8a4807209728130a66455f",
+            "answers": [
+              {
+                "case": "en-guess-stays-open",
+                "run": 1,
+                "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+                "failures": [],
+                "elapsed_ms": 9047
+              },
+              {
+                "case": "en-guess-stays-open",
+                "run": 2,
+                "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+                "failures": [],
+                "elapsed_ms": 3816
+              },
+              {
+                "case": "en-guess-stays-open",
+                "run": 3,
+                "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+                "failures": [],
+                "elapsed_ms": 3801
+              },
+              {
+                "case": "zh-stated-date-beside-tentative-date",
+                "run": 1,
+                "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。",
+                "failures": [],
+                "elapsed_ms": 9620
+              },
+              {
+                "case": "zh-stated-date-beside-tentative-date",
+                "run": 2,
+                "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。",
+                "failures": [],
+                "elapsed_ms": 4344
+              },
+              {
+                "case": "zh-stated-date-beside-tentative-date",
+                "run": 3,
+                "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。",
+                "failures": [],
+                "elapsed_ms": 4316
+              },
+              {
+                "case": "zh-stated-date-corrected",
+                "run": 1,
+                "summary": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无",
+                "failures": [],
+                "elapsed_ms": 4287
+              },
+              {
+                "case": "zh-stated-date-corrected",
+                "run": 2,
+                "summary": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无",
+                "failures": [],
+                "elapsed_ms": 3636
+              },
+              {
+                "case": "zh-stated-date-corrected",
+                "run": 3,
+                "summary": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无",
+                "failures": [],
+                "elapsed_ms": 3643
+              }
+            ]
+          },
+          "trace": {
+            "calls": [
+              {
+                "stage": "runtime-auto",
+                "messages_sha256": "232e9251378d37cac654cd76899dcbd353dff10629af8dfa541ecdbb849da36b",
+                "message_count": 4,
+                "prompt_tokens": 771,
+                "reserved_output": 1024,
+                "completion_tokens": 42,
+                "finish_reason": "stop",
+                "elapsed_ms": 8948,
+                "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed."
+              },
+              {
+                "stage": "runtime-auto",
+                "messages_sha256": "232e9251378d37cac654cd76899dcbd353dff10629af8dfa541ecdbb849da36b",
+                "message_count": 4,
+                "prompt_tokens": 771,
+                "reserved_output": 1024,
+                "completion_tokens": 42,
+                "finish_reason": "stop",
+                "elapsed_ms": 3735,
+                "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed."
+              },
+              {
+                "stage": "runtime-auto",
+                "messages_sha256": "232e9251378d37cac654cd76899dcbd353dff10629af8dfa541ecdbb849da36b",
+                "message_count": 4,
+                "prompt_tokens": 771,
+                "reserved_output": 1024,
+                "completion_tokens": 42,
+                "finish_reason": "stop",
+                "elapsed_ms": 3719,
+                "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed."
+              },
+              {
+                "stage": "runtime-auto",
+                "messages_sha256": "213fb4fc0fcb1ace0154ffacf2db62424800935d1aef07f2eb6ee56c4e3ff33d",
+                "message_count": 4,
+                "prompt_tokens": 715,
+                "reserved_output": 1024,
+                "completion_tokens": 48,
+                "finish_reason": "stop",
+                "elapsed_ms": 9536,
+                "raw_reply": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。"
+              },
+              {
+                "stage": "runtime-auto",
+                "messages_sha256": "213fb4fc0fcb1ace0154ffacf2db62424800935d1aef07f2eb6ee56c4e3ff33d",
+                "message_count": 4,
+                "prompt_tokens": 715,
+                "reserved_output": 1024,
+                "completion_tokens": 48,
+                "finish_reason": "stop",
+                "elapsed_ms": 4251,
+                "raw_reply": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。"
+              },
+              {
+                "stage": "runtime-auto",
+                "messages_sha256": "213fb4fc0fcb1ace0154ffacf2db62424800935d1aef07f2eb6ee56c4e3ff33d",
+                "message_count": 4,
+                "prompt_tokens": 715,
+                "reserved_output": 1024,
+                "completion_tokens": 48,
+                "finish_reason": "stop",
+                "elapsed_ms": 4228,
+                "raw_reply": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。"
+              },
+              {
+                "stage": "runtime-auto",
+                "messages_sha256": "0124ecd7ffbe2763da84b024126778d951b777165e94070ee9d46e93fd032703",
+                "message_count": 4,
+                "prompt_tokens": 713,
+                "reserved_output": 1024,
+                "completion_tokens": 40,
+                "finish_reason": "stop",
+                "elapsed_ms": 4191,
+                "raw_reply": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无"
+              },
+              {
+                "stage": "runtime-auto",
+                "messages_sha256": "0124ecd7ffbe2763da84b024126778d951b777165e94070ee9d46e93fd032703",
+                "message_count": 4,
+                "prompt_tokens": 713,
+                "reserved_output": 1024,
+                "completion_tokens": 40,
+                "finish_reason": "stop",
+                "elapsed_ms": 3542,
+                "raw_reply": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无"
+              },
+              {
+                "stage": "runtime-auto",
+                "messages_sha256": "0124ecd7ffbe2763da84b024126778d951b777165e94070ee9d46e93fd032703",
+                "message_count": 4,
+                "prompt_tokens": 713,
+                "reserved_output": 1024,
+                "completion_tokens": 40,
+                "finish_reason": "stop",
+                "elapsed_ms": 3545,
+                "raw_reply": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n无\n\n### 待讨论\n无"
+              }
+            ],
+            "maximum_prompt_plus_output": 1795,
+            "preflight_matches_actual": true,
+            "all_stopped_normally": true
+          }
+        }
+      }
+    },
+    "rejected_date_rule": {
+      "decision": "Rejected: original suite stays 15/15 and transfer stays 7/8; the English shipment becomes an invented open question about possible delay. No production code, sampler, cases or checks were changed. No long-input or cloud candidate run was warranted.",
+      "run": {
+        "commit": "45b2bbc29f4ab3989e6218e550c7f922fb312499",
+        "server_command": [
+          "/home/hsiangnianian/GITPROJECT/boardcast/resources/llama/llama-server",
+          "-m",
+          "/tmp/boardcast-summary-dates-9roeq67y/production/model.gguf",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "18865",
+          "-c",
+          "4096",
+          "--jinja",
+          "-np",
+          "1",
+          "-t",
+          "4",
+          "-tb",
+          "4",
+          "-ngl",
+          "0",
+          "--alias",
+          "Qwen3.5-4B-Q4_K_M.gguf"
+        ],
+        "server_pid": 3273185,
+        "version": "version: 0.7.0-dev (build 11954, commit f1a7dea99)\nbuilt with GNU 11.4.0 for Linux x86_64",
+        "source_hashes": {
+          "crates/agent/src/summary.rs": "c9276a77e0e6476f6899d3b1900bbc7ebf3a5ddacee6e41464ee0385e0f70193",
+          "crates/agent/src/lib.rs": "363d6a84bf92ac36ff35dd4439dff2a0d4c20d9d4e8a4807209728130a66455f",
+          "crates/tools/src/summary_eval.rs": "a9aea9870e0d7590499d8db872073f708ddd97ac2041f923f46ece548df9f76a",
+          "eval/summary-cases.json": "d7bcaa57b2e5faa0f0e478e36891c65c987669c2cf1cb1174c9a088382d38181"
+        },
+        "candidate_rule": {
+          "zh": "完整保留已确认日程的日期和对应事项；不同日程分别列出。",
+          "en": "Keep the complete stated date and event of each confirmed schedule; list distinct scheduled events separately."
+        },
+        "probe_sha256": "15bf76d23d32149dce1b406daa6c7cf77249fed140a8a793b93222a06b325bd7",
+        "evaluations": [
+          {
+            "stage": "date-short",
+            "exit_code": 0
+          },
+          {
+            "stage": "date-transfer",
+            "exit_code": 1
+          }
+        ],
+        "server_exit_code": 0
+      },
+      "reports": {
+        "date-short": {
+          "label": "date-short",
+          "repeat": 1,
+          "cases_sha256": "d7bcaa57b2e5faa0f0e478e36891c65c987669c2cf1cb1174c9a088382d38181",
+          "checker_source_sha256": "a9aea9870e0d7590499d8db872073f708ddd97ac2041f923f46ece548df9f76a",
+          "summary_source_sha256": "c9276a77e0e6476f6899d3b1900bbc7ebf3a5ddacee6e41464ee0385e0f70193",
+          "agent_source_sha256": "363d6a84bf92ac36ff35dd4439dff2a0d4c20d9d4e8a4807209728130a66455f",
+          "answers": [
+            {
+              "case": "zh-guess-stays-open",
+              "run": 1,
+              "summary": "### 结论\n无\n\n### 决定\n- 部署于本周三上线。\n\n### 待办\n无\n\n### 待讨论\n- 失败标准是否应为两个（需回头核对）。",
+              "failures": [],
+              "elapsed_ms": 9877
+            },
+            {
+              "case": "zh-answered-question-closes",
+              "run": 1,
+              "summary": "### 结论\n- 三次重试不满足要求时，采用动态缩小字号作为兜底方案，不做硬切。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+              "failures": [],
+              "elapsed_ms": 6038
+            },
+            {
+              "case": "zh-tentative-answer-stays-open",
+              "run": 1,
+              "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案：建议缩小字号，但需稍后验证。",
+              "failures": [],
+              "elapsed_ms": 5419
+            },
+            {
+              "case": "zh-withdrawn-plan",
+              "run": 1,
+              "summary": "### 结论\n无\n\n### 决定\n- 改用方案二：按词换行。\n\n### 待办\n无\n\n### 待讨论\n无",
+              "failures": [],
+              "elapsed_ms": 4769
+            },
+            {
+              "case": "zh-letter-is-no-owner",
+              "run": 1,
+              "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档周五前发出。\n\n### 待讨论\n无",
+              "failures": [],
+              "elapsed_ms": 4112
+            },
+            {
+              "case": "zh-in-the-moment-is-no-todo",
+              "run": 1,
+              "summary": "### 结论\n- 视频存在明显卡顿问题。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小王负责查卡顿问题。\n\n### 待讨论\n- 无",
+              "failures": [],
+              "elapsed_ms": 5651
+            },
+            {
+              "case": "en-guess-stays-open",
+              "run": 1,
+              "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed.",
+              "failures": [],
+              "elapsed_ms": 10092
+            },
+            {
+              "case": "en-answered-question-closes",
+              "run": 1,
+              "summary": "### Conclusions\n- If three retries fail, shrink the font as a fallback.\n\n### Decisions\n- No hard cut; use font shrinking instead.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+              "failures": [],
+              "elapsed_ms": 5625
+            },
+            {
+              "case": "zh-partial-answer-stays-open",
+              "run": 1,
+              "summary": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存刷新负责人是谁。",
+              "failures": [],
+              "elapsed_ms": 5021
+            },
+            {
+              "case": "en-partial-answer-stays-open",
+              "run": 1,
+              "summary": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?",
+              "failures": [],
+              "elapsed_ms": 4978
+            },
+            {
+              "case": "zh-template-retro",
+              "run": 1,
+              "summary": "### 结论\n#### 做得好的\n- 本次发布没有停机。\n\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试。\n\n### 待讨论\n- 无",
+              "failures": [],
+              "elapsed_ms": 12649
+            },
+            {
+              "case": "en-template-custom",
+              "run": 1,
+              "summary": "### Conclusions\n#### Latency\n- Measured p95 latency is eighty milliseconds.\n#### Rollout\n- Canary release finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\nNone\n\n### Open questions\nNone",
+              "failures": [],
+              "elapsed_ms": 10482
+            },
+            {
+              "case": "zh-stated-date-beside-tentative-date",
+              "run": 1,
+              "summary": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。",
+              "failures": [],
+              "elapsed_ms": 8023
+            },
+            {
+              "case": "zh-stated-date-corrected",
+              "run": 1,
+              "summary": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n- 无\n\n### 待讨论\n- 无",
+              "failures": [],
+              "elapsed_ms": 5230
+            },
+            {
+              "case": "zh-explicit-condition-not-an-event",
+              "run": 1,
+              "summary": "### 结论\n- 测试报告由小林周五前整理。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小林周五前整理测试报告。\n\n### 待讨论\n- 若周四测试失败，部署日期是否顺延及具体安排待定。",
+              "failures": [],
+              "elapsed_ms": 7152
+            }
+          ]
+        },
+        "date-transfer": {
+          "label": "date-transfer",
+          "repeat": 1,
+          "cases_sha256": "310b6d450e9a08c05a330257ab1071b8236cd408eb5e2b05d99c4f5d0de84026",
+          "checker_source_sha256": "a9aea9870e0d7590499d8db872073f708ddd97ac2041f923f46ece548df9f76a",
+          "summary_source_sha256": "c9276a77e0e6476f6899d3b1900bbc7ebf3a5ddacee6e41464ee0385e0f70193",
+          "agent_source_sha256": "363d6a84bf92ac36ff35dd4439dff2a0d4c20d9d4e8a4807209728130a66455f",
+          "answers": [
+            {
+              "case": "zh-confirmed-count-beside-tentative-price",
+              "run": 1,
+              "summary": "### 结论\n- 参会人数为五人。\n- 场地定于周日启用。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小赵周二前确认场地钥匙。\n\n### 待讨论\n- 票价是否八十元待核实。",
+              "failures": [],
+              "elapsed_ms": 6970
+            },
+            {
+              "case": "en-confirmed-count-beside-tentative-price",
+              "run": 1,
+              "summary": "### Conclusions\n- Nine monitors were counted.\n\n### Decisions\n- None\n\n### To-dos\n- [ ] Lena will confirm the delivery address by Tuesday.\n\n### Open questions\n- Whether the unit price is sixty dollars needs checking.\n- When the monitors will ship (stated as Thursday in transcript, but context implies pending confirmation or potential delay).",
+              "failures": [
+                "Conclusions/Decisions lacks any of [\"Thursday\"]"
+              ],
+              "elapsed_ms": 11027
+            },
+            {
+              "case": "zh-earlier-corrected-date-keeps-distinct-work",
+              "run": 1,
+              "summary": "### 结论\n- 周六进行货物盘点。\n\n### 决定\n- 货物于周四入库。\n\n### 待办\n- [ ] 小田周三前发货运清单。\n\n### 待讨论\n- 无",
+              "failures": [],
+              "elapsed_ms": 6252
+            },
+            {
+              "case": "en-earlier-corrected-date-keeps-distinct-work",
+              "run": 1,
+              "summary": "### Conclusions\n- Clean the exhibition venue on Sunday.\n\n### Decisions\n- Open the exhibition on Thursday.\n\n### To-dos\n- [ ] Amir will send the guest list by Wednesday.\n\n### Open questions\n- None",
+              "failures": [],
+              "elapsed_ms": 6021
+            },
+            {
+              "case": "zh-guess-without-any-task",
+              "run": 1,
+              "summary": "### 结论\n- 仓库周二已清空。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 车辆数量是否需七辆未定。",
+              "failures": [],
+              "elapsed_ms": 5641
+            },
+            {
+              "case": "en-guess-without-any-task",
+              "run": 1,
+              "summary": "### Conclusions\n- The warehouse was emptied on Tuesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether seven vans are needed remains unconfirmed.",
+              "failures": [],
+              "elapsed_ms": 5178
+            },
+            {
+              "case": "zh-guessed-count-later-confirmed",
+              "run": 1,
+              "summary": "### 结论\n- 座位图核对确认六张桌子足够。\n\n### 决定\n- 租六张桌子。\n\n### 待办\n- [ ] 小周周日取桌子。\n\n### 待讨论\n- 无",
+              "failures": [],
+              "elapsed_ms": 6259
+            },
+            {
+              "case": "en-guessed-count-later-confirmed",
+              "run": 1,
+              "summary": "### Conclusions\n- Six tables are sufficient for the event.\n\n### Decisions\n- Rent six tables.\n\n### To-dos\n- [ ] Jules will collect the tables on Sunday.\n\n### Open questions\n- None",
+              "failures": [],
+              "elapsed_ms": 5927
+            }
+          ]
+        }
+      },
+      "trace": {
+        "calls": [
+          {
+            "stage": "date-short",
+            "messages_sha256": "a387fc95cecf870e9c923dc7aa37746ca0a651a4fd343463be76aa4983ca99ca",
+            "message_count": 4,
+            "prompt_tokens": 735,
+            "reserved_output": 1024,
+            "completion_tokens": 44,
+            "finish_reason": "stop",
+            "elapsed_ms": 9777,
+            "raw_reply": "### 结论\n无\n\n### 决定\n- 部署于本周三上线。\n\n### 待办\n无\n\n### 待讨论\n- 失败标准是否应为两个（需回头核对）。"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "916cfbf9d2a1da35a00b5159c3af781110a4b694e47990442d2b940e66e83d0d",
+            "message_count": 4,
+            "prompt_tokens": 734,
+            "reserved_output": 1024,
+            "completion_tokens": 53,
+            "finish_reason": "stop",
+            "elapsed_ms": 5951,
+            "raw_reply": "### 结论\n- 三次重试不满足要求时，采用动态缩小字号作为兜底方案，不做硬切。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 无"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "4db32e8af1f0596daabbba6077f158bb3910fe741471752ab1ce77300b06bf0b",
+            "message_count": 4,
+            "prompt_tokens": 731,
+            "reserved_output": 1024,
+            "completion_tokens": 45,
+            "finish_reason": "stop",
+            "elapsed_ms": 5324,
+            "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n- 三次重试不满足要求后的解决方案：建议缩小字号，但需稍后验证。"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "e3c8fd95c30f1c1223cde2395c148169f74ba1e927fea93e5ec3de22de93c0ca",
+            "message_count": 4,
+            "prompt_tokens": 744,
+            "reserved_output": 1024,
+            "completion_tokens": 36,
+            "finish_reason": "stop",
+            "elapsed_ms": 4678,
+            "raw_reply": "### 结论\n无\n\n### 决定\n- 改用方案二：按词换行。\n\n### 待办\n无\n\n### 待讨论\n无"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "1c1dbf40655bc3745d75f7ec14a3ae22bdb73637bd5039f2aaf0b0278d56f111",
+            "message_count": 4,
+            "prompt_tokens": 715,
+            "reserved_output": 1024,
+            "completion_tokens": 35,
+            "finish_reason": "stop",
+            "elapsed_ms": 4018,
+            "raw_reply": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n- [ ] 接口文档周五前发出。\n\n### 待讨论\n无"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "84d83c427e5afc475f674d307f13cda1dc2f289c14afb38e1aacd86ded63a5d8",
+            "message_count": 4,
+            "prompt_tokens": 732,
+            "reserved_output": 1024,
+            "completion_tokens": 46,
+            "finish_reason": "stop",
+            "elapsed_ms": 5557,
+            "raw_reply": "### 结论\n- 视频存在明显卡顿问题。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小王负责查卡顿问题。\n\n### 待讨论\n- 无"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "085e03729f3dbc36db3ffeca38614250663dc5408ee4aaa45e05fd04d994d31b",
+            "message_count": 4,
+            "prompt_tokens": 790,
+            "reserved_output": 1024,
+            "completion_tokens": 42,
+            "finish_reason": "stop",
+            "elapsed_ms": 9997,
+            "raw_reply": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether there should be two failure criteria remains unconfirmed."
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "b927bb7dbdcd50388d25e4ff900f49694146493ac52748a295534da182eb15e5",
+            "message_count": 4,
+            "prompt_tokens": 793,
+            "reserved_output": 1024,
+            "completion_tokens": 48,
+            "finish_reason": "stop",
+            "elapsed_ms": 5531,
+            "raw_reply": "### Conclusions\n- If three retries fail, shrink the font as a fallback.\n\n### Decisions\n- No hard cut; use font shrinking instead.\n\n### To-dos\n- None\n\n### Open questions\n- None"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "e9d0169243f730a82895a96504eb03cdbddf742f7cddbf142e07a9acf9fbe195",
+            "message_count": 4,
+            "prompt_tokens": 733,
+            "reserved_output": 1024,
+            "completion_tokens": 42,
+            "finish_reason": "stop",
+            "elapsed_ms": 4932,
+            "raw_reply": "### 结论\n- 缓存保留时间为十分钟。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 缓存刷新负责人是谁。"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "ad4e8eb6c9825a1714227c18b757c139f8ba3cf29d1d7ca4ee089d0eba5e6e46",
+            "message_count": 4,
+            "prompt_tokens": 795,
+            "reserved_output": 1024,
+            "completion_tokens": 40,
+            "finish_reason": "stop",
+            "elapsed_ms": 4892,
+            "raw_reply": "### Conclusions\n- Cache lifetime set to ten minutes.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Who will refresh the cache?"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "3de107fb12ceaef766ca5fe6f5c5c197eaa4f0589fc5ae94ca77fa5643422e9d",
+            "message_count": 4,
+            "prompt_tokens": 845,
+            "reserved_output": 1024,
+            "completion_tokens": 76,
+            "finish_reason": "stop",
+            "elapsed_ms": 12555,
+            "raw_reply": "### 结论\n#### 做得好的\n- 本次发布没有停机。\n\n#### 要改进的\n- 告警来得太晚。\n\n### 决定\n- 下次发布前由小王补上告警测试。\n\n### 待办\n- [ ] 小王补上告警测试。\n\n### 待讨论\n- 无"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "bb4e65f1efdd5f3f7859ebde375b8c8f93aeba3de16d6fb7f09097219f6d56be",
+            "message_count": 4,
+            "prompt_tokens": 884,
+            "reserved_output": 1024,
+            "completion_tokens": 56,
+            "finish_reason": "stop",
+            "elapsed_ms": 10388,
+            "raw_reply": "### Conclusions\n#### Latency\n- Measured p95 latency is eighty milliseconds.\n#### Rollout\n- Canary release finished without errors.\n\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\nNone\n\n### Open questions\nNone"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "24a05f8224bf6f2f316c713155d91fbebf49cc968c92193af936fb20439be430",
+            "message_count": 4,
+            "prompt_tokens": 732,
+            "reserved_output": 1024,
+            "completion_tokens": 48,
+            "finish_reason": "stop",
+            "elapsed_ms": 7923,
+            "raw_reply": "### 结论\n- 桌面版周四发布。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 移动版发布日期未定，暂不安排周五发布。"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "d9dee536856acf037957a02e4dfd679280765a2adf0278a5fa9036a7221251e1",
+            "message_count": 4,
+            "prompt_tokens": 730,
+            "reserved_output": 1024,
+            "completion_tokens": 44,
+            "finish_reason": "stop",
+            "elapsed_ms": 5142,
+            "raw_reply": "### 结论\n- 周一进行部署预演。\n\n### 决定\n- 部署改至周二上线。\n\n### 待办\n- 无\n\n### 待讨论\n- 无"
+          },
+          {
+            "stage": "date-short",
+            "messages_sha256": "65e9924e2e6c42c4abf7a2a6b6f02dafaf80462b8fb8877dbe24235a7c5540ef",
+            "message_count": 4,
+            "prompt_tokens": 738,
+            "reserved_output": 1024,
+            "completion_tokens": 62,
+            "finish_reason": "stop",
+            "elapsed_ms": 7055,
+            "raw_reply": "### 结论\n- 测试报告由小林周五前整理。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小林周五前整理测试报告。\n\n### 待讨论\n- 若周四测试失败，部署日期是否顺延及具体安排待定。"
+          },
+          {
+            "stage": "date-transfer",
+            "messages_sha256": "a4c37d3099947cbea24a22d6e5e0b17cff5a87d943079e3d703028c295326874",
+            "message_count": 4,
+            "prompt_tokens": 735,
+            "reserved_output": 1024,
+            "completion_tokens": 61,
+            "finish_reason": "stop",
+            "elapsed_ms": 6875,
+            "raw_reply": "### 结论\n- 参会人数为五人。\n- 场地定于周日启用。\n\n### 决定\n- 无\n\n### 待办\n- [ ] 小赵周二前确认场地钥匙。\n\n### 待讨论\n- 票价是否八十元待核实。"
+          },
+          {
+            "stage": "date-transfer",
+            "messages_sha256": "0c7085ec2b470eccff7275fef132f18c0f345755a04d06fed6a023597411fdf9",
+            "message_count": 4,
+            "prompt_tokens": 792,
+            "reserved_output": 1024,
+            "completion_tokens": 76,
+            "finish_reason": "stop",
+            "elapsed_ms": 10932,
+            "raw_reply": "### Conclusions\n- Nine monitors were counted.\n\n### Decisions\n- None\n\n### To-dos\n- [ ] Lena will confirm the delivery address by Tuesday.\n\n### Open questions\n- Whether the unit price is sixty dollars needs checking.\n- When the monitors will ship (stated as Thursday in transcript, but context implies pending confirmation or potential delay)."
+          },
+          {
+            "stage": "date-transfer",
+            "messages_sha256": "f7cba2eb0a7f083c21fa3aaa434f6ca042a91e61148a66a9fcf93422d96a8829",
+            "message_count": 4,
+            "prompt_tokens": 736,
+            "reserved_output": 1024,
+            "completion_tokens": 51,
+            "finish_reason": "stop",
+            "elapsed_ms": 6157,
+            "raw_reply": "### 结论\n- 周六进行货物盘点。\n\n### 决定\n- 货物于周四入库。\n\n### 待办\n- [ ] 小田周三前发货运清单。\n\n### 待讨论\n- 无"
+          },
+          {
+            "stage": "date-transfer",
+            "messages_sha256": "b25173f0c9a2e18e7d00ac074e044c465727fe16a538f6f2734b3f3eaa6801f7",
+            "message_count": 4,
+            "prompt_tokens": 795,
+            "reserved_output": 1024,
+            "completion_tokens": 50,
+            "finish_reason": "stop",
+            "elapsed_ms": 5933,
+            "raw_reply": "### Conclusions\n- Clean the exhibition venue on Sunday.\n\n### Decisions\n- Open the exhibition on Thursday.\n\n### To-dos\n- [ ] Amir will send the guest list by Wednesday.\n\n### Open questions\n- None"
+          },
+          {
+            "stage": "date-transfer",
+            "messages_sha256": "783b115dd7cd908b3bd5e25360151fc0d7457728f9703ca6b6bc1bab19afcd8f",
+            "message_count": 4,
+            "prompt_tokens": 723,
+            "reserved_output": 1024,
+            "completion_tokens": 46,
+            "finish_reason": "stop",
+            "elapsed_ms": 5547,
+            "raw_reply": "### 结论\n- 仓库周二已清空。\n\n### 决定\n- 无\n\n### 待办\n- 无\n\n### 待讨论\n- 车辆数量是否需七辆未定。"
+          },
+          {
+            "stage": "date-transfer",
+            "messages_sha256": "2c8d2b47a56b22f90fc06f2ce1309c7d8b90e91abb1b56b41ba4153ee1b36677",
+            "message_count": 4,
+            "prompt_tokens": 781,
+            "reserved_output": 1024,
+            "completion_tokens": 43,
+            "finish_reason": "stop",
+            "elapsed_ms": 5109,
+            "raw_reply": "### Conclusions\n- The warehouse was emptied on Tuesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- Whether seven vans are needed remains unconfirmed."
+          },
+          {
+            "stage": "date-transfer",
+            "messages_sha256": "23535d9b856925136ec9b33956932679ee1f95f8f73ddbda1e1a533ac125bcc2",
+            "message_count": 4,
+            "prompt_tokens": 738,
+            "reserved_output": 1024,
+            "completion_tokens": 53,
+            "finish_reason": "stop",
+            "elapsed_ms": 6164,
+            "raw_reply": "### 结论\n- 座位图核对确认六张桌子足够。\n\n### 决定\n- 租六张桌子。\n\n### 待办\n- [ ] 小周周日取桌子。\n\n### 待讨论\n- 无"
+          },
+          {
+            "stage": "date-transfer",
+            "messages_sha256": "9e955779d7b44f779f94cd85991fc0e7146d8f65a22a1a405faf45145f5112ac",
+            "message_count": 4,
+            "prompt_tokens": 793,
+            "reserved_output": 1024,
+            "completion_tokens": 48,
+            "finish_reason": "stop",
+            "elapsed_ms": 5832,
+            "raw_reply": "### Conclusions\n- Six tables are sufficient for the event.\n\n### Decisions\n- Rent six tables.\n\n### To-dos\n- [ ] Jules will collect the tables on Sunday.\n\n### Open questions\n- None"
+          }
+        ],
+        "maximum_prompt_plus_output": 1908,
+        "preflight_matches_actual": true,
+        "all_stopped_normally": true
+      }
+    }
+  }
 }

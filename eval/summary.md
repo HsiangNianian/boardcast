@@ -23,6 +23,24 @@ the final summary request for **Qwen3.5-4B Q4_K_M**. The unchanged 4B control is
 binary passes **45/45** across three repetitions of the same fifteen cases, including both templates **6/6**.
 The Wednesday deployment, Monday rehearsal and English uncertain quantity now survive in those cases.
 
+The completed [same-commit CI run](https://github.com/HsiangNianian/boardcast/actions/runs/43103679484)
+at `45b2bbc` scores **42/45**, including templates **6/6** and the named owner **3/3**. All three corrected-date
+outputs say `周只做预演`, omitting Monday. Model, production-source and checker hashes match the local run;
+the early and final summary artifacts are identical. The local 45/45 result does not establish cloud acceptance.
+The summary gate is the only failed step. Both board suites and all ASR jobs finish: dev Node/Edge F1 remains
+**0.860/0.534**, and pointing Topic recall/Item F1 is **1.000/1.000**. Failed requests and layout violations are
+zero. The English prefilled-template case keeps latency as a Note, which the item scorer excludes; its Item F1
+remains **0.67**. Production routed + VAD checks pass; the VAD-off control retains non-enforced check failures.
+The raw CI summary, board metrics, hashes and comparison are retained in the investigation's `ci_follow_up`.
+
+The CI server log reports two threads. Local production checks with two, four and automatic threads (six on
+this host) each pass **9/9** across the corrected-date case and two adjacent cases, without changing requests.
+This does not reproduce the cloud omission or establish its cause. A subsequent candidate prepends only an
+instruction to retain complete confirmed dates and list separate scheduled events separately. It stays **15/15**
+on the original suite and **7/8** on transfer, but turns the confirmed Thursday shipment into an invented open
+question about a possible delay. The candidate is rejected; its 23 raw replies and the 27 thread-probe replies
+are retained. Production prompts, sampling, cases and checks are unchanged by this follow-up.
+
 Eight additional [transfer cases](summary-transfer-cases.json), written before their first model run, change
 dates, quantities, owners and whether a guess receives a later answer. Their 4B control is **3/8** and the
 candidate/final production result is **7/8**. English still loses a confirmed Thursday shipment while retaining

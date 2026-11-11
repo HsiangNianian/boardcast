@@ -2,7 +2,7 @@
   "date": "2026-11-12",
   "captured_at_utc": "2026-11-11T20:53:06.004114+00:00",
   "base_commit": "ff8bcfd60b372f1f100351ab00ecfebe4161d1bd",
-  "scope": "Restore live SpeechAnalyzer partials from the former Tauri implementation. Linux protocol/GUI evidence only; Swift compilation and native Mac recognition remain unverified at capture time.",
+  "scope": "Restore live SpeechAnalyzer partials from the former Tauri implementation. Linux protocol/GUI evidence only; Swift compilation and native Mac recognition remain unverified at capture time. Later same-source Mac compilation and native helper self-tests are verified in ci_follow_up; physical recognition remains unverified.",
   "reference": {
     "commit": "4f9ab26a46f07cc5575460fd7431f1a995e705cc",
     "path": "src-tauri/apple-speech/main.swift",
@@ -115,10 +115,37 @@
     ".github/workflows/rust.yml": "08dd4b62edf3de4a59965088feb10c6ad8049022da309d59070ed4e4bf3c1346"
   },
   "remaining": [
-    "Current Swift compilation/self-test on Mac CI; queue had zero scheduled jobs when last checked",
     "Physical Mac microphone/system permissions, actual Analyzer partial/final quality, clock calibration and displayed latency",
     "CAM++ speaker accuracy for native final ranges",
     "Cold/warm, sustained dual-source load and 30-minute device/thermal/battery measurements",
     "19 missing own-voice recordings and target-user trials remain unchanged; no private audio was transferred or used here"
-  ]
+  ],
+  "ci_follow_up": {
+    "captured_at_utc": "2026-11-11T22:09:56.670339+00:00",
+    "commit": "45b2bbc29f4ab3989e6218e550c7f922fb312499",
+    "run": 43103679620,
+    "conclusion": "success",
+    "all_five_jobs_passed": true,
+    "source_hashes_unchanged": true,
+    "macs": [
+      {
+        "job": 130801337898,
+        "log_sha256": "d59662c43d9f39b1592b55f9dec33b6c323b5ad49f43f05f7c8efd65a87503fa",
+        "packaged_self_check": true,
+        "agent_passed": 53,
+        "audio_passed": 28,
+        "audio_ignored": 1
+      },
+      {
+        "job": 130801338146,
+        "log_sha256": "e5e2278de163f60d14648b2c93f046cff49129b15af16bb151cf75cf6a18e180",
+        "packaged_self_check": true,
+        "agent_passed": 53,
+        "audio_passed": 28,
+        "audio_ignored": 1
+      }
+    ],
+    "native_swift_self_test": "Both successful package scripts compile the Swift helper and run its self-test with set -eu.",
+    "physical_audio_acceptance": false
+  }
 }

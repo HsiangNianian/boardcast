@@ -4,6 +4,14 @@ This is a test plan and a local measurement tool, not a completed Mac benchmark.
 and record its commit/package, Mac model, RAM, OS, speech engine, board model, power source and output device.
 A virtual Mac CI package check does not establish microphone permission, sustained performance or battery use.
 
+At `45b2bbc`, [Rust CI](https://github.com/HsiangNianian/boardcast/actions/runs/43103679620) passes all five jobs:
+core crates and Linux, Windows, Apple Silicon macOS 26 and Intel macOS 15 packages. Both Mac package scripts
+compile the current Swift helper and run its native self-test; packaged self-checks find the helper. Each Mac
+job passes 53 agent and 28 audio tests, with one audio integration test ignored. Linux separately passes the
+three explicit Auto, dual-source and streaming integration tests. [Streaming evidence](streaming-captions-2026-11-12.json)
+retains the unchanged source hashes and subsequent Mac CI log hashes. These checks do not establish real
+microphone/system permissions, Apple recognition quality, physical display latency or long-meeting performance.
+
 1. Start with headphones. Test microphone, system, both, then microphone again, without restarting the app.
    On first use test Allow and Deny for each permission, then allow it in System Settings and retry. Confirm
    that the selected source changes while listening and that a failed source does not leave the other one

@@ -30,6 +30,7 @@ struct Words {
     system: &'static str,
     facts: &'static str,
     rules: &'static str,
+    example: [&'static str; 2],
 }
 
 const ZH: Words = Words {
@@ -48,6 +49,10 @@ const ZH: Words = Words {
     system: "你在帮人写会议摘要。",
     facts: "保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。",
     rules: "只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：",
+    example: [
+        "白板上的内容：\n（空）\n\n会议记录：\n> 培训手册周五发给大家。\n> 更正一下，手册周六发送，周五只是校对。\n> 好，就定周六发送。\n> 要请四位讲师吧？\n> 人数还没确认。\n> 小陈周四前联系讲师。",
+        "### 结论\n- 周五校对培训手册。\n\n### 决定\n- 周六发送培训手册。\n\n### 待办\n- [ ] 小陈周四前联系讲师。\n\n### 待讨论\n- 讲师人数是否为四位尚未确认。",
+    ],
 };
 
 const EN: Words = Words {
@@ -66,6 +71,10 @@ const EN: Words = Words {
     system: "You are helping someone write a meeting summary.",
     facts: "Preserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.",
     rules: "Write only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:",
+    example: [
+        "On the whiteboard:\n(empty)\n\nTranscript:\n> The training handbook goes out on Friday.\n> Correction: it goes out on Saturday; Friday is only for proofreading.\n> Agreed, send it on Saturday.\n> We need four instructors, right?\n> The number is not confirmed.\n> Maya will contact the instructors by Thursday.",
+        "### Conclusions\n- Proofread the training handbook on Friday.\n\n### Decisions\n- Send the training handbook on Saturday.\n\n### To-dos\n- [ ] Maya will contact the instructors by Thursday.\n\n### Open questions\n- Whether four instructors are needed remains unconfirmed.",
+    ],
 };
 
 fn words(english: bool) -> &'static Words {
@@ -485,7 +494,7 @@ fn ask(provider: &Provider, messages: &[Value], tokens: u32, cancel: &AtomicBool
         bail!("cancelled");
     }
     let mut retry = (tokens * 2).min(8192);
-    if let Some(capacity) = provider.context_size()? {
+    if let Some((capacity, _)) = provider.local_summary_context()? {
         retry = retry.min(u32::try_from(capacity.saturating_sub(provider.prompt_tokens(messages)?)).unwrap_or(u32::MAX));
         ensure!(retry > 0, "No room for a summary reply in the local model's context.");
     }
@@ -499,17 +508,18 @@ fn ask(provider: &Provider, messages: &[Value], tokens: u32, cancel: &AtomicBool
 /// A collection of boards or intermediate notes can outgrow the context even after transcript chunking.
 fn compact(provider: &Provider, request: &mut [Value], output: u32, capacity: usize, english: bool, preserve: &str, cancel: &AtomicBool, progress: &mut dyn FnMut(Step)) -> Result<()> {
     let w = words(english);
+    let user = request.len() - 1;
     let mut size = provider.prompt_tokens(request)?;
     if size.saturating_add(output as usize) <= capacity { return Ok(()); }
     let mut fixed = request.to_vec();
-    fixed[1]["content"] = json!(preserve);
+    fixed[user]["content"] = json!(preserve);
     // Keep a short original transcript verbatim; second-hand notes can change a question's certainty.
     let preserve = if provider.prompt_tokens(&fixed)?.saturating_add(output as usize + 600) <= capacity { preserve } else { "" };
     while size.saturating_add(output as usize) > capacity {
         if cancel.load(Ordering::Relaxed) { bail!("cancelled"); }
-        let source = request[1]["content"].as_str().expect("summary user text").strip_suffix(preserve).expect("original transcript suffix").to_string();
+        let source = request[user]["content"].as_str().expect("summary user text").strip_suffix(preserve).expect("original transcript suffix").to_string();
         let mut empty = request.to_vec();
-        empty[1]["content"] = json!(preserve);
+        empty[user]["content"] = json!(preserve);
         ensure!(provider.prompt_tokens(&empty)?.saturating_add(output as usize) < capacity,
             "The summary instructions alone exceed the local model's context. Shorten the meeting template.");
         let mut batches = vec![];
@@ -537,7 +547,7 @@ fn compact(provider: &Provider, request: &mut [Value], output: u32, capacity: us
             let note = ask(provider, batch, 600, cancel)?;
             notes.push(format!("{}\n{}", (w.part)(i + 1), note));
         }
-        request[1]["content"] = json!(format!("{}\n{}\n\n{preserve}", w.too_long, notes.join("\n\n")));
+        request[user]["content"] = json!(format!("{}\n{}\n\n{preserve}", w.too_long, notes.join("\n\n")));
         let reduced = provider.prompt_tokens(request)?;
         ensure!(reduced < size, "The model did not shorten the meeting notes enough to fit its context.");
         size = reduced;
@@ -552,7 +562,8 @@ pub fn summarize(provider: &Provider, boards: &[Graph], lines: &[Line], cancel: 
     if cancel.load(Ordering::Relaxed) { bail!("cancelled"); }
     let english = is_english(lines.iter().map(|l| l.text.as_str()));
     let w = words(english);
-    let capacity = provider.context_size()?;
+    let context = provider.local_summary_context()?;
+    let capacity = context.map(|(size, _)| size);
     // A remote model may reason before writing, so it gets more room.
     let remote = matches!(provider, Provider::Remote { .. });
     let parts = chunks(lines, CHUNK);
@@ -580,6 +591,9 @@ pub fn summarize(provider: &Provider, boards: &[Graph], lines: &[Line], cancel: 
     progress(Step::Writing { done: total - 1, total });
     let tokens = if remote { 4096 } else { 1024 };
     let mut request = messages(boards, &said, false, english);
+    if context.is_some_and(|(_, example)| example) {
+        request.splice(1..1, [json!({ "role": "user", "content": w.example[0] }), json!({ "role": "assistant", "content": w.example[1] })]);
+    }
     if let Some(capacity) = capacity { compact(provider, &mut request, tokens, capacity, english, if parts.len() == 1 { &said } else { "" }, cancel, progress)?; }
     if cancel.load(Ordering::Relaxed) { bail!("cancelled"); }
     let reply = ask(provider, &request, tokens, cancel)?;
@@ -906,9 +920,12 @@ mod tests {
         let source = format!("白板上的内容：\n{}\n\n{transcript}", "检查已完成。\n".repeat(2000));
         let mut request = messages(&[], "", false, false);
         request[1]["content"] = json!(source);
+        request.splice(1..1, [json!({ "role": "user", "content": ZH.example[0] }), json!({ "role": "assistant", "content": ZH.example[1] })]);
+        let instructions = request[..3].to_vec();
         compact(&provider, &mut request, 1024, 4096, false, transcript, &AtomicBool::new(false), &mut |_| {}).unwrap();
         assert_eq!(seen.lock().unwrap().join("") + transcript, source);
-        assert!(request[1]["content"].as_str().unwrap().ends_with(transcript));
+        assert_eq!(request[..3], instructions, "examples are neither source material nor replaceable notes");
+        assert!(request.last().unwrap()["content"].as_str().unwrap().ends_with(transcript));
         assert!(provider.prompt_tokens(&request).unwrap() + 1024 <= 4096);
     }
 

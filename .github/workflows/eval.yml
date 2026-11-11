@@ -75,7 +75,7 @@ jobs:
           export LD_LIBRARY_PATH="$(dirname "$server"):${LD_LIBRARY_PATH:-}"
           mkdir -p eval/reports
           sha256sum ~/models/model.gguf > eval/reports/model-sha256.txt
-          nohup "$server" -m ~/models/model.gguf --host 127.0.0.1 --port 8080 -c 4096 --jinja -np 1 > ~/llama-server.log 2>&1 &
+          nohup "$server" -m ~/models/model.gguf --alias "${MODEL_URL##*/}" --host 127.0.0.1 --port 8080 -c 4096 --jinja -np 1 > ~/llama-server.log 2>&1 &
           for i in $(seq 1 120); do
             curl -sf http://127.0.0.1:8080/health && exit 0
             sleep 2

@@ -108,12 +108,15 @@ impl Provider {
         Ok(text.to_string())
     }
 
-    fn context_size(&self) -> Result<Option<usize>> {
+    fn local_summary_context(&self) -> Result<Option<(usize, bool)>> {
         let Self::Local { base } = self else { return Ok(None) };
         let props: Value = http().get(&format!("{base}/props")).timeout(Duration::from_secs(30)).call()?.into_json()?;
         let size = props["default_generation_settings"]["n_ctx"].as_u64()
             .and_then(|n| usize::try_from(n).ok()).filter(|n| *n > 0).context("missing local model context size")?;
-        Ok(Some(size))
+        // The example improves the measured 4B model but regresses 9B's tasks and template headings.
+        let example = ["model_path", "model_alias"].iter().any(|key| props[key].as_str()
+            .is_some_and(|name| name.rsplit(['/', '\\']).next() == Some("Qwen3.5-4B-Q4_K_M.gguf")));
+        Ok(Some((size, example)))
     }
 
     fn prompt_tokens(&self, messages: &[Value]) -> Result<usize> {
@@ -929,6 +932,23 @@ mod tests {
 
     fn remote(base: String) -> Provider {
         Provider::Remote { base_url: base, key: "sk-secret-123".into(), model: "m".into() }
+    }
+
+    #[test]
+    fn summary_examples_follow_only_the_measured_local_model() {
+        for (body, example) in [
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"/models/Qwen3.5-4B-Q4_K_M.gguf"}"#, true),
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"C:\\models\\Qwen3.5-4B-Q4_K_M.gguf"}"#, true),
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"/models/model.gguf","model_alias":"Qwen3.5-4B-Q4_K_M.gguf"}"#, true),
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"/models/Qwen3.5-9B-Q4_K_M.gguf"}"#, false),
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"/Qwen3.5-4B-Q4_K_M.gguf/unknown.gguf"}"#, false),
+            (r#"{"default_generation_settings":{"n_ctx":4096},"model_path":"Qwen3.5-4B-Q8_0.gguf"}"#, false),
+            (r#"{"default_generation_settings":{"n_ctx":4096}}"#, false),
+        ] {
+            let provider = Provider::Local { base: serve("200 OK", "application/json", body) };
+            assert_eq!(provider.local_summary_context().unwrap(), Some((4096, example)), "{body}");
+        }
+        assert_eq!(remote("http://127.0.0.1:0".into()).local_summary_context().unwrap(), None);
     }
 
     #[test]

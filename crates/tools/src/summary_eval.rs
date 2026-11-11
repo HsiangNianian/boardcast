@@ -213,6 +213,9 @@ mod tests {
         let cases: Vec<Case> = serde_json::from_str(include_str!("../../../eval/summary-long-transcript-cases.json")).unwrap();
         assert_eq!(cases.len(), 2);
         assert!(cases.iter().all(|c| !c.checks.is_empty() && c.lines.len() > 80));
+        let cases: Vec<Case> = serde_json::from_str(include_str!("../../../eval/summary-transfer-cases.json")).unwrap();
+        assert_eq!(cases.len(), 8);
+        assert!(cases.iter().all(|c| !c.checks.is_empty() && !c.lines.is_empty()));
     }
 
     #[test]
@@ -282,5 +285,25 @@ mod tests {
             assert!(!failures(&summary(invalid), checks).is_empty(), "{invalid}");
         }
         assert!(!failures(&summary("- 无"), checks).is_empty(), "the topic is still required");
+    }
+
+    #[test]
+    fn a_corrected_date_can_retain_its_history_without_restoring_the_old_plan() {
+        let cases: Vec<Case> = serde_json::from_str(include_str!("../../../eval/summary-transfer-cases.json")).unwrap();
+        let checks = &cases.iter().find(|c| c.id == "zh-earlier-corrected-date-keeps-distinct-work").unwrap().checks;
+        let summary = |conclusion: &str| format!("### 结论\n{conclusion}\n### 决定\n- 周四入库\n### 待办\n- [ ] 小田周三前发货运清单\n### 待讨论\n- 无");
+        assert!(failures(&summary("- 货物原计划周六入库，后改为周六盘点、周四入库。"), checks).is_empty());
+        for invalid in ["- 货物周六入库，周六盘点。", "- 原计划已更正。\n- 货物周六入库，周六盘点。"] {
+            assert!(!failures(&summary(invalid), checks).is_empty(), "{invalid}");
+        }
+    }
+
+    #[test]
+    fn an_unresolved_replica_count_does_not_invent_an_owner_question() {
+        let cases: Vec<Case> = serde_json::from_str(include_str!("../../../eval/summary-long-transcript-cases.json")).unwrap();
+        let checks = &cases.iter().find(|c| c.id == "en-long-transcript-count-and-task").unwrap().checks;
+        let valid = "### Conclusions\n- Configuration migration is complete.\n### Decisions\n- Launch on Monday.\n### To-dos\n- [ ] Sam to verify metrics by Tuesday.\n### Open questions\n- How many replicas are needed?";
+        assert!(failures(valid, checks).is_empty());
+        assert!(!failures(&format!("{valid}\n- Who owns the decision on the replica count?"), checks).is_empty());
     }
 }

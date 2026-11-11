@@ -16,7 +16,50 @@ template topic is an agenda, not evidence of discussion; only discussed topics b
 removes empty template placeholders from all four sections and deduplicates within a section, so a fact repeated
 as a decision survives. Nonempty topic subsections are retained.
 
-## Current options and earlier CI evidence
+## Default local model: examples and transfer checks
+
+The [current investigation](summary-examples-2026-11-12.json) adds one Chinese or English worked example to
+the final summary request for **Qwen3.5-4B Q4_K_M**. The unchanged 4B control is **12/15**; the final production
+binary passes **45/45** across three repetitions of the same fifteen cases, including both templates **6/6**.
+The Wednesday deployment, Monday rehearsal and English uncertain quantity now survive in those cases.
+
+Eight additional [transfer cases](summary-transfer-cases.json), written before their first model run, change
+dates, quantities, owners and whether a guess receives a later answer. Their 4B control is **3/8** and the
+candidate/final production result is **7/8**. English still loses a confirmed Thursday shipment while retaining
+Lena's Tuesday task. The first candidate score was 6/8 because an absence check wrongly rejected a correctly
+described former Saturday plan. The corrected check requires historical wording in the same conclusion item;
+another bullet cannot excuse a current assertion, and Decisions/To-dos still reject the old date. Original
+cases, outputs and scores are retained; source utterances are unchanged.
+
+The long-transcript candidate initially scored 2/2, but manual review found an invented question about the
+replica-count owner. An added assertion scores the same outputs **1/2**, versus the previous frozen **0/2**.
+The English result now retains completed migration, Monday launch and Sam's Tuesday task, but still copies that
+invented question from its intermediate notes. Large-board checks improve from the previous **3/4** to **4/4**.
+Exact HTTP trace replay through the final production binary matches every recorded long/context request and
+re-scores those model outputs without regenerating them. These are synthetic checks, not real long-meeting acceptance.
+
+The same example regresses 9B's original suite from **12/15 to 11/15**, introducing task and template failures;
+its transfer improvement from 5/8 to 7/8 does not justify that regression. Production therefore selects the
+example only when `/props` names `Qwen3.5-4B-Q4_K_M.gguf` as its model path or alias basename. CI supplies the
+downloaded filename as its alias even though its local file is `model.gguf`; the final live run exercises that
+same arrangement. Unknown local models, 9B and remote models keep their previous requests. Exact trace replay
+confirms unchanged 9B control inputs. Model selection, downloads, sampling and partial-note instructions are unchanged.
+
+Examples count toward the measured context budget and remain outside the source material being reduced.
+The regression retains every source character and the original short transcript while leaving examples intact.
+All 53 agent and 16 tools tests, the release tools build, UI compile check and actionlint pass. One existing HTTP
+test received an unexpected loopback 502 on the first full run and passed unchanged on the full rerun; no test
+assertion or retry bound was relaxed. CI remains tracked in [PR #206](https://github.com/HsiangNianian/boardcast/pull/206).
+**#68 stays open** for the remaining date omission, invented questions and real-meeting review.
+
+Run the additional cases separately from the default fifteen-case CI gate:
+
+```sh
+cargo run --release -p boardcast-tools -- summary-eval . \
+  --cases eval/summary-transfer-cases.json --llm http://127.0.0.1:18765 --label transfer
+```
+
+## Earlier options and CI evidence
 
 The [checker correction](summary-checker-2026-11-12.json) removes a confirmed false positive: an open topic
 such as “移动版发布日期” asserts no date and needs no uncertainty keyword. A check with `each_with` instead applies

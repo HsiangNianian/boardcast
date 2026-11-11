@@ -8,7 +8,7 @@
 //! eval/reports/summary-<label>-<time>.md, with every answer in the adjacent JSON. Failed checks fail the command.
 
 use anyhow::{bail, Context, Result};
-use boardcast_agent::summary::{summarize, Line};
+use boardcast_agent::summary::{blocks, summarize, Block, Line};
 use boardcast_agent::Provider;
 use boardcast_board::graph::Graph;
 use serde::Deserialize;
@@ -39,6 +39,9 @@ struct Check {
     /// None of these may.
     #[serde(default)]
     absent: Vec<String>,
+    /// Standalone statements that lose uncertainty; a question containing these words can be valid.
+    #[serde(default)]
+    absent_items: Vec<String>,
 }
 
 /// The text under each `### heading` of a summary.
@@ -73,6 +76,12 @@ fn failures(summary: &str, checks: &[Check]) -> Vec<String> {
         }
         for w in check.absent.iter().filter(|w| text.contains(&w.to_lowercase())) {
             out.push(format!("{place} has \"{w}\""));
+        }
+        for item in blocks(&text) {
+            let (Block::Bullet(item) | Block::Paragraph(item) | Block::Todo { text: item, .. }) = item else { continue };
+            for w in check.absent_items.iter().filter(|w| item.trim().trim_end_matches(['.', '。']).eq_ignore_ascii_case(w)) {
+                out.push(format!("{place} has standalone \"{w}\""));
+            }
         }
     }
     out
@@ -223,6 +232,11 @@ mod tests {
         let valid = "### 结论\n- 保留十分钟\n### 决定\n- 保留十分钟\n### 待办\n- 无\n### 待讨论\n- 缓存过期后由谁刷新（下次讨论）";
         assert!(failures(valid, checks).is_empty());
         assert!(!failures(&valid.replace("缓存过期后由谁刷新（下次讨论）", "无"), checks).is_empty());
+        assert!(!failures(&valid.replace("缓存过期后由谁刷新（下次讨论）", "缓存保留多久，过期后谁来刷新？"), checks).is_empty());
+        let checks = &cases.iter().find(|c| c.id == "en-partial-answer-stays-open").unwrap().checks;
+        let valid = "### Conclusions\n- Ten minutes\n### Decisions\n- None\n### To-dos\n- None\n### Open questions\n- Who will refresh the cache?";
+        assert!(failures(valid, checks).is_empty());
+        assert!(!failures(&valid.replace("Who will refresh the cache?", "How long should the cache live, and who will refresh it?"), checks).is_empty());
     }
 
     #[test]
@@ -233,6 +247,8 @@ mod tests {
         assert!(failures(valid, checks).is_empty());
         assert!(!failures(&valid.replace("Ship on Wednesday.", "None"), checks).is_empty());
         assert!(!failures(&valid.replace("Should there be two failure criteria?", "What are the two failure criteria?"), checks).is_empty());
+        assert!(!failures(&valid.replace("Should there be two failure criteria?", "**Two failure criteria**"), checks).is_empty());
+        assert!(failures(&valid.replace("Should there be two failure criteria?", "Whether there should be two failure criteria"), checks).is_empty());
         let checks = &cases.iter().find(|c| c.id == "zh-guess-stays-open").unwrap().checks;
         let wrong = "### 结论\n失败标准应包含两项\n部署定于本周三上线\n### 决定\n无\n### 待讨论\n失败标准具体有哪些？";
         assert!(!failures(wrong, checks).is_empty());

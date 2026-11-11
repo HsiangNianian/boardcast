@@ -15,6 +15,27 @@ template topic is an agenda, not evidence of discussion; only discussed topics b
 removes empty template placeholders from all four sections and deduplicates within a section, so a fact repeated
 as a decision survives. Nonempty topic subsections are retained.
 
+## Board references and evidence-selection probes
+
+Board IDs restart on each board. Cleanup could turn `第 2 张板的 n1（计费）已经完成` into
+`第 2 张板的 登录（计费）已经完成` by taking the first board's `n1` label. It now replaces an ID only
+when every matching node or group has the same label. Conflicting references stay as written; cleanup does not
+infer which board a free-text reference means. A regression fails before the fix and passes afterward, including
+reversed board order and a shared ID whose labels agree. All 49 agent and 13 tools tests pass.
+
+The [frozen follow-up](summary-grounding-2026-11-12.json) includes two rejected probes. Selecting verbatim source
+excerpts preserves dates but produces incomplete tasks, invents or loses template topics, and asks an already
+answered duration question again: **3/8**, after strengthening a check that previously scored it 4/8. A separate
+1024-token thinking-budget probe preserves both missing dates but leaves the bare item `Two failure criteria`,
+losing the uncertainty in the number: **2/3**, where the older checks incorrectly scored 3/3. Those three calls
+took 108–122 seconds on the local CPU. Neither approach was added to production.
+
+Checks now reject reopening the confirmed cache-duration question and reject that unqualified quantity item,
+while accepting questions such as `Should there be two failure criteria?`. The original source utterances and
+boards are unchanged; previous reports and original scores are retained. The final production short run remains
+**12/15**, with both template cases passing. All 26 captured calls fit the measured context budget and stop normally.
+The existing long-transcript **0/2** remains unresolved; it was not rerun for this cleanup-only production change.
+
 ## Output handling and longer transcripts
 
 The latest follow-up rejects a nonempty reply with `finish_reason: length` instead of merging incomplete notes
@@ -88,17 +109,19 @@ add limits on inferring unseen context, group numbers and totals.
 
 ## Measured result
 
-The latest completed CI text job, on the expanded 15-case suite at `f356e5a`, is **36/45**. The Chinese Wednesday
+The latest completed CI text job, on the expanded 15-case suite at `caa1600`, is **36/45**. The Chinese Wednesday
 deployment, English unconfirmed quantity and Chinese Monday rehearsal each fail all three repetitions. Both
 template cases pass 6/6. [All 45 outputs and hashes](summary-ci-expanded-2026-11-11.json) are retained from
 [the earlier run](https://github.com/HsiangNianian/boardcast/actions/runs/43036127338); the artifact also records
 [the follow-up](https://github.com/HsiangNianian/boardcast/actions/runs/43042362889) and
-[the context-budget run](https://github.com/HsiangNianian/boardcast/actions/runs/43051546186). All 45 outputs and
-failures are identical across these runs, with separate durations and report/source hashes. This does not imply
+[the context-budget run](https://github.com/HsiangNianian/boardcast/actions/runs/43051546186). Those three runs have
+identical outputs and failures, with separate durations and report/source hashes. The
+[output-handling follow-up](https://github.com/HsiangNianian/boardcast/actions/runs/43060105257) retains another
+45 outputs: eighteen differ, including filled empty sections and several model wordings, with the same failed cases. This does not imply
 that the whole Eval workflow passed.
 The original twelve cases score 30/36 and the new three 6/9; the earlier English CI pass was not stable.
-The latest source hashes reflect the context-budget change; its short inputs use the same final prompts.
-Model hashes match the frozen local model, but identical runtime conditions are not established. These runs
+The latest source hashes reflect the output-handling change; its short inputs use the same final prompts.
+Model hashes match the frozen local model, but identical runtime conditions are not established. The first three runs
 precede the output-handling and checker follow-up above. The historical English answered-question output leaves
 empty headings instead of `None`; that presentation defect is fixed above without changing its facts. The score
 checks semantics, not every presentation rule. #68 remains open.

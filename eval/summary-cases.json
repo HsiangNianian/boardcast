@@ -64,6 +64,7 @@
       { "in": ["Conclusions", "Decisions"], "absent": ["two failure", "two criteria"] },
       { "in": ["Open questions"], "any": ["criteri"] },
       { "in": ["Open questions"], "absent": ["what are the two", "which are the two"] },
+      { "in": ["Open questions"], "absent_items": ["two failure criteria"] },
       { "in": ["Conclusions", "Decisions"], "any": ["Wednesday"] }
     ]
   },
@@ -83,6 +84,7 @@
     "checks": [
       {"in": ["结论", "决定"], "any": ["十分钟", "10分钟", "10 分钟"]},
       {"in": ["待讨论"], "any": ["负责人", "谁来刷新", "谁刷新"]},
+      {"in": ["待讨论"], "absent": ["保留多久", "保留多长"]},
       {"in": ["待办"], "absent": ["负责人：A", "负责人：B", "小王"]}
     ]
   },
@@ -93,6 +95,7 @@
     "checks": [
       {"in": ["Conclusions", "Decisions"], "any": ["ten minutes", "10 minutes", "ten-minute", "10-minute"]},
       {"in": ["Open questions"], "any": ["owner", "who", "refresh"]},
+      {"in": ["Open questions"], "absent": ["how long"]},
       {"in": ["To-dos"], "absent": ["owner: A", "owner: B", "Alice"]}
     ]
   },

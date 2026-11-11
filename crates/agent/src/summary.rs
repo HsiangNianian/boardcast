@@ -330,9 +330,13 @@ static ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b([ng]\d+)\b(?:\s*[(
 /// `n6 (Login)` or `n6 Login`, is simply dropped.
 pub fn name_ids(text: &str, boards: &[Graph]) -> String {
     let label = |id: &str| {
-        boards.iter().find_map(|g| {
-            g.nodes.iter().find(|n| n.id == id).map(|n| n.label.clone()).or_else(|| g.groups.iter().find(|x| x.id == id).map(|x| x.label.clone()))
-        })
+        let mut names = boards.iter().flat_map(|g| {
+            g.nodes.iter().filter(|n| n.id == id).map(|n| &n.label)
+                .chain(g.groups.iter().filter(|x| x.id == id).map(|x| &x.label))
+        });
+        let first = names.next()?;
+        // IDs restart on each board; an ambiguous reference must not acquire the first board's meaning.
+        names.all(|name| name == first).then(|| first.clone())
     };
     let mut out = String::with_capacity(text.len());
     let mut last = 0;
@@ -715,6 +719,18 @@ mod tests {
         // Not an id on this board, or not an id at all.
         assert_eq!(name_ids("- n99 and win32 and n2x stay", &boards), "- n99 and win32 and n2x stay");
         assert!(!Regex::new(r"\bn\d+\b").unwrap().is_match(&name_ids("### 结论\n- n1 已定，n2 待办", &boards)));
+    }
+
+    #[test]
+    fn repeated_board_ids_do_not_replace_a_fact_with_another_boards_label() {
+        let boards: Vec<Graph> = serde_json::from_value(json!([
+            {"nodes":[{"id":"n1","kind":"item","label":"登录"},{"id":"n2","kind":"item","label":"发布"}],"groups":[{"id":"g1","label":"客户端"}]},
+            {"nodes":[{"id":"n1","kind":"item","label":"计费"},{"id":"n2","kind":"item","label":"发布"}],"groups":[{"id":"g1","label":"服务端"}]}
+        ])).unwrap();
+        let reply = "### 结论\n- 第 2 张板的 n1（计费）已经完成\n- n1 待核对\n- g1 的部署已完成\n- n2 的检查已完成";
+        assert_eq!(name_ids(reply, &boards), reply.replace("n2", "发布"));
+        let reversed = vec![boards[1].clone(), boards[0].clone()];
+        assert_eq!(name_ids(reply, &boards), name_ids(reply, &reversed));
     }
 
     #[test]

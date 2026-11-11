@@ -197,7 +197,7 @@ impl Pipeline {
             value
         }).collect();
         serde_json::to_string_pretty(&serde_json::json!({ "version": 1, "captures": captures,
-            "limits": { "captures": 20, "recent_timings_per_track": 128, "queued_packets": 300 },
+            "limits": { "captures": 20, "recent_timings_per_track": 128, "queued_packets_per_track": 300 },
             "speech_to_first_partial_ms": null, "sentence_end_to_final_ms": null, "screen_present_ms": null,
             "timing_basis": "monotonic arrival at Rust, recognition, receipt by UI; no acoustic onset or screen presentation measurement"
         })).expect("report serializes")

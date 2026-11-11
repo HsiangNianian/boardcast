@@ -14,6 +14,8 @@ pub struct SystemSpeech {
     pub engine: String,
     pub locale: String,
     failure: Option<String>,
+    stop: Arc<AtomicBool>,
+    finish_by: Option<Instant>,
 }
 
 impl SystemSpeech {
@@ -35,6 +37,8 @@ impl SystemSpeech {
                     engine: event["engine"].as_str().context("missing speech engine")?.into(),
                     locale: event["locale"].as_str().context("missing speech locale")?.into(),
                     failure: None,
+                    stop,
+                    finish_by: None,
                 }),
                 Some("error") => bail!("{}", event["message"].as_str().unwrap_or("Apple speech recognition did not start")),
                 Some("fallback") => eprintln!("SpeechAnalyzer fallback: {}", event["message"].as_str().unwrap_or_default()),
@@ -47,13 +51,27 @@ impl SystemSpeech {
 
 impl Recognizer for SystemSpeech {
     fn recognize(&mut self, samples: &[f32]) -> Result<String> {
+        const UNFINISHED: &str = "Apple speech did not finish within five seconds after stopping. Some captured speech was not transcribed.";
         let result = (|| {
             ensure!(!samples.is_empty() && samples.len() <= 16_000 * 30 && samples.iter().all(|s| s.is_finite()), "invalid sentence samples");
+            ensure!(self.finish_by.is_none_or(|end| Instant::now() < end), UNFINISHED);
             let mut bytes = Vec::with_capacity(4 + samples.len() * 4);
             bytes.extend_from_slice(&(samples.len() as u32).to_le_bytes());
             for sample in samples { bytes.extend_from_slice(&sample.to_le_bytes()); }
             self.helper.write(bytes)?;
-            let event = self.helper.next(Duration::from_secs(60), &AtomicBool::new(false))?;
+            let request_deadline = Instant::now() + Duration::from_secs(60);
+            let event = loop {
+                // One finalization budget for the whole stopped stream, including queued sentences.
+                if self.stop.load(Ordering::Relaxed) {
+                    self.finish_by.get_or_insert_with(|| Instant::now() + Duration::from_secs(5));
+                }
+                let remaining = self.finish_by.unwrap_or(request_deadline).min(request_deadline).saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    ensure!(self.finish_by.is_none_or(|end| Instant::now() < end), UNFINISHED);
+                    bail!("audio helper timed out");
+                }
+                if let Some(event) = self.helper.poll(remaining.min(Duration::from_millis(50)))? { break event; }
+            };
             match event["type"].as_str() {
                 Some("text") => Ok(event["text"].as_str().context("missing recognized text")?.trim().to_string()),
                 Some("error") => bail!("{}", event["message"].as_str().unwrap_or("recognition failed")),
@@ -121,12 +139,13 @@ while True:
     print(json.dumps({"type": "text", "text": " %d samples, sum %.1f " % (n, total)}), flush=True)
 "#;
 
-    fn fake_helper() -> Option<std::path::PathBuf> {
+    fn fake_helper(source: &str) -> Option<std::path::PathBuf> {
         Command::new("python3").arg("--version").output().ok()?;
-        let dir = std::env::temp_dir().join(format!("boardcast-speech-test-{}", std::process::id()));
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
+        let dir = std::env::temp_dir().join(format!("boardcast-speech-test-{}-{stamp}", std::process::id()));
         std::fs::create_dir_all(&dir).ok()?;
         let script = dir.join("fake.py");
-        std::fs::write(&script, FAKE).ok()?;
+        std::fs::write(&script, source).ok()?;
         let helper = dir.join("boardcast-speech");
         std::fs::write(&helper, format!("#!/bin/sh\nexec python3 -I {} \"$@\"\n", script.display())).ok()?;
         #[cfg(not(unix))]
@@ -141,12 +160,47 @@ while True:
 
     #[test]
     fn sentences_go_to_the_helper_and_text_comes_back() {
-        let Some(helper) = fake_helper() else { return };
+        let Some(helper) = fake_helper(FAKE) else { return };
         let mut speech = SystemSpeech::start(&helper, "ja-JP").unwrap();
         assert_eq!(speech.engine, "fake");
         assert_eq!(speech.locale, "ja-JP");
         assert_eq!(speech.recognize(&[0.5; 1600]).unwrap(), "1600 samples, sum 800.0");
         assert_eq!(speech.recognize(&[0.25; 8]).unwrap(), "8 samples, sum 2.0");
+    }
+
+    #[test]
+    fn stopping_keeps_a_prompt_final_reply() {
+        let Some(helper) = fake_helper(FAKE) else { return };
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut speech = SystemSpeech::start_with_stop(&helper, "en-US", stop.clone()).unwrap();
+        stop.store(true, Ordering::Relaxed);
+        assert_eq!(speech.recognize(&[0.5; 1600]).unwrap(), "1600 samples, sum 800.0");
+        assert_eq!(speech.recognize(&[0.25; 8]).unwrap(), "8 samples, sum 2.0");
+    }
+
+    #[test]
+    fn stopping_bounds_an_inflight_request_and_later_queued_sentences() {
+        let Some(helper) = fake_helper(r#"
+import json, struct, sys, time
+print(json.dumps({'type':'ready','engine':'fake','locale':sys.argv[2]}), flush=True)
+n, = struct.unpack('<I', sys.stdin.buffer.read(4))
+sys.stdin.buffer.read(n * 4)
+time.sleep(12)
+"#) else { return };
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut speech = SystemSpeech::start_with_stop(&helper, "en-US", stop.clone()).unwrap();
+        let stopping = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            stop.store(true, Ordering::Relaxed);
+        });
+        let started = Instant::now();
+        let error = speech.recognize(&[0.5; 1600]).unwrap_err();
+        stopping.join().unwrap();
+        assert!(error.to_string().contains("after stopping"), "{error:#}");
+        assert!(started.elapsed() < Duration::from_secs(8));
+        let again = Instant::now();
+        assert!(speech.recognize(&[0.5; 1600]).is_err());
+        assert!(again.elapsed() < Duration::from_millis(100), "the drain deadline was reset");
     }
 
     #[test]

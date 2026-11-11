@@ -8,6 +8,9 @@ A virtual Mac CI package check does not establish microphone permission, sustain
    On first use test Allow and Deny for each permission, then allow it in System Settings and retry. Confirm
    that the selected source changes while listening and that a failed source does not leave the other one
    silently running. Repeat fast start/stop and source changes, then quit and inspect for remaining helpers.
+   After noticing stop, each Apple recognizer has one five-second window for its in-flight request and
+   queued sentences; a prompt final reply is kept. An exceeded window reports unfinished transcription,
+   and the helper is released before the next capture. This bounds helper waiting, not total device shutdown.
 2. With Apple's recognizer, explicitly choose Chinese for the microphone and Japanese for system audio.
    Play a known Japanese WAV in Finder Quick Look while speaking Chinese. Reverse the languages, then use
    the same language on both. Include alternation and overlap. Sources label where audio came from, not who
@@ -29,7 +32,7 @@ A virtual Mac CI package check does not establish microphone permission, sustain
 5. Before stopping and after stopping, use Settings → **Copy audio diagnostics**, save each JSON locally,
    and match capture IDs to the source-switch sequence. Each source retains received samples, latest arrival,
    level, maximum/current backlog and bounded queue/ASR/UI-receipt timings. Inspect counts as well as p50/p95/max.
-   Each source has its own recognition worker and a queue capped at 300 packets. The last 20 captures and last
+   Each source has its own recognition worker and a queue capped at 300 packets (`queued_packets_per_track`). The last 20 captures and last
    128 timing samples per source are retained. No transcript, audio, API key or
    full error response is included. Actual acoustic onset → first partial, sentence end → final and screen
    presentation are **not measured**; nulls must not be reported as zero latency. This path currently emits
@@ -60,3 +63,8 @@ cargo test -p boardcast-ui both_sources_can_recognize_while_the_other_is_waiting
 
 This exercises the production capture-job lifecycle with WAV input; it does not open devices or measure Apple
 recognition. Both tracks use the same English recording, so it is not a bilingual accuracy or clock-alignment test.
+
+The helper stop regression also checks a reply that returns promptly after stop, an in-flight helper that hangs,
+and another queued sentence after the finalization deadline. The hanging-helper case failed on the earlier code
+after waiting for its 12-second simulated hang; it now fails explicitly within the stop budget, without granting
+each subsequent sentence another five seconds. These are protocol/lifecycle checks, not physical latency figures.

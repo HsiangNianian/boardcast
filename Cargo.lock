@@ -827,6 +827,7 @@ name = "boardcast-site"
 version = "0.27.0"
 dependencies = [
  "js-sys",
+ "serde",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",

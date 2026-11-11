@@ -38,7 +38,7 @@ Reduced motion shows every drawing finished and turns off the autoplay.
 | File | What it does |
 |---|---|
 | `index.html`, `style.css` | The page and its look |
-| `crates/site/src/pen.rs` | Writes text in stroke order with a visible pen tip, from the EMS Tech single-stroke font |
+| `crates/site/src/pen.rs` | Writes text in stroke order with a visible pen tip, along the app's Excalifont centerlines |
 | `crates/site/src/hero.rs` | The first sheet: the said line, the handwriting, circle targets and the eraser |
 | `crates/site/src/sheet.rs` | The rulers, the title block that follows the section, and the closing clock |
 | `crates/site/src/lasso.rs` | Circling anything on the page with the mouse or a pen |
@@ -58,5 +58,6 @@ run `python3 scripts/site-licenses.py` after dependencies change.
 
 DM Sans and JetBrains Mono are the Latin and Latin Extended files from Fontsource, in `fonts/`. The board's
 handwriting is an unmodified Latin subset of Excalifont (`fonts/excalifont-latin.woff2`), the source of the app's
-English strokes. The pen in the first sheet writes with EMS Tech from hersheytext (`crates/site/src/emstech.json`).
-All four are under the SIL OFL; their licenses are in `public/licenses/`.
+English strokes. The pen in the first sheet writes along those same strokes, the ASCII part of them
+(`crates/site/src/excalifont.json`), which `scripts/excalifont-strokes.py` writes next to the app's. All three are
+under the SIL OFL; their licenses are in `public/licenses/`.

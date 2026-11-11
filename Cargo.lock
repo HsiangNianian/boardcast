@@ -722,6 +722,7 @@ name = "boardcast-asr-eval"
 version = "0.27.0"
 dependencies = [
  "anyhow",
+ "boardcast-agent",
  "boardcast-audio",
  "boardcast-board",
  "serde",

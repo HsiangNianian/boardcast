@@ -117,6 +117,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: asr-linux
+      - run: python3 eval/asr/own-voice/test_record.py
+      - run: cargo test -p boardcast-asr-eval
       - run: cargo build --release -p boardcast-asr-eval
       - uses: actions/cache@v5
         with:

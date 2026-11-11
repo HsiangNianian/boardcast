@@ -115,7 +115,7 @@ impl Pipeline {
             for turn in script.turns {
                 let meeting = stamp.load(Ordering::SeqCst);
                 let _ = tx.send(Event::Heard { meeting, speaker: turn.speaker.clone(), text: turn.text.clone(), asr_ms: None });
-                let _ = to_model.send(Said { line: turn, ended: Instant::now(), asr_ms: None, meeting, renames: 0 });
+                let _ = to_model.send(Said { line: turn, ended: Instant::now(), submitted: Instant::now(), asr_ms: None, meeting, renames: 0 });
                 thread::sleep(Duration::from_millis(2500));
             }
             // Lines can merge into one request, so this waits for silence rather than a count.
@@ -177,13 +177,8 @@ impl Pipeline {
     }
 
     /// Bounded measurements only: no meeting text, audio, device names, keys or error bodies.
-    pub fn diagnostics(&self) -> String {
-        fn stats(values: &VecDeque<u128>) -> serde_json::Value {
-            if values.is_empty() { return serde_json::Value::Null; }
-            let mut values: Vec<_> = values.iter().copied().collect(); values.sort_unstable();
-            serde_json::json!({ "n": values.len(), "p50": values[(values.len() - 1) / 2],
-                "p95": values[((values.len() - 1) as f64 * 0.95).ceil() as usize], "max": values.last() })
-        }
+    pub fn diagnostics(&self, drawing: serde_json::Value) -> String {
+        use boardcast_agent::diagnostics::stats;
         let captures: Vec<_> = self.reports.iter().map(|report| {
             let report = report.lock().unwrap();
             let mut value = serde_json::to_value(&*report).expect("report serializes");
@@ -191,13 +186,15 @@ impl Pipeline {
             for (i, track) in report.tracks.iter().enumerate() {
                 value["tracks"][i]["source"] = serde_json::json!(listen::SOURCES[i]);
                 for (name, values) in [("queue_ms", &track.queue_ms), ("asr_ms", &track.asr_ms), ("ui_receive_ms", &track.ui_receive_ms), ("audio_end_to_final_ms", &track.audio_end_to_final_ms)] {
-                    value["tracks"][i][name] = stats(values);
+                    value["tracks"][i][name] = stats(values.iter().copied());
                 }
             }
             value
         }).collect();
         serde_json::to_string_pretty(&serde_json::json!({ "version": 1, "captures": captures,
-            "limits": { "captures": 20, "recent_timings_per_track": 128, "queued_packets_per_track": 300 },
+            "board": { "requests": self.session.diagnostics(), "drawing": drawing },
+            "limits": { "captures": 20, "recent_timings_per_track": 128, "queued_packets_per_track": 300,
+                "recent_board_requests": boardcast_agent::diagnostics::RECENT, "recent_drawings": boardcast_agent::diagnostics::RECENT },
             "speech_to_first_partial_ms": null, "sentence_end_to_final_ms": null, "screen_present_ms": null,
             "timing_basis": "capture timestamps (native on Mac, callback estimates elsewhere), monotonic arrival at Rust, recognition, receipt by UI; audio_end_to_final_ms starts at the captured segment end, not acoustic speech end; no acoustic onset or screen presentation measurement"
         })).expect("report serializes")

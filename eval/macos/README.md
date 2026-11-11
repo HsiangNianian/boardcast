@@ -34,7 +34,7 @@ A virtual Mac CI package check does not establish microphone permission, sustain
    Results stay in ignored `eval/reports/macos/`. RSS is a process-tree sum and can double-count shared pages;
    it is not physical memory use. Battery percentages are observations, not a calibrated power measurement.
    Temperature remains unmeasured. An interrupted run or an exited app is explicitly incomplete.
-5. Before stopping and after stopping, use Settings → **Copy audio diagnostics**, save each JSON locally,
+5. Before stopping and after stopping, use Settings → **Copy diagnostics**, save each JSON locally,
    and match capture IDs to the source-switch sequence. Each source retains received samples, latest arrival,
    level, maximum/current backlog and bounded queue/ASR/UI-receipt timings. When native capture timestamps
    are available, `audio_end_to_final_ms` measures from the captured segment's end to the final recognition result.
@@ -46,6 +46,17 @@ A virtual Mac CI package check does not establish microphone permission, sustain
    presentation are **not measured**; nulls must not be reported as zero latency. This path currently emits
    final captions; timings alone do not establish complete end-to-end latency. The first Auto ASR call includes
    language detection and native helper startup, so keep it separate from warmed recognition samples.
+   `board.requests` retains the last 128 batches, including failures and replies superseded by a meeting switch.
+   Queue timing starts when the oldest line in the batch is submitted to the board worker, independently of ASR;
+   it includes waiting for initial model readiness. Provider setup and generation are measured separately;
+   generation includes prompt preparation, retries and reply validation. An unavailable model has null generation
+   time, not zero. Groups distinguish local/remote/unavailable backends and applied/failed/superseded outcomes.
+   `board.drawing` retains 128 completed animations linked by request ID, plus pending/interrupted counts.
+   Its clock starts when the UI receives the result; animation advance/completion is not screen presentation.
+   Empty board operations do not create a drawing sample. Request order does not prove cold or warm caches;
+   record that test condition separately. Existing capture fields and unmeasured physical-latency nulls remain.
+   [Native GUI clipboard evidence and regression results](board-diagnostics-2026-11-12.json) cover a drawing,
+   a no-op and a failed model request on Linux with synthetic content; they do not measure Mac performance.
 6. For a separately consented recording with human reference text, note missed/incorrect words, wrong source
    labels, duplicate echo and summary corrections. Keep original audio and transcript private. Verify closing
    a meeting with queued audio cannot put that audio into a newly opened meeting.

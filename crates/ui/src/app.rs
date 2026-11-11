@@ -202,6 +202,7 @@ struct Ink {
     drawn: HashSet<String>,
     last: Option<Instant>,
     timings: Vec<Timing>,
+    drawings: DrawingReport,
     graph: Option<Graph>,
     next_tidy_batch: u64,
     /// What a click can land on, in board coordinates.
@@ -267,6 +268,7 @@ fn raster_level(k: f32, dpr: f32) -> f32 {
 
 struct Timing {
     id: u64,
+    request: u64,
     text: String,
     asr_ms: Option<u128>,
     llm_ms: u128,
@@ -275,6 +277,39 @@ struct Timing {
     arrived: Instant,
     first_ink: Option<Instant>,
     strokes: usize,
+}
+
+struct Drawing {
+    request: u64,
+    start_ms: u128,
+    done_ms: u128,
+    strokes: usize,
+}
+
+#[derive(Default)]
+struct DrawingReport {
+    completed: usize,
+    interrupted: usize,
+    recent: VecDeque<Drawing>,
+}
+
+impl DrawingReport {
+    fn push(&mut self, drawing: Drawing) {
+        self.completed += 1;
+        if self.recent.len() == boardcast_agent::diagnostics::RECENT { self.recent.pop_front(); }
+        self.recent.push_back(drawing);
+    }
+
+    fn json(&self, pending: usize) -> serde_json::Value {
+        use boardcast_agent::diagnostics::stats;
+        serde_json::json!({ "completed": self.completed, "interrupted": self.interrupted, "pending": pending,
+            "start_after_result_ms": stats(self.recent.iter().map(|d| d.start_ms)),
+            "done_after_result_ms": stats(self.recent.iter().map(|d| d.done_ms)),
+            "recent": self.recent.iter().map(|d| serde_json::json!({ "request": d.request,
+                "start_after_result_ms": d.start_ms, "done_after_result_ms": d.done_ms, "strokes": d.strokes })).collect::<Vec<_>>(),
+            "timing_basis": "UI receipt of a board result to animation advance/completion; only batches with new strokes; not physical display presentation"
+        })
+    }
 }
 
 /// Whether a closed shape holds a point, by counting crossings.
@@ -475,6 +510,7 @@ impl Ink {
         self.queue.clear();
         self.finished.clear();
         self.drawn.clear();
+        self.drawings.interrupted += self.timings.len();
         self.timings.clear();
         self.targets.clear();
         self.live = 0.0;
@@ -726,6 +762,8 @@ impl Ink {
         let Some(i) = self.timings.iter().position(|t| t.id == id) else { return };
         let t = self.timings.remove(i);
         let first = t.first_ink.unwrap_or(now);
+        self.drawings.push(Drawing { request: t.request, start_ms: (first - t.arrived).as_millis(),
+            done_ms: (now - t.arrived).as_millis(), strokes: t.strokes });
         println!(
             "{{\"line\":{},\"batch\":{},\"asr_ms\":{},\"llm_ms\":{},\"to_board_ms\":{},\"to_first_ink_ms\":{},\"to_done_ms\":{},\"ui_delay_ms\":{},\"strokes\":{}}}",
             serde_json::Value::from(t.text),
@@ -1341,10 +1379,10 @@ impl Workbench {
                         }
                         let renames = self.session().renames_seen();
                         let line = Utterance { speaker, text: sentence.text, pointing: self.take_pointing() };
-                        let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, asr_ms: Some(sentence.asr_ms), meeting, renames });
+                        let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, submitted: Instant::now(), asr_ms: Some(sentence.asr_ms), meeting, renames });
                     }
                 }
-                Event::Agent(Update::Drawn { meeting, graph, ops, lines, asr_ms, llm_ms, ended }) => {
+                Event::Agent(Update::Drawn { request, meeting, graph, ops, lines, asr_ms, llm_ms, ended }) => {
                     if meeting != self.session().meeting() {
                         continue;
                     }
@@ -1357,7 +1395,7 @@ impl Workbench {
                     let mut ink = self.ink.borrow_mut();
                     let strokes = ink.update(&graph, id);
                     if strokes > 0 {
-                        ink.timings.push(Timing { id, text, asr_ms, llm_ms, batch: lines.len(), ended, arrived, first_ink: None, strokes });
+                        ink.timings.push(Timing { id, request, text, asr_ms, llm_ms, batch: lines.len(), ended, arrived, first_ink: None, strokes });
                     }
                     let memory = ink.board.snapshot();
                     drop(ink);
@@ -2794,7 +2832,7 @@ impl Workbench {
     fn retry_line(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some((speaker, text)) = self.live.retry_line(index) else { return };
         let (meeting, renames) = (self.session().meeting(), self.session().renames_seen());
-        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting, renames });
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing: vec![] }, ended: Instant::now(), submitted: Instant::now(), asr_ms: None, meeting, renames });
         cx.notify();
     }
 
@@ -3017,7 +3055,7 @@ impl Workbench {
         let meeting = self.session().meeting();
         let renames = self.session().renames_seen();
         let pointing = self.take_pointing();
-        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing }, ended: Instant::now(), asr_ms: None, meeting, renames });
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing }, ended: Instant::now(), submitted: Instant::now(), asr_ms: None, meeting, renames });
         cx.notify();
     }
 
@@ -4489,9 +4527,10 @@ impl Render for Workbench {
                     })
             })
             .when_some(self.hearing.clone(), |d, with| d.child(div().text_xs().text_color(rgb(pal().muted)).child(format!("{} {with}", tr("Hearing with", "当前识别：")))))
-            .child(button("copy-audio-diagnostics", tr("Copy audio diagnostics", "复制收音诊断")).on_click(cx.listener(|this, _, _, cx| {
-                cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(this.pipeline.diagnostics()));
-                this.notice = Some(tr("Audio diagnostics copied. No transcript or audio is included.", "收音诊断已复制，不含会议文字或音频。").into());
+            .child(button("copy-audio-diagnostics", tr("Copy diagnostics", "复制诊断")).on_click(cx.listener(|this, _, _, cx| {
+                let ink = this.ink.borrow();
+                cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(this.pipeline.diagnostics(ink.drawings.json(ink.timings.len()))));
+                this.notice = Some(tr("Diagnostics copied. No transcript or audio is included.", "诊断已复制，不含会议文字或音频。").into());
                 cx.notify();
             })))
             .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Language", "语言")))
@@ -4921,6 +4960,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 drawn: HashSet::new(),
                 last: None,
                 timings: vec![],
+                drawings: DrawingReport::default(),
                 graph: None,
                 next_tidy_batch: 0,
                 targets: vec![],
@@ -5232,7 +5272,25 @@ fn page_number(graph: &Graph) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{encloses, page_ranges};
+    use super::{encloses, page_ranges, Drawing, DrawingReport};
+
+    #[test]
+    fn drawing_timings_are_bounded_and_keep_request_identity() {
+        let mut report = DrawingReport::default();
+        assert!(report.json(0)["start_after_result_ms"].is_null());
+        for request in 1..=130 {
+            report.push(Drawing { request, start_ms: request as u128, done_ms: request as u128 + 7, strokes: 4 });
+        }
+        report.interrupted = 2;
+        let value = report.json(3);
+        assert_eq!(value["completed"], 130);
+        assert_eq!(value["interrupted"], 2);
+        assert_eq!(value["pending"], 3);
+        assert_eq!(value["recent"].as_array().unwrap().len(), 128);
+        assert_eq!(value["recent"][0]["request"], 3);
+        assert_eq!(value["start_after_result_ms"]["max"], 130);
+        assert_eq!(value["done_after_result_ms"]["max"], 137);
+    }
 
     #[test]
     fn pages_to_import_are_read_from_numbers_and_ranges() {

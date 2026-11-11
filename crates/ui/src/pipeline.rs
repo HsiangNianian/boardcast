@@ -177,7 +177,7 @@ impl Pipeline {
     }
 
     /// Bounded measurements only: no meeting text, audio, device names, keys or error bodies.
-    pub fn diagnostics(&self, drawing: serde_json::Value) -> String {
+    pub fn diagnostics(&self, drawing: serde_json::Value) -> serde_json::Value {
         use boardcast_agent::diagnostics::stats;
         let captures: Vec<_> = self.reports.iter().map(|report| {
             let report = report.lock().unwrap();
@@ -191,13 +191,13 @@ impl Pipeline {
             }
             value
         }).collect();
-        serde_json::to_string_pretty(&serde_json::json!({ "version": 1, "captures": captures,
+        serde_json::json!({ "version": 1, "captures": captures,
             "board": { "requests": self.session.diagnostics(), "drawing": drawing },
             "limits": { "captures": 20, "recent_timings_per_track": 128, "queued_packets_per_track": 300,
                 "recent_board_requests": boardcast_agent::diagnostics::RECENT, "recent_drawings": boardcast_agent::diagnostics::RECENT },
             "speech_to_first_partial_ms": null, "sentence_end_to_final_ms": null, "screen_present_ms": null,
             "timing_basis": "capture timestamps (native on Mac, callback estimates elsewhere), monotonic arrival at Rust, recognition, receipt by UI; audio_end_to_final_ms starts at the captured segment end, not acoustic speech end; no acoustic onset or screen presentation measurement"
-        })).expect("report serializes")
+        })
     }
 }
 

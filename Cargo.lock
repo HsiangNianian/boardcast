@@ -887,6 +887,7 @@ dependencies = [
  "sys-locale",
  "tiny-skia",
  "windows-sys 0.61.2",
+ "zip",
 ]
 
 [[package]]

@@ -797,6 +797,7 @@ enum Panel {
     Import,
     Speakers,
     Settings,
+    Diagnostics,
 }
 
 enum ImportSource {
@@ -944,6 +945,13 @@ struct SettingsForm {
     probing: Option<Receiver<Result<u128, String>>>,
 }
 
+struct DiagnosticPanel {
+    files: Vec<crate::diagnostics::File>,
+    selected: usize,
+    saving: bool,
+    note: Option<String>,
+}
+
 struct Workbench {
     ink: Rc<RefCell<Ink>>,
     pipeline: Pipeline,
@@ -967,6 +975,7 @@ struct Workbench {
     /// What the meeting list is narrowed to.
     library_query: Entity<InputState>,
     form: SettingsForm,
+    diagnostics: Option<DiagnosticPanel>,
     summary: SummaryPanel,
     replay: Option<Replaying>,
     import: ImportState,
@@ -1751,6 +1760,72 @@ impl Workbench {
         self.session().open(self.live.graph.clone(), history);
         self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
         self.show_page_image();
+        cx.notify();
+    }
+
+    fn open_diagnostics(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.panel = Panel::Diagnostics;
+        if !self.diagnostics.as_ref().is_some_and(|d| d.saving) {
+            let ink = self.ink.borrow();
+            let runtime = self.pipeline.diagnostics(ink.drawings.json(ink.timings.len()));
+            let catalog = boardcast_models::catalog();
+            let current = boardcast_models::current(&self.models);
+            let remote = !self.live.local_only() && self.form.saved.enabled && self.form.saved.is_complete();
+            let size = window.viewport_size();
+            let info = crate::diagnostics::Info {
+                screen: [f32::from(size.width), f32::from(size.height), window.scale_factor()],
+                backend: if remote { "remote" } else { "local" },
+                model: if remote { None } else { catalog.iter().find(|m| current.as_ref().is_some_and(|p| p.ends_with(&m.file))).map(|m| m.id) },
+                state: if self.needs_model { "no-model" } else if self.preparing.is_some() { "starting" } else { "configured" },
+                installed: catalog.iter().filter(|m| boardcast_models::installed(m, &self.models)).map(|m| m.id).collect(),
+                listening: self.pipeline.listening(),
+                source: match self.form.saved.capture_source.as_str() { "microphone" => "microphone", "system" => "system", "both" => "both", _ => "unknown" },
+                diarize: self.form.saved.diarize,
+                apple_helper: self.speech_helper.is_some(),
+            };
+            self.diagnostics = Some(DiagnosticPanel { files: crate::diagnostics::files(info, &self.live.lines, runtime), selected: 0, saving: false, note: None });
+        }
+        cx.notify();
+    }
+
+    fn save_diagnostics(&mut self, cx: &mut Context<Self>) {
+        let Some(state) = &mut self.diagnostics else { return };
+        if state.saving { return; }
+        state.saving = true;
+        state.note = None;
+        let files = state.files.clone();
+        let directory = self.export_dir.clone().unwrap_or_else(|| {
+            let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map_or_else(|| self.data.clone(), PathBuf::from);
+            Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
+        });
+        let answer = cx.prompt_for_new_path(&directory, Some("boardcast-diagnostics.zip"));
+        cx.spawn(async move |this, cx| {
+            let result = match answer.await {
+                Ok(Ok(Some(path))) => {
+                    let target = path.clone();
+                    cx.background_executor().spawn(async move {
+                        boardcast_export::write_file(&target, &crate::diagnostics::zip(&files)?)?;
+                        anyhow::Ok(Some(target))
+                    }).await
+                }
+                Ok(Ok(None)) | Err(_) => Ok(None),
+                Ok(Err(error)) => Err(error),
+            };
+            let _ = this.update(cx, |this, cx| {
+                if let Some(state) = &mut this.diagnostics {
+                    state.saving = false;
+                    state.note = match result {
+                        Ok(Some(path)) => {
+                            this.export_dir = path.parent().map(PathBuf::from);
+                            Some(format!("{} {}", tr("Saved to", "已保存到"), path.display()))
+                        }
+                        Ok(None) => None,
+                        Err(error) => Some(format!("{}{error:#}", tr("Could not save diagnostics: ", "无法保存诊断："))),
+                    };
+                }
+                cx.notify();
+            });
+        }).detach();
         cx.notify();
     }
 
@@ -3189,6 +3264,38 @@ impl Workbench {
         }
     }
 
+    fn diagnostics_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let panel = div().id("diagnostics-panel").flex_1().min_h_0().p_3().flex().flex_col().gap_2();
+        let Some(state) = &self.diagnostics else { return panel };
+        let file = &state.files[state.selected];
+        let copied = file.text.clone();
+        panel
+            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
+                "Review the files before saving. This snapshot contains system information and measurements, without meeting text, audio or keys. Nothing is uploaded.",
+                "保存前可以逐个查看文件。这份快照包含系统信息和测量记录，不含会议文字、音频或密钥，不会上传。")))
+            .child(div().flex().flex_wrap().gap_1().children(state.files.iter().enumerate().map(|(i, f)| {
+                button(("diagnostic-file", i), f.name).when(i == state.selected, |b| b.primary())
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if let Some(state) = &mut this.diagnostics { state.selected = i; }
+                        cx.notify();
+                    }))
+            })))
+            .child(div().text_xs().text_color(rgb(pal().muted)).child(format!("{} · {} bytes", file.name, file.text.len())))
+            .child(div().id("diagnostic-preview").flex_1().min_h_0().overflow_y_scroll().p_2().rounded_md().bg(rgb(pal().track))
+                .font_family(theme::MONO).text_xs().child(file.text.clone()))
+            .when_some(state.note.clone(), |d, note| d.child(div().text_xs().child(note)))
+            .child(div().flex().flex_wrap().gap_2()
+                .child(button("copy-diagnostic-file", tr("Copy file", "复制此文件")).on_click(cx.listener(move |this, _, _, cx| {
+                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copied.clone()));
+                    if let Some(state) = &mut this.diagnostics { state.note = Some(tr("File copied", "已复制文件内容").into()); }
+                    cx.notify();
+                })))
+                .child(button("refresh-diagnostics", tr("Refresh", "刷新快照")).disabled(state.saving)
+                    .on_click(cx.listener(|this, _, window, cx| this.open_diagnostics(window, cx))))
+                .child(button("save-diagnostics", if state.saving { tr("Saving…", "正在保存…") } else { tr("Save ZIP…", "保存 ZIP…") }).primary().disabled(state.saving)
+                    .on_click(cx.listener(|this, _, _, cx| this.save_diagnostics(cx)))))
+    }
+
     fn export_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
         let drawn = !self.live.graph.nodes.is_empty() || self.live.graph.underlay().is_some();
         let content = self.live.has_content();
@@ -4529,10 +4636,12 @@ impl Render for Workbench {
             .when_some(self.hearing.clone(), |d, with| d.child(div().text_xs().text_color(rgb(pal().muted)).child(format!("{} {with}", tr("Hearing with", "当前识别：")))))
             .child(button("copy-audio-diagnostics", tr("Copy diagnostics", "复制诊断")).on_click(cx.listener(|this, _, _, cx| {
                 let ink = this.ink.borrow();
-                cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(this.pipeline.diagnostics(ink.drawings.json(ink.timings.len()))));
+                let report = this.pipeline.diagnostics(ink.drawings.json(ink.timings.len()));
+                cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(serde_json::to_string_pretty(&report).expect("diagnostics serialize")));
                 this.notice = Some(tr("Diagnostics copied. No transcript or audio is included.", "诊断已复制，不含会议文字或音频。").into());
                 cx.notify();
             })))
+            .child(button("export-diagnostics", tr("Export diagnostics…", "导出诊断…")).on_click(cx.listener(|this, _, window, cx| this.open_diagnostics(window, cx))))
             .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Language", "语言")))
             .child({
                 let chosen = self.form.saved.interface_language.clone();
@@ -4613,6 +4722,7 @@ impl Render for Workbench {
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
         let import_panel = (self.panel == Panel::Import).then(|| self.import_panel(cx));
         let speakers_panel = (self.panel == Panel::Speakers).then(|| self.speakers_panel(editable, cx));
+        let diagnostics_panel = (self.panel == Panel::Diagnostics).then(|| self.diagnostics_panel(cx));
         let side = div()
             .id("side")
             .occlude()
@@ -4645,6 +4755,7 @@ impl Render for Workbench {
                         Panel::Import => tr("Import", "导入"),
                         Panel::Speakers => tr("Speakers", "说话人"),
                         Panel::Settings => tr("Settings", "设置"),
+                        Panel::Diagnostics => tr("Diagnostics", "诊断"),
                     }))
                     .child(icon_button("close-panel", "x", if self.panel == Panel::Transcript { tr("Hide the transcript", "收起转写") } else { tr("Back to the transcript (Esc)", "回到转写（Esc）") }).on_click(cx.listener(|this, _, _, cx| {
                         if this.panel == Panel::Transcript {
@@ -4690,6 +4801,7 @@ impl Render for Workbench {
             .when_some(export_panel, |d, panel| d.child(panel))
             .when_some(import_panel, |d, panel| d.child(panel))
             .when_some(speakers_panel, |d, panel| d.child(panel))
+            .when_some(diagnostics_panel, |d, panel| d.child(panel))
             .when(self.panel == Panel::Settings, |d| d.child(settings));
         let preparing_page = self.preparing.as_ref().filter(|p| p.showing()).map(|p| {
             let fraction = p.fraction();
@@ -5128,6 +5240,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     library_query,
                     label_input,
                     form: SettingsForm { glossary, base_url, model, key, remote, saved: settings, note: None, probing: None },
+                    diagnostics: None,
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,
                     import: ImportState::Idle,

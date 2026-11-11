@@ -65,6 +65,18 @@ A virtual Mac CI package check does not establish microphone permission, sustain
    error bodies, helper paths and input filenames are excluded from these diagnostic fields. A queued capture
    cancelled before starting keeps null failure fields. [Regression evidence](capture-errors-2026-11-12.json)
    covers setup failure and both runtime failure stages without opening an audio device.
+   Settings → **Export diagnostics…** also previews three files before saving a local ZIP. The snapshot stays
+   fixed until **Refresh** or reopening the panel; each file can be copied. `info.json` contains allowlisted
+   platform/configuration fields, `errors.txt` contains retained structured failure IDs/stages, and
+   `timing.json.runtime` is the complete existing Copy diagnostics report. Nothing is uploaded. The root timing
+   fields retain the Tauri names and percentile ranks for stored completed, non-manual, non-failed meeting lines;
+   they are separate from the bounded runtime populations. `spoken` counts lines with ASR metadata. Missing
+   stages stay null, and `totalMs` is populated only when all five stages exist; that sum is not physical latency.
+   Device names, paths, endpoints, custom model names, keys and raw error bodies are excluded. The old optional
+   `llama-server.log` is absent because GPUI does not capture it. Helper-file availability alone does not prove
+   Apple capability or permission. [Export evidence](diagnostic-zip-2026-11-12.json) checks preview/copy, native
+   cancel/save/retry, unchanged existing output on a write error and ZIP bytes on Linux; Mac save dialogs remain
+   part of physical acceptance.
 6. For a separately consented recording with human reference text, note missed/incorrect words, wrong source
    labels, duplicate echo and summary corrections. Keep original audio and transcript private. Verify closing
    a meeting with queued audio cannot put that audio into a newly opened meeting.

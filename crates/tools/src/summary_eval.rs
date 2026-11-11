@@ -112,8 +112,13 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         let (mut ok, mut wrong) = (0, vec![]);
         for run in 0..repeat {
             let started = std::time::Instant::now();
-            let summary = summarize(&provider, &case.boards, &lines, &cancel, &mut |_| {}).with_context(|| format!("summarizing {}", case.id))?;
-            let failed = failures(&summary, &case.checks);
+            let (summary, failed) = match summarize(&provider, &case.boards, &lines, &cancel, &mut |_| {}) {
+                Ok(summary) => {
+                    let failed = failures(&summary, &case.checks);
+                    (summary, failed)
+                }
+                Err(error) => (String::new(), vec![format!("generation failed: {error:#}")]),
+            };
             answers.push(json!({ "case": case.id, "run": run + 1, "summary": summary, "failures": failed, "elapsed_ms": started.elapsed().as_millis() }));
             if failed.is_empty() {
                 ok += 1;
@@ -141,6 +146,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "agent_source_sha256": format!("{:x}", Sha256::digest(include_bytes!("../../agent/src/lib.rs"))),
         "answers": answers,
     }))?)?;
+    // Deliberate model failures in unit tests should not enter the workflow's evaluation summary.
+    #[cfg(not(test))]
     if let Ok(path) = std::env::var("GITHUB_STEP_SUMMARY") {
         use std::io::Write;
         std::fs::OpenOptions::new().create(true).append(true).open(path)?.write_all(report.as_bytes())?;
@@ -180,6 +187,9 @@ mod tests {
         let cases: Vec<Case> = serde_json::from_str(include_str!("../../../eval/summary-context-cases.json")).unwrap();
         assert_eq!(cases.len(), 4);
         assert!(cases.iter().all(|c| !c.checks.is_empty() && !c.lines.is_empty()));
+        let cases: Vec<Case> = serde_json::from_str(include_str!("../../../eval/summary-long-transcript-cases.json")).unwrap();
+        assert_eq!(cases.len(), 2);
+        assert!(cases.iter().all(|c| !c.checks.is_empty() && c.lines.len() > 80));
     }
 
     #[test]
@@ -187,6 +197,23 @@ mod tests {
         let checks: Vec<Check> = serde_json::from_str(r#"[{"in":["Decisions"],"absent":["two"]}]"#).unwrap();
         assert!(!failures("No headings or decisions at all", &checks).is_empty());
         assert!(failures("### Decisions\n- None", &checks).is_empty());
+    }
+
+    #[test]
+    fn a_generation_failure_still_writes_the_evaluation_report() {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("boardcast-summary-eval-{}-{stamp}", std::process::id()));
+        let cases = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../eval/summary-cases.json");
+        let args = [root.to_string_lossy().into_owned(), "--cases".into(), cases.to_string_lossy().into_owned(),
+            "--only".into(), "zh-guess-stays-open".into(), "--llm".into(), "http://127.0.0.1:0".into()];
+        assert!(run(args.into_iter()).unwrap_err().to_string().contains("1 of 1 summaries failed"));
+        let report = std::fs::read_dir(root.join("eval/reports")).unwrap().flatten().map(|f| f.path())
+            .find(|p| p.extension().is_some_and(|x| x == "json")).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&std::fs::read(report).unwrap()).unwrap();
+        assert_eq!(value["answers"].as_array().unwrap().len(), 1);
+        assert_eq!(value["answers"][0]["summary"], "");
+        assert!(value["answers"][0]["failures"][0].as_str().unwrap().starts_with("generation failed:"));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -206,5 +233,9 @@ mod tests {
         assert!(failures(valid, checks).is_empty());
         assert!(!failures(&valid.replace("Ship on Wednesday.", "None"), checks).is_empty());
         assert!(!failures(&valid.replace("Should there be two failure criteria?", "What are the two failure criteria?"), checks).is_empty());
+        let checks = &cases.iter().find(|c| c.id == "zh-guess-stays-open").unwrap().checks;
+        let wrong = "### 结论\n失败标准应包含两项\n部署定于本周三上线\n### 决定\n无\n### 待讨论\n失败标准具体有哪些？";
+        assert!(!failures(wrong, checks).is_empty());
+        assert!(failures(&wrong.replace("失败标准应包含两项\n", ""), checks).is_empty());
     }
 }

@@ -1,4 +1,4 @@
-# Summary and template acceptance — 2026-11-11
+# Summary and template acceptance — 2026-11-12
 
 `boardcast-tools summary-eval <root> [--llm <url> | --deepseek] [--cases path] [--repeat N] [--label name]`
 uses the production summary path on the synthetic meetings in `summary-cases.json`. It writes every resulting
@@ -15,7 +15,42 @@ template topic is an agenda, not evidence of discussion; only discussed topics b
 removes empty template placeholders from all four sections and deduplicates within a section, so a fact repeated
 as a decision survives. Nonempty topic subsections are retained.
 
-## Large local summaries
+## Output handling and longer transcripts
+
+The latest follow-up rejects a nonempty reply with `finish_reason: length` instead of merging incomplete notes
+or saving a cut-off summary. Empty reasoning-only replies retain their existing bounded retry. A generation
+error now stays in the evaluation's JSON and Markdown report, with a failed command status. The app's existing
+error path keeps the prior summary. This detects a failed generation; it does not recover the missing text.
+
+Model-produced list items under To-dos now receive checkboxes when omitted, retaining text, indentation and
+existing completion state. `None`/`无` placeholders and other sections do not become tasks. Empty main headings
+also receive their placeholder when no meeting template is used. These fixes passed 48 agent and 13 tools
+tests, the UI compile check, and a fresh model control containing Nora's Wednesday task.
+
+The final short suite remains **12/15**. Two new [long-transcript cases](summary-long-transcript-cases.json),
+split into four Chinese and seven English fragments, are **0/2**. The Chinese result places the agreed Thursday
+launch only in Conclusions. English loses the completed migration and Sam's Tuesday task, and invents unresolved
+owners. Run them separately from the default short CI suite:
+
+```sh
+cargo run --release -p boardcast-tools -- summary-eval . \
+  --cases eval/summary-long-transcript-cases.json --llm http://127.0.0.1:18765 --label long-transcript
+```
+
+[Frozen reports, raw replies, source hashes and rejected probes](summary-output-2026-11-12.json) record two
+attempts to make partial notes more faithful. One emitted cut-off lists; the other lost completed facts and
+downgraded confirmed ten-minute retention to tentative. Both were reverted. A separate four-case self-review
+probe passed only **1/4**, introducing a false Chinese two-item assertion; no second model pass was added.
+The Chinese quantity checker now catches that observed wording. The longer checks were also strengthened after
+manual review; source utterances were unchanged, and both frozen baseline and candidate score **0/2** when rescored.
+The final production prompts and sampler are unchanged from `f356e5a`.
+
+All 110 captured requests fit the measured input/output budget; four responses in the rejected experiment still
+hit their output limit. Context fit alone does not prove that a response finished. The final source made 29 model
+calls with normal stop reasons, including the fifteen short cases, two long cases and checkbox control. These
+synthetic tests do not establish real-meeting reliability; #68 remains open.
+
+## Large local summaries (2026-11-11)
 
 Twelve boards with forty checks each reproduced a real local-server error: **10,891 prompt tokens exceeded
 the 4,096-token context**, even with the old 1,500-character cutoff on every board. That cutoff also silently
@@ -53,17 +88,20 @@ add limits on inferring unseen context, group numbers and totals.
 
 ## Measured result
 
-The latest completed CI text job, on the expanded 15-case suite at `5e79a53`, is **36/45**. The Chinese Wednesday
+The latest completed CI text job, on the expanded 15-case suite at `f356e5a`, is **36/45**. The Chinese Wednesday
 deployment, English unconfirmed quantity and Chinese Monday rehearsal each fail all three repetitions. Both
 template cases pass 6/6. [All 45 outputs and hashes](summary-ci-expanded-2026-11-11.json) are retained from
 [the earlier run](https://github.com/HsiangNianian/boardcast/actions/runs/43036127338); the artifact also records
-[the follow-up](https://github.com/HsiangNianian/boardcast/actions/runs/43042362889), whose outputs and failures
-are identical, with separate durations and report hash. This does not imply that the whole Eval workflow passed.
+[the follow-up](https://github.com/HsiangNianian/boardcast/actions/runs/43042362889) and
+[the context-budget run](https://github.com/HsiangNianian/boardcast/actions/runs/43051546186). All 45 outputs and
+failures are identical across these runs, with separate durations and report/source hashes. This does not imply
+that the whole Eval workflow passed.
 The original twelve cases score 30/36 and the new three 6/9; the earlier English CI pass was not stable.
-These two CI runs share source/case hashes and the model hash matches the frozen local model, but identical
-runtime conditions are not established. They precede the context-budget change below.
-The English answered-question output also leaves empty headings instead of `None`; the score above checks
-semantics, not every presentation rule. #68 remains open.
+The latest source hashes reflect the context-budget change; its short inputs use the same final prompts.
+Model hashes match the frozen local model, but identical runtime conditions are not established. These runs
+precede the output-handling and checker follow-up above. The historical English answered-question output leaves
+empty headings instead of `None`; that presentation defect is fixed above without changing its facts. The score
+checks semantics, not every presentation rule. #68 remains open.
 
 Twelve cases, three runs per model, using the production source before the cleanup follow-up below. Full outputs, checks and provenance are in
 [`summary-2026-11-11.json`](summary-2026-11-11.json). The initial keyword checks reported 36/36 for both models;

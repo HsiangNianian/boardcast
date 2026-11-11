@@ -100,7 +100,11 @@ impl Provider {
             }
         };
         let reply = self.send(&self.endpoint(), &body)?;
-        Ok(strip_thinking(message(&reply)?).to_string())
+        let text = strip_thinking(message(&reply)?);
+        if !text.is_empty() && reply["choices"][0]["finish_reason"] == "length" {
+            bail!("The model's reply reached its output limit before it finished.");
+        }
+        Ok(text.to_string())
     }
 
     fn context_size(&self) -> Result<Option<usize>> {
@@ -895,6 +899,23 @@ mod tests {
 
     fn remote(base: String) -> Provider {
         Provider::Remote { base_url: base, key: "sk-secret-123".into(), model: "m".into() }
+    }
+
+    #[test]
+    fn a_cut_off_summary_is_not_accepted_but_empty_reasoning_can_retry() {
+        for local in [false, true] {
+            for (body, truncated) in [
+                (r#"{"choices":[{"message":{"content":"- Finish the"},"finish_reason":"length"}]}"#, true),
+                (r#"{"choices":[{"message":{"content":"- Finish the guide."},"finish_reason":"stop"}]}"#, false),
+                (r#"{"choices":[{"message":{"content":"","reasoning_content":"Still thinking"},"finish_reason":"length"}]}"#, false),
+            ] {
+                let base = serve("200 OK", "application/json", body);
+                let provider = if local { Provider::Local { base } } else { remote(base) };
+                let reply = provider.chat(&[json!({"role":"user","content":"Summarize."})], 600);
+                if truncated { assert!(reply.unwrap_err().to_string().contains("output limit")); }
+                else { assert_eq!(reply.unwrap(), message(&serde_json::from_str::<Value>(body).unwrap()).unwrap()); }
+            }
+        }
     }
 
     #[test]

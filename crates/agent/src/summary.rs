@@ -229,7 +229,6 @@ fn messages(boards: &[Graph], said: &str, partial: bool, english: bool) -> Vec<V
 
 /// An unused template topic sometimes survives as a heading followed only by "None".
 fn no_empty_topics(text: &str, topics: &[String], english: bool) -> String {
-    if topics.is_empty() { return text.to_string(); }
     let rows: Vec<&str> = text.lines().collect();
     let mut out = vec![];
     let mut i = 0;
@@ -310,7 +309,18 @@ pub fn tidy(text: &str, english: bool) -> String {
             out.push_str(&format!("\n\n### {section}\n- {}", w.none));
         }
     }
-    out.trim().to_string()
+    let mut section = "";
+    out.trim().lines().map(|line| {
+        if let Some(name) = line.strip_prefix("### ") { section = name; }
+        if section == w.sections[2] && BULLET.is_match(line) && !DONE.is_match(line) && !OPEN.is_match(line) {
+            let content = BULLET.replace(line, "");
+            let content = content.trim().trim_end_matches(['.', '。']);
+            if !content.is_empty() && !content.eq_ignore_ascii_case(w.none) {
+                return BULLET.replace(line, "${1}- [ ] ").into_owned();
+            }
+        }
+        line.to_string()
+    }).collect::<Vec<_>>().join("\n")
 }
 
 static ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b([ng]\d+)\b(?:\s*[(（]([^)）\n]*)[)）])?").expect("valid"));
@@ -609,6 +619,31 @@ mod tests {
         let text = "### 结论\n- 发布没有停机。\n### 决定\n#### 预算\n无\n### 待办\n#### 要改进的\n- [ ] 小王补上告警测试。\n#### 预算\n- 无\n### 待讨论\n#### 预算\n无";
         let cleaned = no_empty_topics(text, &topics, false);
         assert_eq!(cleaned, "### 结论\n- 发布没有停机。\n### 决定\n- 无\n### 待办\n#### 要改进的\n- [ ] 小王补上告警测试。\n### 待讨论\n- 无");
+    }
+
+    #[test]
+    fn plain_todo_bullets_are_tickable_and_empty_sections_are_not_tasks() {
+        for english in [false, true] {
+            let w = words(english);
+            let text = format!("### {}\n\n### {}\n\n### {}\n  * Nora: Wednesday guide\n- [x] Earlier task\n- {}.\n\n### {}\n- Is rollback needed?",
+                w.sections[0], w.sections[1], w.sections[2], w.none, w.sections[3]);
+            let cleaned = no_empty_topics(&tidy(&text, english), &[], english);
+            for section in &w.sections[..2] {
+                assert!(cleaned.contains(&format!("### {section}\n- {}", w.none)));
+            }
+            let read = blocks(&cleaned);
+            let tasks: Vec<_> = read.iter().filter_map(|b| match b {
+                Block::Todo { done, text, line } => Some((*done, text.as_str(), *line)),
+                _ => None,
+            }).collect();
+            assert_eq!(tasks.len(), 2, "None is not work");
+            assert_eq!(tasks[0].1, "Nora: Wednesday guide");
+            assert!(!tasks[0].0 && tasks[1].0);
+            let ticked = toggle_todo(&cleaned, tasks[0].2);
+            assert!(ticked.contains("  - [x] Nora: Wednesday guide"));
+            assert_eq!(toggle_todo(&ticked, tasks[0].2), cleaned);
+            assert!(read.contains(&Block::Bullet("Is rollback needed?".into())));
+        }
     }
 
     #[test]

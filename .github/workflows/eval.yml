@@ -84,6 +84,8 @@ jobs:
       # eval/revisions.json waits for them (#150).
       - run: target/release/boardcast-tools agent-eval . board-dev.json --llm http://127.0.0.1:8080 --set dev --label "$LABEL"
       - run: target/release/boardcast-tools agent-eval . board-pointing.json --llm http://127.0.0.1:8080 --set pointing --label "$LABEL"
+      - name: Summary certainty and template topics
+        run: target/release/boardcast-tools summary-eval . --llm http://127.0.0.1:8080 --label "$LABEL" --repeat 3
 
       - uses: actions/upload-artifact@v6
         if: always()
@@ -117,6 +119,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: asr-linux
+      # rust-cache keeps build-script outputs but not sherpa-onnx-prebuilt; force native discovery again.
+      - run: cargo clean -p sherpa-onnx-sys
       - run: python3 eval/asr/own-voice/test_record.py
       - run: cargo test -p boardcast-asr-eval
       - run: cargo build --release -p boardcast-asr-eval
@@ -156,6 +160,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: asr-linux
+      # rust-cache keeps build-script outputs but not sherpa-onnx-prebuilt; force native discovery again.
+      - run: cargo clean -p sherpa-onnx-sys
       - run: cargo build --release -p boardcast-asr-eval
       - uses: actions/download-artifact@v7
         with:

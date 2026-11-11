@@ -89,13 +89,13 @@ Linux 安装版启动后不久会检查新版本，在后台安装，等你重�
 
 ### 线上会议和录音
 
-在**设置 › 语音 › 收音来源**里选择麦克风；在 Linux 上也可以选播放会议声音的扬声器或耳机对应的 **Monitor of …** 输入，这样就能收到线上会议里对方的声音，或者播放器里正在放的录音。一次只收一个来源。在 Mac 上，任何安装包都可以在同一处改用 Apple 自带的识别器。
+在**设置 › 语音 › 收音来源**里选择麦克风；在 Linux 上也可以选播放会议声音的扬声器或耳机对应的 **Monitor of …** 输入，这样就能收到线上会议里对方的声音，或者播放器里正在放的录音。v0.27.0 安装包一次只收一个来源。在 Mac 上，任何安装包都可以在同一处改用 Apple 自带的识别器。
 
-### 现在的应用还没有
+### 发布状态和剩余工作
 
-同时收麦克风和系统声音、macOS 的系统声音（[#34](https://github.com/HsiangNianian/boardcast/issues/34)）、全局收音快捷键和诊断包还没有迁回新版。Excalidraw 自由编辑和导出已从 GPUI 版移除。
+[#206](https://github.com/HsiangNianian/boardcast/pull/206) 恢复了 Mac 麦克风、系统及双路收音，增加两路独立的 Apple 语言选择和有限容量的收音诊断。这些尚未进入 v0.27.0；真实 Mac 的授权、双路转写和长会仍需按[验收计划](eval/macos/README.md)核对。「系统语言」跟随操作系统，不是自动检测正在说的语言。全局收音快捷键和完整诊断包仍未迁回。Excalidraw 自由编辑和导出已从 GPUI 版移除。
 
-相对最新正式版 **v0.27.0**，`main` 还增加了 PDF 选页导入（[#202](https://github.com/HsiangNianian/boardcast/pull/202)）和单句改说话人（[#201](https://github.com/HsiangNianian/boardcast/pull/201)）；这两项尚未进入该版本的安装包。改单句暂不修改对应板书内容的归属，声纹也只在会议打开期间保留。
+相对最新正式版 **v0.27.0**，`main` 还增加了 PDF 选页导入（[#202](https://github.com/HsiangNianian/boardcast/pull/202)）和单句改说话人（[#201](https://github.com/HsiangNianian/boardcast/pull/201)）；这两项尚未进入该版本的安装包。改单句暂不修改对应板书内容的归属，说话人的声纹统计会随会议保存；逐句声纹只在会议打开期间保留，因此重新打开后改旧句子无法重算对应的声纹统计。
 
 ## 快捷键
 
@@ -157,6 +157,8 @@ sh packaging/linux/package.sh           # target/package/boardcast-<version>-<ar
 | [`eval/holdout.json`](eval/holdout.json) | 27 场会 | 不参与提示词调整的留出集 |
 | [`eval/pointing.json`](eval/pointing.json) | 18 个用例 | 中英文圈着说，起始板固定 |
 | [`eval/revisions.json`](eval/revisions.json) | 3 个用例 | 转写修订，必须保留节点身份和无关内容；等 GPUI 版支持转写修订后再跑 |
+
+摘要可信度和模板结构使用[重复模型评测](eval/summary.md)。术语表实录对照从[自己的录音](eval/asr/own-voice/README.md)开始；Mac 长会和目标用户试用分别使用[验收计划](eval/macos/README.md)及[试用材料](docs/trials/README.md)。
 
 先启动可用的 llama-server，然后运行：
 

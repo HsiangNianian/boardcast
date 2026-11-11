@@ -89,13 +89,13 @@ Exports always use marker on white paper, whatever the window's theme.
 
 ### Online meetings and recordings
 
-In **Settings › Speech › Listen to**, choose a microphone or, on Linux, the **Monitor of …** input of the speakers or headphones that play the meeting. That is how the other side of an online call, or a recording playing in a media player, is heard. One input is heard at a time. On a Mac, any package can use Apple's own recognizer instead, from the same section.
+In **Settings › Speech › Listen to**, choose a microphone or, on Linux, the **Monitor of …** input of the speakers or headphones that play the meeting. That is how the other side of an online call, or a recording playing in a media player, is heard. The v0.27.0 packages hear one input at a time. On a Mac, any package can use Apple's own recognizer instead, from the same section.
 
-### Not in this app yet
+### Release status and remaining work
 
-Hearing the microphone and system audio together, system audio on macOS ([#34](https://github.com/HsiangNianian/boardcast/issues/34)), a global microphone shortcut and the diagnostics bundle have not been rebuilt yet. Excalidraw free editing and export were dropped from the GPUI app.
+The changes in [#206](https://github.com/HsiangNianian/boardcast/pull/206) restore Mac microphone/system/both capture with separate Apple language choices and bounded audio diagnostics. They are not in v0.27.0; real Mac permissions, two-source transcription and long meetings still need [acceptance](eval/macos/README.md). “System language” follows the OS locale, not automatic spoken-language detection. A global microphone shortcut and the full diagnostics bundle are still outstanding. Excalidraw free editing and export were dropped from the GPUI app.
 
-Compared with the latest release, **v0.27.0**, `main` also has PDF page selection ([#202](https://github.com/HsiangNianian/boardcast/pull/202)) and changing the speaker of one transcript line ([#201](https://github.com/HsiangNianian/boardcast/pull/201)); these are not in that release's packages. Reassigning a line does not yet change ownership of its board content, and voiceprints are retained only while the meeting is open.
+Compared with the latest release, **v0.27.0**, `main` also has PDF page selection ([#202](https://github.com/HsiangNianian/boardcast/pull/202)) and changing the speaker of one transcript line ([#201](https://github.com/HsiangNianian/boardcast/pull/201)); these are not in that release's packages. Reassigning a line does not yet change ownership of its board content, and voice statistics persist in the meeting file. Individual sentence voiceprints are kept only while the meeting is open, so reassigning an older line cannot recalculate its voice statistics after reopening.
 
 ## Shortcuts
 
@@ -153,7 +153,7 @@ Everything is Rust, the website included: it is built with [Trunk](https://trunk
 
 | Set | Current size | Purpose |
 |---|---|---|
-| [`eval/cases.json`](eval/cases.json) | 28 meetings | Development and regression, including English and a real-meeting regression |
+| [`eval/cases.json`](eval/cases.json) | 30 meetings | Development and regression, including English, pre-filled templates and a real-meeting regression |
 | [`eval/holdout.json`](eval/holdout.json) | 27 meetings | Held out from prompt tuning |
 | [`eval/pointing.json`](eval/pointing.json) | 18 cases | Chinese and English pointing cases with fixed starting boards |
 | [`eval/revisions.json`](eval/revisions.json) | 3 cases | Transcription revisions that must keep node identity and unrelated content; not run until the GPUI app revises transcripts |
@@ -165,6 +165,8 @@ cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://1
 cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set holdout --label my-model
 cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
 ```
+
+Summary confidence and template structure have [repeatable model checks](eval/summary.md). Real microphone glossary comparisons use the [own-voice recorder](eval/asr/own-voice/README.md); real Mac measurements and the target-user trial use [the acceptance plan](eval/macos/README.md) and [trial kit](docs/trials/README.md).
 
 Speech recognition has its own suites:
 

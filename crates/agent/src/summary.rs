@@ -47,8 +47,8 @@ const ZH: Words = Words {
     too_long: "会议记录太长，下面是逐段记下的要点：",
     partial: "你在帮人整理会议记录。这是一场长会议中的一段，记下这一段里的要点：说了什么结论、定了什么、谁要做什么、还有什么没定。每条一行，以「- 」开头。",
     system: "你在帮人写会议摘要。",
-    facts: "保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：待办不写负责人括号。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。",
-    rules: "只根据给出的内容写，不要编造；没有的部分写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办写成「- [ ] 事情（负责人：某某）」，没提到负责人就不写括号。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：",
+    facts: "保留原话的主体、否定和进展，区分已有成果与后续工作。\n只把明确达成的共识列为决定，把建议、希望和未定事项放在待讨论。\n结论和决定只写会上确认过的事；只是猜测的（「应该……吧」「是不是……」），哪怕说的是数量或标准，也只写进待讨论。\n一个问题后面有人回答、大家接受了（如「之后怎么办？」「就缩小字号」「好」），就把答案写进结论或决定，这个问题从待讨论里去掉，也不要换个说法再问一遍。\n只是「也许」「可能」「得验证一下」的回答不算定下来：这个问题照原样留在待讨论，可写上提到的办法。\n会上明确同意要做的选择（「同意」「就用」「改用」「定了」）写进决定，撤回的方案不写成决定。\n只把明确承诺或分配的工作列为待办，保留已说明的负责人和日期，不自行补充。说话人是 A、B、C 这样的字母时，那是自动编号，不是人名：摘要不把字母当成人名；待办仍完整保留事情和已说明的截止时间，只去掉负责人。\n只总结会议记录（或分段笔记）与白板文字中明确写出的事实，包括手动修正和批注；不从划线等标记推测决定。\n按发言顺序处理确认、否定和撤回；较晚的明确回答优先于白板上的旧说法。问题只回答了一部分时，记录已确认的部分，剩余部分仍放待讨论。例如：已确认周五发布，但上线负责人下次讨论，应写决定「周五发布」、待讨论「上线负责人是谁」，不能只写待办「确定上线负责人」而清空待讨论。未确定的事项不自动变成待办，当场已经做过的操作也不变成会后任务。",
+    rules: "只根据给出的内容写，不要编造；下面四个主栏目没有内容时写「无」。\n用简体中文，每条一行，以「- 」开头，简短。\n待办每条以「- [ ] 」开头，保留事情、已说明的截止时间和明确的人名；发言编号不写成负责人。没有时间或人名就省略，不填代称。\n只在记录明确标注「第 N 张板」时引用板号，不把不同话题当成不同板。\n严格按下面的格式输出，不要别的话：",
 };
 
 const EN: Words = Words {
@@ -65,8 +65,8 @@ const EN: Words = Words {
     too_long: "The transcript is too long; these are the notes taken part by part:",
     partial: "You are helping someone tidy up meeting notes. This is one part of a long meeting; note its key points: conclusions reached, what was decided, who will do what, and what is still open. One point per line, starting with '- '.",
     system: "You are helping someone write a meeting summary.",
-    facts: "Preserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: give such to-dos no owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.",
-    rules: "Write only from what is given, never make things up; write \"None\" for an empty section.\nWrite in English, one short point per line, starting with \"- \".\nWrite to-dos as \"- [ ] task (owner: name)\"; leave out the parentheses if no owner was mentioned.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:",
+    facts: "Preserve subjects, negations and progress; distinguish existing work from future work.\nPut only explicit agreements in Decisions; keep suggestions, hopes and unresolved matters under Open questions.\nConclusions and Decisions hold only what the meeting confirmed; a guess (\"it should be two, right?\"), even about a number or a criterion, goes under Open questions.\nA question that is answered and accepted later in the meeting (\"what then?\" \"then we shrink the font\" \"good\") is settled: put the answer under Conclusions or Decisions and leave the question out of Open questions, not even reworded.\nAn answer given as a maybe (\"perhaps\", \"we could\", \"needs checking\") settles nothing: keep the question as asked under Open questions, with the idea mentioned.\nA choice the meeting explicitly agreed on (\"agreed\", \"let's go with\", \"we'll use\") goes under Decisions; a withdrawn plan is no decision.\nList only explicitly promised or assigned work as To-dos, retaining stated owners and dates without inventing them. Speakers named by a single letter such as A, B or C are numbered automatically, not named: never use those letters as people's names in the summary. Keep the entire task and its stated deadline, omitting only the owner.\nUse explicitly stated facts from the transcript (or its notes) and whiteboard text, including manual corrections and annotations; do not infer decisions from marks such as strikethroughs.\nFollow the order of the transcript through confirmations, denials and withdrawals; a later explicit answer takes precedence over an older board statement. A partial answer settles only that part: keep the unanswered part under Open questions. For example, if Friday is agreed for launch but its owner is left for the next discussion, Decisions says \"Launch on Friday\" and Open questions asks \"Who owns the launch?\"; a To-do to choose the owner cannot replace that open question. An unresolved question is not automatically a To-do, nor is an action already done during the meeting.",
+    rules: "Write only from what is given, never make things up; write \"None\" only for an empty main section among the four below.\nWrite in English, one short point per line, starting with \"- \".\nStart each To-do with \"- [ ] \", retaining the task, its stated deadline and explicitly named people. Omit missing dates or names; do not substitute speaker numbers or unnamed roles.\nMention a board number only when explicitly labeled in the source; do not infer board numbers from topics.\nOutput exactly the format below and nothing else:",
 };
 
 fn words(english: bool) -> &'static Words {
@@ -136,6 +136,7 @@ fn to_base36(mut n: u32) -> String {
     digits.iter().rev().collect()
 }
 
+// Automatic speaker letters are not names. Leave them out of the model input, keeping the saved transcript intact.
 fn transcript(lines: &[Line], english: bool) -> String {
     let w = words(english);
     let many = lines.iter().map(|l| l.page).collect::<HashSet<_>>().len() > 1;
@@ -146,7 +147,8 @@ fn transcript(lines: &[Line], english: bool) -> String {
             page = Some(l.page);
             out.push((w.page_mark)(l.page + 1));
         }
-        out.push(l.speaker.as_ref().map_or_else(|| l.text.clone(), |s| format!("{s}{}{}", w.colon, l.text)));
+        let text = l.speaker.as_ref().filter(|s| !(s.len() == 1 && s.as_bytes()[0].is_ascii_uppercase())).map_or_else(|| l.text.clone(), |s| format!("{s}{}{}", w.colon, l.text));
+        out.push(format!("> {}", text.replace('\n', "\n> ")));
     }
     out.join("\n")
 }
@@ -177,7 +179,10 @@ fn board_text(g: &Graph) -> String {
         touched.insert(&e.from);
         touched.insert(&e.to);
     }
+    let topics = template_topics(std::slice::from_ref(g));
     let mut out = g.clone();
+    // Blank template topics are an agenda, not statements made in the meeting.
+    out.nodes.retain(|n| !(n.kind == Kind::Topic && topics.contains(&n.label) && n.marks.is_empty() && !touched.contains(n.id.as_str())));
     out.nodes.retain(|n| n.kind != Kind::Region || !n.marks.is_empty() || n.extra.get("spans").and_then(Value::as_array).is_some_and(|s| !s.is_empty()) || touched.contains(n.id.as_str()));
     out.describe()
 }
@@ -217,19 +222,49 @@ fn template_rule(topics: &[String], english: bool) -> Option<String> {
         return None;
     }
     Some(if english {
-        format!("This meeting follows a template with the topics {}. Under Conclusions, give each topic that was discussed its own part, starting with \"#### topic\"; leave out topics nobody spoke to.", topics.join(" / "))
+        format!("Keep the four sections above. Within Conclusions, group the confirmed facts under this meeting's template topics: {}. Write each discussed topic as a separate heading line \"#### topic\", followed by its facts on separate bullet lines. A topic's name on the board alone is not evidence it was discussed. Omit undiscussed topics from every section, including Open questions, headings and empty placeholders.", topics.join(" / "))
     } else {
-        format!("这场会按模板开，话题是：{}。「结论」里按这些话题分小节，每个小节以「#### 话题」开头；没人说到的话题不写。", topics.join(" / "))
+        format!("保留上面的四个栏目。这场会按模板开，话题是：{}。仅在「结论」里，将已确认的事实按讨论过的话题分小节。每个「#### 话题」必须独占一行，事实另起一行以「- 」开头。板上只有话题名称不算讨论过；没讨论过的话题在任何栏目都不要写，不要凭模板添加待讨论事项，也不要填「无」。", topics.join(" / "))
     })
 }
 
 fn messages(boards: &[Graph], said: &str, partial: bool, english: bool) -> Vec<Value> {
     let w = words(english);
-    let structure = template_rule(&template_topics(boards), english).map_or_else(String::new, |r| format!("{r}\n"));
-    let rules = format!("{structure}{}\n{}", w.rules, w.sections.map(|s| format!("### {s}")).join("\n"));
+    let structure = template_rule(&template_topics(boards), english).map_or_else(String::new, |r| format!("\n{r}"));
+    let rules = format!("{}\n{}{structure}", w.rules, w.sections.map(|s| format!("### {s}")).join("\n"));
     let system = if partial { format!("{}\n{}", w.partial, w.facts) } else { format!("{}\n{}\n{rules}", w.system, w.facts) };
     let user = if partial { format!("{}\n{said}", w.fragment) } else { format!("{}\n{}\n\n{said}", w.board_intro, boards_text(boards, english)) };
     vec![json!({ "role": "system", "content": system }), json!({ "role": "user", "content": user })]
+}
+
+/// An unused template topic sometimes survives as a heading followed only by "None".
+fn no_empty_topics(text: &str, topics: &[String], english: bool) -> String {
+    if topics.is_empty() { return text.to_string(); }
+    let rows: Vec<&str> = text.lines().collect();
+    let heading = format!("### {}", words(english).sections[0]);
+    let mut conclusions = false;
+    let mut out = vec![];
+    let mut i = 0;
+    while i < rows.len() {
+        let line = rows[i];
+        if line.starts_with("### ") { conclusions = line == heading; }
+        if conclusions && line.strip_prefix("#### ").is_some_and(|t| topics.iter().any(|topic| topic == t.trim())) {
+            let end = (i + 1..rows.len()).find(|&j| rows[j].starts_with('#')).unwrap_or(rows.len());
+            if rows[i + 1..end].iter().all(|l| matches!(l.trim(), "" | "None" | "- None" | "无" | "- 无")) {
+                i = end;
+                continue;
+            }
+        }
+        out.push(line);
+        i += 1;
+    }
+    if let Some(start) = out.iter().position(|l| *l == heading) {
+        let end = (start + 1..out.len()).find(|&j| out[j].starts_with("### ")).unwrap_or(out.len());
+        if out[start + 1..end].iter().all(|l| l.trim().is_empty()) {
+            out.insert(start + 1, if english { "- None" } else { "- 无" });
+        }
+    }
+    out.join("\n")
 }
 
 static HEADING: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*(?:#{1,6}\s*)?(?:\*\*|【)?\s*(结论|决定|待办|待办事项|待讨论)\s*(?:\*\*|】)?\s*[:：]?\s*(?:\*\*)?\s*$").expect("valid"));
@@ -425,11 +460,13 @@ pub enum Step {
 /// lines may repeat, and only list items and sentences of some length count, as `- 无` can fairly recur.
 fn drop_repeated_lines(text: &str) -> String {
     let mut seen = std::collections::HashSet::new();
+    let mut section = String::new();
     let kept: Vec<&str> = text
         .split('\n')
         .filter(|line| {
             let line = line.trim();
-            line.starts_with('#') || line.chars().count() < 8 || seen.insert(line.to_string())
+            if line.starts_with('#') { section = line.to_string(); return true; }
+            line.chars().count() < 8 || seen.insert((section.clone(), line.to_string()))
         })
         .collect();
     kept.join("\n")
@@ -478,7 +515,7 @@ pub fn summarize(provider: &Provider, boards: &[Graph], lines: &[Line], cancel: 
     let total = if parts.len() > 1 { parts.len() + 1 } else { 1 };
     progress(Step::Writing { done: total - 1, total });
     let reply = ask(provider, &messages(boards, &said, false, english), if remote { 4096 } else { 1024 }, cancel)?;
-    let tidied = no_letter_owners(&name_ids(&tidy(&reply, english), boards));
+    let tidied = no_empty_topics(&no_letter_owners(&name_ids(&tidy(&reply, english), boards)), &template_topics(boards), english);
     if tidied.is_empty() {
         bail!("The model returned no summary.");
     }
@@ -496,6 +533,43 @@ mod tests {
 
     fn lines_of(v: &Value) -> Vec<Line> {
         Line::spoken(v.as_array().unwrap())
+    }
+
+    #[test]
+    fn only_empty_template_placeholders_are_removed() {
+        let topics = vec!["Latency".into(), "Hiring".into()];
+        let text = "### Conclusions\n#### Latency\n- No alerts fired.\n#### Hiring\n- None\n\n### Decisions\n- None";
+        let cleaned = no_empty_topics(text, &topics, true);
+        assert!(cleaned.contains("#### Latency\n- No alerts fired."));
+        assert!(!cleaned.contains("#### Hiring"));
+        assert!(cleaned.contains("### Decisions\n- None"));
+        assert_eq!(no_empty_topics("### Conclusions\n#### Hiring\n- None", &topics, true), "### Conclusions\n- None");
+        assert_eq!(no_empty_topics(text, &[], true), text);
+        let real = text.replace("#### Hiring\n- None", "#### Hiring\n- No hiring this quarter.");
+        assert_eq!(no_empty_topics(&real, &topics, true), real);
+    }
+
+    #[test]
+    fn repeated_facts_in_different_sections_do_not_empty_a_decision() {
+        let text = "### Conclusions\n- Cache lifetime is ten minutes.\n### Decisions\n- Cache lifetime is ten minutes.\n- Cache lifetime is ten minutes.";
+        assert_eq!(drop_repeated_lines(text), "### Conclusions\n- Cache lifetime is ten minutes.\n### Decisions\n- Cache lifetime is ten minutes.");
+    }
+
+    #[test]
+    fn a_blank_template_is_not_evidence_of_discussion() {
+        let mut graph: Graph = serde_json::from_value(json!({"nodes":[{"id":"n1","kind":"topic","label":"Budget"}],"template":["Budget"]})).unwrap();
+        assert!(!board_text(&graph).contains("Budget"));
+        graph.nodes[0].marks.push("confirmed".into());
+        assert!(board_text(&graph).contains("Budget"));
+    }
+
+    #[test]
+    fn summary_input_omits_automatic_letters_but_keeps_names_dates_and_source_lines() {
+        let source = json!([{"speaker":"A","text":"我周五前写接口文档。"},{"speaker":"小王","text":"我周四补测试。"}]);
+        let lines = Line::spoken(source.as_array().unwrap());
+        assert_eq!(transcript(&lines, false), "> 我周五前写接口文档。\n> 小王：我周四补测试。");
+        assert_eq!(lines[0].speaker.as_deref(), Some("A"));
+        assert_eq!(lines[0].text, "我周五前写接口文档。");
     }
 
     #[test]
@@ -544,7 +618,7 @@ mod tests {
     }
 
     #[test]
-    fn everything_matches_the_typescript_engine_on_recorded_meetings() {
+    fn recorded_meetings_keep_their_fingerprints_and_current_summary_inputs() {
         let g = goldens();
         let cases = g["summaries"].as_array().unwrap();
         assert!(cases.len() >= 20);

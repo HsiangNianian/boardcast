@@ -10,6 +10,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'assets/demos/**'
+      - 'eval/macos/**'
       - '.github/workflows/rust.yml'
   pull_request:
     paths:
@@ -19,6 +20,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'assets/demos/**'
+      - 'eval/macos/**'
       - '.github/workflows/rust.yml'
 
 jobs:
@@ -30,6 +32,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # The window and audio crates run their tests in the package jobs, with native libraries installed.
+      - run: python3 eval/macos/test_watch.py
       - run: cargo run -q -p boardcast-tools -- fetch pdfium
       - run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-export -p boardcast-import -p boardcast-update -p boardcast-tools
       - name: Check the recorded boards for layout defects
@@ -104,6 +107,8 @@ jobs:
       - run: sh packaging/macos/package.sh
         env:
           VARIANTS: all none
+      - name: Check the Mac measurement tool against the runner process
+        run: python3 eval/macos/watch.py --pid $$ --minutes 0.01
       - name: Core crates and speech, with the packaged models
         run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-audio
         env:

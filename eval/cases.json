@@ -2219,5 +2219,141 @@
         }
       ]
     }
+  },
+  {
+    "id": "template-zh-retro",
+    "name": "Pre-filled template topics receive the matching items",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "kind": "topic",
+          "label": "做得好的"
+        },
+        {
+          "id": "n2",
+          "kind": "topic",
+          "label": "要改进的"
+        },
+        {
+          "id": "n3",
+          "kind": "topic",
+          "label": "行动项"
+        }
+      ],
+      "template": [
+        "做得好的",
+        "要改进的",
+        "行动项"
+      ],
+      "nextNode": 4
+    },
+    "turns": [
+      {
+        "text": "做得好的方面，这次发布零停机。"
+      },
+      {
+        "text": "要改进的方面，告警太晚。"
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "做得好的"
+          ],
+          "items": [
+            [
+              "零停机"
+            ]
+          ]
+        },
+        {
+          "title": [
+            "要改进的"
+          ],
+          "items": [
+            [
+              "告警太晚"
+            ]
+          ]
+        },
+        {
+          "title": [
+            "行动项"
+          ],
+          "items": []
+        }
+      ]
+    }
+  },
+  {
+    "id": "template-en-custom",
+    "name": "Pre-filled template topics receive the matching items",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "kind": "topic",
+          "label": "Latency"
+        },
+        {
+          "id": "n2",
+          "kind": "topic",
+          "label": "Rollout"
+        },
+        {
+          "id": "n3",
+          "kind": "topic",
+          "label": "Hiring"
+        }
+      ],
+      "template": [
+        "Latency",
+        "Rollout",
+        "Hiring"
+      ],
+      "nextNode": 4
+    },
+    "turns": [
+      {
+        "text": "For Latency, p95 latency is 80 milliseconds."
+      },
+      {
+        "text": "For Rollout, the canary completed."
+      }
+    ],
+    "gold": {
+      "topics": [
+        {
+          "title": [
+            "Latency"
+          ],
+          "items": [
+            [
+              "80 milliseconds",
+              "80 ms"
+            ]
+          ]
+        },
+        {
+          "title": [
+            "Rollout"
+          ],
+          "items": [
+            [
+              "canary completed",
+              "canary"
+            ]
+          ]
+        },
+        {
+          "title": [
+            "Hiring"
+          ],
+          "items": []
+        }
+      ]
+    }
   }
 ]

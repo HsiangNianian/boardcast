@@ -88,10 +88,10 @@ nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 
 .nav-item:hover .pict .s, .card:hover .pict .s { stroke: var(--grey); }
 
 /* ———————————————— the drawing sheet around everything ———————————————— */
-.frame { position: fixed; inset: 12px; z-index: 30; pointer-events: none; border: 1px solid var(--hair); box-shadow: 0 0 0 12px var(--bg); }
+.frame { position: fixed; inset: 12px; z-index: 30; pointer-events: none; border: 1px solid var(--hair); }
 .ruler { position: absolute; font: 400 9px var(--mono); color: var(--faint); }
-.ruler.top { left: 0; right: 0; top: 0; z-index: 1; height: 20px; border-bottom: 1px solid var(--hair); background: repeating-linear-gradient(90deg, var(--hair) 0 1px, transparent 1px calc(100% / 48)) 0 0 / 100% 5px no-repeat var(--bg); }
-.ruler.left { top: 0; bottom: 0; left: 0; width: 24px; border-right: 1px solid var(--hair); background: repeating-linear-gradient(180deg, var(--hair) 0 1px, transparent 1px calc(100% / 32)) 0 0 / 5px 100% no-repeat var(--bg); }
+.ruler.top { left: 0; right: 0; top: 0; height: 14px; background: repeating-linear-gradient(90deg, var(--hair) 0 1px, transparent 1px calc(100% / 48)) 0 0 / 100% 5px no-repeat; }
+.ruler.left { top: 0; bottom: 0; left: 0; width: 14px; background: repeating-linear-gradient(180deg, var(--hair) 0 1px, transparent 1px calc(100% / 32)) 0 0 / 5px 100% no-repeat; }
 .ruler span { position: absolute; }
 .ruler.top span { top: 5px; transform: translateX(-50%); }
 .ruler.left span { left: 5px; transform: translateY(-50%); }

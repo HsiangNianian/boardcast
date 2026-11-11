@@ -74,7 +74,6 @@ async (page) => {
     await page.waitForFunction(() => Number(document.querySelector('#ruler-left span').textContent) > 1);
     assert(JSON.stringify(await rulerPositions()) === JSON.stringify(rulersAtTop), 'Rulers must stay fixed while the content scrolls');
     assert(await page.locator('#ruler-top').textContent() === 'ABCDEFGHIJKL', 'The top ruler letters must stay fixed');
-    assert(await page.locator('.ruler').evaluateAll(nodes => nodes.every(el => getComputedStyle(el).backgroundColor === getComputedStyle(document.body).backgroundColor)), 'Opaque rulers must prevent content from showing through');
     const numbers = await page.locator('#ruler-left span').allTextContents();
     assert(numbers.every((n, i) => Number(n) === Number(numbers[0]) + i), 'Scrolling ruler numbers must remain consecutive');
     await page.setViewportSize({ width: 1440, height: 700 });
@@ -222,7 +221,7 @@ async (page) => {
       await phone.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(0, 0, 0)' && getComputedStyle(document.querySelector('iframe').contentDocument.body).backgroundColor === 'rgb(0, 0, 0)');
     } finally { await privateContext.close(); }
     assert(errors.length === 0, errors.join('\n'));
-    return { passed: ['system theme changes preserve ink', 'old theme URLs cannot override the system', 'five samples, playback controls and canvas framing', 'automatic Light and Dark on desktop and mobile', 'fixed opaque rulers with scrolling numbers', 'hero arrow, circle targets and rewrite', 'real demo in the first fold', 'phone and tablet demo sizing and touch targets', 'embedded demo follows the system', 'canvas colors with reduced motion', 'document and browser theme colors', 'keyboard theme toggle preserves playback', 'tab preference survives reload and navigation', 'return to automatic theme and reject unsupported themes', 'touch theme switching with storage blocked'], errors };
+    return { passed: ['system theme changes preserve ink', 'old theme URLs cannot override the system', 'five samples, playback controls and canvas framing', 'automatic Light and Dark on desktop and mobile', 'fixed HUD rulers with scrolling numbers', 'hero arrow, circle targets and rewrite', 'real demo in the first fold', 'phone and tablet demo sizing and touch targets', 'embedded demo follows the system', 'canvas colors with reduced motion', 'document and browser theme colors', 'keyboard theme toggle preserves playback', 'tab preference survives reload and navigation', 'return to automatic theme and reject unsupported themes', 'touch theme switching with storage blocked'], errors };
   } finally {
     page.off('pageerror', onError);
     page.off('response', onResponse);

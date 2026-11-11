@@ -44,7 +44,7 @@ has a 900px minimum height to keep the demo legible on short screens; narrower l
 On phones, the demo extends to the drawing frame's margins. Samples swipe horizontally, playback controls keep
 44px touch targets, and the transcript and board share a 560–720px player instead of compressing into the desktop height.
 
-The rest is one meeting told as a set of drawing sheets. A thin frame with fixed, opaque rulers runs around it;
+The rest is one meeting told as a set of drawing sheets. A thin frame with fixed HUD rulers runs around it;
 the left ruler's numbers advance as the page scrolls. A title block
 in the corner shows the sheet in view, its title, the version and a running meeting clock. It stays hidden on the
 first sheet so it cannot cover the demo controls. Phones show just its theme button on the later sheets.

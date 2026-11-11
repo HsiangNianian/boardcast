@@ -7,8 +7,16 @@ both, and fetches the matching wasm-bindgen itself.
 ```bash
 rustup target add wasm32-unknown-unknown   # or your distribution's Rust WebAssembly package
 cd landing
-trunk serve            # http://localhost:1430
+trunk serve            # http://localhost:1430, rebuilt when landing/ or crates/site changes
 trunk build --release  # → landing/dist/, with relative paths, so it opens under any subpath
+```
+
+The web demo under `/demo/` is a page of its own. To open it locally, run a second server for it; the first passes
+`/demo/` on to it:
+
+```bash
+cd landing/demo
+trunk serve            # on port 1431, behind http://localhost:1430/demo/
 ```
 
 GitHub Pages serves this page at the root; `pages.yml` builds it on pull requests and publishes it from main.

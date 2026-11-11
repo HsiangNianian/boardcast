@@ -33,6 +33,9 @@ struct Check {
     /// The sections looked in, by heading.
     #[serde(rename = "in")]
     sections: Vec<String>,
+    /// When present, apply the checks separately to each list item or paragraph containing one of these words.
+    #[serde(default)]
+    each_with: Vec<String>,
     /// At least one of these must appear there.
     #[serde(default)]
     any: Vec<String>,
@@ -70,17 +73,27 @@ fn failures(summary: &str, checks: &[Check]) -> Vec<String> {
             out.push(format!("missing section {}", check.sections.join("/")));
         }
         let text: String = parts.iter().filter(|(name, _)| check.sections.contains(name)).map(|(_, body)| body.to_lowercase()).collect();
-        let place = check.sections.join("/");
-        if !check.any.is_empty() && !check.any.iter().any(|w| text.contains(&w.to_lowercase())) {
-            out.push(format!("{place} lacks any of {:?}", check.any));
-        }
-        for w in check.absent.iter().filter(|w| text.contains(&w.to_lowercase())) {
-            out.push(format!("{place} has \"{w}\""));
-        }
-        for item in blocks(&text) {
-            let (Block::Bullet(item) | Block::Paragraph(item) | Block::Todo { text: item, .. }) = item else { continue };
-            for w in check.absent_items.iter().filter(|w| item.trim().trim_end_matches(['.', '。']).eq_ignore_ascii_case(w)) {
-                out.push(format!("{place} has standalone \"{w}\""));
+        let texts = if check.each_with.is_empty() { vec![text] } else {
+            blocks(&text).into_iter().filter_map(|block| match block {
+                Block::Bullet(text) | Block::Paragraph(text) | Block::Todo { text, .. }
+                    if check.each_with.iter().any(|w| text.contains(&w.to_lowercase())) => Some(text),
+                _ => None,
+            }).collect()
+        };
+        for text in texts {
+            let mut place = check.sections.join("/");
+            if !check.each_with.is_empty() { let _ = write!(place, " item {text:?}"); }
+            if !check.any.is_empty() && !check.any.iter().any(|w| text.contains(&w.to_lowercase())) {
+                out.push(format!("{place} lacks any of {:?}", check.any));
+            }
+            for w in check.absent.iter().filter(|w| text.contains(&w.to_lowercase())) {
+                out.push(format!("{place} has \"{w}\""));
+            }
+            for item in blocks(&text) {
+                let (Block::Bullet(item) | Block::Paragraph(item) | Block::Todo { text: item, .. }) = item else { continue };
+                for w in check.absent_items.iter().filter(|w| item.trim().trim_end_matches(['.', '。']).eq_ignore_ascii_case(w)) {
+                    out.push(format!("{place} has standalone \"{w}\""));
+                }
             }
         }
     }
@@ -151,6 +164,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "label": label,
         "repeat": repeat,
         "cases_sha256": format!("{:x}", Sha256::digest(&input)),
+        "checker_source_sha256": format!("{:x}", Sha256::digest(include_bytes!("summary_eval.rs"))),
         "summary_source_sha256": format!("{:x}", Sha256::digest(include_bytes!("../../agent/src/summary.rs"))),
         "agent_source_sha256": format!("{:x}", Sha256::digest(include_bytes!("../../agent/src/lib.rs"))),
         "answers": answers,
@@ -253,5 +267,20 @@ mod tests {
         let wrong = "### 结论\n失败标准应包含两项\n部署定于本周三上线\n### 决定\n无\n### 待讨论\n失败标准具体有哪些？";
         assert!(!failures(wrong, checks).is_empty());
         assert!(failures(&wrong.replace("失败标准应包含两项\n", ""), checks).is_empty());
+    }
+
+    #[test]
+    fn an_open_date_label_needs_no_qualifier_but_a_stated_date_does() {
+        let cases: Vec<Case> = serde_json::from_str(include_str!("../../../eval/summary-cases.json")).unwrap();
+        let checks = &cases.iter().find(|c| c.id == "zh-stated-date-beside-tentative-date").unwrap().checks;
+        let summary = |open: &str| format!("### 结论\n- 桌面版周四发布\n### 决定\n- 无\n### 待办\n- 无\n### 待讨论\n{open}");
+        for valid in ["- 移动版发布日期", "移动版发布日期", "- 移动版是否周五发布", "- 移动版周五发布尚未确定"] {
+            assert!(failures(&summary(valid), checks).is_empty(), "{valid}");
+        }
+        for invalid in ["- 移动版周五发布", "移动版星期五发布", "- 移动版周五发布\n- 预算待确认",
+            "- 移动版周五发布尚未确定\n- 移动版星期五发布"] {
+            assert!(!failures(&summary(invalid), checks).is_empty(), "{invalid}");
+        }
+        assert!(!failures(&summary("- 无"), checks).is_empty(), "the topic is still required");
     }
 }

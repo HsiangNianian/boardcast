@@ -2,7 +2,7 @@
 
 `boardcast-tools summary-eval <root> [--llm <url> | --deepseek] [--cases path] [--repeat N] [--label name]`
 uses the production summary path on the synthetic meetings in `summary-cases.json`. It writes every resulting
-summary, its failed checks, generation duration and the case/source SHA-256 hashes beside a timestamped Markdown report. A failed
+summary, its failed checks, generation duration and the case, checker and production-source SHA-256 hashes beside a timestamped Markdown report. A failed
 semantic check returns a nonzero exit status; the existing Eval workflow runs this check and uploads its evidence.
 Generation duration includes the production summary calls and cleanup; it is not audio-to-screen latency.
 Model labels accept version dots (such as `qwen3.5-4b-q4km-cpu`); path separators remain invalid.
@@ -17,6 +17,20 @@ removes empty template placeholders from all four sections and deduplicates with
 as a decision survives. Nonempty topic subsections are retained.
 
 ## Current options and earlier CI evidence
+
+The [checker correction](summary-checker-2026-11-12.json) removes a confirmed false positive: an open topic
+such as “移动版发布日期” asserts no date and needs no uncertainty keyword. A check with `each_with` instead applies
+its assertions separately to each bullet, to-do or paragraph containing one of the selected terms. Here it
+requires the existing uncertainty terms only in items mentioning Friday; a qualifier in another item cannot
+make a definite date pass. The separate requirement to retain the mobile-release topic remains. Original
+utterances and boards are unchanged; these word checks still do not establish complete semantic acceptance.
+
+The actual old and new Rust checkers re-scored 75 frozen outputs without calling a model. Exactly one result
+changes: the existing 9B report goes from **11/15 to 12/15** after removing that date-label false positive,
+while retaining the named-owner failure. The 4B local report stays **12/15** and the `1bd7b05` CI summary stays
+**36/45**, with the same three failed cases and both templates passing **6/6**. The regression fails before the
+change and passes after; all 14 tools tests pass. Production inference is unchanged. The CI summary artifact is
+available before its remaining board suites finish; it does not mean the whole Eval run passed.
 
 The [latest frozen investigation](summary-options-2026-11-12.json) retains three unsuccessful alternatives.
 A shorter rule set scores **1/4** on the same four screening cases as the original 4B control (**1/4**) and

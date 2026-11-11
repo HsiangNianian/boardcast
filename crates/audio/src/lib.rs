@@ -7,10 +7,11 @@ use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceM
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{channel, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+mod helper;
 pub mod system;
 
 pub const SAMPLE_RATE: i32 = 16_000;
@@ -129,6 +130,7 @@ pub fn is_japanese(text: &str) -> bool {
 /// A recognizer outside this crate, such as the system's own, that takes a sentence and gives its text.
 pub trait Recognizer: Send {
     fn recognize(&mut self, samples: &[f32]) -> Result<String>;
+    fn error(&self) -> Option<&str> { None }
 }
 
 /// Text this short might have been made up from noise, so its sound is checked for a voice.
@@ -410,6 +412,10 @@ impl Ear {
         })
     }
 
+    pub fn error(&self) -> Option<&str> {
+        self.asr.system.as_ref().and_then(|s| s.error())
+    }
+
     pub fn feed(&mut self, samples: &[f32], heard: &mut impl Heard) {
         self.pending.extend_from_slice(samples);
         while self.pending.len() >= VAD_WINDOW {
@@ -528,13 +534,14 @@ impl Ear {
 }
 
 /// Feed a mono WAV in real time, so timings resemble a live meeting.
-pub fn play_wav(path: &Path, samples: &Sender<Vec<f32>>) -> Result<()> {
+pub fn play_wav(path: &Path, mut samples: impl FnMut(Vec<f32>) -> Result<()>) -> Result<()> {
     let wave = Wave::read(&path.to_string_lossy()).with_context(|| format!("cannot read {}", path.display()))?;
+    anyhow::ensure!(wave.sample_rate() == SAMPLE_RATE, "recording must be 16 kHz");
     for chunk in wave.samples().chunks(320) {
-        let _ = samples.send(chunk.to_vec());
+        samples(chunk.to_vec())?;
         thread::sleep(Duration::from_millis(20));
     }
-    let _ = samples.send(vec![0.0; SAMPLE_RATE as usize]);
+    samples(vec![0.0; SAMPLE_RATE as usize])?;
     Ok(())
 }
 
@@ -566,7 +573,7 @@ pub fn inputs() -> Vec<Input> {
 
 /// Live capture, mono at 16 kHz, until `stop` is set. `chosen` is an input's id; when it is gone,
 /// the default input is used and `fell_back` hears about it.
-pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>, chosen: Option<&str>, fell_back: impl FnOnce(&str)) -> Result<()> {
+pub fn capture(stop: &AtomicBool, mut samples: impl FnMut(Vec<f32>) -> Result<()> + Send + 'static, chosen: Option<&str>, fell_back: impl FnOnce(&str), ready: impl FnOnce()) -> Result<()> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     let host = input_host();
     let picked = chosen.and_then(|id| host.input_devices().ok()?.find(|d| d.id().is_ok_and(|d| d.to_string() == id)));
@@ -584,7 +591,8 @@ pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>, chosen: Option<&st
     if let cpal::SupportedBufferSize::Range { min, max } = *supported.buffer_size() {
         config.buffer_size = cpal::BufferSize::Fixed((supported.sample_rate() / 50).clamp(min, max));
     }
-    let tx = samples.clone();
+    let (errors, failure) = channel();
+    let sending_errors = errors.clone();
     let mut position = 0.0_f64;
     let mut send = move |mono: Vec<f32>| {
         let mut out = Vec::with_capacity((mono.len() as f64 / ratio) as usize + 1);
@@ -593,9 +601,11 @@ pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>, chosen: Option<&st
             position += ratio;
         }
         position -= mono.len() as f64;
-        let _ = tx.send(out);
+        if !out.is_empty() {
+            if let Err(e) = samples(out) { let _ = sending_errors.send(e.to_string()); }
+        }
     };
-    let on_error = |e: cpal::Error| eprintln!("microphone: {e}");
+    let on_error = move |e: cpal::Error| { let _ = errors.send(format!("microphone: {e}")); };
     let stream = match supported.sample_format() {
         cpal::SampleFormat::F32 => device.build_input_stream::<f32, _, _>(
             config,
@@ -622,8 +632,13 @@ pub fn capture(stop: &AtomicBool, samples: &Sender<Vec<f32>>, chosen: Option<&st
         other => return Err(anyhow!("unsupported sample format {other:?}")),
     };
     stream.play()?;
+    ready();
     while !stop.load(Ordering::Relaxed) {
-        thread::sleep(Duration::from_millis(50));
+        match failure.recv_timeout(Duration::from_millis(50)) {
+            Ok(error) => return Err(anyhow!(error)),
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => break,
+        }
     }
     Ok(())
 }

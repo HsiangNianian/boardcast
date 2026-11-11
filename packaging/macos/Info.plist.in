@@ -25,6 +25,6 @@
   <key>NSMicrophoneUsageDescription</key>
   <string>boardcast listens to what is said in a meeting and turns it into a board. The sound is recognized on this Mac and never uploaded.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>When you choose Apple's speech recognition, boardcast uses it to turn what is said in a meeting into text, on this Mac when it can.</string>
+  <string>When you choose Apple's speech recognition, boardcast uses it to turn what is said in a meeting into text, on this Mac.</string>
 </dict>
 </plist>

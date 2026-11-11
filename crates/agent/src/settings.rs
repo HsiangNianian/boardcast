@@ -28,6 +28,10 @@ pub struct Settings {
     pub system_speech: bool,
     /// The language the system's recognizer listens for: "auto" for the system's own, or a locale like "ja-JP".
     pub speech_language: String,
+    /// Apple language for the independent system-audio track.
+    pub system_audio_language: String,
+    /// microphone, system, or both; system capture requires the Mac helper.
+    pub capture_source: String,
     /// The interface's language: "auto" to follow the system, or "en" or "zh".
     pub interface_language: String,
     /// The window's look: "auto" to follow the system, or "light" or "dark".
@@ -38,7 +42,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), interface_language: "auto".into(), appearance: "auto".into(), input: String::new() }
+        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), system_audio_language: "auto".into(), capture_source: "microphone".into(), interface_language: "auto".into(), appearance: "auto".into(), input: String::new() }
     }
 }
 
@@ -85,6 +89,8 @@ impl Settings {
                 .unwrap_or_default(),
             system_speech: v["systemSpeech"].as_bool().unwrap_or(false),
             speech_language: v["speechLanguage"].as_str().filter(|l| !l.is_empty()).unwrap_or("auto").to_string(),
+            system_audio_language: v["systemAudioLanguage"].as_str().filter(|l| !l.is_empty()).or_else(|| v["speechLanguage"].as_str()).unwrap_or("auto").to_string(),
+            capture_source: v["captureSource"].as_str().filter(|s| matches!(*s, "microphone" | "system" | "both")).unwrap_or("microphone").to_string(),
             interface_language: v["interfaceLanguage"].as_str().filter(|l| !l.is_empty()).unwrap_or("auto").to_string(),
             appearance: v["appearance"].as_str().filter(|l| !l.is_empty()).unwrap_or("auto").to_string(),
             input: text("input"),
@@ -94,7 +100,7 @@ impl Settings {
     pub fn save(&self) -> Result<()> {
         let dir = config_dir()?;
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "turnPages": self.turn_pages, "glossary": self.glossary, "templates": self.templates.iter().map(|(name, topics)| json!({ "name": name, "topics": topics })).collect::<Vec<_>>(), "systemSpeech": self.system_speech, "speechLanguage": self.speech_language, "interfaceLanguage": self.interface_language, "appearance": self.appearance, "input": self.input }))?;
+        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "turnPages": self.turn_pages, "glossary": self.glossary, "templates": self.templates.iter().map(|(name, topics)| json!({ "name": name, "topics": topics })).collect::<Vec<_>>(), "systemSpeech": self.system_speech, "speechLanguage": self.speech_language, "systemAudioLanguage": self.system_audio_language, "captureSource": self.capture_source, "interfaceLanguage": self.interface_language, "appearance": self.appearance, "input": self.input }))?;
         let tmp = dir.join("remote.json.tmp");
         // Private from the first byte: the key must never sit in a file others can read.
         let _ = fs::remove_file(&tmp);
@@ -152,7 +158,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("boardcast-settings-{}", std::process::id()));
         std::env::set_var("BOARDCAST_CONFIG", &dir);
-        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, turn_pages: true, glossary: "鉴权; API = A P I".into(), templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])], system_speech: true, speech_language: "ja-JP".into(), interface_language: "zh".into(), appearance: "dark".into(), input: "pulse:monitor".into() };
+        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, turn_pages: true, glossary: "鉴权; API = A P I".into(), templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])], system_speech: true, speech_language: "ja-JP".into(), system_audio_language: "zh-CN".into(), capture_source: "both".into(), interface_language: "zh".into(), appearance: "dark".into(), input: "pulse:monitor".into() };
         s.save().unwrap();
         assert_eq!(Settings::load(), s);
         assert_eq!(fs::metadata(dir.join("remote.json")).unwrap().permissions().mode() & 0o777, 0o600);

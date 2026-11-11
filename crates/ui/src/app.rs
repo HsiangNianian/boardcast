@@ -1169,6 +1169,9 @@ fn fingerprint_of(live: &Live) -> String {
 
 fn line_note(line: &serde_json::Value, model_loading: bool) -> String {
     let mut parts = vec![];
+    if let Some(source) = line["source"].as_str() {
+        parts.push(match source { "microphone" => tr("Microphone", "麦克风"), "system" => tr("System audio", "系统声音"), _ => source }.to_string());
+    }
     if let Some(ms) = line["heard"]["asrMs"].as_u64() {
         parts.push(format!("{} {ms} ms", tr("Heard", "识别")));
     }
@@ -1194,9 +1197,9 @@ impl Workbench {
     /// Turn the microphone on or off, counting the time it was on towards the meeting.
     fn toggle_mic(&mut self) {
         let was_listening = self.pipeline.listening();
-        self.pipeline.toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()));
+        self.pipeline.toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()), &self.form.saved.capture_source);
         if !was_listening {
-            self.listening_since = Some(Instant::now());
+            self.hearing = Some(tr("Preparing audio…", "正在准备收音…").into());
         } else if let Some(since) = self.listening_since.take() {
             self.live.add_recorded(since.elapsed().as_secs_f64() * 1000.0);
         }
@@ -1243,16 +1246,18 @@ impl Workbench {
     }
 
     /// Hear with Apple's recognizer or the speech models, in `language` for Apple's.
-    fn choose_speech(&mut self, system: bool, language: Option<&str>, cx: &mut Context<Self>) {
+    fn choose_speech(&mut self, system: bool, language: Option<&str>, system_audio: bool, cx: &mut Context<Self>) {
+        self.count_listening();
+        self.listening_since = None;
         let saved = &mut self.form.saved;
         saved.system_speech = system;
         if let Some(language) = language {
-            saved.speech_language = language.to_string();
+            if system_audio { saved.system_audio_language = language.to_string(); } else { saved.speech_language = language.to_string(); }
         }
         if let Err(e) = saved.save() {
             self.form.note = Some(format!("{e:#}"));
         }
-        self.pipeline.set_speech(Speech { helper: self.speech_helper.clone(), system, language: saved.speech_language.clone() });
+        self.pipeline.set_speech(Speech { helper: self.speech_helper.clone(), system, language: saved.speech_language.clone(), system_language: saved.system_audio_language.clone() });
         self.hearing = None;
         cx.notify();
     }
@@ -1309,13 +1314,27 @@ impl Workbench {
                         self.live.add_line(speaker.as_deref(), &text, asr_ms);
                     }
                 }
-                Event::Spoken { meeting, sentence } => {
+                Event::CaptureReady(id) => {
+                    if self.pipeline.current_capture(id) { self.listening_since = Some(Instant::now()); }
+                }
+                Event::CaptureStopped(id) => {
+                    if self.pipeline.capture_stopped(id) {
+                        if let Some(since) = self.listening_since.take() { self.live.add_recorded(since.elapsed().as_secs_f64() * 1000.0); }
+                        self.level = 0.0;
+                    }
+                }
+                Event::Spoken { meeting, sentence, audio } => {
+                    crate::listen::keep(&mut audio.report.lock().unwrap().tracks[audio.source].ui_receive_ms, audio.ready.elapsed().as_millis());
                     if meeting == self.session().meeting() {
                         let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds);
                         let mut sentence = sentence;
                         sentence.text = self.as_glossary_writes(&sentence.text);
                         self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
                         self.keep_heard_text();
+                        if let Some(line) = self.live.lines.last_mut() {
+                            line["source"] = serde_json::json!(crate::listen::SOURCES[audio.source]);
+                            line["capture"] = serde_json::json!({ "id": audio.capture, "sourceStartSeconds": sentence.start, "seconds": sentence.seconds });
+                        }
                         if self.follow_pages(&sentence.text, cx) {
                             continue;
                         }
@@ -2686,6 +2705,8 @@ impl Workbench {
             templates: self.form.saved.templates.clone(),
             system_speech: self.form.saved.system_speech,
             speech_language: self.form.saved.speech_language.clone(),
+            system_audio_language: self.form.saved.system_audio_language.clone(),
+            capture_source: self.form.saved.capture_source.clone(),
             interface_language: self.form.saved.interface_language.clone(),
             appearance: self.form.saved.appearance.clone(),
             input: self.form.saved.input.clone(),
@@ -2702,6 +2723,13 @@ impl Workbench {
             self.toggle_mic();
             self.toggle_mic();
         }
+        cx.notify();
+    }
+
+    fn choose_capture(&mut self, source: &str, cx: &mut Context<Self>) {
+        self.form.saved.capture_source = source.into();
+        if let Err(e) = self.form.saved.save() { self.form.note = Some(format!("{e:#}")); }
+        if self.pipeline.listening() { self.toggle_mic(); self.toggle_mic(); }
         cx.notify();
     }
 
@@ -4334,6 +4362,19 @@ impl Render for Workbench {
             .when(local_only, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))))
             .child(manual_label("02", tr("Speech", "语音")))
             .child(div().text_sm().child(tr("Listen to", "收音来源")))
+            .when(self.speech_helper.is_some(), |d| {
+                d.child(div().flex().flex_wrap().gap_2().children([
+                    ("microphone", tr("Microphone", "麦克风")), ("system", tr("System audio", "系统声音")), ("both", tr("Both", "两路一起收音")),
+                ].into_iter().map(|(id, label)| {
+                    button(gpui_kit::ElementId::Name(format!("capture-source-{id}").into()), label)
+                        .when(self.form.saved.capture_source == id, |b| b.primary())
+                        .on_click(cx.listener(move |this, _, _, cx| this.choose_capture(id, cx)))
+                })))
+                .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
+                    "System audio needs Screen & System Audio Recording permission. Use headphones to keep the microphone from hearing the same sound twice.",
+                    "系统声音需要「屏幕与系统音频录制」权限。双路收音请戴耳机，避免麦克风重复收到外放的声音。",
+                )))
+            })
             .child({
                 let chosen = self.form.saved.input.clone();
                 let rows = std::iter::once((String::new(), tr("The system's default input", "系统默认输入").to_string()))
@@ -4415,22 +4456,36 @@ impl Render for Workbench {
                         div()
                             .flex()
                             .gap_2()
-                            .child(button("speech-models", tr("Speech models", "语音模型")).when(!system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, cx))))
-                            .child(button("speech-apple", tr("Apple", "Apple")).when(system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, cx)))),
+                            .child(button("speech-models", tr("Speech models", "语音模型")).when(!system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, false, cx))))
+                            .child(button("speech-apple", tr("Apple", "Apple")).when(system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, false, cx)))),
                     )
                     .when(system, |d| {
-                        d.child(div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
+                        d.child(div().text_xs().child(tr("Microphone language", "麦克风语言")))
+                        .child(div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
                             button(gpui_kit::ElementId::Name(format!("speech-language-{id}").into()), label)
                                 .when(language == id, |b| b.primary())
-                                .on_click(cx.listener(move |this, _, _, cx| this.choose_speech(true, Some(id), cx)))
+                                .on_click(cx.listener(move |this, _, _, cx| this.choose_speech(true, Some(id), false, cx)))
                         })))
+                        .when(self.form.saved.capture_source != "microphone", |d| {
+                            d.child(div().text_xs().child(tr("System audio language", "系统声音语言")))
+                                .child(div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
+                                    button(gpui_kit::ElementId::Name(format!("system-language-{id}").into()), label)
+                                        .when(self.form.saved.system_audio_language == id, |b| b.primary())
+                                        .on_click(cx.listener(move |this, _, _, cx| this.choose_speech(true, Some(id), true, cx)))
+                                })))
+                        })
                         .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                            "Apple's recognizer hears one language at a time. On macOS 26 it uses SpeechAnalyzer; on older systems, or where that can't be used, the older recognizer.",
-                            "Apple 的识别一次只听一种语言。macOS 26 上用 SpeechAnalyzer，更早的系统或用不了时改用旧的识别器。",
+                            "Apple's recognizer hears one language per source. System language follows this Mac's locale; it does not detect the spoken language. On macOS 26 it uses SpeechAnalyzer; fallback also requires on-device recognition, otherwise use the speech models.",
+                            "Apple 每路听一种语言，可以分别选择。跟随系统使用 Mac 的语言设置，不检测说话语言。macOS 26 用 SpeechAnalyzer；回退的旧识别器也必须支持本地识别，否则改用语音模型。",
                         )))
                     })
             })
             .when_some(self.hearing.clone(), |d, with| d.child(div().text_xs().text_color(rgb(pal().muted)).child(format!("{} {with}", tr("Hearing with", "当前识别：")))))
+            .child(button("copy-audio-diagnostics", tr("Copy audio diagnostics", "复制收音诊断")).on_click(cx.listener(|this, _, _, cx| {
+                cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(this.pipeline.diagnostics()));
+                this.notice = Some(tr("Audio diagnostics copied. No transcript or audio is included.", "收音诊断已复制，不含会议文字或音频。").into());
+                cx.notify();
+            })))
             .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Language", "语言")))
             .child({
                 let chosen = self.form.saved.interface_language.clone();
@@ -4828,7 +4883,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let store = start_board.is_none().then(|| Store::new(data.clone()));
     let reopen = if turns.is_empty() && wav.is_none() { open.or_else(|| store.as_ref().and_then(Store::last_opened)) } else { None };
     let reads_meetings = store.is_some();
-    let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone() };
+    let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone(), system_language: settings.system_audio_language.clone() };
     let pipeline = Pipeline::start(backend, guidance, resources.voice, speech, Script { turns, wav });
     pipeline.session().set_glossary(Glossary::parse(&settings.glossary));
     std::thread::spawn(boardcast_agent::sound::warm);

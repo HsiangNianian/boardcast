@@ -5,5 +5,5 @@
   <key>CFBundleName</key><string>boardcast Speech</string>
   <key>LSUIElement</key><true/>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>boardcast recognizes what is said in a meeting with Apple's speech recognition, on this Mac when it can.</string>
+  <string>boardcast recognizes what is said in a meeting with Apple's speech recognition, on this Mac.</string>
 </dict></plist>

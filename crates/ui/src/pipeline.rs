@@ -1,14 +1,14 @@
 //! Wires the audio chain to the board agent on background threads, and reports to the UI over a channel.
 
 use boardcast_agent::{Backend, Guidance, Said, Session, Update};
-use anyhow::Result;
-use boardcast_audio::system::SystemSpeech;
-use boardcast_audio::{capture, play_wav, Ear, Recognizers, Sentence};
+use crate::listen::{self, Heard, Job, Report};
+use boardcast_audio::Sentence;
+use std::collections::VecDeque;
 use boardcast_board::graph::Utterance;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::Arc;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -18,7 +18,9 @@ pub enum Event {
     Heard { meeting: u64, speaker: Option<String>, text: String, asr_ms: Option<u128> },
     /// A sentence from the microphone or a recording. The window works out who said it, as it holds
     /// the meeting's voices, and passes it on to the model.
-    Spoken { meeting: u64, sentence: Sentence },
+    Spoken { meeting: u64, sentence: Sentence, audio: Heard },
+    CaptureReady(u64),
+    CaptureStopped(u64),
     Failed(String),
     /// What recognizes speech now, and why it isn't what was chosen, if it isn't.
     Hearing { with: String, note: Option<String> },
@@ -35,6 +37,7 @@ pub struct Speech {
     pub system: bool,
     /// The language the system's recognizer listens for, or "auto".
     pub language: String,
+    pub system_language: String,
 }
 
 impl Speech {
@@ -43,32 +46,6 @@ impl Speech {
         let helper = std::env::current_exe().ok()?.parent()?.join("boardcast-speech");
         helper.is_file().then_some(helper)
     }
-}
-
-/// An ear for the choice, falling back to whatever can hear: the models when the system's recognizer
-/// fails, and the system's when there are no models.
-fn ear_for(models: &Path, speech: &Speech) -> Result<(Ear, String, Option<String>)> {
-    let system = |helper: &Path| -> Result<(Ear, String)> {
-        let recognizer = SystemSpeech::start(helper, &speech.language)?;
-        let with = format!("Apple {}", if recognizer.engine == "analyzer" { "SpeechAnalyzer" } else { "SFSpeechRecognizer" });
-        Ok((Ear::with(models, Recognizers::system(Box::new(recognizer)))?, with))
-    };
-    let mut note = None;
-    if let Some(helper) = speech.helper.as_deref().filter(|_| speech.system) {
-        match system(helper) {
-            Ok((ear, with)) => return Ok((ear, with, None)),
-            Err(e) => note = Some(format!("{e:#}")),
-        }
-    }
-    let models_there = Recognizers::load(models);
-    if models_there.is_empty() {
-        if let Some(helper) = speech.helper.as_deref().filter(|_| !speech.system) {
-            let (ear, with) = system(helper)?;
-            return Ok((ear, with, None));
-        }
-    }
-    let with = models_there.names().join(" + ");
-    Ok((Ear::with(models, models_there)?, with, note))
 }
 
 pub struct Script {
@@ -80,12 +57,17 @@ pub struct Pipeline {
     pub said: Sender<Said>,
     pub events: Receiver<Event>,
     session: Session,
-    samples: Sender<Vec<f32>>,
-    mic_stop: Option<Arc<AtomicBool>>,
+    audio: Sender<Job>,
+    active: Option<Active>,
+    next_capture: u64,
+    reports: VecDeque<Arc<Mutex<Report>>>,
     event_tx: Sender<Event>,
     script_start: Sender<()>,
-    speech: Sender<Speech>,
+    speech: Speech,
 }
+
+#[derive(Clone)]
+struct Active { id: u64, stop: Arc<AtomicBool>, input: Option<String>, source: String }
 
 impl Pipeline {
     pub fn start(backend: Backend, guidance: Option<Guidance>, voice_models: PathBuf, speech: Speech, script: Script) -> Self {
@@ -93,7 +75,7 @@ impl Pipeline {
         let (said, said_rx) = channel::<Said>();
         let (drained_tx, drained_rx) = channel::<()>();
         let (ready_tx, ready_rx) = channel::<()>();
-        let (samples, samples_rx) = channel::<Vec<f32>>();
+        let (audio, jobs) = channel::<Job>();
         let (updates_tx, updates_rx) = channel::<Update>();
         let session = Session::start(backend, guidance, said_rx, ready_tx, drained_tx, updates_tx);
         let tx = event_tx.clone();
@@ -104,57 +86,13 @@ impl Pipeline {
         });
 
         let tx = event_tx.clone();
-        let stamp = session.stamp();
-        let (finish_tx, finish_rx) = channel::<()>();
-        let (speech_tx, speech_rx) = channel::<Speech>();
-        thread::spawn(move || {
-            let load = |speech: &Speech| match ear_for(&voice_models, speech) {
-                Ok((ear, with, note)) => {
-                    let _ = tx.send(Event::Hearing { with, note });
-                    Some(ear)
-                }
-                Err(e) => {
-                    let _ = tx.send(Event::Failed(format!("{e:#}")));
-                    None
-                }
-            };
-            let mut ear = load(&speech);
-            let mut heard = |sentence: Sentence| {
-                let _ = tx.send(Event::Spoken { meeting: stamp.load(Ordering::SeqCst), sentence });
-            };
-            loop {
-                // A new choice replaces the ear; what the old one was hearing is finished first.
-                if let Some(speech) = speech_rx.try_iter().last() {
-                    if let Some(old) = ear.as_mut() {
-                        old.finish(&mut heard);
-                    }
-                    // The old one goes first, so two sets of models are never loaded at once.
-                    drop(ear.take());
-                    ear = load(&speech);
-                }
-                match samples_rx.recv_timeout(Duration::from_millis(100)) {
-                    Ok(chunk) => {
-                        let level = chunk.iter().fold(0.0_f32, |m, s| m.max(s.abs()));
-                        let _ = tx.send(Event::Level(level));
-                        if let Some(ear) = ear.as_mut() {
-                            ear.feed(&chunk, &mut heard);
-                        }
-                    }
-                    Err(RecvTimeoutError::Timeout) => {}
-                    Err(RecvTimeoutError::Disconnected) => return,
-                }
-                if finish_rx.try_recv().is_ok() {
-                    if let Some(ear) = ear.as_mut() {
-                        ear.finish(&mut heard);
-                    }
-                }
-            }
-        });
+        thread::spawn(move || listen::run_jobs(jobs, voice_models, tx));
 
         // Scripted sources run in real time, so timings resemble a live meeting.
         let tx = event_tx.clone();
         let to_model = said.clone();
-        let feed = samples.clone();
+        let feed = audio.clone();
+        let scripted_speech = speech.clone();
         let stamp = session.stamp();
         let scripted = !script.turns.is_empty() || script.wav.is_some();
         let (script_start, script_go) = channel::<()>();
@@ -167,14 +105,12 @@ impl Pipeline {
             let _ = script_go.recv();
             let _ = ready_rx.recv();
             if let Some(path) = &script.wav {
-                match play_wav(path, &feed) {
-                    Ok(()) => {
-                        let _ = finish_tx.send(());
-                    }
-                    Err(e) => {
-                        let _ = tx.send(Event::Failed(format!("{e:#}")));
-                    }
-                }
+                let (done, finished) = channel();
+                let report = Arc::new(Mutex::new(Report::new(0, "microphone", &scripted_speech)));
+                let _ = feed.send(Job { id: 0, meeting: stamp.load(Ordering::SeqCst), input: None,
+                    source: "microphone".into(), speech: scripted_speech, stop: Arc::new(AtomicBool::new(false)),
+                    report, wav: Some(path.clone()), done: Some(done) });
+                let _ = finished.recv();
             }
             for turn in script.turns {
                 let meeting = stamp.load(Ordering::SeqCst);
@@ -190,7 +126,7 @@ impl Pipeline {
             let _ = tx.send(Event::Done);
         });
 
-        Self { said, events, session, samples, mic_stop: None, event_tx, script_start, speech: speech_tx }
+        Self { said, events, session, audio, active: None, next_capture: 0, reports: VecDeque::new(), event_tx, script_start, speech }
     }
 
     /// The window is ready for a scripted meeting to begin.
@@ -202,33 +138,74 @@ impl Pipeline {
         &self.session
     }
 
-    /// Hear with another recognizer from now on.
-    pub fn set_speech(&self, speech: Speech) {
-        let _ = self.speech.send(speech);
+    /// A change starts only after the old streams and helpers have been released.
+    pub fn set_speech(&mut self, speech: Speech) {
+        self.speech = speech;
+        if let Some(active) = self.active.clone() {
+            self.toggle_mic(None, "microphone");
+            self.toggle_mic(active.input, &active.source);
+        }
     }
 
-    pub fn listening(&self) -> bool {
-        self.mic_stop.is_some()
+    pub fn listening(&self) -> bool { self.active.is_some() }
+
+    pub fn current_capture(&self, id: u64) -> bool { self.active.as_ref().is_some_and(|a| a.id == id) }
+
+    pub fn capture_stopped(&mut self, id: u64) -> bool {
+        if !self.current_capture(id) { return false; }
+        self.active.take();
+        true
     }
 
-    /// Start or stop listening, to `input` when it is given and still there.
-    pub fn toggle_mic(&mut self, input: Option<String>) {
-        if let Some(stop) = self.mic_stop.take() {
-            stop.store(true, Ordering::Relaxed);
+    pub fn toggle_mic(&mut self, input: Option<String>, source: &str) {
+        if let Some(active) = self.active.take() {
+            active.stop.store(true, Ordering::Relaxed);
             return;
         }
+        self.next_capture += 1;
+        let id = self.next_capture;
         let stop = Arc::new(AtomicBool::new(false));
-        self.mic_stop = Some(stop.clone());
-        let samples = self.samples.clone();
-        let tx = self.event_tx.clone();
-        thread::spawn(move || {
-            let warn = tx.clone();
-            let fell_back = move |_: &str| {
-                let _ = warn.send(Event::Failed(crate::i18n::tr("The chosen input isn't connected, so the default one is listening.", "选择的输入设备没有连接，正在用默认设备收音。").into()));
-            };
-            if let Err(e) = capture(&stop, &samples, input.as_deref(), fell_back) {
-                let _ = tx.send(Event::Failed(format!("{e:#}")));
+        self.active = Some(Active { id, stop: stop.clone(), input: input.clone(), source: source.into() });
+        let report = Arc::new(Mutex::new(Report::new(id, source, &self.speech)));
+        if self.reports.len() == 20 { self.reports.pop_front(); }
+        self.reports.push_back(report.clone());
+        let job = Job { id, meeting: self.session.meeting(), input, source: source.into(), speech: self.speech.clone(), stop, report, wav: None, done: None };
+        if self.audio.send(job).is_err() {
+            self.active.take();
+            let _ = self.event_tx.send(Event::Failed("Audio worker stopped".into()));
+        }
+    }
+
+    /// Bounded measurements only: no meeting text, audio, device names, keys or error bodies.
+    pub fn diagnostics(&self) -> String {
+        fn stats(values: &VecDeque<u128>) -> serde_json::Value {
+            if values.is_empty() { return serde_json::Value::Null; }
+            let mut values: Vec<_> = values.iter().copied().collect(); values.sort_unstable();
+            serde_json::json!({ "n": values.len(), "p50": values[(values.len() - 1) / 2],
+                "p95": values[((values.len() - 1) as f64 * 0.95).ceil() as usize], "max": values.last() })
+        }
+        let captures: Vec<_> = self.reports.iter().map(|report| {
+            let report = report.lock().unwrap();
+            let mut value = serde_json::to_value(&*report).expect("report serializes");
+            if self.current_capture(report.id) { value["elapsed_ms"] = serde_json::json!(report.started.elapsed().as_millis()); }
+            for (i, track) in report.tracks.iter().enumerate() {
+                value["tracks"][i]["source"] = serde_json::json!(listen::SOURCES[i]);
+                for (name, values) in [("queue_ms", &track.queue_ms), ("asr_ms", &track.asr_ms), ("ui_receive_ms", &track.ui_receive_ms)] {
+                    value["tracks"][i][name] = stats(values);
+                }
             }
-        });
+            value
+        }).collect();
+        serde_json::to_string_pretty(&serde_json::json!({ "version": 1, "captures": captures,
+            "limits": { "captures": 20, "recent_timings_per_track": 128, "queued_packets": 300 },
+            "speech_to_first_partial_ms": null, "sentence_end_to_final_ms": null, "screen_present_ms": null,
+            "timing_basis": "monotonic arrival at Rust, recognition, receipt by UI; no acoustic onset or screen presentation measurement"
+        })).expect("report serializes")
+    }
+}
+
+impl Drop for Pipeline {
+    fn drop(&mut self) {
+        if let Some(active) = &self.active { active.stop.store(true, Ordering::Relaxed); }
     }
 }

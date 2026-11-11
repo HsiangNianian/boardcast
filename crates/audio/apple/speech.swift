@@ -81,18 +81,23 @@ func readExactly(_ count: Int) -> Data? {
 }
 
 /// The next sentence's samples, or nil when there are no more.
-func nextSentence() -> [Float]? {
+func nextSentence() throws -> [Float]? {
     guard let header = readExactly(4) else { return nil }
     let count = Int(header.withUnsafeBytes { UInt32(littleEndian: $0.loadUnaligned(as: UInt32.self)) })
     if count == 0 { return nil }
-    guard let body = readExactly(count * 4) else { return nil }
-    return body.withUnsafeBytes { raw in
+    guard count <= 16_000 * 30, let body = readExactly(count * 4) else {
+        throw Failure(message: "Invalid sentence length")
+    }
+    let samples = body.withUnsafeBytes { raw in
         (0..<count).map { Float(bitPattern: UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: $0 * 4, as: UInt32.self))) }
     }
+    guard samples.allSatisfy(\.isFinite) else { throw Failure(message: "Invalid sentence samples") }
+    return samples
 }
 
 protocol Engine {
     var name: String { get }
+    var locale: Locale { get }
     func recognize(_ samples: [Float]) async throws -> String
 }
 
@@ -183,6 +188,7 @@ final class Once<T> {
 final class Legacy: Engine {
     let name = "legacy"
     let recognizer: SFSpeechRecognizer
+    var locale: Locale { recognizer.locale }
 
     init(recognizer: SFSpeechRecognizer) {
         self.recognizer = recognizer
@@ -195,8 +201,11 @@ final class Legacy: Engine {
         guard status == .authorized else {
             throw Failure(message: "Speech recognition is not allowed. Turn it on for boardcast in System Settings › Privacy & Security › Speech Recognition.")
         }
-        guard let recognizer = SFSpeechRecognizer(locale: wanted) ?? SFSpeechRecognizer(), recognizer.isAvailable else {
+        guard let recognizer = SFSpeechRecognizer(locale: wanted), recognizer.isAvailable else {
             throw Failure(message: "Apple speech recognition is not available for \(wanted.identifier)")
+        }
+        guard recognizer.supportsOnDeviceRecognition else {
+            throw Failure(message: "On-device speech recognition is not available for \(wanted.identifier). Choose the bundled speech models instead.")
         }
         // Its answers come on this queue rather than the main one, which nothing here services.
         recognizer.queue = OperationQueue()
@@ -206,9 +215,7 @@ final class Legacy: Engine {
     func recognize(_ samples: [Float]) async throws -> String {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = false
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        }
+        request.requiresOnDeviceRecognition = true
         if #available(macOS 13.0, *) {
             request.addsPunctuation = true
         }
@@ -244,8 +251,8 @@ func engine(for wanted: Locale) async throws -> Engine {
 func serve(_ identifier: String) async throws {
     let wanted = identifier == "auto" ? Locale.current : Locale(identifier: identifier)
     let engine = try await engine(for: wanted)
-    emit(["type": "ready", "engine": engine.name, "locale": wanted.identifier])
-    while let samples = nextSentence() {
+    emit(["type": "ready", "engine": engine.name, "locale": engine.locale.identifier])
+    while let samples = try nextSentence() {
         do {
             emit(["type": "text", "text": try await engine.recognize(samples)])
         } catch {
@@ -280,9 +287,10 @@ struct Main {
         do {
             let args = Array(CommandLine.arguments.dropFirst())
             switch args.first {
-            case "self-test": try selfTest()
+            case "self-test": try systemAudioSelfTest(); try selfTest()
+            case "system-audio": try await captureSystemAudio()
             case "serve" where args.count == 2: try await serve(args[1])
-            default: throw Failure(message: "Usage: boardcast-speech serve <locale|auto> | self-test")
+            default: throw Failure(message: "Usage: boardcast-speech serve <locale|auto> | system-audio | self-test")
             }
         } catch {
             emit(["type": "error", "message": error.localizedDescription])

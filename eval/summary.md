@@ -75,6 +75,15 @@ passed; [outputs and current source/model hashes](summary-template-cleanup-2026-
 Manual inspection confirmed the discussed topics, facts, named task and deadline remain. These six runs are
 template-only validation, not a new 36-case score; no prompt change addresses the two factual failures.
 
+The full rerun at `1c1a519` then completed at **33/36**: [CI](https://github.com/HsiangNianian/boardcast/actions/runs/43026651384),
+[original outputs and model hash](summary-ci-cleanup-2026-11-11.json). Both template cases passed all three runs;
+manual inspection confirmed the topic facts, task owner/deadline and omitted budget topic. The English quantity
+case also passed in this run, while the Chinese deployment date was omitted in all three repetitions. The model
+hash matches the local frozen run, but this is not a controlled runtime comparison. The prompts and no-template
+cleanup are unchanged, so the English result does not demonstrate a reliable fix for its earlier failures.
+Keep the earlier failing outputs and #68 open. Four-platform Rust packaging/core checks and all ASR jobs/comparison
+passed at this commit; the Eval workflow correctly remains failed on summary quality.
+
 At `0c89941`, four-platform Rust packaging/core checks and all ASR jobs/comparison passed. The earlier
 `c39109b` text run had stopped before summary model calls because the default label contains a dot;
 `77007e5` fixed that validation and tests the actual CLI argument path. Build success alone does not establish

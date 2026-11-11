@@ -158,7 +158,7 @@ sh packaging/linux/package.sh           # target/package/boardcast-<version>-<ar
 | [`eval/pointing.json`](eval/pointing.json) | 18 个用例 | 中英文圈着说，起始板固定 |
 | [`eval/revisions.json`](eval/revisions.json) | 3 个用例 | 转写修订，必须保留节点身份和无关内容；等 GPUI 版支持转写修订后再跑 |
 
-摘要可信度和模板结构使用[重复模型评测](eval/summary.md)。术语表实录对照从[自己的录音](eval/asr/own-voice/README.md)开始；Mac 长会和目标用户试用分别使用[验收计划](eval/macos/README.md)及[试用材料](docs/trials/README.md)。
+摘要可信度、日期、待办归属和模板结构使用[重复模型评测](eval/summary.md)，保留失败结果及未采用的改动。术语表实录对照从[自己的录音](eval/asr/own-voice/README.md)开始；Mac 长会和目标用户试用分别使用[验收计划](eval/macos/README.md)及[试用材料](docs/trials/README.md)。
 
 先启动可用的 llama-server，然后运行：
 

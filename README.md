@@ -166,7 +166,7 @@ cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://1
 cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
 ```
 
-Summary confidence and template structure have [repeatable model checks](eval/summary.md). Real microphone glossary comparisons use the [own-voice recorder](eval/asr/own-voice/README.md); real Mac measurements and the target-user trial use [the acceptance plan](eval/macos/README.md) and [trial kit](docs/trials/README.md).
+Summary confidence, dates, assigned tasks and template structure have [repeatable model checks](eval/summary.md), including retained failures and rejected changes. Real microphone glossary comparisons use the [own-voice recorder](eval/asr/own-voice/README.md); real Mac measurements and the target-user trial use [the acceptance plan](eval/macos/README.md) and [trial kit](docs/trials/README.md).
 
 Speech recognition has its own suites:
 

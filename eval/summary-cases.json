@@ -120,5 +120,94 @@
       {"in": ["Conclusions", "Decisions", "To-dos", "Open questions"], "absent": ["Hiring"]},
       {"in": ["Decisions"], "any": ["tomorrow"]}
     ]
+  },
+  {
+    "id": "zh-stated-date-beside-tentative-date",
+    "why": "Retain a stated schedule without promoting a separate proposed date to a fact.",
+    "lines": [["A", "桌面版周四发布，这是已经定下来的安排。"], ["B", "移动版要不周五发布？"], ["C", "移动版的日期还没定，先别按周五排。"]],
+    "checks": [
+      {"in": ["结论", "决定"], "any": ["桌面版"]},
+      {"in": ["结论", "决定"], "any": ["周四", "星期四"]},
+      {"in": ["决定", "待办"], "absent": ["周五", "星期五"]},
+      {"in": ["待讨论"], "any": ["移动版"]},
+      {"in": ["待讨论"], "any": ["未定", "未确定", "没定", "待定", "待确定", "待确认", "未确认", "是否", "是不是"]}
+    ]
+  },
+  {
+    "id": "zh-stated-date-corrected",
+    "why": "Keep the later corrected deployment date and the earlier day's separate rehearsal.",
+    "lines": [["A", "部署周一上线。"], ["B", "更正一下，部署改到周二上线，周一只做预演。"], ["A", "收到，就按周二安排。"]],
+    "checks": [
+      {"in": ["结论", "决定"], "any": ["周二", "星期二"]},
+      {"in": ["结论", "决定", "待办"], "any": ["周一", "星期一"]},
+      {"in": ["结论", "决定", "待办"], "any": ["预演", "演练"]},
+      {"in": ["结论", "决定", "待办"], "absent": ["周一上线", "周一部署", "星期一上线", "星期一部署"]},
+      {"in": ["待讨论"], "absent": ["上线", "部署", "预演", "日期"]}
+    ]
+  },
+  {
+    "id": "zh-explicit-condition-not-an-event",
+    "why": "A future conditional question does not assert that its premise happened.",
+    "lines": [
+      [
+        "A",
+        "如果周四测试失败，部署日期怎么办？"
+      ],
+      [
+        "B",
+        "先别确定，可能要顺延，等测试结果再讨论。"
+      ],
+      [
+        "C",
+        "现在测试还没开始，测试报告由小林周五前整理。"
+      ]
+    ],
+    "checks": [
+      {
+        "in": [
+          "结论",
+          "决定"
+        ],
+        "absent": [
+          "测试已失败",
+          "测试已经失败",
+          "周四测试失败。"
+        ]
+      },
+      {
+        "in": [
+          "决定"
+        ],
+        "absent": [
+          "顺延",
+          "推迟"
+        ]
+      },
+      {
+        "in": [
+          "待讨论"
+        ],
+        "any": [
+          "部署",
+          "日期"
+        ]
+      },
+      {
+        "in": [
+          "待办"
+        ],
+        "any": [
+          "小林"
+        ]
+      },
+      {
+        "in": [
+          "待办"
+        ],
+        "any": [
+          "周五"
+        ]
+      }
+    ]
   }
 ]

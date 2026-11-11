@@ -6,6 +6,8 @@ summary, its failed checks, generation duration and the case/source SHA-256 hash
 semantic check returns a nonzero exit status; the existing Eval workflow runs this check and uploads its evidence.
 Generation duration includes the production summary calls and cleanup; it is not audio-to-screen latency.
 Model labels accept version dots (such as `qwen3.5-4b-q4km-cpu`); path separators remain invalid.
+The suite now has 15 cases, including mixed confirmed/tentative dates, a corrected date with a separate rehearsal,
+and an explicitly conditional question beside an assigned task. Historical totals below retain their original case sets.
 
 The current prompt follows later answers, partial answers and withdrawals, retains stated deadlines and excludes
 automatic speaker letters from model input. Saved transcript lines and their fingerprints stay unchanged. A blank
@@ -57,6 +59,20 @@ is an experimental cap, not a model recommendation.
 | Thinking enabled, 256-token reasoning budget and the recommended thinking sampler | 7/12 | Lost tasks/dates, changed uncertainty and broke a custom-template result. |
 | One plain Chinese/English input-output example | 10/12 | Fixed the original two failures but lost template headings, a task owner and a decision. |
 | Example with an explicit decision, used only without a template | 10/12 | Kept an answered question open and treated an agreed duration as unresolved. |
+
+A later Chinese-only rule separated directly stated facts from agreed decisions. It retained the Wednesday deployment:
+on fourteen cases repeated three times, Qwen scored **39/42** and DeepSeek **42/42 after a check correction**. The
+new mixed-date check initially rejected DeepSeek's correct statement that the mobile date was undetermined and Friday
+should not be scheduled. It now allows that negation in Conclusions while requiring uncertainty in Open questions;
+the original **41/42** score and all original failures are retained. Inputs were unchanged.
+
+**This prompt was rejected.** An additional explicit conditional question with “小林周五前整理测试报告” produced an empty
+To-dos section, putting the task only in Conclusions. The original production prompt retained the task in To-dos.
+[The complete outputs, rule change, checks, hashes and before/after counterexample](summary-rejected-stated-facts-2026-11-11.json)
+are preserved. Neither language's production prompt changed, and the candidate's scores are not current product scores.
+The original prompt then ran the three new cases three times: **6/9**, with all three corrected-date outputs omitting
+“一” from the Monday rehearsal (“周只做预演”). The corrected Tuesday deployment survives. This new failure remains open
+alongside the original Wednesday omission and English quantity presupposition; the other two new cases passed 3/3 each.
 
 ## CI result and empty-topic follow-up
 

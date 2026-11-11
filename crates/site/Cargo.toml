@@ -1,6 +1,6 @@
 [package]
 name = "boardcast-site"
-description = "The website, compiled to WebAssembly; landing/ holds its page and styles"
+description = "The website interactions, compiled to WebAssembly"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

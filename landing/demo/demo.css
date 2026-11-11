@@ -14,8 +14,8 @@ body { max-width: 1440px; margin: 0 auto; padding: 32px 40px 40px; }
 a { color: inherit; text-decoration: none; }
 .mono { font: 400 12px var(--mono); color: var(--faint); }
 
-.top { display: grid; grid-template-columns: 160px 1fr auto; gap: 40px; align-items: start; padding-bottom: 28px; }
-.brand { font-size: 32px; line-height: 1.05; font-weight: 300; letter-spacing: -.03em; }
+body > .site-header { padding-top: 0; padding-bottom: 28px; }
+.top { display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: start; padding-bottom: 28px; }
 .intro h1 { font-size: clamp(36px, 4.4vw, 64px); font-weight: 200; letter-spacing: -.035em; line-height: 1; }
 .intro p { margin-top: 14px; max-width: 46em; font-size: 15px; line-height: 1.65; color: var(--muted); }
 .get { display: inline-flex; gap: 22px; align-items: center; padding: 14px 16px; background: var(--text); color: var(--bg); font-size: 16px; white-space: nowrap; }
@@ -66,13 +66,12 @@ a { color: inherit; text-decoration: none; }
 .lines li.drawn .who { border-color: var(--text); background: var(--text); color: var(--bg); }
 .input { margin: 10px; padding: 10px 12px; border: 1px solid var(--line); font-size: 13px; color: var(--faint); }
 .foot { margin-top: 16px; }
-.foot a:hover { color: var(--text); }
 .dock svg [fill="#000"] { fill: var(--bg); }
 .embed-label { display: none; }
 
 /* The embedded demo reads left to right: transcript, then the board. */
 html.embed body { display: flex; flex-direction: column; height: 100vh; padding: 0; max-width: none; }
-html.embed .top, html.embed .foot, html.embed .app-label, html.embed .input, html.embed .titlebar { display: none; }
+html.embed .site-header, html.embed .top, html.embed .foot, html.embed .app-label, html.embed .input, html.embed .titlebar { display: none; }
 html.embed .embed-label { display: inline; }
 html.embed .sample-header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; height: 45px; flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--bg); font: 400 11px var(--mono); letter-spacing: .04em; }
 html.embed .sample-caption { white-space: nowrap; font-size: 10px; letter-spacing: 0; }
@@ -106,7 +105,7 @@ html.embed #replay { margin-left: auto; border-left: 1px solid var(--line); bord
 
 @media (max-width: 900px) {
   body { padding: 20px 16px; }
-  .top { grid-template-columns: 1fr; gap: 16px; } .brand { display: none; }
+  .top { grid-template-columns: 1fr; gap: 16px; }
   .body { grid-template-columns: 1fr; } .side { display: none; }
   .dock button span { display: none; } .dock button { padding: 0 14px; } .titlebar .sample, .titlebar .icons { display: none; }
   .window { height: 70vh; }

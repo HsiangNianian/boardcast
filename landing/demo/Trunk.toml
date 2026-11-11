@@ -6,7 +6,12 @@ dist = "../dist-demo"
 public_url = "/demo/"
 
 [watch]
-watch = [".", "../../crates/demo", "../../crates/board"]
+watch = [".", "../../crates/demo", "../../crates/board", "../../crates/site-gen"]
 
 [serve]
 port = 1431
+
+[[hooks]]
+stage = "post_build"
+command = "cargo"
+command_arguments = ["run", "--quiet", "--locked", "--package", "boardcast-site-gen"]

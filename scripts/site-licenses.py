@@ -1,6 +1,6 @@
 """python3 scripts/site-licenses.py
 
-Write the Rust crates the app and the website ship, grouped by license, into landing/terms/index.html,
+Write the Rust crates the app and the website ship, grouped by license, into crates/site-gen/pages/terms.html,
 between its <!-- crates --> markers. Run it after dependencies change; it reads Cargo.lock only.
 """
 import collections
@@ -39,7 +39,7 @@ for license, crates in sorted(groups.items(), key=lambda g: (-len(g[1]), g[0])):
     )
     out.append(f'<h4>{html.escape(license)} <span class="label">{len(crates)}</span></h4>\n<p class="crates">{names}</p>')
 
-page = ROOT / "landing/terms/index.html"
+page = ROOT / "crates/site-gen/pages/terms.html"
 text = page.read_text()
 start, end = "<!-- crates -->", "<!-- /crates -->"
 head, rest = text.split(start, 1)

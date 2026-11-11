@@ -1,6 +1,6 @@
 name: Website
 
-# Publishes the website, built from crates/site and landing/ with Trunk, at the Pages root. The earlier app's web demo under /demo/ is no longer built (#150).
+# Trunk bundles the WASM assets; crates/site-gen renders the five pages before publication.
 # Requires Settings → Pages → Source: GitHub Actions.
 
 on:
@@ -11,6 +11,7 @@ on:
     paths:
       - 'landing/**'
       - 'crates/site/**'
+      - 'crates/site-gen/**'
       - 'crates/demo/**'
       - 'crates/board/**'
       - 'Cargo.lock'
@@ -43,6 +44,7 @@ jobs:
         working-directory: landing
         # The demo is a page of its own under demo/, built after the site, which empties dist/ first.
         run: |
+          cargo test --locked -p boardcast-site-gen
           trunk build --release
           trunk build demo/index.html --dist dist/demo --release
       - uses: actions/upload-pages-artifact@v4

@@ -1,0 +1,42 @@
+{{ navigation }}
+<header class="top">
+      <div class="intro">
+        <h1>web demo</h1>
+        <p>Five sample meetings, in English, replayed in your browser with the same board code the app runs: the line is said, the model's recorded reply is applied, and the board is laid out and written stroke by stroke. The app does this live, from your own voice, on your computer.</p>
+      </div>
+      <a class="get" href="../#get">download the app <span>↓</span></a>
+    </header>
+    <div class="sample-header">
+      <span class="sample-caption embed-label">from conversation to canvas <b aria-hidden="true">↘</b></span>
+      <nav class="samples" id="samples" aria-label="Sample meetings"></nav>
+      <a class="full-demo embed-label" href="./" target="_top">open full demo ↗</a>
+    </div>
+
+    <div class="window" role="region" aria-label="The boardcast window replaying a sample meeting">
+      <div class="titlebar">
+        <span class="name" id="title">Release checklist</span>
+        <span class="mono">start 14:02</span>
+        <span class="mono state" id="state">board / ready</span>
+        <span class="mono sample">Sample, not saved</span>
+        <span class="icons" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <span class="mono coords"><span class="embed-label">02 / on the board</span><span class="app-label">100% · sample playback</span></span>
+          <svg class="board" id="board" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="dock">
+            <button class="listen on" id="listen"><span class="rec" aria-hidden="true"></span><span><span id="listen-label">pause</span><small>sample playback</small></span></button>
+            <button><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M18 39C5 31 11 12 30 10C48 8 60 21 54 34C48 47 29 47 18 39C10 44 12 53 23 55" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /></svg><span>circle</span></button>
+            <button><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 6 H40 L54 20 V58 H10 Z" fill="currentColor" /><rect x="18" y="30" width="26" height="4" fill="#000" /><rect x="18" y="40" width="18" height="4" fill="#000" /></svg><span>summary</span></button>
+            <button><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 6 V40 M18 28 L32 42 L46 28" fill="none" stroke="currentColor" stroke-width="7" /><rect x="8" y="50" width="48" height="8" fill="currentColor" /></svg><span>import</span></button>
+            <button><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 8H30V16H22L38 32H56V56H32V38L16 22V30H8Z" fill="currentColor" /></svg><span>export</span></button>
+            <button id="replay"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="currentColor" /><circle cx="32" cy="15" r="4" fill="#000" /><circle cx="48" cy="27" r="4" fill="#000" /><circle cx="42" cy="46" r="4" fill="#000" /><circle cx="22" cy="46" r="4" fill="#000" /><circle cx="16" cy="27" r="4" fill="#000" /><circle cx="32" cy="32" r="5" fill="#000" /></svg><span>replay<small>ctrl ⇧ R</small></span></button>
+          </div>
+        </div>
+        <aside class="side">
+          <div class="side-head"><b><span class="embed-label">01 / </span>transcript</b><span class="app-label" aria-hidden="true">✕</span></div>
+          <ol class="lines" id="lines"></ol>
+          <div class="input">Type a line, Enter puts it on the board</div>
+        </aside>
+      </div>
+    </div>

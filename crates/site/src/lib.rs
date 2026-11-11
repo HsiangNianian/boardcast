@@ -1,5 +1,5 @@
-//! The website, in Rust: one meeting told as a set of drawing sheets. landing/index.html is the page and
-//! landing/style.css its look; this fills in and animates what they leave empty. Trunk builds it.
+//! The website's interactions: one meeting told as a set of drawing sheets. crates/site-gen renders the
+//! HTML at build time, landing/style.css sets its look, and this animates it. Trunk builds it.
 
 mod cards;
 mod dots;

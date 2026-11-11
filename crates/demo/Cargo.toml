@@ -1,6 +1,6 @@
 [package]
 name = "boardcast-demo"
-description = "The app's board in a web page, replaying the sample meetings; landing/demo holds its page"
+description = "The app's board in a web page, replaying the sample meetings"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

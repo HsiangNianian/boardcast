@@ -39,10 +39,10 @@ pub fn init() {
         let y = 22.0 + row as f64 * 24.0;
         let label = svg_el("text", &[("x", "-2".into()), ("y", (y + 3.0).to_string()), ("text-anchor", "end".into()), ("class", "pop".into())], Some(&who));
         set_text(&label, w);
-        svg_el("line", &flat(vec![("x1", "0".into()), ("x2", "1000".into()), ("y1", y.to_string()), ("y2", y.to_string()), ("stroke", "#262626".into())]), Some(&who));
+        svg_el("line", &flat(vec![("x1", "0".into()), ("x2", "1000".into()), ("y1", y.to_string()), ("y2", y.to_string()), ("stroke", "var(--hair)".into())]), Some(&who));
         for l in LINES.iter().filter(|l| l.who == w) {
             let (a, b) = span(l);
-            let attrs = vec![("x1", x(a).to_string()), ("x2", x(b).to_string()), ("y1", y.to_string()), ("y2", y.to_string()), ("class", "seg pop".into()), ("stroke", "#f2f2f2".into())];
+            let attrs = vec![("x1", x(a).to_string()), ("x2", x(b).to_string()), ("y1", y.to_string()), ("y2", y.to_string()), ("class", "seg pop".into()), ("stroke", "var(--fg)".into())];
             svg_el("line", &flat(attrs), Some(&who));
         }
     }

@@ -170,7 +170,7 @@ async fn again(h: Rc<Hero>) {
 }
 
 pub fn init() {
-    let h = Rc::new(Hero { svg: q("#ink"), said: q("#said"), host: q("#hero"), run: Cell::new(0) });
+    let h = Rc::new(Hero { svg: q("#ink"), said: q("#said"), host: q("#hero-writing"), run: Cell::new(0) });
     {
         let h = h.clone();
         crate::util::on(&q("#again"), "click", move |_| wasm_bindgen_futures::spawn_local(again(h.clone())));

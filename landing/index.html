@@ -12,6 +12,10 @@
     <!-- Trunk builds the Rust crate in crates/site and copies the rest. -->
     <link data-trunk rel="rust" href="../crates/site/Cargo.toml" />
     <link data-trunk rel="css" href="style.css" />
+    <link rel="stylesheet" href="./appearance.css" />
+    <script src="./appearance.js"></script>
+    <link data-trunk rel="copy-file" href="appearance.css" />
+    <link data-trunk rel="copy-file" href="appearance.js" />
     <link data-trunk rel="copy-dir" href="fonts" />
     <link data-trunk rel="copy-dir" href="public/licenses" />
     <link data-trunk rel="copy-dir" href="public/media" />
@@ -23,10 +27,11 @@
   </head>
   <body>
 <div class="frame" aria-hidden="true"><div class="ruler top" id="ruler-top"></div><div class="ruler left" id="ruler-left"></div></div>
-<div class="titleblock label" aria-hidden="true">
-  <div><b>boardcast</b></div><div>sheet <b id="tb-n">01</b> / 08</div>
+<div class="titleblock label on-hero">
+  <div><b>boardcast</b></div><div>sheet <b id="tb-n">01</b> / 07</div>
   <div>title <b id="tb-title">talk</b></div><div>rev <span data-version></span></div>
-  <div>time <b id="tb-time">14:02:04</b></div><div>scale 1:1</div>
+  <div>time <b id="tb-time">14:02:04</b></div>
+  <div class="appearance-cell"><span>scale 1:1</span><button id="theme-toggle" type="button" aria-label="Switch colour theme" title="Switch colour theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 4a8 8 0 0 0 0 16Z" fill="currentColor"/></svg></button></div>
 </div>
 <svg class="lasso-layer" id="lasso-layer"></svg>
 <div class="toast" id="toast"></div>
@@ -34,28 +39,35 @@
 <!-- ———————————————— hero ———————————————— -->
 <section class="hero" id="hero" data-sheet="01 talk">
   <div class="wrap">
-    <nav class="top">
+    <nav class="top" aria-label="Main navigation">
       <div class="brand">board<br>cast</div>
       <a class="nav-item" href="#story"><svg class="pict" data-icon="board" viewBox="0 0 64 64"></svg><div><b>product</b><span><em>talk &amp; draw</em><em>circle</em><em>replay</em></span></div></a>
       <a class="nav-item" href="#get"><svg class="pict" data-icon="export" viewBox="0 0 64 64"></svg><div><b>get</b><span><em>macos</em><em>windows</em><em>linux</em></span></div></a>
       <a class="nav-item" href="https://github.com/HsiangNianian/boardcast/releases/latest"><svg class="pict" data-icon="replay" viewBox="0 0 64 64"></svg><div><b>latest</b><span><em data-version></em><em>changelog</em></span></div></a>
-      <div class="nav-item"><svg class="pict" data-icon="doc" viewBox="0 0 64 64"></svg><div><b>guide</b><span><a href="https://github.com/HsiangNianian/boardcast#get-started">start</a><a href="./faq/">faq</a><a href="./privacy/">privacy</a><a href="./terms/">terms</a><a href="https://github.com/HsiangNianian/boardcast">github</a></span></div></div>
+      <div class="nav-item"><svg class="pict" data-icon="doc" viewBox="0 0 64 64"></svg><div><b>guide</b><span><a href="https://github.com/HsiangNianian/boardcast#get-started">start</a><a href="./faq/">faq</a><a href="./privacy/">privacy</a><a href="./terms/">terms</a></span></div></div>
       <p class="about">boardcast is a whiteboard that writes itself. It turns what is said in a meeting into a board, stroke by stroke. Speech and the board model run on your computer: no account, and no audio leaves it.</p>
     </nav>
-    <p class="said label"><span class="who">A</span><span id="said-time">14:02:04</span><q id="said"></q></p>
-    <svg class="ink" id="ink"></svg>
-    <div class="eraser" id="eraser"></div>
-    <div class="hero-foot">
-      <div>
-        <h1>a whiteboard that writes down your meeting.</h1>
-        <p class="inline">Turn <i data-mini="mic"></i><b data-circle="#signals">voice</b>, <i data-mini="speakers"></i><b data-circle="#during">who said it</b>, <i data-mini="lasso"></i><b data-circle="#story@0.7">what you circle</b> and <i data-mini="doc"></i><b data-circle="#after">the papers on the table</b> into one board.<br>Not just a record. <b>Understand it while you talk.</b></p>
+    <div class="hero-intro">
+      <div class="hero-writing" id="hero-writing">
+        <p class="said label"><span class="who">A</span><span id="said-time">14:02:04</span><q id="said"></q></p>
+        <svg class="ink" id="ink" role="img" aria-label="talk, and the board draws itself."></svg>
+        <div class="eraser" id="eraser"></div>
+        <button class="replay-open label" id="again">↺ write it again</button>
       </div>
-      <div class="cta"><a class="solid" href="#get">download <span>↓</span></a><a href="#story">see it write <span>→</span></a></div>
+      <div class="hero-copy">
+        <h1>a whiteboard that writes down your meeting.</h1>
+        <p>Speak naturally. Watch ideas take shape, stroke by stroke. Speech and the board model run on your own computer.</p>
+        <div class="cta"><a class="solid" href="#live">see it write <span aria-hidden="true">↘</span></a><a href="#get">get boardcast <span aria-hidden="true">↓</span></a></div>
+      </div>
     </div>
-    <div class="hero-rail label">
-      <div class="chapters"><span class="on">01 talk</span><span>02 four lines</span><span>03 the app</span><span>04 the real app</span></div>
-      <button class="replay-open label" id="again">↺ hear it again</button>
-      <span>all on your machine.</span>
+    <div class="try" id="live">
+      <div class="try-head label"><span>from conversation to canvas <b aria-hidden="true">↘</b></span><a href="./demo/">open full demo ↗</a></div>
+      <iframe src="./demo/?embed" title="boardcast web demo"></iframe>
+      <div class="try-foot label"><span>5 recorded sample meetings · no microphone needed</span><span>your words. a shared picture.</span></div>
+    </div>
+    <div class="hero-rail">
+      <p>made for the conversation.</p>
+      <div class="label"><span>runs locally</span><span>no account</span><span>no audio uploaded</span></div>
     </div>
   </div>
 </section>
@@ -118,21 +130,8 @@
   </div>
 </section>
 
-<!-- ———————————————— the real app ———————————————— -->
-<section class="block wrap" id="real" data-sheet="04 the real app">
-  <div class="head"><h2>the real app,<br><em>not a mock-up.</em></h2><p>Screenshots of boardcast itself, with sample meetings on the board. Then try it below, in your browser, with the same board code.</p></div>
-  <div class="shots">
-    <figure class="shot"><img src="./media/en-upload-branch.webp" alt="A flow chart: an upload API sends files to a virus scanner, which branches to object storage or a circled quarantine" loading="lazy" width="1600" height="1000"><figcaption class="label"><span>upload pipeline · a flow that branches</span><span>01</span></figcaption></figure>
-    <figure class="shot"><img src="./media/en-platform-groups.webp" alt="Clients grouped in a box, both forwarding to a backend, beside a BFF layer list" loading="lazy" width="1600" height="1000"><figcaption class="label"><span>service groups · boxes and lists on one board</span><span>02</span></figcaption></figure>
-  </div>
-  <div class="try">
-    <div class="try-head label"><span>web demo · seven sample meetings, replayed by the app's board code</span><a href="./demo/">open full screen →</a></div>
-    <iframe src="./demo/?embed" title="boardcast web demo" loading="lazy"></iframe>
-  </div>
-</section>
-
 <!-- ———————————————— during ———————————————— -->
-<section class="block wrap" id="during" data-sheet="05 during">
+<section class="block wrap" id="during" data-sheet="04 during">
   <div class="head"><h2>during the meeting,<br><em>one click is enough.</em></h2><p>Marking, rewriting, circling: each takes a single click. Every card shows what it really does.</p></div>
   <div class="bento">
     <div class="card w4"><span class="k label">02 / circle</span><svg class="pict" data-icon="lasso" viewBox="0 0 64 64"></svg>
@@ -161,7 +160,7 @@
 </section>
 
 <!-- ———————————————— after ———————————————— -->
-<section class="block wrap" id="after" data-sheet="06 after">
+<section class="block wrap" id="after" data-sheet="05 after">
   <div class="head"><h2>after the meeting,<br><em>it is already sorted.</em></h2><p>Each of these is made of dots. Point at one and it scatters, then gathers again.</p></div>
   <div class="dots">
     <div class="dot-card"><canvas data-icon="doc"></canvas><span class="label">summary</span><h4>summary</h4><p>Conclusions, decisions and to-dos to edit, tick off and copy.</p></div>
@@ -171,7 +170,7 @@
   </div>
 </section>
 
-<section class="block wrap" id="get" data-sheet="07 specs">
+<section class="block wrap" id="get" data-sheet="06 specs">
   <div class="head"><h2>specs.</h2><p>What is inside, written down like a product manual.</p></div>
   <div class="specs">
     <dl><dt>speech</dt><dd>parakeet · reazonspeech · sensevoice</dd><dt>speakers</dt><dd>cam++ voiceprints</dd><dt>board model</dt><dd>qwen3.5 4b / 9b · minicpm5</dd><dt>runtime</dt><dd>llama.cpp · vulkan / metal</dd></dl>
@@ -184,7 +183,7 @@
   </div>
 </section>
 
-<section class="now wrap" id="now-sheet" data-sheet="08 now">
+<section class="now wrap" id="now-sheet" data-sheet="07 now">
   <span class="label">your local time</span>
   <div class="clock" id="now">--<span class="sep">:</span>--</div>
   <p>your next meeting. let the board draw itself.</p>

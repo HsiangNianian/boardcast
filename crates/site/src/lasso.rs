@@ -79,7 +79,7 @@ pub fn init() {
             encloses(&shape, (r.left() + r.width() / 2.0, r.top() + r.height() / 2.0))
         });
         let Some(hit) = hit else {
-            say("nothing circled. try a word in white.");
+            say("nothing circled. try a word in the headline.");
             timeout(500, finish);
             return;
         };

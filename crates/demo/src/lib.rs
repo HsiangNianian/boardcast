@@ -33,8 +33,7 @@ struct SampleLine {
     ops: Option<String>,
 }
 
-/// The English samples, whose boards need only the Latin strokes built into the board crate, then two in
-/// Chinese, whose characters come from `zh-glyphs.pack`.
+/// Recorded English meetings for the web demo.
 fn samples() -> Vec<Sample> {
     [
         include_str!("../../../assets/demos/en-release-priorities.json"),
@@ -42,8 +41,6 @@ fn samples() -> Vec<Sample> {
         include_str!("../../../assets/demos/en-upload-branch.json"),
         include_str!("../../../assets/demos/en-platform-groups.json"),
         include_str!("../../../assets/demos/en-owner-handoff.json"),
-        include_str!("../../../assets/demos/login-flow.json"),
-        include_str!("../../../assets/demos/bs-mixed.json"),
     ]
     .iter()
     .map(|s| serde_json::from_str(s).expect("a sample meeting"))
@@ -51,23 +48,21 @@ fn samples() -> Vec<Sample> {
 }
 
 /// Short names for the sample list, in the samples' order.
-const TITLES: [&str; 7] = ["Release checklist", "Sign-in flow", "Upload pipeline", "Service groups", "Owner handoff", "登录流程", "流程和待办"];
+const TITLES: [&str; 5] = ["Release checklist", "Sign-in flow", "Upload pipeline", "Service groups", "Owner handoff"];
 
-/// The app's dark board shows strokes, composed in marker colors, in their chalk.
-fn chalk(rgb: u32) -> String {
-    let c = match rgb {
-        0x1e_1e_1e => 0xec_ec_e6,
-        0xe0_31_31 => 0xff_5a_36,
-        0x19_71_c2 => 0x9f_b4_ff,
-        other => other,
-    };
-    format!("#{c:06x}")
+/// CSS recolors existing strokes without clearing or restarting the board.
+fn ink_color(rgb: u32) -> String {
+    match rgb {
+        0x1e_1e_1e => "var(--board-ink, #ecece6)".into(),
+        0xe0_31_31 => "var(--board-red, #ff5a36)".into(),
+        0x19_71_c2 => "var(--board-blue, #9fb4ff)".into(),
+        other => format!("#{other:06x}"),
+    }
 }
 
 /// Board units of ink per millisecond, as quick as a hand that knows what it is writing.
 const PEN_SPEED: f32 = 1.4;
-/// Room around the ink, and the least the canvas shows, so a small board is not blown up. A narrow
-/// canvas shows less, so a phone still reads the writing.
+/// Room around the ink, and the least the canvas shows. Compact canvases show less to keep ink legible.
 const MARGIN: f64 = 80.0;
 const MIN_VIEW: (f64, f64) = (900.0, 560.0);
 
@@ -208,7 +203,7 @@ impl Board {
 fn frame_for(b: &Bounds) -> [f64; 4] {
     let (bw, bh, cx, cy) = if b.x1 > b.x0 { (b.x1 - b.x0, b.y1 - b.y0, (b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0) } else { (0.0, 0.0, 0.0, 0.0) };
     let r = q("#board").get_bounding_client_rect();
-    let narrow = (r.width() / MIN_VIEW.0).clamp(0.45, 1.0);
+    let narrow = (r.width() / MIN_VIEW.0).min(r.height() / MIN_VIEW.1).clamp(0.45, 1.0);
     let margin = MARGIN * narrow;
     let (w, h) = ((bw + margin * 2.0).max(MIN_VIEW.0 * narrow), (bh + margin * 2.0).max(MIN_VIEW.1 * narrow));
     let aspect = if r.height() > 0.0 { r.width() / r.height() } else { 1.6 };
@@ -217,7 +212,7 @@ fn frame_for(b: &Bounds) -> [f64; 4] {
 }
 
 fn stroke_node(style: Style) -> Element {
-    svg_el("path", &[("fill", &chalk(style.rgb)), ("fill-opacity", &style.alpha.to_string())])
+    svg_el("path", &[("fill", &ink_color(style.rgb)), ("fill-opacity", &style.alpha.to_string())])
 }
 
 struct Ui {
@@ -249,6 +244,8 @@ async fn play(sample: &Sample, index: usize, board: &RefCell<Board>, ui: &Ui, co
     board.borrow_mut().clear();
     ui.lines.set_text_content(None);
     ui.title.set_text_content(Some(TITLES[index]));
+    let _ = ui.listen.class_list().toggle_with_force("paused", control.paused.get());
+    q("#listen-label").set_text_content(Some(if control.paused.get() { "resume" } else { "pause" }));
     for (i, t) in ui.tabs.iter().enumerate() {
         let _ = t.class_list().toggle_with_force("on", i == index);
     }
@@ -402,6 +399,7 @@ pub fn start() {
         on(&q("#listen"), "click", move |_| {
             control.paused.set(!control.paused.get());
             let _ = ui.listen.class_list().toggle_with_force("paused", control.paused.get());
+            q("#listen-label").set_text_content(Some(if control.paused.get() { "resume" } else { "pause" }));
         });
     }
     {

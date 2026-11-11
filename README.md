@@ -168,6 +168,8 @@ cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://1
 
 Summary confidence, dates, assigned tasks and template structure have [repeatable model checks](eval/summary.md), including retained failures and rejected changes. Real microphone glossary comparisons use the [own-voice recorder](eval/asr/own-voice/README.md); real Mac measurements and the target-user trial use [the acceptance plan](eval/macos/README.md) and [trial kit](docs/trials/README.md).
 
+Draft PR #206 also checks the local model's actual token budget and summarizes oversized board material in stages, keeping short original speech when it fits. The new long-input checks still expose factual errors; generating within the context limit does not complete summary acceptance.
+
 Speech recognition has its own suites:
 
 ```sh

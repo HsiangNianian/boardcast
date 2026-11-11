@@ -103,6 +103,30 @@ impl Provider {
         Ok(strip_thinking(message(&reply)?).to_string())
     }
 
+    fn context_size(&self) -> Result<Option<usize>> {
+        let Self::Local { base } = self else { return Ok(None) };
+        let props: Value = http().get(&format!("{base}/props")).timeout(Duration::from_secs(30)).call()?.into_json()?;
+        let size = props["default_generation_settings"]["n_ctx"].as_u64()
+            .and_then(|n| usize::try_from(n).ok()).filter(|n| *n > 0).context("missing local model context size")?;
+        Ok(Some(size))
+    }
+
+    fn prompt_tokens(&self, messages: &[Value]) -> Result<usize> {
+        match self {
+            Self::Local { base } => {
+                let rendered = self.send(&format!("{base}/apply-template"), &json!({
+                    "messages": messages, "chat_template_kwargs": { "enable_thinking": false }
+                }))?;
+                let prompt = rendered["prompt"].as_str().context("missing rendered chat prompt")?;
+                let tokens = self.send(&format!("{base}/tokenize"), &json!({ "content": prompt, "add_special": false, "parse_special": true }))?;
+                Ok(tokens["tokens"].as_array().context("missing prompt tokens")?.len())
+            }
+            #[cfg(test)]
+            Self::Scripted(_) => Ok(messages.iter().filter_map(|m| m["content"].as_str()).map(|s| s.chars().count()).sum()),
+            _ => bail!("token counting requires the local model"),
+        }
+    }
+
     fn endpoint(&self) -> String {
         match self {
             Self::Remote { base_url, .. } => chat_url(base_url),

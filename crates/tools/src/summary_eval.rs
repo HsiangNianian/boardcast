@@ -2,7 +2,7 @@
 //! a guess stays an open question, an answered question leaves them, a withdrawn plan is no decision, a
 //! lettered speaker owns nothing (#68). Checks are words that must or must not appear in named sections.
 //!
-//!   summary-eval <root> [--llm <url> | --deepseek] [--repeat N] [--only id,id] [--label name]
+//!   summary-eval <root> [--llm <url> | --deepseek] [--cases path] [--repeat N] [--only id,id] [--label name]
 //!
 //! `--deepseek` reads its key from DEEPSEEK_API_KEY and never writes it. A report goes to
 //! eval/reports/summary-<label>-<time>.md, with every answer in the adjacent JSON. Failed checks fail the command.
@@ -81,12 +81,14 @@ fn failures(summary: &str, checks: &[Check]) -> Vec<String> {
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let root = PathBuf::from(args.next().context("boardcast root")?);
     let mut provider = Provider::Local { base: "http://127.0.0.1:18765".into() };
+    let mut cases_path = PathBuf::from("eval/summary-cases.json");
     let (mut repeat, mut only, mut label) = (1, None::<String>, "local".to_string());
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--llm" => provider = Provider::Local { base: args.next().context("url")? },
             "--deepseek" => (provider, label) = (Provider::deepseek_from_env()?, "deepseek".into()),
             "--repeat" => repeat = args.next().context("count")?.parse::<usize>()?.max(1),
+            "--cases" => cases_path = args.next().context("cases path")?.into(),
             "--only" => only = args.next(),
             "--label" => label = args.next().context("label")?,
             other => bail!("unknown flag {other}"),
@@ -95,8 +97,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     if label.is_empty() || !label.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) {
         bail!("label must contain only letters, digits, -, _ or .");
     }
-    let input = std::fs::read(root.join("eval/summary-cases.json"))?;
-    let mut cases: Vec<Case> = serde_json::from_slice(&input).context("reading eval/summary-cases.json")?;
+    let input = std::fs::read(root.join(&cases_path)).with_context(|| format!("reading {}", cases_path.display()))?;
+    let mut cases: Vec<Case> = serde_json::from_slice(&input).with_context(|| format!("parsing {}", cases_path.display()))?;
     cases.retain(|c| only.as_ref().is_none_or(|ids| ids.split(',').any(|id| id == c.id)));
     if cases.is_empty() {
         bail!("no matching cases");
@@ -175,6 +177,9 @@ mod tests {
     fn every_case_reads() {
         let cases: Vec<Case> = serde_json::from_str(include_str!("../../../eval/summary-cases.json")).unwrap();
         assert!(cases.len() >= 8 && cases.iter().all(|c| !c.checks.is_empty() && !c.lines.is_empty()));
+        let cases: Vec<Case> = serde_json::from_str(include_str!("../../../eval/summary-context-cases.json")).unwrap();
+        assert_eq!(cases.len(), 4);
+        assert!(cases.iter().all(|c| !c.checks.is_empty() && !c.lines.is_empty()));
     }
 
     #[test]

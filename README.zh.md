@@ -160,6 +160,8 @@ sh packaging/linux/package.sh           # target/package/boardcast-<version>-<ar
 
 摘要可信度、日期、待办归属和模板结构使用[重复模型评测](eval/summary.md)，保留失败结果及未采用的改动。术语表实录对照从[自己的录音](eval/asr/own-voice/README.md)开始；Mac 长会和目标用户试用分别使用[验收计划](eval/macos/README.md)及[试用材料](docs/trials/README.md)。
 
+草稿 PR #206 还按本地模型的实际 token 预算分段整理过大的白板材料，并在容量允许时保留较短的原始发言。新增长输入用例仍暴露事实错误；不再超出上下文，不等于摘要验收通过。
+
 先启动可用的 llama-server，然后运行：
 
 ```sh

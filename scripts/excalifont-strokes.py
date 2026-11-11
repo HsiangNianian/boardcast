@@ -113,4 +113,7 @@ for code in sorted(codes):
         data[ch] = {"strokes": [[[round(x * 0.65, 4), round(y * 0.65 + shift, 4)] for x, y in s] for s in base["strokes"]], "advance": round(base["advance"] * 0.65, 4)}
 
 (ROOT / "assets/glyphs/handwritten.json").write_text(json.dumps(dict(sorted(data.items())), separators=(",", ":")) + "\n")
+# The website's pen only writes ASCII, so it carries just that part.
+ascii_only = {chr(c): data[chr(c)] for c in range(32, 127) if chr(c) in data}
+(ROOT / "crates/site/src/excalifont.json").write_text(json.dumps(ascii_only, separators=(",", ":")) + "\n")
 print(f"Generated {len(data)} glyphs; licenses in assets/licenses/handwritten-*.txt.")

@@ -58,14 +58,14 @@ async fn write(h: Rc<Hero>) {
     remove_class(&h.said, "typing");
     wait(250).await;
 
-    // Two lines sized to the sheet, the second indented as handwriting drifts.
-    let unit = text_strokes("board draws itself.", 0.0, 0.0, 100.0, 1).width / 100.0;
-    let size = ((w * 0.9) / (unit + 0.5)).min(ht * 0.42).min(210.0);
-    let x0 = ((w - (unit + 0.5) * size) / 2.0).max(0.0);
+    // Two lines sized to the sheet, on the left edge the said line starts from; the second drifts a little
+    // to the right, as handwriting does.
+    let unit = text_strokes("board draws itself.", 0.0, 0.0, 100.0).width / 100.0;
+    let size = ((w * 0.9) / (unit + 0.2)).min(ht * 0.42).min(210.0);
     let y1 = size * 0.95;
     let y2 = y1 + size * 1.05;
-    let l1 = text_strokes("talk, and the", x0, y1, size, 3);
-    let l2 = text_strokes("board draws itself.", x0 + size * 0.5, y2, size, 9);
+    let l1 = text_strokes("talk, and the", 0.0, y1, size);
+    let l2 = text_strokes("board draws itself.", size * 0.2, y2, size);
     set_attr(&h.svg, "aria-label", "talk, and the board draws itself.");
     let speed = (size / 52.0).max(1.6);
     pen_draw(&h.svg, &l1.strokes, Pen { class: "w big", speed, ..Pen::default() }).await;
@@ -76,8 +76,12 @@ async fn write(h: Rc<Hero>) {
     if !h.live(me) {
         return;
     }
-    let it = &l2.words[2];
-    let ring = lasso_loop(it.x + it.w / 2.0, y2 - size * 0.3, it.w / 2.0 + size * 0.22, size * 0.48, 21, 1.14);
+    // The ring keeps its room on the right, but on the left it stops halfway into the gap, clear of "draws".
+    // The loop overshoots its radius by up to a tenth.
+    let (before, it) = (&l2.words[1], &l2.words[2]);
+    let left = (it.x - size * 0.22).max((before.x + before.w + it.x) / 2.0);
+    let right = it.x + it.w + size * 0.22;
+    let ring = lasso_loop((left + right) / 2.0, y2 - size * 0.36, (right - left) / 2.0 / 1.1, size * 0.62, 21, 1.14);
     pen_draw(&h.svg, &[ring], Pen { class: "w a big", speed: speed * 1.4, lift: 0.0 }).await;
     if !h.live(me) {
         return;
@@ -108,9 +112,9 @@ async fn write(h: Rc<Hero>) {
     }
     wait(300).await;
     let note_size = (size * 0.15).max(18.0);
-    let width = text_strokes("drag a circle around any word", 0.0, 0.0, note_size, 5).width;
+    let width = text_strokes("drag a circle around any word", 0.0, 0.0, note_size).width;
     let nx = (w - size * 3.2).min(w - width - 8.0).max(size * 0.8);
-    let note = text_strokes("drag a circle around any word", nx, y2 + size * 0.62, note_size, 5);
+    let note = text_strokes("drag a circle around any word", nx, y2 + size * 0.62, note_size);
     pen_draw(&h.svg, &note.strokes, Pen { class: "w note", speed: 1.4, lift: 12.0 }).await;
     let a: Pt = (nx - size * 0.05, y2 + size * 0.5);
     let b: Pt = (a.0 - size * 0.5, y2 + size * 0.18);

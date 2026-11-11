@@ -1,28 +1,24 @@
-//! A pen that writes in stroke order. The letters come from EMS Tech, a single-stroke font: each glyph is a
-//! few centerlines, so the pen can follow them the way a hand would rather than revealing filled letters.
+//! A pen that writes in stroke order. The letters are the centerlines the app writes English with, traced from
+//! Excalifont by `scripts/excalifont-strokes.py`, so the pen follows them the way a hand would rather than
+//! revealing filled letters.
 
-use crate::util::{frame, length_of, now, reduced, set_attr, svg_el, to_d, Pt, Rand};
+use crate::util::{frame, length_of, now, reduced, set_attr, svg_el, to_d, Pt};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use web_sys::Element;
 
-struct Font {
-    em: f64,
-    glyphs: HashMap<char, (String, f64)>,
+/// Where the baseline sits in the glyphs' own units, one unit being the font size.
+const BASELINE: f64 = 0.88;
+
+#[derive(serde::Deserialize)]
+struct Glyph {
+    strokes: Vec<Vec<Pt>>,
+    advance: f64,
 }
 
-fn font() -> &'static Font {
-    static FONT: OnceLock<Font> = OnceLock::new();
-    FONT.get_or_init(|| {
-        let raw: serde_json::Value = serde_json::from_str(include_str!("emstech.json")).expect("the pen's font");
-        let glyphs = raw["g"]
-            .as_object()
-            .expect("glyphs")
-            .iter()
-            .filter_map(|(ch, g)| Some((ch.chars().next()?, (g[0].as_str()?.to_string(), g[1].as_f64()?))))
-            .collect();
-        Font { em: raw["em"].as_f64().expect("em"), glyphs }
-    })
+fn font() -> &'static HashMap<char, Glyph> {
+    static FONT: OnceLock<HashMap<char, Glyph>> = OnceLock::new();
+    FONT.get_or_init(|| serde_json::from_str(include_str!("excalifont.json")).expect("the pen's font"))
 }
 
 pub struct Word {
@@ -37,39 +33,29 @@ pub struct Line {
     pub width: f64,
 }
 
-/// A line of text as pen strokes in page units, with where each word sits.
-pub fn text_strokes(s: &str, x: f64, y: f64, size: f64, seed: u32) -> Line {
+/// A line of text as pen strokes in page units, with where each word sits. `y` is the baseline.
+pub fn text_strokes(s: &str, x: f64, y: f64, size: f64) -> Line {
     let font = font();
-    let k = size / font.em;
-    let mut r = Rand::new(seed);
     let (mut strokes, mut words) = (vec![], vec![]);
     let (mut cx, mut word_start, mut word) = (x, x, String::new());
-    let space = &font.glyphs[&' '];
+    let space = &font[&' '];
     for ch in s.chars().chain([' ']) {
         if ch == ' ' && !word.is_empty() {
             words.push(Word { text: std::mem::take(&mut word), x: word_start, w: cx - word_start });
         }
-        let g = font.glyphs.get(&ch).unwrap_or(space);
+        let g = font.get(&ch).unwrap_or(space);
         if ch != ' ' {
             if word.is_empty() {
                 word_start = cx;
             }
             word.push(ch);
         }
-        // The glyphs only use M and L: every M starts a new stroke.
-        for part in g.0.split('M').filter(|t| !t.trim().is_empty()) {
-            let n: Vec<f64> = part.replace('L', " ").split_whitespace().filter_map(|v| v.parse().ok()).collect();
-            let mut pts = vec![];
-            for pair in n.chunks_exact(2) {
-                let jx = (r.next() - 0.5) * size * 0.012;
-                let jy = (r.next() - 0.5) * size * 0.012;
-                pts.push((cx + pair[0] * k + jx, y - pair[1] * k + jy));
-            }
-            if pts.len() > 1 {
-                strokes.push(pts);
+        for stroke in &g.strokes {
+            if stroke.len() > 1 {
+                strokes.push(stroke.iter().map(|&(px, py)| (cx + px * size, y + (py - BASELINE) * size)).collect());
             }
         }
-        cx += g.1 * k * 0.97;
+        cx += g.advance * size;
     }
     Line { strokes, words, width: cx - x }
 }

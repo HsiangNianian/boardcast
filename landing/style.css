@@ -64,7 +64,7 @@ html, body { background: var(--bg); }
 body { color: var(--fg); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
 a { color: inherit; text-decoration: none; }
 ::selection { background: var(--fg); color: var(--bg); }
-.wrap { max-width: 1320px; margin: 0 auto; padding: 0 40px; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
 .label { font: 400 11px var(--mono); color: var(--dim); letter-spacing: .04em; text-transform: lowercase; }
 
 /* ———————————————— navigation, as a product manual ———————————————— */
@@ -151,7 +151,7 @@ body.drawing-lasso { user-select: none; cursor: crosshair; }
 .cta a { display: inline-flex; gap: 22px; justify-content: space-between; align-items: center; padding: 12px 16px; border: 1px solid var(--fg); font-size: 14px; }
 .cta a.solid { background: var(--fg); color: var(--bg); }
 .cta a:hover { background: var(--grey); border-color: var(--grey); color: var(--bg); }
-.hero-rail { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 26px 0; border-bottom: 1px solid var(--hair); }
+.hero-rail { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 26px 0; }
 .hero-rail p { font-size: 18px; letter-spacing: -.02em; }
 .hero-rail .label { display: flex; gap: 28px; }
 .hero-rail .label span::before { content: '+'; color: var(--accent); margin-right: 8px; }
@@ -165,22 +165,16 @@ body.drawing-lasso { user-select: none; cursor: crosshair; }
 
 /* The live sample, in a thin frame. */
 .try { border: 1px solid var(--hair); background: var(--bg); scroll-margin-top: 44px; box-shadow: 0 20px 70px #00000018; }
-.try-head, .try-foot { display: flex; justify-content: space-between; gap: 16px; padding: 12px 16px; }
-.try-head { border-bottom: 1px solid var(--hair); }
-.try-head > span { color: var(--fg); }
-.try-head b { margin-left: 16px; color: var(--accent); font-size: 16px; font-weight: 400; }
-.try-head a { color: var(--fg); }
-.try-head a:hover { color: var(--link); }
 .try iframe { display: block; width: 100%; height: clamp(340px, 44vh, 400px); border: 0; background: var(--l1); }
-.try-foot { border-top: 1px solid var(--hair); font-size: 10px; }
+.try-foot { display: flex; justify-content: space-between; gap: 16px; padding: 12px 16px; border-top: 1px solid var(--hair); font-size: 10px; }
 
-/* The demo takes the space left by the navigation, headline and bottom rail. */
+/* Keep the demo readable; shorter viewports scroll through the first sheet. */
 @media (min-width: 1081px) {
-  .hero > .wrap { display: flex; flex-direction: column; height: 100svh; min-height: 900px; }
+  .hero > .wrap { display: flex; flex-direction: column; min-height: 100svh; }
   .hero > .wrap > :not(.try) { flex-shrink: 0; }
   .try { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-  .try-head, .try-foot { flex-shrink: 0; }
-  .try iframe { flex: 1; height: 0; min-height: 0; }
+  .try-foot { flex-shrink: 0; }
+  .try iframe { flex: 1; height: 0; min-height: 600px; }
 }
 @media (min-width: 1081px) and (max-height: 960px) {
   .hero-intro { padding-top: 20px; padding-bottom: 20px; }
@@ -374,7 +368,7 @@ footer a { color: var(--dim); }
   .dots { grid-template-columns: 1fr 1fr; }
   .row { grid-template-columns: 110px 1fr; } .caption { grid-template-columns: 110px 1fr; } .row .name { font-size: 16px; }
   .dock button:not(.mic) span { display: none; }
-  .try iframe { height: clamp(560px, 70svh, 720px); }
+  .try iframe { height: calc(clamp(560px, 70svh, 720px) + 44px); }
 }
 @media (max-width: 760px) {
   .hero-intro { grid-template-columns: 1fr; gap: 28px; padding-top: 28px; }
@@ -415,9 +409,7 @@ footer a { color: var(--dim); }
   .now { padding-top: 96px; padding-bottom: 80px; } .now p { font-size: 17px; }
 
   .try { margin-inline: -14px; }
-  .try-head { align-items: center; gap: 12px; padding: 12px; font-size: 10px; }
-  .try-head a { flex-shrink: 0; white-space: nowrap; }
-  .try-head b, .try-foot span:last-child { display: none; }
+  .try-foot span:last-child { display: none; }
   .try-foot { padding: 12px; font-size: 10px; line-height: 1.5; }
 }
 

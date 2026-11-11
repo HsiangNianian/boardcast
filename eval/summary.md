@@ -74,6 +74,12 @@ The original prompt then ran the three new cases three times: **6/9**, with all 
 “一” from the Monday rehearsal (“周只做预演”). The corrected Tuesday deployment survives. This new failure remains open
 alongside the original Wednesday omission and English quantity presupposition; the other two new cases passed 3/3 each.
 
+Two three-case sampler screening probes also failed to preserve the dates: removing only the repetition penalty
+passed **0/3**; using Qwen's recommended non-thinking sampler passed **1/3**, improving only that English quantity
+output. Both still omitted Wednesday and the Monday rehearsal date. [All six outputs, inputs, source hashes and
+sampler changes](summary-rejected-samplers-2026-11-11.json) are retained. Neither warranted a full-suite rerun;
+the production sampler and its repetition guard remain unchanged. These screening scores are not product scores.
+
 ## CI result and empty-topic follow-up
 
 At `0c89941`, [Eval](https://github.com/HsiangNianian/boardcast/actions/runs/43019666812) reached the summary

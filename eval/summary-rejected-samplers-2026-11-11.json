@@ -1,0 +1,305 @@
+{
+  "date": "2026-11-11",
+  "decision": "Rejected both three-case screening probes; production prompts and sampler are unchanged. These are not full-suite scores.",
+  "base_commit": "24994417d3a23624d57b985cb740abc8ca5af457",
+  "model": {
+    "name": "Qwen3.5-4B-Q4_K_M.gguf",
+    "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    "llama_build": "b11954",
+    "device": "CPU",
+    "threads": 4,
+    "context": 4096,
+    "temperature": 0,
+    "repeat_penalty": 1.05,
+    "enable_thinking": false
+  },
+  "cases": [
+    {
+      "id": "zh-guess-stays-open",
+      "why": "A guess nobody confirmed is not a conclusion (#68).",
+      "lines": [
+        [
+          "A",
+          "失败标准应该有两个吧？"
+        ],
+        [
+          "B",
+          "我也说不准，回头再对一下。"
+        ],
+        [
+          "A",
+          "行，那先往下说部署。"
+        ],
+        [
+          "B",
+          "部署这周三上线。"
+        ]
+      ],
+      "checks": [
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "absent": [
+            "两个"
+          ]
+        },
+        {
+          "in": [
+            "待讨论"
+          ],
+          "any": [
+            "失败标准",
+            "两个"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "any": [
+            "周三",
+            "星期三"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "en-guess-stays-open",
+      "why": "A guess nobody confirmed is not a conclusion.",
+      "lines": [
+        [
+          "A",
+          "There should be two failure criteria, right?"
+        ],
+        [
+          "B",
+          "Not sure, we'll have to check."
+        ],
+        [
+          "A",
+          "Okay, moving on to deployment."
+        ],
+        [
+          "B",
+          "We ship on Wednesday."
+        ]
+      ],
+      "checks": [
+        {
+          "in": [
+            "Conclusions",
+            "Decisions"
+          ],
+          "absent": [
+            "two failure",
+            "two criteria"
+          ]
+        },
+        {
+          "in": [
+            "Open questions"
+          ],
+          "any": [
+            "criteri"
+          ]
+        },
+        {
+          "in": [
+            "Open questions"
+          ],
+          "absent": [
+            "what are the two",
+            "which are the two"
+          ]
+        },
+        {
+          "in": [
+            "Conclusions",
+            "Decisions"
+          ],
+          "any": [
+            "Wednesday"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "zh-stated-date-corrected",
+      "why": "Keep the later corrected deployment date and the earlier day's separate rehearsal.",
+      "lines": [
+        [
+          "A",
+          "部署周一上线。"
+        ],
+        [
+          "B",
+          "更正一下，部署改到周二上线，周一只做预演。"
+        ],
+        [
+          "A",
+          "收到，就按周二安排。"
+        ]
+      ],
+      "checks": [
+        {
+          "in": [
+            "结论",
+            "决定"
+          ],
+          "any": [
+            "周二",
+            "星期二"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定",
+            "待办"
+          ],
+          "any": [
+            "周一",
+            "星期一"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定",
+            "待办"
+          ],
+          "any": [
+            "预演",
+            "演练"
+          ]
+        },
+        {
+          "in": [
+            "结论",
+            "决定",
+            "待办"
+          ],
+          "absent": [
+            "周一上线",
+            "周一部署",
+            "星期一上线",
+            "星期一部署"
+          ]
+        },
+        {
+          "in": [
+            "待讨论"
+          ],
+          "absent": [
+            "上线",
+            "部署",
+            "预演",
+            "日期"
+          ]
+        }
+      ]
+    }
+  ],
+  "probes": [
+    {
+      "change": {
+        "repeat_penalty": 1.0
+      },
+      "passed": 0,
+      "total": 3,
+      "raw_report": {
+        "label": "no-repeat-penalty-probe",
+        "repeat": 1,
+        "cases_sha256": "5a2a198d31313d40274d1c70bc0c2c1556b2ebf479d46867b82f9dd7ce543b82",
+        "summary_source_sha256": "18f631b6d26dbbf5a508cf2c89c52e689ca1f00a06c13b40487d1876ec1baad8",
+        "agent_source_sha256": "7e0e2badb45581c26354bbafff5b460a5a584e2e9fe894500c0185b4f0fc7a6e",
+        "answers": [
+          {
+            "case": "zh-guess-stays-open",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准应该有两个",
+            "failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "elapsed_ms": 15339
+          },
+          {
+            "case": "en-guess-stays-open",
+            "run": 1,
+            "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the two failure criteria?",
+            "failures": [
+              "Open questions has \"what are the two\""
+            ],
+            "elapsed_ms": 17037
+          },
+          {
+            "case": "zh-stated-date-corrected",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n部署改到周二上线，周只做预演\n\n### 待办\n无\n\n### 待讨论\n无",
+            "failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ],
+            "elapsed_ms": 4740
+          }
+        ]
+      }
+    },
+    {
+      "change": {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "min_p": 0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0
+      },
+      "passed": 1,
+      "total": 3,
+      "raw_report": {
+        "label": "instruct-sampler-probe",
+        "repeat": 1,
+        "cases_sha256": "5a2a198d31313d40274d1c70bc0c2c1556b2ebf479d46867b82f9dd7ce543b82",
+        "summary_source_sha256": "18f631b6d26dbbf5a508cf2c89c52e689ca1f00a06c13b40487d1876ec1baad8",
+        "agent_source_sha256": "757e514e93d3ce409a3a7cf39b1d9d8b3f2984f60863179f1dc2f637b85ba9b5",
+        "answers": [
+          {
+            "case": "zh-guess-stays-open",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n无\n\n### 待办\n无\n\n### 待讨论\n失败标准的数量及具体内容待定",
+            "failures": [
+              "结论/决定 lacks any of [\"周三\", \"星期三\"]"
+            ],
+            "elapsed_ms": 4391
+          },
+          {
+            "case": "en-guess-stays-open",
+            "run": 1,
+            "summary": "### Conclusions\n- Ship on Wednesday.\n\n### Decisions\n- None\n\n### To-dos\n- None\n\n### Open questions\n- What are the failure criteria?",
+            "failures": [],
+            "elapsed_ms": 3526
+          },
+          {
+            "case": "zh-stated-date-corrected",
+            "run": 1,
+            "summary": "### 结论\n无\n\n### 决定\n- 部署改到周二上线，周只做预演。\n\n### 待办\n无\n\n### 待讨论\n无",
+            "failures": [
+              "结论/决定/待办 lacks any of [\"周一\", \"星期一\"]"
+            ],
+            "elapsed_ms": 4828
+          }
+        ]
+      }
+    }
+  ],
+  "unchanged": {
+    "repeat_last_n": 256,
+    "max_tokens": 1024,
+    "enable_thinking": false,
+    "cache_prompt": true
+  },
+  "reference": "https://huggingface.co/Qwen/Qwen3.5-4B",
+  "manual_review": "Both probes omit the stated Wednesday deployment and lose the Monday rehearsal date. Removing repetition penalty alone also retains the unconfirmed two as a premise in the English question. The non-thinking sampler removes that premise in this single output, but does not fix the Chinese facts. No full-suite follow-up was justified, and the existing repetition guard was retained."
+}

@@ -35,6 +35,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # The window and audio crates run their tests in the package jobs, with native libraries installed.
       - run: python3 eval/macos/test_watch.py
+      - run: node crates/export/tests/transcript-order.cjs
       - run: cargo run -q -p boardcast-tools -- fetch pdfium
       - run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-export -p boardcast-import -p boardcast-update -p boardcast-tools
       - name: Check the recorded boards for layout defects

@@ -3,7 +3,8 @@ use crate::pipeline::{Event, Speech};
 use anyhow::{bail, ensure, Result};
 use boardcast_audio::{capture, play_wav, system::{AutoSpeech, SystemSpeech}, Captured, Ear, Recognizers, Sentence};
 use serde::Serialize;
-use std::collections::VecDeque;
+use std::collections::{hash_map::RandomState, VecDeque};
+use std::hash::BuildHasher;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
@@ -37,6 +38,7 @@ pub fn keep(values: &mut VecDeque<u128>, value: u128) {
 #[derive(Serialize)]
 pub struct Report {
     pub id: u64,
+    pub key: String,
     pub source: String,
     pub requested_apple: bool,
     pub requested_languages: [String; 2],
@@ -50,7 +52,7 @@ pub struct Report {
 
 impl Report {
     pub fn new(id: u64, source: &str, speech: &Speech) -> Self {
-        Self { id, source: source.into(), requested_apple: speech.system,
+        Self { id, key: format!("{:016x}", RandomState::new().hash_one(id)), source: source.into(), requested_apple: speech.system,
             requested_languages: [speech.language.clone(), speech.system_language.clone()],
             phase: "preparing", failure_stage: None, tracks: Default::default(), elapsed_ms: 0, started: Instant::now() }
     }
@@ -72,6 +74,7 @@ pub struct Job {
 #[derive(Clone)]
 pub struct Heard {
     pub capture: u64,
+    pub key: String,
     pub source: usize,
     pub ready: Instant,
     /// Seconds from this capture's common origin, shared by both sources.
@@ -295,19 +298,20 @@ fn refresh_identity(job: &Job, source: usize, ear: &Ear, events: &Sender<Event>)
 
 fn heard(job: &Job, source: usize, sentence: Sentence, events: &Sender<Event>) {
     let ready = Instant::now();
-    let captured = {
+    let (key, captured) = {
         let mut report = job.report.lock().unwrap();
         report.tracks[source].finals += 1;
         keep(&mut report.tracks[source].asr_ms, sentence.asr_ms);
         if let Some(elapsed) = sentence.captured[1].and_then(|end| ready.checked_duration_since(end)) {
             keep(&mut report.tracks[source].audio_end_to_final_ms, elapsed.as_millis());
         }
-        sentence.captured.map(|time| time.map(|time| {
+        let captured = sentence.captured.map(|time| time.map(|time| {
             if time >= report.started { (time - report.started).as_secs_f64() }
             else { -(report.started - time).as_secs_f64() }
-        }))
+        }));
+        (report.key.clone(), captured)
     };
-    let audio = Heard { capture: job.id, source, ready, captured, report: job.report.clone() };
+    let audio = Heard { capture: job.id, key, source, ready, captured, report: job.report.clone() };
     let _ = events.send(Event::Spoken { meeting: job.meeting, sentence, audio });
 }
 
@@ -435,6 +439,7 @@ while True:
     fn final_times_share_the_capture_origin_and_keep_untimed_input_unknown() {
         let speech = Speech { helper: None, system: false, language: "detect".into(), system_language: "auto".into() };
         let mut report = Report::new(3, "both", &speech);
+        assert_ne!(report.key, Report::new(3, "both", &speech).key, "capture IDs can repeat after restarting the app");
         report.started = Instant::now() - Duration::from_secs(10);
         let origin = report.started;
         let job = Job { id: 3, meeting: 7, input: None, source: "both".into(), speech,
@@ -449,6 +454,7 @@ while True:
                 start: 0.0, seconds: 1.0, captured: times, engine: boardcast_audio::Engine::SenseVoice }, &events);
             let Event::Spoken { meeting, sentence, audio } = receive.recv().unwrap() else { panic!("missing sentence") };
             assert_eq!((meeting, audio.capture, audio.source), (7, 3, source));
+            assert_eq!(audio.key, job.report.lock().unwrap().key);
             assert_eq!(audio.captured, expected);
             assert_eq!(sentence.start, 0.0);
             if let Some(end) = times[1] {

@@ -4,6 +4,30 @@
 use crate::graph::{Edge, Graph, Group, Node};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+
+/// Only a capture's persistent key makes its relative timestamps comparable across app restarts.
+pub fn capture_time(line: &Value) -> Option<(&str, f64)> {
+    if line["manual"].as_bool().unwrap_or(false) { return None; }
+    let key = line["capture"]["key"].as_str().filter(|key| !key.is_empty())?;
+    let time = line["capture"]["startSeconds"].as_f64().filter(|time| time.is_finite())?;
+    Some((key, time))
+}
+
+/// Read timed lines in capture order without moving stored indices, other captures or untimed slots.
+pub fn transcript_order(lines: &[Value]) -> Vec<usize> {
+    let mut captures: HashMap<&str, Vec<(usize, f64)>> = HashMap::new();
+    for (index, line) in lines.iter().enumerate() {
+        if let Some((key, time)) = capture_time(line) { captures.entry(key).or_default().push((index, time)); }
+    }
+    let mut order: Vec<_> = (0..lines.len()).collect();
+    for captured in captures.values_mut() {
+        let slots: Vec<_> = captured.iter().map(|(index, _)| *index).collect();
+        captured.sort_by(|a, b| a.1.partial_cmp(&b.1).expect("finite capture times"));
+        for (slot, (index, _)) in slots.into_iter().zip(captured) { order[slot] = *index; }
+    }
+    order
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(bound(deserialize = "T: Deserialize<'de>"))]
@@ -244,6 +268,27 @@ impl Player {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn captions_keep_their_indices_while_each_capture_reads_in_time_order() {
+        let lines = serde_json::json!([
+            {"text":"later", "capture":{"key":"first", "id":1, "startSeconds":3}},
+            {"text":"manual", "manual":true, "capture":{"key":"first", "startSeconds":0}},
+            {"text":"earlier", "capture":{"key":"first", "id":1, "startSeconds":1}},
+            {"text":"new run later", "capture":{"key":"second", "id":1, "startSeconds":4}},
+            {"text":"equal time", "capture":{"key":"first", "startSeconds":1}},
+            {"text":"old clock", "capture":{"id":1, "startSeconds":0}},
+            {"text":"new run earlier", "capture":{"key":"second", "id":1, "startSeconds":2}},
+            {"text":"unknown time", "capture":{"key":"first", "startSeconds":"0"}},
+            {"text":"legacy"}
+        ]);
+        let original = lines.clone();
+        let lines = lines.as_array().unwrap();
+        assert_eq!(transcript_order(lines), [2, 1, 4, 6, 0, 5, 3, 7, 8]);
+        assert_eq!(transcript_order(&lines[..2]), [0, 1]);
+        assert_eq!(transcript_order(&lines[..3]), [2, 1, 0]);
+        assert_eq!(lines, original.as_array().unwrap());
+    }
 
     #[test]
     fn a_replay_follows_the_meeting_across_boards() {

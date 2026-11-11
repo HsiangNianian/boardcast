@@ -1159,12 +1159,15 @@ mod tests {
         let store = Store::new(path.clone());
         let mut live = Live::new();
         live.add_line(None, "用户调网关", None);
+        live.lines[0]["capture"] = json!({"key":"capture", "startSeconds":5});
+        live.add_line(None, "先验证权限", None);
+        live.lines[1]["capture"] = json!({"key":"capture", "startSeconds":1});
         let g = with(&live.graph, "E 「用户」 -> 「网关」\nM 「网关」 星标");
-        live.model_drew(&[(None, "用户调网关".into())], g, json!({ "regionAt": [["n", { "x": 1, "y": 2 }]] }), "ops", 5);
+        live.model_drew(&[(None, "用户调网关".into()), (None, "先验证权限".into())], g, json!({ "regionAt": [["n", { "x": 1, "y": 2 }]] }), "ops", 5);
         let id = live.id().to_string();
         let revision = store.save(&id, live.snapshot(), &live.origin.clone(), live.revision).unwrap();
         live.saved(revision);
-        let again = Live::from_loaded(store.load(&id).unwrap().unwrap());
+        let mut again = Live::from_loaded(store.load(&id).unwrap().unwrap());
         assert_eq!(again.graph, live.graph);
         assert_eq!(again.memory, live.memory);
         assert_eq!(again.lines, live.lines);
@@ -1172,6 +1175,12 @@ mod tests {
         assert_eq!(again.steps, live.steps);
         assert_eq!(again.title(), live.title());
         assert_eq!(again.revision, 1);
+        let order = boardcast_board::steps::transcript_order(&again.lines);
+        assert_eq!(order, [1, 0]);
+        assert_eq!(again.steps[0]["line"], 2);
+        again.move_line(order[0], "小林");
+        assert_eq!(again.lines[1]["speaker"], "小林");
+        assert!(again.lines[0]["speaker"].is_null());
         let _ = std::fs::remove_dir_all(path);
     }
 }

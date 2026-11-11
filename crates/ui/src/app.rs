@@ -26,7 +26,7 @@ use boardcast_export::Kind as ExportKind;
 use boardcast_import::pdf::NewPage;
 use boardcast_board::spans::{span_at, Unit};
 use boardcast_board::speakers::{by_of_edge, by_of_node, first_seen, initial, said_at};
-use boardcast_board::steps::{clock, replay_to, Player};
+use boardcast_board::steps::{clock, replay_to, transcript_order, Player};
 use gpui_kit::base::input::{Textarea, TextareaState};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -1333,7 +1333,7 @@ impl Workbench {
                         self.keep_heard_text();
                         if let Some(line) = self.live.lines.last_mut() {
                             line["source"] = serde_json::json!(crate::listen::SOURCES[audio.source]);
-                            line["capture"] = serde_json::json!({ "id": audio.capture, "sourceStartSeconds": sentence.start, "seconds": sentence.seconds,
+                            line["capture"] = serde_json::json!({ "id": audio.capture, "key": audio.key, "sourceStartSeconds": sentence.start, "seconds": sentence.seconds,
                                 "startSeconds": audio.captured[0], "endSeconds": audio.captured[1] });
                         }
                         if self.follow_pages(&sentence.text, cx) {
@@ -1402,7 +1402,9 @@ impl Workbench {
             } else if at.elapsed() < JUMP_SCROLLING {
                 // A list scrolls only once it has been laid out, which the transcript may not have
                 // been if another panel was showing. Newest first on screen.
-                self.transcript_scroll.scroll_to_item(self.live.lines.len().saturating_sub(line + 1));
+                if let Some(position) = self.transcript_order().iter().rev().position(|index| *index == line) {
+                    self.transcript_scroll.scroll_to_item(position);
+                }
                 changed = true;
             }
         }
@@ -2837,6 +2839,11 @@ impl Workbench {
         cx.notify();
     }
 
+    fn transcript_order(&self) -> Vec<usize> {
+        let shown = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&r.steps).min(self.live.lines.len()));
+        transcript_order(&self.live.lines[..shown])
+    }
+
     /// A voice says who it is. A sentence too short to tell goes to whoever spoke last.
     fn who_spoke(&mut self, voiceprint: Option<&[f32]>, seconds: f64) -> Option<String> {
         if let Some(print) = voiceprint.filter(|_| self.form.saved.diarize) {
@@ -4061,7 +4068,8 @@ impl Render for Workbench {
             });
         // With the transcript away, the latest line still shows that the room is being heard.
         let transcript_shown = self.panel == Panel::Transcript && self.transcript_open;
-        let caption = self.live.lines.iter().rev().find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !transcript_shown && self.replay.is_none());
+        let transcript_order = self.transcript_order();
+        let caption = transcript_order.iter().rev().map(|&i| &self.live.lines[i]).find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !transcript_shown && self.replay.is_none());
         let banner = self.notice.clone().or_else(|| match &self.save {
             SaveState::Failed(error) => Some(format!("{}{error}", tr("Your meeting is still open here, but it was not saved: ", "这场会还在这里，但没有保存成功："))),
             _ => None,
@@ -4071,8 +4079,6 @@ impl Render for Workbench {
             ViewOnly::NewerFormat => tr("This meeting was saved by a newer version, so it is view-only.", "这场会是新版本保存的，只能查看。"),
             ViewOnly::ImportedContent => tr("This meeting has free-edit content, which this version does not show. It is view-only here, and its file is unchanged.", "这场会含自由编辑内容，这个版本不显示，这里只能查看，文件不会被改动。"),
         });
-        // During a replay the transcript has only reached that moment.
-        let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&r.steps).min(self.live.lines.len()));
         let replay_bar = self.replay_bar(window, cx);
         let transcript = div()
             .id("transcript")
@@ -4083,7 +4089,8 @@ impl Render for Workbench {
             .gap_3()
             .flex()
             .flex_col()
-            .children(self.live.lines[..shown_lines].iter().enumerate().rev().map(|(i, l)| {
+            .children(transcript_order.into_iter().rev().map(|i| {
+                let l = &self.live.lines[i];
                 let manual = l["manual"].as_bool().unwrap_or(false);
                 let note = line_note(l, self.preparing.is_some());
                 let jumped = self.jumped_line.is_some_and(|(line, _)| line == i);

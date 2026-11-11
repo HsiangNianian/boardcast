@@ -10,7 +10,7 @@ pub mod replay_page;
 use anyhow::{bail, Context, Result};
 use boardcast_board::glyphs::{Glyphs, HanziSource};
 use boardcast_board::graph::Graph;
-use boardcast_board::steps::ink_only;
+use boardcast_board::steps::{capture_time, ink_only, transcript_order};
 use boardcast_meetings::{Live, PageImage, ViewOnly};
 use chrono::TimeZone;
 use serde_json::Value;
@@ -65,6 +65,9 @@ impl Kind {
 /// One line of the transcript.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Said {
+    /// Original index, so replay can reveal only lines received by each recorded board step.
+    pub index: usize,
+    pub capture_key: Option<String>,
     pub speaker: Option<String>,
     pub text: String,
     pub page: u64,
@@ -74,13 +77,18 @@ pub struct Said {
 
 impl Said {
     pub fn from_stored(lines: &[Value]) -> Vec<Self> {
-        lines
-            .iter()
-            .map(|l| Self {
-                speaker: l["speaker"].as_str().filter(|s| !s.is_empty()).map(str::to_string),
-                text: l["text"].as_str().unwrap_or_default().to_string(),
-                page: l["page"].as_u64().unwrap_or(0),
-                manual: l["manual"].as_bool().unwrap_or(false),
+        transcript_order(lines)
+            .into_iter()
+            .map(|index| {
+                let l = &lines[index];
+                Self {
+                    index,
+                    capture_key: capture_time(l).map(|(key, _)| key.to_string()),
+                    speaker: l["speaker"].as_str().filter(|s| !s.is_empty()).map(str::to_string),
+                    text: l["text"].as_str().unwrap_or_default().to_string(),
+                    page: l["page"].as_u64().unwrap_or(0),
+                    manual: l["manual"].as_bool().unwrap_or(false),
+                }
             })
             .collect()
     }
@@ -259,7 +267,7 @@ mod tests {
     #[test]
     fn stored_lines_keep_their_board_and_notes_stay_marked() {
         let lines = Said::from_stored(&[serde_json::json!({ "text": "a", "speaker": "A", "page": 1 }), serde_json::json!({ "text": "b", "manual": true })]);
-        assert_eq!(lines[0], Said { speaker: Some("A".into()), text: "a".into(), page: 1, manual: false });
+        assert_eq!(lines[0], Said { index: 0, capture_key: None, speaker: Some("A".into()), text: "a".into(), page: 1, manual: false });
         assert!(lines[1].manual);
     }
 }

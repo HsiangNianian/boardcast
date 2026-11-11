@@ -85,8 +85,8 @@ pub struct Line {
 impl Line {
     /// The spoken lines of a stored transcript.
     pub fn spoken(lines: &[Value]) -> Vec<Self> {
-        lines
-            .iter()
+        boardcast_board::steps::transcript_order(lines)
+            .into_iter().map(|i| &lines[i])
             .filter(|l| !l["manual"].as_bool().unwrap_or(false))
             .map(|l| Self {
                 speaker: l["speaker"].as_str().map(str::to_string),
@@ -680,6 +680,20 @@ mod tests {
         assert_eq!(transcript(&lines, false), "> 我周五前写接口文档。\n> 小王：我周四补测试。");
         assert_eq!(lines[0].speaker.as_deref(), Some("A"));
         assert_eq!(lines[0].text, "我周五前写接口文档。");
+    }
+
+    #[test]
+    fn summary_reads_corrections_in_capture_order_even_if_they_finish_first() {
+        let source = json!([
+            {"speaker":"小王", "text":"改到周五。", "capture":{"key":"capture", "startSeconds":4}},
+            {"text":"手工备注", "manual":true},
+            {"speaker":"小林", "text":"周四上线。", "capture":{"key":"capture", "startSeconds":1}}
+        ]);
+        let lines = Line::spoken(source.as_array().unwrap());
+        assert_eq!(transcript(&lines, false), "> 小林：周四上线。\n> 小王：改到周五。");
+        let ordered = lines_of(&json!([{"speaker":"小林", "text":"周四上线。"}, {"speaker":"小王", "text":"改到周五。"}]));
+        assert_eq!(fingerprint(&[], &lines), fingerprint(&[], &ordered));
+        assert_eq!(source[0]["text"], "改到周五。");
     }
 
     #[test]

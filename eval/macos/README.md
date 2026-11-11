@@ -63,8 +63,12 @@ Rust's monotonic clock when received. See Apple's [host clock](https://developer
 and [output timestamp](https://developer.apple.com/documentation/coremedia/cmsamplebuffergetoutputpresentationtimestamp(_:)) documentation.
 Each saved transcript line retains `capture.startSeconds` and `capture.endSeconds` relative to that capture's
 shared origin. `capture.sourceStartSeconds` and `capture.seconds` remain PCM-based; a capture gap can make elapsed
-time longer than the retained PCM. The display still appends final results in completion order; chronological
-merging of captions remains unfinished. Test delayed source startup and playback pauses, then compare the two sources'
+time longer than the retained PCM. New captures also persist a random `capture.key`: process-local IDs alone
+can repeat after an app restart. The transcript, summary input and text exports order timed lines within each
+capture by `startSeconds`, keeping equal timestamps stable and untimed/manual entries in their original slots.
+Stored lines remain append-only, so speaker corrections, source jumps and replay receipt counts keep their
+original indices. Replay orders only the lines already received; it cannot reveal a late result early.
+Older lines without a capture key keep their existing order. Test delayed source startup and playback pauses, then compare the two sources'
 timestamps with an independently recorded reference. Auto waiting and recognition queues must not shift them.
 Untimed WAV input and artificial stop padding leave native endpoints unknown; diagnostic nulls mean unmeasured.
 Outside Mac, microphone time is estimated from callback arrival minus the device-reported delay.
@@ -81,8 +85,16 @@ At `56051ad`, Linux, Apple Silicon, Windows and core CI passed; Intel packaging/
 tests read each other's simulated-helper protocol. Their temporary directories used only the wall clock and PID.
 Holding the test process's wall clock constant reproduced the unexpected `1600 samples, sum 800.0` reply locally.
 Test helpers now add an atomic sequence and create directories exclusively; under the same injected clock, all
-24 audio tests pass. This fixes test isolation without changing the production stop deadline. The next Mac CI
-must still confirm it. [Local clock/fixture evidence](capture-clock-2026-11-12.json) retains commands and results.
+24 audio tests pass. This fixes test isolation without changing the production stop deadline. At `9f2d891`,
+[both Mac CI jobs](https://github.com/HsiangNianian/boardcast/actions/runs/43069060151) passed packaging, helper
+self-tests and core/audio tests. [Local clock/fixture evidence](capture-clock-2026-11-12.json) retains commands and results.
+
+The subsequent caption-order change passed the affected board, agent, export, meetings and UI tests, plus all
+ten replay receipt-prefix checks in `node crates/export/tests/transcript-order.cjs`. An isolated Linux GPUI run
+checked reordered captions, a single-line speaker correction, a board-to-source jump, replay visibility and
+save/reopen against a synthetic meeting. Markdown/PDF text and the HTML replay were also checked. The test
+fixture, results and source hashes are in [caption-order evidence](caption-order-2026-11-12.json). This verifies
+ordering and indexing, not physical clock accuracy or the model's handling of semantic corrections in #68.
 
 The sampler parser can be tested anywhere: `python3 eval/macos/test_watch.py`.
 

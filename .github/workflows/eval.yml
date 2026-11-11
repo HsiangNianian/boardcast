@@ -119,8 +119,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: asr-linux
-      # rust-cache keeps build-script outputs but not sherpa-onnx-prebuilt; force native discovery again.
-      - run: cargo clean -p sherpa-onnx-sys
+      # rust-cache can leave empty native-library directories that sherpa mistakes for a complete download.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       - run: python3 eval/asr/own-voice/test_record.py
       - run: cargo test -p boardcast-asr-eval
       - run: cargo build --release -p boardcast-asr-eval
@@ -160,8 +162,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: asr-linux
-      # rust-cache keeps build-script outputs but not sherpa-onnx-prebuilt; force native discovery again.
-      - run: cargo clean -p sherpa-onnx-sys
+      # rust-cache can leave empty native-library directories that sherpa mistakes for a complete download.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       - run: cargo build --release -p boardcast-asr-eval
       - uses: actions/download-artifact@v7
         with:

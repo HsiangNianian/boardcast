@@ -93,7 +93,7 @@ Linux 安装版启动后不久会检查新版本，在后台安装，等你重�
 
 ### 发布状态和剩余工作
 
-[#206](https://github.com/HsiangNianian/boardcast/pull/206) 恢复了 Mac 麦克风、系统及双路收音，增加两路独立的 Apple 语言选择和有限容量的收音诊断。这些尚未进入 v0.27.0；真实 Mac 的授权、双路转写和长会仍需按[验收计划](eval/macos/README.md)核对。「系统语言」跟随操作系统，不是自动检测正在说的语言。全局收音快捷键和完整诊断包仍未迁回。Excalidraw 自由编辑和导出已从 GPUI 版移除。
+[#206](https://github.com/HsiangNianian/boardcast/pull/206) 恢复了 Mac 麦克风、系统及双路收音，两路分别运行识别，并提供独立的 Apple 语言选择和有限容量的收音诊断。这些尚未进入 v0.27.0；真实 Mac 的授权、双路转写和长会仍需按[验收计划](eval/macos/README.md)核对。「系统语言」跟随操作系统，不是自动检测正在说的语言。全局收音快捷键和完整诊断包仍未迁回。Excalidraw 自由编辑和导出已从 GPUI 版移除。
 
 相对最新正式版 **v0.27.0**，`main` 还增加了 PDF 选页导入（[#202](https://github.com/HsiangNianian/boardcast/pull/202)）和单句改说话人（[#201](https://github.com/HsiangNianian/boardcast/pull/201)）；这两项尚未进入该版本的安装包。改单句暂不修改对应板书内容的归属，说话人的声纹统计会随会议保存；逐句声纹只在会议打开期间保留，因此重新打开后改旧句子无法重算对应的声纹统计。
 

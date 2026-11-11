@@ -11,6 +11,7 @@ on:
       - 'Cargo.lock'
       - 'assets/demos/**'
       - 'eval/macos/**'
+      - 'eval/asr/corpus.json'
       - '.github/workflows/rust.yml'
   pull_request:
     paths:
@@ -21,6 +22,7 @@ on:
       - 'Cargo.lock'
       - 'assets/demos/**'
       - 'eval/macos/**'
+      - 'eval/asr/corpus.json'
       - '.github/workflows/rust.yml'
 
 jobs:
@@ -65,6 +67,22 @@ jobs:
         run: cargo test -p boardcast-audio -p boardcast-ui
         env:
           BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
+          CARGO_TARGET_DIR: ${{ runner.temp }}/audio-tests
+      - name: A waiting recognizer does not block the other audio source
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, urllib.request
+          corpus = json.loads(pathlib.Path('eval/asr/corpus.json').read_text())
+          sample = next(s for s in corpus['samples'] if s['id'] == 'en-ami-00')
+          with urllib.request.urlopen(corpus['baseUrl'] + '/' + sample['file'], timeout=60) as response:
+              audio = response.read(sample['bytes'] + 1)
+          assert len(audio) == sample['bytes'] and hashlib.sha256(audio).hexdigest() == sample['sha256']
+          pathlib.Path(os.environ['BOARDCAST_AUDIO_TEST_WAV']).write_bytes(audio)
+          PY
+          cargo test -p boardcast-ui both_sources_can_recognize_while_the_other_is_waiting -- --ignored
+        env:
+          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
+          BOARDCAST_AUDIO_TEST_WAV: ${{ runner.temp }}/dual-source.wav
           CARGO_TARGET_DIR: ${{ runner.temp }}/audio-tests
       - name: Install from the package and check again
         run: |

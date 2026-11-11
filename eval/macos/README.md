@@ -29,7 +29,8 @@ A virtual Mac CI package check does not establish microphone permission, sustain
 5. Before stopping and after stopping, use Settings → **Copy audio diagnostics**, save each JSON locally,
    and match capture IDs to the source-switch sequence. Each source retains received samples, latest arrival,
    level, maximum/current backlog and bounded queue/ASR/UI-receipt timings. Inspect counts as well as p50/p95/max.
-   The last 20 captures and last 128 timing samples per source are retained. No transcript, audio, API key or
+   Each source has its own recognition worker and a queue capped at 300 packets. The last 20 captures and last
+   128 timing samples per source are retained. No transcript, audio, API key or
    full error response is included. Actual acoustic onset → first partial, sentence end → final and screen
    presentation are **not measured**; nulls must not be reported as zero latency. This path currently emits
    final captions; timings alone do not establish complete end-to-end latency.
@@ -44,3 +45,18 @@ Do not close #34/#69/#70/#71 from protocol tests or package CI alone. Per-source
 language detection, partial-caption timing and actual two-source Apple capacity remain to be verified/finished.
 
 The sampler parser can be tested anywhere: `python3 eval/macos/test_watch.py`.
+
+The two-source scheduling regression uses the verified `en-ami-00.wav` fixture, real VAD and two stand-in
+speech helpers. Each helper waits for the other to receive a sentence: shared serial consumption fails this
+check, while separate workers complete it. A second run injects a recognition error and checks both helpers
+shut down through EOF. The blocking case failed on the serial implementation and passed with separate workers.
+The Linux package job downloads this one fixture, verifies its manifest size/hash and runs the test explicitly:
+
+```sh
+BOARDCAST_VOICE_DIR="$PWD/resources/voice" \
+BOARDCAST_AUDIO_TEST_WAV="$PWD/eval/asr/.data/en-ami-00.wav" \
+cargo test -p boardcast-ui both_sources_can_recognize_while_the_other_is_waiting -- --ignored
+```
+
+This exercises the production capture-job lifecycle with WAV input; it does not open devices or measure Apple
+recognition. Both tracks use the same English recording, so it is not a bilingual accuracy or clock-alignment test.

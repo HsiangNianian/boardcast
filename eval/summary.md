@@ -17,6 +17,15 @@ as a decision survives. Nonempty topic subsections are retained.
 
 ## Measured result
 
+The latest complete CI run, on the expanded 15-case suite at `2499441`, is **36/45**. The Chinese Wednesday
+deployment, English unconfirmed quantity and Chinese Monday rehearsal each fail all three repetitions. Both
+template cases pass 6/6. [All 45 outputs and hashes](summary-ci-expanded-2026-11-11.json) are retained from
+[Eval](https://github.com/HsiangNianian/boardcast/actions/runs/43036127338). The original twelve cases score
+30/36 and the new three 6/9; the earlier English CI pass was not stable. Source/case hashes match this checkout
+and the model hash matches the frozen local model, but identical runtime conditions are not established.
+The English answered-question output also leaves empty headings instead of `None`; the score above checks
+semantics, not every presentation rule. #68 remains open.
+
 Twelve cases, three runs per model, using the production source before the cleanup follow-up below. Full outputs, checks and provenance are in
 [`summary-2026-11-11.json`](summary-2026-11-11.json). The initial keyword checks reported 36/36 for both models;
 manual inspection found two omissions in those checks. The same frozen outputs were rescored against the stronger

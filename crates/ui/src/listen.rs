@@ -18,6 +18,7 @@ pub const SOURCES: [&str; 2] = ["microphone", "system"];
 pub struct Track {
     pub engine: Option<String>,
     pub locale: Option<String>,
+    pub failure_stage: Option<&'static str>,
     pub samples: u64,
     pub last_received_ms: Option<u128>,
     pub peak: f32,
@@ -44,6 +45,7 @@ pub struct Report {
     pub requested_languages: [String; 2],
     pub phase: &'static str,
     pub failure_stage: Option<&'static str>,
+    pub failure_source: Option<&'static str>,
     pub tracks: [Track; 2],
     pub elapsed_ms: u128,
     #[serde(skip)]
@@ -54,7 +56,7 @@ impl Report {
     pub fn new(id: u64, source: &str, speech: &Speech) -> Self {
         Self { id, key: format!("{:016x}", RandomState::new().hash_one(id)), source: source.into(), requested_apple: speech.system,
             requested_languages: [speech.language.clone(), speech.system_language.clone()],
-            phase: "preparing", failure_stage: None, tracks: Default::default(), elapsed_ms: 0, started: Instant::now() }
+            phase: "preparing", failure_stage: None, failure_source: None, tracks: Default::default(), elapsed_ms: 0, started: Instant::now() }
     }
 }
 
@@ -113,7 +115,7 @@ fn ear_for(models: &Path, speech: &Speech, locale: &str, stop: Arc<AtomicBool>) 
 
 struct Frame { source: usize, samples: Vec<f32>, start: Option<Instant>, arrived: Instant }
 
-enum Status { Ready(usize), Failed(anyhow::Error), Finished }
+enum Status { Ready(usize), Failed { source: usize, stage: &'static str, error: anyhow::Error } }
 
 fn send_frame(tx: &SyncSender<Frame>, report: &Arc<Mutex<Report>>, source: usize, captured: Captured) -> Result<()> {
     let Captured { samples, start } = captured;
@@ -164,7 +166,12 @@ fn run(job: &Job, models: &Path, events: &Sender<Event>) -> Result<()> {
         "microphone" => [true, false], "system" => [false, true], "both" => [true, true],
         _ => bail!("unknown capture source"),
     };
-    if active[1] { ensure!(job.speech.helper.is_some(), "system audio capture needs the Mac desktop helper"); }
+    if active[1] && job.speech.helper.is_none() {
+        let mut report = job.report.lock().unwrap();
+        report.failure_source = Some(SOURCES[1]);
+        report.tracks[1].failure_stage = Some("capture");
+        bail!("system audio capture needs the Mac desktop helper");
+    }
     let mut ears: [Option<Ear>; 2] = [None, None];
     let mut names = vec![];
     let mut notes = vec![];
@@ -172,7 +179,14 @@ fn run(job: &Job, models: &Path, events: &Sender<Event>) -> Result<()> {
         if !active[source] { continue; }
         if job.stop.load(Ordering::Relaxed) { return Ok(()); }
         let language = if source == 0 { &job.speech.language } else { &job.speech.system_language };
-        let (ear, with, locale, note) = ear_for(models, &job.speech, language, job.stop.clone())?;
+        let (ear, with, locale, note) = ear_for(models, &job.speech, language, job.stop.clone()).map_err(|error| {
+            if !job.stop.load(Ordering::Relaxed) {
+                let mut report = job.report.lock().unwrap();
+                report.failure_source = Some(SOURCES[source]);
+                report.tracks[source].failure_stage = Some("preparing");
+            }
+            error
+        })?;
         names.push(format!("{}: {with}{}", SOURCES[source], locale.as_ref().map_or(String::new(), |l| format!(" ({l})"))));
         if let Some(note) = note { notes.push(format!("{}: {note}", SOURCES[source])); }
         let mut report = job.report.lock().unwrap();
@@ -212,8 +226,7 @@ fn run(job: &Job, models: &Path, events: &Sender<Event>) -> Result<()> {
                     if let Some(error) = ear.error() { bail!("{error}"); }
                     Ok(())
                 })();
-                if let Err(error) = result { let _ = hearing_status.send(Status::Failed(error)); }
-                let _ = hearing_status.send(Status::Finished);
+                if let Err(error) = result { let _ = hearing_status.send(Status::Failed { source, stage: "recognition", error }); }
             });
             let (status, report, stop, events) = (status.clone(), job.report.clone(), job.stop.clone(), events.clone());
             let input = job.input.clone();
@@ -246,30 +259,28 @@ fn run(job: &Job, models: &Path, events: &Sender<Event>) -> Result<()> {
                 } else {
                     boardcast_audio::system::capture(helper.as_deref().unwrap(), &stop, send, ready)
                 };
-                if let Err(error) = result { if !stop.load(Ordering::Relaxed) { let _ = status.send(Status::Failed(error)); } }
+                if let Err(error) = result { if !stop.load(Ordering::Relaxed) { let _ = status.send(Status::Failed { source, stage: "capture", error }); } }
             });
         }
         drop(status);
         let mut started = [false; 2];
-        let mut finished = 0;
         let mut failure = None;
-        while finished < active.iter().filter(|on| **on).count() {
-            match statuses.recv() {
-                Ok(Status::Ready(source)) => {
+        // A capture error can arrive after the recognizer has drained; wait for both senders to close.
+        while let Ok(status) = statuses.recv() {
+            match status {
+                Status::Ready(source) => {
                     started[source] = true;
                     if failure.is_none() && (0..2).all(|i| !active[i] || started[i]) {
                         job.report.lock().unwrap().phase = "listening";
                         let _ = events.send(Event::CaptureReady(job.id));
                     }
                 }
-                Ok(Status::Finished) => finished += 1,
-                Ok(Status::Failed(error)) => {
+                Status::Failed { source, stage, error } => {
+                    let mut report = job.report.lock().unwrap();
+                    report.failure_source.get_or_insert(SOURCES[source]);
+                    report.tracks[source].failure_stage.get_or_insert(stage);
                     failure.get_or_insert(error);
                     job.stop.store(true, Ordering::Relaxed);
-                }
-                Err(error) => {
-                    failure.get_or_insert(error.into());
-                    break;
                 }
             }
         }
@@ -318,6 +329,48 @@ fn heard(job: &Job, source: usize, sentence: Sentence, events: &Sender<Event>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_setup_keeps_the_source_without_copying_the_error_or_reporting_twice() {
+        for (helper, source, stage) in [(None, "system", "capture"), (Some(PathBuf::from("private-helper-path")), "microphone", "preparing")] {
+            let speech = Speech { helper, system: true, language: "detect".into(), system_language: "detect".into() };
+            let report = Arc::new(Mutex::new(Report::new(1, "both", &speech)));
+            let (jobs, receive_jobs) = channel();
+            let (events, receive_events) = channel();
+            jobs.send(Job { id: 1, meeting: 0, input: None, source: "both".into(), speech,
+                stop: Arc::new(AtomicBool::new(false)), report: report.clone(), wavs: [None, None], done: None }).unwrap();
+            drop(jobs);
+            run_jobs(receive_jobs, PathBuf::from("private-missing-model-directory"), events);
+            let events: Vec<_> = receive_events.try_iter().collect();
+            assert_eq!(events.iter().filter(|e| matches!(e, Event::Failed(_))).count(), 1);
+            assert_eq!(events.iter().filter(|e| matches!(e, Event::CaptureStopped(1))).count(), 1);
+            let value = serde_json::to_value(&*report.lock().unwrap()).unwrap();
+            assert_eq!(value["phase"], "failed");
+            assert_eq!(value["failure_source"], source);
+            for (i, name) in SOURCES.iter().enumerate() {
+                assert_eq!(value["tracks"][i]["failure_stage"].as_str(), (*name == source).then_some(stage));
+            }
+            assert!(!value.to_string().contains("private-"));
+        }
+    }
+
+    #[test]
+    fn a_cancelled_queued_capture_has_no_failure_source() {
+        let speech = Speech { helper: None, system: true, language: "detect".into(), system_language: "detect".into() };
+        let report = Arc::new(Mutex::new(Report::new(1, "both", &speech)));
+        let (jobs, receive_jobs) = channel();
+        let (events, receive_events) = channel();
+        jobs.send(Job { id: 1, meeting: 0, input: None, source: "both".into(), speech,
+            stop: Arc::new(AtomicBool::new(true)), report: report.clone(), wavs: [None, None], done: None }).unwrap();
+        drop(jobs);
+        run_jobs(receive_jobs, PathBuf::from("private-missing-model-directory"), events);
+        assert_eq!(receive_events.try_iter().filter(|e| matches!(e, Event::Failed(_))).count(), 0);
+        let report = report.lock().unwrap();
+        assert_eq!(report.phase, "stopped");
+        assert!(report.failure_source.is_none() && report.failure_stage.is_none());
+        assert!(report.tracks.iter().all(|t| t.failure_stage.is_none()));
+    }
+
     #[test]
     fn missing_auto_detector_asks_for_a_manual_language() {
         let models = std::env::temp_dir().join(format!("boardcast-missing-models-{}", std::process::id()));
@@ -363,52 +416,76 @@ while True:
 "#).unwrap();
         std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).unwrap();
         for (languages, locales, files, fail) in [
-            (["en-US", "ja-JP"], ["en-US", "ja-JP"], ["en-ami-00", "en-ami-00"], false),
-            (["detect", "ja-JP"], ["en-US", "ja-JP"], ["en-ami-00", "en-ami-00"], false),
-            (["detect", "detect"], ["zh-CN", "ja-JP"], ["zh-alimeeting-00", "ja-fleurs-00"], false),
-            (["detect", "detect"], ["ja-JP", "zh-CN"], ["ja-fleurs-00", "zh-alimeeting-00"], false),
-            (["detect", "ja-JP"], ["en-US", "ja-JP"], ["en-ami-00", "en-ami-00"], true),
+            (["en-US", "ja-JP"], ["en-US", "ja-JP"], ["en-ami-00", "en-ami-00"], ""),
+            (["detect", "ja-JP"], ["en-US", "ja-JP"], ["en-ami-00", "en-ami-00"], ""),
+            (["detect", "detect"], ["zh-CN", "ja-JP"], ["zh-alimeeting-00", "ja-fleurs-00"], ""),
+            (["detect", "detect"], ["ja-JP", "zh-CN"], ["ja-fleurs-00", "zh-alimeeting-00"], ""),
+            (["detect", "ja-JP"], ["en-US", "ja-JP"], ["en-ami-00", "en-ami-00"], "recognition"),
+            (["en-US", "ja-JP"], ["en-US", "ja-JP"], ["en-ami-00", "private-missing-audio"], "capture"),
         ] {
             // Only equal-duration inputs use the barrier; separate utterances can end at different times.
             if files[0] == files[1] { std::fs::write(dir.join("barrier"), "").unwrap(); }
             else { let _ = std::fs::remove_file(dir.join("barrier")); }
             let speech = Speech { helper: Some(helper.clone()), system: true, language: languages[0].into(), system_language: languages[1].into() };
-            if fail { std::fs::write(dir.join("fail"), "").unwrap(); }
+            if fail == "recognition" { std::fs::write(dir.join("fail"), "").unwrap(); }
+            else { let _ = std::fs::remove_file(dir.join("fail")); }
             let report = Arc::new(Mutex::new(Report::new(9, "both", &speech)));
+            let stop = Arc::new(AtomicBool::new(false));
             let job = Job { id: 9, meeting: 17, input: None, source: "both".into(), speech: speech.clone(),
-                stop: Arc::new(AtomicBool::new(false)), report, wavs: files.map(|file| Some(audio.join(format!("{file}.wav")))), done: None };
+                stop: stop.clone(), report: report.clone(), wavs: files.map(|file| Some(audio.join(format!("{file}.wav")))), done: None };
             let (events, receive) = channel();
-            let result = run(&job, &models, &events);
+            let (jobs, receive_jobs) = channel();
+            jobs.send(job).unwrap();
+            drop(jobs);
+            run_jobs(receive_jobs, models.clone(), events);
             let mut spoken = [0; 2];
+            let mut errors = vec![];
+            let mut stopped = 0;
             for event in receive.try_iter() {
-                if let Event::Spoken { meeting, audio, sentence } = event {
-                    assert_eq!(meeting, 17);
-                    assert_eq!(audio.capture, 9);
-                    assert_eq!(sentence.text, format!("Recognized by {}", locales[audio.source]));
-                    assert_eq!(audio.captured, [None, None], "file input has no native capture clock");
-                    spoken[audio.source] += 1;
+                match event {
+                    Event::Spoken { meeting, audio, sentence } => {
+                        assert_eq!(meeting, 17);
+                        assert_eq!(audio.capture, 9);
+                        assert_eq!(sentence.text, format!("Recognized by {}", locales[audio.source]));
+                        assert_eq!(audio.captured, [None, None], "file input has no native capture clock");
+                        spoken[audio.source] += 1;
+                    }
+                    Event::Failed(error) => errors.push(error),
+                    Event::CaptureStopped(9) => stopped += 1,
+                    _ => {}
                 }
             }
-            if fail {
-                assert!(result.unwrap_err().to_string().contains("injected recognition failure"));
-                assert_eq!(job.report.lock().unwrap().failure_stage, Some("capture-or-recognition"));
+            assert_eq!(stopped, 1);
+            if !fail.is_empty() {
+                assert_eq!(errors.len(), 1, "{errors:?}");
+                if fail == "recognition" { assert!(errors[0].contains("injected recognition failure")); }
+                let report = report.lock().unwrap();
+                assert_eq!(report.phase, "failed");
+                assert_eq!(report.failure_stage, Some("capture-or-recognition"));
+                assert_eq!(report.failure_source, Some("system"));
+                assert_eq!(report.tracks[1].failure_stage, Some(fail));
+                let text = serde_json::to_string(&*report).unwrap();
+                assert!(!text.contains("private-missing-audio") && !text.contains("injected recognition failure"));
             } else {
-                assert!(result.is_ok(), "{languages:?} / {files:?}: {result:?}");
+                assert!(errors.is_empty(), "{languages:?} / {files:?}: {errors:?}");
                 assert!(spoken.iter().all(|n| *n > 0), "{spoken:?}");
-                let report = job.report.lock().unwrap();
+                let report = report.lock().unwrap();
+                assert_eq!(report.phase, "stopped");
                 assert_eq!(report.requested_languages, languages);
+                assert!(report.failure_source.is_none());
                 for (track, locale) in report.tracks.iter().zip(locales) {
+                    assert!(track.failure_stage.is_none());
                     assert_eq!(track.locale.as_deref(), Some(locale));
                     assert_eq!(track.queued_samples, 0);
                     assert!(track.samples > 0 && track.finals > 0);
                     assert!(track.audio_end_to_final_ms.is_empty());
                 }
             }
-            assert!(job.stop.load(Ordering::Relaxed));
+            assert!(stop.load(Ordering::Relaxed));
             for locale in locales {
                 assert!(dir.join(format!("{locale}.closed")).exists(), "helper did not shut down through EOF");
                 std::fs::remove_file(dir.join(format!("{locale}.closed"))).unwrap();
-                std::fs::remove_file(dir.join(locale)).unwrap();
+                let _ = std::fs::remove_file(dir.join(locale));
             }
         }
         std::fs::remove_dir_all(dir).unwrap();

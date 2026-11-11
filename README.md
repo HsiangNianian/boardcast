@@ -172,6 +172,7 @@ Draft PR #206 also checks the local model's actual token budget and summarizes o
 
 Both 4B and 9B retain known summary errors. The [latest comparisons](eval/summary-options-2026-11-12.json) preserve raw replies, rejected prompt changes and a newly checked omission of a named task owner.
 The [checker follow-up](eval/summary-checker-2026-11-12.json) removes a false positive for an open topic with no stated date. Re-scoring the same outputs changes 9B from 11/15 to 12/15; 4B stays 12/15 locally and 36/45 in CI. These are corrected checks, not improved model outputs.
+Capture diagnostics now identify the failing source and distinguish preparation, capture and recognition errors. [Regression evidence](eval/macos/capture-errors-2026-11-12.json) covers file-capture errors, one final failure report per job and helper shutdown; physical Mac acceptance remains open.
 
 Speech recognition has its own suites:
 

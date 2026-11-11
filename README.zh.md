@@ -164,6 +164,7 @@ sh packaging/linux/package.sh           # target/package/boardcast-<version>-<ar
 
 4B 和 9B 均仍有已知摘要错误。[最新对照](eval/summary-options-2026-11-12.json)保留原始回复、未采用的提示词改动，并补上了“任务保留但明确负责人丢失”的检查。
 [检查器后续修正](eval/summary-checker-2026-11-12.json)消除了未陈述具体日期的待讨论话题误报。同一批输出重评分后，9B 从 11/15 改为 12/15；4B 仍为本地 12/15、CI 36/45。这是检查纠错，模型输出没有改善。
+收音诊断现可定位失败来源，区分准备、采集和识别阶段。[回归证据](eval/macos/capture-errors-2026-11-12.json)用文件输入检查采集错误收尾、每次采集只报一次失败及 helper 退出；Mac 真机验收仍开放。
 
 先启动可用的 llama-server，然后运行：
 

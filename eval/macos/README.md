@@ -57,6 +57,14 @@ A virtual Mac CI package check does not establish microphone permission, sustain
    record that test condition separately. Existing capture fields and unmeasured physical-latency nulls remain.
    [Native GUI clipboard evidence and regression results](board-diagnostics-2026-11-12.json) cover a drawing,
    a no-op and a failed model request on Linux with synthetic content; they do not measure Mac performance.
+   `failure_source` identifies the first reported failing source. Each track's first `failure_stage` distinguishes
+   recognizer preparation (`preparing`), device/file capture (`capture`) and recognition (`recognition`);
+   null means no failure was attributed there. The existing capture-level `failure_stage` is retained.
+   The status receiver stays open until both capture and recognition workers release their senders, so a
+   capture error arriving after recognition drains is still handled. The job runner reports its final failure once;
+   error bodies, helper paths and input filenames are excluded from these diagnostic fields. A queued capture
+   cancelled before starting keeps null failure fields. [Regression evidence](capture-errors-2026-11-12.json)
+   covers setup failure and both runtime failure stages without opening an audio device.
 6. For a separately consented recording with human reference text, note missed/incorrect words, wrong source
    labels, duplicate echo and summary corrections. Keep original audio and transcript private. Verify closing
    a meeting with queued audio cannot put that audio into a newly opened meeting.
@@ -117,7 +125,9 @@ and checks both helpers shut down through EOF. The blocking case failed on the s
 with separate workers.
 The Linux package job downloads three language fixtures, verifies their manifest sizes/hashes and runs this
 test explicitly. It covers manual selection, microphone Auto with manual system language, Auto on both sources
-with Chinese/Japanese and then Japanese/Chinese input, and a failure:
+with Chinese/Japanese and then Japanese/Chinese input, a recognition failure and a file-capture failure. All six
+scenarios use the production job runner, check one stop event, and require exactly one failure event for a failed
+capture. Both stand-in helpers must exit through EOF:
 
 ```sh
 BOARDCAST_VOICE_DIR="$PWD/resources/voice" \

@@ -170,6 +170,8 @@ Summary confidence, dates, assigned tasks and template structure have [repeatabl
 
 Draft PR #206 also checks the local model's actual token budget and summarizes oversized board material in stages, keeping short original speech when it fits. Cut-off replies now fail explicitly, evaluation failures remain in reports, and To-do bullets receive working checkboxes. Ambiguous board IDs no longer acquire another board's labels during cleanup. Long-input checks still expose factual errors; generating within the context limit does not complete summary acceptance.
 
+Both 4B and 9B retain known summary errors. The [latest comparisons](eval/summary-options-2026-11-12.json) preserve raw replies, rejected prompt changes and a newly checked omission of a named task owner.
+
 Speech recognition has its own suites:
 
 ```sh

@@ -68,6 +68,7 @@ jobs:
           curl -fL --retry 3 -o ~/models/model.gguf "$MODEL_URL"
 
       - name: Start llama-server
+        id: server
         run: |
           server=$(find ~/llama -type f -name llama-server | head -1)
           chmod +x "$server"
@@ -82,12 +83,25 @@ jobs:
           cat ~/llama-server.log
           exit 1
 
-      # The board model as the app runs it. Transcript revisions are not in the GPUI app yet, so
-      # eval/revisions.json waits for them (#150).
-      - run: target/release/boardcast-tools agent-eval . board-dev.json --llm http://127.0.0.1:8080 --set dev --label "$LABEL"
-      - run: target/release/boardcast-tools agent-eval . board-pointing.json --llm http://127.0.0.1:8080 --set pointing --label "$LABEL"
       - name: Summary certainty and template topics
+        id: summary
         run: target/release/boardcast-tools summary-eval . --llm http://127.0.0.1:8080 --label "$LABEL" --repeat 3
+      # Keep summary evidence before the longer board suites or a later push can cancel the job.
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() && steps.summary.outcome != 'skipped' }}
+        with:
+          name: summary-report
+          path: |
+            eval/reports/summary-*
+            eval/reports/model-sha256.txt
+          if-no-files-found: error
+
+      # The board model as the app runs it. Transcript revisions are not in the GPUI app yet, so
+      # eval/revisions.json waits for them (#150). Summary failures must not skip these checks.
+      - run: target/release/boardcast-tools agent-eval . board-dev.json --llm http://127.0.0.1:8080 --set dev --label "$LABEL"
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
+      - run: target/release/boardcast-tools agent-eval . board-pointing.json --llm http://127.0.0.1:8080 --set pointing --label "$LABEL"
+        if: ${{ !cancelled() && steps.server.outcome == 'success' }}
 
       - uses: actions/upload-artifact@v6
         if: always()

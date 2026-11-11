@@ -10,10 +10,34 @@ The suite now has 15 cases, including mixed confirmed/tentative dates, a correct
 and an explicitly conditional question beside an assigned task. Historical totals below retain their original case sets.
 
 The current prompt follows later answers, partial answers and withdrawals, retains stated deadlines and excludes
-automatic speaker letters from model input. Saved transcript lines and their fingerprints stay unchanged. A blank
+automatic speaker letters from model input. Saved transcript indices stay unchanged; new timed captures enter
+the summary and its fingerprint in audio order, while legacy untimed lines retain their order. A blank
 template topic is an agenda, not evidence of discussion; only discussed topics belong in the summary. Cleanup
 removes empty template placeholders from all four sections and deduplicates within a section, so a fact repeated
 as a decision survives. Nonempty topic subsections are retained.
+
+## Current options and earlier CI evidence
+
+The [latest frozen investigation](summary-options-2026-11-12.json) retains three unsuccessful alternatives.
+A shorter rule set scores **1/4** on the same four screening cases as the original 4B control (**1/4**) and
+changes Monday rehearsal to Sunday. Four separate section requests score **2/4**, using 16 calls; the English
+quantity remains presupposed, Monday is still lost and a deployment task is added without an explicit assignment.
+Neither prompt nor the multi-call architecture was adopted.
+
+The existing Qwen3.5-9B option scores **12/15** with the old checks, but loses the explicitly named owner 小王
+while retaining the task. The raw response already has this omission. The existing case now also requires that
+owner in To-dos; the same frozen 9B outputs re-score to **11/15**, without regeneration. The earlier 4B output
+retains 小王 and passes this added assertion. Source utterances and boards are unchanged. Manual review also
+finds that the bare label “移动版发布日期” in Open questions is falsely rejected by the old uncertainty-keyword
+check: it asserts no fixed date. That automated failure remains recorded explicitly; keyword counts alone do
+not establish semantic acceptance. The 9B run also invents questions about unspecified owners, so no model
+recommendation or default was changed. These are Linux CPU checks, not Mac performance measurements.
+
+CI now runs summary acceptance before the longer board suites and uploads `summary-report` immediately,
+including the model hash, outputs and failed checks. A summary failure still fails the job; both board suites
+continue if the model server started and the run was not cancelled. The final combined artifact and all ASR
+jobs remain. This avoids losing every summary result when a later code push cancels a run during board eval.
+The workflow passes actionlint and condition checks; live results are tracked in [PR #206](https://github.com/HsiangNianian/boardcast/pull/206).
 
 ## Board references and evidence-selection probes
 

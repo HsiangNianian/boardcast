@@ -1,4 +1,31 @@
-# Development priorities — 2026-11-02
+# Development priorities — 2026-11-11
+
+The current app is Rust + GPUI. v0.27.0 is the latest release checked for this update; the earlier Tauri application
+and its JavaScript tooling have been removed. Current status belongs in [#42](https://github.com/HsiangNianian/boardcast/issues/42).
+
+The agreed order is:
+
+1. Synchronize the issue tracker and both READMEs, distinguishing released features, merged changes and pending acceptance.
+2. Finish template acceptance (#29) with real summary models, and glossary acceptance (#117) with the same self-recorded
+   audio scored before and after correction. Synthetic pronunciation fixtures are not an ASR accuracy result.
+3. Improve summary faithfulness (#68), with repeatable checks for uncertainty, partial answers, later decisions and owners.
+   Restore macOS system capture and the microphone/system-audio chain (#34, #69–#71), using the earlier Tauri implementation
+   as a reference while adapting it to the current app.
+4. Validate sustained meetings on real Macs (#35), then run the 10–20 target-user trial (#36). Keep actual hardware/user
+   evidence separate from CI builds, protocol tests and synthetic fixtures.
+
+Preserve the current multilingual speech routing and existing regression coverage while doing this work. The current
+GPUI Apple backend can fall back from SpeechAnalyzer to SFSpeechRecognizer; it is not the older integration described below.
+Single-line speaker reassignment and PDF page selection are merged after v0.27.0 and await a subsequent release. Templates,
+GIF export, pronunciation correction and paper-reference lookup are already in v0.27.0.
+
+Broad model training, additional enhancement models, commercial distribution and iPad implementation remain separate work;
+the [iPad plan](ipad-plan.md) records the target architecture without claiming device validation.
+
+<details>
+<summary>2026-11-02 priorities and Tauri Apple integration (historical; not the current GPUI implementation)</summary>
+
+## Development priorities — 2026-11-02
 
 The current priority is the product: UI, UX, features and the complete interaction flows in PAD whiteboard mode and PC meeting mode. Broad model selection and optimization resume after those flows are reasonably complete. Existing Eval regression coverage stays in place.
 
@@ -53,3 +80,5 @@ Validation on 2026-11-02: [Eval run 41401038026](https://github.com/HsiangNiania
 6. Measure Apple implementations on the actual target devices under concurrent whiteboard LLM load: first-text delay, final-text P95, memory, temperature and sustained slowdown. Linux CPU RTF is not microphone-to-screen latency.
 
 The supplied external analysis proposes MLX Qwen, speech-swift, WhisperKit, Fun-ASR and Argmax Pro routes. These are research leads, not project-validated implementations or licensing promises. Recheck their official support, device requirements and offline/license behavior when the experiments resume. The target Mac's exact hardware and memory still need confirmation.
+
+</details>

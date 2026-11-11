@@ -34,19 +34,18 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
    | 安装包 | 能识别 | 语音模型 |
    |---|---|---|
-   | `…-macos.zip`、`…-linux.tar.gz` | 日语、英语和中文，各用最合适的模型 | 约 1.1 GB |
+   | `…-macos.zip`、`…-linux.tar.gz`、`…-windows.zip` | 日语、英语和中文，各用最合适的模型 | 约 1.1 GB |
    | `…-ja` | 日语，用 ReazonSpeech | 约 160 MB |
    | `…-en` | 英语，用 Parakeet | 约 660 MB |
-   | `…-sensevoice` | 中文、英语、日语、韩语和粤语，用 SenseVoice | 约 230 MB |
-   | `…-macos-apple.zip` | Mac 自带识别器支持的语言 | 无 |
+   | `…-macos-none.zip` | Mac 自带识别器支持的语言 | 无 |
 
-   目前提供 Apple Silicon 的 macOS 和 x64 的 Linux 安装包，现在的应用还没有 Windows 安装包。
+   提供 Apple Silicon / Intel 的 macOS、x64 的 Linux 和 Windows 安装包。
 
-2. **macOS：** 应用只做了临时签名，第一次打开请按住 Control 点击 › 打开。**Linux：** 解压后运行 `./install.sh`（装到 `~/.local`，不需要 root；`--uninstall` 卸载并保留数据）。之后的版本会自动安装。
+2. **macOS：** 应用只做了临时签名，第一次打开请按住 Control 点击 › 打开。**Linux：** 解压后运行 `./install.sh`（装到 `~/.local`，不需要 root；`--uninstall` 卸载并保留数据）。**Windows：** 解压 zip 后运行 `bin\boardcast.exe`。
 3. 第一次启动时，设置会停在**板书模型**：下载一个在本机运行的模型，或者设置远程模型。语音识别已经内置。
 4. 点**开始收音**（或按 `空格`），也可以在转写下方的输入框里打一句话，回车上板。
 
-安装版启动后不久会检查新版本，在后台安装，等你重启后生效，不会打断正在开的会。
+Linux 安装版启动后不久会检查新版本，在后台安装，等你重启后生效，不会打断正在开的会。macOS 和 Windows 暂时需要手动下载新包。
 
 ## 能做什么
 
@@ -58,6 +57,8 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 | **按声音区分说话人**，并改成真名；同一个声音之后都沿用这个名字。 | **找回会议**：在会议列表里找到之前的会，接着开。 |
 
 板书按笔顺一笔一笔写出中文、日文和英文。浅色是白板马克笔；系统为深色时，画布变成粉笔黑板。界面语言是英文或中文，跟随系统或在设置里选择；板书和摘要跟随会议本身的语言。
+
+新会议可以从周会、方案评审、复盘或站会模板开始，也可以把当前板的话题存成自己的模板；摘要会按模板话题组织。在设置里填写术语表后，中英日名字可以按读音纠错，并把规范写法交给板书模型；识别原文仍会保留。
 
 ### 圈着说
 
@@ -80,6 +81,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 | **Markdown** | 要点、Mermaid 流程图和会议记录。 |
 | **PNG / SVG** | 当前这张板，和画面上一样；SVG 放大不糊。 |
 | **动态 SVG** | 当前这张板，按会议顺序逐笔写出。 |
+| **GIF** | 板书逐笔写出的动图，可以直接贴进群聊和文档。 |
 | **回放网页** | 一个 `.html` 文件，发给没参会的人，双击就能看。 |
 | **整场会 PDF** | 每张板一页，后面是摘要和会议记录，文字可以选中复制。 |
 
@@ -91,7 +93,9 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
 ### 现在的应用还没有
 
-下面这些旧版有，还没有在新版里重做：用 Excalidraw 自由编辑和导出、术语表与读音纠错（[#117](https://github.com/HsiangNianian/boardcast/issues/117)）、同时收麦克风和系统声音、macOS 的系统声音（[#34](https://github.com/HsiangNianian/boardcast/issues/34)）、Windows 安装包、全局收音快捷键和诊断包。
+同时收麦克风和系统声音、macOS 的系统声音（[#34](https://github.com/HsiangNianian/boardcast/issues/34)）、全局收音快捷键和诊断包还没有迁回新版。Excalidraw 自由编辑和导出已从 GPUI 版移除。
+
+相对最新正式版 **v0.27.0**，`main` 还增加了 PDF 选页导入（[#202](https://github.com/HsiangNianian/boardcast/pull/202)）和单句改说话人（[#201](https://github.com/HsiangNianian/boardcast/pull/201)）；这两项尚未进入该版本的安装包。改单句暂不修改对应板书内容的归属，声纹也只在会议打开期间保留。
 
 ## 快捷键
 
@@ -126,6 +130,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 |---|---|---|
 | Linux | `~/.local/share/games.mmstudio.boardcast/` | `~/.config/games.mmstudio.boardcast/` |
 | macOS | `~/Library/Application Support/games.mmstudio.boardcast/` | 同一个目录 |
+| Windows | `%APPDATA%\games.mmstudio.boardcast\` | 同一个目录 |
 
 可以用 `BOARDCAST_DATA` 和 `BOARDCAST_CONFIG` 改到别处。
 
@@ -177,7 +182,7 @@ target/release/asr-eval run . --suite meetings     # 9 段约 10 分钟、跨行
 <details>
 <summary><strong>发布</strong></summary>
 
-提高 workspace 版本号并合并，然后推送一个带注释的 tag，注释就是发版说明：`git tag -a v<version> -m "…"`，再 `git push origin v<version>`。[Release](.github/workflows/release.yml) 工作流随即构建 Linux（all、ja、en）和 Mac（Apple 芯片与 Intel，各 all、ja、en、none）的全部安装包、写出更新清单，并把 `v<version>` 发布为最新版本，安装版就从这里检查更新。带预发布部分的版本（如 `0.23.0-1`）发布为预发布版，不会推送给已安装的用户。提交信息使用 Conventional Commits；每个版本记录在 [CHANGELOG.md](CHANGELOG.md)。
+提高 workspace 版本号并合并，然后推送一个带注释的 tag，注释就是发版说明：`git tag -a v<version> -m "…"`，再 `git push origin v<version>`。[Release](.github/workflows/release.yml) 工作流构建 Linux（all、ja、en）和 Mac（Apple 芯片与 Intel，各 all、ja、en、none）安装包、写出更新清单，并把 `v<version>` 发布为最新版本。Windows x64（all、ja、en）单独构建并追加附件，Windows 构建失败不会阻止其他包发布。带预发布部分的版本（如 `0.23.0-1`）发布为预发布版，不会推送给已安装的用户。提交信息使用 Conventional Commits；新版发版说明在 GitHub Releases，[CHANGELOG.md](CHANGELOG.md) 保留旧应用截至 0.21.0 的记录。
 
 </details>
 

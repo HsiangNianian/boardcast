@@ -34,19 +34,18 @@ The desktop app is a native rewrite in Rust on [GPUI](crates/README.md). The ear
 
    | Package | Recognizes | Speech models |
    |---|---|---|
-   | `…-macos.zip`, `…-linux.tar.gz` | Japanese, English and Chinese, each with its best model | about 1.1 GB |
+   | `…-macos.zip`, `…-linux.tar.gz`, `…-windows.zip` | Japanese, English and Chinese, each with its best model | about 1.1 GB |
    | `…-ja` | Japanese, with ReazonSpeech | about 160 MB |
    | `…-en` | English, with Parakeet | about 660 MB |
-   | `…-sensevoice` | Chinese, English, Japanese, Korean and Cantonese, with SenseVoice | about 230 MB |
-   | `…-macos-apple.zip` | Whatever your Mac's own recognizer supports | none |
+   | `…-macos-none.zip` | Whatever your Mac's own recognizer supports | none |
 
-   Packages are built for macOS on Apple Silicon and for Linux x64. There is no Windows package of the current app yet.
+   Packages are built for macOS on Apple Silicon and Intel, Linux x64 and Windows x64.
 
-2. **macOS:** the app is signed only ad hoc, so open it with Control-click › Open the first time. **Linux:** unpack the archive and run `./install.sh` (into `~/.local`, no root needed; `--uninstall` removes it and keeps your data). Later versions then install themselves.
+2. **macOS:** the app is signed only ad hoc, so open it with Control-click › Open the first time. **Linux:** unpack the archive and run `./install.sh` (into `~/.local`, no root needed; `--uninstall` removes it and keeps your data). **Windows:** unpack the zip and run `bin\boardcast.exe`.
 3. On first launch, Settings opens on **Board model**: download a model that runs on this computer, or set up a remote one. Speech recognition is already included.
 4. Click **Start listening** (or press `Space`), or type a line in the transcript's input and press Enter.
 
-An installed copy looks for a new version shortly after starting. It installs in the background and waits for you to restart, so a meeting is never interrupted.
+An installed Linux copy looks for a new version shortly after starting. It installs in the background and waits for you to restart, so a meeting is never interrupted. On macOS and Windows, download the new package manually.
 
 ## What you can do
 
@@ -58,6 +57,8 @@ An installed copy looks for a new version shortly after starting. It installs in
 | **Tell speakers apart** by voice and give them real names; the same voice keeps its name. | **Find a meeting** again in the meeting list and carry on where it stopped. |
 
 Boards are drawn stroke by stroke in Chinese, Japanese and English. Light mode uses whiteboard markers; when the system is dark, the board becomes a chalkboard. The interface is in English or Chinese, following the system or your choice in Settings; board labels and summaries follow the meeting's language.
+
+Start a meeting from a weekly sync, design review, retrospective or stand-up template, or save this board's topics as your own template. Summaries use the template's topics. In Settings, a glossary corrects names by their Chinese, English or Japanese pronunciation and gives the board model their preferred spelling; the original transcript is retained.
 
 ### Circle and refer
 
@@ -80,6 +81,7 @@ Use **Import** or drop a file on the board:
 | **Markdown** | Key points, a Mermaid flow chart and the transcript. |
 | **PNG / SVG** | This board, as it looks on screen; SVG stays sharp at any size. |
 | **Animated SVG** | This board, written out stroke by stroke in the order of the meeting. |
+| **GIF** | The board writing itself, ready to paste into chats and documents. |
 | **Replay page** | One `.html` file for someone who missed the meeting. Nothing to install. |
 | **Whole meeting PDF** | A page per board, then the summary and transcript, with selectable text. |
 
@@ -91,7 +93,9 @@ In **Settings › Speech › Listen to**, choose a microphone or, on Linux, the 
 
 ### Not in this app yet
 
-These were in the earlier app and have not been rebuilt yet: free editing and export with Excalidraw, the glossary and pronunciation correction ([#117](https://github.com/HsiangNianian/boardcast/issues/117)), hearing the microphone and system audio together, system audio on macOS ([#34](https://github.com/HsiangNianian/boardcast/issues/34)), a Windows package, a global microphone shortcut and the diagnostics bundle.
+Hearing the microphone and system audio together, system audio on macOS ([#34](https://github.com/HsiangNianian/boardcast/issues/34)), a global microphone shortcut and the diagnostics bundle have not been rebuilt yet. Excalidraw free editing and export were dropped from the GPUI app.
+
+Compared with the latest release, **v0.27.0**, `main` also has PDF page selection ([#202](https://github.com/HsiangNianian/boardcast/pull/202)) and changing the speaker of one transcript line ([#201](https://github.com/HsiangNianian/boardcast/pull/201)); these are not in that release's packages. Reassigning a line does not yet change ownership of its board content, and voiceprints are retained only while the meeting is open.
 
 ## Shortcuts
 
@@ -126,6 +130,7 @@ Downloads can be paused and resumed, check free space and verify SHA-256, trying
 |---|---|---|
 | Linux | `~/.local/share/games.mmstudio.boardcast/` | `~/.config/games.mmstudio.boardcast/` |
 | macOS | `~/Library/Application Support/games.mmstudio.boardcast/` | the same folder |
+| Windows | `%APPDATA%\games.mmstudio.boardcast\` | the same folder |
 
 `BOARDCAST_DATA` and `BOARDCAST_CONFIG` move them elsewhere.
 
@@ -177,7 +182,7 @@ See [speech evaluation](eval/asr/README.md) for the configurations, reference qu
 <details>
 <summary><strong>Releases</strong></summary>
 
-Raise the workspace version, merge it, then push an annotated tag whose message is the release notes: `git tag -a v<version> -m "…"` and `git push origin v<version>`. The [Release](.github/workflows/release.yml) workflow then builds every package for Linux (all, ja, en) and the Mac, Apple silicon and Intel (all, ja, en, none), writes the update manifest and publishes `v<version>` as the latest release, which is where installed copies look for updates. A version with a pre-release part, such as `0.23.0-1`, is published as a pre-release, which installed copies are not offered. Use Conventional Commits; [CHANGELOG.md](CHANGELOG.md) records each release.
+Raise the workspace version, merge it, then push an annotated tag whose message is the release notes: `git tag -a v<version> -m "…"` and `git push origin v<version>`. The [Release](.github/workflows/release.yml) workflow builds Linux (all, ja, en) and Mac packages, Apple silicon and Intel (all, ja, en, none), writes the update manifest and publishes `v<version>` as the latest release. Windows x64 packages (all, ja, en) are built and attached separately; a failed Windows build does not block the other packages. A version with a pre-release part, such as `0.23.0-1`, is published as a pre-release, which installed copies are not offered. Use Conventional Commits; current release notes are on GitHub Releases, while [CHANGELOG.md](CHANGELOG.md) records the earlier app through 0.21.0.
 
 </details>
 

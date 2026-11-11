@@ -92,8 +92,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             other => bail!("unknown flag {other}"),
         }
     }
-    if label.is_empty() || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-        bail!("label must contain only letters, digits, - or _");
+    if label.is_empty() || !label.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) {
+        bail!("label must contain only letters, digits, -, _ or .");
     }
     let input = std::fs::read(root.join("eval/summary-cases.json"))?;
     let mut cases: Vec<Case> = serde_json::from_slice(&input).context("reading eval/summary-cases.json")?;
@@ -109,9 +109,10 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         let lines: Vec<Line> = case.lines.iter().map(|(who, text)| Line { speaker: Some(who.clone()), text: text.clone(), page: 0, has_page: false }).collect();
         let (mut ok, mut wrong) = (0, vec![]);
         for run in 0..repeat {
+            let started = std::time::Instant::now();
             let summary = summarize(&provider, &case.boards, &lines, &cancel, &mut |_| {}).with_context(|| format!("summarizing {}", case.id))?;
             let failed = failures(&summary, &case.checks);
-            answers.push(json!({ "case": case.id, "run": run + 1, "summary": summary, "failures": failed }));
+            answers.push(json!({ "case": case.id, "run": run + 1, "summary": summary, "failures": failed, "elapsed_ms": started.elapsed().as_millis() }));
             if failed.is_empty() {
                 ok += 1;
             } else {
@@ -152,6 +153,15 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ci_model_labels_work_but_paths_are_rejected() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for (label, expected) in [("qwen3.5-4b-q4km-cpu", "no matching cases"), ("../outside", "label must contain"), ("", "label must contain")] {
+            let args = [root.to_string_lossy().into_owned(), "--label".into(), label.into(), "--only".into(), "no-such-case".into()];
+            assert!(run(args.into_iter()).unwrap_err().to_string().contains(expected));
+        }
+    }
 
     #[test]
     fn checks_look_only_in_their_sections() {

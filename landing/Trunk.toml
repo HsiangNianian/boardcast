@@ -5,5 +5,14 @@ dist = "dist"
 # Relative paths, so the page opens under any subpath.
 public_url = "./"
 
+[watch]
+# The page's code lives outside this folder.
+watch = [".", "../crates/site"]
+ignore = ["dist-demo"]
+
 [serve]
 port = 1430
+
+# The demo is a page of its own with a server of its own: `trunk serve` in demo/ as well, and /demo/ is passed on.
+[[proxy]]
+backend = "http://127.0.0.1:1431/demo/"

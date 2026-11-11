@@ -1,0 +1,12 @@
+# The web demo, for local development: `trunk serve` from this folder while the site runs, and the site's server
+# passes /demo/ on to this one. The release build lives in pages.yml, under the site's dist/.
+[build]
+target = "index.html"
+dist = "../dist-demo"
+public_url = "/demo/"
+
+[watch]
+watch = [".", "../../crates/demo", "../../crates/board"]
+
+[serve]
+port = 1431

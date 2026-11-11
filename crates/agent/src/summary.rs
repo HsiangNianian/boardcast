@@ -241,14 +241,11 @@ fn messages(boards: &[Graph], said: &str, partial: bool, english: bool) -> Vec<V
 fn no_empty_topics(text: &str, topics: &[String], english: bool) -> String {
     if topics.is_empty() { return text.to_string(); }
     let rows: Vec<&str> = text.lines().collect();
-    let heading = format!("### {}", words(english).sections[0]);
-    let mut conclusions = false;
     let mut out = vec![];
     let mut i = 0;
     while i < rows.len() {
         let line = rows[i];
-        if line.starts_with("### ") { conclusions = line == heading; }
-        if conclusions && line.strip_prefix("#### ").is_some_and(|t| topics.iter().any(|topic| topic == t.trim())) {
+        if line.strip_prefix("#### ").is_some_and(|t| topics.iter().any(|topic| topic == t.trim())) {
             let end = (i + 1..rows.len()).find(|&j| rows[j].starts_with('#')).unwrap_or(rows.len());
             if rows[i + 1..end].iter().all(|l| matches!(l.trim(), "" | "None" | "- None" | "无" | "- 无")) {
                 i = end;
@@ -258,10 +255,13 @@ fn no_empty_topics(text: &str, topics: &[String], english: bool) -> String {
         out.push(line);
         i += 1;
     }
-    if let Some(start) = out.iter().position(|l| *l == heading) {
-        let end = (start + 1..out.len()).find(|&j| out[j].starts_with("### ")).unwrap_or(out.len());
-        if out[start + 1..end].iter().all(|l| l.trim().is_empty()) {
-            out.insert(start + 1, if english { "- None" } else { "- 无" });
+    for section in words(english).sections {
+        let heading = format!("### {section}");
+        if let Some(start) = out.iter().position(|l| *l == heading) {
+            let end = (start + 1..out.len()).find(|&j| out[j].starts_with("### ")).unwrap_or(out.len());
+            if out[start + 1..end].iter().all(|l| l.trim().is_empty()) {
+                out.insert(start + 1, if english { "- None" } else { "- 无" });
+            }
         }
     }
     out.join("\n")
@@ -547,6 +547,14 @@ mod tests {
         assert_eq!(no_empty_topics(text, &[], true), text);
         let real = text.replace("#### Hiring\n- None", "#### Hiring\n- No hiring this quarter.");
         assert_eq!(no_empty_topics(&real, &topics, true), real);
+    }
+
+    #[test]
+    fn empty_template_topics_are_not_revived_in_other_sections() {
+        let topics = vec!["预算".into(), "要改进的".into()];
+        let text = "### 结论\n- 发布没有停机。\n### 决定\n#### 预算\n无\n### 待办\n#### 要改进的\n- [ ] 小王补上告警测试。\n#### 预算\n- 无\n### 待讨论\n#### 预算\n无";
+        let cleaned = no_empty_topics(text, &topics, false);
+        assert_eq!(cleaned, "### 结论\n- 发布没有停机。\n### 决定\n- 无\n### 待办\n#### 要改进的\n- [ ] 小王补上告警测试。\n### 待讨论\n- 无");
     }
 
     #[test]

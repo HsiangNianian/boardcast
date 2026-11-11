@@ -10,14 +10,15 @@ Model labels accept version dots (such as `qwen3.5-4b-q4km-cpu`); path separator
 The current prompt follows later answers, partial answers and withdrawals, retains stated deadlines and excludes
 automatic speaker letters from model input. Saved transcript lines and their fingerprints stay unchanged. A blank
 template topic is an agenda, not evidence of discussion; only discussed topics belong in the summary. Cleanup
-removes empty template placeholders and deduplicates within a section, so a fact repeated as a decision survives.
+removes empty template placeholders from all four sections and deduplicates within a section, so a fact repeated
+as a decision survives. Nonempty topic subsections are retained.
 
 ## Measured result
 
-Twelve cases, three runs per model, using the final production source. Full outputs, checks and provenance are in
+Twelve cases, three runs per model, using the production source before the cleanup follow-up below. Full outputs, checks and provenance are in
 [`summary-2026-11-11.json`](summary-2026-11-11.json). The initial keyword checks reported 36/36 for both models;
 manual inspection found two omissions in those checks. The same frozen outputs were rescored against the stronger
-checks below. Case inputs and production source are unchanged. The **30/36** result is the accepted report for
+checks below without regenerating the summaries or changing their case inputs. The **30/36** result is the accepted local report for
 Qwen, not the earlier 36/36.
 
 | Check group | Qwen3.5-4B Q4_K_M | DeepSeek Flash |
@@ -46,7 +47,7 @@ not three independent meetings. DeepSeek's passing result covers these short syn
 ## Rejected follow-up probes
 
 Each probe below ran all twelve cases once on the same local model and CPU server. None was adopted;
-the production source still matches the accepted report above. [Outputs and example patches](summary-rejected-2026-11-11.json)
+the production prompts remain those used for the accepted report above. [Outputs and example patches](summary-rejected-2026-11-11.json)
 are retained so these local improvements are not mistaken for overall fixes.
 The thinking sampler follows [Qwen's model card](https://huggingface.co/Qwen/Qwen3.5-4B); the reasoning budget
 is an experimental cap, not a model recommendation.
@@ -57,10 +58,27 @@ is an experimental cap, not a model recommendation.
 | One plain Chinese/English input-output example | 10/12 | Fixed the original two failures but lost template headings, a task owner and a decision. |
 | Example with an explicit decision, used only without a template | 10/12 | Kept an answered question open and treated an agreed duration as unresolved. |
 
-At `c39109b`, four-platform packaging and core checks passed, as did all three ASR jobs and their comparison.
-The text job stopped before calling the summary model because the default label contains a dot. `77007e5`
-fixes that validation and tests the actual CLI argument path; a rerun must reach the semantic checks before
-it can provide a CI summary result. Build success alone does not establish summary accuracy.
+## CI result and empty-topic follow-up
+
+At `0c89941`, [Eval](https://github.com/HsiangNianian/boardcast/actions/runs/43019666812) reached the summary
+checks and failed at **27/36**. [The original CI outputs](summary-ci-2026-11-11.json) preserve the date omission,
+the unconfirmed English quantity and a third failure: the Chinese retrospective emitted an empty `预算` topic
+under Decisions in all three runs. The source hashes match the frozen local run; the CI run did not retain the
+model-file hash, so these are separate observations, not a controlled comparison of identical runtimes.
+The workflow now records that hash alongside its reports.
+
+Cleanup previously removed empty template topics only from Conclusions. It now removes known template headings
+containing only blank lines or `None`/`无` from all four sections, retaining real content and filling an emptied
+main section. A regression covers Decisions, To-dos and Open questions, including a real task that must survive.
+The 41 agent and 12 tools tests passed. Six fresh local generations (two template cases, three runs each) also
+passed; [outputs and current source/model hashes](summary-template-cleanup-2026-11-11.json) are retained.
+Manual inspection confirmed the discussed topics, facts, named task and deadline remain. These six runs are
+template-only validation, not a new 36-case score; no prompt change addresses the two factual failures.
+
+At `0c89941`, four-platform Rust packaging/core checks and all ASR jobs/comparison passed. The earlier
+`c39109b` text run had stopped before summary model calls because the default label contains a dot;
+`77007e5` fixed that validation and tests the actual CLI argument path. Build success alone does not establish
+summary accuracy, and the quality check remains expected to flag the known factual failures.
 
 ## Human review
 

@@ -1,0 +1,65 @@
+{
+  "label": "qwen3.5-empty-topic-cleanup",
+  "repeat": 3,
+  "cases_sha256": "79dd8aba19e222e69ef2577a30102504e0a4f746006a3dedf76566365fe13457",
+  "summary_source_sha256": "18f631b6d26dbbf5a508cf2c89c52e689ca1f00a06c13b40487d1876ec1baad8",
+  "agent_source_sha256": "6e6911354a07ea6318fdd32c50b36d655517c037eb05bbdfa77180cfc7b97d71",
+  "answers": [
+    {
+      "case": "zh-template-retro",
+      "run": 1,
+      "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n#### 要改进的\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 小王补上告警测试，下次发布前。\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 24125
+    },
+    {
+      "case": "zh-template-retro",
+      "run": 2,
+      "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n#### 要改进的\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 小王补上告警测试，下次发布前。\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 9079
+    },
+    {
+      "case": "zh-template-retro",
+      "run": 3,
+      "summary": "### 结论\n#### 做得好的\n- 这次发布没有停机。\n#### 要改进的\n- 告警来得太晚。\n### 决定\n#### 要改进的\n- 下次发布前由小王补上告警测试。\n### 待办\n- [ ] 小王补上告警测试，下次发布前。\n\n### 待讨论\n无",
+      "failures": [],
+      "elapsed_ms": 8773
+    },
+    {
+      "case": "en-template-custom",
+      "run": 1,
+      "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+      "failures": [],
+      "elapsed_ms": 22330
+    },
+    {
+      "case": "en-template-custom",
+      "run": 2,
+      "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+      "failures": [],
+      "elapsed_ms": 5910
+    },
+    {
+      "case": "en-template-custom",
+      "run": 3,
+      "summary": "### Conclusions\n#### Latency\n- The measured p95 latency is 80 milliseconds.\n#### Rollout\n- The canary deployment completed without errors.\n### Decisions\n- Enable the release tomorrow.\n\n### To-dos\n- None\n\n### Open questions\n- None",
+      "failures": [],
+      "elapsed_ms": 5943
+    }
+  ],
+  "passed": 6,
+  "total": 6,
+  "scope": "Two template cases only, three fresh production generations each after extending empty-topic cleanup to all four sections. No prompt change; this is not a complete twelve-case result.",
+  "runtime": {
+    "llama_cpp": "b11954",
+    "device": "cpu",
+    "threads": 4,
+    "context": 4096,
+    "temperature": 0,
+    "repeat_penalty": 1.05,
+    "thinking": false,
+    "model": "Qwen3.5-4B-Q4_K_M.gguf",
+    "model_sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4"
+  }
+}

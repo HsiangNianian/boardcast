@@ -1,6 +1,6 @@
 //! Apple's speech recognition and system audio capture, through the packaged Swift helper.
 
-use crate::{helper::Helper, language::Probe, timing, Captured, Recognizer, SAMPLE_RATE};
+use crate::{helper::Helper, language::Probe, timing, Captured, Recognizer, StreamText, SAMPLE_RATE};
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -18,6 +18,11 @@ pub struct SystemSpeech {
     failure: Option<String>,
     stop: Arc<AtomicBool>,
     finish_by: Option<Instant>,
+    live: bool,
+    supports_streaming: bool,
+    streaming: bool,
+    streamed: usize,
+    final_until: f64,
 }
 
 impl SystemSpeech {
@@ -28,6 +33,36 @@ impl SystemSpeech {
 
     pub fn start_with_stop(helper: &Path, locale: &str, stop: Arc<AtomicBool>) -> Result<Self> {
         Self::launch(helper, locale, stop, false)
+    }
+
+    /// Live capture may use native partials; file evaluation keeps sentence recognition.
+    pub fn live(mut self) -> Self { self.live = true; self }
+
+    fn remaining(&mut self, deadline: Instant) -> Result<Duration> {
+        if self.stop.load(Ordering::Relaxed) {
+            self.finish_by.get_or_insert_with(|| Instant::now() + Duration::from_secs(5));
+        }
+        let left = self.finish_by.unwrap_or(deadline).min(deadline).saturating_duration_since(Instant::now());
+        ensure!(!left.is_zero(), if self.finish_by.is_some() { UNFINISHED } else { "audio helper timed out" });
+        Ok(left)
+    }
+
+    fn streamed_text(&mut self, event: &Value) -> Result<Option<StreamText>> {
+        let final_text = match event["type"].as_str() {
+            Some("partial") => false,
+            Some("final") => true,
+            Some("error") => bail!("{}", event["message"].as_str().unwrap_or("streaming recognition failed")),
+            _ => bail!("unexpected streaming speech reply"),
+        };
+        let text = event["text"].as_str().context("missing streaming text")?.trim().to_string();
+        let start = event["start"].as_f64().context("missing streaming start")?;
+        let end = event["end"].as_f64().context("missing streaming end")?;
+        let fed = self.streamed as f64 / f64::from(SAMPLE_RATE);
+        ensure!(start.is_finite() && end.is_finite() && start >= 0.0 && end >= start && end <= fed + 0.1, "invalid streaming speech range");
+        if end <= self.final_until { return Ok(None); }
+        ensure!(start + 0.001 >= self.final_until, "overlapping streaming speech range");
+        if final_text { self.final_until = end; }
+        Ok(Some(StreamText { text, start: start.min(fed), end: end.min(fed), final_text }))
     }
 
     fn launch(helper: &Path, locale: &str, stop: Arc<AtomicBool>, finish: bool) -> Result<Self> {
@@ -53,6 +88,11 @@ impl SystemSpeech {
                     failure: None,
                     stop,
                     finish_by,
+                    live: false,
+                    supports_streaming: event["engine"] == "analyzer" && event["streaming"] == true,
+                    streaming: false,
+                    streamed: 0,
+                    final_until: 0.0,
                 }),
                 Some("error") => bail!("{}", event["message"].as_str().unwrap_or("Apple speech recognition did not start")),
                 Some("fallback") => eprintln!("SpeechAnalyzer fallback: {}", event["message"].as_str().unwrap_or_default()),
@@ -66,6 +106,7 @@ impl SystemSpeech {
 impl Recognizer for SystemSpeech {
     fn recognize(&mut self, samples: &[f32]) -> Result<String> {
         let result = (|| {
+            ensure!(!self.streaming, "streaming speech cannot accept a sentence");
             ensure!(!samples.is_empty() && samples.len() <= 16_000 * 30 && samples.iter().all(|s| s.is_finite()), "invalid sentence samples");
             ensure!(self.finish_by.is_none_or(|end| Instant::now() < end), UNFINISHED);
             let mut bytes = Vec::with_capacity(4 + samples.len() * 4);
@@ -97,6 +138,56 @@ impl Recognizer for SystemSpeech {
 
     fn error(&self) -> Option<&str> { self.failure.as_deref() }
     fn identity(&self) -> Option<(&str, &str)> { Some((&self.engine, &self.locale)) }
+    fn can_stream(&self) -> bool { self.live && self.supports_streaming }
+
+    fn stream(&mut self, samples: &[f32], finish: bool) -> Result<Vec<StreamText>> {
+        let result = (|| {
+            ensure!(self.can_stream(), "streaming is unavailable");
+            ensure!(self.failure.is_none(), "streaming speech has failed");
+            ensure!(samples.len() <= SAMPLE_RATE as usize * 30 && samples.iter().all(|s| s.is_finite()), "invalid streaming samples");
+            let deadline = Instant::now() + Duration::from_secs(60);
+            self.remaining(deadline)?;
+            if !self.streaming {
+                self.helper.write(u32::MAX.to_le_bytes().to_vec())?;
+                loop {
+                    let left = self.remaining(deadline)?;
+                    let Some(event) = self.helper.poll(left.min(Duration::from_millis(50)))? else { continue };
+                    ensure!(event["type"] == "streaming", "Apple streaming did not start: {}", event["message"].as_str().unwrap_or("unexpected reply"));
+                    break;
+                }
+                self.streaming = true;
+            }
+            if !samples.is_empty() {
+                self.helper.write(samples.iter().flat_map(|s| s.to_le_bytes()).collect())?;
+                self.streamed += samples.len();
+            }
+            if finish {
+                self.finish_by.get_or_insert_with(|| Instant::now() + Duration::from_secs(5));
+                self.helper.close_input();
+            }
+            let mut text = vec![];
+            loop {
+                let event = (|| {
+                    let left = self.remaining(deadline)?;
+                    self.helper.poll(if finish { left.min(Duration::from_millis(50)) } else { Duration::ZERO })
+                })();
+                match event {
+                    Ok(Some(event)) if event["type"] == "done" && finish => break,
+                    Ok(Some(event)) => match self.streamed_text(&event) {
+                        Ok(Some(item)) => text.push(item),
+                        Ok(None) => {},
+                        Err(error) => { self.failure = Some(format!("{error:#}")); break; }
+                    },
+                    Ok(None) if finish => continue,
+                    Ok(None) => break,
+                    Err(error) => { self.failure = Some(format!("{error:#}")); break; }
+                }
+            }
+            Ok(text)
+        })();
+        if let Err(e) = &result { self.failure = Some(format!("{e:#}")); }
+        result
+    }
 }
 
 /// Each source chooses one opening language; the normal ear retains and segments the original PCM.
@@ -107,12 +198,15 @@ pub struct AutoSpeech {
     helper: PathBuf,
     stop: Arc<AtomicBool>,
     failure: Option<String>,
+    live: bool,
 }
 
 impl AutoSpeech {
     pub fn load(models: &Path, helper: &Path, stop: Arc<AtomicBool>) -> Result<Self> {
-        Ok(Self { probe: Some(Probe::load(models)?), opening: vec![], speech: None, helper: helper.into(), stop, failure: None })
+        Ok(Self { probe: Some(Probe::load(models)?), opening: vec![], speech: None, helper: helper.into(), stop, failure: None, live: false })
     }
+
+    pub fn live(mut self) -> Self { self.live = true; self }
 }
 
 impl Recognizer for AutoSpeech {
@@ -136,6 +230,7 @@ impl Recognizer for AutoSpeech {
                 drop(probe);
                 // A short first utterance may only reach VAD when stopped; startup shares its finalization budget.
                 self.speech = Some(SystemSpeech::launch(&self.helper, locale, self.stop.clone(), true)?);
+                self.speech.as_mut().unwrap().live = self.live;
             }
             self.speech.as_mut().unwrap().recognize(samples)
         })();
@@ -143,8 +238,12 @@ impl Recognizer for AutoSpeech {
         result
     }
 
-    fn error(&self) -> Option<&str> { self.failure.as_deref() }
+    fn error(&self) -> Option<&str> { self.failure.as_deref().or_else(|| self.speech.as_ref().and_then(Recognizer::error)) }
     fn identity(&self) -> Option<(&str, &str)> { self.speech.as_ref().and_then(Recognizer::identity) }
+    fn can_stream(&self) -> bool { self.speech.as_ref().is_some_and(Recognizer::can_stream) }
+    fn stream(&mut self, samples: &[f32], finish: bool) -> Result<Vec<StreamText>> {
+        self.speech.as_mut().context("language has not been detected")?.stream(samples, finish)
+    }
 }
 
 fn system_samples(event: &Value) -> Result<Captured> {
@@ -187,6 +286,69 @@ fn capture_from(helper: Helper, stop: &AtomicBool, samples: &mut impl FnMut(Capt
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const STREAMING: &str = include_str!("../tests/streaming_helper.py");
+
+    #[test]
+    fn live_partials_precede_eof_and_final_keeps_every_original_sample() {
+        let Some(helper) = fake_helper(STREAMING) else { return };
+        let mut speech = SystemSpeech::start(&helper, "zh-CN").unwrap();
+        assert!(!speech.can_stream(), "file evaluation must keep sentence mode");
+        assert!(speech.recognize(&[0.5; 32]).unwrap().contains("32 samples"));
+        let mut speech = speech.live();
+        assert!(speech.can_stream());
+        let mut events = speech.stream(&[0.5; 320], false).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while events.is_empty() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+            events.extend(speech.stream(&[], false).unwrap());
+        }
+        assert_eq!(events.len(), 1);
+        assert!(!events[0].final_text);
+        assert_eq!(events[0].text, "zh-CN temporary: 320 samples");
+        assert_eq!((events[0].start, events[0].end), (0.0, 0.02));
+        speech.stream(&[-0.25; 640], false).unwrap();
+        let final_text = speech.stream(&[], true).unwrap();
+        let final_text = final_text.iter().find(|s| s.final_text).unwrap();
+        assert_eq!(final_text.text, "Stream: 960 samples, sum 0.0");
+        assert_eq!(final_text.end, 0.06);
+        assert!(speech.error().is_none());
+    }
+
+    #[test]
+    fn native_ranges_reject_bad_data_and_do_not_repeat_finals() {
+        let Some(helper) = fake_helper(STREAMING) else { return };
+        let mut speech = SystemSpeech::start(&helper, "en-US").unwrap();
+        speech.streamed = 16_000;
+        let event = |kind, start, end| serde_json::json!({"type":kind,"text":"words","start":start,"end":end});
+        for (start, end) in [(-0.1, 0.2), (0.4, 0.2), (0.0, 2.0)] {
+            assert!(speech.streamed_text(&event("final", start, end)).is_err());
+        }
+        assert!(speech.streamed_text(&event("final", 0.0, 0.5)).unwrap().is_some());
+        assert!(speech.streamed_text(&event("final", 0.0, 0.5)).unwrap().is_none());
+        assert!(speech.streamed_text(&event("partial", 0.0, 0.5)).unwrap().is_none());
+        assert!(speech.streamed_text(&event("final", 0.4, 0.8)).is_err());
+        assert!(speech.streamed_text(&serde_json::json!({"type":"partial","text":"private"})).is_err());
+        assert!(speech.streamed_text(&event("final", 0.5, 1.0)).unwrap().is_some());
+    }
+
+    #[test]
+    fn native_stop_keeps_a_final_before_timeout_and_does_not_reset_its_budget() {
+        let source = STREAMING.replace("emit(\"done\")", "import time; time.sleep(12)");
+        let Some(helper) = fake_helper(&source) else { return };
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut speech = SystemSpeech::start_with_stop(&helper, "en-US", stop.clone()).unwrap().live();
+        speech.stream(&[0.5; 320], false).unwrap();
+        stop.store(true, Ordering::Relaxed);
+        let started = Instant::now();
+        let events = speech.stream(&[], true).unwrap();
+        assert!(events.iter().any(|s| s.final_text && s.text.contains("320 samples")));
+        assert!(speech.error().unwrap().contains("after stopping"));
+        assert!(started.elapsed() < Duration::from_secs(8));
+        let again = Instant::now();
+        assert!(speech.stream(&[], true).is_err());
+        assert!(again.elapsed() < Duration::from_millis(100));
+    }
 
     /// A stand-in helper that speaks the same protocol and says how many samples it got.
     const FAKE: &str = r#"

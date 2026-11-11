@@ -89,6 +89,7 @@ jobs:
           PY
           cargo test -p boardcast-audio auto_routes_real_opening_speech_and_preserves_the_pcm -- --ignored
           cargo test -p boardcast-ui both_sources_can_recognize_while_the_other_is_waiting -- --ignored
+          cargo test -p boardcast-ui native_sources_emit_partials_and_finalize_after_manual_or_auto_start -- --ignored
         env:
           BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
           BOARDCAST_AUTO_AUDIO: ${{ runner.temp }}/auto-audio

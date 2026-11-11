@@ -100,8 +100,9 @@ pub struct Sentence {
     pub text: String,
     /// At unit length, so a dot product is the cosine similarity. Missing if it was too short to tell.
     pub voiceprint: Option<Vec<f32>>,
-    pub asr_ms: u128,
-    /// When the sentence was detected as over.
+    /// Absent for streaming recognition, whose computation overlaps capture.
+    pub asr_ms: Option<u128>,
+    /// VAD sentence end, or native final receipt when recognition overlaps capture.
     pub ended: Instant,
     /// Where in the input it began, in seconds.
     pub start: f64,
@@ -144,6 +145,16 @@ pub trait Recognizer: Send {
     fn recognize(&mut self, samples: &[f32]) -> Result<String>;
     fn error(&self) -> Option<&str> { None }
     fn identity(&self) -> Option<(&str, &str)> { None }
+    fn can_stream(&self) -> bool { false }
+    fn stream(&mut self, _samples: &[f32], _finish: bool) -> Result<Vec<StreamText>> { anyhow::bail!("streaming is unavailable") }
+}
+
+#[derive(Debug)]
+pub struct StreamText {
+    pub text: String,
+    pub start: f64,
+    pub end: f64,
+    pub final_text: bool,
 }
 
 /// Text this short might have been made up from noise, so its sound is checked for a voice.
@@ -378,6 +389,8 @@ pub struct Ear {
     waiting: Vec<(Vec<f32>, usize, Instant, [Option<Instant>; 2])>,
     /// Sample-index ranges still retained by the detector; waiting sentences copy their endpoints.
     times: VecDeque<(usize, usize, Instant)>,
+    stream_base: Option<usize>,
+    failure: Option<String>,
 }
 
 impl Ear {
@@ -427,11 +440,13 @@ impl Ear {
             audio: VecDeque::new(),
             waiting: vec![],
             times: VecDeque::new(),
+            stream_base: None,
+            failure: None,
         })
     }
 
     pub fn error(&self) -> Option<&str> {
-        self.asr.system.as_ref().and_then(|s| s.error())
+        self.failure.as_deref().or_else(|| self.asr.system.as_ref().and_then(|s| s.error()))
     }
 
     /// The actual system backend and locale, once an automatic language has been chosen.
@@ -444,11 +459,39 @@ impl Ear {
     }
 
     pub fn feed_at(&mut self, samples: &[f32], start: Option<Instant>, heard: &mut impl Heard) {
+        self.feed_at_with_partials(samples, start, heard, &mut |_| {});
+    }
+
+    pub fn feed_at_with_partials(&mut self, samples: &[f32], start: Option<Instant>, heard: &mut impl Heard, partial: &mut impl FnMut(String)) {
         if let Some(at) = start.filter(|_| !samples.is_empty()) {
             let begin = self.fed + self.pending.len();
             self.times.push_back((begin, begin + samples.len(), at));
         }
         self.pending.extend_from_slice(samples);
+        if self.stream_base.is_some() || (self.waiting.is_empty() && self.asr.system.as_ref().is_some_and(|s| s.can_stream())) {
+            let mut input = vec![];
+            if self.stream_base.is_none() {
+                let base = self.sent_until.max(self.fed - self.audio.len());
+                input.extend(self.audio.iter().skip(base - (self.fed - self.audio.len())).copied());
+                self.stream_base = Some(base);
+                self.speech.clear();
+                self.loudness.clear();
+                self.recent.clear();
+            }
+            input.extend_from_slice(&self.pending);
+            self.fed += self.pending.len();
+            self.audio.extend(self.pending.drain(..));
+            if input.is_empty() {
+                self.stream(&[], false, heard, partial);
+            } else {
+                for chunk in input.chunks(RETAIN) { self.stream(chunk, false, heard, partial); }
+            }
+            // shortcut: retain 30 seconds for voiceprints; extend if real Mac finals routinely arrive later.
+            let discard = self.audio.len().saturating_sub(RETAIN);
+            self.audio.drain(..discard);
+            self.prune_times();
+            return;
+        }
         while self.pending.len() >= VAD_WINDOW {
             let chunk: Vec<f32> = self.pending.drain(..VAD_WINDOW).collect();
             self.fed += VAD_WINDOW;
@@ -484,10 +527,43 @@ impl Ear {
             let keep_from = if self.in_speech { self.sent_until } else { self.fed.saturating_sub(PREROLL) };
             let discard = keep_from.saturating_sub(self.fed - self.audio.len()).min(self.audio.len());
             self.audio.drain(..discard);
-            while self.times.front().is_some_and(|(_, end, _)| *end <= self.fed - self.audio.len()) {
-                self.times.pop_front();
-            }
+            self.prune_times();
         }
+    }
+
+    fn prune_times(&mut self) {
+        while self.times.front().is_some_and(|(_, end, _)| *end <= self.fed - self.audio.len()) {
+            self.times.pop_front();
+        }
+    }
+
+    fn stream(&mut self, samples: &[f32], finish: bool, heard: &mut impl Heard, partial: &mut impl FnMut(String)) {
+        if self.error().is_some() { return; }
+        let events = match self.asr.system.as_mut().expect("streaming recognizer").stream(samples, finish) {
+            Ok(events) => events,
+            Err(error) => { self.failure = Some(format!("{error:#}")); partial(String::new()); return; }
+        };
+        let base = self.stream_base.expect("streaming base");
+        for event in events {
+            if !event.final_text { partial(event.text); continue; }
+            partial(String::new());
+            let start = base + (event.start * f64::from(SAMPLE_RATE)).round() as usize;
+            let end = base + (event.end * f64::from(SAMPLE_RATE)).round() as usize;
+            let retained = self.fed - self.audio.len();
+            let pcm = (start >= retained && end <= self.fed && end > start).then(|| self.audio.iter().skip(start - retained).take(end - start).copied().collect::<Vec<_>>());
+            if event.text.is_empty() || pcm.as_ref().is_some_and(|s| event.text.chars().count() <= NOISE_WORDS && voiced_share(s) < MIN_VOICED) { continue; }
+            heard(Sentence {
+                text: event.text,
+                voiceprint: pcm.as_ref().and_then(|s| self.voiceprint(s)),
+                asr_ms: None,
+                ended: Instant::now(),
+                start: start as f64 / f64::from(SAMPLE_RATE),
+                seconds: (end - start) as f64 / f64::from(SAMPLE_RATE),
+                captured: self.captured(start, end - start),
+                engine: Engine::System,
+            });
+        }
+        if finish || self.error().is_some() { partial(String::new()); }
     }
 
     fn captured(&self, start: usize, length: usize) -> [Option<Instant>; 2] {
@@ -539,7 +615,7 @@ impl Ear {
             return;
         }
         if !text.is_empty() {
-            let asr_ms = started.elapsed().as_millis();
+            let asr_ms = Some(started.elapsed().as_millis());
             heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), captured, engine });
         }
     }
@@ -588,8 +664,20 @@ impl Ear {
 
     /// The input ended: whatever is still buffered counts as a sentence.
     pub fn finish(&mut self, heard: &mut impl Heard) {
+        self.finish_with_partials(heard, &mut |_| {});
+    }
+
+    pub fn finish_with_partials(&mut self, heard: &mut impl Heard, partial: &mut impl FnMut(String)) {
+        if self.stream_base.is_some() {
+            self.stream(&[], true, heard, partial);
+            return;
+        }
         if !self.pending.is_empty() {
-            self.feed(&vec![0.0; VAD_WINDOW - self.pending.len()], heard);
+            self.feed_at_with_partials(&vec![0.0; VAD_WINDOW - self.pending.len()], None, heard, partial);
+        }
+        if self.stream_base.is_some() {
+            self.stream(&[], true, heard, partial);
+            return;
         }
         self.vad.flush();
         self.drain(heard);
@@ -816,6 +904,56 @@ mod tests {
             assert!(ear.waiting.is_empty());
             ear.finish(&mut |_| panic!("deferred sentences must not be repeated"));
         }
+    }
+
+    #[test]
+    fn streaming_handoff_keeps_unfinalized_pcm_and_gaps_without_repeating_sent_audio() {
+        use std::sync::{Arc, Mutex};
+        struct Live { ready: Arc<AtomicBool>, pcm: Arc<Mutex<Vec<f32>>> }
+        impl Recognizer for Live {
+            fn recognize(&mut self, _: &[f32]) -> Result<String> { panic!("native audio must not be sentence-segmented") }
+            fn can_stream(&self) -> bool { self.ready.load(Ordering::Relaxed) }
+            fn stream(&mut self, samples: &[f32], finish: bool) -> Result<Vec<StreamText>> {
+                let mut pcm = self.pcm.lock().unwrap();
+                pcm.extend_from_slice(samples);
+                Ok(vec![StreamText { text: if finish { "The final text is kept only once." } else { "Temporary" }.into(), start: 0.0,
+                    end: pcm.len() as f64 / f64::from(SAMPLE_RATE), final_text: finish }])
+            }
+        }
+        let Some(models) = models() else { return };
+        let ready = Arc::new(AtomicBool::new(false));
+        let pcm = Arc::new(Mutex::new(vec![]));
+        let mut ear = Ear::with(&models, Recognizers::system(Box::new(Live { ready: ready.clone(), pcm: pcm.clone() }))).unwrap();
+        let origin = Instant::now();
+        let mut finals = vec![];
+        let mut partials = vec![];
+        ear.feed_at(&[0.0; 1000], Some(origin), &mut |s| finals.push(s));
+        // A completed opening segment ends inside the retained frame/pending tail.
+        ear.sent_until = 400;
+        ready.store(true, Ordering::Relaxed);
+        ear.feed_at_with_partials(&[0.25; 1000], Some(origin + Duration::from_secs(2)), &mut |s| finals.push(s), &mut |s| partials.push(s));
+        assert!(finals.is_empty());
+        assert_eq!(partials, ["Temporary"]);
+        assert_eq!(*pcm.lock().unwrap(), [vec![0.0; 600], vec![0.25; 1000]].concat());
+        ear.finish_with_partials(&mut |s| finals.push(s), &mut |s| partials.push(s));
+        assert_eq!(finals.len(), 1);
+        assert_eq!((finals[0].start, finals[0].seconds), (0.025, 0.1));
+        assert_eq!(finals[0].captured, [Some(origin + Duration::from_millis(25)), Some(origin + Duration::from_secs(2) + Duration::from_micros(62_500))]);
+        assert_eq!(finals[0].asr_ms, None);
+        assert_eq!(partials.last().unwrap(), "");
+
+        let pcm = Arc::new(Mutex::new(vec![]));
+        let mut ear = Ear::with(&models, Recognizers::system(Box::new(Live { ready, pcm }))).unwrap();
+        for second in 0..40 {
+            ear.feed_at_with_partials(&[0.0; 16_000], Some(origin + Duration::from_secs(second)), &mut |_| panic!("no native final yet"), &mut |_| {});
+        }
+        assert_eq!(ear.audio.len(), RETAIN);
+        assert_eq!(ear.times.len(), 30);
+        let mut finals = vec![];
+        ear.finish(&mut |s| finals.push(s));
+        assert_eq!(finals.len(), 1, "late text must survive PCM eviction");
+        assert_eq!(finals[0].captured, [None, Some(origin + Duration::from_secs(40))]);
+        assert!(finals[0].voiceprint.is_none() && finals[0].asr_ms.is_none());
     }
 
     #[test]

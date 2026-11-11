@@ -7,7 +7,7 @@ use std::collections::{hash_map::RandomState, VecDeque};
 use std::hash::BuildHasher;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender};
+use std::sync::mpsc::{channel, sync_channel, Receiver, RecvTimeoutError, Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -25,6 +25,10 @@ pub struct Track {
     pub queued_samples: usize,
     pub max_queued_samples: usize,
     pub finals: usize,
+    pub partials: usize,
+    pub first_partial_received_ms: Option<u128>,
+    pub last_partial_received_ms: Option<u128>,
+    pub partial_ui_receive_ms: VecDeque<u128>,
     pub queue_ms: VecDeque<u128>,
     pub asr_ms: VecDeque<u128>,
     pub ui_receive_ms: VecDeque<u128>,
@@ -87,11 +91,11 @@ pub struct Heard {
 fn ear_for(models: &Path, speech: &Speech, locale: &str, stop: Arc<AtomicBool>) -> Result<(Ear, String, Option<String>, Option<String>)> {
     let system = |helper: &Path| -> Result<(Ear, String, Option<String>, Option<String>)> {
         if locale == "detect" {
-            let recognizer = AutoSpeech::load(models, helper, stop.clone())?;
+            let recognizer = AutoSpeech::load(models, helper, stop.clone())?.live();
             return Ok((Ear::with(models, Recognizers::system(Box::new(recognizer)))?,
                 crate::i18n::tr("Apple (detecting language)", "Apple（正在探测语言）").into(), None, None));
         }
-        let recognizer = SystemSpeech::start_with_stop(helper, locale, stop.clone())?;
+        let recognizer = SystemSpeech::start_with_stop(helper, locale, stop.clone())?.live();
         let with = format!("Apple {}", if recognizer.engine == "analyzer" { "SpeechAnalyzer" } else { "SFSpeechRecognizer" });
         let locale = recognizer.locale.clone();
         Ok((Ear::with(models, Recognizers::system(Box::new(recognizer)))?, with, Some(locale), None))
@@ -208,20 +212,29 @@ fn run(job: &Job, models: &Path, events: &Sender<Event>) -> Result<()> {
             // Each source can wait for its recognizer without holding up the other source.
             scope.spawn(move || {
                 let result = (|| -> Result<()> {
-                    for frame in receive {
-                        ensure!(frame.source == source, "audio reached the wrong source's recognizer");
-                        {
-                            let mut report = job.report.lock().unwrap();
-                            let track = &mut report.tracks[source];
-                            track.queued_samples -= frame.samples.len();
-                            keep(&mut track.queue_ms, frame.arrived.elapsed().as_millis());
+                    loop {
+                        let frame = match receive.recv_timeout(Duration::from_millis(50)) {
+                            Ok(frame) => Some(frame),
+                            Err(RecvTimeoutError::Timeout) => None,
+                            Err(RecvTimeoutError::Disconnected) => break,
+                        };
+                        if let Some(frame) = frame {
+                            ensure!(frame.source == source, "audio reached the wrong source's recognizer");
+                            {
+                                let mut report = job.report.lock().unwrap();
+                                let track = &mut report.tracks[source];
+                                track.queued_samples -= frame.samples.len();
+                                keep(&mut track.queue_ms, frame.arrived.elapsed().as_millis());
+                            }
+                            let _ = events.send(Event::Level(frame.samples.iter().fold(0.0_f32, |p, s| p.max(s.abs()))));
+                            ear.feed_at_with_partials(&frame.samples, frame.start, &mut |sentence| heard(job, source, sentence, events), &mut |text| partial(job, source, text, events));
+                        } else {
+                            ear.feed_at_with_partials(&[], None, &mut |sentence| heard(job, source, sentence, events), &mut |text| partial(job, source, text, events));
                         }
-                        let _ = events.send(Event::Level(frame.samples.iter().fold(0.0_f32, |p, s| p.max(s.abs()))));
-                        ear.feed_at(&frame.samples, frame.start, &mut |sentence| heard(job, source, sentence, events));
                         refresh_identity(job, source, &ear, events);
                         if let Some(error) = ear.error() { bail!("{error}"); }
                     }
-                    ear.finish(&mut |sentence| heard(job, source, sentence, events));
+                    ear.finish_with_partials(&mut |sentence| heard(job, source, sentence, events), &mut |text| partial(job, source, text, events));
                     refresh_identity(job, source, &ear, events);
                     if let Some(error) = ear.error() { bail!("{error}"); }
                     Ok(())
@@ -312,7 +325,7 @@ fn heard(job: &Job, source: usize, sentence: Sentence, events: &Sender<Event>) {
     let (key, captured) = {
         let mut report = job.report.lock().unwrap();
         report.tracks[source].finals += 1;
-        keep(&mut report.tracks[source].asr_ms, sentence.asr_ms);
+        if let Some(ms) = sentence.asr_ms { keep(&mut report.tracks[source].asr_ms, ms); }
         if let Some(elapsed) = sentence.captured[1].and_then(|end| ready.checked_duration_since(end)) {
             keep(&mut report.tracks[source].audio_end_to_final_ms, elapsed.as_millis());
         }
@@ -326,9 +339,50 @@ fn heard(job: &Job, source: usize, sentence: Sentence, events: &Sender<Event>) {
     let _ = events.send(Event::Spoken { meeting: job.meeting, sentence, audio });
 }
 
+fn partial(job: &Job, source: usize, text: String, events: &Sender<Event>) {
+    let ready = Instant::now();
+    let mut report = job.report.lock().unwrap();
+    let elapsed = report.started.elapsed().as_millis();
+    let track = &mut report.tracks[source];
+    if !text.is_empty() {
+        track.partials += 1;
+        track.first_partial_received_ms.get_or_insert(elapsed);
+        track.last_partial_received_ms = Some(elapsed);
+    }
+    let audio = Heard { capture: job.id, key: report.key.clone(), source, ready, captured: [None; 2], report: job.report.clone() };
+    drop(report);
+    let _ = events.send(Event::Partial { meeting: job.meeting, text, audio });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn partials_keep_source_and_meeting_without_counting_as_final_or_asr_time() {
+        let speech = Speech { helper: None, system: true, language: "zh-CN".into(), system_language: "ja-JP".into() };
+        let report = Arc::new(Mutex::new(Report::new(4, "both", &speech)));
+        let job = Job { id: 4, meeting: 9, input: None, source: "both".into(), speech, stop: Arc::new(AtomicBool::new(false)),
+            report: report.clone(), wavs: [None, None], done: None };
+        let (events, receive) = channel();
+        for source in [1, 0] {
+            partial(&job, source, "private temporary text".into(), &events);
+            let Event::Partial { meeting, text, audio } = receive.recv().unwrap() else { panic!("temporary text became a sentence") };
+            assert_eq!((meeting, audio.capture, audio.source), (9, 4, source));
+            assert_eq!(text, "private temporary text");
+            assert_eq!(audio.captured, [None, None]);
+            partial(&job, source, String::new(), &events);
+            assert!(matches!(receive.recv().unwrap(), Event::Partial { text, .. } if text.is_empty()));
+        }
+        let report = report.lock().unwrap();
+        for track in &report.tracks {
+            assert_eq!((track.partials, track.finals), (1, 0));
+            assert!(track.asr_ms.is_empty() && track.audio_end_to_final_ms.is_empty());
+            assert_eq!(track.first_partial_received_ms, track.last_partial_received_ms);
+            assert!(track.first_partial_received_ms.is_some());
+        }
+        assert!(!serde_json::to_string(&*report).unwrap().contains("private"));
+    }
 
     #[test]
     fn failed_setup_keeps_the_source_without_copying_the_error_or_reporting_twice() {
@@ -378,6 +432,75 @@ mod tests {
         let speech = Speech { helper: Some("unused-helper".into()), system: true, language: "detect".into(), system_language: "auto".into() };
         let error = ear_for(&models, &speech, "detect", Arc::new(AtomicBool::new(false))).err().unwrap();
         assert!(error.to_string().contains("multilingual speech package"), "{error:#}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "needs BOARDCAST_VOICE_DIR, BOARDCAST_AUTO_AUDIO and Python 3; uses no audio device"]
+    fn native_sources_emit_partials_and_finalize_after_manual_or_auto_start() {
+        use std::os::unix::fs::PermissionsExt;
+        let models = PathBuf::from(std::env::var_os("BOARDCAST_VOICE_DIR").expect("voice models"));
+        let audio = PathBuf::from(std::env::var_os("BOARDCAST_AUTO_AUDIO").expect("verified shared fixtures"));
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("boardcast-live-test-{}-{stamp}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let helper = dir.join("speech");
+        std::fs::write(&helper, include_str!("../../audio/tests/streaming_helper.py")).unwrap();
+        std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let wav = dir.join("opening-and-continuation.wav");
+        assert!(std::process::Command::new("python3").args(["-c", r#"
+import sys, wave
+with wave.open(sys.argv[1]) as source:
+    params = source.getparams()
+    samples = source.readframes(source.getnframes())
+with wave.open(sys.argv[2], 'wb') as target:
+    target.setparams(params)
+    target.writeframes(samples + b'\0' * (params.framerate * params.sampwidth) + samples)
+"#]).arg(audio.join("en-ami-00.wav")).arg(&wav).status().unwrap().success());
+        for language in ["en-US", "detect"] {
+            let speech = Speech { helper: Some(helper.clone()), system: true, language: language.into(), system_language: language.into() };
+            let report = Arc::new(Mutex::new(Report::new(8, "both", &speech)));
+            let (jobs, receive_jobs) = channel();
+            let (events, receive) = channel();
+            jobs.send(Job { id: 8, meeting: 12, input: None, source: "both".into(), speech, stop: Arc::new(AtomicBool::new(false)),
+                report: report.clone(), wavs: [Some(wav.clone()), Some(wav.clone())], done: None }).unwrap();
+            drop(jobs);
+            run_jobs(receive_jobs, models.clone(), events);
+            let mut partials = [0; 2];
+            let mut finals = [0; 2];
+            let mut stopped = 0;
+            for event in receive.try_iter() {
+                match event {
+                    Event::Partial { meeting, text, audio } => {
+                        assert_eq!((meeting, audio.capture), (12, 8));
+                        if !text.is_empty() { partials[audio.source] += 1; }
+                    }
+                    Event::Spoken { meeting, sentence, audio } if sentence.asr_ms.is_none() => {
+                        assert_eq!((meeting, audio.capture), (12, 8));
+                        assert!(partials[audio.source] > 0, "native final arrived without any earlier partial");
+                        let samples = report.lock().unwrap().tracks[audio.source].samples;
+                        assert!((sentence.start + sentence.seconds - samples as f64 / 16_000.0).abs() < 0.0001, "stream lost or repeated input at handoff");
+                        assert_eq!(audio.captured, [None; 2]);
+                        finals[audio.source] += 1;
+                    }
+                    Event::Failed(error) => panic!("{language}: {error}"),
+                    Event::CaptureStopped(8) => stopped += 1,
+                    _ => {}
+                }
+            }
+            assert_eq!((finals, stopped), ([1, 1], 1));
+            let report = report.lock().unwrap();
+            assert_eq!(report.phase, "stopped");
+            for (i, track) in report.tracks.iter().enumerate() {
+                assert_eq!(track.locale.as_deref(), Some("en-US"));
+                assert_eq!(track.partials, partials[i]);
+                assert_eq!(track.queued_samples, 0);
+                assert!(track.first_partial_received_ms.is_some());
+                if language == "en-US" { assert!(track.asr_ms.is_empty()); }
+                else { assert!(!track.asr_ms.is_empty(), "Auto's opening sentences must be retained"); }
+            }
+        }
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[cfg(unix)]
@@ -527,7 +650,7 @@ while True:
             (1, [Some(origin + Duration::from_secs(2)), Some(origin + Duration::from_secs(3))], [Some(2.0), Some(3.0)]),
             (0, [None, None], [None, None]),
         ] {
-            heard(&job, source, Sentence { text: "test".into(), voiceprint: None, asr_ms: 5, ended: Instant::now(),
+            heard(&job, source, Sentence { text: "test".into(), voiceprint: None, asr_ms: Some(5), ended: Instant::now(),
                 start: 0.0, seconds: 1.0, captured: times, engine: boardcast_audio::Engine::SenseVoice }, &events);
             let Event::Spoken { meeting, sentence, audio } = receive.recv().unwrap() else { panic!("missing sentence") };
             assert_eq!((meeting, audio.capture, audio.source), (7, 3, source));

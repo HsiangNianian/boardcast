@@ -43,9 +43,23 @@ A virtual Mac CI package check does not establish microphone permission, sustain
    Each source has its own recognition worker and a queue capped at 300 packets (`queued_packets_per_track`). The last 20 captures and last
    128 timing samples per source are retained. No transcript, audio, API key or
    full error response is included. Actual acoustic onset → first partial, sentence end → final and screen
-   presentation are **not measured**; nulls must not be reported as zero latency. This path currently emits
-   final captions; timings alone do not establish complete end-to-end latency. The first Auto ASR call includes
+   presentation are **not measured**; nulls must not be reported as zero latency. With SpeechAnalyzer on macOS 26,
+   live capture continuously feeds PCM and shows separate temporary captions for each source; only final text
+   enters meeting history, summaries and board requests. Auto keeps the original opening sentences and starts
+   streaming after language detection and that sentence queue drain. SFSpeechRecognizer and bundled engines keep
+   sentence recognition. Test changing language, source and meeting while temporary text is visible; the old
+   capture must not clear or populate the new capture's temporary text. Stop must clear previews and retain
+   prompt final results. `partials` counts nonempty native previews; `first_partial_received_ms` and
+   `last_partial_received_ms` start at capture preparation, not acoustic onset. `partial_ui_receive_ms` measures
+   Rust receipt to UI receipt, not display presentation. Streaming `asr_ms` is absent because computation overlaps
+   capture; it must not become a zero-duration sample. Only 30 seconds of PCM are retained for native final
+   voiceprints/timestamps: late text is kept, but evicted audio can leave the speaker or capture endpoints unknown.
+   The first Auto ASR call includes
    language detection and native helper startup, so keep it separate from warmed recognition samples.
+   [Streaming regression and native Linux GUI evidence](streaming-captions-2026-11-12.json) checks continuous
+   protocol input, partial/final isolation, stop and meeting switches with simulated Apple replies. It does not
+   establish Mac recognition quality or physical latency. This follows the former Tauri helper's use of Apple's
+   [volatile results](https://developer.apple.com/documentation/speech/speechtranscriber/reportingoption/volatileresults).
    `board.requests` retains the last 128 batches, including failures and replies superseded by a meeting switch.
    Queue timing starts when the oldest line in the batch is submitted to the board worker, independently of ASR;
    it includes waiting for initial model readiness. Provider setup and generation are measured separately;

@@ -994,6 +994,7 @@ struct Workbench {
     editing_title: bool,
     /// What recognizes speech, once the ear is ready.
     hearing: Option<String>,
+    partials: [Option<(u64, String)>; 2],
     /// The system's recognizer, where there is one to choose.
     speech_helper: Option<PathBuf>,
     /// When the microphone went on, so the title bar can count the time.
@@ -1243,6 +1244,7 @@ impl Workbench {
 
     /// Turn the microphone on or off, counting the time it was on towards the meeting.
     fn toggle_mic(&mut self) {
+        self.partials = [None, None];
         let was_listening = self.pipeline.listening();
         self.pipeline.toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()), &self.form.saved.capture_source);
         if !was_listening {
@@ -1294,6 +1296,7 @@ impl Workbench {
 
     /// Hear with Apple's recognizer or the speech models, in `language` for Apple's.
     fn choose_speech(&mut self, system: bool, language: Option<&str>, system_audio: bool, cx: &mut Context<Self>) {
+        self.partials = [None, None];
         self.count_listening();
         self.listening_since = None;
         let saved = &mut self.form.saved;
@@ -1365,6 +1368,9 @@ impl Workbench {
                     if self.pipeline.current_capture(id) { self.listening_since = Some(Instant::now()); }
                 }
                 Event::CaptureStopped(id) => {
+                    for text in &mut self.partials {
+                        if text.as_ref().is_some_and(|(capture, _)| *capture == id) { *text = None; }
+                    }
                     if self.pipeline.capture_stopped(id) {
                         if let Some(since) = self.listening_since.take() { self.live.add_recorded(since.elapsed().as_secs_f64() * 1000.0); }
                         self.level = 0.0;
@@ -1373,12 +1379,14 @@ impl Workbench {
                 Event::Spoken { meeting, sentence, audio } => {
                     crate::listen::keep(&mut audio.report.lock().unwrap().tracks[audio.source].ui_receive_ms, audio.ready.elapsed().as_millis());
                     if meeting == self.session().meeting() {
+                        if self.partials[audio.source].as_ref().is_some_and(|(id, _)| *id == audio.capture) { self.partials[audio.source] = None; }
                         let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds);
                         let mut sentence = sentence;
                         sentence.text = self.as_glossary_writes(&sentence.text);
-                        self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
+                        self.live.add_line(speaker.as_deref(), &sentence.text, sentence.asr_ms);
                         self.keep_heard_text();
                         if let Some(line) = self.live.lines.last_mut() {
+                            line["heard"]["asrMs"] = serde_json::json!(sentence.asr_ms);
                             line["source"] = serde_json::json!(crate::listen::SOURCES[audio.source]);
                             line["capture"] = serde_json::json!({ "id": audio.capture, "key": audio.key, "sourceStartSeconds": sentence.start, "seconds": sentence.seconds,
                                 "startSeconds": audio.captured[0], "endSeconds": audio.captured[1] });
@@ -1388,7 +1396,15 @@ impl Workbench {
                         }
                         let renames = self.session().renames_seen();
                         let line = Utterance { speaker, text: sentence.text, pointing: self.take_pointing() };
-                        let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, submitted: Instant::now(), asr_ms: Some(sentence.asr_ms), meeting, renames });
+                        let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, submitted: Instant::now(), asr_ms: sentence.asr_ms, meeting, renames });
+                    }
+                }
+                Event::Partial { meeting, text, audio } => {
+                    if !text.is_empty() {
+                        crate::listen::keep(&mut audio.report.lock().unwrap().tracks[audio.source].partial_ui_receive_ms, audio.ready.elapsed().as_millis());
+                    }
+                    if meeting == self.session().meeting() && (self.pipeline.current_capture(audio.capture) || (audio.capture == 0 && !self.pipeline.listening())) {
+                        self.partials[audio.source] = (!text.is_empty()).then_some((audio.capture, text));
                     }
                 }
                 Event::Agent(Update::Drawn { request, meeting, graph, ops, lines, asr_ms, llm_ms, ended }) => {
@@ -2192,6 +2208,7 @@ impl Workbench {
         self.speaker_line = None;
         self.speaker_hovered = None;
         self.jumped_line = None;
+        self.partials = [None, None];
         self.live = live;
         self.live.adopt_summary_source(&fingerprint_of(&self.live));
         self.show_page_image();
@@ -4214,7 +4231,12 @@ impl Render for Workbench {
         // With the transcript away, the latest line still shows that the room is being heard.
         let transcript_shown = self.panel == Panel::Transcript && self.transcript_open;
         let transcript_order = self.transcript_order();
-        let caption = transcript_order.iter().rev().map(|&i| &self.live.lines[i]).find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| !transcript_shown && self.replay.is_none());
+        let partials = self.partials.iter().enumerate().filter_map(|(source, text)| {
+            let (_, text) = text.as_ref().filter(|_| self.replay.is_none())?;
+            let label = if source == 0 { tr("Microphone · live", "麦克风 · 临时文字") } else { tr("System audio · live", "系统音频 · 临时文字") };
+            Some((label, text.clone()))
+        }).collect::<Vec<_>>();
+        let caption = transcript_order.iter().rev().map(|&i| &self.live.lines[i]).find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| partials.is_empty() && !transcript_shown && self.replay.is_none());
         let banner = self.notice.clone().or_else(|| match &self.save {
             SaveState::Failed(error) => Some(format!("{}{error}", tr("Your meeting is still open here, but it was not saved: ", "这场会还在这里，但没有保存成功："))),
             _ => None,
@@ -4234,6 +4256,7 @@ impl Render for Workbench {
             .gap_3()
             .flex()
             .flex_col()
+            .children(partials.iter().map(|(source, text)| div().text_sm().text_color(rgb(pal().faint)).child(div().text_xs().child(*source)).child(text.clone())))
             .children(transcript_order.into_iter().rev().map(|i| {
                 let l = &self.live.lines[i];
                 let manual = l["manual"].as_bool().unwrap_or(false);
@@ -4869,6 +4892,12 @@ impl Render for Workbench {
                     ),
                 )
             })
+            .when(!transcript_shown && !partials.is_empty(), |d| {
+                d.child(div().absolute().bottom(px(16.)).left_0().right_0().flex().justify_center().child(
+                    div().occlude().max_w(px(560.)).px_3().py_1().bg(rgb(pal().strong)).text_color(rgb(pal().on_strong)).text_sm().flex().flex_col().gap_1()
+                        .children(partials.into_iter().map(|(source, text)| div().max_h(px(140.)).overflow_hidden().child(div().text_xs().child(source)).child(text))),
+                ))
+            })
             .when_some(notices, |d, notices| d.child(notices));
         let main = div()
             .relative()
@@ -5253,6 +5282,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     title_input,
                     editing_title: false,
                     hearing: None,
+                    partials: [None, None],
                     speech_helper: Speech::helper_path(),
                     listening_since: None,
                     clock_second: 0,

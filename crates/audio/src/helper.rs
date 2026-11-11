@@ -22,7 +22,7 @@ impl Helper {
         let mut stdin = child.stdin.take().expect("piped stdin");
         let stdout = child.stdout.take().expect("piped stdout");
         let (send, output) = sync_channel(64);
-        let (input, receive) = sync_channel::<Vec<u8>>(1);
+        let (input, receive) = sync_channel::<Vec<u8>>(64);
         let errors = send.clone();
         let writer = thread::spawn(move || {
             for bytes in receive {
@@ -52,6 +52,8 @@ impl Helper {
     pub(crate) fn write(&self, bytes: Vec<u8>) -> Result<()> {
         self.input.as_ref().context("audio helper stopped")?.try_send(bytes).context("audio helper is not reading its input")
     }
+
+    pub(crate) fn close_input(&mut self) { self.input.take(); }
 
     pub(crate) fn next(&self, timeout: Duration, stop: &AtomicBool) -> Result<Value> {
         let end = Instant::now() + timeout;

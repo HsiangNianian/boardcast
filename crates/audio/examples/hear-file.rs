@@ -12,7 +12,10 @@ fn main() -> anyhow::Result<()> {
     };
     let mut ear = Ear::load(Path::new(models))?;
     let wave = Wave::read(wav).ok_or_else(|| anyhow::anyhow!("cannot read {wav}"))?;
-    let mut heard = |s: Sentence| println!("{:7.2}s {:?} {} ms: {}", s.start, s.engine, s.asr_ms, s.text);
+    let mut heard = |s: Sentence| {
+        let timing = s.asr_ms.map_or("streaming".into(), |ms| format!("{ms} ms"));
+        println!("{:7.2}s {:?} {timing}: {}", s.start, s.engine, s.text);
+    };
     for chunk in wave.samples().chunks(1600) {
         ear.feed(chunk, &mut heard);
     }

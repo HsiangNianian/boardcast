@@ -1,10 +1,12 @@
-// boardcast-speech: Apple's speech recognition for boardcast, one sentence at a time.
+// boardcast-speech: Apple's sentence and live speech recognition for boardcast.
 //
 //   boardcast-speech serve <locale|auto>
 //     Prints {"type":"ready","engine":"analyzer"|"legacy","locale":…} once it can recognize, or
 //     {"type":"error","message":…} and exits. Then, for each sentence, reads a little-endian UInt32
 //     sample count and that many 16 kHz mono float32 samples from stdin, and prints
 //     {"type":"text","text":…} or {"type":"error","message":…}. A count of 0, or the end of stdin, ends it.
+//     When ready includes streaming:true, UInt32.max switches to continuous raw PCM input until EOF.
+//     After streaming readiness, partial/final events contain text and start/end seconds; EOF emits done.
 //   boardcast-speech self-test
 //     Checks the audio conversion, for the build.
 //
@@ -70,29 +72,97 @@ func convert(_ samples: [Float], to format: AVAudioFormat) throws -> AVAudioPCMB
     return output
 }
 
+// Pull-based input keeps file imports and a slow recognizer from accumulating unbounded audio.
+final class PCMInput {
+    let format: AVAudioFormat
+    let converter: AVAudioConverter
+    let read: () throws -> Data
+    var pending = Data()
+    var ended = false
+
+    init(format: AVAudioFormat, read: @escaping () throws -> Data) throws {
+        let source = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000,
+                                   channels: 1, interleaved: false)!
+        guard let converter = AVAudioConverter(from: source, to: format) else {
+            throw Failure(message: "Cannot convert audio to Apple's input format")
+        }
+        converter.primeMethod = .none
+        self.format = format
+        self.converter = converter
+        self.read = read
+    }
+
+    func next() throws -> AVAudioPCMBuffer? {
+        while true {
+            if !ended {
+                let bytes = try read()
+                ended = bytes.isEmpty
+                pending.append(bytes)
+            }
+            if ended && pending.count % 4 != 0 {
+                throw Failure(message: "Incomplete float32 audio sample")
+            }
+            let frames = pending.count / 4
+            if frames == 0 && !ended { continue }
+            let input = AVAudioPCMBuffer(pcmFormat: converter.inputFormat,
+                                          frameCapacity: AVAudioFrameCount(max(1, frames)))!
+            input.frameLength = AVAudioFrameCount(frames)
+            if frames > 0 {
+                _ = pending.copyBytes(to: UnsafeMutableRawBufferPointer(start: input.floatChannelData![0], count: frames * 4))
+                pending.removeFirst(frames * 4)
+                guard UnsafeBufferPointer(start: input.floatChannelData![0], count: frames).allSatisfy(\.isFinite) else {
+                    throw Failure(message: "Invalid streaming samples")
+                }
+            }
+            let capacity = AVAudioFrameCount(ceil(Double(max(frames, 1)) * format.sampleRate / 16_000)) + 64
+            let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity)!
+            var supplied = false
+            var error: NSError?
+            let status = converter.convert(to: output, error: &error) { _, state in
+                if !supplied && frames > 0 {
+                    supplied = true
+                    state.pointee = .haveData
+                    return input
+                }
+                state.pointee = self.ended ? .endOfStream : .noDataNow
+                return nil
+            }
+            if let error { throw error }
+            if status == .error { throw Failure(message: "Audio conversion failed") }
+            if output.frameLength > 0 { return output }
+            if status == .endOfStream { return nil }
+        }
+    }
+}
+
 /// Exactly `count` bytes from stdin, or nil at its end.
-func readExactly(_ count: Int) -> Data? {
+func readExactly(_ count: Int) throws -> Data? {
     var data = Data()
     while data.count < count {
-        guard let chunk = try? FileHandle.standardInput.read(upToCount: count - data.count), !chunk.isEmpty else { return nil }
+        guard let chunk = try FileHandle.standardInput.read(upToCount: count - data.count), !chunk.isEmpty else {
+            if data.isEmpty { return nil }
+            throw Failure(message: "Truncated sentence input")
+        }
         data.append(chunk)
     }
     return data
 }
 
-/// The next sentence's samples, or nil when there are no more.
-func nextSentence() throws -> [Float]? {
-    guard let header = readExactly(4) else { return nil }
+enum Input { case end, sentence([Float]), stream }
+
+func nextInput() throws -> Input {
+    guard let header = try readExactly(4) else { return .end }
     let count = Int(header.withUnsafeBytes { UInt32(littleEndian: $0.loadUnaligned(as: UInt32.self)) })
-    if count == 0 { return nil }
-    guard count <= 16_000 * 30, let body = readExactly(count * 4) else {
+    if count == 0 { return .end }
+    if count == Int(UInt32.max) { return .stream }
+    guard count <= 16_000 * 30, let body = try readExactly(count * 4) else {
         throw Failure(message: "Invalid sentence length")
     }
     let samples = body.withUnsafeBytes { raw in
         (0..<count).map { Float(bitPattern: UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: $0 * 4, as: UInt32.self))) }
     }
     guard samples.allSatisfy(\.isFinite) else { throw Failure(message: "Invalid sentence samples") }
-    return samples
+    return .sentence(samples)
 }
 
 protocol Engine {
@@ -110,8 +180,8 @@ final class Analyzer: Engine {
         self.locale = locale
     }
 
-    func module() -> SpeechTranscriber {
-        SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [], attributeOptions: [])
+    func module(live: Bool = false) -> SpeechTranscriber {
+        SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: live ? [.volatileResults] : [], attributeOptions: live ? [.audioTimeRange] : [])
     }
 
     /// The language model is on the device, downloading it if the system allows.
@@ -132,6 +202,49 @@ final class Analyzer: Engine {
             throw Failure(message: "The speech model for \(locale.identifier) is not installed")
         }
         return analyzer
+    }
+
+    func stream() async throws {
+        let module = module(live: true)
+        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [module]) else {
+            throw Failure(message: "Apple could not provide a compatible audio format")
+        }
+        let input = try PCMInput(format: format) {
+            try FileHandle.standardInput.read(upToCount: 6_400) ?? Data()
+        }
+        let sequence = AsyncThrowingStream<AnalyzerInput, Error>(unfolding: {
+            try input.next().map { AnalyzerInput(buffer: $0) }
+        })
+        let analyzer = SpeechAnalyzer(modules: [module])
+        try await analyzer.prepareToAnalyze(in: format)
+        let results = Task {
+            do {
+                for try await result in module.results {
+                    let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let start = CMTimeGetSeconds(result.range.start)
+                    let end = CMTimeGetSeconds(CMTimeRangeGetEnd(result.range))
+                    guard start.isFinite, end.isFinite else { throw Failure(message: "Invalid Apple transcript timestamps") }
+                    emit(["type": result.isFinal ? "final" : "partial", "text": text, "start": start, "end": end])
+                }
+            } catch {
+                emit(["type": "error", "message": error.localizedDescription])
+                await analyzer.cancelAndFinishNow()
+                throw error
+            }
+        }
+        do {
+            emit(["type": "streaming"])
+            if let last = try await analyzer.analyzeSequence(sequence) {
+                try await analyzer.finalizeAndFinish(through: last)
+            } else {
+                await analyzer.cancelAndFinishNow()
+            }
+            try await results.value
+        } catch {
+            await analyzer.cancelAndFinishNow()
+            results.cancel()
+            throw error
+        }
     }
 
     func recognize(_ samples: [Float]) async throws -> String {
@@ -251,12 +364,23 @@ func engine(for wanted: Locale) async throws -> Engine {
 func serve(_ identifier: String) async throws {
     let wanted = identifier == "auto" ? Locale.current : Locale(identifier: identifier)
     let engine = try await engine(for: wanted)
-    emit(["type": "ready", "engine": engine.name, "locale": engine.locale.identifier])
-    while let samples = try nextSentence() {
-        do {
-            emit(["type": "text", "text": try await engine.recognize(samples)])
-        } catch {
-            emit(["type": "error", "message": error.localizedDescription])
+    emit(["type": "ready", "engine": engine.name, "locale": engine.locale.identifier, "streaming": engine.name == "analyzer"])
+    while true {
+        switch try nextInput() {
+        case .end: return
+        case .stream:
+            guard #available(macOS 26.0, *), let analyzer = engine as? Analyzer else {
+                throw Failure(message: "This speech engine cannot stream")
+            }
+            try await analyzer.stream()
+            emit(["type": "done"])
+            return
+        case .sentence(let samples):
+            do {
+                emit(["type": "text", "text": try await engine.recognize(samples)])
+            } catch {
+                emit(["type": "error", "message": error.localizedDescription])
+            }
         }
     }
 }
@@ -272,6 +396,26 @@ func selfTest() throws {
     guard resampled.frameLength > 2_800 && resampled.frameLength <= 3_264 else {
         throw Failure(message: "Resampling self-test failed: \(resampled.frameLength) frames")
     }
+    let data = values.withUnsafeBytes { Data($0) }
+    var chunks = [Data(data.prefix(3)), Data(data.dropFirst(3).prefix(7)), Data(data.dropFirst(10)), Data()]
+    let input = try PCMInput(format: inputFormat) { chunks.removeFirst() }
+    var actual: [Float] = []
+    while let buffer = try input.next() {
+        actual += Array(UnsafeBufferPointer(start: buffer.floatChannelData![0], count: Int(buffer.frameLength)))
+    }
+    guard actual == values else { throw Failure(message: "PCM split-read self-test failed") }
+    var truncated = [Data([0, 0, 0]), Data()]
+    let broken = try PCMInput(format: inputFormat) { truncated.removeFirst() }
+    do {
+        _ = try broken.next()
+        throw Failure(message: "Truncated PCM was accepted")
+    } catch let error as Failure where error.message == "Incomplete float32 audio sample" {}
+    var invalid = [Float.nan].withUnsafeBytes { Data($0) }
+    let nonfinite = try PCMInput(format: inputFormat) { defer { invalid = Data() }; return invalid }
+    do {
+        _ = try nonfinite.next()
+        throw Failure(message: "Nonfinite PCM was accepted")
+    } catch let error as Failure where error.message == "Invalid streaming samples" {}
     emit(["type": "done"])
 }
 

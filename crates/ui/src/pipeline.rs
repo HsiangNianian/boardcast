@@ -19,6 +19,7 @@ pub enum Event {
     /// A sentence from the microphone or a recording. The window works out who said it, as it holds
     /// the meeting's voices, and passes it on to the model.
     Spoken { meeting: u64, sentence: Sentence, audio: Heard },
+    Partial { meeting: u64, text: String, audio: Heard },
     CaptureReady(u64),
     CaptureStopped(u64),
     Failed(String),
@@ -185,7 +186,7 @@ impl Pipeline {
             if self.current_capture(report.id) { value["elapsed_ms"] = serde_json::json!(report.started.elapsed().as_millis()); }
             for (i, track) in report.tracks.iter().enumerate() {
                 value["tracks"][i]["source"] = serde_json::json!(listen::SOURCES[i]);
-                for (name, values) in [("queue_ms", &track.queue_ms), ("asr_ms", &track.asr_ms), ("ui_receive_ms", &track.ui_receive_ms), ("audio_end_to_final_ms", &track.audio_end_to_final_ms)] {
+                for (name, values) in [("queue_ms", &track.queue_ms), ("asr_ms", &track.asr_ms), ("ui_receive_ms", &track.ui_receive_ms), ("partial_ui_receive_ms", &track.partial_ui_receive_ms), ("audio_end_to_final_ms", &track.audio_end_to_final_ms)] {
                     value["tracks"][i][name] = stats(values.iter().copied());
                 }
             }

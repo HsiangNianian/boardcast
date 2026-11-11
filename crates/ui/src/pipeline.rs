@@ -109,7 +109,7 @@ impl Pipeline {
                 let report = Arc::new(Mutex::new(Report::new(0, "microphone", &scripted_speech)));
                 let _ = feed.send(Job { id: 0, meeting: stamp.load(Ordering::SeqCst), input: None,
                     source: "microphone".into(), speech: scripted_speech, stop: Arc::new(AtomicBool::new(false)),
-                    report, wav: Some(path.clone()), done: Some(done) });
+                    report, wavs: [Some(path.clone()), None], done: Some(done) });
                 let _ = finished.recv();
             }
             for turn in script.turns {
@@ -169,7 +169,7 @@ impl Pipeline {
         let report = Arc::new(Mutex::new(Report::new(id, source, &self.speech)));
         if self.reports.len() == 20 { self.reports.pop_front(); }
         self.reports.push_back(report.clone());
-        let job = Job { id, meeting: self.session.meeting(), input, source: source.into(), speech: self.speech.clone(), stop, report, wav: None, done: None };
+        let job = Job { id, meeting: self.session.meeting(), input, source: source.into(), speech: self.speech.clone(), stop, report, wavs: [None, None], done: None };
         if self.audio.send(job).is_err() {
             self.active.take();
             let _ = self.event_tx.send(Event::Failed("Audio worker stopped".into()));

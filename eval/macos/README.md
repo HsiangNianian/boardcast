@@ -55,33 +55,41 @@ timing and actual two-source Apple capacity remain to be verified/finished; Auto
 
 The sampler parser can be tested anywhere: `python3 eval/macos/test_watch.py`.
 
-The two-source scheduling regression uses the verified `en-ami-00.wav` fixture, real VAD and two stand-in
-speech helpers. Each helper waits for the other to receive a sentence: shared serial consumption fails this
-check, while separate workers complete it. A second run injects a recognition error and checks both helpers
-shut down through EOF. The blocking case failed on the serial implementation and passed with separate workers.
+The two-source scheduling regression uses verified English, Chinese and Japanese fixtures, real VAD and two
+stand-in speech helpers. For the same English input, each helper waits for the other to receive a sentence:
+shared serial consumption fails this check, while separate workers complete it. The wait allows Auto to collect
+its opening speech while a manual-language peer is already recognizing. Another run injects a recognition error
+and checks both helpers shut down through EOF. The blocking case failed on the serial implementation and passed
+with separate workers.
 The Linux package job downloads three language fixtures, verifies their manifest sizes/hashes and runs this
-test explicitly. It covers manual selection, microphone Auto with manual system language, and a failure:
+test explicitly. It covers manual selection, microphone Auto with manual system language, Auto on both sources
+with Chinese/Japanese and then Japanese/Chinese input, and a failure:
 
 ```sh
 BOARDCAST_VOICE_DIR="$PWD/resources/voice" \
-BOARDCAST_AUDIO_TEST_WAV="$PWD/eval/asr/.data/en-ami-00.wav" \
+BOARDCAST_AUTO_AUDIO="$PWD/eval/asr/.data" \
 cargo test -p boardcast-ui both_sources_can_recognize_while_the_other_is_waiting -- --ignored
 ```
 
-This exercises the production capture-job lifecycle with WAV input; it does not open devices or measure Apple
-recognition. Both tracks use the same English recording, so it is not a bilingual accuracy or clock-alignment test.
+This exercises the production capture-job lifecycle with WAV input and checks each source's selected locale,
+meeting/capture stamp and drained queue. It does not open devices or measure Apple recognition accuracy or source
+clock alignment. The Japanese recording initially selected English from its first short VAD segment, reproducing
+a routing bug that the direct, longer-sentence probe below had missed.
 
 Auto reuses the Tauri probe of SenseVoice's [language/event metadata](https://github.com/k2-fsa/sherpa-onnx/blob/v2.0.1/sherpa-onnx/csrc/offline-recognizer-sense-voice-impl.h#L52-L58), accepting only nonempty speech tagged Chinese,
-Japanese or English. The current ear supplies the first VAD-segmented sentence; up to five seconds are probed,
-then the probe is released before starting Apple's selected locale. The full original sentence is sent once,
-including audio beyond the probe window. The ear retains its source-relative timestamp and normal bounded buffers;
-the probe adds no independent silence buffer. Short or mixed speech can select the wrong language, so manual
-selection remains available. Missing models or inconclusive detection fail explicitly.
+Japanese or English. The ear now gathers five seconds of VAD-qualified original PCM across opening sentences;
+it collects context while speech arrives, without waiting for the next full sentence to end. Completed sentences
+wait for detection, then each is sent once with its original PCM and source-relative timestamp. Stopping flushes
+shorter opening speech. The probe is released before starting Apple's selected locale. This delays the initial
+captions; five seconds of speech is not a physical latency guarantee. Silence adds no probe context or waiting
+sentences. Short or mixed speech can still select the wrong language, so manual selection remains available.
+Missing models or inconclusive detection fail explicitly.
 
 A separate regression runs verified Chinese, Japanese and English WAVs through three concurrent Auto instances
 and simulated Apple helpers. It checks the actual selected locales, byte-for-byte forwarding of the complete
-opening PCM and the next sentence, probe release, an opening sentence finalized after stop, and 40 seconds
-of silence through the production ear without starting Apple or exceeding its audio retention bound:
+opening PCM and the next sentence, the five-second context cap and its release, an opening sentence finalized
+after stop, and 40 seconds of silence through the production ear without starting Apple, queuing sentences or
+exceeding its audio retention bound:
 
 ```sh
 BOARDCAST_VOICE_DIR="$PWD/resources/voice" \
@@ -92,7 +100,7 @@ cargo test -p boardcast-audio auto_routes_real_opening_speech_and_preserves_the_
 That test runs real language detection, not Apple recognition. Native asset preparation, permissions, overlapping
 source performance and bilingual transcription accuracy still require the Mac procedure above.
 
-On 2026-11-11, local Linux verification passed 21 audio tests, 5 UI tests, the explicit three-language Auto test
+On 2026-11-11, local Linux verification passed 22 audio tests, 5 UI tests, the explicit three-language Auto test
 and the extended two-source lifecycle test. The English settings UI was also exercised in an isolated Linux app:
 an existing Japanese microphone / System language pair survived loading; choosing microphone Auto left system
 audio unchanged; choosing Auto for both persisted through a full app close and reopen. A presence-only Apple

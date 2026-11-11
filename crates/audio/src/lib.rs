@@ -130,6 +130,8 @@ pub fn is_japanese(text: &str) -> bool {
 
 /// A recognizer outside this crate, such as the system's own, that takes a sentence and gives its text.
 pub trait Recognizer: Send {
+    /// Observe VAD-qualified chunks; an empty slice queries readiness or finishes a short capture.
+    fn prepare(&mut self, _samples: &[f32], _finished: bool) -> bool { true }
     fn recognize(&mut self, samples: &[f32]) -> Result<String>;
     fn error(&self) -> Option<&str> { None }
     fn identity(&self) -> Option<(&str, &str)> { None }
@@ -364,6 +366,7 @@ pub struct Ear {
     level: VadLevel,
     /// The original samples: recognition must not hear the detector's gain.
     audio: VecDeque<f32>,
+    waiting: Vec<(Vec<f32>, usize, Instant)>,
 }
 
 impl Ear {
@@ -411,6 +414,7 @@ impl Ear {
             fed: 0,
             level: VadLevel::default(),
             audio: VecDeque::new(),
+            waiting: vec![],
         })
     }
 
@@ -432,6 +436,9 @@ impl Ear {
             let mut leveled = chunk.clone();
             self.level.apply(&mut leveled);
             self.vad.accept_waveform(&leveled);
+            if self.vad.detected() && self.asr.system.as_mut().is_some_and(|s| s.prepare(&chunk, false)) {
+                self.hear_waiting(heard);
+            }
 
             if self.in_speech {
                 self.speech.extend_from_slice(&chunk);
@@ -476,6 +483,22 @@ impl Ear {
             return;
         }
         let ended = Instant::now();
+        if self.asr.system.as_mut().is_some_and(|s| !s.prepare(&[], false)) {
+            self.waiting.push((samples.to_vec(), start, ended));
+            return;
+        }
+        self.hear_waiting(heard);
+        self.transcribe(samples, start, ended, heard);
+    }
+
+    fn hear_waiting(&mut self, heard: &mut impl Heard) {
+        for (samples, start, ended) in std::mem::take(&mut self.waiting) {
+            self.transcribe(&samples, start, ended, heard);
+        }
+    }
+
+    fn transcribe(&mut self, samples: &[f32], start: usize, ended: Instant, heard: &mut impl Heard) {
+        let started = Instant::now();
         let (text, engine) = self.asr.hear(samples);
         // A word or two out of clicks, breath or hum: the recognizers find words in anything, but
         // speech is voiced, and these are not.
@@ -483,7 +506,7 @@ impl Ear {
             return;
         }
         if !text.is_empty() {
-            let asr_ms = ended.elapsed().as_millis();
+            let asr_ms = started.elapsed().as_millis();
             heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine });
         }
     }
@@ -537,6 +560,9 @@ impl Ear {
         }
         self.vad.flush();
         self.drain(heard);
+        if !self.waiting.is_empty() && self.asr.system.as_mut().is_some_and(|s| s.prepare(&[], true)) {
+            self.hear_waiting(heard);
+        }
     }
 }
 
@@ -702,6 +728,44 @@ mod tests {
         let none = Recognizers { system: None, sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None };
         assert!(none.is_empty());
         assert!(Ear::with(Path::new("/nowhere"), none).is_err());
+    }
+
+    #[test]
+    fn opening_context_wait_keeps_sentence_audio_and_positions_and_flushes_on_stop() {
+        use std::sync::{Arc, Mutex};
+        struct Waiting { ready: Arc<AtomicBool>, seen: Arc<Mutex<Vec<Vec<f32>>>> }
+        impl Recognizer for Waiting {
+            fn prepare(&mut self, _: &[f32], finished: bool) -> bool {
+                finished || self.ready.load(Ordering::Relaxed)
+            }
+            fn recognize(&mut self, samples: &[f32]) -> Result<String> {
+                self.seen.lock().unwrap().push(samples.to_vec());
+                Ok("The original sentence was retained.".into())
+            }
+        }
+        let Some(models) = models() else { return };
+        let first = vec![0.25; VAD_WINDOW * 2];
+        let second = vec![-0.5; VAD_WINDOW * 2];
+        for finish in [false, true] {
+            let seen = Arc::new(Mutex::new(vec![]));
+            let ready = Arc::new(AtomicBool::new(false));
+            let mut ear = Ear::with(&models, Recognizers::system(Box::new(Waiting { ready: ready.clone(), seen: seen.clone() }))).unwrap();
+            let mut sentences = vec![];
+            ear.hear(&first, 1600, &mut |s| sentences.push(s));
+            assert!(sentences.is_empty() && seen.lock().unwrap().is_empty());
+            if finish { ear.finish(&mut |s| sentences.push(s)); }
+            else { ready.store(true, Ordering::Relaxed); ear.hear(&second, 16000, &mut |s| sentences.push(s)); }
+            let expected = if finish { vec![first.clone()] } else { vec![first.clone(), second.clone()] };
+            assert_eq!(*seen.lock().unwrap(), expected);
+            assert_eq!(sentences[0].start, 0.1);
+            assert_eq!(sentences[0].seconds, first.len() as f64 / f64::from(SAMPLE_RATE));
+            if !finish {
+                assert_eq!(sentences[1].start, 1.0);
+                assert!(sentences[0].ended <= sentences[1].ended);
+            }
+            assert!(ear.waiting.is_empty());
+            ear.finish(&mut |_| panic!("deferred sentences must not be repeated"));
+        }
     }
 
     #[test]

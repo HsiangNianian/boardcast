@@ -63,7 +63,7 @@ pub struct Job {
     pub speech: Speech,
     pub stop: Arc<AtomicBool>,
     pub report: Arc<Mutex<Report>>,
-    pub wav: Option<PathBuf>,
+    pub wavs: [Option<PathBuf>; 2],
     pub done: Option<Sender<()>>,
 }
 
@@ -211,7 +211,7 @@ fn run(job: &Job, models: &Path, events: &Sender<Event>) -> Result<()> {
             let (status, report, stop, events) = (status.clone(), job.report.clone(), job.stop.clone(), events.clone());
             let input = job.input.clone();
             let helper = job.speech.helper.clone();
-            let wav = job.wav.clone();
+            let wav = job.wavs[source].clone();
             let mic_ready = mic_ready.clone();
             scope.spawn(move || {
                 // Activate the microphone before asking ScreenCaptureKit for permission.
@@ -313,11 +313,11 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[ignore = "needs BOARDCAST_VOICE_DIR, BOARDCAST_AUDIO_TEST_WAV and Python 3; uses no audio device"]
+    #[ignore = "needs BOARDCAST_VOICE_DIR, BOARDCAST_AUTO_AUDIO and Python 3; uses no audio device"]
     fn both_sources_can_recognize_while_the_other_is_waiting() {
         use std::os::unix::fs::PermissionsExt;
         let models = PathBuf::from(std::env::var_os("BOARDCAST_VOICE_DIR").expect("voice models"));
-        let wav = PathBuf::from(std::env::var_os("BOARDCAST_AUDIO_TEST_WAV").expect("16 kHz speech WAV"));
+        let audio = PathBuf::from(std::env::var_os("BOARDCAST_AUTO_AUDIO").expect("verified three-language WAVs"));
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let dir = std::env::temp_dir().join(format!("boardcast-dual-test-{}-{stamp}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -334,28 +334,41 @@ while True:
     if not n: break
     if len(sys.stdin.buffer.read(n * 4)) != n * 4: break
     (root / locale).touch()
-    other = root / ('ja-JP' if locale == 'en-US' else 'en-US')
-    until = time.monotonic() + 3
-    while not other.exists() and time.monotonic() < until: time.sleep(0.01)
-    event = {'type':'text','text':'The two sources both reached recognition.'} if other.exists() else {'type':'error','message':'The other source was blocked by this recognition request.'}
+    event = {'type':'text','text':'Recognized by ' + locale}
+    if (root / 'barrier').exists():
+        other = root / ('ja-JP' if locale == 'en-US' else 'en-US')
+        # Auto gathers opening speech while a manual-language peer can already be waiting here.
+        until = time.monotonic() + 15
+        while not other.exists() and time.monotonic() < until: time.sleep(0.01)
+        if not other.exists(): event = {'type':'error','message':'The other source was blocked by this recognition request.'}
     if locale == 'ja-JP' and (root / 'fail').exists(): event = {'type':'error','message':'injected recognition failure'}
     print(json.dumps(event), flush=True)
 (root / (locale + '.closed')).touch()
 "#).unwrap();
         std::fs::set_permissions(&helper, std::fs::Permissions::from_mode(0o755)).unwrap();
-        for (language, fail) in [("en-US", false), ("detect", false), ("detect", true)] {
-            let speech = Speech { helper: Some(helper.clone()), system: true, language: language.into(), system_language: "ja-JP".into() };
+        for (languages, locales, files, fail) in [
+            (["en-US", "ja-JP"], ["en-US", "ja-JP"], ["en-ami-00", "en-ami-00"], false),
+            (["detect", "ja-JP"], ["en-US", "ja-JP"], ["en-ami-00", "en-ami-00"], false),
+            (["detect", "detect"], ["zh-CN", "ja-JP"], ["zh-alimeeting-00", "ja-fleurs-00"], false),
+            (["detect", "detect"], ["ja-JP", "zh-CN"], ["ja-fleurs-00", "zh-alimeeting-00"], false),
+            (["detect", "ja-JP"], ["en-US", "ja-JP"], ["en-ami-00", "en-ami-00"], true),
+        ] {
+            // Only equal-duration inputs use the barrier; separate utterances can end at different times.
+            if files[0] == files[1] { std::fs::write(dir.join("barrier"), "").unwrap(); }
+            else { let _ = std::fs::remove_file(dir.join("barrier")); }
+            let speech = Speech { helper: Some(helper.clone()), system: true, language: languages[0].into(), system_language: languages[1].into() };
             if fail { std::fs::write(dir.join("fail"), "").unwrap(); }
             let report = Arc::new(Mutex::new(Report::new(9, "both", &speech)));
             let job = Job { id: 9, meeting: 17, input: None, source: "both".into(), speech: speech.clone(),
-                stop: Arc::new(AtomicBool::new(false)), report, wav: Some(wav.clone()), done: None };
+                stop: Arc::new(AtomicBool::new(false)), report, wavs: files.map(|file| Some(audio.join(format!("{file}.wav")))), done: None };
             let (events, receive) = channel();
             let result = run(&job, &models, &events);
             let mut spoken = [0; 2];
             for event in receive.try_iter() {
-                if let Event::Spoken { meeting, audio, .. } = event {
+                if let Event::Spoken { meeting, audio, sentence } = event {
                     assert_eq!(meeting, 17);
                     assert_eq!(audio.capture, 9);
+                    assert_eq!(sentence.text, format!("Recognized by {}", locales[audio.source]));
                     spoken[audio.source] += 1;
                 }
             }
@@ -363,15 +376,18 @@ while True:
                 assert!(result.unwrap_err().to_string().contains("injected recognition failure"));
                 assert_eq!(job.report.lock().unwrap().failure_stage, Some("capture-or-recognition"));
             } else {
-                assert!(result.is_ok(), "{result:?}");
+                assert!(result.is_ok(), "{languages:?} / {files:?}: {result:?}");
                 assert!(spoken.iter().all(|n| *n > 0), "{spoken:?}");
                 let report = job.report.lock().unwrap();
-                assert_eq!(report.requested_languages, [language, "ja-JP"]);
-                assert_eq!(report.tracks[0].locale.as_deref(), Some("en-US"));
-                assert_eq!(report.tracks[1].locale.as_deref(), Some("ja-JP"));
+                assert_eq!(report.requested_languages, languages);
+                for (track, locale) in report.tracks.iter().zip(locales) {
+                    assert_eq!(track.locale.as_deref(), Some(locale));
+                    assert_eq!(track.queued_samples, 0);
+                    assert!(track.samples > 0 && track.finals > 0);
+                }
             }
             assert!(job.stop.load(Ordering::Relaxed));
-            for locale in ["en-US", "ja-JP"] {
+            for locale in locales {
                 assert!(dir.join(format!("{locale}.closed")).exists(), "helper did not shut down through EOF");
                 std::fs::remove_file(dir.join(format!("{locale}.closed"))).unwrap();
                 std::fs::remove_file(dir.join(locale)).unwrap();

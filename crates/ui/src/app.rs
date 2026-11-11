@@ -4475,8 +4475,8 @@ impl Render for Workbench {
                                 })))
                         })
                         .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                            "Auto needs the multilingual speech package. It chooses Chinese, Japanese or English from each source's first utterance and keeps that language until restarted. Short or mixed speech may need a manual choice. System language follows this Mac's locale. Apple recognition stays on this device.",
-                            "自动探测需要多语种语音包，根据每路开场语音选择中、日或英语，保持到下次启动收音。过短或混合语音可能需要手动选择。跟随系统使用 Mac 的语言设置。Apple 识别始终在本机进行。",
+                            "Auto needs the multilingual speech package. It gathers about five seconds of speech to choose Chinese, Japanese or English per source, then keeps that language until restarted. Initial captions wait for detection; short or mixed speech may need a manual choice. System language follows this Mac's locale. Apple recognition stays on this device.",
+                            "自动探测需要多语种语音包，积累每路约 5 秒开场语音后选择中、日或英语，保持到下次启动收音。首批字幕会等待探测完成；过短或混合语音可能需要手动选择。跟随系统使用 Mac 的语言设置。Apple 识别始终在本机进行。",
                         )))
                     })
             })

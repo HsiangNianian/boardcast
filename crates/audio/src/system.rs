@@ -102,6 +102,7 @@ impl Recognizer for SystemSpeech {
 /// Each source chooses one opening language; the normal ear retains and segments the original PCM.
 pub struct AutoSpeech {
     probe: Option<Probe>,
+    opening: Vec<f32>,
     speech: Option<SystemSpeech>,
     helper: PathBuf,
     stop: Arc<AtomicBool>,
@@ -110,18 +111,28 @@ pub struct AutoSpeech {
 
 impl AutoSpeech {
     pub fn load(models: &Path, helper: &Path, stop: Arc<AtomicBool>) -> Result<Self> {
-        Ok(Self { probe: Some(Probe::load(models)?), speech: None, helper: helper.into(), stop, failure: None })
+        Ok(Self { probe: Some(Probe::load(models)?), opening: vec![], speech: None, helper: helper.into(), stop, failure: None })
     }
 }
 
 impl Recognizer for AutoSpeech {
+    fn prepare(&mut self, samples: &[f32], finished: bool) -> bool {
+        if self.probe.is_none() { return true; }
+        let needed = SAMPLE_RATE as usize * 5 - self.opening.len();
+        self.opening.extend_from_slice(&samples[..samples.len().min(needed)]);
+        finished || self.opening.len() == SAMPLE_RATE as usize * 5
+    }
+
     fn recognize(&mut self, samples: &[f32]) -> Result<String> {
         let result = (|| {
             if let Some(error) = &self.failure { bail!("{error}"); }
             ensure!(!samples.is_empty() && samples.len() <= SAMPLE_RATE as usize * 30 && samples.iter().all(|s| s.is_finite()), "invalid sentence samples");
             if self.speech.is_none() {
                 let probe = self.probe.take().context("language detection is unavailable")?;
-                let locale = probe.detect(&samples[..samples.len().min(SAMPLE_RATE as usize * 5)])?;
+                // A short first VAD segment can look English inside an otherwise Japanese utterance.
+                let opening = if self.opening.is_empty() { &samples[..samples.len().min(SAMPLE_RATE as usize * 5)] } else { &self.opening };
+                let locale = probe.detect(opening)?;
+                self.opening = Vec::new();
                 drop(probe);
                 // A short first utterance may only reach VAD when stopped; startup shares its finalization budget.
                 self.speech = Some(SystemSpeech::launch(&self.helper, locale, self.stop.clone(), true)?);
@@ -303,8 +314,14 @@ while True:
                     let stop = Arc::new(AtomicBool::new(locale == "ja-JP"));
                     let mut speech = AutoSpeech::load(models, helper, stop.clone()).unwrap();
                     assert!(speech.identity().is_none());
+                    for (i, chunk) in samples.chunks(crate::VAD_WINDOW).enumerate() {
+                        let collected = ((i + 1) * crate::VAD_WINDOW).min(samples.len());
+                        assert_eq!(speech.prepare(chunk, false), collected >= SAMPLE_RATE as usize * 5);
+                        assert_eq!(speech.opening.len(), collected.min(SAMPLE_RATE as usize * 5));
+                    }
                     assert_eq!(speech.recognize(samples).unwrap(), locale, "{file}");
                     assert!(speech.probe.is_none(), "release SenseVoice after choosing Apple's language");
+                    assert!(speech.opening.is_empty());
                     assert_eq!(speech.identity(), Some(("fake", locale)));
                     stop.store(true, Ordering::Relaxed);
                     assert_eq!(speech.recognize(&[0.25; 32]).unwrap(), locale);
@@ -322,6 +339,7 @@ while True:
         for _ in 0..400 {
             ear.feed(&[0.0; 1600], &mut unheard);
             assert!(ear.audio.len() <= crate::RETAIN, "quiet Auto capture must keep bounded audio");
+            assert!(ear.waiting.is_empty(), "silence must not queue sentences for language detection");
         }
         ear.finish(&mut unheard);
         assert!(ear.identity().is_none() && ear.error().is_none());

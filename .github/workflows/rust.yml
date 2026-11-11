@@ -57,6 +57,10 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      # rust-cache drops native libraries but can retain sherpa's completed-download directory.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       # The script ends by running each packaged app's self-check. A second variant checks the model selection.
       - run: sh packaging/linux/package.sh
         env:
@@ -126,6 +130,10 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      # rust-cache drops native libraries but can retain sherpa's completed-download directory.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       # The script ends by running each packaged app's self-check, and builds and self-tests the Apple speech helper.
       - run: sh packaging/macos/package.sh
         env:
@@ -159,6 +167,10 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      # rust-cache drops native libraries but can retain sherpa's completed-download directory.
+      - run: |
+          cargo clean -p sherpa-onnx-sys
+          rm -rf target/sherpa-onnx-prebuilt
       - run: sh packaging/windows/package.sh
         env:
           VARIANTS: all

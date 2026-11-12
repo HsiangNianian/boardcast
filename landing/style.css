@@ -96,14 +96,22 @@ nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 
 .ruler span { position: absolute; }
 .ruler.top span { top: 5px; transform: translateX(-50%); }
 .ruler.left span { left: 5px; transform: translateY(-50%); }
-.titleblock { position: fixed; right: 12px; bottom: 12px; z-index: 31; display: grid; grid-template-columns: 1.3fr 1fr; width: 300px; background: var(--bg); border-top: 1px solid var(--hair); border-left: 1px solid var(--hair); }
+/* The timeline along the bottom: the page is the meeting, and scrolling plays it. */
+.titleblock { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 31; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; align-items: center; height: 38px; background: var(--bg); border-top: 1px solid var(--hair); }
 .titleblock.on-hero { visibility: hidden; }
-.titleblock div { padding: 5px 8px; border-right: 1px solid var(--hair); border-bottom: 1px solid var(--hair); white-space: nowrap; overflow: hidden; }
-.titleblock div:nth-child(2n) { border-right: 0; }
-.titleblock div:nth-last-child(-n+2) { border-bottom: 0; }
+.titleblock > div { padding: 0 16px; white-space: nowrap; }
 .titleblock b { color: var(--fg); font-weight: 400; }
-.titleblock div.appearance-cell { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 0 0 8px; overflow: visible; }
-#theme-toggle { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-left: 1px solid var(--hair); background: var(--bg); color: var(--fg); cursor: pointer; }
+.tb-clock b { font-variant-numeric: tabular-nums; }
+.tb-no { color: var(--accent); }
+.tb-track { position: relative; display: flex; gap: 3px; align-items: flex-end; height: 24px; padding: 0 44px 0 0 !important; margin: 0 16px; }
+.tb-seg { position: relative; flex: 1 1 0; height: 4px; background: var(--l3); transition: background .3s; }
+.tb-seg.past { background: var(--faint); }
+.tb-seg em, .tb-fin { position: absolute; bottom: 9px; left: 0; font: 400 9px var(--mono); font-style: normal; color: var(--dim); }
+.tb-fin { left: auto; right: 0; bottom: 0; line-height: 4px; }
+.tb-head { position: absolute; top: 2px; bottom: -6px; width: 1px; margin-left: -.5px; background: var(--accent); z-index: 1; transition: left .12s linear; }
+.tb-head::before { content: ''; position: absolute; top: 0; left: -3px; width: 7px; height: 7px; background: var(--accent); }
+.titleblock div.appearance-cell { display: flex; align-self: stretch; padding: 0; border-left: 1px solid var(--hair); }
+#theme-toggle { display: grid; place-items: center; width: 38px; height: 100%; padding: 0; border: 0; background: var(--bg); color: var(--fg); cursor: pointer; }
 #theme-toggle svg { width: 20px; height: 20px; }
 #theme-toggle:hover { background: var(--fg); color: var(--bg); }
 .titleblock .flip { display: inline-block; animation: flip .35s cubic-bezier(.2,.8,.2,1); }
@@ -145,7 +153,7 @@ nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 .toast b { font-weight: 400; background: var(--bg); color: var(--fg); padding: 1px 6px; margin-right: 8px; }
 body.drawing-lasso { user-select: none; cursor: crosshair; }
-@media (max-width: 1080px) { .titleblock { width: 220px; grid-template-columns: 1fr; } .titleblock div:nth-child(2n):not(.appearance-cell) { display: none; } }
+@media (max-width: 1080px) { .tb-rev, .tb-sheet { display: none; } .titleblock { grid-template-columns: auto minmax(0, 1fr) auto; } }
 .hero-copy h1 { max-width: 17ch; font-size: clamp(30px, 3vw, 42px); font-weight: 350; letter-spacing: -.035em; line-height: 1.08; }
 .hero-copy p { margin-top: 18px; max-width: 36ch; font-size: 15px; line-height: 1.65; color: var(--grey); }
 .cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
@@ -200,6 +208,9 @@ body.drawing-lasso { user-select: none; cursor: crosshair; }
   .sheet-page, .sheet-page.block { padding-top: 40px; padding-bottom: 40px; }
   .sheet-page .head { padding-bottom: 20px; }
 }
+
+/* Cards are numbered in order, the number in the accent. */
+.card .k b, .dot-card .label b { margin-right: 6px; font-weight: 400; color: var(--accent); }
 
 /* ———————————————— signals: one meeting, four lines ———————————————— */
 /* Top only: the sides are .wrap's padding. */
@@ -454,13 +465,13 @@ section.block { padding-top: 140px; }
   .hero-rail .label { flex-wrap: wrap; gap: 12px 20px; }
 }
 @media (max-width: 600px) {
-  /* Sides only: sections, the clock and the footer set their own top and bottom. */
+  /* Sides only: the sections set their own top and bottom. */
   .wrap { padding-left: 20px; padding-right: 20px; } .dots, .dl { grid-template-columns: 1fr; } .app-title > span:not(.rec):not(.name) { display: none; }
   /* The sheet's furniture stays out of the way of a narrow screen. */
-  .ruler, .titleblock div:not(.appearance-cell), .appearance-cell > span { display: none; }
-  .titleblock { display: block; right: 6px; bottom: 6px; width: auto; border: 1px solid var(--hair); }
-  .titleblock div.appearance-cell { padding: 0; border: 0; }
-  #theme-toggle { width: 44px; height: 44px; border: 0; }
+  .ruler, .tb-clock, .tb-seg em, .tb-fin { display: none; }
+  .titleblock { left: 6px; right: 6px; bottom: 6px; height: 44px; grid-template-columns: minmax(0, 1fr) auto; }
+  .tb-track { margin: 0 16px; padding-right: 0 !important; align-items: center; }
+  #theme-toggle { width: 44px; }
   .frame { inset: 6px; }
   nav.top { grid-template-columns: 1fr; padding-top: 24px; } .nav-item { display: none; }
   .said { gap: 8px; font-size: 10px; }
@@ -500,6 +511,5 @@ section.block { padding-top: 140px; }
   .try-foot { padding: 12px; font-size: 10px; line-height: 1.5; }
 }
 
-footer a:hover { color: var(--fg); }
 @media (max-width: 360px) { .files { transform: scale(.64); } }
 @media (max-width: 600px) and (any-pointer: fine) { .ink { height: 135px; } }

@@ -199,27 +199,44 @@ fn navigation(page: &Page) -> String {
         return include_str!("../pages/home-nav.html")
             .replace("{{ guide-links }}", &links(page, DOCUMENT_LINKS));
     }
-    let wrap = if page.slug == "demo" { "" } else { " wrap" };
+    // The demo keeps only the name at the top; its footer maps the site.
+    if page.slug == "demo" {
+        return format!(r#"<header class="site-header"><a class="site-brand" href="{}">board<br>cast</a></header>"#, root(page));
+    }
     format!(
-        r#"<header class="site-header{wrap}"><a class="site-brand" href="{}">board<br>cast</a><nav class="site-nav" aria-label="Main navigation">{}</nav></header>"#,
+        r#"<header class="site-header wrap"><a class="site-brand" href="{}">board<br>cast</a><nav class="site-nav" aria-label="Main navigation">{}</nav></header>"#,
         root(page),
         links(page, &[0, 1, 2, 3, 4]),
     )
 }
 
+/// The demo ends on a plain map of the site: a heading over each group of links, as site footers go. The documents
+/// have none: their navigation already links each other, and the home page ends on its last sheet.
 fn footer(page: &Page) -> String {
-    let (class, note) = match page.slug {
-        "" => (" wrap", String::new()),
-        "demo" => (
-            " foot",
-            "<span>sample meetings with their recorded model replies</span>".into(),
-        ),
-        _ => (" wrap", format!("<span>{UPDATED}</span>")),
-    };
+    if page.slug != "demo" {
+        return String::new();
+    }
+    let home = root(page);
+    let releases = "https://github.com/HsiangNianian/boardcast/releases/latest";
     format!(
-        r#"<footer class="site-footer{class}">{note}<nav class="site-nav" aria-label="Footer">{}</nav></footer>"#,
-        links(page, DOCUMENT_LINKS)
+        r#"<footer class="sitemap">
+  <a class="sitemap-brand" href="{home}">board<br>cast</a>
+  <div><b>product</b><a href="{home}#story">talk &amp; draw</a><a href="{home}#story">circle</a><a href="{home}#story">replay</a></div>
+  <div><b>get</b><a href="{home}#get">macos</a><a href="{home}#get">windows</a><a href="{home}#get">linux</a></div>
+  <div><b>latest</b><a href="{releases}">{}</a><a href="https://github.com/HsiangNianian/boardcast/blob/main/CHANGELOG.md">changelog</a></div>
+  <div><b>guide</b><a href="https://github.com/HsiangNianian/boardcast#get-started">start</a>{}</div>
+</footer>"#,
+        env!("CARGO_PKG_VERSION"),
+        links(page, DOCUMENT_LINKS),
     )
+}
+
+/// A document's summary beside it, with the date it was last updated.
+fn dated(page: &Page, content: String) -> String {
+    if matches!(page.slug, "" | "demo") {
+        return content;
+    }
+    content.replacen("</aside>", &format!(r#"<p class="updated label">updated {UPDATED}</p></aside>"#), 1)
 }
 
 fn render(page: &Page, bundled_head: &str, bundled_body: &str, assets: &Assets) -> String {
@@ -263,9 +280,9 @@ fn render(page: &Page, bundled_head: &str, bundled_body: &str, assets: &Assets) 
 </html>
 "##,
         title = escape(page.title),
-        description = escape(page.description),
-        content = fill_sizes(&page.content.replace("{{ navigation }}", &navigation(page)), assets),
         footer = footer(page),
+        description = escape(page.description),
+        content = dated(page, fill_sizes(&page.content.replace("{{ navigation }}", &navigation(page)), assets)),
     )
 }
 
@@ -321,18 +338,20 @@ mod tests {
         for page in &PAGES {
             let html = render(page, "", "", &Assets::new());
             assert!(html.contains(&format!("<title>{}</title>", escape(page.title))));
-            assert!(html.contains("<h1>") && html.contains("<footer class=\"site-footer"));
+            assert!(html.contains("<h1>"));
+            assert_eq!(html.contains(r#"<footer class="sitemap">"#), page.slug == "demo");
             assert!(!html.contains("{{ ") && !html.contains("last updated"));
             assert_eq!(html.matches("<html lang=\"en\">").count(), 1);
             assert!(html.contains(&format!("href=\"{}privacy/\"", root(page))));
-            if !page.slug.is_empty() {
+            if !matches!(page.slug, "" | "demo") {
                 assert!(html.contains(&format!(
                     "href=\"../{}/\" class=\"on\" aria-current=\"page\"",
                     page.slug
                 )));
             }
             if !matches!(page.slug, "" | "demo") {
-                assert!(!html.contains("type=\"module\"") && html.contains(UPDATED));
+                assert!(!html.contains("type=\"module\""));
+                assert!(html.contains(&format!(r#"<p class="updated label">updated {UPDATED}</p></aside>"#)));
             }
         }
         assert!(render(&PAGES[2], "", "", &Assets::new()).contains("<details open>"));

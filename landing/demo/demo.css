@@ -65,13 +65,12 @@ body > .site-header { padding-top: 0; padding-bottom: 28px; }
 .lines li.live p::after { content: '▍'; color: var(--faint); }
 .lines li.drawn .who { border-color: var(--text); background: var(--text); color: var(--bg); }
 .input { margin: 10px; padding: 10px 12px; border: 1px solid var(--line); font-size: 13px; color: var(--faint); }
-.foot { margin-top: 16px; }
 .dock svg [fill="#000"] { fill: var(--bg); }
 .embed-label { display: none; }
 
 /* The embedded demo reads left to right: transcript, then the board. */
 html.embed body { display: flex; flex-direction: column; height: 100vh; padding: 0; max-width: none; }
-html.embed .site-header, html.embed .top, html.embed .foot, html.embed .app-label, html.embed .input, html.embed .titlebar { display: none; }
+html.embed .site-header, html.embed .sitemap, html.embed .top, html.embed .app-label, html.embed .input, html.embed .titlebar { display: none; }
 html.embed .embed-label { display: inline; }
 html.embed .sample-header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; height: 45px; flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--bg); font: 400 11px var(--mono); letter-spacing: .04em; }
 html.embed .sample-caption { white-space: nowrap; font-size: 10px; letter-spacing: 0; }

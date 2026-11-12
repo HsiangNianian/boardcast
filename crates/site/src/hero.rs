@@ -1,5 +1,5 @@
 //! The first sheet: a line is said, then a pen writes the headline in stroke order and circles a word.
-//! The words can be circled to jump to their sheet, and an eraser wipes the sheet to write it again.
+//! The words can be circled to jump to their sheet, and the sheet can be wiped to write it again.
 
 use crate::pen::{pen_draw, text_strokes, Pen};
 use crate::util::{add_class, append, clear, clear_timeout, el, frame, hand, lasso_loop, now, q, qa_in, reduced, remove_class, set_attr, set_style, set_text, svg_el, timeout, wait, win, Pt};
@@ -126,45 +126,43 @@ fn fine_pointer() -> bool {
     win().match_media("(any-pointer: fine)").ok().flatten().is_some_and(|m| m.matches())
 }
 
-/// Wipe the sheet with an eraser, then write it again.
+/// Wipe the sheet, then write it again: a soft edge sweeps across and the ink fades away behind it,
+/// with no eraser drawn, so nothing on the sheet is anything but the board's own ink.
 async fn again(h: Rc<Hero>) {
     if reduced() {
         return write(h).await;
     }
     h.run.set(h.run.get() + 1);
-    let eraser = q("#eraser");
-    let box_ = h.svg.get_bounding_client_rect();
-    let hb = h.host.get_bounding_client_rect();
-    set_style(&eraser, "display", "block");
-    set_style(&eraser, "top", &format!("{}px", box_.top() - hb.top()));
-    set_style(&eraser, "height", &format!("{}px", box_.height()));
-    let clip = h.svg.query_selector("#wipe").ok().flatten().unwrap_or_else(|| {
-        let clip = svg_el("clipPath", &[("id", "wipe".into())], None);
-        let _ = h.svg.prepend_with_node_1(&clip);
-        svg_el("rect", &[("y", "-2000".into()), ("height", "6000".into()), ("width", "10000".into())], Some(&clip));
-        clip
+    let width = f64::from(h.svg.client_width());
+    // A mask whose edge moves left to right: black where the ink is gone, white where it still is.
+    let mask = h.svg.query_selector("#wipe").ok().flatten().unwrap_or_else(|| {
+        let mask = svg_el("mask", &[("id", "wipe".into()), ("maskUnits", "userSpaceOnUse".into()), ("x", "-2000".into()), ("y", "-2000".into()), ("width", "10000".into()), ("height", "6000".into())], None);
+        let _ = h.svg.prepend_with_node_1(&mask);
+        let fade = svg_el("linearGradient", &[("id", "wipe-edge".into()), ("gradientUnits", "userSpaceOnUse".into()), ("x1", "0".into()), ("x2", "0".into())], Some(&mask));
+        svg_el("stop", &[("offset", "0".into()), ("stop-color", "#000".into())], Some(&fade));
+        svg_el("stop", &[("offset", "1".into()), ("stop-color", "#fff".into())], Some(&fade));
+        svg_el("rect", &[("x", "-2000".into()), ("y", "-2000".into()), ("width", "10000".into()), ("height", "6000".into()), ("fill", "url(#wipe-edge)".into())], Some(&mask));
+        mask
     });
-    let rect = clip.first_element_child().expect("the wipe's rectangle");
+    let edge = mask.first_element_child().expect("the wipe's edge");
     for g in qa_in(&h.svg, ":scope > g") {
-        set_attr(&g, "clip-path", "url(#wipe)");
+        set_attr(&g, "mask", "url(#wipe)");
     }
     for hit in qa_in(&h.host, ".hit") {
         hit.remove();
     }
+    const SOFT: f64 = 160.0;
     let t0 = now();
     loop {
         let t = frame().await;
-        let k = ((t - t0) / 900.0).min(1.0);
-        let x = -140.0 + (box_.width() + 280.0) * (k * k * (3.0 - 2.0 * k));
-        set_style(&eraser, "left", &format!("{}px", box_.left() - hb.left() + x));
-        // A slight up and down, like a hand scrubbing.
-        set_style(&eraser, "transform", &format!("translateY({}px)", (k * 30.0).sin() * 6.0));
-        set_attr(&rect, "x", x + 120.0);
+        let k = ((t - t0) / 700.0).min(1.0);
+        let x = -SOFT + (width + SOFT) * (k * k * (3.0 - 2.0 * k));
+        set_attr(&edge, "x1", x);
+        set_attr(&edge, "x2", x + SOFT);
         if k >= 1.0 {
             break;
         }
     }
-    set_style(&eraser, "display", "none");
     wait(200).await;
     write(h).await;
 }

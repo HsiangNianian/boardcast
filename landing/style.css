@@ -141,8 +141,6 @@ nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 
 .ink .tip { fill: var(--bg); stroke: var(--fg); stroke-width: 1.5; }
 .ink .tip-dot { fill: var(--fg); }
 .hit { position: absolute; }
-.eraser { position: absolute; z-index: 2; width: 120px; border: 1px solid var(--faint); background: linear-gradient(90deg, var(--l2), var(--l3)); pointer-events: none; display: none; }
-.eraser::after { content: 'eraser'; position: absolute; left: 10px; bottom: 8px; font: 400 10px var(--mono); color: var(--dim); }
 [data-circle] { cursor: crosshair; }
 
 /* Circling anything on the page. */

@@ -1,0 +1,657 @@
+{
+ "id": "en-office-plan",
+ "name": "A real research-group meeting planning who sits where, from the AMI Meeting Corpus (IB4001), with its recording",
+ "lang": "en",
+ "audio": "en-office-plan.mp3",
+ "credit": "Recording and transcript: AMI Meeting Corpus, meeting IB4001, CC BY 4.0",
+ "lines": [
+  {
+   "speaker": "B",
+   "text": "I don't know, put all the P_H_D_ students together, all the professors together, that sort of thing.",
+   "ms": 1593,
+   "ops": null,
+   "start": 0.152,
+   "end": 7.269
+  },
+  {
+   "speaker": "B",
+   "text": "So the idea is that we come up with a plan.",
+   "ms": 1593,
+   "ops": "T 「Plan」\nL 「Plan」 「P_H_D_ students」\nL 「Plan」 「Professors」",
+   "start": 7.269,
+   "end": 10.329
+  },
+  {
+   "speaker": "B",
+   "text": "there's another group who's gonna be working on the same plan later this week.",
+   "ms": 1593,
+   "ops": null,
+   "start": 10.329,
+   "end": 15.88
+  },
+  {
+   "speaker": "B",
+   "text": "And then Andre and I have to do presentations for the university administrators on the second.",
+   "ms": 1593,
+   "ops": "L 「Plan」 「Andre」\nL 「Plan」 「University administrators」\nL 「Plan」 「Presentation」",
+   "start": 15.88,
+   "end": 22.57
+  },
+  {
+   "speaker": "B",
+   "text": "So we have to come up with a plan, possibly, if we have time, a presentation, a quick presentation with arguments for why we think our plan works best.",
+   "ms": 1593,
+   "ops": "Q 「Plan works best?」",
+   "start": 22.57,
+   "end": 33.316
+  },
+  {
+   "speaker": "B",
+   "text": "Okay?",
+   "ms": 1593,
+   "ops": null,
+   "start": 33.316,
+   "end": 33.672
+  },
+  {
+   "speaker": "A",
+   "text": "Mm-hmm.",
+   "ms": 472,
+   "ops": null,
+   "start": 33.858,
+   "end": 34.36
+  },
+  {
+   "speaker": "C",
+   "text": "Alright.",
+   "ms": 462,
+   "ops": null,
+   "start": 33.896,
+   "end": 34.577
+  },
+  {
+   "speaker": "B",
+   "text": "So, anyone have any ideas or",
+   "ms": 458,
+   "ops": null,
+   "start": 35.592,
+   "end": 41.016
+  },
+  {
+   "speaker": "B",
+   "text": "I guess",
+   "ms": 559,
+   "ops": null,
+   "start": 42.552,
+   "end": 43.208
+  },
+  {
+   "speaker": "A",
+   "text": "Uh do we know if there will be a lot of people coming across the hall in terms of security stuff if we can I mean my idea is to put the photocopier and the fax in the hall.",
+   "ms": 891,
+   "ops": "T 「Security plan」\nL 「Security plan」 「Put photocopier and fax in the hall」",
+   "start": 43.896,
+   "end": 56.52
+  },
+  {
+   "speaker": "B",
+   "text": "Yeah.",
+   "ms": 721,
+   "ops": null,
+   "start": 56.584,
+   "end": 56.852
+  },
+  {
+   "speaker": "B",
+   "text": "Um I think it's the security is sort of the same as it is in the current building.",
+   "ms": 721,
+   "ops": null,
+   "start": 56.852,
+   "end": 61.251
+  },
+  {
+   "speaker": "B",
+   "text": "So as long as the things are physically attached to the wall, so they can't be removed, then it should be okay to leave them in the hall.",
+   "ms": 721,
+   "ops": "K n9 「Physically attached to wall」",
+   "start": 61.251,
+   "end": 68.6
+  },
+  {
+   "speaker": "A",
+   "text": "Um.",
+   "ms": 502,
+   "ops": null,
+   "start": 57.385,
+   "end": 58.152
+  },
+  {
+   "speaker": "A",
+   "text": "Okay.",
+   "ms": 500,
+   "ops": null,
+   "start": 62.436,
+   "end": 63.042
+  },
+  {
+   "speaker": "A",
+   "text": "Mm.",
+   "ms": 496,
+   "ops": null,
+   "start": 64.766,
+   "end": 65.508
+  },
+  {
+   "speaker": "C",
+   "text": "We can put it. Mm-hmm.",
+   "ms": 537,
+   "ops": null,
+   "start": 65.506,
+   "end": 67.172
+  },
+  {
+   "speaker": "A",
+   "text": "Okay.",
+   "ms": 518,
+   "ops": null,
+   "start": 66.616,
+   "end": 67.419
+  },
+  {
+   "speaker": "A",
+   "text": "Okay.",
+   "ms": 202,
+   "ops": null,
+   "start": 68.059,
+   "end": 68.68
+  },
+  {
+   "speaker": "B",
+   "text": "It's just a question of whether you are printing sensitive documents or n whatever.",
+   "ms": 662,
+   "ops": "Q n8 「Printing sensitive documents?」",
+   "start": 73.064,
+   "end": 77.064
+  },
+  {
+   "speaker": "A",
+   "text": "Mm.",
+   "ms": 496,
+   "ops": null,
+   "start": 74.072,
+   "end": 74.36
+  },
+  {
+   "speaker": "C",
+   "text": "Mm.",
+   "ms": 406,
+   "ops": null,
+   "start": 76.024,
+   "end": 76.296
+  },
+  {
+   "speaker": "A",
+   "text": "Mm yeah.",
+   "ms": 417,
+   "ops": null,
+   "start": 76.216,
+   "end": 77.304
+  },
+  {
+   "speaker": "C",
+   "text": "So we only get one printer for fifteen people?",
+   "ms": 628,
+   "ops": "Q n9 「One printer for fifteen people?」",
+   "start": 79.16,
+   "end": 81.512
+  },
+  {
+   "speaker": "B",
+   "text": "Um well we get one sort of networked printer and then I think some of us have personal printers.",
+   "ms": 1010,
+   "ops": "K n9 「Networked printer + personal printers」\nK n9 「Susan has personal printer」\nK n9 「Gisella has personal printer」",
+   "start": 82.264,
+   "end": 89.846
+  },
+  {
+   "speaker": "B",
+   "text": "I think Susan has a personal printer, Gisella has one maybe.",
+   "ms": 1010,
+   "ops": null,
+   "start": 89.846,
+   "end": 94.584
+  },
+  {
+   "speaker": "A",
+   "text": "Yeah, and that's it.",
+   "ms": 578,
+   "ops": null,
+   "start": 95.016,
+   "end": 96.528
+  },
+  {
+   "speaker": "B",
+   "text": "I can't remember who else. Yeah. But no-one else gets their own printer. In terms of equipment it's sort of the same thing as we have now.",
+   "ms": 719,
+   "ops": "K n13 「No one else gets own printer」",
+   "start": 95.672,
+   "end": 103.032
+  },
+  {
+   "speaker": "A",
+   "text": "Mm.",
+   "ms": 578,
+   "ops": null,
+   "start": 98.584,
+   "end": 99.053
+  },
+  {
+   "speaker": "A",
+   "text": "Mm-hmm.",
+   "ms": 477,
+   "ops": null,
+   "start": 102.151,
+   "end": 102.616
+  },
+  {
+   "speaker": "B",
+   "text": "Um.",
+   "ms": 558,
+   "ops": null,
+   "start": 107.448,
+   "end": 108.056
+  },
+  {
+   "speaker": "B",
+   "text": "So what I'd propose is that we sort of discuss various concepts without getting into specifics, and then go off and think about it over lunch and then come back later in the day with sort of more specific proposals, as to exactly where to put people.",
+   "ms": 1072,
+   "ops": "L n1 「Discuss concepts first」\nL n1 「Think over lunch」\nL n1 「Come back with specific proposals」\nL n1 「Decide where to put people」",
+   "start": 112.248,
+   "end": 127.384
+  },
+  {
+   "speaker": "A",
+   "text": "Mm.",
+   "ms": 501,
+   "ops": null,
+   "start": 118.024,
+   "end": 118.456
+  },
+  {
+   "speaker": "A",
+   "text": "Yeah.",
+   "ms": 464,
+   "ops": null,
+   "start": 120.821,
+   "end": 121.659
+  },
+  {
+   "speaker": "A",
+   "text": "Mm yeah.",
+   "ms": 573,
+   "ops": null,
+   "start": 124.104,
+   "end": 125.481
+  },
+  {
+   "speaker": "C",
+   "text": "Okay",
+   "ms": 560,
+   "ops": null,
+   "start": 124.577,
+   "end": 125.582
+  },
+  {
+   "speaker": "B",
+   "text": "Does that work?",
+   "ms": 1130,
+   "ops": "H n9",
+   "start": 128.872,
+   "end": 129.866
+  },
+  {
+   "speaker": "B",
+   "text": "Oh, and on the map the little half-circular, well, quater circles are doors, which I'm assuming you've figured out, but just in case.",
+   "ms": 1130,
+   "ops": "K n9 「Half-circular/quarter circles are doors」\nK n9 「One room has two doors (three person room on the」",
+   "start": 129.866,
+   "end": 138.675
+  },
+  {
+   "speaker": "B",
+   "text": "And there's just the one room that actually has two doors going into it, the the three person room on the right.",
+   "ms": 1130,
+   "ops": null,
+   "start": 138.675,
+   "end": 146.093
+  },
+  {
+   "speaker": "B",
+   "text": "Yeah.",
+   "ms": 1130,
+   "ops": null,
+   "start": 146.093,
+   "end": 146.424
+  },
+  {
+   "speaker": "C",
+   "text": "'Kay sure. Yeah",
+   "ms": 559,
+   "ops": null,
+   "start": 136.808,
+   "end": 138.973
+  },
+  {
+   "speaker": "C",
+   "text": "The three person room?",
+   "ms": 667,
+   "ops": "H n22",
+   "start": 143.624,
+   "end": 144.89
+  },
+  {
+   "speaker": "A",
+   "text": "rooms, yeah. And do we need a room like a reading room or Yeah.",
+   "ms": 619,
+   "ops": null,
+   "start": 144.377,
+   "end": 150.121
+  },
+  {
+   "speaker": "B",
+   "text": "Yes, yeah. A lot of people were saying that they wanted to have a reading room.",
+   "ms": 626,
+   "ops": "L n8 「Reading room」",
+   "start": 149.512,
+   "end": 153.96
+  },
+  {
+   "speaker": "C",
+   "text": "That's a good idea.",
+   "ms": 613,
+   "ops": null,
+   "start": 154.632,
+   "end": 155.448
+  },
+  {
+   "speaker": "B",
+   "text": "So we should leave a space for that.",
+   "ms": 1409,
+   "ops": "L n23 「Leave space for reading room」",
+   "start": 155.241,
+   "end": 157.75
+  },
+  {
+   "speaker": "B",
+   "text": "And we can, because like I said maximum eighteen people in those rooms and there is only fifteen of us.",
+   "ms": 1409,
+   "ops": "K n23 「Max 18 people; 15 present」",
+   "start": 157.75,
+   "end": 164.927
+  },
+  {
+   "speaker": "B",
+   "text": "And I don't know if you've noticed, but two of us are only here half the time.",
+   "ms": 1409,
+   "ops": "K n23 「Martin & David half-time」",
+   "start": 164.927,
+   "end": 170.362
+  },
+  {
+   "speaker": "B",
+   "text": "So Martin and David um are half the time at the E_P_F_L_ and half the time in Geneva.",
+   "ms": 1409,
+   "ops": "K n23 「Martin & David split: E_P_F_L_ & Geneva」",
+   "start": 170.362,
+   "end": 176.285
+  },
+  {
+   "speaker": "B",
+   "text": "So",
+   "ms": 1409,
+   "ops": null,
+   "start": 176.285,
+   "end": 176.424
+  },
+  {
+   "speaker": "A",
+   "text": "Okay.",
+   "ms": 677,
+   "ops": null,
+   "start": 158.968,
+   "end": 159.57
+  },
+  {
+   "speaker": "B",
+   "text": "sort of keep that in mind, I guess, when",
+   "ms": 637,
+   "ops": null,
+   "start": 178.488,
+   "end": 181.416
+  },
+  {
+   "speaker": "B",
+   "text": "you are doing the actual planning.",
+   "ms": 575,
+   "ops": null,
+   "start": 182.68,
+   "end": 184.104
+  },
+  {
+   "speaker": "A",
+   "text": "The first split we can do is between administration and reasearch uh.",
+   "ms": 834,
+   "ops": "T 「Plan split」\nL 「Plan split」 「Administration vs Research」",
+   "start": 192.76,
+   "end": 197.557
+  },
+  {
+   "speaker": "A",
+   "text": "I mean, it's completely different work so we can deal with administration and decide something for administration and then",
+   "ms": 834,
+   "ops": null,
+   "start": 197.557,
+   "end": 206.04
+  },
+  {
+   "speaker": "A",
+   "text": "for the other.",
+   "ms": 608,
+   "ops": "L n28 「Research」",
+   "start": 206.842,
+   "end": 207.544
+  },
+  {
+   "speaker": "B",
+   "text": "But Gisella's really the only administrator. Yeah.",
+   "ms": 922,
+   "ops": "M n5 星标\nK n5 「Only administrator: Gisella」",
+   "start": 209.608,
+   "end": 214.856
+  },
+  {
+   "speaker": "A",
+   "text": "Yeah.",
+   "ms": 1517,
+   "ops": null,
+   "start": 212.312,
+   "end": 212.629
+  },
+  {
+   "speaker": "A",
+   "text": "But at least deal with that particular situation and then see with the other, because I was thinking uh Gisella is quite, I mean, Gile Gisella's work is quite noisy, because it's secretary so, yeah, lot of phone call and stuff like that so Yeah, so you won't share an office with Gisella unless you are fifty per cent and not the fifty per cent Gisella is working, which is another condition.",
+   "ms": 1517,
+   "ops": "K n5 「Gisella: secretary, noisy, lots of calls」\nK n5 「Gisella: 50% share only if not 50% Gisella」\nK n5 「Gisella: cannot share office unless 50%」",
+   "start": 212.629,
+   "end": 237.496
+  },
+  {
+   "speaker": "C",
+   "text": "Ad administrator.",
+   "ms": 1309,
+   "ops": "A n5 「Ad administrator」",
+   "start": 212.315,
+   "end": 213.628
+  },
+  {
+   "speaker": "B",
+   "text": "And she's always moving around.",
+   "ms": 2394,
+   "ops": "K n32 「Always moving around」",
+   "start": 227.464,
+   "end": 229.144
+  },
+  {
+   "speaker": "B",
+   "text": "Which I don't know if we can assume that there isn't going to be any overlap between them.",
+   "ms": 1830,
+   "ops": "Q n29 「Can we assume no overlap?」",
+   "start": 237.688,
+   "end": 242.072
+  },
+  {
+   "speaker": "A",
+   "text": "So I don't know, maybe we can decide that Gisella is having one of the one person room.",
+   "ms": 2790,
+   "ops": "Q n31 「Gisella gets a one-person room?」",
+   "start": 251.288,
+   "end": 257.032
+  },
+  {
+   "speaker": "C",
+   "text": "Yeah, I w I would suggest that too. Yeah.",
+   "ms": 1302,
+   "ops": null,
+   "start": 256.984,
+   "end": 259.656
+  },
+  {
+   "speaker": "C",
+   "text": "Yeah, that would be",
+   "ms": 952,
+   "ops": null,
+   "start": 257.896,
+   "end": 258.856
+  },
+  {
+   "speaker": "C",
+   "text": "maybe convenient.",
+   "ms": 734,
+   "ops": null,
+   "start": 259.848,
+   "end": 260.968
+  },
+  {
+   "speaker": "B",
+   "text": "Yeah. Either that or maybe put her in a two person room with the equipment or",
+   "ms": 2860,
+   "ops": "L n31 「Two-person room with equipment」",
+   "start": 261.544,
+   "end": 268.024
+  },
+  {
+   "speaker": "C",
+   "text": "With someone",
+   "ms": 1406,
+   "ops": "K n38 「With someone」",
+   "start": 265.772,
+   "end": 266.891
+  },
+  {
+   "speaker": "C",
+   "text": "Yeah, and with someone who is who is fifty pro percent.",
+   "ms": 1851,
+   "ops": "K n39 「At 50%」",
+   "start": 268.2,
+   "end": 271.665
+  },
+  {
+   "speaker": "B",
+   "text": "Like with the the photocopier, or Maybe not the photocopier, but the printer.",
+   "ms": 3107,
+   "ops": null,
+   "start": 269.032,
+   "end": 272.872
+  },
+  {
+   "speaker": "A",
+   "text": "Yeah. But at least the thing we know that Gisella is gonna be alone.",
+   "ms": 1664,
+   "ops": "K n37 「Known: Gisella alone」",
+   "start": 275.96,
+   "end": 279.016
+  },
+  {
+   "speaker": "A",
+   "text": "Or with equipment, but",
+   "ms": 884,
+   "ops": null,
+   "start": 280.296,
+   "end": 281.832
+  },
+  {
+   "speaker": "B",
+   "text": "And not with a hundred percent staff yeah a staff worker.",
+   "ms": 3126,
+   "ops": "K n39 「Not 100% staff; a staff worker」",
+   "start": 282.296,
+   "end": 285.624
+  },
+  {
+   "speaker": "A",
+   "text": "humanly alone. Yeah.",
+   "ms": 863,
+   "ops": null,
+   "start": 283.016,
+   "end": 285.128
+  },
+  {
+   "speaker": "C",
+   "text": "Okay, so th that's a one person room, but we don't know how how big they are.",
+   "ms": 1799,
+   "ops": "K n37 「\"Size」",
+   "start": 285.944,
+   "end": 292.869
+  },
+  {
+   "speaker": "C",
+   "text": "Or it's hard to tell.",
+   "ms": 1799,
+   "ops": null,
+   "start": 292.869,
+   "end": 294.758
+  },
+  {
+   "speaker": "C",
+   "text": "I mean, Gisella has this funny uh typing uh thing.",
+   "ms": 1799,
+   "ops": "K n32 「\"Has」",
+   "start": 294.758,
+   "end": 299.254
+  },
+  {
+   "speaker": "C",
+   "text": "Yeah.",
+   "ms": 1799,
+   "ops": null,
+   "start": 299.254,
+   "end": 299.704
+  },
+  {
+   "speaker": "C",
+   "text": "So probably sh she should get the fax, right?",
+   "ms": 2247,
+   "ops": "Q n32 「Should Gisella get the fax?」",
+   "start": 303.352,
+   "end": 306.296
+  },
+  {
+   "speaker": "B",
+   "text": "Yeah, yeah, that makes sense to put the fax in there.",
+   "ms": 1967,
+   "ops": "K n45 「Resolved: yes, fax goes in there」\nD n7",
+   "start": 307.704,
+   "end": 311.288
+  }
+ ]
+}

@@ -6,9 +6,19 @@
 :root { --bg: #000; --fg: #f2f2f2; --grey: #c4c4c4; --dim: #8a8a8a; --hair: #262626; --link: #9fb4ff;
   --sans: 'DM Sans Variable', system-ui, sans-serif; --mono: 'JetBrains Mono Variable', ui-monospace, monospace; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { background: var(--bg); }
-/* The home page's dots, without colour, under every page. */
-body { background: radial-gradient(circle, color-mix(in srgb, var(--fg) 11%, transparent) .7px, transparent 1px) 0 0 / 5px 5px, var(--bg); }
+/* The home page's dots, without colour, under every page, with the same two glows drifting through them. */
+html { background: radial-gradient(circle, color-mix(in srgb, var(--fg) 11%, transparent) .7px, transparent 1px) 0 0 / 5px 5px fixed, var(--bg); }
+@property --glow-ax { syntax: '<percentage>'; inherits: false; initial-value: 18%; }
+@property --glow-ay { syntax: '<percentage>'; inherits: false; initial-value: 30%; }
+@property --glow-bx { syntax: '<percentage>'; inherits: false; initial-value: 82%; }
+@property --glow-by { syntax: '<percentage>'; inherits: false; initial-value: 74%; }
+body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--fg) 34%, transparent) .8px, transparent 1.1px) 0 0 / 5px 5px fixed;
+  mask-image: radial-gradient(circle 34vmax at var(--glow-ax) var(--glow-ay), #000b, transparent), radial-gradient(circle 26vmax at var(--glow-bx) var(--glow-by), #0009, transparent);
+  animation: glow-a 41s ease-in-out infinite alternate, glow-b 57s ease-in-out infinite alternate; }
+@keyframes glow-a { 0% { --glow-ax: 18%; --glow-ay: 30%; } 35% { --glow-ax: 55%; --glow-ay: 12%; } 70% { --glow-ax: 72%; --glow-ay: 58%; } 100% { --glow-ax: 30%; --glow-ay: 80%; } }
+@keyframes glow-b { 0% { --glow-bx: 82%; --glow-by: 74%; } 40% { --glow-bx: 40%; --glow-by: 88%; } 75% { --glow-bx: 12%; --glow-by: 45%; } 100% { --glow-bx: 62%; --glow-by: 22%; } }
+@media (prefers-reduced-motion: reduce) { body::before { animation: none; } }
 body { color: var(--fg); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased; }
 a { color: var(--link); text-decoration: none; }
 a:hover { color: var(--fg); }

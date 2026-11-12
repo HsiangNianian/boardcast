@@ -57,13 +57,29 @@
   --hero-dot: #f2f2f22b;
   /* The first sheet's dots, without its colour, under the whole page. */
   --page-dot: color-mix(in srgb, var(--fg) 11%, transparent);
+  --glow-dot: color-mix(in srgb, var(--fg) 34%, transparent);
   --sans: 'DM Sans Variable', system-ui, sans-serif;
   --mono: 'JetBrains Mono Variable', ui-monospace, monospace;
   --hand: 'Excalifont', cursive;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { background: var(--bg); }
-body { background: radial-gradient(circle, var(--page-dot) .7px, transparent 1px) 0 0 / 5px 5px, var(--bg); }
+/* The dot screen stays put while the page scrolls over it, so every layer of dots lines up. */
+html { background: radial-gradient(circle, var(--page-dot) .7px, transparent 1px) 0 0 / 5px 5px fixed, var(--bg); }
+/* Brighter grey dots show through a few soft glows: two drift slowly about the window, one follows the pointer. */
+@property --glow-ax { syntax: '<percentage>'; inherits: false; initial-value: 18%; }
+@property --glow-ay { syntax: '<percentage>'; inherits: false; initial-value: 30%; }
+@property --glow-bx { syntax: '<percentage>'; inherits: false; initial-value: 82%; }
+@property --glow-by { syntax: '<percentage>'; inherits: false; initial-value: 74%; }
+body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(circle, var(--glow-dot) .8px, transparent 1.1px) 0 0 / 5px 5px fixed;
+  mask-image:
+    radial-gradient(circle 200px at var(--mx, -400px) var(--my, -400px), #000, transparent),
+    radial-gradient(circle 34vmax at var(--glow-ax) var(--glow-ay), #000b, transparent),
+    radial-gradient(circle 26vmax at var(--glow-bx) var(--glow-by), #0009, transparent);
+  animation: glow-a 41s ease-in-out infinite alternate, glow-b 57s ease-in-out infinite alternate; }
+@keyframes glow-a { 0% { --glow-ax: 18%; --glow-ay: 30%; } 35% { --glow-ax: 55%; --glow-ay: 12%; } 70% { --glow-ax: 72%; --glow-ay: 58%; } 100% { --glow-ax: 30%; --glow-ay: 80%; } }
+@keyframes glow-b { 0% { --glow-bx: 82%; --glow-by: 74%; } 40% { --glow-bx: 40%; --glow-by: 88%; } 75% { --glow-bx: 12%; --glow-by: 45%; } 100% { --glow-bx: 62%; --glow-by: 22%; } }
+@media (prefers-reduced-motion: reduce) { body::before { animation: none; } }
 body { color: var(--fg); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
 a { color: inherit; text-decoration: none; }
 ::selection { background: var(--fg); color: var(--bg); }
@@ -128,7 +144,7 @@ nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 
   radial-gradient(ellipse at 3% 55%, var(--hero-teal), transparent 65%),
   radial-gradient(ellipse at 100% 65%, var(--hero-gold), transparent 60%),
   radial-gradient(ellipse at 65% 30%, var(--hero-coral), transparent 75%); }
-.hero::after { background: radial-gradient(circle, var(--hero-dot) .7px, transparent 1px) 0 0 / 5px 5px; mask-image: radial-gradient(ellipse at 65% 40%, #000, transparent 75%); }
+.hero::after { background: radial-gradient(circle, var(--hero-dot) .7px, transparent 1px) 0 0 / 5px 5px fixed; mask-image: radial-gradient(ellipse at 65% 40%, #000, transparent 75%); }
 .hero .wrap { position: relative; }
 .hero-intro { display: grid; grid-template-columns: 1.55fr 1fr; gap: 60px; align-items: center; padding: 32px 0 28px; }
 .hero-writing { position: relative; min-width: 0; }

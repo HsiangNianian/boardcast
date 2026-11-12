@@ -74,6 +74,14 @@ pub fn board(page: usize, graph: &Graph) -> Vec<Chunk> {
     let children = |id: &str| graph.nodes.iter().filter(move |n| n.parent.as_deref() == Some(id)).collect::<Vec<_>>();
     let mut out = vec![];
     for node in graph.nodes.iter().filter(|n| n.parent.is_none()) {
+        // An imported page's block keeps its whole text apart from its short label: that is what to search.
+        if matches!(node.kind, Kind::Region) {
+            let full = node.extra.get("text").and_then(|t| t.as_str()).filter(|t| !t.trim().is_empty()).unwrap_or(&node.label);
+            for piece in pieces(full) {
+                out.push(Chunk { source: Source::Board { page, node: node.id.clone() }, text: piece });
+            }
+            continue;
+        }
         let mut text = node.label.clone();
         if matches!(node.kind, Kind::Topic) {
             // Two levels are plenty to say what a topic holds.
@@ -94,6 +102,30 @@ pub fn board(page: usize, graph: &Graph) -> Vec<Chunk> {
             continue;
         }
         out.push(Chunk { source: Source::Board { page, node: node.id.clone() }, text });
+    }
+    out
+}
+
+/// A long text in passages of about `PASSAGE_CHARS`, cut after a sentence where one ends near enough.
+fn pieces(text: &str) -> Vec<String> {
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = vec![];
+    let mut start = 0;
+    while start < chars.len() {
+        let mut end = (start + PASSAGE_CHARS).min(chars.len());
+        if end < chars.len() {
+            // Back to the last sentence end in the second half of the passage, if there is one.
+            let half = start + PASSAGE_CHARS / 2;
+            if let Some(cut) = (half..end).rev().find(|&i| matches!(chars[i], '.' | '?' | '!' | '。' | '？' | '！' | '；' | ';')) {
+                end = cut + 1;
+            }
+        }
+        let piece: String = chars[start..end].iter().collect::<String>().trim().to_string();
+        if !piece.is_empty() {
+            out.push(piece);
+        }
+        start = end;
     }
     out
 }
@@ -148,6 +180,21 @@ mod tests {
         assert_eq!(parts.len(), 2);
         assert_eq!(parts[1].source, Source::Summary { heading: "To-dos".into() });
         assert!(parts[1].text.contains("canary"));
+    }
+
+    #[test]
+    fn an_imported_block_is_searched_by_its_whole_text_in_passages() {
+        let mut g = Graph::default();
+        let body = "Deep networks are hard to train. ".repeat(30);
+        let mut extra = serde_json::Map::new();
+        extra.insert("text".into(), serde_json::json!(body));
+        g.nodes.push(boardcast_board::graph::Ordered::new(boardcast_board::graph::NodeData {
+            id: "n1".into(), label: "Deep networks are…".into(), aliases: vec![], kind: Kind::Region, parent: None, group: None, marks: vec![], icon: None, ink: "ink".into(), extra,
+        }));
+        let parts = board(2, &g);
+        assert!(parts.len() >= 3, "{} passages", parts.len());
+        assert!(parts.iter().all(|c| c.text.chars().count() <= PASSAGE_CHARS && c.text.ends_with('.')));
+        assert!(parts.iter().all(|c| c.source == Source::Board { page: 2, node: "n1".into() }));
     }
 
     #[test]

@@ -941,9 +941,12 @@ struct MeetingSearch {
     asked: String,
     typed_at: Option<Instant>,
     ticket: u64,
+    /// A question has been asked and its answer has not come back yet.
+    asking: bool,
     hits: Vec<boardcast_search::service::Found>,
-    /// The meeting saved since it was last indexed, and when.
-    saved_at: Option<Instant>,
+    /// Meetings saved since they were last indexed, with when. Each is indexed again a while after its last
+    /// save, and never while listening.
+    saved: HashMap<String, Instant>,
     error: Option<String>,
 }
 
@@ -979,6 +982,14 @@ enum SettingsTab {
     Speech,
     General,
     About,
+}
+
+/// What reads text in a picture on this computer: llama-server, a local model that can see, and its add-on.
+#[derive(Clone)]
+struct Vision {
+    binaries: PathBuf,
+    model: PathBuf,
+    projector: PathBuf,
 }
 
 enum ImportSource {
@@ -1341,7 +1352,7 @@ fn read_image(path: &std::path::Path, binaries: &std::path::Path, model: &std::p
 }
 
 /// Download if need be, read the file, and word what happened.
-fn read_import(source: ImportSource, library: &std::path::Path, english: bool, cancel: &AtomicBool, tx: &std::sync::mpsc::Sender<ImportUpdate>) -> anyhow::Result<ImportPreview> {
+fn read_import(source: ImportSource, vision: Option<Vision>, library: &std::path::Path, english: bool, cancel: &AtomicBool, tx: &std::sync::mpsc::Sender<ImportUpdate>) -> anyhow::Result<ImportPreview> {
     let (name, bytes) = match source {
         ImportSource::Image { path, binaries, model, projector } => return read_image(&path, &binaries, &model, &projector, english, cancel, tx),
         ImportSource::File(path) => {
@@ -1353,9 +1364,35 @@ fn read_import(source: ImportSource, library: &std::path::Path, english: bool, c
             (format!("arXiv {id}"), boardcast_import::arxiv::download(&id, cancel)?)
         }
     };
-    let imported = boardcast_import::pdf::import_pdf(&bytes, library, english, cancel, &mut |done, total| {
+    let mut imported = boardcast_import::pdf::import_pdf(&bytes, library, english, cancel, &mut |done, total| {
         let _ = tx.send(ImportUpdate::Progress(if english { format!("Reading {name}: page {done}/{total}") } else { format!("正在读 {name}：{done}/{total} 页") }));
     })?;
+    // Pages with no text layer are pictures of text: where the local model can see, it reads them, so they
+    // can be pointed at, marked and searched like the rest. Each keeps its page number.
+    let mut read_scanned = 0;
+    if let Some(vision) = vision.filter(|_| !imported.scanned_pages.is_empty()) {
+        let _ = tx.send(ImportUpdate::Progress(if english { "Starting the local model to read the scanned pages…".to_string() } else { "正在启动本地模型来读扫描页…".to_string() }));
+        let shaders = vision.model.parent().map(shader_dir);
+        let server = VisionServer::start(&vision.binaries, &vision.model, &vision.projector, shaders.as_deref())?;
+        let count = imported.scanned_pages.len();
+        for (k, &i) in imported.scanned_pages.clone().iter().enumerate() {
+            if cancel.load(Ordering::Relaxed) {
+                anyhow::bail!("cancelled");
+            }
+            let page = &mut imported.pages[i];
+            let number = page.graph.extra.get("underlay").and_then(|u| u.get("no")).cloned();
+            let read = boardcast_import::image::import_image(&page.jpeg, english, cancel, &mut |png| server.read(png), &mut |done, total| {
+                let _ = tx.send(ImportUpdate::Progress(if english { format!("Reading scanned page {}/{count}: block {done}/{total}", k + 1) } else { format!("正在读扫描页 {}/{count}：{done}/{total} 块", k + 1) }));
+            })?;
+            if read.read > 0 {
+                *page = read.page;
+                if let (Some(number), Some(underlay)) = (number, page.graph.extra.get_mut("underlay")) {
+                    underlay["no"] = number;
+                }
+                read_scanned += 1;
+            }
+        }
+    }
     let plural = |n: usize, word: &str| if n == 1 { format!("1 {word}") } else { format!("{n} {word}s") };
     let mut details = vec![];
     if imported.refs_skipped > 0 {
@@ -1364,9 +1401,13 @@ fn read_import(source: ImportSource, library: &std::path::Path, english: bool, c
     if imported.unread > 0 {
         details.push(if english { format!("board limit reached, last {} not imported", plural(imported.unread, "page")) } else { format!("板到上限了，最后 {} 页没导", imported.unread) });
     }
-    if imported.scanned > 0 {
+    if read_scanned > 0 {
+        details.push(if english { format!("{} without a text layer read by the local model", plural(read_scanned, "page")) } else { format!("{} 页没有文字层的扫描页由本地模型读出了文字", read_scanned) });
+    }
+    if imported.scanned > read_scanned {
         // Talk is matched against a page's words, so these can only be turned to by number.
-        details.push(if english { format!("{} without a text layer, imported as images and turned to only by number", plural(imported.scanned, "page")) } else { format!("{} 页没有文字层，整页算一张图，只能按页码翻到", imported.scanned) });
+        let left = imported.scanned - read_scanned;
+        details.push(if english { format!("{} without a text layer, imported as images and turned to only by number; a local model with its vision add-on can read them", plural(left, "page")) } else { format!("{left} 页没有文字层，整页算一张图，只能按页码翻到；有看图组件的本地模型可以读出其中的文字") });
     }
     let boards = imported.pages.len();
     let note = if english {
@@ -2196,7 +2237,7 @@ impl Workbench {
         let (jobs, events) = boardcast_search::service::start(data, self.models.join(&model.file), spawn);
         let all: Vec<String> = store.list().unwrap_or_default().into_iter().filter(|m| m.read_error.is_none()).map(|m| m.id).collect();
         let _ = jobs.send(boardcast_search::service::Job::Index(all));
-        self.search = Some(MeetingSearch { jobs, events, indexing: None, asked: String::new(), typed_at: None, ticket: 0, hits: vec![], saved_at: None, error: None });
+        self.search = Some(MeetingSearch { jobs, events, indexing: None, asked: String::new(), typed_at: None, ticket: 0, asking: false, hits: vec![], saved: HashMap::new(), error: None });
     }
 
     /// Turn meeting search on or off. On, it downloads its model first if need be.
@@ -2221,7 +2262,8 @@ impl Workbench {
 
     fn pump_search(&mut self, changed: &mut bool) {
         use boardcast_search::service::{Event as SearchEvent, Job};
-        let current = self.live.id().to_string();
+        // While listening, the CPU is for hearing and the board; the meeting is read again once it stops.
+        let listening = self.pipeline.listening();
         let library: Vec<String> = self.library.iter().filter(|m| m.read_error.is_none()).map(|m| m.id.clone()).collect();
         if self.search.is_none() && !self.search_tried {
             // At start, once: search that was turned on comes back on.
@@ -2237,23 +2279,29 @@ impl Workbench {
                 SearchEvent::Found { ticket, hits } => {
                     if ticket == search.ticket {
                         search.hits = hits;
+                        search.asking = false;
                         search.error = None;
                     }
                 }
                 SearchEvent::Failed(error) => {
                     search.indexing = None;
+                    search.asking = false;
                     search.error = Some(error);
                 }
             }
         }
-        if search.saved_at.is_some_and(|at| at.elapsed() >= REINDEX_AFTER) {
-            search.saved_at = None;
-            let _ = search.jobs.send(Job::Index(vec![current]));
+        if !listening {
+            let due: Vec<String> = search.saved.iter().filter(|(_, at)| at.elapsed() >= REINDEX_AFTER).map(|(id, _)| id.clone()).collect();
+            if !due.is_empty() {
+                search.saved.retain(|id, _| !due.contains(id));
+                let _ = search.jobs.send(Job::Index(due));
+            }
         }
         if search.typed_at.is_some_and(|at| at.elapsed() >= QUERY_AFTER) {
             search.typed_at = None;
             search.ticket += 1;
-            let _ = search.jobs.send(Job::Find { text: search.asked.clone(), meetings: library, limit: 12, ticket: search.ticket });
+            search.asking = true;
+            let _ = search.jobs.send(Job::Find { text: search.asked.clone(), meetings: library, limit: 8, ticket: search.ticket });
         }
     }
 
@@ -2287,6 +2335,7 @@ impl Workbench {
         search.asked = text.to_string();
         search.hits.clear();
         search.typed_at = (text.chars().count() >= 2).then(Instant::now);
+        search.asking = search.typed_at.is_some();
     }
 
     /// Open a found passage: its meeting, at its line, its board or the summary.
@@ -2354,7 +2403,7 @@ impl Workbench {
                 self.live.saved(revision);
                 self.saved_changes = covers;
                 if let Some(search) = &mut self.search {
-                    search.saved_at = Some(Instant::now());
+                    search.saved.insert(self.live.id().to_string(), Instant::now());
                 }
                 self.save = if self.live.changes == covers { SaveState::Saved } else { SaveState::Dirty };
             }
@@ -2704,6 +2753,13 @@ impl Workbench {
         }
     }
 
+    /// The local model and add-on that can read pictures, if both are here.
+    fn vision(&self) -> Option<Vision> {
+        let model = boardcast_models::current(&self.models)?;
+        let add_on = boardcast_models::vision_for(&model.file_name()?.to_string_lossy())?;
+        boardcast_models::installed(&add_on, &self.models).then(|| Vision { binaries: self.binaries.clone(), model, projector: self.models.join(&add_on.file) })
+    }
+
     /// Reading an image takes a model on this device, whichever model draws the board.
     fn import_image_file(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         let Some(model) = boardcast_models::current(&self.models) else {
@@ -2749,9 +2805,10 @@ impl Workbench {
         let stop = cancel.clone();
         let library = self.pdfium.clone();
         let english = tr("en", "zh") == "en";
+        let vision = self.vision();
         let (tx, updates) = channel();
         std::thread::spawn(move || {
-            let result = read_import(source, &library, english, &stop, &tx);
+            let result = read_import(source, vision, &library, english, &stop, &tx);
             let _ = tx.send(ImportUpdate::Finished(result.map_err(|e| format!("{e:#}"))));
         });
         self.import = ImportState::Reading { progress: tr("Reading the selected file…", "正在读取所选文件…").to_string(), cancel, updates };
@@ -4799,42 +4856,49 @@ impl Render for Workbench {
                     .when(self.store.is_some() && self.library.is_empty(), |d| {
                         d.child(div().py_4().text_sm().text_color(rgb(pal().faint)).child(tr("No meetings yet. A meeting is saved here as soon as something is said or typed.", "还没有会议。开始说话或输入后，会议会自动保存在这里。")))
                     })
-                    // What was said that matches, by meaning, under the meetings whose names do.
+                    // What matches by meaning, under the meetings whose names do: first where things stand (the
+                    // boards and summaries as the meetings left them), then what was said on the way.
                     .when_some(self.search.as_ref().filter(|s| !s.hits.is_empty() && !query.is_empty()).map(|s| s.hits.clone()), |d, hits| {
-                        d.child(div().pt_5().pb_2().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).text_color(rgb(pal().muted)).border_b_1().border_color(rgb(pal().line)).child(tr("In what was said", "会议内容")))
-                            .children(hits.into_iter().enumerate().map(|(i, found)| {
-                                let place = match &found.source {
-                                    boardcast_search::Source::Transcript { .. } => tr("transcript", "转写"),
-                                    boardcast_search::Source::Board { .. } => tr("board", "板书"),
-                                    boardcast_search::Source::Summary { .. } => tr("summary", "摘要"),
-                                };
-                                let snippet: String = found.text.split('\n').map(|l| l.trim()).collect::<Vec<_>>().join("  ").chars().take(180).collect();
-                                let open = found.clone();
-                                div()
-                                    .id(("found", i))
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .px_3()
-                                    .py_3()
-                                    .border_b_1()
-                                    .border_color(rgb(pal().line))
-                                    .cursor_pointer()
-                                    .hover(|d| d.bg(rgb(pal().selected)))
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .child(div().text_sm().overflow_hidden().whitespace_nowrap().child(found.title.clone()))
-                                            .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).child(place)),
-                                    )
-                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(snippet))
-                                    .on_click(cx.listener(move |this, _, _, cx| this.open_found(&open, cx)))
-                            }))
+                        let row = |i: usize, found: boardcast_search::service::Found, cx: &mut Context<Self>| {
+                            let place = match &found.source {
+                                boardcast_search::Source::Transcript { .. } => tr("transcript", "转写"),
+                                boardcast_search::Source::Board { .. } => tr("board", "板书"),
+                                boardcast_search::Source::Summary { .. } => tr("summary", "摘要"),
+                            };
+                            let snippet: String = found.text.split('\n').map(|l| l.trim()).collect::<Vec<_>>().join("  ").chars().take(180).collect();
+                            let open = found.clone();
+                            div()
+                                .id(("found", i))
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .px_3()
+                                .py_3()
+                                .border_b_1()
+                                .border_color(rgb(pal().line))
+                                .cursor_pointer()
+                                .hover(|d| d.bg(rgb(pal().selected)))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(div().text_sm().overflow_hidden().whitespace_nowrap().child(found.title.clone()))
+                                        .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).child(place)),
+                                )
+                                .child(div().text_xs().text_color(rgb(pal().muted)).child(snippet))
+                                .on_click(cx.listener(move |this, _, _, cx| this.open_found(&open, cx)))
+                        };
+                        let heading = |name: &'static str| div().pt_5().pb_2().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).text_color(rgb(pal().muted)).border_b_1().border_color(rgb(pal().line)).child(name);
+                        let (stands, said): (Vec<_>, Vec<_>) = hits.into_iter().enumerate().partition(|(_, f)| f.stands());
+                        d.when(!stands.is_empty(), |d| d.child(heading(tr("Where things stand", "板上结论"))).children(stands.into_iter().map(|(i, f)| row(i, f, cx))))
+                            .when(!said.is_empty(), |d| d.child(heading(tr("What was said", "讨论原话"))).children(said.into_iter().map(|(i, f)| row(i, f, cx))))
                     })
-                    .when(!self.library.is_empty() && found.is_empty() && self.search.as_ref().is_none_or(|s| s.hits.is_empty()), |d| {
-                        d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(tr("No meeting has that in its name.", "没有名称里含这些字的会议。")))
+                    .when(self.search.as_ref().is_some_and(|s| s.asking) && !query.is_empty(), |d| {
+                        d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(tr("Searching what was said…", "正在搜索会议内容…")))
+                    })
+                    .when(!self.library.is_empty() && found.is_empty() && self.search.as_ref().is_none_or(|s| s.hits.is_empty() && !s.asking), |d| {
+                        d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(if self.search.is_some() { tr("Nothing in the meetings' names or in what was said matches that.", "会议名称和会议内容里都没有找到相关的。") } else { tr("No meeting has that in its name.", "没有名称里含这些字的会议。") }))
                     })
                     .when_some(self.deleted_meeting.clone(), |d, (_, title)| {
                         d.child(

@@ -9,14 +9,15 @@
 use crate::chunk::{self, Chunk, Said, Source};
 use crate::embed::{cut, Embedder};
 use crate::index::{fingerprint, Index};
-use crate::{rank, DIMS, FAMILY, MODEL, WORD_WEIGHT};
+use crate::{rank, DIMS, FAMILY, MIN_SCORE, MODEL, WITHIN_BEST, WORD_WEIGHT};
 use anyhow::{bail, Context, Result};
 use boardcast_meetings::{Live, Store};
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Child;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
+use std::collections::VecDeque;
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::time::{Duration, Instant, SystemTime};
 
 /// The most passages shown from any one meeting.
@@ -31,7 +32,8 @@ pub type Spawn = Box<dyn Fn(&[String]) -> Result<Child> + Send>;
 pub enum Job {
     /// Bring these meetings' indexes up to date, in this order.
     Index(Vec<String>),
-    /// Find `text` among these meetings, at most `limit` passages.
+    /// Find `text` among these meetings: at most `limit` passages of where things stand, then at most
+    /// `limit` of what was said.
     Find { text: String, meetings: Vec<String>, limit: usize, ticket: u64 },
     /// Forget a meeting's index, as when it is removed for good.
     Forget(String),
@@ -47,10 +49,22 @@ pub struct Found {
     pub score: f32,
 }
 
+impl Found {
+    /// Whether a passage says where things stand, as a board or a summary does, rather than what was said.
+    pub fn stands_for(source: &Source) -> bool {
+        !matches!(source, Source::Transcript { .. })
+    }
+
+    pub fn stands(&self) -> bool {
+        Self::stands_for(&self.source)
+    }
+}
+
 pub enum Event {
     /// Indexing went on: `done` of `total` meetings looked at in this round.
     Indexing { done: usize, total: usize },
-    Indexed { meeting: String, passages: usize },
+    /// A meeting's index was made again: it has `passages`, of which `embedded` had to be embedded anew.
+    Indexed { meeting: String, passages: usize, embedded: usize },
     Found { ticket: u64, hits: Vec<Found> },
     Failed(String),
 }
@@ -137,25 +151,34 @@ impl Worker {
         Ok(&self.server.insert(server).embedder)
     }
 
-    /// Make one meeting's index again if what it was made from has changed. Says how many passages it has.
-    fn index(&mut self, meeting: &str) -> Result<Option<usize>> {
+    /// Make one meeting's index again if what it was made from has changed. Passages it already had, read
+    /// with the same title, keep their vectors, so a meeting that grew by a few lines costs only those.
+    /// Says how many passages it has, and how many were embedded.
+    fn index(&mut self, meeting: &str) -> Result<Option<(usize, usize)>> {
         let Some(loaded) = self.store.load(meeting)? else { return Ok(None) };
         let live = Live::from_loaded(loaded);
         let chunks = passages(&live);
         let content: String = std::iter::once(live.title().to_string()).chain(chunks.iter().map(|c| c.text.clone())).collect::<Vec<_>>().join("\n\u{1f}");
         let print = fingerprint(MODEL, DIMS, &content);
         let path = self.path(meeting);
-        if Index::load(&path).is_ok_and(|i| i.fingerprint == print) {
+        let before = Index::load(&path).ok();
+        if before.as_ref().is_some_and(|i| i.fingerprint == print) {
             return Ok(None);
         }
         let title = live.title().to_string();
         let texts: Vec<String> = chunks.iter().map(|c| FAMILY.passage(&title, &c.text)).collect();
-        let vectors = if texts.is_empty() { vec![] } else { self.embedder()?.embed(&texts)? };
-        let count = chunks.len();
+        let known: HashMap<String, Vec<f32>> = before
+            .filter(|i| i.same_kind(&print))
+            .map(|i| i.chunks.iter().enumerate().map(|(n, c)| (FAMILY.passage(&i.title, &c.text), i.vector(n).to_vec())).collect())
+            .unwrap_or_default();
+        let missing: Vec<String> = texts.iter().filter(|t| !known.contains_key(*t)).cloned().collect();
+        let fresh: HashMap<String, Vec<f32>> = if missing.is_empty() { HashMap::new() } else { missing.iter().cloned().zip(self.embedder()?.embed(&missing)?).collect() };
+        let vectors: Vec<Vec<f32>> = texts.iter().map(|t| known.get(t).or_else(|| fresh.get(t)).cloned().expect("every passage has a vector")).collect();
+        let (count, embedded) = (chunks.len(), missing.len());
         std::fs::create_dir_all(&self.folder)?;
-        Index::new(print, DIMS, chunks, vectors).save(&path)?;
+        Index::new(print, DIMS, chunks, vectors).titled(&title).save(&path)?;
         self.cache.remove(meeting);
-        Ok(Some(count))
+        Ok(Some((count, embedded)))
     }
 
     /// An index from disk, read again only when its file changed.
@@ -179,18 +202,34 @@ impl Worker {
                 indexes.push((id.clone(), index.clone()));
             }
         }
-        // A few passages from each meeting at most, so one long meeting does not crowd out the rest.
-        let mut per_meeting: HashMap<&str, usize> = HashMap::new();
-        Ok(rank(&indexes, &query, text, WORD_WEIGHT, usize::MAX)
-            .into_iter()
-            .filter(|h| {
-                let seen = per_meeting.entry(h.meeting).or_default();
-                *seen += 1;
-                *seen <= PER_MEETING
-            })
-            .take(limit)
-            .map(|h| Found { meeting: h.meeting.to_string(), title: titles.get(h.meeting).cloned().unwrap_or_default(), source: h.chunk.source.clone(), text: h.chunk.text.clone(), score: h.score })
-            .collect())
+        let hits = rank(&indexes, &query, text, WORD_WEIGHT, usize::MAX);
+        // Where things stand (boards and summaries, as the meeting left them) and what was said on the way
+        // (the transcript) answer different questions, so each is cut on its own: a conclusion a little less
+        // like the question than some remark is still the answer.
+        let mut out = vec![];
+        for stands in [true, false] {
+            let group: Vec<_> = hits.iter().filter(|h| Found::stands_for(&h.chunk.source) == stands).collect();
+            // Nothing that matches only weakly, by itself or next to what matched best: no answer beats a wrong one.
+            let best = group.first().map_or(0.0, |h| h.score);
+            // A few passages from each meeting at most, so one long meeting does not crowd out the rest.
+            let mut per_meeting: HashMap<&str, usize> = HashMap::new();
+            // The same words in one meeting, as a node kept on two boards, are shown once.
+            let mut seen: std::collections::HashSet<(&str, &str)> = std::collections::HashSet::new();
+            out.extend(
+                group
+                    .into_iter()
+                    .filter(|h| h.score >= MIN_SCORE && h.score >= best - WITHIN_BEST)
+                    .filter(|h| seen.insert((h.meeting, h.chunk.text.as_str())))
+                    .filter(|h| {
+                        let seen = per_meeting.entry(h.meeting).or_default();
+                        *seen += 1;
+                        *seen <= PER_MEETING
+                    })
+                    .take(limit)
+                    .map(|h| Found { meeting: h.meeting.to_string(), title: titles.get(h.meeting).cloned().unwrap_or_default(), source: h.chunk.source.clone(), text: h.chunk.text.clone(), score: h.score }),
+            );
+        }
+        Ok(out)
     }
 }
 
@@ -202,47 +241,79 @@ pub fn start(data: &Path, model: PathBuf, spawn: Spawn) -> (Sender<Job>, Receive
     let mut worker = Worker { store: Store::new(data.to_path_buf()), folder: data.join("search"), model, spawn, server: None, cache: HashMap::new() };
     std::thread::Builder::new()
         .name("meeting search".into())
-        .spawn(move || loop {
-            let job = match inbox.recv_timeout(Duration::from_secs(15)) {
-                Ok(job) => job,
-                Err(RecvTimeoutError::Timeout) => {
-                    if worker.server.as_ref().is_some_and(|s| s.last_used.elapsed() > IDLE) {
-                        worker.server = None;
-                    }
-                    continue;
-                }
-                Err(RecvTimeoutError::Disconnected) => return,
-            };
-            let reply = match job {
-                Job::Index(meetings) => {
-                    let total = meetings.len();
-                    for (done, id) in meetings.iter().enumerate() {
-                        let _ = outbox.send(Event::Indexing { done, total });
-                        match worker.index(id) {
-                            Ok(Some(passages)) => {
-                                let _ = outbox.send(Event::Indexed { meeting: id.clone(), passages });
+        .spawn(move || {
+            // Meetings waiting to be indexed, and how far through this round it is. A question asked
+            // meanwhile is answered between two meetings, not after all of them.
+            let mut todo: VecDeque<String> = VecDeque::new();
+            let (mut done, mut total) = (0, 0);
+            loop {
+                let job = if todo.is_empty() {
+                    match inbox.recv_timeout(Duration::from_secs(15)) {
+                        Ok(job) => Some(job),
+                        Err(RecvTimeoutError::Timeout) => {
+                            if worker.server.as_ref().is_some_and(|s| s.last_used.elapsed() > IDLE) {
+                                worker.server = None;
                             }
-                            Ok(None) => {}
-                            Err(e) => {
-                                let _ = outbox.send(Event::Failed(format!("{e:#}")));
-                                break;
+                            continue;
+                        }
+                        Err(RecvTimeoutError::Disconnected) => return,
+                    }
+                } else {
+                    match inbox.try_recv() {
+                        Ok(job) => Some(job),
+                        Err(TryRecvError::Empty) => None,
+                        Err(TryRecvError::Disconnected) => return,
+                    }
+                };
+                let reply = match job {
+                    Some(Job::Index(meetings)) => {
+                        for id in meetings {
+                            if !todo.contains(&id) {
+                                todo.push_back(id);
+                                total += 1;
                             }
                         }
+                        continue;
                     }
-                    Event::Indexing { done: total, total }
+                    Some(Job::Find { text, meetings, limit, ticket }) => match worker.find(&text, &meetings, limit) {
+                        Ok(hits) => Event::Found { ticket, hits },
+                        Err(e) => Event::Failed(format!("{e:#}")),
+                    },
+                    Some(Job::Forget(id)) => {
+                        let _ = std::fs::remove_file(worker.path(&id));
+                        worker.cache.remove(&id);
+                        todo.retain(|t| *t != id);
+                        continue;
+                    }
+                    None => {
+                        let id = todo.pop_front().expect("there is a meeting to index");
+                        let _ = outbox.send(Event::Indexing { done, total });
+                        let result = worker.index(&id);
+                        done += 1;
+                        let reply = match result {
+                            Ok(Some((passages, embedded))) => Some(Event::Indexed { meeting: id, passages, embedded }),
+                            Ok(None) => None,
+                            Err(e) => {
+                                todo.clear();
+                                Some(Event::Failed(format!("{e:#}")))
+                            }
+                        };
+                        if let Some(reply) = reply {
+                            if outbox.send(reply).is_err() {
+                                return;
+                            }
+                        }
+                        if !todo.is_empty() {
+                            continue;
+                        }
+                        let finished = Event::Indexing { done: total, total };
+                        (done, total) = (0, 0);
+                        finished
+                    }
+                };
+                if outbox.send(reply).is_err() {
+                    return;
                 }
-                Job::Find { text, meetings, limit, ticket } => match worker.find(&text, &meetings, limit) {
-                    Ok(hits) => Event::Found { ticket, hits },
-                    Err(e) => Event::Failed(format!("{e:#}")),
-                },
-                Job::Forget(id) => {
-                    let _ = std::fs::remove_file(worker.path(&id));
-                    worker.cache.remove(&id);
-                    continue;
-                }
-            };
-            if outbox.send(reply).is_err() {
-                return;
             }
         })
         .expect("a thread for meeting search");
@@ -301,6 +372,19 @@ mod tests {
         jobs.send(Job::Find { text: "how is the parking garage shared out".into(), meetings: ids, limit: 3, ticket: 2 }).unwrap();
         let Event::Found { hits, .. } = wait(&|e| matches!(e, Event::Found { .. })) else { unreachable!() };
         assert_eq!(hits[0].meeting, "20260101-000000-bbbb");
+        // A meeting that grew by a line embeds only the passages at its end, not the whole meeting again.
+        let long: Vec<String> = (1..=14).map(|i| format!("Item {i} of the plan: the team reviewed the budget, the schedule and the risks for part {i} in detail.")).collect();
+        let lines: Vec<&str> = long.iter().map(String::as_str).collect();
+        meeting("20260101-000000-cccc", "Planning", &lines);
+        jobs.send(Job::Index(vec!["20260101-000000-cccc".into()])).unwrap();
+        let Event::Indexed { passages, embedded, .. } = wait(&|e| matches!(e, Event::Indexed { .. })) else { unreachable!() };
+        assert_eq!(embedded, passages);
+        let mut grown = lines.clone();
+        grown.push("One more thing: the launch moves to Tuesday.");
+        meeting("20260101-000000-cccc", "Planning", &grown);
+        jobs.send(Job::Index(vec!["20260101-000000-cccc".into()])).unwrap();
+        let Event::Indexed { passages, embedded, .. } = wait(&|e| matches!(e, Event::Indexed { .. })) else { unreachable!() };
+        assert!(passages >= 4 && embedded <= 2, "{embedded} of {passages} embedded again");
         // A second round leaves unchanged meetings as they are.
         let before = std::fs::metadata(data.join("search/20260101-000000-aaaa.index")).unwrap().modified().unwrap();
         jobs.send(Job::Index(vec!["20260101-000000-aaaa".into()])).unwrap();

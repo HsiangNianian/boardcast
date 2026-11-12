@@ -30,3 +30,7 @@ five (R@5) and by its reciprocal rank in the top ten (MRR@10).
 One question is 1.35 points, so recall is a tie. A word weight of 0.1 brings keyword questions from 93% to
 100% at no cost elsewhere; more starts to cost paraphrases. EmbeddingGemma is used, at 512 dimensions with a
 word weight of 0.1 (`crates/search/src/lib.rs`), for being half the size and three to six times faster.
+
+Hits are then cut where they are weak: below a score of 0.30, or more than 0.10 below the best hit. The
+evaluation prints how many right answers each pair of cuts keeps against how often the best passage from a
+meeting with no answer gets through; 0.30 and 0.10 keep 95% and let it through for 18% of questions.

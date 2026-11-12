@@ -27,3 +27,8 @@ pub const FAMILY: Family = Family::Gemma;
 pub const DIMS: usize = 512;
 /// How much a full match of the query's words adds to the cosine; more starts to cost paraphrases.
 pub const WORD_WEIGHT: f32 = 0.1;
+/// Below this score a passage is not shown at all, and nor is one further than `WITHIN_BEST` below the best
+/// hit. On the evaluation together they keep 95% of right answers and let the best unrelated passage
+/// through for 18% of questions, where a floor alone that keeps as many lets through 43%.
+pub const MIN_SCORE: f32 = 0.30;
+pub const WITHIN_BEST: f32 = 0.10;

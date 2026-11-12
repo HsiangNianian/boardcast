@@ -13,12 +13,15 @@ use std::path::Path;
 
 const MAGIC: &[u8; 8] = b"BCSRCH01";
 /// Bumped whenever passages are cut differently, so every index is made again.
-pub const CHUNKING: u32 = 1;
+pub const CHUNKING: u32 = 2;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Header {
     fingerprint: String,
     dims: usize,
+    /// The meeting's name when its passages were embedded, which the model read with each of them.
+    #[serde(default)]
+    title: String,
     chunks: Vec<Chunk>,
 }
 
@@ -26,6 +29,7 @@ struct Header {
 pub struct Index {
     pub fingerprint: String,
     pub dims: usize,
+    pub title: String,
     pub chunks: Vec<Chunk>,
     /// `chunks.len() * dims` values, each vector at unit length.
     pub vectors: Vec<f32>,
@@ -39,7 +43,19 @@ pub fn fingerprint(model: &str, dims: usize, content: &str) -> String {
 
 impl Index {
     pub fn new(fingerprint: String, dims: usize, chunks: Vec<Chunk>, vectors: Vec<Vec<f32>>) -> Self {
-        Self { fingerprint, dims, chunks, vectors: vectors.into_iter().flatten().collect() }
+        Self { fingerprint, dims, title: String::new(), chunks, vectors: vectors.into_iter().flatten().collect() }
+    }
+
+    pub fn titled(mut self, title: &str) -> Self {
+        self.title = title.to_string();
+        self
+    }
+
+    /// Whether this index was made by the same model, at the same size and cut the same way as one with
+    /// `fingerprint`, whatever the content: then its vectors can be reused for passages that did not change.
+    pub fn same_kind(&self, fingerprint: &str) -> bool {
+        let kind = |f: &str| f.rsplit_once('/').map(|(k, _)| k.to_string());
+        kind(&self.fingerprint).is_some() && kind(&self.fingerprint) == kind(fingerprint)
     }
 
     pub fn vector(&self, i: usize) -> &[f32] {
@@ -47,7 +63,7 @@ impl Index {
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
-        let header = serde_json::to_vec(&Header { fingerprint: self.fingerprint.clone(), dims: self.dims, chunks: self.chunks.clone() })?;
+        let header = serde_json::to_vec(&Header { fingerprint: self.fingerprint.clone(), dims: self.dims, title: self.title.clone(), chunks: self.chunks.clone() })?;
         let mut bytes = Vec::with_capacity(16 + header.len() + self.vectors.len() * 4);
         bytes.extend_from_slice(MAGIC);
         bytes.extend_from_slice(&(header.len() as u64).to_le_bytes());
@@ -75,7 +91,7 @@ impl Index {
             bail!("{} has {} bytes of vectors for {} passages", path.display(), raw.len(), header.chunks.len());
         }
         let vectors = raw.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
-        Ok(Self { fingerprint: header.fingerprint, dims: header.dims, chunks: header.chunks, vectors })
+        Ok(Self { fingerprint: header.fingerprint, dims: header.dims, title: header.title, chunks: header.chunks, vectors })
     }
 }
 
@@ -92,11 +108,13 @@ mod tests {
             Chunk { source: Source::Transcript { first: 0, last: 2 }, text: "上线改到周二".into() },
             Chunk { source: Source::Summary { heading: "To-dos".into() }, text: "canary".into() },
         ];
-        let index = Index::new(fingerprint("m", 2, "content"), 2, chunks, vec![vec![0.6, 0.8], vec![1.0, 0.0]]);
+        let index = Index::new(fingerprint("m", 2, "content"), 2, chunks, vec![vec![0.6, 0.8], vec![1.0, 0.0]]).titled("Release review");
         let path = dir.join("a.index");
         index.save(&path).unwrap();
         assert_eq!(Index::load(&path).unwrap(), index);
         assert_eq!(index.vector(1), &[1.0, 0.0]);
         assert_ne!(fingerprint("m", 2, "content"), fingerprint("m", 2, "changed"));
+        assert!(index.same_kind(&fingerprint("m", 2, "changed")));
+        assert!(!index.same_kind(&fingerprint("m", 3, "content")));
     }
 }

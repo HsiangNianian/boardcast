@@ -81,10 +81,6 @@ pub fn init() {
     let Some(prog) = program(&gl) else { return };
     let Some(body) = doc().body() else { return };
     let _ = body.prepend_with_node_1(&canvas);
-    // The stylesheet's still dots give way once the ground draws.
-    if let Some(root) = doc().document_element() {
-        let _ = root.class_list().add_1("ground-on");
-    }
     gl.use_program(Some(&prog));
     let buffer = gl.create_buffer();
     gl.bind_buffer(Gl::ARRAY_BUFFER, buffer.as_ref());

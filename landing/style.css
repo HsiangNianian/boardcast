@@ -417,7 +417,7 @@ section.block { padding-top: 140px; }
 .dot-card { background: var(--bg); padding: 24px; height: 380px; display: flex; flex-direction: column; justify-content: flex-end; position: relative; }
 .dot-card canvas { position: absolute; left: 0; right: 0; top: 0; height: 250px; width: 100%; }
 .dot-card h4 { font-size: 20px; font-weight: 500; letter-spacing: -.01em; }
-.dot-card p { margin-top: 8px; font-size: 13px; color: var(--grey); line-height: 1.6; }
+.dot-card p { margin-top: 8px; font-size: 13px; color: var(--grey); line-height: 1.6; min-height: 3.2em; } /* Two lines for every card, so the titles above line up whatever the text. */
 
 .specs { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--fg); }
 .specs dl { display: grid; grid-template-columns: 170px 1fr; }

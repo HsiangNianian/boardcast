@@ -102,30 +102,36 @@
       <div class="art art-lasso"><svg viewBox="0 0 520 170">
         <text class="word" x="50" y="72">cache service</text><text class="word" x="330" y="130">Redis</text>
         <path class="loop" id="l1" pathLength="1"/><path class="loop" id="l2" pathLength="1"/><path class="link" id="lk" pathLength="1"/>
-      </svg></div>
+      </svg><div class="lsay"><span class="label" id="lcount"></span><span id="lsay"></span></div></div>
       <h4>circle</h4><p>Circle “cache service” and “Redis”, then say “connect these”. The model knows which two you mean.</p></div>
     <div class="card w2"><span class="k label">04 / voices</span><svg class="pict" data-icon="speakers" viewBox="0 0 64 64"></svg>
       <div class="art"><div>
         <div class="voice"><b>A</b>Lin · product<span class="wave"></span></div>
         <div class="voice quiet"><b>B</b>Chen · backend<span class="wave"></span></div>
         <div class="voice quiet"><b>C</b>Wang · QA<span class="wave"></span></div>
+        <p class="voice-line" id="vline"></p>
       </div></div>
       <h4>voices</h4><p>Tells speakers apart by voice. Give one a real name and the same voice keeps it.</p></div>
     <div class="card w2"><span class="k label">— / local</span><svg class="pict" data-icon="mic" viewBox="0 0 64 64"></svg>
-      <div class="art"><div><div class="chain"><span>mic</span><i></i><span>asr</span><i></i><span>board</span></div><div class="cloud">upload to cloud</div></div></div>
+      <div class="art"><div><div class="chain"><span>mic</span><i></i><span>asr</span><i></i><span>board</span><em class="lv"><i></i><i></i><i></i><i></i><i></i></em><em id="asr-w"></em><em id="board-w"></em></div><div class="cloud">upload to cloud</div></div></div>
       <h4>local</h4><p>No account, no uploaded audio. Once the models are down, it works offline.</p></div>
     <div class="card w2"><span class="k label">05 / replay</span><svg class="pict" data-icon="replay" viewBox="0 0 64 64"></svg>
-      <div class="art"><div class="scrub"><div class="bars" id="bars"></div><div class="time label"><span>00:00</span><span id="bt">06:12</span><span>48:30</span></div></div></div>
+      <div class="art"><div class="scrub"><div class="mini" id="mini"><b data-at=".04">Release</b><span data-at=".22">– tests</span><span data-at=".42">– ship <del data-at=".66">fri</del> <ins data-at=".74">tue</ins></span><span data-at=".86">– canary <em data-at=".94">★</em></span></div><div class="bars" id="bars"></div><div class="time label"><span>00:00</span><span id="bt">06:12</span><span>48:30</span></div></div></div>
       <h4>replay</h4><p>Drag to any moment to see the board as it was, or fork a new one from there.</p></div>
     <div class="card w2"><span class="k label">06 / export</span><svg class="pict" data-icon="export" viewBox="0 0 64 64"></svg>
-      <div class="art"><div class="files"><div>.md</div><div>.pdf</div><div>.gif</div><div>.html</div></div></div>
+      <div class="art"><div class="files">
+        <div class="f-md"><i class="t"># release review</i><i>- [x] regression</i><i>- [ ] ship tue</i><i class="flow"><s></s><u></u><s></s></i><b>.md</b></div>
+        <div class="f-pdf"><i class="h">Release</i><i class="ln"></i><i class="ln x"></i><i class="ln"></i><b>.pdf</b></div>
+        <div class="f-gif"><i class="h">Release</i><i class="pen"></i><i class="ln"></i><b>.gif</b></div>
+        <div class="f-html"><i class="h">Release</i><i class="ln"></i><i class="ln"></i><i class="bar"></i><b>.html</b></div>
+      </div></div>
       <h4>export</h4><p>markdown, png, svg, an animated svg or gif, a whole-meeting pdf, or a replay page.</p></div>
   </div>
 </section>
 
 <!-- ———————————————— after ———————————————— -->
 <section class="block wrap" id="after" data-sheet="05 after">
-  <div class="head"><h2>after the meeting,<br><em>it is already sorted.</em></h2><p>Each of these is made of dots. Point at one and it scatters, then gathers again.</p></div>
+  <div class="head"><h2>after the meeting,<br><em>it is already sorted.</em></h2><p>Each of these is made of dots. Point at one and they gather into what you take home.</p></div>
   <div class="dots">
     <div class="dot-card"><canvas data-icon="doc"></canvas><span class="label">summary</span><h4>summary</h4><p>Conclusions, decisions and to-dos to edit, tick off and copy.</p></div>
     <div class="dot-card"><canvas data-icon="replay"></canvas><span class="label">replay page</span><h4>replay page</h4><p>One .html file for whoever missed it. Nothing to install.</p></div>

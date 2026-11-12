@@ -45,7 +45,7 @@ use gpui_kit::{
 };
 use serde::Deserialize;
 use std::cell::RefCell;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
@@ -66,7 +66,8 @@ const DOCK_H: f32 = 56.0;
 /// Room kept clear around the board when it is fitted to the canvas.
 const BOARD_MARGIN: f32 = 28.0;
 /// The spacing of the grid drawn on the canvas, as on the website.
-const GRID: f32 = 72.0;
+/// The spacing of the dots under the ink, fixed on the screen like the website's sheet.
+const GRID: f32 = 24.0;
 const AUTOSAVE_AFTER: Duration = Duration::from_millis(500);
 const RETRY_SAVE_AFTER: Duration = Duration::from_secs(5);
 #[derive(Clone, Copy, PartialEq)]
@@ -128,8 +129,14 @@ const MAX_ZOOM: f32 = 4.0;
 const RERASTER_AFTER: Duration = Duration::from_millis(120);
 /// How long the view takes to move to where new content needs it, easing out.
 const GLIDE: Duration = Duration::from_millis(450);
-/// Writing speed. A backlog speeds it up so the board never falls far behind the talk.
-const PEN_PX_PER_SECOND: f32 = 1500.0;
+/// How long after the user last moved the view new ink waits before taking the view back to it.
+const READ_HOLD: Duration = Duration::from_secs(5);
+/// Writing speed in board units, as on the website's demo: a hand that knows what it is writing.
+const PEN_PX_PER_SECOND: f32 = 1400.0;
+/// A backlog is written faster, so what is waiting never takes longer than this to appear.
+const PEN_BACKLOG: f32 = 3.5;
+/// A mark made in one stroke (a star, a ring, an underline) takes at least this long, so it is seen being drawn.
+const MARK_SECONDS: f32 = 0.35;
 
 struct Queued {
     inked: Inked,
@@ -137,6 +144,8 @@ struct Queued {
     key: String,
     /// The batch this stroke belongs to, for end-to-end timing.
     batch: u64,
+    /// Whether the stroke is a whole piece on its own, a mark rather than part of a word.
+    alone: bool,
 }
 
 struct Stroke {
@@ -257,6 +266,8 @@ struct Ink {
     insets: [f32; 4],
     dpr: f32,
     zoomed_at: Instant,
+    /// When the user last moved or zoomed the view by hand. Reading holds the view only for a while after.
+    touched: Instant,
     /// Bumped when finished strokes are removed, which invalidates a rendering in progress.
     generation: u64,
     rebuilding: Option<Receiver<Rebuilt>>,
@@ -356,8 +367,22 @@ impl Ink {
         self.follow(&layout.bounds);
         self.extent = layout.bounds;
         let wanted: HashSet<&str> = pieces.iter().map(|p| p.key.as_str()).collect();
-        // Ink cannot be partly erased from a texture, so a removal or a move repaints what remains.
-        if self.drawn.iter().any(|k| !wanted.contains(k.as_str())) {
+        // A piece already written may change its look in place, as words fade when they are crossed out.
+        let styles: HashMap<&str, Style> = pieces.iter().filter_map(|p| p.lines.first().map(|l| (p.key.as_str(), l.style))).collect();
+        let mut restyled = false;
+        for stroke in &mut self.finished {
+            if let Some(style) = styles.get(stroke.key.as_str()).filter(|s| **s != stroke.style) {
+                *stroke = Arc::new(Stroke { key: stroke.key.clone(), shape: stroke.shape.clone(), style: *style, area: stroke.area });
+                restyled = true;
+            }
+        }
+        for queued in &mut self.queue {
+            if let Some(style) = styles.get(queued.key.as_str()) {
+                queued.style = *style;
+            }
+        }
+        // Ink cannot be partly erased from a texture, so a removal, a move or a new look repaints what remains.
+        if restyled || self.drawn.iter().any(|k| !wanted.contains(k.as_str())) {
             self.finished.retain(|s| wanted.contains(s.key.as_str()));
             self.base.under.clear();
             self.base.layer.clear();
@@ -380,12 +405,14 @@ impl Ink {
                 continue;
             }
             let mut r = Rng::new(&piece.seed);
+            let alone = piece.lines.len() == 1;
             for line in &piece.lines {
                 self.queue.push_back(Queued {
                     inked: line.inked(&mut r),
                     style: line.style,
                     key: piece.key.clone(),
                     batch,
+                    alone,
                 });
                 added += 1;
             }
@@ -582,9 +609,6 @@ impl Ink {
 
     /// New content keeps the view while it fits, so the board does not rescale with every line.
     fn follow(&mut self, next: &BoardBounds) {
-        if self.reading {
-            return;
-        }
         // Measured against where the view is going, so a move already under way is not cut short.
         let cur = self.target();
         let (w, h) = (f32::from(self.canvas.size.width), f32::from(self.canvas.size.height));
@@ -594,6 +618,14 @@ impl Ink {
             && next.y0 as f32 >= cur.y + top / cur.k
             && next.x1 as f32 <= cur.x + (w - right) / cur.k
             && next.y1 as f32 <= cur.y + (h - bottom) / cur.k;
+        // Someone looking around keeps their view while what is new shows in it, or while they are still
+        // moving about; after that, new ink out of sight brings the view back to follow the talk.
+        if self.reading {
+            if inside || self.touched.elapsed() < READ_HOLD {
+                return;
+            }
+            self.reading = false;
+        }
         let view = inside.then_some(cur);
         if view.map(|v| v.k) != self.view.map(|v| v.k) {
             self.zoomed_at = Instant::now();
@@ -614,6 +646,7 @@ impl Ink {
         self.reading = true;
         self.glide = None;
         self.zoomed_at = Instant::now();
+        self.touched = Instant::now();
     }
 
     fn show_latest(&mut self) {
@@ -766,16 +799,20 @@ impl Ink {
             return;
         }
         let dt = self.last.replace(now).map_or(0.016, |l| (now - l).as_secs_f32()).min(0.1);
-        let mut budget = if self.instant { f32::MAX } else { PEN_PX_PER_SECOND * (1.0 + self.queue.len() as f32 / 60.0) * dt };
+        // Time to spend this frame, and the pen's speed for what is waiting.
+        let mut budget = if self.instant { f32::MAX } else { dt };
+        let waiting: f32 = self.queue.iter().map(|q| q.inked.length).sum::<f32>() - self.queue.front().map_or(0.0, |q| q.inked.length * self.live);
+        let speed = PEN_PX_PER_SECOND.max(waiting / PEN_BACKLOG);
         while budget > 0.0 {
             let Some(front) = self.queue.front() else { break };
             let (id, length) = (front.batch, front.inked.length);
             if let Some(t) = self.timings.iter_mut().find(|t| t.id == id && t.first_ink.is_none()) {
                 t.first_ink = Some(now);
             }
-            let left = length * (1.0 - self.live);
+            let rate = if front.alone { speed.min(length / MARK_SECONDS).max(1.0) } else { speed };
+            let left = length * (1.0 - self.live) / rate;
             if left > budget {
-                self.live += budget / length.max(0.01);
+                self.live += budget * rate / length.max(0.01);
                 return;
             }
             budget -= left;
@@ -833,6 +870,22 @@ enum Panel {
     Import,
     Speakers,
     Settings,
+}
+
+impl Panel {
+    /// Whether the panel is used alongside the board, so it lives in the side; the rest cover the board.
+    fn beside_board(self) -> bool {
+        matches!(self, Panel::Transcript | Panel::Summary | Panel::Speakers)
+    }
+}
+
+/// The parts of the settings page.
+#[derive(Clone, Copy, PartialEq)]
+enum SettingsTab {
+    Model,
+    Speech,
+    General,
+    About,
 }
 
 enum ImportSource {
@@ -995,6 +1048,7 @@ struct Workbench {
     last_change: Instant,
     last_attempt: Option<Instant>,
     panel: Panel,
+    settings_tab: SettingsTab,
     library: Vec<Info>,
     /// What can be listened to, as of opening Settings.
     inputs: Vec<boardcast_audio::Input>,
@@ -1242,19 +1296,27 @@ fn fingerprint_of(live: &Live) -> String {
     summary::fingerprint(&live.boards(), &Line::spoken(&live.lines))
 }
 
+/// What is still to happen to a line, said under it; a line on the board needs nothing.
 fn line_note(line: &serde_json::Value, model_loading: bool) -> String {
+    if line["failed"].as_bool().unwrap_or(false) {
+        tr("Not drawn", "没有画上").to_string()
+    } else if line["ms"].is_null() {
+        if model_loading { tr("Waiting for the model…", "等模型就绪后上板…") } else { tr("Drawing…", "正在画…") }.to_string()
+    } else {
+        String::new()
+    }
+}
+
+/// How long hearing and drawing a line took, for whoever hovers to ask.
+fn line_timing(line: &serde_json::Value) -> Option<String> {
     let mut parts = vec![];
     if let Some(ms) = line["heard"]["asrMs"].as_u64() {
-        parts.push(format!("{} {ms} ms", tr("Heard", "识别")));
+        parts.push(format!("{} {ms} ms", tr("Heard in", "识别")));
     }
-    if line["failed"].as_bool().unwrap_or(false) {
-        parts.push(tr("Not drawn", "没有画上").to_string());
-    } else if line["ms"].is_null() {
-        parts.push(if model_loading { tr("Waiting for the model…", "等模型就绪后上板…") } else { tr("Drawing…", "正在画…") }.to_string());
-    } else if let Some(ms) = line["ms"].as_u64().filter(|ms| *ms > 0) {
-        parts.push(format!("{} {ms} ms", tr("Model", "模型")));
+    if let Some(ms) = line["ms"].as_u64().filter(|ms| *ms > 0) {
+        parts.push(format!("{} {ms} ms", tr("drawn in", "上板")));
     }
-    parts.join(" · ")
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 impl Workbench {
@@ -3177,7 +3239,7 @@ impl Workbench {
 
     fn import_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
         let hint = |text: &'static str| div().text_xs().text_color(rgb(pal().muted)).child(text);
-        let panel = div().id("import-panel").flex_1().overflow_y_scroll().p_3().flex().flex_col().gap_2();
+        let panel = div().id("import-panel").flex_1().overflow_y_scroll().flex().flex_col().gap_2();
         let can_add_here = self.live.read_only.is_none();
         match &self.import {
             ImportState::NeedsVision { add_on, path } => {
@@ -3219,11 +3281,30 @@ impl Workbench {
             state => panel
                 .when_some(if let ImportState::Failed(error) = state { Some(error.clone()) } else { None }, |d, error| d.child(div().text_sm().text_color(rgb(pal().danger)).child(error)))
                 .child(hint(tr("A PDF page or an image becomes a board, with its text in place to circle, link and note on during the meeting.", "PDF 的每一页或一张图片变成一张板，文字留在原位，开会时可以圈画、连线、写批注。")))
-                .child(button("pick-import", tr("Choose a file…", "选择文件…")).on_click(cx.listener(|this, _, _, cx| this.pick_import_file(cx))))
-                .child(hint(tr("You can also drop a file anywhere in this window.", "也可以把文件拖到窗口里。")))
-                .child(div().mt_2().text_xs().text_color(rgb(pal().muted)).child(tr("An arXiv paper, by link or ID", "arXiv 论文的链接或编号")))
-                .child(Input::new(&self.arxiv_input))
-                .child(button("import-arxiv", tr("Download and read", "下载并读取")).on_click(cx.listener(|this, _, window, cx| this.import_arxiv(window, cx)))),
+                // Where a file goes: the button, or a drop anywhere in the window.
+                .child(
+                    div()
+                        .mt_2()
+                        .py_6()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .gap_2()
+                        .border_1()
+                        .border_dashed()
+                        .border_color(rgb(pal().faint))
+                        .rounded(px(3.))
+                        .child(Button::new("pick-import").small().primary().label(tr("Choose a file…", "选择文件…")).on_click(cx.listener(|this, _, _, cx| this.pick_import_file(cx))))
+                        .child(hint(tr("or drop a PDF or an image anywhere in the window", "或者把 PDF、图片拖进窗口"))),
+                )
+                .child(div().mt_3().text_xs().text_color(rgb(pal().muted)).child(tr("An arXiv paper, by link or ID", "arXiv 论文的链接或编号")))
+                .child(
+                    div()
+                        .flex()
+                        .gap_2()
+                        .child(div().flex_1().child(Input::new(&self.arxiv_input).small()))
+                        .child(button("import-arxiv", tr("Download and read", "下载并读取")).on_click(cx.listener(|this, _, window, cx| this.import_arxiv(window, cx)))),
+                ),
         }
     }
 
@@ -3285,7 +3366,6 @@ impl Workbench {
             .id("export-panel")
             .flex_1()
             .overflow_y_scroll()
-            .p_3()
             .flex()
             .flex_col()
             .gap_2()
@@ -3450,19 +3530,6 @@ fn templates() -> Vec<(&'static str, Vec<String>)> {
     ]
 }
 
-/// A section of a panel, numbered in the website's manual style: a hairline, then "01 / board model".
-fn manual_label(number: &str, name: &str) -> gpui_kit::Div {
-    div()
-        .mt_3()
-        .pt_2()
-        .border_t_1()
-        .border_color(rgb(pal().line))
-        .font_family(theme::MONO)
-        .text_xs()
-        .text_color(rgb(pal().faint))
-        .child(format!("{number} / {}", name.to_lowercase()))
-}
-
 /// A recorded sample replayed from its stored model output, with no model involved.
 fn demo_board(root: &std::path::Path, name: &str) -> Result<Graph> {
     #[derive(Deserialize)]
@@ -3582,6 +3649,7 @@ impl Render for Workbench {
                     b.reading = true;
                     b.glide = None;
                     b.zoomed_at = Instant::now();
+                    b.touched = Instant::now();
                     cx.notify();
                 }
             }))
@@ -3636,16 +3704,15 @@ impl Render for Workbench {
                                 Some((tier, cover)) if inside(view, *cover) => tier,
                                 _ => &mut state.base,
                             };
-                            // A fixed grid on the canvas, as on the website's sheet, under all the ink.
-                            let line: Hsla = rgb(pal().line).into();
-                            let mut gx = bounds.origin.x + px(GRID);
-                            while gx < bounds.origin.x + bounds.size.width {
-                                window.paint_quad(gpui_kit::fill(Bounds::new(point(gx, bounds.origin.y), size(px(1.), bounds.size.height)), line));
-                                gx += px(GRID);
-                            }
+                            // Faint dots under all the ink: enough to read as a sheet, too little to compete with it.
+                            let dot: Hsla = rgb(pal().line).into();
                             let mut gy = bounds.origin.y + px(GRID);
                             while gy < bounds.origin.y + bounds.size.height {
-                                window.paint_quad(gpui_kit::fill(Bounds::new(point(bounds.origin.x, gy), size(bounds.size.width, px(1.))), line));
+                                let mut gx = bounds.origin.x + px(GRID);
+                                while gx < bounds.origin.x + bounds.size.width {
+                                    window.paint_quad(gpui_kit::fill(Bounds::new(point(gx - px(1.), gy - px(1.)), size(px(2.), px(2.))), dot));
+                                    gx += px(GRID);
+                                }
                                 gy += px(GRID);
                             }
                             // Under everything, from the moment a replay reaches the page.
@@ -3825,41 +3892,20 @@ impl Render for Workbench {
                     }),
             );
         }
-        if reading {
-            let back = self.ink.clone();
-            board = board.child(
-                div()
-                    .id("latest")
-                    .absolute()
-                    .bottom(px(16.))
-                    .left(px(14.))
-                    .px_3()
-                    .py_1()
-                    .cursor_pointer()
-                    .bg(rgb(pal().strong))
-                    .text_color(rgb(pal().on_strong))
-                    .text_sm()
-                    .child(tr("Back to latest", "回到最新"))
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .on_click(cx.listener(move |_, _, _, cx| {
-                        back.borrow_mut().show_latest();
-                        cx.notify();
-                    })),
-            );
-        }
         let editable = self.editable();
         let (page, pages) = (self.live.page(), self.live.pages());
         let save_label: String = match &self.save {
             _ if self.store.is_none() => tr("Sample, not saved", "示例，不保存").into(),
-            _ if self.replay.is_some() => tr("Replaying", "回放中").into(),
+            // The replay bar says so already.
+            _ if self.replay.is_some() => String::new(),
             _ if !editable => tr("View only", "只读").into(),
-            SaveState::Idle => String::new(),
-            SaveState::Dirty => tr("Unsaved", "未保存").into(),
-            SaveState::Saving => tr("Saving…", "正在保存…").into(),
-            SaveState::Saved => tr("Saved", "已保存").into(),
+            // Saving is the normal case and takes a moment, so only a failure is worth a word.
+            SaveState::Idle | SaveState::Dirty | SaveState::Saving | SaveState::Saved => String::new(),
             SaveState::Failed(_) => tr("Not saved", "保存失败").into(),
         };
-        let side_shown = self.panel != Panel::Transcript || self.transcript_open;
+        // Pages and dialogs cover the board; the side keeps the transcript beside them.
+        let side_panel = if self.panel.beside_board() { self.panel } else { Panel::Transcript };
+        let side_shown = side_panel != Panel::Transcript || self.transcript_open;
         // Nothing floats over the board any more but its corner label, so it may use the whole canvas.
         self.ink.borrow_mut().set_insets([BOARD_MARGIN, BOARD_MARGIN + 16.0, BOARD_MARGIN, BOARD_MARGIN]);
         let recording = self.pipeline.listening();
@@ -3872,15 +3918,15 @@ impl Render for Workbench {
         // and what to open on the right.
         let mono = |text: String| div().font_family(theme::MONO).text_xs().whitespace_nowrap().child(text);
         let (state_text, state_color, state_line) = match () {
-            _ if self.replay.is_some() => (tr("replaying", "回放中").to_string(), pal().faint, None),
+            _ if self.replay.is_some() => (String::new(), pal().faint, None),
             _ if !editable => (tr("view only", "只读").to_string(), pal().faint, None),
             _ if !not_drawn.is_empty() => (format!("{} {}", not_drawn.len(), tr("not drawn: show", "句没画上：查看")), pal().danger, not_drawn.last().copied()),
             _ if self.needs_model => (tr("no board model yet", "还没有板书模型").to_string(), pal().warning, None),
             _ if waiting > 0 && self.preparing.is_some() => (format!("{waiting} {}", tr("waiting for the model", "句等模型就绪")), pal().warning, None),
             _ if waiting > 1 => (format!("{} · {} {}", tr("drawing", "正在画"), waiting - 1, tr("waiting", "句排队")), pal().recording, None),
             _ if waiting == 1 => (tr("drawing", "正在画").to_string(), pal().recording, None),
-            _ if recording => (tr("listening", "正在听").to_string(), pal().text, None),
-            _ => (tr("ready", "就绪").to_string(), pal().faint, None),
+            // Listening shows in the red clock beside it, and a ready board needs no word.
+            _ => (String::new(), pal().faint, None),
         };
         let started = self.live.created_at().map(local_time).filter(|t| !t.is_empty()).map(|t| t.rsplit(' ').next().unwrap_or_default().to_string());
         let meeting_side = div()
@@ -3901,12 +3947,15 @@ impl Render for Workbench {
                             .text_base()
                             .when(editable, |d| d.cursor_pointer().hover(|d| d.text_color(rgb(pal().muted))))
                             .child(self.live.title().to_string())
+                            .when_some(started.clone(), |d, started| {
+                                let tip = format!("{} {started}", tr("Started at", "开始于"));
+                                d.tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                            })
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .on_click(cx.listener(|this, _, window, cx| this.edit_title(window, cx))),
                     )
                 }
             })
-            .when_some(started, |d, started| d.child(mono(format!("{} {started}", tr("start", "开始"))).text_color(rgb(pal().faint))))
             .when(recording || !recorded.is_zero(), |d| {
                 d.child(
                     div()
@@ -3918,7 +3967,7 @@ impl Render for Workbench {
                         .child(mono(clock(recorded.as_secs_f64() * 1000.0))),
                 )
             })
-            .child(
+            .when(!state_text.is_empty(), |d| d.child(
                 div()
                     .id("board-state")
                     .flex()
@@ -3935,13 +3984,15 @@ impl Render for Workbench {
                         }
                         cx.notify();
                     }))
-                    .child(mono(tr("board /", "板书 /").to_string()).text_color(rgb(pal().faint)))
-                    .child(mono(state_text).text_color(rgb(state_color))),
-            )
+                    .text_xs()
+                    .whitespace_nowrap()
+                    .text_color(rgb(state_color))
+                    .child(state_text),
+            ))
             .when(!save_label.is_empty(), |d| {
                 // A meeting that is not on disk is the one state here that must not go unseen.
                 let failed = matches!(self.save, SaveState::Failed(_));
-                d.child(mono(save_label).text_color(rgb(if failed { pal().danger } else { pal().faint })))
+                d.child(div().text_xs().whitespace_nowrap().child(save_label).text_color(rgb(if failed { pal().danger } else { pal().faint })))
             });
         let open_side = div()
             .flex()
@@ -3974,6 +4025,8 @@ impl Render for Workbench {
                 // A sample has nowhere to keep a meeting, so the button says why instead of doing nothing.
                 None => icon_button("new", "file-plus", tr("A sample is not saved, so it cannot start a new meeting", "示例不会保存，不能从这里新建会议")).disabled(true),
             })
+            .child(icon_button("import", "import", tr("Import", "导入")).selected(self.panel == Panel::Import).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))))
+            .child(icon_button("export", "file-down", tr("Export", "导出")).selected(self.panel == Panel::Export).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
             .child(Separator::vertical().h(px(18.)).mx_1())
             .child(icon_button("speakers", "users", tr("Speakers", "说话人")).selected(self.panel == Panel::Speakers).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Speakers, cx))))
             .child(icon_button("settings", "settings", tr("Settings", "设置")).selected(self.panel == Panel::Settings).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))))
@@ -4013,10 +4066,12 @@ impl Render for Workbench {
             .border_color(rgb(pal().line))
             .bg(rgb(pal().surface))
             .when(editable, |d| {
-                // The microphone is the one solid block, with the level beside it while it listens.
+                // The microphone sits with the other commands until it listens, then turns red with the level beside it.
                 d.child(
                     Button::new("mic")
-                        .primary()
+                        .map(|b| if listening { b.danger() } else { b.ghost() })
+                        .border_r_1()
+                        .border_color(rgb(pal().line))
                         .rounded_none()
                         .h(px(DOCK_H - 1.0))
                         .px_4()
@@ -4030,7 +4085,7 @@ impl Render for Workbench {
                                 .flex()
                                 .items_center()
                                 .gap_3()
-                                .child(div().size(px(26.)).flex().items_center().justify_center().bg(rgb(pal().on_strong)).child(div().size(px(10.)).bg(rgb(pal().recording)).when(!listening, |d| d.rounded_full())))
+                                .child(div().size(px(20.)).flex().items_center().justify_center().child(div().size(px(12.)).map(|d| if listening { d.bg(rgb(pal().on_strong)) } else { d.rounded_full().bg(rgb(pal().recording)) })))
                                 .child(
                                     div()
                                         .flex()
@@ -4070,11 +4125,20 @@ impl Render for Workbench {
                     }).px_2().text_color(rgb(pal().muted)))
                 })
             })
-            .child(dock_button("summary", "sparkles", tr("summary", "摘要"), None).selected(self.panel == Panel::Summary).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
-            .child(dock_button("import", "import", tr("import", "导入"), None).selected(self.panel == Panel::Import).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx))))
-            .child(dock_button("export", "file-down", tr("export", "导出"), None).selected(self.panel == Panel::Export).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
+            // What changes the board, beside the tools that draw on it.
+            .when(editable, |d| {
+                d.child(div().w(px(8.)))
+                    .child(icon_button("undo", "undo-2", key(tr("Undo (⌘Z)", "撤销（⌘Z）"), tr("Undo (Ctrl+Z)", "撤销（Ctrl+Z）"))).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
+                    .child(icon_button("redo", "redo-2", key(tr("Redo (⇧⌘Z)", "重做（⇧⌘Z）"), tr("Redo (Ctrl+Shift+Z)", "重做（Ctrl+Shift+Z）"))).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
+                    .child(icon_button("tidy", "wand-sparkles", tr("Tidy", "整理排版")).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
+            })
+            // What is done with the meeting as a whole, at the far end.
+            .child(div().flex_1())
+            .child(dock_button("summary", "sparkles", tr("summary", "摘要"), None).border_r_0().border_l_1().selected(self.panel == Panel::Summary).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Summary, cx))))
             .child(
                 dock_button("replay", "rotate-ccw", if self.replay.is_some() { tr("exit replay", "退出回放") } else { tr("replay", "回放") }, Some(if self.replay.is_some() { "esc" } else { key("⇧⌘R", "ctrl ⇧ R") }))
+                    .border_r_0()
+                    .border_l_1()
                     .selected(self.replay.is_some())
                     .disabled(self.live.steps.is_empty())
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -4084,14 +4148,7 @@ impl Render for Workbench {
                             this.start_replay(window, cx);
                         }
                     })),
-            )
-            .child(div().flex_1())
-            .when(editable, |d| {
-                d.child(icon_button("undo", "undo-2", key("Undo (⌘Z)", "Undo (Ctrl+Z)")).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
-                    .child(icon_button("redo", "redo-2", key("Redo (⇧⌘Z)", "Redo (Ctrl+Shift+Z)")).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
-                    .child(icon_button("tidy", "wand-sparkles", tr("Tidy", "整理排版")).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
-                    .child(div().w(px(8.)))
-            });
+            );
         // The corner of the board: how far it is zoomed, whether it is live, and what the model is doing.
         let coords = div()
             .flex()
@@ -4112,8 +4169,30 @@ impl Render for Workbench {
                     .on_click(cx.listener(|this, _, _, cx| this.fit_board(cx)))
                     .child(format!("{:.0}%", zoom * 100.0)),
             )
-            .child("·")
-            .child(if self.replay.is_some() { tr("replay", "回放") } else { tr("live", "实时") })
+            // Following the talk is the usual state and goes unsaid; looking elsewhere offers the way back.
+            .when(self.replay.is_some(), |d| d.child("·").child(tr("replay", "回放")))
+            .when(reading && self.replay.is_none(), |d| {
+                let back = self.ink.clone();
+                d.child(
+                    div()
+                        .id("latest")
+                        .occlude()
+                        .cursor_pointer()
+                        .ml_1()
+                        .px_2()
+                        .border_1()
+                        .border_color(rgb(pal().line))
+                        .bg(rgb(pal().surface))
+                        .text_color(rgb(pal().text))
+                        .hover(|d| d.border_color(rgb(pal().text)))
+                        .child(tr("↓ back to latest", "↓ 回到最新"))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(cx.listener(move |_, _, _, cx| {
+                            back.borrow_mut().show_latest();
+                            cx.notify();
+                        })),
+                )
+            })
             .when(!self.status.is_empty(), |d| d.child("·").child(self.status.clone()))
             .when_some(self.page_hint.clone().filter(|_| self.replay.is_none()), |d, (board, number, title)| {
                 d.child(
@@ -4213,7 +4292,7 @@ impl Render for Workbench {
                                 })),
                         )
                     })
-                    .child(div().text_sm().when(manual, |d| d.text_color(rgb(pal().faint))).child(text))
+                    .child(div().id(("line-text", i)).text_sm().when(manual, |d| d.text_color(rgb(pal().faint))).child(text).when_some(line_timing(l), |d, tip| d.tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))))
                     .when(!note.is_empty() && !manual, |d| {
                         d.child(div().text_xs().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { pal().danger } else { pal().faint })).child(note))
                     })
@@ -4230,16 +4309,15 @@ impl Render for Workbench {
             .flex()
             .flex_col()
             // A handful of meetings reads at a glance; past that, a search finds one.
-            .when(self.library.len() > LIBRARY_SEARCH_FROM, |d| d.child(div().p_2().pb_0().child(Input::new(&self.library_query).small().cleanable(true))))
+            .when(self.library.len() > LIBRARY_SEARCH_FROM, |d| d.child(div().pb_3().child(Input::new(&self.library_query).small().cleanable(true))))
             .child(
                 div()
                     .id("library-list")
                     .flex_1()
                     .overflow_y_scroll()
-                    .p_2()
+                    .pb_8()
                     .flex()
                     .flex_col()
-                    .gap_1()
                     .when(self.store.is_none(), |d| {
                         d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(tr("This is a sample, which is not saved, so there are no meetings to list here.", "这是示例，不会保存，这里没有会议可以列出。")))
                     })
@@ -4250,65 +4328,67 @@ impl Render for Workbench {
                             .chain(self.form.saved.templates.iter().enumerate().map(|(i, (n, t))| (n.clone(), t.clone(), Some(i))))
                             .collect();
                         let has_topics = self.live.graph.nodes.iter().any(|n| n.kind == Kind::Topic);
-                        d.child(manual_label("+", tr("New from a template", "从模板新建")).mt_0().mb_1()).children(own.into_iter().enumerate().map(|(i, (name, topics, saved))| {
-                            let shown = topics.join(" · ");
-                            div()
-                                .id(("template", i))
-                                .py_1()
-                                .px_2()
-                                .cursor_pointer()
-                                .border_b_1()
-                                .border_color(rgb(pal().line))
-                                .hover(|d| d.bg(rgb(pal().selected)))
-                                .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(topics.clone(), cx)))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .justify_between()
-                                        .child(div().text_sm().child(name))
-                                        .when_some(saved, |d, index| {
-                                            d.child(
-                                                div()
-                                                    .id(("forget-template", index))
-                                                    .px_1()
-                                                    .text_xs()
-                                                    .text_color(rgb(pal().faint))
-                                                    .hover(|d| d.text_color(rgb(pal().text)))
-                                                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                                    .on_click(cx.listener(move |this, _, _, cx| this.forget_template(index, cx)))
-                                                    .child("×"),
-                                            )
-                                        }),
-                                )
-                                .child(div().text_xs().text_color(rgb(pal().muted)).child(shown))
-                        }))
-                        .when(has_topics, |d| {
-                            d.child(
+                        let section = |name: &'static str| div().pt_2().pb_2().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).text_color(rgb(pal().muted)).child(name);
+                        // Templates as cards in a row: what a new meeting starts with, at a glance.
+                        let card = || div().w(px(220.)).h(px(78.)).p_3().flex().flex_col().gap_1().border_1().border_color(rgb(pal().line)).rounded(px(3.)).cursor_pointer();
+                        d.child(section(tr("Start from a template", "从模板新建")))
+                            .child(
                                 div()
-                                    .id("save-template")
-                                    .py_1()
-                                    .px_2()
-                                    .cursor_pointer()
-                                    .text_xs()
-                                    .text_color(rgb(pal().accent))
-                                    .hover(|d| d.text_color(rgb(pal().text)))
-                                    .on_click(cx.listener(|this, _, _, cx| this.save_template(cx)))
-                                    .child(tr("+ Keep this board's topics as a template", "+ 把这张板的话题存成模板")),
+                                    .flex()
+                                    .flex_wrap()
+                                    .gap_2()
+                                    .pb_5()
+                                    .children(own.into_iter().enumerate().map(|(i, (name, topics, saved))| {
+                                        let shown = topics.join(" · ");
+                                        card()
+                                            .id(("template", i))
+                                            .bg(rgb(pal().surface))
+                                            .hover(|d| d.border_color(rgb(pal().text)))
+                                            .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(topics.clone(), cx)))
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .justify_between()
+                                                    .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name))
+                                                    .when_some(saved, |d, index| {
+                                                        d.child(
+                                                            div()
+                                                                .id(("forget-template", index))
+                                                                .px_1()
+                                                                .text_xs()
+                                                                .text_color(rgb(pal().faint))
+                                                                .hover(|d| d.text_color(rgb(pal().text)))
+                                                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                                    cx.stop_propagation();
+                                                                    this.forget_template(index, cx)
+                                                                }))
+                                                                .child("×"),
+                                                        )
+                                                    }),
+                                            )
+                                            .child(div().text_xs().text_color(rgb(pal().muted)).overflow_hidden().whitespace_nowrap().text_ellipsis().child(shown))
+                                    }))
+                                    .when(has_topics, |d| {
+                                        d.child(
+                                            card()
+                                                .id("save-template")
+                                                .border_dashed()
+                                                .border_color(rgb(pal().faint))
+                                                .items_center()
+                                                .justify_center()
+                                                .text_xs()
+                                                .text_color(rgb(pal().muted))
+                                                .hover(|d| d.text_color(rgb(pal().text)).border_color(rgb(pal().text)))
+                                                .on_click(cx.listener(|this, _, _, cx| this.save_template(cx)))
+                                                .child(tr("+ Keep this board's topics as a template", "+ 把这张板的话题存成模板")),
+                                        )
+                                    }),
                             )
-                        })
-                        .child(manual_label("·", tr("Meetings", "会议")).mb_1())
+                            .child(section(tr("Meetings", "会议")).border_b_1().border_color(rgb(pal().line)))
                     })
                     .when(self.store.is_some() && self.library.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .p_2()
-                                .flex()
-                                .flex_col()
-                                .items_start()
-                                .gap_2()
-                                .child(div().text_sm().text_color(rgb(pal().faint)).child(tr("No meetings yet. A meeting is saved here as soon as something is said or typed.", "还没有会议。开始说话或输入后，会议会自动保存在这里。")))
-                                .child(button("library-new", tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))),
-                        )
+                        d.child(div().py_4().text_sm().text_color(rgb(pal().faint)).child(tr("No meetings yet. A meeting is saved here as soon as something is said or typed.", "还没有会议。开始说话或输入后，会议会自动保存在这里。")))
                     })
                     .when(!self.library.is_empty() && found.is_empty(), |d| {
                         d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(tr("No meeting has that in its name.", "没有名称里含这些字的会议。")))
@@ -4320,14 +4400,29 @@ impl Render for Workbench {
                             Some(error) => format!("{}{error}", tr("Could not be read, and the file is left as it is: ", "无法读取，文件保持原样：")),
                             None => format!("{} · {} {}", local_time(m.updated_at), m.lines, tr("lines", "句")),
                         };
+                        // A row of a list: the name, and when and how long on the right.
                         div()
                             .id(("meeting", i))
-                            .p_2()
-                            .rounded_md()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_4()
+                            .px_3()
+                            .py_3()
+                            .border_b_1()
+                            .border_color(rgb(pal().line))
                             .when(m.read_error.is_none(), |d| d.cursor_pointer().hover(|d| d.bg(rgb(pal().selected))))
                             .when(current, |d| d.bg(rgb(pal().selected)))
-                            .child(div().text_sm().overflow_hidden().whitespace_nowrap().when(m.read_error.is_some(), |d| d.text_color(rgb(pal().muted))).child(m.title.clone()))
-                            .child(div().text_xs().text_color(rgb(if m.read_error.is_some() { pal().danger } else { pal().faint })).child(detail))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .min_w_0()
+                                    .when(current, |d| d.child(div().size(px(6.)).flex_none().rounded_full().bg(rgb(pal().recording))))
+                                    .child(div().text_sm().overflow_hidden().whitespace_nowrap().when(m.read_error.is_some(), |d| d.text_color(rgb(pal().muted))).child(m.title.clone())),
+                            )
+                            .child(div().flex_none().max_w(px(360.)).overflow_hidden().whitespace_nowrap().font_family(theme::MONO).text_xs().text_color(rgb(if m.read_error.is_some() { pal().danger } else { pal().faint })).child(detail))
                             .when(m.read_error.is_none(), |d| d.on_click(cx.listener(move |this, _, _, cx| this.open_meeting(&id, cx))))
                     })),
             );
@@ -4355,27 +4450,35 @@ impl Render for Workbench {
             let installed = boardcast_models::installed(&model, &self.models);
             let active = !using_remote && current_model.as_ref().is_some_and(|p| p.ends_with(&model.file));
             let busy = self.download.is_some();
-            let name = format!(
-                "{} · {}{}",
-                model.label,
-                gigabytes(model.size),
-                if model.id == recommended { tr(" · recommended", " · 推荐") } else { "" },
-            );
+            let name = model.label.to_string();
+            let size = gigabytes(model.size);
+            let recommended = model.id == recommended;
             let (action, fetch) = (model.clone(), model.clone());
             div()
                 .flex()
                 .items_center()
                 .justify_between()
                 .gap_2()
+                .px_3()
+                .py_2()
+                .when(i > 0, |d| d.border_t_1().border_color(rgb(pal().line)))
                 // The name gives way, so a long one can never push its button out of reach.
                 .child(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .child(div().text_sm().child(name))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .child(div().text_sm().child(name))
+                                .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).child(size))
+                                .when(recommended, |d| d.child(div().px_1().text_xs().border_1().border_color(rgb(pal().recording)).text_color(rgb(pal().recording)).child(tr("recommended", "推荐")))),
+                        )
                         .when_some(model.note, |d, (en, zh)| d.child(div().text_xs().text_color(rgb(pal().muted)).child(tr(en, zh)))),
                 )
-                .when(active, |d| d.child(div().text_xs().text_color(rgb(pal().accent)).child(tr("In use", "使用中"))))
+                .when(active, |d| d.child(div().flex().items_center().gap_1().text_xs().child(div().size(px(6.)).rounded_full().bg(rgb(pal().recording))).child(tr("In use", "使用中"))))
                 .when(installed && !active, |d| {
                     d.child(button(("use-model", i), tr("Use", "使用")).on_click(cx.listener(move |this, _, _, cx| this.use_model(&action, cx))))
                 })
@@ -4385,259 +4488,375 @@ impl Render for Workbench {
         }).collect::<Vec<_>>();
         let forced = self.forced_backend;
         let key_hint = self.form.saved.key_hint();
-        let settings = div()
-            .id("settings-panel")
-            .flex_1()
-            .overflow_y_scroll()
-            .p_3()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(manual_label("01", tr("Board model", "板书模型")))
-            .when(self.needs_model, |d| {
-                d.child(div().text_sm().child(tr(
-                    "To draw the board, download a model that runs on this computer, or set up a remote one. Speech recognition is already included.",
-                    "要开始画板书，请下载一个在本机运行的模型，或者设置远程模型。语音识别已经内置。",
-                )))
-            })
-            .child(
-                div()
-                    .flex()
-                    .gap_1()
-                    .child(button("use-local", tr("On this computer", "本机模型")).when(!self.form.remote, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| {
+        let tab = self.settings_tab;
+        // One setting a row: its name and a line on what it does on the left, the control on the right.
+        let row = |title: &'static str, hint: Option<&'static str>| {
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_6()
+                .py_3()
+                .border_b_1()
+                .border_color(rgb(pal().line))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .child(div().text_sm().child(title))
+                        .when_some(hint, |d, hint| d.child(div().text_xs().text_color(rgb(pal().muted)).child(hint))),
+                )
+        };
+        // A few choices side by side, the chosen one filled.
+        let segmented = |buttons: Vec<Button>| div().flex().flex_none().p(px(2.)).gap(px(2.)).border_1().border_color(rgb(pal().line)).rounded(px(3.)).children(buttons);
+        let choice = |id: gpui_kit::ElementId, label: &'static str, on: bool| Button::new(id).small().label(label).map(|b| if on { b.primary() } else { b.ghost() });
+        let heading = |title: &'static str, intro: Option<&'static str>| {
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .pb_2()
+                .child(div().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(title))
+                .when_some(intro, |d, intro| d.child(div().text_sm().text_color(rgb(pal().muted)).child(intro)))
+        };
+        let page: gpui_kit::AnyElement = match tab {
+            SettingsTab::Model => div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(heading(
+                    tr("Board model", "板书模型"),
+                    Some(if self.needs_model {
+                        tr("To draw the board, download a model that runs on this computer, or set up a remote one. Speech recognition is already included.", "要开始画板书，请下载一个在本机运行的模型，或者设置远程模型。语音识别已经内置。")
+                    } else {
+                        tr("What turns what is said into the board.", "把说的话变成板书的模型。")
+                    }),
+                ))
+                .child(div().flex().child(segmented(vec![
+                    choice("use-local".into(), tr("On this computer", "本机"), !self.form.remote).on_click(cx.listener(|this, _, _, cx| {
                         this.form.remote = false;
                         cx.notify();
-                    })))
-                    .child(button("use-remote", tr("Remote", "远程模型")).when(self.form.remote, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| {
+                    })),
+                    choice("use-remote".into(), tr("Remote", "远程"), self.form.remote).on_click(cx.listener(|this, _, _, cx| {
                         this.form.remote = true;
                         cx.notify();
-                    }))),
-            )
-            .when(!self.form.remote, |d| d.children(local_models))
-            .when_some(progress_row, |d, (text, fraction)| {
-                d.child(div().text_xs().child(text))
-                    .child(div().h(px(6.)).w_full().rounded_sm().bg(rgb(pal().track)).child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(pal().accent))))
-                    .child(button("stop-download", tr("Pause", "暂停")).on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(download) = &this.download {
-                            download.cancel.store(true, Ordering::Relaxed);
-                        }
-                        cx.notify();
-                    })))
-            })
-            .when(self.form.remote, |d| {
-                d
-                // The usual service, filled in, so only the key is left to paste.
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Fill in", "一键填写")))
-                        .children(REMOTE_PRESETS.iter().enumerate().map(|(i, (name, base, model))| {
-                            button(("remote-preset", i), *name).on_click(cx.listener(move |this, _, window, cx| {
-                                this.form.base_url.update(cx, |s, cx| s.set_value(*base, window, cx));
-                                this.form.model.update(cx, |s, cx| s.set_value(*model, window, cx));
-                                this.form.key.update(cx, |s, cx| s.focus(window, cx));
+                    })),
+                ])))
+                .when(!self.form.remote, |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .border_1()
+                            .border_color(rgb(pal().line))
+                            .rounded(px(3.))
+                            .bg(rgb(pal().surface))
+                            .children(local_models),
+                    )
+                })
+                .when_some(progress_row, |d, (text, fraction)| {
+                    d.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .child(div().flex_1().flex().flex_col().gap_1().child(div().text_xs().child(text)).child(div().h(px(4.)).w_full().bg(rgb(pal().track)).child(div().h_full().w(gpui_kit::relative(fraction)).bg(rgb(pal().strong)))))
+                            .child(button("stop-download", tr("Pause", "暂停")).on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(download) = &this.download {
+                                    download.cancel.store(true, Ordering::Relaxed);
+                                }
                                 cx.notify();
-                            }))
-                        })),
-                )
-                .child(field(tr("API address", "接口地址"), &self.form.base_url))
-                .child(field(tr("Model", "模型"), &self.form.model))
-                .child(field(tr("API key", "API key"), &self.form.key))
-                .child(div().text_xs().text_color(rgb(pal().faint)).child(match key_hint {
-                    Some(hint) => format!("{} {hint}{}", tr("Saved key:", "已保存的 key："), tr(". Leave empty to keep it.", "。留空则继续使用。")),
-                    None => tr("No key saved. It is stored only on this computer.", "还没有保存 key。key 只存在这台电脑上。").to_string(),
-                }))
-                .child(
-                    div()
-                        .flex()
-                        .gap_2()
-                        .child(button("save-settings", tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
-                        .child(button("test-settings", tr("Test", "测试连接")).on_click(cx.listener(|this, _, _, cx| this.test_settings(cx)))),
-                )
-            })
-            // Leaving the remote model takes effect on saving, like choosing it does.
-            .when(!self.form.remote && self.form.saved.enabled, |d| {
-                d.child(button("save-local", tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
-            })
-            .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
-            .when(forced, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
-            .when(local_only, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))))
-            .child(manual_label("02", tr("Speech", "语音")))
-            .child(div().text_sm().child(tr("Listen to", "收音来源")))
-            .child({
-                let chosen = self.form.saved.input.clone();
-                let rows = std::iter::once((String::new(), tr("The system's default input", "系统默认输入").to_string()))
-                    .chain(self.inputs.iter().map(|i| (i.id.clone(), i.name.clone())))
-                    .chain((!chosen.is_empty() && !self.inputs.iter().any(|i| i.id == chosen)).then(|| (chosen.clone(), tr("The chosen input, not connected now", "选择的设备（现在没有连接）").to_string())));
-                div().flex().flex_col().gap_1().children(rows.enumerate().map(|(i, (id, name))| {
-                    let on = id == chosen;
-                    div()
-                        .id(("input", i))
-                        .px_2()
-                        .py_1()
-                        .rounded_md()
-                        .cursor_pointer()
-                        .text_sm()
-                        .overflow_hidden()
-                        .whitespace_nowrap()
-                        .hover(|d| d.bg(rgb(pal().selected)))
-                        .when(on, |d| d.bg(rgb(pal().selected)).font_weight(gpui_kit::FontWeight::SEMIBOLD))
-                        .child(name)
-                        .on_click(cx.listener(move |this, _, _, cx| this.choose_input(id.clone(), cx)))
-                }))
-            })
-            .when(cfg!(target_os = "linux"), |d| {
-                d.child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                    "To hear the other side of an online meeting, choose the \"Monitor of\" input for the speakers or headphones it plays through. One input is heard at a time.",
-                    "要收线上会议里对方的声音，选播放它的扬声器或耳机对应的 “Monitor of” 输入。一次只收一个来源。",
-                )))
-            })
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(div().flex_1().min_w_0().text_sm().child(tr("Tell speakers apart by voice", "按声音区分说话人")))
-                    .child(Switch::new("diarize").checked(self.form.saved.diarize).accessibility_label(tr("Tell speakers apart by voice", "按声音区分说话人")).on_click(cx.listener(|this, checked: &bool, _, cx| {
-                        this.form.saved.diarize = *checked;
-                        if let Err(e) = this.form.saved.save() {
-                            this.form.note = Some(format!("{e:#}"));
-                        }
-                        cx.notify();
-                    }))),
-            )
-            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                "New voices are named A, B, C in order. Click a speaker to give them a real name, and the same voice keeps it. Voice data stays in the meeting file on this device. Very short sentences go to whoever spoke last.",
-                "新的声音按 A、B、C 命名。点说话人可以改成真名，同一个声音之后都用这个名字。声纹只保存在本机的会议文件里。很短的句子会算给上一个说话的人。",
-            )))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(div().flex_1().min_w_0().text_sm().child(tr("Turn to the page being talked about", "讲到别的页时自动翻过去")))
-                    .child(Switch::new("turn-pages").checked(self.form.saved.turn_pages).accessibility_label(tr("Turn to the page being talked about", "讲到别的页时自动翻过去")).on_click(cx.listener(|this, checked: &bool, _, cx| {
-                        this.form.saved.turn_pages = *checked;
-                        if let Err(e) = this.form.saved.save() {
-                            this.form.note = Some(format!("{e:#}"));
-                        }
-                        cx.notify();
-                    }))),
-            )
-            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                "With pages imported, saying \u{201c}go to page 5\u{201d} always turns to it. When what is said is about another page, it is offered at the board's corner; with this on, the board turns by itself.",
-                "导入了多页材料时，说「翻到第5页」总会翻过去。讲到另一页的内容时，画布角落会给出建议；打开这项后会直接翻过去。",
-            )))
-            .child(manual_label("03", tr("Glossary", "术语表")))
-            .child(Input::new(&self.form.glossary).small())
-            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                "Names as they should be written, apart by semicolons. Recognition is corrected to them, and the board writes them so. Chinese is matched by sound; for other ways a name is heard, add them after an equals sign: API = A P I, エーピーアイ.",
-                "名字应该怎么写，用分号隔开。识别结果会改成这些写法，板书也照着写。中文按读音匹配；其他听错的写法写在等号后面，例如：API = A P I, エーピーアイ。",
-            )))
-            .when(self.speech_helper.is_some(), |d| {
-                let system = self.form.saved.system_speech;
-                let language = self.form.saved.speech_language.clone();
-                let languages = [("auto", tr("System language", "跟随系统")), ("ja-JP", "日本語"), ("en-US", "English"), ("zh-CN", "中文")];
-                d.child(div().text_sm().child(tr("Recognize speech with", "语音识别")))
+                            }))),
+                    )
+                })
+                .when(self.form.remote, |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Fill in", "一键填写")))
+                            .children(REMOTE_PRESETS.iter().enumerate().map(|(i, (name, base, model))| {
+                                button(("remote-preset", i), *name).on_click(cx.listener(move |this, _, window, cx| {
+                                    this.form.base_url.update(cx, |s, cx| s.set_value(*base, window, cx));
+                                    this.form.model.update(cx, |s, cx| s.set_value(*model, window, cx));
+                                    this.form.key.update(cx, |s, cx| s.focus(window, cx));
+                                    cx.notify();
+                                }))
+                            })),
+                    )
+                    .child(field(tr("API address", "接口地址"), &self.form.base_url))
+                    .child(field(tr("Model", "模型"), &self.form.model))
+                    .child(field(tr("API key", "API key"), &self.form.key))
+                    .child(div().text_xs().text_color(rgb(pal().faint)).child(match key_hint {
+                        Some(hint) => format!("{} {hint}{}", tr("Saved key:", "已保存的 key："), tr(". Leave empty to keep it.", "。留空则继续使用。")),
+                        None => tr("No key saved. It is stored only on this computer.", "还没有保存 key。key 只存在这台电脑上。").to_string(),
+                    }))
                     .child(
                         div()
                             .flex()
                             .gap_2()
-                            .child(button("speech-models", tr("Speech models", "语音模型")).when(!system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, cx))))
-                            .child(button("speech-apple", tr("Apple", "Apple")).when(system, |b| b.primary()).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, cx)))),
+                            .child(Button::new("save-settings").small().primary().label(tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
+                            .child(button("test-settings", tr("Test", "测试连接")).on_click(cx.listener(|this, _, _, cx| this.test_settings(cx)))),
                     )
-                    .when(system, |d| {
-                        d.child(div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
-                            button(gpui_kit::ElementId::Name(format!("speech-language-{id}").into()), label)
-                                .when(language == id, |b| b.primary())
-                                .on_click(cx.listener(move |this, _, _, cx| this.choose_speech(true, Some(id), cx)))
-                        })))
-                        .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                            "Apple's recognizer hears one language at a time. On macOS 26 it uses SpeechAnalyzer; on older systems, or where that can't be used, the older recognizer.",
-                            "Apple 的识别一次只听一种语言。macOS 26 上用 SpeechAnalyzer，更早的系统或用不了时改用旧的识别器。",
+                })
+                // Leaving the remote model takes effect on saving, like choosing it does.
+                .when(!self.form.remote && self.form.saved.enabled, |d| {
+                    d.child(div().flex().child(Button::new("save-local").small().primary().label(tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx)))))
+                })
+                .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
+                .when(forced, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。"))))
+                .when(local_only, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。"))))
+                .into_any_element(),
+            SettingsTab::Speech => {
+                let chosen = self.form.saved.input.clone();
+                let inputs = std::iter::once((String::new(), tr("The system's default input", "系统默认输入").to_string()))
+                    .chain(self.inputs.iter().map(|i| (i.id.clone(), i.name.clone())))
+                    .chain((!chosen.is_empty() && !self.inputs.iter().any(|i| i.id == chosen)).then(|| (chosen.clone(), tr("The chosen input, not connected now", "选择的设备（现在没有连接）").to_string())));
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(heading(tr("Speech", "语音"), Some(tr("What is heard, and how it is written down.", "听什么，以及怎么写下来。"))))
+                    .child(div().pt_3().pb_1().text_sm().child(tr("Listen to", "收音来源")))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .border_1()
+                            .border_color(rgb(pal().line))
+                            .rounded(px(3.))
+                            .bg(rgb(pal().surface))
+                            .children(inputs.enumerate().map(|(i, (id, name))| {
+                                let on = id == chosen;
+                                div()
+                                    .id(("input", i))
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .px_3()
+                                    .py_2()
+                                    .when(i > 0, |d| d.border_t_1().border_color(rgb(pal().line)))
+                                    .cursor_pointer()
+                                    .text_sm()
+                                    .hover(|d| d.bg(rgb(pal().selected)))
+                                    .child(div().size(px(8.)).flex_none().rounded_full().when(on, |d| d.bg(rgb(pal().recording))).when(!on, |d| d.border_1().border_color(rgb(pal().faint))))
+                                    .child(div().min_w_0().overflow_hidden().whitespace_nowrap().child(name))
+                                    .on_click(cx.listener(move |this, _, _, cx| this.choose_input(id.clone(), cx)))
+                            })),
+                    )
+                    .when(cfg!(target_os = "linux"), |d| {
+                        d.child(div().pt_1().text_xs().text_color(rgb(pal().muted)).child(tr(
+                            "For the other side of an online meeting, choose the \"Monitor of\" input for the speakers it plays through.",
+                            "要收线上会议里对方的声音，选播放它的扬声器对应的 “Monitor of” 输入。",
                         )))
                     })
-            })
-            .when_some(self.hearing.clone(), |d, with| d.child(div().text_xs().text_color(rgb(pal().muted)).child(format!("{} {with}", tr("Hearing with", "当前识别：")))))
-            .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Language", "语言")))
-            .child({
-                let chosen = self.form.saved.interface_language.clone();
-                let languages = [("auto", tr("Follow the system", "跟随系统")), ("en", "English"), ("zh", "中文")];
-                div().flex().flex_wrap().gap_2().children(languages.into_iter().map(|(id, label)| {
-                    button(gpui_kit::ElementId::Name(format!("interface-language-{id}").into()), label)
-                        .when(chosen == id, |b| b.primary())
-                        .on_click(cx.listener(move |this, _, _, cx| this.choose_language(id, cx)))
-                }))
-            })
-            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                "The interface changes at once; a few hints in text fields change on the next start. The board and summary follow the meeting's own language.",
-                "界面立即切换；输入框里的少数提示文字下次启动后切换。板书和摘要跟随会议本身的语言。",
-            )))
-            .child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Appearance", "外观")))
-            .child({
-                let chosen = self.form.saved.appearance.clone();
-                let looks = [("auto", tr("Follow the system", "跟随系统")), ("dark", tr("Dark", "深色")), ("light", tr("Light", "浅色"))];
-                div().flex().flex_wrap().gap_2().children(looks.into_iter().map(|(id, label)| {
-                    button(gpui_kit::ElementId::Name(format!("appearance-{id}").into()), label)
-                        .when(chosen == id, |b| b.primary())
-                        .on_click(cx.listener(move |this, _, _, cx| this.choose_appearance(id, cx)))
-                }))
-            })
-            // Before there is a model, choosing one is the only thing to do here.
-            .when(!self.needs_model, |d| {
-                d.child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Updates", "更新")))
-                .child(div().text_xs().text_color(rgb(pal().muted)).child(format!("{} {}", tr("Version", "版本"), boardcast_update::VERSION)))
-                .child(match &self.update {
-                _ if self.prefix.is_none() => div().text_sm().child(tr("Updates apply to installed copies.", "只有安装版可以更新。")).into_any_element(),
-                UpdateState::Idle => button("check-update", tr("Check for updates", "检查更新")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
-                UpdateState::Checking => div().text_sm().child(tr("Checking…", "正在检查…")).into_any_element(),
-                UpdateState::UpToDate => div().flex().items_center().gap_2().child(div().text_sm().child(tr("Up to date.", "已是最新版本。"))).child(button("check-update", tr("Check again", "再次检查")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); }))).into_any_element(),
-                UpdateState::Available(release) => div().flex().flex_col().gap_2()
-                    .child(div().text_sm().child(format!("{} {} · {}", tr("New version", "新版本"), release.version, gigabytes(release.size))))
-                    .when(!release.notes.is_empty(), |d| d.child(div().text_xs().text_color(rgb(pal().muted)).child(release.notes.clone())))
-                    .child(button("install-update", tr("Download and install", "下载并安装")).on_click(cx.listener(|this, _, _, cx| this.install_update(cx))))
-                    .into_any_element(),
-                UpdateState::Installing { release, progress } => {
-                    let text = progress.as_ref().map_or(tr("Starting…", "正在开始…").to_string(), |p| {
-                        if p.done >= p.total { tr("Verifying and installing…", "正在校验并安装…").to_string() } else { format!("{} / {}", gigabytes(p.done), gigabytes(p.total)) }
-                    });
-                    let fraction = progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
-                    div().flex().flex_col().gap_1()
-                        .child(div().text_xs().child(format!("{} {text}", release.version)))
-                        .child(div().h(px(6.)).w_full().rounded_sm().bg(rgb(pal().track)).child(div().h_full().rounded_sm().w(gpui_kit::relative(fraction)).bg(rgb(pal().accent))))
-                        .into_any_element()
-                }
-                UpdateState::ReadyToRestart(release) => div().flex().flex_col().gap_2()
-                    .child(div().text_sm().child(format!("{} {}", release.version, tr("is installed. Your meeting keeps running until you restart.", "已安装。重启之前，当前会议不受影响。"))))
-                    .child(button("restart-update", tr("Save and restart", "保存并重启")).on_click(cx.listener(|this, _, _, cx| this.restart(cx))))
-                    .into_any_element(),
-                UpdateState::Failed(error) => div().flex().flex_col().gap_2()
-                    .child(div().text_sm().text_color(rgb(pal().danger)).child(error.clone()))
-                    .child(button("check-update", tr("Try again", "重试")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })))
-                    .into_any_element(),
-            })
-            })
-            // Metal keeps its own shaders, so there is nothing here for a Mac to manage.
-            .when(self.panel == Panel::Settings && !self.needs_model && cfg!(not(target_os = "macos")), |d| {
-                let size = dir_size(&shader_dir(&self.models));
-                d.child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Graphics cache", "显卡缓存")))
-                    .child(div().text_xs().text_color(rgb(pal().muted)).child(format!(
-                        "{} {:.1} MB. {}",
-                        tr("Shaders compiled for this computer take", "为这台电脑编译的着色器占用"),
-                        size as f64 / 1e6,
-                        tr("Deleting them is safe, and the next start compiles them again, which takes about half a minute.", "删除是安全的，下次启动模型时会重新编译，大约需要半分钟。"),
+                    .child(row(tr("Tell speakers apart by voice", "按声音区分说话人"), Some(tr("New voices are named A, B, C. Voice data stays in the meeting file on this computer.", "新的声音按 A、B、C 命名，声纹只保存在本机的会议文件里。"))).child(
+                        Switch::new("diarize").checked(self.form.saved.diarize).accessibility_label(tr("Tell speakers apart by voice", "按声音区分说话人")).on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.form.saved.diarize = *checked;
+                            if let Err(e) = this.form.saved.save() {
+                                this.form.note = Some(format!("{e:#}"));
+                            }
+                            cx.notify();
+                        })),
+                    ))
+                    .child(row(tr("Turn to the page being talked about", "讲到别的页时自动翻过去"), Some(tr("Otherwise the board's corner offers the page.", "关闭时只在画布角落给出建议。"))).child(
+                        Switch::new("turn-pages").checked(self.form.saved.turn_pages).accessibility_label(tr("Turn to the page being talked about", "讲到别的页时自动翻过去")).on_click(cx.listener(|this, checked: &bool, _, cx| {
+                            this.form.saved.turn_pages = *checked;
+                            if let Err(e) = this.form.saved.save() {
+                                this.form.note = Some(format!("{e:#}"));
+                            }
+                            cx.notify();
+                        })),
+                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .py_3()
+                            .border_b_1()
+                            .border_color(rgb(pal().line))
+                            .child(div().text_sm().child(tr("Glossary", "术语表")))
+                            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
+                                "Names as they should be written, apart by semicolons; ways they are misheard go after an equals sign: API = A P I.",
+                                "名字应该怎么写，用分号隔开；听错的写法写在等号后面，例如：API = A P I。",
+                            )))
+                            .child(div().pt_1().child(Input::new(&self.form.glossary).small())),
+                    )
+                    .when(self.speech_helper.is_some(), |d| {
+                        let system = self.form.saved.system_speech;
+                        let language = self.form.saved.speech_language.clone();
+                        let languages = [("auto", tr("System", "跟随系统")), ("ja-JP", "日本語"), ("en-US", "English"), ("zh-CN", "中文")];
+                        d.child(row(tr("Recognize speech with", "语音识别"), None).child(segmented(vec![
+                            choice("speech-models".into(), tr("Speech models", "语音模型"), !system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, cx))),
+                            choice("speech-apple".into(), "Apple", system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, cx))),
+                        ])))
+                        .when(system, |d| {
+                            d.child(row(tr("Language heard", "识别语言"), Some(tr("Apple's recognizer hears one language at a time.", "Apple 的识别一次只听一种语言。"))).child(segmented(
+                                languages.into_iter().map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("speech-language-{id}").into()), label, language == id).on_click(cx.listener(move |this, _, _, cx| this.choose_speech(true, Some(id), cx)))).collect(),
+                            )))
+                        })
+                    })
+                    .when_some(self.hearing.clone(), |d, with| d.child(div().pt_2().text_xs().text_color(rgb(pal().faint)).child(format!("{} {with}", tr("Hearing with", "当前识别：")))))
+                    .into_any_element()
+            }
+            SettingsTab::General => {
+                let language = self.form.saved.interface_language.clone();
+                let look = self.form.saved.appearance.clone();
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(heading(tr("General", "通用"), None))
+                    .child(row(tr("Language", "界面语言"), Some(tr("The board and summary follow the meeting's own language.", "板书和摘要跟随会议本身的语言。"))).child(segmented(
+                        [("auto", tr("System", "跟随系统")), ("en", "English"), ("zh", "中文")]
+                            .into_iter()
+                            .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("interface-language-{id}").into()), label, language == id).on_click(cx.listener(move |this, _, _, cx| this.choose_language(id, cx))))
+                            .collect(),
                     )))
-                    .child(div().flex().child(button("clear-shaders", tr("Delete", "删除")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
-                        if let Err(e) = std::fs::remove_dir_all(shader_dir(&this.models)) {
-                            this.form.note = Some(format!("{e:#}"));
-                        }
-                        cx.notify();
-                    }))))
-            });
+                    .child(row(tr("Appearance", "外观"), None).child(segmented(
+                        [("auto", tr("System", "跟随系统")), ("light", tr("Light", "浅色")), ("dark", tr("Dark", "深色"))]
+                            .into_iter()
+                            .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("appearance-{id}").into()), label, look == id).on_click(cx.listener(move |this, _, _, cx| this.choose_appearance(id, cx))))
+                            .collect(),
+                    )))
+                    .into_any_element()
+            }
+            SettingsTab::About => {
+                let update: gpui_kit::AnyElement = match &self.update {
+                    _ if self.prefix.is_none() => div().text_xs().text_color(rgb(pal().muted)).child(tr("Installed copies update.", "只有安装版可以更新。")).into_any_element(),
+                    UpdateState::Idle => button("check-update", tr("Check for updates", "检查更新")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
+                    UpdateState::Checking => div().text_sm().text_color(rgb(pal().muted)).child(tr("Checking…", "正在检查…")).into_any_element(),
+                    UpdateState::UpToDate => div().flex().items_center().gap_2().child(div().text_sm().text_color(rgb(pal().muted)).child(tr("Up to date", "已是最新"))).child(button("check-update", tr("Check again", "再次检查")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); }))).into_any_element(),
+                    UpdateState::Available(release) => Button::new("install-update").small().primary().label(format!("{} {} · {}", tr("Install", "安装"), release.version, gigabytes(release.size))).on_click(cx.listener(|this, _, _, cx| this.install_update(cx))).into_any_element(),
+                    UpdateState::Installing { release, progress } => {
+                        let text = progress.as_ref().map_or(tr("Starting…", "正在开始…").to_string(), |p| {
+                            if p.done >= p.total { tr("Verifying and installing…", "正在校验并安装…").to_string() } else { format!("{} / {}", gigabytes(p.done), gigabytes(p.total)) }
+                        });
+                        let fraction = progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
+                        div().w(px(200.)).flex().flex_col().gap_1()
+                            .child(div().text_xs().child(format!("{} {text}", release.version)))
+                            .child(div().h(px(4.)).w_full().bg(rgb(pal().track)).child(div().h_full().w(gpui_kit::relative(fraction)).bg(rgb(pal().strong))))
+                            .into_any_element()
+                    }
+                    UpdateState::ReadyToRestart(_) => Button::new("restart-update").small().primary().label(tr("Save and restart", "保存并重启")).on_click(cx.listener(|this, _, _, cx| this.restart(cx))).into_any_element(),
+                    UpdateState::Failed(_) => button("check-update", tr("Try again", "重试")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
+                };
+                let update_hint: Option<String> = match &self.update {
+                    UpdateState::Available(release) if !release.notes.is_empty() => Some(release.notes.clone()),
+                    UpdateState::ReadyToRestart(release) => Some(format!("{} {}", release.version, tr("is installed. Your meeting keeps running until you restart.", "已安装。重启之前，当前会议不受影响。"))),
+                    UpdateState::Failed(error) => Some(error.clone()),
+                    _ => None,
+                };
+                let failed = matches!(self.update, UpdateState::Failed(_));
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(heading(tr("About", "关于"), None))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_6()
+                            .py_3()
+                            .border_b_1()
+                            .border_color(rgb(pal().line))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(2.))
+                                    .child(div().text_sm().child(format!("boardcast {}", boardcast_update::VERSION)))
+                                    .when_some(update_hint, |d, hint| d.child(div().text_xs().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(hint))),
+                            )
+                            .child(update),
+                    )
+                    // Metal keeps its own shaders, so there is nothing here for a Mac to manage.
+                    .when(cfg!(not(target_os = "macos")), |d| {
+                        let size = dir_size(&shader_dir(&self.models));
+                        d.child(row(tr("Graphics cache", "显卡缓存"), Some(tr("Safe to delete; the model compiles it again in about half a minute.", "可以放心删除，下次启动模型时约半分钟重新编译。"))).child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_3()
+                                .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().muted)).child(format!("{:.1} MB", size as f64 / 1e6)))
+                                .child(button("clear-shaders", tr("Delete", "删除")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
+                                    if let Err(e) = std::fs::remove_dir_all(shader_dir(&this.models)) {
+                                        this.form.note = Some(format!("{e:#}"));
+                                    }
+                                    cx.notify();
+                                }))),
+                        ))
+                    })
+                    .into_any_element()
+            }
+        };
+        // Before there is a model, choosing one is the only thing to do here.
+        let tabs: Vec<(SettingsTab, &'static str)> = [
+            (SettingsTab::Model, tr("Board model", "板书模型")),
+            (SettingsTab::Speech, tr("Speech", "语音")),
+            (SettingsTab::General, tr("General", "通用")),
+            (SettingsTab::About, tr("About", "关于")),
+        ]
+        .into_iter()
+        .filter(|(t, _)| !self.needs_model || matches!(t, SettingsTab::Model | SettingsTab::General))
+        .collect();
+        let settings = div()
+            .id("settings-page")
+            .occlude()
+            .absolute()
+            .size_full()
+            .flex()
+            .bg(rgb(pal().paper))
+            .child(
+                div()
+                    .w(px(200.))
+                    .flex_none()
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .p_3()
+                    .pt_6()
+                    .border_r_1()
+                    .border_color(rgb(pal().line))
+                    .bg(rgb(pal().surface))
+                    .child(div().px_2().pb_3().text_xs().font_family(theme::MONO).text_color(rgb(pal().faint)).child(tr("settings", "设置")))
+                    .children(tabs.into_iter().map(|(t, label)| {
+                        let on = t == tab;
+                        div()
+                            .id(label)
+                            .px_2()
+                            .py(px(6.))
+                            .cursor_pointer()
+                            .text_sm()
+                            .rounded(px(2.))
+                            .when(on, |d| d.bg(rgb(pal().selected)).font_weight(gpui_kit::FontWeight::SEMIBOLD))
+                            .when(!on, |d| d.text_color(rgb(pal().muted)).hover(|d| d.text_color(rgb(pal().text))))
+                            .child(label)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.settings_tab = t;
+                                cx.notify();
+                            }))
+                    })),
+            )
+            .child(
+                div()
+                    .id("settings-page-body")
+                    .flex_1()
+                    .h_full()
+                    .overflow_y_scroll()
+                    .child(div().max_w(px(640.)).px_10().pt_6().pb_10().child(page)),
+            )
+            .child(div().absolute().top(px(10.)).right(px(10.)).child(icon_button("close-settings", "x", tr("Close (Esc)", "关闭（Esc）")).on_click(cx.listener(|this, _, _, cx| {
+                this.panel = Panel::Transcript;
+                cx.notify();
+            }))));
         let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
         let import_panel = (self.panel == Panel::Import).then(|| self.import_panel(cx));
@@ -4662,11 +4881,11 @@ impl Render for Workbench {
                     .justify_between()
                     .pl_4()
                     .pr_1()
-                    .h(px(52.))
+                    .h(px(40.))
                     .flex_none()
                     .border_b_1()
                     .border_color(rgb(pal().line))
-                    .child(div().text_xl().font_weight(gpui_kit::FontWeight::LIGHT).child(match self.panel {
+                    .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(match side_panel {
                         Panel::Transcript => tr("Transcript", "转写"),
                         Panel::Library => tr("Meetings", "会议"),
                         Panel::Summary => tr("Summary", "摘要"),
@@ -4675,16 +4894,15 @@ impl Render for Workbench {
                         Panel::Speakers => tr("Speakers", "说话人"),
                         Panel::Settings => tr("Settings", "设置"),
                     }))
-                    .child(icon_button("close-panel", "x", if self.panel == Panel::Transcript { tr("Hide the transcript", "收起转写") } else { tr("Back to the transcript (Esc)", "回到转写（Esc）") }).on_click(cx.listener(|this, _, _, cx| {
-                        if this.panel == Panel::Transcript {
-                            this.transcript_open = false;
-                        } else {
+                    // The title bar's button opens and closes the transcript; the other panels close back to it.
+                    .when(side_panel != Panel::Transcript, |d| {
+                        d.child(icon_button("close-panel", "x", tr("Back to the transcript (Esc)", "回到转写（Esc）")).on_click(cx.listener(|this, _, _, cx| {
                             this.panel = Panel::Transcript;
-                        }
-                        cx.notify();
-                    }))),
+                            cx.notify();
+                        })))
+                    }),
             )
-            .when(self.panel == Panel::Transcript, |d| {
+            .when(side_panel == Panel::Transcript, |d| {
                 d.child(transcript).when(editable, |d| {
                     d.child(
                         div()
@@ -4712,12 +4930,103 @@ impl Render for Workbench {
                     )
                 })
             })
-            .when(self.panel == Panel::Library, |d| d.child(library))
             .when_some(summary_panel, |d, panel| d.child(panel))
-            .when_some(export_panel, |d, panel| d.child(panel))
-            .when_some(import_panel, |d, panel| d.child(panel))
-            .when_some(speakers_panel, |d, panel| d.child(panel))
-            .when(self.panel == Panel::Settings, |d| d.child(settings));
+            .when_some(speakers_panel, |d, panel| d.child(panel));
+        // A dialog for what is done in one go, over a dimmed window; clicking outside closes it.
+        let dialog = |title: &'static str, body: gpui_kit::Stateful<gpui_kit::Div>, cx: &mut Context<Self>| {
+            let mut veil: Hsla = rgb(pal().strong).into();
+            veil.a = 0.18;
+            div()
+                .id("dialog-veil")
+                .occlude()
+                .absolute()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(veil)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.panel = Panel::Transcript;
+                    cx.notify();
+                }))
+                .child(
+                    div()
+                        .id("dialog")
+                        .occlude()
+                        .w(px(520.))
+                        .max_h(gpui_kit::relative(0.82))
+                        .flex()
+                        .flex_col()
+                        .bg(rgb(pal().surface))
+                        .border_1()
+                        .border_color(rgb(pal().line))
+                        .rounded(px(3.))
+                        .shadow_lg()
+                        .on_click(|_, _, cx| cx.stop_propagation())
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .pl_5()
+                                .pr_2()
+                                .pt_3()
+                                .pb_1()
+                                .child(div().text_lg().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(title))
+                                .child(icon_button("close-dialog", "x", tr("Close (Esc)", "关闭（Esc）")).on_click(cx.listener(|this, _, _, cx| {
+                                    this.panel = Panel::Transcript;
+                                    cx.notify();
+                                }))),
+                        )
+                        .child(body.px_5().pb_5().pt_2()),
+                )
+        };
+        let overlay: Option<gpui_kit::AnyElement> = match self.panel {
+            Panel::Export => export_panel.map(|body| dialog(tr("Export", "导出"), body, cx).into_any_element()),
+            Panel::Import => import_panel.map(|body| dialog(tr("Import", "导入"), body, cx).into_any_element()),
+            Panel::Library => Some(
+                div()
+                    .id("library-page")
+                    .occlude()
+                    .absolute()
+                    .size_full()
+                    .bg(rgb(pal().paper))
+                    .flex()
+                    .justify_center()
+                    .child(
+                        div()
+                            .w_full()
+                            .max_w(px(760.))
+                            .h_full()
+                            .flex()
+                            .flex_col()
+                            .px_10()
+                            .pt_8()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .pb_3()
+                                    .child(div().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Meetings", "会议")))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .when(self.store.is_some(), |d| d.child(Button::new("library-page-new").small().primary().label(tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
+                                            .child(icon_button("close-library", "x", tr("Close (Esc)", "关闭（Esc）")).on_click(cx.listener(|this, _, _, cx| {
+                                                this.panel = Panel::Transcript;
+                                                cx.notify();
+                                            }))),
+                                    ),
+                            )
+                            .child(library),
+                    )
+                    .into_any_element(),
+            ),
+            _ => None,
+        };
         let preparing_page = self.preparing.as_ref().filter(|p| p.showing()).map(|p| {
             let fraction = p.fraction();
             let (title, detail) = if p.first_time {
@@ -4803,6 +5112,8 @@ impl Render for Workbench {
             .flex()
             .child(main)
             .when(side_shown, |d| d.child(side))
+            .when(self.panel == Panel::Settings, |d| d.child(settings))
+            .when_some(overlay, |d, overlay| d.child(overlay))
             .when_some(preparing_page, |d, page| d.child(page));
         div()
             .id("workbench")
@@ -5006,6 +5317,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 editing: false,
                 dpr: 1.0,
                 zoomed_at: Instant::now(),
+                touched: Instant::now(),
                 generation: 0,
                 rebuilding: None,
                 drag: None,
@@ -5158,6 +5470,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     last_change: Instant::now(),
                     last_attempt: None,
                     panel: start_panel,
+                    settings_tab: SettingsTab::Model,
                     library: vec![],
                     inputs: vec![],
                     library_query,

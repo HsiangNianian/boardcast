@@ -196,7 +196,7 @@ impl Board {
             0 => (strike(x, y + FONT * 0.5, w, &mut r), INK_STYLE, 1.0),
             1 => (vec![line([x - 2.0, y + FONT + 5.0], [x + w + 2.0, y + FONT + 3.0], &mut r, 0.02)], RED, 1.0),
             2 => (vec![circle_mark(x + w / 2.0, y + FONT / 2.0, w / 2.0 + 8.0, FONT * 0.72, &mut r)], RED, 1.0),
-            3 => (vec![star(x + w + 12.0, y + FONT * 0.45, 10.0)], RED, 1.0),
+            3 => (vec![star(x + w + 12.0, y + FONT * 0.45, 10.0, &mut r)], RED, 1.0),
             4 => (vec![line([x - 2.0, y + FONT / 2.0], [x + w + 2.0, y + FONT / 2.0], &mut r, 0.004)], HIGHLIGHT, 10.0),
             5 => (rough_box(x - 6.0, y - 5.0, w + 12.0, FONT + 10.0, &mut r), INK_STYLE, 1.0),
             _ => match self.previous {

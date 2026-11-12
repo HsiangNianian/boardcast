@@ -71,5 +71,7 @@ sample = {
     'credit': 'Recording and transcript: AMI Meeting Corpus, meeting IB4001, CC BY 4.0',
     'lines': lines,
 }
-json.dump(sample, open(out_path, 'w'), ensure_ascii=False, indent=1)
+with open(out_path, 'w') as out:
+    json.dump(sample, out, ensure_ascii=False, indent=1)
+    out.write('\n')
 print(len(lines), 'lines;', sum(1 for l in lines if l['ops']), 'with replies; first reply at', next(l['end'] for l in lines if l['ops']))

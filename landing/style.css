@@ -335,7 +335,8 @@ section.block { padding-top: 140px; }
 .card { position: relative; background: var(--bg); padding: 24px; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
 .card .pict { position: absolute; top: 22px; right: 22px; width: 40px; height: 40px; }
 .card .k { position: absolute; top: 24px; left: 24px; }
-.card h4 { font-size: 22px; font-weight: 500; letter-spacing: .01em; line-height: 1; text-transform: uppercase; }
+/* A card's name is a step below the section headings: written as a word, not in capitals. */
+.card h4 { font-size: 22px; font-weight: 500; letter-spacing: -.01em; line-height: 1; }
 .card p { margin-top: 10px; font-size: 14px; line-height: 1.6; color: var(--grey); max-width: 30em; }
 .card .art { position: absolute; inset: 56px 24px 110px; display: grid; place-items: center; }
 .w4 { grid-column: span 4; } .w2 { grid-column: span 2; }
@@ -415,7 +416,7 @@ section.block { padding-top: 140px; }
 .dots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--hair); border: 1px solid var(--hair); }
 .dot-card { background: var(--bg); padding: 24px; height: 380px; display: flex; flex-direction: column; justify-content: flex-end; position: relative; }
 .dot-card canvas { position: absolute; left: 0; right: 0; top: 0; height: 250px; width: 100%; }
-.dot-card h4 { font-size: 20px; font-weight: 500; letter-spacing: .01em; text-transform: uppercase; }
+.dot-card h4 { font-size: 20px; font-weight: 500; letter-spacing: -.01em; }
 .dot-card p { margin-top: 8px; font-size: 13px; color: var(--grey); line-height: 1.6; }
 
 .specs { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--fg); }
@@ -427,7 +428,8 @@ section.block { padding-top: 140px; }
 .dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--hair); border: 1px solid var(--hair); margin-top: 48px; }
 .dl a { position: relative; background: var(--bg); padding: 36px 32px 28px; display: flex; flex-direction: column; transition: background .2s, color .2s; }
 .dl-top { display: grid; gap: 14px; justify-items: start; padding-right: 72px; }
-.dl b { font-size: clamp(30px, 3.4vw, 50px); font-weight: 500; letter-spacing: -.01em; line-height: 1; text-transform: uppercase; }
+/* Systems keep their own names: macOS, Windows, Linux. */
+.dl b { font-size: clamp(30px, 3.4vw, 50px); font-weight: 500; letter-spacing: -.02em; line-height: 1; }
 .dl .here { display: none; color: var(--accent); }
 .dl a.this .here { display: inline; }
 .dl a.this { box-shadow: inset 0 3px 0 var(--accent); }

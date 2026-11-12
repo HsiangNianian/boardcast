@@ -21,6 +21,7 @@ boardcast-models = { path = "crates/models" }
 boardcast-export = { path = "crates/export" }
 boardcast-import = { path = "crates/import" }
 boardcast-update = { path = "crates/update" }
+boardcast-search = { path = "crates/search" }
 
 [profile.dev]
 opt-level = 1

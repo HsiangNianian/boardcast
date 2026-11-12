@@ -1,0 +1,749 @@
+[
+  {
+    "id": "q001",
+    "meeting": "zh-property-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "小区门口对陌生车辆放行太松",
+    "gold": [
+      "进入咱们小区。监管力度不够"
+    ]
+  },
+  {
+    "id": "q002",
+    "meeting": "zh-property-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "给业主的车发出入凭证的办法",
+    "gold": [
+      "每辆车嗯有一个登记牌儿",
+      "进去的时候嗯要领牌儿"
+    ]
+  },
+  {
+    "id": "q003",
+    "meeting": "zh-property-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "一户只有一个停车位却有好几台车",
+    "gold": [
+      "他就一个车位，他家两辆车三辆车"
+    ]
+  },
+  {
+    "id": "q004",
+    "meeting": "zh-property-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "业主把自家车位转租给外人",
+    "gold": [
+      "您可以对外去把这个车位租出去"
+    ]
+  },
+  {
+    "id": "q005",
+    "meeting": "zh-property-meeting",
+    "lang": "zh",
+    "kind": "keyword",
+    "q": "外来车辆不允许过夜",
+    "gold": [
+      "是临时车，不允许过夜",
+      "外来车就是不允许过夜"
+    ]
+  },
+  {
+    "id": "q006",
+    "meeting": "zh-property-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "公共停车位按到达先后分配",
+    "gold": [
+      "谁先买，谁先停，早来早停"
+    ]
+  },
+  {
+    "id": "q007",
+    "meeting": "zh-property-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "私人买断的停车位自己装地锁",
+    "gold": [
+      "在他自己地方加把锁对吧"
+    ]
+  },
+  {
+    "id": "q008",
+    "meeting": "zh-property-meeting",
+    "lang": "en",
+    "kind": "cross",
+    "q": "should cars staying overnight be charged a fee",
+    "gold": [
+      "商量一下是否要收取一部分的这个"
+    ]
+  },
+  {
+    "id": "q009",
+    "meeting": "zh-property-meeting",
+    "lang": "en",
+    "kind": "cross",
+    "q": "why parking used to be so tight in the complex",
+    "gold": [
+      "对本小区的车辆造成了一定的困扰"
+    ]
+  },
+  {
+    "id": "q010",
+    "meeting": "zh-education-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "孩子入园时生病着凉要上报",
+    "gold": [
+      "孩子们来的时候儿是否有感冒的情况"
+    ]
+  },
+  {
+    "id": "q011",
+    "meeting": "zh-education-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "请在读孩子的家庭帮忙介绍新生源",
+    "gold": [
+      "我建议就是说。以老带新吧"
+    ]
+  },
+  {
+    "id": "q012",
+    "meeting": "zh-education-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "到居民楼附近发招生传单",
+    "gold": [
+      "去一些小区门口儿做一些宣传单页儿"
+    ]
+  },
+  {
+    "id": "q013",
+    "meeting": "zh-education-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "搞开放日让家长领孩子来看园所",
+    "gold": [
+      "让一些有意向的家长带着孩子来幼儿园进行参观"
+    ]
+  },
+  {
+    "id": "q014",
+    "meeting": "zh-education-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "让家长在微信上转发宣传",
+    "gold": [
+      "通过每个家长嗯那个发一个朋友圈儿"
+    ]
+  },
+  {
+    "id": "q015",
+    "meeting": "zh-education-meeting",
+    "lang": "zh",
+    "kind": "keyword",
+    "q": "入园年龄卡在两周儿到五周儿",
+    "gold": [
+      "两周儿至嗯那个两周儿到五周儿",
+      "现在不行放到二两周儿吧"
+    ]
+  },
+  {
+    "id": "q016",
+    "meeting": "zh-education-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "之前招进来的娃年纪偏小不好带",
+    "gold": [
+      "去年有一种现象就孩子太小啦"
+    ]
+  },
+  {
+    "id": "q017",
+    "meeting": "zh-education-meeting",
+    "lang": "en",
+    "kind": "cross",
+    "q": "what happens to kids whose parents pick them up late",
+    "gold": [
+      "统一一个教室，然后给他们准备一些零食啦"
+    ]
+  },
+  {
+    "id": "q018",
+    "meeting": "zh-education-meeting",
+    "lang": "en",
+    "kind": "cross",
+    "q": "how much time is left before the Spring Festival for enrollment",
+    "gold": [
+      "离过年不到两个月的时间了"
+    ]
+  },
+  {
+    "id": "q019",
+    "meeting": "zh-manufacturing-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "有些领导只在上级检查时才抓安全",
+    "gold": [
+      "上边儿来检查了。就重视一把"
+    ]
+  },
+  {
+    "id": "q020",
+    "meeting": "zh-manufacturing-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "规章写好了却没人执行",
+    "gold": [
+      "仅仅停留在。文字上墙上表面上"
+    ]
+  },
+  {
+    "id": "q021",
+    "meeting": "zh-manufacturing-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "培训流于形式学完啥也不记得",
+    "gold": [
+      "走过场儿形同虚设",
+      "培训完了一问培训什么不知道"
+    ]
+  },
+  {
+    "id": "q022",
+    "meeting": "zh-manufacturing-meeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "做安全横幅标语需要公司拨钱",
+    "gold": [
+      "这个安全经费上面儿可能会有一些不足"
+    ]
+  },
+  {
+    "id": "q023",
+    "meeting": "zh-manufacturing-meeting",
+    "lang": "zh",
+    "kind": "keyword",
+    "q": "河北省二号令双控规定",
+    "gold": [
+      "河北省二号令简称双控规定"
+    ]
+  },
+  {
+    "id": "q024",
+    "meeting": "zh-manufacturing-meeting",
+    "lang": "zh",
+    "kind": "keyword",
+    "q": "风险等级红橙黄蓝四色",
+    "gold": [
+      "分别用红，橙，黄，蓝四种颜色表示"
+    ]
+  },
+  {
+    "id": "q025",
+    "meeting": "zh-manufacturing-meeting",
+    "lang": "zh",
+    "kind": "keyword",
+    "q": "LEC法里D值怎么算",
+    "gold": [
+      "D等于L 乘以E乘以C"
+    ]
+  },
+  {
+    "id": "q026",
+    "meeting": "zh-manufacturing-meeting",
+    "lang": "en",
+    "kind": "cross",
+    "q": "storing oil and other flammable goods in the warehouse",
+    "gold": [
+      "易燃呃易爆物品比如说油品类的东西"
+    ]
+  },
+  {
+    "id": "q027",
+    "meeting": "zh-manufacturing-meeting",
+    "lang": "en",
+    "kind": "cross",
+    "q": "smoking ban for visitors in the storeroom",
+    "gold": [
+      "禁止外来吸嗯闲杂人员在仓库吸烟"
+    ]
+  },
+  {
+    "id": "q028",
+    "meeting": "zh-alimeeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "新手机主要卖给哪些用户",
+    "gold": [
+      "确认一下咱们这个产品的目标"
+    ]
+  },
+  {
+    "id": "q029",
+    "meeting": "zh-alimeeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "鲜艳的配色老人不会选",
+    "gold": [
+      "有蓝色的黄色你要老年人，他不可能用这种颜色"
+    ]
+  },
+  {
+    "id": "q030",
+    "meeting": "zh-alimeeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "老人手机通常是儿女代买的",
+    "gold": [
+      "一般都是子女给家长去买"
+    ]
+  },
+  {
+    "id": "q031",
+    "meeting": "zh-alimeeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "给老年人版本调大字号和音量",
+    "gold": [
+      "字体或者声音稍微大一点"
+    ]
+  },
+  {
+    "id": "q032",
+    "meeting": "zh-alimeeting",
+    "lang": "zh",
+    "kind": "keyword",
+    "q": "双十一直播带货抢市场份额",
+    "gold": [
+      "比较热门的直播带货",
+      "多占领一些市场份额"
+    ]
+  },
+  {
+    "id": "q033",
+    "meeting": "zh-alimeeting",
+    "lang": "zh",
+    "kind": "paraphrase",
+    "q": "线下扫码推广是不是过时了",
+    "gold": [
+      "地推地推太太老套了"
+    ]
+  },
+  {
+    "id": "q034",
+    "meeting": "zh-alimeeting",
+    "lang": "en",
+    "kind": "cross",
+    "q": "bundling the phone with mobile carrier offers",
+    "gold": [
+      "捆绑着一些什么移动啊这些运营商"
+    ]
+  },
+  {
+    "id": "q035",
+    "meeting": "zh-alimeeting",
+    "lang": "en",
+    "kind": "cross",
+    "q": "target users aged 18 to 45",
+    "gold": [
+      "十八到四十五之岁的中青年人人群"
+    ]
+  },
+  {
+    "id": "q036",
+    "meeting": "en-research-meeting",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "why have a room to escape from your desk",
+    "gold": [
+      "somewhere to get out of your office"
+    ]
+  },
+  {
+    "id": "q037",
+    "meeting": "en-research-meeting",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "collect rarely used books from everyone's shelves",
+    "gold": [
+      "books that aren't frequently used"
+    ]
+  },
+  {
+    "id": "q038",
+    "meeting": "en-research-meeting",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "short catch-ups tend to overrun",
+    "gold": [
+      "quick meetings always get longer"
+    ]
+  },
+  {
+    "id": "q039",
+    "meeting": "en-research-meeting",
+    "lang": "en",
+    "kind": "keyword",
+    "q": "Gisella in the three person office",
+    "gold": [
+      "assign Gisella into this three person"
+    ]
+  },
+  {
+    "id": "q040",
+    "meeting": "en-research-meeting",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "where do the copier and network printer go",
+    "gold": [
+      "printer goes next to the mailboxes"
+    ]
+  },
+  {
+    "id": "q041",
+    "meeting": "en-research-meeting",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "secretary's desk is noisy because of calls",
+    "gold": [
+      "you always have the phone ringing"
+    ]
+  },
+  {
+    "id": "q042",
+    "meeting": "en-research-meeting",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "short-term interns won't object to a bad office",
+    "gold": [
+      "not really in a position to complain"
+    ]
+  },
+  {
+    "id": "q043",
+    "meeting": "en-research-meeting",
+    "lang": "en",
+    "kind": "keyword",
+    "q": "paper archives taking up cupboard space",
+    "gold": [
+      "she got lots of paper archives and files"
+    ]
+  },
+  {
+    "id": "q044",
+    "meeting": "en-research-meeting",
+    "lang": "zh",
+    "kind": "cross",
+    "q": "办公室朝向要考虑日出日落",
+    "gold": [
+      "sunrise and sunset is quite also a good"
+    ]
+  },
+  {
+    "id": "q045",
+    "meeting": "en-research-meeting",
+    "lang": "zh",
+    "kind": "cross",
+    "q": "在日内瓦总分不清哪边是北",
+    "gold": [
+      "where's north in Geneva"
+    ]
+  },
+  {
+    "id": "q046",
+    "meeting": "en-semiconductor-call",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "is the new fab on schedule to open",
+    "gold": [
+      "come online in early twenty twenty three"
+    ]
+  },
+  {
+    "id": "q047",
+    "meeting": "en-semiconductor-call",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "why they stopped reporting orders versus shipments",
+    "gold": [
+      "disclosing that anymore",
+      "backlog isn't quite as meaningful"
+    ]
+  },
+  {
+    "id": "q048",
+    "meeting": "en-semiconductor-call",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "share of sales going straight to customers",
+    "gold": [
+      "about, uh, two thirds of our revenues",
+      "that was about 65% of revenues"
+    ]
+  },
+  {
+    "id": "q049",
+    "meeting": "en-semiconductor-call",
+    "lang": "en",
+    "kind": "keyword",
+    "q": "seventy five million cost people not depreciation",
+    "gold": [
+      "million is, uh, mainly people"
+    ]
+  },
+  {
+    "id": "q050",
+    "meeting": "en-semiconductor-call",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "which expense line absorbs plant costs before output begins",
+    "gold": [
+      "restructuring charges slash other line"
+    ]
+  },
+  {
+    "id": "q051",
+    "meeting": "en-semiconductor-call",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "customers rushing orders on fewer parts now",
+    "gold": [
+      "upsides were much, much more narrow"
+    ]
+  },
+  {
+    "id": "q052",
+    "meeting": "en-semiconductor-call",
+    "lang": "en",
+    "kind": "keyword",
+    "q": "inventory a hundred thirty to a hundred ninety days",
+    "gold": [
+      "hundred thirty to a hundred ninety days"
+    ]
+  },
+  {
+    "id": "q053",
+    "meeting": "en-semiconductor-call",
+    "lang": "en",
+    "kind": "keyword",
+    "q": "Stacy Rasgon Bernstein question",
+    "gold": [
+      "Stacy Rasgon of Bernstein Research"
+    ]
+  },
+  {
+    "id": "q054",
+    "meeting": "en-semiconductor-call",
+    "lang": "zh",
+    "kind": "cross",
+    "q": "客户缺的不只是芯片还有别的零件",
+    "gold": [
+      "it is not even semiconductors"
+    ]
+  },
+  {
+    "id": "q055",
+    "meeting": "en-semiconductor-call",
+    "lang": "zh",
+    "kind": "cross",
+    "q": "行业下行时还会继续投入研发吗",
+    "gold": [
+      "we will continue investing in r and d"
+    ]
+  },
+  {
+    "id": "q056",
+    "meeting": "en-ami",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "is it safe to leave machines in the corridor",
+    "gold": [
+      "physically attached to the wall"
+    ]
+  },
+  {
+    "id": "q057",
+    "meeting": "en-ami",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "how many printers will the group share",
+    "gold": [
+      "one printer for fifteen people"
+    ]
+  },
+  {
+    "id": "q058",
+    "meeting": "en-ami",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "discuss broad ideas first and decide seating later today",
+    "gold": [
+      "come back later in the day"
+    ]
+  },
+  {
+    "id": "q059",
+    "meeting": "en-ami",
+    "lang": "en",
+    "kind": "keyword",
+    "q": "Martin and David split time with EPFL",
+    "gold": [
+      "So Martin and David um are half the time"
+    ]
+  },
+  {
+    "id": "q060",
+    "meeting": "en-ami",
+    "lang": "en",
+    "kind": "paraphrase",
+    "q": "who we pitch the office plan to",
+    "gold": [
+      "for the university administrators"
+    ]
+  },
+  {
+    "id": "q061",
+    "meeting": "en-ami",
+    "lang": "zh",
+    "kind": "cross",
+    "q": "秘书是不是单独一间办公室",
+    "gold": [
+      "Gisella is having one of the one person"
+    ]
+  },
+  {
+    "id": "q062",
+    "meeting": "en-ami",
+    "lang": "zh",
+    "kind": "cross",
+    "q": "传真机放在谁的房间",
+    "gold": [
+      "makes sense to put the fax in there"
+    ]
+  },
+  {
+    "id": "q063",
+    "meeting": "en-ami",
+    "lang": "zh",
+    "kind": "cross",
+    "q": "平面图上四分之一圆代表门",
+    "gold": [
+      "quater circles are doors"
+    ]
+  },
+  {
+    "id": "q064",
+    "meeting": "ja-health-committee",
+    "lang": "ja",
+    "kind": "paraphrase",
+    "q": "感染症対策でオンライン開催にした件",
+    "gold": [
+      "Web会議での開催とさせていただいております"
+    ]
+  },
+  {
+    "id": "q065",
+    "meeting": "ja-health-committee",
+    "lang": "ja",
+    "kind": "keyword",
+    "q": "出席委員の人数と定足数",
+    "gold": [
+      "８名のご出席をいただいており"
+    ]
+  },
+  {
+    "id": "q066",
+    "meeting": "ja-health-committee",
+    "lang": "ja",
+    "kind": "paraphrase",
+    "q": "会議の途中で抜ける委員",
+    "gold": [
+      "所用により、途中でご退席されます"
+    ]
+  },
+  {
+    "id": "q067",
+    "meeting": "ja-health-committee",
+    "lang": "ja",
+    "kind": "paraphrase",
+    "q": "傍聴できない被害者のために録音を出す",
+    "gold": [
+      "会議の音声を公開することといたしております"
+    ]
+  },
+  {
+    "id": "q068",
+    "meeting": "ja-health-committee",
+    "lang": "ja",
+    "kind": "paraphrase",
+    "q": "スケジュールを延ばして会合を一回増やす提案",
+    "gold": [
+      "当初の予定を変更して第６回を追加し"
+    ]
+  },
+  {
+    "id": "q069",
+    "meeting": "ja-health-committee",
+    "lang": "ja",
+    "kind": "paraphrase",
+    "q": "患者側が求めた給付の増額と新しい年金",
+    "gold": [
+      "療養手当の額の引上げや遺族年金の新設を求める"
+    ]
+  },
+  {
+    "id": "q070",
+    "meeting": "ja-health-committee",
+    "lang": "ja",
+    "kind": "keyword",
+    "q": "多様な責任に基づく制度の新設",
+    "gold": [
+      "多様な責任に基づく制度を新たに構築すべき"
+    ]
+  },
+  {
+    "id": "q071",
+    "meeting": "ja-health-committee",
+    "lang": "ja",
+    "kind": "paraphrase",
+    "q": "自己負担の調査から手当は足りないと言えるか",
+    "gold": [
+      "療養手当の額が不足しているということは"
+    ]
+  },
+  {
+    "id": "q072",
+    "meeting": "ja-health-committee",
+    "lang": "ja",
+    "kind": "keyword",
+    "q": "建設アスベスト訴訟の最高裁判決",
+    "gold": [
+      "建設アスベスト訴訟の最高裁判決"
+    ]
+  },
+  {
+    "id": "q073",
+    "meeting": "ja-health-committee",
+    "lang": "en",
+    "kind": "cross",
+    "q": "which years were ruled unlawful for indoor construction workers",
+    "gold": [
+      "違法期間が昭和50年から平成16年まで"
+    ]
+  },
+  {
+    "id": "q074",
+    "meeting": "ja-health-committee",
+    "lang": "zh",
+    "kind": "cross",
+    "q": "户外作业人员的国家责任被否定了吗",
+    "gold": [
+      "屋外作業従事者に関する責任は否定されている"
+    ]
+  }
+]

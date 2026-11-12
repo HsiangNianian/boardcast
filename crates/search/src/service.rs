@@ -9,14 +9,15 @@
 use crate::chunk::{self, Chunk, Said, Source};
 use crate::embed::{cut, Embedder};
 use crate::index::{fingerprint, Index};
-use crate::{rank, DIMS, FAMILY, MODEL, WORD_WEIGHT};
+use crate::{rank, DIMS, FAMILY, MIN_SCORE, MODEL, WITHIN_BEST, WORD_WEIGHT};
 use anyhow::{bail, Context, Result};
 use boardcast_meetings::{Live, Store};
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Child;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
+use std::collections::VecDeque;
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::time::{Duration, Instant, SystemTime};
 
 /// The most passages shown from any one meeting.
@@ -191,8 +192,12 @@ impl Worker {
         }
         // A few passages from each meeting at most, so one long meeting does not crowd out the rest.
         let mut per_meeting: HashMap<&str, usize> = HashMap::new();
-        Ok(rank(&indexes, &query, text, WORD_WEIGHT, usize::MAX)
+        let hits = rank(&indexes, &query, text, WORD_WEIGHT, usize::MAX);
+        // Nothing that matches only weakly, by itself or next to what matched best: no answer beats a wrong one.
+        let best = hits.first().map_or(0.0, |h| h.score);
+        Ok(hits
             .into_iter()
+            .filter(|h| h.score >= MIN_SCORE && h.score >= best - WITHIN_BEST)
             .filter(|h| {
                 let seen = per_meeting.entry(h.meeting).or_default();
                 *seen += 1;
@@ -212,47 +217,79 @@ pub fn start(data: &Path, model: PathBuf, spawn: Spawn) -> (Sender<Job>, Receive
     let mut worker = Worker { store: Store::new(data.to_path_buf()), folder: data.join("search"), model, spawn, server: None, cache: HashMap::new() };
     std::thread::Builder::new()
         .name("meeting search".into())
-        .spawn(move || loop {
-            let job = match inbox.recv_timeout(Duration::from_secs(15)) {
-                Ok(job) => job,
-                Err(RecvTimeoutError::Timeout) => {
-                    if worker.server.as_ref().is_some_and(|s| s.last_used.elapsed() > IDLE) {
-                        worker.server = None;
-                    }
-                    continue;
-                }
-                Err(RecvTimeoutError::Disconnected) => return,
-            };
-            let reply = match job {
-                Job::Index(meetings) => {
-                    let total = meetings.len();
-                    for (done, id) in meetings.iter().enumerate() {
-                        let _ = outbox.send(Event::Indexing { done, total });
-                        match worker.index(id) {
-                            Ok(Some((passages, embedded))) => {
-                                let _ = outbox.send(Event::Indexed { meeting: id.clone(), passages, embedded });
+        .spawn(move || {
+            // Meetings waiting to be indexed, and how far through this round it is. A question asked
+            // meanwhile is answered between two meetings, not after all of them.
+            let mut todo: VecDeque<String> = VecDeque::new();
+            let (mut done, mut total) = (0, 0);
+            loop {
+                let job = if todo.is_empty() {
+                    match inbox.recv_timeout(Duration::from_secs(15)) {
+                        Ok(job) => Some(job),
+                        Err(RecvTimeoutError::Timeout) => {
+                            if worker.server.as_ref().is_some_and(|s| s.last_used.elapsed() > IDLE) {
+                                worker.server = None;
                             }
-                            Ok(None) => {}
-                            Err(e) => {
-                                let _ = outbox.send(Event::Failed(format!("{e:#}")));
-                                break;
+                            continue;
+                        }
+                        Err(RecvTimeoutError::Disconnected) => return,
+                    }
+                } else {
+                    match inbox.try_recv() {
+                        Ok(job) => Some(job),
+                        Err(TryRecvError::Empty) => None,
+                        Err(TryRecvError::Disconnected) => return,
+                    }
+                };
+                let reply = match job {
+                    Some(Job::Index(meetings)) => {
+                        for id in meetings {
+                            if !todo.contains(&id) {
+                                todo.push_back(id);
+                                total += 1;
                             }
                         }
+                        continue;
                     }
-                    Event::Indexing { done: total, total }
+                    Some(Job::Find { text, meetings, limit, ticket }) => match worker.find(&text, &meetings, limit) {
+                        Ok(hits) => Event::Found { ticket, hits },
+                        Err(e) => Event::Failed(format!("{e:#}")),
+                    },
+                    Some(Job::Forget(id)) => {
+                        let _ = std::fs::remove_file(worker.path(&id));
+                        worker.cache.remove(&id);
+                        todo.retain(|t| *t != id);
+                        continue;
+                    }
+                    None => {
+                        let id = todo.pop_front().expect("there is a meeting to index");
+                        let _ = outbox.send(Event::Indexing { done, total });
+                        let result = worker.index(&id);
+                        done += 1;
+                        let reply = match result {
+                            Ok(Some((passages, embedded))) => Some(Event::Indexed { meeting: id, passages, embedded }),
+                            Ok(None) => None,
+                            Err(e) => {
+                                todo.clear();
+                                Some(Event::Failed(format!("{e:#}")))
+                            }
+                        };
+                        if let Some(reply) = reply {
+                            if outbox.send(reply).is_err() {
+                                return;
+                            }
+                        }
+                        if !todo.is_empty() {
+                            continue;
+                        }
+                        let finished = Event::Indexing { done: total, total };
+                        (done, total) = (0, 0);
+                        finished
+                    }
+                };
+                if outbox.send(reply).is_err() {
+                    return;
                 }
-                Job::Find { text, meetings, limit, ticket } => match worker.find(&text, &meetings, limit) {
-                    Ok(hits) => Event::Found { ticket, hits },
-                    Err(e) => Event::Failed(format!("{e:#}")),
-                },
-                Job::Forget(id) => {
-                    let _ = std::fs::remove_file(worker.path(&id));
-                    worker.cache.remove(&id);
-                    continue;
-                }
-            };
-            if outbox.send(reply).is_err() {
-                return;
             }
         })
         .expect("a thread for meeting search");

@@ -13,7 +13,7 @@ use std::path::Path;
 
 const MAGIC: &[u8; 8] = b"BCSRCH01";
 /// Bumped whenever passages are cut differently, so every index is made again.
-pub const CHUNKING: u32 = 1;
+pub const CHUNKING: u32 = 2;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Header {

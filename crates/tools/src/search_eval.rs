@@ -159,6 +159,51 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 "recall5_by_kind": by_kind.iter().map(|(k, (h, a))| (k.clone(), json!(h / a))).collect::<serde_json::Map<_, _>>(), "misses_at5": misses }));
         }
     }
+    // Where to stop showing hits: the scores of right answers against the best score from meetings that
+    // hold no answer, at the size and weight the app uses.
+    {
+        let dims = boardcast_search::DIMS;
+        let indexes: Vec<(String, Index)> = passages.iter().map(|(id, chunks, vectors)| (id.clone(), Index::new(String::new(), dims, chunks.clone(), vectors.iter().map(|v| cut(v, dims)).collect()))).collect();
+        let (mut right, mut elsewhere) = (vec![], vec![]);
+        // Each query's best score, with its right answer's and the best unrelated one's.
+        let mut trios: Vec<(f32, Option<f32>, Option<f32>)> = vec![];
+        for (q, qv) in queries.iter().zip(&query_vectors) {
+            let meeting = q["meeting"].as_str().unwrap_or_default();
+            let gold: Vec<&str> = q["gold"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+            let hits = rank(&indexes, &cut(qv, dims), q["q"].as_str().unwrap_or_default(), boardcast_search::WORD_WEIGHT, usize::MAX);
+            if let Some(h) = hits.iter().find(|h| h.meeting == meeting && gold.iter().any(|g| h.chunk.text.contains(g))) {
+                right.push(h.score);
+            }
+            if let Some(h) = hits.iter().find(|h| h.meeting != meeting) {
+                elsewhere.push(h.score);
+            }
+            let r = hits.iter().find(|h| h.meeting == meeting && gold.iter().any(|g| h.chunk.text.contains(g))).map(|h| h.score);
+            let u = hits.iter().find(|h| h.meeting != meeting).map(|h| h.score);
+            trios.push((hits.first().map_or(0.0, |h| h.score), r, u));
+        }
+        for floor in [0.28f32, 0.30, 0.32] {
+            for gap in [0.06f32, 0.08, 0.10, 0.12, 0.15] {
+                let shown = |s: f32, best: f32| s >= floor && s >= best - gap;
+                let kept = trios.iter().filter(|(b, r, _)| r.is_some_and(|r| shown(r, *b))).count() as f64 / trios.iter().filter(|t| t.1.is_some()).count() as f64;
+                let leaked = trios.iter().filter(|(b, _, u)| u.is_some_and(|u| shown(u, *b))).count() as f64 / trios.len() as f64;
+                println!("  floor {floor:.2} and within {gap:.2} of the best: keeps {:.0}% of right answers, shows the best unrelated for {:.0}% of queries", kept * 100.0, leaked * 100.0);
+            }
+        }
+        let at = |v: &mut Vec<f32>, p: f64| {
+            v.sort_by(f32::total_cmp);
+            v[((v.len() - 1) as f64 * p).round() as usize]
+        };
+        println!(
+            "scores at {dims}: right answers p05 {:.3} p10 {:.3} p25 {:.3} p50 {:.3}; best from other meetings p50 {:.3} p75 {:.3} p90 {:.3} p95 {:.3} max {:.3}",
+            at(&mut right, 0.05), at(&mut right, 0.10), at(&mut right, 0.25), at(&mut right, 0.5),
+            at(&mut elsewhere, 0.5), at(&mut elsewhere, 0.75), at(&mut elsewhere, 0.9), at(&mut elsewhere, 0.95), at(&mut elsewhere, 1.0)
+        );
+        for cut_at in [0.30f32, 0.35, 0.40, 0.45, 0.50] {
+            let kept = right.iter().filter(|s| **s >= cut_at).count() as f64 / right.len() as f64;
+            let shown = elsewhere.iter().filter(|s| **s >= cut_at).count() as f64 / elsewhere.len() as f64;
+            println!("  threshold {cut_at:.2}: keeps {:.0}% of right answers, lets through {:.0}% of best unrelated", kept * 100.0, shown * 100.0);
+        }
+    }
     if let Some(out) = out {
         let report = json!({ "model": model.file_name().map(|f| f.to_string_lossy().to_string()), "family": format!("{family:?}"), "meetings": meetings, "passages": count,
             "characters": characters, "index_seconds": index_secs, "query_ms": query_ms, "dimensions": full, "results": results });

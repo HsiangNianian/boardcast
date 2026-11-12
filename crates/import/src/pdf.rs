@@ -40,6 +40,8 @@ pub struct PdfImport {
     pub unread: usize,
     /// Pages with no text layer.
     pub scanned: usize,
+    /// Which of `pages` those are, so their pictures can be read for text by another means.
+    pub scanned_pages: Vec<usize>,
     /// It looks like a paper, so the first board has an outline of its sections.
     pub paper: bool,
     /// Pages of nothing but references, which get no board.
@@ -235,6 +237,7 @@ pub fn import_pdf(bytes: &[u8], library: &Path, english: bool, cancel: &AtomicBo
     let mut title = document.metadata().get(PdfDocumentMetadataTagType::Title).map(|t| t.value().trim().to_string()).filter(|t| !t.is_empty());
     let mut pages: Vec<NewPage> = vec![];
     let (mut scanned, mut refs_skipped, mut captions, mut read) = (0, 0, 0, 0);
+    let mut scanned_pages = vec![];
     let mut state = PaperState::default();
     let mut headings: Vec<String> = vec![];
     let mut reference_text: Vec<String> = vec![];
@@ -276,6 +279,7 @@ pub fn import_pdf(bytes: &[u8], library: &Path, english: bool, cancel: &AtomicBo
         // No text layer: where anything is drawn counts as one block, so it can still be pointed at.
         if areas.is_empty() {
             scanned += 1;
+            scanned_pages.push(pages.len());
             if let Some(b) = ink_box(&rgba, pw, ph) {
                 let k = WIDTH / pw as f64;
                 let name = if english { format!("Figure on page {number}") } else { format!("第 {number} 页的图") };
@@ -306,7 +310,7 @@ pub fn import_pdf(bytes: &[u8], library: &Path, english: bool, cancel: &AtomicBo
     if let Some(first) = pages.first_mut().filter(|_| !references.is_empty()) {
         first.graph.extra.insert("references".into(), serde_json::json!(references));
     }
-    Ok(PdfImport { pages, total, unread: total - read, scanned, paper, refs_skipped, references, title: title.map(|t| utf16_prefix(&t, 80)) })
+    Ok(PdfImport { pages, total, unread: total - read, scanned, scanned_pages, paper, refs_skipped, references, title: title.map(|t| utf16_prefix(&t, 80)) })
 }
 
 static ENTRY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|\s)(?:\[(\d{1,3})\]|(\d{1,3})\.)\s+").expect("valid"));
@@ -497,7 +501,7 @@ mod tests {
             return;
         }
         let imported = run(&pdf(600, 800, 0, None, &[vec![]])).unwrap();
-        assert_eq!((imported.pages.len(), imported.scanned), (1, 1));
+        assert_eq!((imported.pages.len(), imported.scanned, imported.scanned_pages.clone()), (1, 1, vec![0]));
         assert!(imported.pages[0].graph.nodes.is_empty());
     }
 

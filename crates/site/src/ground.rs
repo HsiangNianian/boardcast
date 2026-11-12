@@ -36,6 +36,9 @@ void main() {
   vec2 uv = at / res.y;
   float n = fbm(uv * 2.4 + vec2(t * 0.018, -t * 0.011));
   n = smoothstep(0.38, 0.82, n) * 0.7;
+  // The faintest levels of an ordered dither are a few lone dots in a regular lattice, which reads as a
+  // dot screen rather than as tone; below this the ground is left empty instead.
+  n *= step(0.09, n);
   float on = step(bayer8(c), n);
   vec2 f = mod(gl_FragCoord.xy, cell);
   float dotted = step(f.x, cell * 0.67) * step(f.y, cell * 0.67);
@@ -81,10 +84,6 @@ pub fn init() {
     let Some(prog) = program(&gl) else { return };
     let Some(body) = doc().body() else { return };
     let _ = body.prepend_with_node_1(&canvas);
-    // The stylesheet's still dots give way once the ground draws.
-    if let Some(root) = doc().document_element() {
-        let _ = root.class_list().add_1("ground-on");
-    }
     gl.use_program(Some(&prog));
     let buffer = gl.create_buffer();
     gl.bind_buffer(Gl::ARRAY_BUFFER, buffer.as_ref());

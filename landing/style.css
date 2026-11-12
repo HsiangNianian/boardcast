@@ -49,26 +49,20 @@
   --dim: #8a8a8a;
   --faint: #555;
   --hair: #262626;
-  --link: #9fb4ff;
+  --link: var(--grey);
   --accent: #ff5a36;
   --hero-teal: #248e8c80;
   --hero-coral: #e3583b94;
   --hero-gold: #dba62c94;
-  --hero-dot: #f2f2f22b;
-  /* The first sheet's dots, without its colour, under the whole page. */
-  --page-dot: color-mix(in srgb, var(--fg) 11%, transparent);
   --sans: 'DM Sans Variable', system-ui, sans-serif;
   --mono: 'JetBrains Mono Variable', ui-monospace, monospace;
   --hand: 'Excalifont', cursive;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-/* The dot screen stays put while the page scrolls over it, so every layer of dots lines up. */
-html { background: radial-gradient(circle, var(--page-dot) .7px, transparent 1px) 0 0 / 5px 5px fixed, var(--bg); }
-/* The ground: grey dots dithering a slowly drifting field, drawn by crates/site/src/ground.rs. While it
-   draws, the still dots above give way to it, and so do the first sheet's coloured ones. */
+html { background: var(--bg); }
+/* The ground: grey dots dithering a slowly drifting field, drawn by crates/site/src/ground.rs. It is the
+   page's only dot screen. */
 .ground { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
-html.ground-on { background: var(--bg); }
-html.ground-on .hero::after { display: none; }
 body { color: var(--fg); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
 a { color: inherit; text-decoration: none; }
 ::selection { background: var(--fg); color: var(--bg); }
@@ -127,7 +121,7 @@ nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 
 
 /* ———————————————— hero: said first, then written with a pen ———————————————— */
 .hero { position: relative; isolation: isolate; }
-.hero::before, .hero::after { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.hero::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; }
 /* The colour fades out at the top and bottom of the sheet rather than ending on the page's own colour,
    so the ground runs on under it into the next sheet without a seam. */
 .hero::before { background:
@@ -135,7 +129,6 @@ nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 
   radial-gradient(ellipse at 100% 65%, var(--hero-gold), transparent 60%),
   radial-gradient(ellipse at 65% 30%, var(--hero-coral), transparent 75%);
   mask-image: linear-gradient(180deg, transparent, #000 22%, #000 70%, transparent); }
-.hero::after { background: radial-gradient(circle, var(--hero-dot) .7px, transparent 1px) 0 0 / 5px 5px fixed; mask-image: radial-gradient(ellipse at 65% 40%, #000, transparent 75%); }
 .hero .wrap { position: relative; }
 .hero-intro { display: grid; grid-template-columns: 1.55fr 1fr; gap: 60px; align-items: center; padding: 32px 0 28px; }
 .hero-writing { position: relative; min-width: 0; }
@@ -179,9 +172,9 @@ body.drawing-lasso { user-select: none; cursor: crosshair; }
 .replay-open:hover { color: var(--fg); }
 
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) { --hero-teal: #5ab8b955; --hero-coral: #f8a08777; --hero-gold: #eccb6077; --hero-dot: #69453a26; }
+  :root:not([data-theme="dark"]) { --hero-teal: #5ab8b955; --hero-coral: #f8a08777; --hero-gold: #eccb6077; }
 }
-:root[data-theme="light"] { --hero-teal: #5ab8b955; --hero-coral: #f8a08777; --hero-gold: #eccb6077; --hero-dot: #69453a26; }
+:root[data-theme="light"] { --hero-teal: #5ab8b955; --hero-coral: #f8a08777; --hero-gold: #eccb6077; }
 
 /* The live sample, in a thin frame. */
 .try { border: 1px solid var(--hair); background: var(--bg); scroll-margin-top: 44px; box-shadow: 0 20px 70px #00000018; }
@@ -296,7 +289,7 @@ section.block { padding-top: 140px; }
 .board .ink { stroke: var(--board-ink); } .board .thick { stroke-width: 3.4; } .board .accent { stroke: var(--accent); }
 .board .lasso { stroke: var(--fg); stroke-width: 1.4; opacity: .8; }
 .board .hand { font-family: var(--hand); fill: var(--board-ink); }
-.board .sel { fill: none; stroke: var(--link); stroke-width: 1; stroke-dasharray: 3 3; }
+.board .sel { fill: none; stroke: var(--board-blue); stroke-width: 1; stroke-dasharray: 3 3; }
 .coords { position: absolute; left: 12px; top: 10px; z-index: 2; }
 .marks { position: absolute; z-index: 3; display: flex; border: 1px solid var(--faint); background: var(--l2); opacity: 0; transform: translateY(6px); transition: opacity .25s, transform .25s; font-size: 12px; }
 .marks.on { opacity: 1; transform: none; }
@@ -342,7 +335,8 @@ section.block { padding-top: 140px; }
 .card { position: relative; background: var(--bg); padding: 24px; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
 .card .pict { position: absolute; top: 22px; right: 22px; width: 40px; height: 40px; }
 .card .k { position: absolute; top: 24px; left: 24px; }
-.card h4 { font-size: 22px; font-weight: 500; letter-spacing: .01em; line-height: 1; text-transform: uppercase; }
+/* A card's name is a step below the section headings: written as a word, not in capitals. */
+.card h4 { font-size: 22px; font-weight: 500; letter-spacing: -.01em; line-height: 1; }
 .card p { margin-top: 10px; font-size: 14px; line-height: 1.6; color: var(--grey); max-width: 30em; }
 .card .art { position: absolute; inset: 56px 24px 110px; display: grid; place-items: center; }
 .w4 { grid-column: span 4; } .w2 { grid-column: span 2; }
@@ -422,8 +416,8 @@ section.block { padding-top: 140px; }
 .dots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--hair); border: 1px solid var(--hair); }
 .dot-card { background: var(--bg); padding: 24px; height: 380px; display: flex; flex-direction: column; justify-content: flex-end; position: relative; }
 .dot-card canvas { position: absolute; left: 0; right: 0; top: 0; height: 250px; width: 100%; }
-.dot-card h4 { font-size: 20px; font-weight: 500; letter-spacing: .01em; text-transform: uppercase; }
-.dot-card p { margin-top: 8px; font-size: 13px; color: var(--grey); line-height: 1.6; }
+.dot-card h4 { font-size: 20px; font-weight: 500; letter-spacing: -.01em; }
+.dot-card p { margin-top: 8px; font-size: 13px; color: var(--grey); line-height: 1.6; min-height: 3.2em; } /* Two lines for every card, so the titles above line up whatever the text. */
 
 .specs { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--fg); }
 .specs dl { display: grid; grid-template-columns: 170px 1fr; }
@@ -434,7 +428,8 @@ section.block { padding-top: 140px; }
 .dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--hair); border: 1px solid var(--hair); margin-top: 48px; }
 .dl a { position: relative; background: var(--bg); padding: 36px 32px 28px; display: flex; flex-direction: column; transition: background .2s, color .2s; }
 .dl-top { display: grid; gap: 14px; justify-items: start; padding-right: 72px; }
-.dl b { font-size: clamp(30px, 3.4vw, 50px); font-weight: 500; letter-spacing: -.01em; line-height: 1; text-transform: uppercase; }
+/* Systems keep their own names: macOS, Windows, Linux. */
+.dl b { font-size: clamp(30px, 3.4vw, 50px); font-weight: 500; letter-spacing: -.02em; line-height: 1; }
 .dl .here { display: none; color: var(--accent); }
 .dl a.this .here { display: inline; }
 .dl a.this { box-shadow: inset 0 3px 0 var(--accent); }

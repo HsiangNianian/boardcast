@@ -17,7 +17,7 @@
   --dim: #666c61;
   --faint: #767c71;
   --hair: #dce1d6;
-  --link: #355fc1;
+  --link: var(--grey);
   --accent: #b43e27;
   --paper: #fdfefa;
   --grid: #e9ede3;
@@ -41,7 +41,7 @@
   --dim: #666c61;
   --faint: #767c71;
   --hair: #dce1d6;
-  --link: #355fc1;
+  --link: var(--grey);
   --accent: #b43e27;
   --paper: #fdfefa;
   --grid: #e9ede3;
@@ -53,4 +53,4 @@
   --line: var(--hair);
   --rec: var(--accent);
 }
-:where(a, button, summary):focus-visible { outline: 2px solid var(--link, var(--accent)); outline-offset: 4px; }
+:where(a, button, summary):focus-visible { outline: 2px solid var(--link, var(--muted)); outline-offset: 4px; }

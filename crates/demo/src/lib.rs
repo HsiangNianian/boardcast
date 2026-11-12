@@ -676,8 +676,8 @@ pub fn start() {
             q("#listen-label").set_text_content(Some(if control.paused.get() { "resume" } else { "pause" }));
         });
     }
-    // The reader can take hold of the board: drag to look around, pinch or Ctrl and the wheel to zoom.
-    // A plain wheel is left to the page, which the demo sits in.
+    // The reader can take hold of the board: drag to look around, and the wheel or a pinch to zoom, as in
+    // the app. Over the board the wheel is the board's, not the page's.
     {
         let drag: Rc<Cell<Option<Grip>>> = Rc::new(Cell::new(None));
         let svg = q("#board");
@@ -721,15 +721,14 @@ pub fn start() {
         {
             let board = board.clone();
             let wheel = Closure::<dyn FnMut(web_sys::WheelEvent)>::new(move |e: web_sys::WheelEvent| {
-                if !e.ctrl_key() && !e.meta_key() {
-                    return;
-                }
                 e.prevent_default();
                 let mut b = board.borrow_mut();
                 let (p, _) = b.at(f64::from(e.client_x()), f64::from(e.client_y()));
                 let v = b.view;
-                // A wheel notch is about a fifth closer or farther; a pinch, finer.
-                let k = (e.delta_y() * 0.002).exp().clamp(ZOOM_WIDTH.0 / v[2], ZOOM_WIDTH.1 / v[2]);
+                // The same response as the app's wheel, exponential in the distance scrolled; a pinch comes
+                // as a wheel with Ctrl held, in smaller steps. Lines and pages are turned into pixels first.
+                let pixels = e.delta_y() * match e.delta_mode() { 1 => 16.0, 2 => 400.0, _ => 1.0 };
+                let k = (pixels * if e.ctrl_key() { 0.01 } else { 0.0015 }).exp().clamp(ZOOM_WIDTH.0 / v[2], ZOOM_WIDTH.1 / v[2]);
                 b.set_reading(true);
                 b.touched = now();
                 b.set_view([p[0] - (p[0] - v[0]) * k, p[1] - (p[1] - v[1]) * k, v[2] * k, v[3] * k]);

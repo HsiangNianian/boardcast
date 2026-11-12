@@ -28,7 +28,7 @@ in the corner shows the sheet in view, its title, the version and a running meet
 
 1. **talk** — a line is said first, then a pen writes "talk, and the board draws itself." in stroke order, with its
    tip visible, and circles "itself" in red. The written words can be circled with the mouse: circling one goes to
-   its sheet, as circling works in the app. "hear it again" wipes the sheet with an eraser and writes it again.
+   its sheet, as circling works in the app. "write it again" wipes the sheet with a soft fading sweep and writes it again.
 2. **four lines** — the meeting as four lines on one timeline: voice, voices, board and marks. A cursor walks it
    until the reader points, and shows what was said at that moment.
 3. **the app** — the app window pins while five chapters scroll: listen, draw, correct, circle, replay. The board
@@ -47,7 +47,7 @@ Reduced motion shows every drawing finished and turns off the autoplay.
 |---|---|
 | `index.html`, `style.css` | The page and its look |
 | `crates/site/src/pen.rs` | Writes text in stroke order with a visible pen tip, along the app's Excalifont centerlines |
-| `crates/site/src/hero.rs` | The first sheet: the said line, the handwriting, circle targets and the eraser |
+| `crates/site/src/hero.rs` | The first sheet: the said line, the handwriting, circle targets and the wipe |
 | `crates/site/src/sheet.rs` | The rulers, the title block that follows the section, and the closing clock |
 | `crates/site/src/lasso.rs` | Circling anything on the page with the mouse or a pen |
 | `crates/site/src/signals.rs` | The four-line timeline and its cursor |

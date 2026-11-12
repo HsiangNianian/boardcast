@@ -11,7 +11,7 @@ use boardcast_board::pen::{outline, Inked, Rng};
 use boardcast_board::sugiyama::first_diagram;
 use serde::Deserialize;
 use std::cell::{Cell, RefCell};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -158,6 +158,8 @@ struct Board {
     layout: StableLayout,
     graph: Graph,
     shown: HashSet<String>,
+    /// Where each piece on the board starts, by what it is rather than where, to tell a move from new ink.
+    placed: HashMap<String, [f32; 2]>,
     view: [f64; 4],
     /// Whether the reader moved the board themselves, when they last did, and where the talk's ink is.
     reading: bool,
@@ -178,7 +180,7 @@ impl Board {
         // `boardcast-tools pack-glyphs assets/hanzi crates/demo/zh-glyphs.pack --only-from <the samples>`.
         let glyphs = Glyphs::load(HanziSource::PackBytes(include_bytes!("../zh-glyphs.pack"))).expect("the samples' strokes");
         let view = [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1];
-        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), view, reading: false, touched: 0.0, latest: view, holding: false, back: q("#latest") }
+        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), placed: HashMap::new(), view, reading: false, touched: 0.0, latest: view, holding: false, back: q("#latest") }
     }
 
     fn clear(&mut self) {
@@ -188,6 +190,7 @@ impl Board {
         self.layout = StableLayout::default();
         self.graph = Graph::default();
         self.shown.clear();
+        self.placed.clear();
     }
 
     /// Apply a reply and lay the board out again. What was already on the board is redrawn where it now
@@ -200,15 +203,25 @@ impl Board {
         self.ink.set_text_content(None);
         let mut fresh = vec![];
         let mut keys = HashSet::new();
+        let mut placed = HashMap::new();
+        let mut sliding = vec![];
         // Notes and marks can reach past the laid-out boxes, so the view is framed on the ink itself.
         let mut ink = Bounds { ..laid.bounds };
         for piece in &pieces {
             keys.insert(piece.key.clone());
-            let new = !self.shown.contains(&piece.key);
+            // Ink that was on the board somewhere else only moved, pushed along by a line written above it:
+            // it slides to its new place instead of being written again.
+            let before = self.placed.get(&piece.seed).copied();
+            let new = !self.shown.contains(&piece.key) && before.is_none();
             // The same seed in the same order gives the same wobble as in the app.
             let mut r = Rng::new(&piece.seed);
-            for line in &piece.lines {
+            for (n, line) in piece.lines.iter().enumerate() {
                 let inked = line.inked(&mut r);
+                if n == 0 {
+                    if let Some(first) = inked.center.first() {
+                        placed.insert(piece.seed.clone(), *first);
+                    }
+                }
                 let pad = f64::from(inked.width);
                 for p in &inked.center {
                     let (x, y) = (f64::from(p[0]), f64::from(p[1]));
@@ -221,10 +234,32 @@ impl Board {
                     fresh.push(Drawing { node, inked });
                 } else {
                     let _ = node.set_attribute("d", &path_of(&outline(&inked, 1.0)));
+                    let first = placed.get(&piece.seed).copied();
+                    let moved = !self.shown.contains(&piece.key);
+                    if let (true, Some(from), Some(to)) = (moved, before, first) {
+                        let (dx, dy) = (from[0] - to[0], from[1] - to[1]);
+                        let _ = node.set_attribute("style", &format!("transform:translate({dx:.1}px,{dy:.1}px)"));
+                        sliding.push(node);
+                    }
                 }
             }
         }
+        // Moved ink starts where it was and eases into place once the page has drawn it there.
+        if !sliding.is_empty() && !reduced() {
+            wasm_bindgen_futures::spawn_local(async move {
+                frame().await;
+                frame().await;
+                for node in sliding {
+                    let _ = node.set_attribute("style", "transition:transform 220ms cubic-bezier(.2,.7,.3,1);transform:none");
+                }
+            });
+        } else {
+            for node in sliding {
+                let _ = node.remove_attribute("style");
+            }
+        }
         self.shown = keys;
+        self.placed = placed;
         (fresh, ink)
     }
 
@@ -315,6 +350,16 @@ struct Control {
     run: Cell<u32>,
     /// Whether the reader turned the recording's sound on. A page may only start sound after a click.
     sound: Cell<bool>,
+    /// Whether the demo is scrolled out of sight or its tab is hidden. A recording waits meanwhile, and
+    /// goes on by itself when it is back, unless the reader paused it.
+    off_screen: Cell<bool>,
+    hidden: Cell<bool>,
+}
+
+impl Control {
+    fn away(&self) -> bool {
+        self.off_screen.get() || self.hidden.get()
+    }
 }
 
 /// Play one sample through. False if the reader started another one meanwhile.
@@ -434,7 +479,7 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
     audio.set_src(&format!("../media/{audio_name}"));
     audio.set_muted(!control.sound.get());
     audio.set_current_time(0.0);
-    if !control.paused.get() {
+    if !control.paused.get() && !control.away() {
         let _ = audio.play();
     }
     let clock = Clock { at: Cell::new(0.0), last: Cell::new(frame().await) };
@@ -482,11 +527,15 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
             let _ = audio.pause();
             return false;
         }
-        let paused = control.paused.get();
+        let paused = control.paused.get() || control.away();
         if paused && !audio.paused() {
             let _ = audio.pause();
         } else if !paused && audio.paused() && audio.error().is_none() && clock.at.get() < end {
-            audio.set_current_time(clock.at.get());
+            // A paused recording waits where it stopped, so it simply goes on. Seeking an MP3 lands only
+            // near the time asked for, so it is moved only when the clock ran on without it.
+            if (audio.current_time() - clock.at.get()).abs() > 1.0 {
+                audio.set_current_time(clock.at.get());
+            }
             let _ = audio.play();
         }
         audio.set_muted(!control.sound.get());
@@ -646,14 +695,34 @@ pub fn start() {
     let audio = HtmlAudioElement::new().expect("an audio element");
     audio.set_preload("auto");
     let ui = Rc::new(Ui { title: q("#title"), state: q("#state"), lines: q("#lines"), tabs: tabs.clone(), listen: q("#listen"), sound: q("#sound"), credit: q("#credit"), audio });
-    let control = Rc::new(Control { wanted: Cell::new(None), paused: Cell::new(false), run: Cell::new(0), sound: Cell::new(false) });
+    let control = Rc::new(Control { wanted: Cell::new(None), paused: Cell::new(false), run: Cell::new(0), sound: Cell::new(false), off_screen: Cell::new(false), hidden: Cell::new(false) });
+    // A recording stops when the demo leaves the screen: scrolled past on the site's first page, where it is
+    // embedded (an observer in a frame watches the top window's viewport), or in a tab put aside.
+    {
+        let control = control.clone();
+        let seen = Closure::<dyn FnMut(js_sys::Array)>::new(move |entries: js_sys::Array| {
+            if let Some(entry) = entries.iter().last().and_then(|e| e.dyn_into::<web_sys::IntersectionObserverEntry>().ok()) {
+                control.off_screen.set(!entry.is_intersecting() || entry.intersection_ratio() < 0.3);
+            }
+        });
+        let options = web_sys::IntersectionObserverInit::new();
+        options.set_threshold(&js_sys::Array::of2(&0.0.into(), &0.3.into()));
+        if let Ok(observer) = web_sys::IntersectionObserver::new_with_options(seen.as_ref().unchecked_ref(), &options) {
+            observer.observe(&q(".window"));
+        }
+        seen.forget();
+    }
+    {
+        let control = control.clone();
+        on(&doc(), "visibilitychange", move |_| control.hidden.set(doc().hidden()));
+    }
     {
         let (control, ui) = (control.clone(), ui.clone());
         on(&q("#sound"), "click", move |_| {
             control.sound.set(!control.sound.get());
             ui.audio.set_muted(!control.sound.get());
             // Sound may only start from a click, so this is where a refused start is tried again.
-            if control.sound.get() && !control.paused.get() && ui.audio.paused() {
+            if control.sound.get() && !control.paused.get() && !control.away() && ui.audio.paused() {
                 let _ = ui.audio.play();
             }
             let _ = ui.sound.class_list().toggle_with_force("on", control.sound.get());

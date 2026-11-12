@@ -649,7 +649,7 @@
    "speaker": "B",
    "text": "Yeah, yeah, that makes sense to put the fax in there.",
    "ms": 1967,
-   "ops": "K n45 「Resolved: yes, fax goes in there」\nD n7",
+   "ops": "K n45 「Resolved: yes, fax goes in there」\nD n7\nM n17 高亮\nM n22 高亮\nM n26 高亮\nM n34 高亮\nM n37 高亮\nM n45 高亮",
    "start": 307.704,
    "end": 311.288
   }

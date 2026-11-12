@@ -5,8 +5,8 @@ Builds the web demo's recorded sample from a meeting the app drew while the `en-
 
 - The meeting's first 19 lines were a microphone test before the recording, and are left out; its node ids are
   renumbered to start from n1, as the sample starts from an empty board.
-- Lines added by hand and a line the meeting has twice are dropped; the removal made by hand at the end
-  goes with the last line said, so the board ends as it did.
+- Lines added by hand and a line the meeting has twice are dropped; the removal and the highlights made by
+  hand after the meeting go with the last line said, so the board ends as it did.
 - A turn longer than ten seconds is cut at its sentence ends, as the app would hear it, timed by length, and
   each op of its reply goes to the first part naming what the op writes.
 
@@ -59,9 +59,13 @@ for l in p['lines'][19:83]:
     ri = j + 1
     ops = None if l.get('ops') in (None, '-') else renum(l['ops'])
     lines.append({'speaker': l['speaker'], 'text': l['text'], 'ms': round(l.get('ms', 800)), 'ops': ops, 'start': round(ref[j]['start'], 3), 'end': round(ref[j]['end'], 3)})
-# The removal made by hand at the end ("del it") goes with the last line said.
+# The removal made by hand at the end ("del it") goes with the last line said, and so do the marks put on
+# by hand once the meeting was over: they come last, as they did, not as if the model had made them.
+by_model = {(m.group(1), m.group(2)) for l in p['lines'] for m in re.finditer(r'^M (n\d+) (\S+)', l.get('ops') or '', re.M)}
+# As the board was left, so a mark put on and taken off again does not count.
+by_hand = ['M %s %s' % (n['id'], mark) for n in p['graph']['nodes'] for mark in n.get('marks', []) if (n['id'], mark) not in by_model]
 last = lines[-1]
-last['ops'] = (last['ops'] + '\n' if last['ops'] else '') + renum(p['lines'][83]['ops'])
+last['ops'] = '\n'.join(([last['ops']] if last['ops'] else []) + [renum(p['lines'][83]['ops'])] + [renum(op) for op in by_hand])
 lines = [c for l in lines for c in split(l)]
 sample = {
     'id': 'en-office-plan',

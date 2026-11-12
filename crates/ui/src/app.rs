@@ -129,6 +129,8 @@ const MAX_ZOOM: f32 = 4.0;
 const RERASTER_AFTER: Duration = Duration::from_millis(120);
 /// How long the view takes to move to where new content needs it, easing out.
 const GLIDE: Duration = Duration::from_millis(450);
+/// How long ink takes to make room for a line written in above it.
+const SLIDE: Duration = Duration::from_millis(220);
 /// How long after the user last moved the view new ink waits before taking the view back to it.
 const READ_HOLD: Duration = Duration::from_secs(5);
 /// Writing speed in board units, as on the website's demo: a hand that knows what it is writing.
@@ -229,6 +231,10 @@ struct Ink {
     queue: VecDeque<Queued>,
     live: f32,
     finished: Vec<Arc<Stroke>>,
+    /// Ink pushed along by something written in above it: each stroke where it now belongs, and how far
+    /// back it started, eased into place before it joins the textures.
+    sliding: Vec<(Arc<Stroke>, [f32; 2])>,
+    slide_started: Instant,
     drawn: HashSet<String>,
     last: Option<Instant>,
     timings: Vec<Timing>,
@@ -366,7 +372,15 @@ impl Ink {
         }
         self.follow(&layout.bounds);
         self.extent = layout.bounds;
+        self.settle_slides();
         let wanted: HashSet<&str> = pieces.iter().map(|p| p.key.as_str()).collect();
+        // Ink that only moved, because something went in above it, keeps its strokes: they are taken by
+        // what the piece is (its seed), and slide to where it now sits instead of being written again.
+        let seed_of = |key: &str| key.rsplit_once('@').map_or(key, |(seed, _)| seed).to_string();
+        let mut gone: HashMap<String, Vec<Arc<Stroke>>> = HashMap::new();
+        for stroke in self.finished.iter().filter(|s| !wanted.contains(s.key.as_str())) {
+            gone.entry(seed_of(&stroke.key)).or_default().push(stroke.clone());
+        }
         // A piece already written may change its look in place, as words fade when they are crossed out.
         let styles: HashMap<&str, Style> = pieces.iter().filter_map(|p| p.lines.first().map(|l| (p.key.as_str(), l.style))).collect();
         let mut restyled = false;
@@ -400,11 +414,24 @@ impl Ink {
         }
         let queued: HashSet<String> = self.queue.iter().map(|q| q.key.clone()).collect();
         let mut added = 0;
+        let mut moved = vec![];
         for piece in pieces {
             if self.drawn.contains(&piece.key) || queued.contains(&piece.key) {
                 continue;
             }
             let mut r = Rng::new(&piece.seed);
+            if let Some(before) = gone.remove(&piece.seed).filter(|b| b.len() == piece.lines.len()) {
+                for (line, old) in piece.lines.iter().zip(before) {
+                    let shape = outline(&line.inked(&mut r), 1.0);
+                    let from = match (old.shape.first(), shape.first()) {
+                        (Some(a), Some(b)) => [a[0] - b[0], a[1] - b[1]],
+                        _ => [0.0, 0.0],
+                    };
+                    moved.push((Arc::new(Stroke { key: piece.key.clone(), area: area_of(&shape), shape, style: line.style }), from));
+                }
+                self.drawn.insert(piece.key);
+                continue;
+            }
             let alone = piece.lines.len() == 1;
             for line in &piece.lines {
                 self.queue.push_back(Queued {
@@ -417,6 +444,10 @@ impl Ink {
                 added += 1;
             }
             self.drawn.insert(piece.key);
+        }
+        if !moved.is_empty() {
+            self.sliding = moved;
+            self.slide_started = Instant::now();
         }
         added
     }
@@ -532,6 +563,7 @@ impl Ink {
         self.retire_detail();
         self.queue.clear();
         self.finished.clear();
+        self.sliding.clear();
         self.drawn.clear();
         self.timings.clear();
         self.targets.clear();
@@ -789,6 +821,9 @@ impl Ink {
     }
 
     fn advance(&mut self) {
+        if !self.sliding.is_empty() && (self.instant || self.slide_left().is_none()) {
+            self.settle_slides();
+        }
         if self.queue.is_empty() {
             self.instant = false;
         }
@@ -819,18 +854,35 @@ impl Ink {
             self.live = 0.0;
             let done = self.queue.pop_front().expect("front exists");
             let shape = outline(&done.inked, 1.0);
-            let stroke = Arc::new(Stroke { key: done.key, area: area_of(&shape), shape, style: done.style });
-            self.base.fill(&stroke);
-            if let Some((tier, cover)) = &mut self.detail {
-                if meets(stroke.area, *cover) {
-                    tier.fill(&stroke);
-                }
-            }
-            self.finished.push(stroke);
+            self.bake(Arc::new(Stroke { key: done.key, area: area_of(&shape), shape, style: done.style }));
             if !self.queue.iter().any(|q| q.batch == done.batch) {
                 self.report(done.batch, now);
             }
         }
+    }
+
+    /// Put a finished stroke on the textures.
+    fn bake(&mut self, stroke: Arc<Stroke>) {
+        self.base.fill(&stroke);
+        if let Some((tier, cover)) = &mut self.detail {
+            if meets(stroke.area, *cover) {
+                tier.fill(&stroke);
+            }
+        }
+        self.finished.push(stroke);
+    }
+
+    /// Ink that has slid into place joins the textures.
+    fn settle_slides(&mut self) {
+        for (stroke, _) in std::mem::take(&mut self.sliding) {
+            self.bake(stroke);
+        }
+    }
+
+    /// How far back sliding ink still is, eased out; None once it has arrived.
+    fn slide_left(&self) -> Option<f32> {
+        let k = self.slide_started.elapsed().as_secs_f32() / SLIDE.as_secs_f32();
+        (!self.sliding.is_empty() && k < 1.0).then(|| (1.0 - k).powi(3))
     }
 
     fn report(&mut self, id: u64, now: Instant) {
@@ -3598,7 +3650,7 @@ impl Render for Workbench {
         // costs no frames.
         {
             let ink = self.ink.borrow();
-            if !ink.queue.is_empty() || ink.zoom_test.is_some() || ink.gliding() || self.typing.as_ref().is_some_and(|t| t.animate) {
+            if !ink.queue.is_empty() || !ink.sliding.is_empty() || ink.zoom_test.is_some() || ink.gliding() || self.typing.as_ref().is_some_and(|t| t.animate) {
                 window.request_animation_frame();
             }
         }
@@ -3770,6 +3822,22 @@ impl Render for Workbench {
                                     let mut ink: Hsla = rgb(pal().accent).into();
                                     ink.a = 0.8;
                                     window.paint_path(path, Background::from(ink));
+                                }
+                            }
+                            // Ink making room for a new line, on its way to where it now belongs.
+                            if let Some(left) = b.slide_left() {
+                                for (stroke, from) in &b.sliding {
+                                    let (dx, dy) = (from[0] * left, from[1] * left);
+                                    let mut pb = fill_builder();
+                                    let at = |p: &Pt| origin + point(px((p[0] + dx) * v.k), px((p[1] + dy) * v.k));
+                                    if let Some(first) = stroke.shape.first() {
+                                        pb.move_to(at(first));
+                                        stroke.shape[1..].iter().for_each(|p| pb.line_to(at(p)));
+                                        pb.close();
+                                    }
+                                    if let Ok(path) = pb.build() {
+                                        window.paint_path(path, Background::from(color(stroke.style)));
+                                    }
                                 }
                             }
                             if let Some(front) = b.queue.front().filter(|_| b.live > 0.0) {
@@ -5295,6 +5363,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 queue: VecDeque::new(),
                 live: 0.0,
                 finished: vec![],
+                sliding: vec![],
+                slide_started: Instant::now(),
                 drawn: HashSet::new(),
                 last: None,
                 timings: vec![],

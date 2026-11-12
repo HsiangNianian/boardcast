@@ -230,7 +230,7 @@ section.block { padding-top: 140px; }
 .head h2 em { font-style: normal; color: var(--dim); }
 .head p { font-size: 15px; line-height: 1.65; color: var(--grey); max-width: 30em; }
 .head-side .cta { margin-top: 18px; }
-.signals { position: relative; border-top: 1px solid var(--fg); cursor: crosshair; user-select: none; }
+.signals { position: relative; border-top: 1px solid var(--fg); cursor: crosshair; user-select: none; background: var(--bg); }
 .row { display: grid; grid-template-columns: 220px 1fr; border-bottom: 1px solid var(--hair); height: 92px; align-items: center; }
 .row .name { font-size: 20px; font-weight: 300; }
 .row .name small { display: block; margin-top: 4px; }

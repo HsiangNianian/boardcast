@@ -80,7 +80,7 @@ const MARGIN: f64 = 80.0;
 const MIN_VIEW: (f64, f64) = (900.0, 560.0);
 /// The most of the board shown at once; past this the view follows the newest ink, so writing stays legible.
 const MAX_VIEW_WIDTH: f64 = 1500.0;
-/// How long after the reader last moved the board new ink out of sight waits before taking the view back.
+/// How long after the reader last moved the board the view goes back to the talk.
 const READ_HOLD_MS: f64 = 5000.0;
 /// How near and how far the reader can zoom, as the width of board shown.
 const ZOOM_WIDTH: (f64, f64) = (240.0, 8000.0);
@@ -163,6 +163,8 @@ struct Board {
     reading: bool,
     touched: f64,
     latest: [f64; 4],
+    /// Whether the reader is holding the board down right now.
+    holding: bool,
     back: Element,
 }
 
@@ -176,7 +178,7 @@ impl Board {
         // `boardcast-tools pack-glyphs assets/hanzi crates/demo/zh-glyphs.pack --only-from <the samples>`.
         let glyphs = Glyphs::load(HanziSource::PackBytes(include_bytes!("../zh-glyphs.pack"))).expect("the samples' strokes");
         let view = [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1];
-        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), view, reading: false, touched: 0.0, latest: view, back: q("#latest") }
+        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), view, reading: false, touched: 0.0, latest: view, holding: false, back: q("#latest") }
     }
 
     fn clear(&mut self) {
@@ -545,7 +547,7 @@ async fn follow(board: &RefCell<Board>, to: [f64; 4], newest: &Bounds, live: &dy
         if b.reading {
             let v = b.view;
             let inside = newest.x0 >= v[0] && newest.y0 >= v[1] && newest.x1 <= v[0] + v[2] && newest.y1 <= v[1] + v[3];
-            if inside || now() - b.touched < READ_HOLD_MS {
+            if inside || b.holding || now() - b.touched < READ_HOLD_MS {
                 return;
             }
             b.set_reading(false);
@@ -690,6 +692,7 @@ pub fn start() {
                 }
                 let _ = target.set_pointer_capture(e.pointer_id());
                 let _ = target.class_list().add_1("dragging");
+                board.borrow_mut().holding = true;
                 drag.set(Some((e.pointer_id(), f64::from(e.client_x()), f64::from(e.client_y()), board.borrow().view)));
             });
         }
@@ -712,9 +715,12 @@ pub fn start() {
             });
         }
         for end in ["pointerup", "pointercancel"] {
-            let (drag, target) = (drag.clone(), svg.clone());
+            let (drag, target, board) = (drag.clone(), svg.clone(), board.clone());
             on(&svg, end, move |_| {
                 drag.set(None);
+                let mut b = board.borrow_mut();
+                b.holding = false;
+                b.touched = now();
                 let _ = target.class_list().remove_1("dragging");
             });
         }
@@ -737,6 +743,24 @@ pub fn start() {
             options.set_passive(false);
             let _ = svg.add_event_listener_with_callback_and_add_event_listener_options("wheel", wheel.as_ref().unchecked_ref(), &options);
             wheel.forget();
+        }
+        // Left alone a while, the board goes back to where the talk is.
+        {
+            let board = board.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                loop {
+                    sleep(250.0).await;
+                    let back = {
+                        let b = board.borrow();
+                        b.reading && !b.holding && now() - b.touched >= READ_HOLD_MS
+                    };
+                    if back {
+                        let to = board.borrow().latest;
+                        board.borrow_mut().set_reading(false);
+                        ease_view(&board, to, &|| true).await;
+                    }
+                }
+            });
         }
         {
             let board = board.clone();

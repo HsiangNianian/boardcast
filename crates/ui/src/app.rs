@@ -942,8 +942,9 @@ struct MeetingSearch {
     typed_at: Option<Instant>,
     ticket: u64,
     hits: Vec<boardcast_search::service::Found>,
-    /// The meeting saved since it was last indexed, and when.
-    saved_at: Option<Instant>,
+    /// Meetings saved since they were last indexed, with when. Each is indexed again a while after its last
+    /// save, and never while listening.
+    saved: HashMap<String, Instant>,
     error: Option<String>,
 }
 
@@ -2196,7 +2197,7 @@ impl Workbench {
         let (jobs, events) = boardcast_search::service::start(data, self.models.join(&model.file), spawn);
         let all: Vec<String> = store.list().unwrap_or_default().into_iter().filter(|m| m.read_error.is_none()).map(|m| m.id).collect();
         let _ = jobs.send(boardcast_search::service::Job::Index(all));
-        self.search = Some(MeetingSearch { jobs, events, indexing: None, asked: String::new(), typed_at: None, ticket: 0, hits: vec![], saved_at: None, error: None });
+        self.search = Some(MeetingSearch { jobs, events, indexing: None, asked: String::new(), typed_at: None, ticket: 0, hits: vec![], saved: HashMap::new(), error: None });
     }
 
     /// Turn meeting search on or off. On, it downloads its model first if need be.
@@ -2221,7 +2222,8 @@ impl Workbench {
 
     fn pump_search(&mut self, changed: &mut bool) {
         use boardcast_search::service::{Event as SearchEvent, Job};
-        let current = self.live.id().to_string();
+        // While listening, the CPU is for hearing and the board; the meeting is read again once it stops.
+        let listening = self.pipeline.listening();
         let library: Vec<String> = self.library.iter().filter(|m| m.read_error.is_none()).map(|m| m.id.clone()).collect();
         if self.search.is_none() && !self.search_tried {
             // At start, once: search that was turned on comes back on.
@@ -2246,9 +2248,12 @@ impl Workbench {
                 }
             }
         }
-        if search.saved_at.is_some_and(|at| at.elapsed() >= REINDEX_AFTER) {
-            search.saved_at = None;
-            let _ = search.jobs.send(Job::Index(vec![current]));
+        if !listening {
+            let due: Vec<String> = search.saved.iter().filter(|(_, at)| at.elapsed() >= REINDEX_AFTER).map(|(id, _)| id.clone()).collect();
+            if !due.is_empty() {
+                search.saved.retain(|id, _| !due.contains(id));
+                let _ = search.jobs.send(Job::Index(due));
+            }
         }
         if search.typed_at.is_some_and(|at| at.elapsed() >= QUERY_AFTER) {
             search.typed_at = None;
@@ -2354,7 +2359,7 @@ impl Workbench {
                 self.live.saved(revision);
                 self.saved_changes = covers;
                 if let Some(search) = &mut self.search {
-                    search.saved_at = Some(Instant::now());
+                    search.saved.insert(self.live.id().to_string(), Instant::now());
                 }
                 self.save = if self.live.changes == covers { SaveState::Saved } else { SaveState::Dirty };
             }

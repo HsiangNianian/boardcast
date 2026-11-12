@@ -37,8 +37,9 @@
 </section>
 
 <!-- ———————————————— signals ———————————————— -->
-<section class="block wrap" id="signals" data-sheet="02 four lines">
-  <div class="head"><h2>one meeting,<br><em>four lines.</em></h2><p>The sound, the people speaking, what went on the board and what you marked, all on one timeline. Point anywhere to read what was said at that moment.</p></div>
+<section class="sig-scroll" id="signals" data-sheet="02 four lines">
+<div class="block wrap sheet-page sig-pin">
+  <div class="head"><h2>one meeting,<br><em>four lines.</em></h2><p>The sound, the people speaking, what went on the board and what you marked, all on one timeline. Scroll to play the meeting, or point anywhere to read what was said at that moment.</p></div>
   <div class="signals" id="sig">
     <div class="row"><div class="name">voice<small class="label">voice · local asr</small></div><svg viewBox="0 0 1000 92" preserveAspectRatio="none" id="sig-voice"></svg></div>
     <div class="row"><div class="name">voices<small class="label">voices · cam++</small></div><svg viewBox="0 0 1000 92" preserveAspectRatio="none" id="sig-who"></svg></div>
@@ -47,6 +48,7 @@
     <div class="cursor" id="sig-cursor"><span class="t"></span></div>
   </div>
   <div class="caption"><span class="label" id="sig-time">14:02</span><p id="sig-said"><b>—</b>point at the lines</p></div>
+</div>
 </section>
 
 <!-- ———————————————— the app story ———————————————— -->
@@ -95,7 +97,7 @@
 </section>
 
 <!-- ———————————————— during ———————————————— -->
-<section class="block wrap" id="during" data-sheet="04 during">
+<section class="block wrap sheet-page" id="during" data-sheet="04 during">
   <div class="head"><h2>during the meeting,<br><em>one click is enough.</em></h2><p>Marking, rewriting, circling: each takes a single click. Every card shows what it really does.</p></div>
   <div class="bento">
     <div class="card w4"><span class="k label">02 / circle</span><svg class="pict" data-icon="lasso" viewBox="0 0 64 64"></svg>
@@ -130,7 +132,7 @@
 </section>
 
 <!-- ———————————————— after ———————————————— -->
-<section class="block wrap" id="after" data-sheet="05 after">
+<section class="block wrap sheet-page" id="after" data-sheet="05 after">
   <div class="head"><h2>after the meeting,<br><em>it is already sorted.</em></h2><p>Each of these is made of dots. Point at one and they gather into what you take home.</p></div>
   <div class="dots">
     <div class="dot-card"><canvas data-icon="doc"></canvas><span class="label">summary</span><h4>summary</h4><p>Conclusions, decisions and to-dos to edit, tick off and copy.</p></div>
@@ -140,21 +142,33 @@
   </div>
 </section>
 
-<section class="block wrap" id="get" data-sheet="06 specs">
+<section class="block wrap sheet-page" id="get" data-sheet="06 specs">
   <div class="head"><h2>specs.</h2><p>What is inside, written down like a product manual.</p></div>
   <div class="specs">
     <dl><dt>speech</dt><dd>parakeet · reazonspeech · sensevoice</dd><dt>speakers</dt><dd>cam++ voiceprints</dd><dt>board model</dt><dd>qwen3.5 4b / 9b · minicpm5</dd><dt>runtime</dt><dd>llama.cpp · vulkan / metal</dd></dl>
     <dl><dt>languages</dt><dd>japanese · english · chinese</dd><dt>export</dt><dd>md · png · svg · gif · pdf · html</dd><dt>network</dt><dd>none required</dd><dt>license</dt><dd>mit</dd></dl>
   </div>
   <div class="dl">
-    <a href="https://github.com/HsiangNianian/boardcast/releases/latest"><div><b>macos</b><span>apple silicon · intel · 1.1 gb</span></div><em>.zip ↓</em></a>
-    <a href="https://github.com/HsiangNianian/boardcast/releases/latest"><div><b>windows</b><span>x64 · 1.1 gb</span></div><em>.zip ↓</em></a>
-    <a href="https://github.com/HsiangNianian/boardcast/releases/latest"><div><b>linux</b><span>x64 · 1.1 gb</span></div><em>.tar.gz ↓</em></a>
+    <a href="https://github.com/HsiangNianian/boardcast/releases/latest" data-os="mac">
+      <div class="dl-top"><b>macos</b><span class="label">apple silicon · intel<span class="here"> · this computer</span></span></div>
+      <ul><li>japanese, english, chinese<em>{{ size:macos }}</em></li><li>english<em>{{ size:macos-en }}</em></li><li>japanese<em>{{ size:macos-ja }}</em></li><li>your mac’s own recognizer<em>{{ size:macos-none }}</em></li></ul>
+      <p class="label">control-click › open, the first time</p><i>.zip ↓</i>
+    </a>
+    <a href="https://github.com/HsiangNianian/boardcast/releases/latest" data-os="windows">
+      <div class="dl-top"><b>windows</b><span class="label">x64<span class="here"> · this computer</span></span></div>
+      <ul><li>japanese, english, chinese<em>{{ size:windows }}</em></li><li>english<em>{{ size:windows-en }}</em></li><li>japanese<em>{{ size:windows-ja }}</em></li></ul>
+      <p class="label">unzip, then run bin\boardcast.exe</p><i>.zip ↓</i>
+    </a>
+    <a href="https://github.com/HsiangNianian/boardcast/releases/latest" data-os="linux">
+      <div class="dl-top"><b>linux</b><span class="label">x64<span class="here"> · this computer</span></span></div>
+      <ul><li>japanese, english, chinese<em>{{ size:linux }}</em></li><li>english<em>{{ size:linux-en }}</em></li><li>japanese<em>{{ size:linux-ja }}</em></li></ul>
+      <p class="label">./install.sh · no root, updates itself</p><i>.tar.gz ↓</i>
+    </a>
   </div>
 </section>
 
-<section class="now wrap" id="now-sheet" data-sheet="07 now">
-  <span class="label">your local time</span>
-  <div class="clock" id="now">--<span class="sep">:</span>--</div>
-  <p>your next meeting. let the board draw itself.</p>
+<section class="now wrap sheet-page" id="now-sheet" data-sheet="07 now">
+  <p class="said label"><span class="who">you</span><span id="now-time">--:--:--</span><q>let’s start.</q></p>
+  <div class="blank canvas"><svg class="ink" id="now-ink" role="img" aria-label="your next meeting."></svg></div>
+  <p class="now-foot">the board is blank until someone speaks. <a href="#get">get boardcast <span aria-hidden="true">↑</span></a></p>
 </section>

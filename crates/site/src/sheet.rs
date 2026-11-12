@@ -1,7 +1,6 @@
 //! The drawing sheet around the page: rulers on two edges and a title block that follows the section in view.
-//! Also the large clock at the end, which shows the reader's own time.
 
-use crate::util::{append, append_text, clear, data, el, interval, on_passive, q, qa, set_style, set_text, text, two, win};
+use crate::util::{append, clear, data, el, interval, on_passive, q, qa, set_style, set_text, text, two, win};
 use std::rc::Rc;
 
 pub fn init() {
@@ -68,14 +67,4 @@ pub fn init() {
         io.observe(&s);
     }
 
-    let now = q("#now");
-    let tick = move || {
-        let d = js_sys::Date::new_0();
-        clear(&now);
-        append_text(&now, &two(f64::from(d.get_hours())));
-        append(&now, &el("span", "sep", ":"));
-        append_text(&now, &two(f64::from(d.get_minutes())));
-    };
-    tick();
-    interval(5000, tick);
 }

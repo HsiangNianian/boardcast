@@ -41,6 +41,7 @@ features = [
   "IntersectionObserverInit",
   "MediaQueryList",
   "MouseEvent",
+  "Navigator",
   "Node",
   "NodeList",
   "Performance",

@@ -6,6 +6,7 @@ mod dots;
 mod hero;
 mod lasso;
 mod meeting;
+mod now;
 mod pen;
 mod pict;
 mod sheet;
@@ -31,5 +32,6 @@ pub fn start() {
         let _ = wasm_bindgen_futures::JsFuture::from(util::doc().fonts().load("22px Excalifont")).await;
         hero::init();
         story::init();
+        now::init();
     });
 }

@@ -1,6 +1,109 @@
 //! Trunk bundles the assets first; this renders the pages into its staging directory before publication.
+//! The download sizes are read from the latest release, so the page always shows what is really there.
 
-use std::{env, fs, io, path::Path};
+use std::{
+    env, fs, io,
+    path::{Path, PathBuf},
+    time::{Duration, SystemTime},
+};
+
+const LATEST: &str = "https://api.github.com/repos/HsiangNianian/boardcast/releases/latest";
+
+/// The latest release's packages, as file name and size in bytes.
+type Assets = Vec<(String, u64)>;
+
+fn parse_assets(release: &serde_json::Value) -> Assets {
+    release["assets"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|a| Some((a["name"].as_str()?.to_owned(), a["size"].as_u64()?)))
+        .collect()
+}
+
+/// `trunk serve` runs this on every change, so a fetched release is kept for an hour.
+fn cache_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/site-release.json")
+}
+
+fn fetch_release() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let mut request = ureq::get(LATEST)
+        .timeout(Duration::from_secs(10))
+        .set("Accept", "application/vnd.github+json");
+    // CI passes its token, so the API's limit for anonymous callers never fails a build.
+    if let Ok(token) = env::var("GITHUB_TOKEN") {
+        request = request.set("Authorization", &format!("Bearer {token}"));
+    }
+    Ok(request.call()?.into_json()?)
+}
+
+/// The latest release's packages: fresh from the cache, else fetched. Offline, the page goes without sizes,
+/// unless `BOARDCAST_REQUIRE_RELEASE` is set, as it is for the published site.
+fn release_assets() -> Result<Assets, Box<dyn std::error::Error>> {
+    let cache = cache_path();
+    let fresh = fs::metadata(&cache)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| SystemTime::now().duration_since(t).ok())
+        .is_some_and(|age| age < Duration::from_secs(3600));
+    if fresh {
+        if let Ok(release) = fs::read_to_string(&cache)
+            .map_err(|e| e.to_string())
+            .and_then(|text| serde_json::from_str(&text).map_err(|e| e.to_string()))
+        {
+            return Ok(parse_assets(&release));
+        }
+    }
+    match fetch_release() {
+        Ok(release) => {
+            let _ = fs::write(&cache, release.to_string());
+            let assets = parse_assets(&release);
+            if assets.is_empty() && env::var_os("BOARDCAST_REQUIRE_RELEASE").is_some() {
+                return Err("the latest release lists no packages".into());
+            }
+            Ok(assets)
+        }
+        Err(e) if env::var_os("BOARDCAST_REQUIRE_RELEASE").is_some() => Err(format!("reading the latest release: {e}").into()),
+        Err(e) => {
+            eprintln!("boardcast-site-gen: no download sizes, the latest release could not be read: {e}");
+            Ok(Assets::new())
+        }
+    }
+}
+
+/// The size of a package, named as the page names it: `linux`, `macos-en`, and so on. Packages for
+/// different processors of one system differ by a few megabytes, so the larger is shown.
+fn package_size(assets: &Assets, key: &str) -> Option<u64> {
+    let (system, variant) = key.split_once('-').map_or((key, ""), |(s, v)| (s, v));
+    let ext = if system == "linux" { "tar.gz" } else { "zip" };
+    let variant = if variant.is_empty() { String::new() } else { format!("-{variant}") };
+    let ending = format!("-{system}{variant}.{ext}");
+    assets.iter().filter(|(name, _)| name.starts_with("boardcast-") && name.ends_with(&ending)).map(|&(_, size)| size).max()
+}
+
+fn human_size(bytes: u64) -> String {
+    let mb = bytes as f64 / 1_048_576.0;
+    if mb >= 1000.0 {
+        format!("{:.1} gb", mb / 1024.0)
+    } else {
+        format!("{} mb", mb.round().max(1.0))
+    }
+}
+
+/// Fills each `{{ size:<package> }}` with the package's size, or leaves it empty when it is not known.
+fn fill_sizes(content: &str, assets: &Assets) -> String {
+    let mut out = String::with_capacity(content.len());
+    let mut rest = content;
+    while let Some(start) = rest.find("{{ size:") {
+        out.push_str(&rest[..start]);
+        let Some(len) = rest[start..].find(" }}") else { break };
+        let key = &rest[start + 8..start + len];
+        out.push_str(&package_size(assets, key).map(human_size).unwrap_or_default());
+        rest = &rest[start + len + 3..];
+    }
+    out.push_str(rest);
+    out
+}
 
 struct Page {
     slug: &'static str,
@@ -119,7 +222,7 @@ fn footer(page: &Page) -> String {
     )
 }
 
-fn render(page: &Page, bundled_head: &str, bundled_body: &str) -> String {
+fn render(page: &Page, bundled_head: &str, bundled_body: &str, assets: &Assets) -> String {
     let prefix = root(page);
     let document_style = if matches!(page.slug, "" | "demo") {
         ""
@@ -161,7 +264,7 @@ fn render(page: &Page, bundled_head: &str, bundled_body: &str) -> String {
 "##,
         title = escape(page.title),
         description = escape(page.description),
-        content = page.content.replace("{{ navigation }}", &navigation(page)),
+        content = fill_sizes(&page.content.replace("{{ navigation }}", &navigation(page)), assets),
         footer = footer(page),
     )
 }
@@ -178,7 +281,7 @@ fn contents<'a>(html: &'a str, tag: &str) -> io::Result<&'a str> {
         })
 }
 
-fn generate(staging: &Path, entry: &Path) -> io::Result<()> {
+fn generate(staging: &Path, entry: &Path, assets: &Assets) -> io::Result<()> {
     let page = if entry.ends_with("demo/index.html") {
         &PAGES[1]
     } else {
@@ -187,13 +290,13 @@ fn generate(staging: &Path, entry: &Path) -> io::Result<()> {
     let index = staging.join("index.html");
     let bundle = fs::read_to_string(&index)?;
     // Preserve hashed asset URLs, integrity attributes and Trunk's development reload script verbatim.
-    let html = render(page, contents(&bundle, "head")?, contents(&bundle, "body")?);
+    let html = render(page, contents(&bundle, "head")?, contents(&bundle, "body")?, assets);
     fs::write(index, html)?;
     if page.slug.is_empty() {
         for page in &PAGES[2..] {
             let dir = staging.join(page.slug);
             fs::create_dir_all(&dir)?;
-            fs::write(dir.join("index.html"), render(page, "", ""))?;
+            fs::write(dir.join("index.html"), render(page, "", "", assets))?;
         }
     }
     Ok(())
@@ -202,7 +305,10 @@ fn generate(staging: &Path, entry: &Path) -> io::Result<()> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let staging = env::var("TRUNK_STAGING_DIR")?;
     let entry = env::var("TRUNK_HTML_FILE")?;
-    generate(Path::new(&staging), Path::new(&entry))?;
+    let entry = Path::new(&entry);
+    // Only the home page shows the downloads.
+    let assets = if entry.ends_with("demo/index.html") { Assets::new() } else { release_assets()? };
+    generate(Path::new(&staging), entry, &assets)?;
     Ok(())
 }
 
@@ -213,7 +319,7 @@ mod tests {
     #[test]
     fn pages_have_complete_static_content_and_relative_navigation() {
         for page in &PAGES {
-            let html = render(page, "", "");
+            let html = render(page, "", "", &Assets::new());
             assert!(html.contains(&format!("<title>{}</title>", escape(page.title))));
             assert!(html.contains("<h1>") && html.contains("<footer class=\"site-footer"));
             assert!(!html.contains("{{ ") && !html.contains("last updated"));
@@ -229,7 +335,7 @@ mod tests {
                 assert!(!html.contains("type=\"module\"") && html.contains(UPDATED));
             }
         }
-        assert!(render(&PAGES[2], "", "").contains("<details open>"));
+        assert!(render(&PAGES[2], "", "", &Assets::new()).contains("<details open>"));
     }
 
     #[test]
@@ -240,6 +346,7 @@ mod tests {
                 page,
                 contents(bundle, "head").unwrap(),
                 contents(bundle, "body").unwrap(),
+                &Assets::new(),
             );
             assert!(html.contains(contents(bundle, "head").unwrap()));
             assert!(html.contains(contents(bundle, "body").unwrap()));
@@ -247,6 +354,31 @@ mod tests {
             assert_eq!(html.matches("<body>").count(), 1);
         }
         assert!(contents("<head>unfinished", "head").is_err());
+    }
+
+    #[test]
+    fn download_sizes_come_from_the_release_packages() {
+        let release = serde_json::json!({ "assets": [
+            { "name": "boardcast-0.27.0-arm64-macos.zip", "size": 845_000_000u64 },
+            { "name": "boardcast-0.27.0-x86_64-macos.zip", "size": 847_000_000u64 },
+            { "name": "boardcast-0.27.0-x86_64-macos-none.zip", "size": 70_000_000u64 },
+            { "name": "boardcast-0.27.0-x86_64-linux.tar.gz", "size": 876_246_171u64 },
+            { "name": "boardcast-0.27.0-x86_64-linux-en.tar.gz", "size": 1_200_000_000u64 },
+            { "name": "manifest.json", "size": 900u64 },
+        ]});
+        let assets = parse_assets(&release);
+        assert_eq!(package_size(&assets, "macos"), Some(847_000_000));
+        assert_eq!(package_size(&assets, "macos-none"), Some(70_000_000));
+        assert_eq!(package_size(&assets, "linux"), Some(876_246_171));
+        assert_eq!(package_size(&assets, "windows"), None);
+        assert_eq!(human_size(876_246_171), "836 mb");
+        assert_eq!(human_size(1_200_000_000), "1.1 gb");
+        assert_eq!(
+            fill_sizes("<em>{{ size:linux }}</em><em>{{ size:windows-ja }}</em>", &assets),
+            "<em>836 mb</em><em></em>"
+        );
+        let home = render(&PAGES[0], "", "", &assets);
+        assert!(home.contains("<em>808 mb</em>") && !home.contains("{{ size:"));
     }
 
     #[test]

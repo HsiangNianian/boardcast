@@ -53,5 +53,10 @@ features = [
   "SvgGraphicsElement",
   "SvgRect",
   "Text",
+  "WebGlBuffer",
+  "WebGlProgram",
+  "WebGlRenderingContext",
+  "WebGlShader",
+  "WebGlUniformLocation",
   "Window",
 ]

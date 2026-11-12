@@ -6,7 +6,19 @@
 :root { --bg: #000; --fg: #f2f2f2; --grey: #c4c4c4; --dim: #8a8a8a; --hair: #262626; --link: #9fb4ff;
   --sans: 'DM Sans Variable', system-ui, sans-serif; --mono: 'JetBrains Mono Variable', ui-monospace, monospace; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { background: var(--bg); }
+/* The home page's dots, without colour, under every page, with the same two glows drifting through them. */
+html { background: radial-gradient(circle, color-mix(in srgb, var(--fg) 11%, transparent) .7px, transparent 1px) 0 0 / 5px 5px fixed, var(--bg); }
+@property --glow-ax { syntax: '<percentage>'; inherits: false; initial-value: 18%; }
+@property --glow-ay { syntax: '<percentage>'; inherits: false; initial-value: 30%; }
+@property --glow-bx { syntax: '<percentage>'; inherits: false; initial-value: 82%; }
+@property --glow-by { syntax: '<percentage>'; inherits: false; initial-value: 74%; }
+body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--fg) 34%, transparent) .8px, transparent 1.1px) 0 0 / 5px 5px fixed;
+  mask-image: radial-gradient(circle 34vmax at var(--glow-ax) var(--glow-ay), #000b, transparent), radial-gradient(circle 26vmax at var(--glow-bx) var(--glow-by), #0009, transparent);
+  animation: glow-a 41s ease-in-out infinite alternate, glow-b 57s ease-in-out infinite alternate; }
+@keyframes glow-a { 0% { --glow-ax: 18%; --glow-ay: 30%; } 35% { --glow-ax: 55%; --glow-ay: 12%; } 70% { --glow-ax: 72%; --glow-ay: 58%; } 100% { --glow-ax: 30%; --glow-ay: 80%; } }
+@keyframes glow-b { 0% { --glow-bx: 82%; --glow-by: 74%; } 40% { --glow-bx: 40%; --glow-by: 88%; } 75% { --glow-bx: 12%; --glow-by: 45%; } 100% { --glow-bx: 62%; --glow-by: 22%; } }
+@media (prefers-reduced-motion: reduce) { body::before { animation: none; } }
 body { color: var(--fg); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased; }
 a { color: var(--link); text-decoration: none; }
 a:hover { color: var(--fg); }
@@ -19,10 +31,10 @@ a:hover { color: var(--fg); }
 .doc > aside { position: sticky; top: 40px; align-self: start; }
 .doc > aside .label { display: block; margin-bottom: 8px; }
 .doc > aside .updated { margin-top: 20px; font: 400 11px var(--mono); color: var(--dim); }
-.doc h1 { grid-column: 1 / -1; font-size: clamp(48px, 7vw, 104px); font-weight: 200; letter-spacing: -.045em; line-height: .95; }
+.doc h1 { grid-column: 1 / -1; font-size: clamp(40px, 5.6vw, 84px); font-weight: 500; letter-spacing: -.02em; line-height: 1; text-transform: uppercase; }
 .doc h1 em { font-style: normal; color: var(--dim); }
 .doc section + section { margin-top: 56px; }
-.doc h2 { font-size: 30px; font-weight: 300; letter-spacing: -.02em; padding-bottom: 14px; border-bottom: 1px solid var(--fg); }
+.doc h2 { font-size: 22px; font-weight: 500; letter-spacing: .01em; text-transform: uppercase; padding-bottom: 14px; border-bottom: 1px solid var(--fg); }
 .doc h3 { margin-top: 28px; font-size: 19px; font-weight: 400; }
 .doc h4 { margin-top: 22px; font: 400 13px var(--mono); color: var(--fg); }
 .doc p, .doc li { margin-top: 12px; font-size: 16px; line-height: 1.7; color: var(--grey); max-width: 44em; }

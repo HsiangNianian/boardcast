@@ -1,7 +1,7 @@
 /* Shared navigation, and the demo's footer; each page keeps its own content layout. */
 .site-header { display: flex; justify-content: space-between; align-items: start; gap: 24px; padding-top: 40px; }
-.site-brand { color: var(--fg, var(--text)); font-size: 36px; line-height: 1.05; letter-spacing: -.02em; }
-.site-nav { display: flex; flex-wrap: wrap; gap: 12px 20px; font: 400 12px var(--mono); }
+.site-brand { color: var(--fg, var(--text)); font-size: 30px; font-weight: 500; line-height: 1.05; letter-spacing: 0; text-transform: uppercase; }
+.site-nav { display: flex; flex-wrap: wrap; gap: 12px 20px; font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .04em; }
 .site-header .site-nav { padding-top: 8px; }
 .site-nav a { color: var(--dim, var(--faint)); }
 .site-nav a.on, .site-nav a:hover { color: var(--fg, var(--text)); }
@@ -12,9 +12,9 @@
 
 /* The demo's footer: a heading over each group of links. Colours fall back to the demo's names. */
 .sitemap { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 28px; margin-top: 72px; padding: 36px 0 48px; border-top: 1px solid var(--hair, var(--line)); align-items: start; }
-.sitemap-brand { font-size: 20px; line-height: 1.05; letter-spacing: -.02em; color: var(--fg, var(--text)); }
+.sitemap-brand { font-size: 18px; font-weight: 500; line-height: 1.05; text-transform: uppercase; color: var(--fg, var(--text)); }
 .sitemap div { display: grid; gap: 8px; justify-items: start; }
-.sitemap b { margin-bottom: 4px; font-size: 15px; font-weight: 400; color: var(--fg, var(--text)); }
+.sitemap b { margin-bottom: 4px; font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; color: var(--fg, var(--text)); }
 .sitemap div a { font-size: 14px; color: var(--grey, var(--muted)); }
 .sitemap div a:hover, .sitemap-brand:hover { color: var(--fg, var(--text)); }
 @media (max-width: 600px) {

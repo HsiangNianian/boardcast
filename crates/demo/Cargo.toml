@@ -19,4 +19,4 @@ wasm-bindgen-futures = "0.4"
 
 [dependencies.web-sys]
 version = "0.3"
-features = ["AddEventListenerOptions", "Document", "DomRect", "DomTokenList", "Element", "Event", "EventTarget", "HtmlAudioElement", "HtmlElement", "HtmlMediaElement", "MediaError", "KeyboardEvent", "Location", "MediaQueryList", "MouseEvent", "Node", "Performance", "PointerEvent", "Text", "UrlSearchParams", "WheelEvent", "Window"]
+features = ["AddEventListenerOptions", "Document", "DomRect", "DomTokenList", "Element", "Event", "EventTarget", "HtmlAudioElement", "HtmlElement", "HtmlMediaElement", "IntersectionObserver", "IntersectionObserverEntry", "IntersectionObserverInit", "MediaError", "KeyboardEvent", "Location", "MediaQueryList", "MouseEvent", "Node", "Performance", "PointerEvent", "Text", "UrlSearchParams", "WheelEvent", "Window"]

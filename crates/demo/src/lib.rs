@@ -11,7 +11,7 @@ use boardcast_board::pen::{outline, Inked, Rng};
 use boardcast_board::sugiyama::first_diagram;
 use serde::Deserialize;
 use std::cell::{Cell, RefCell};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -158,6 +158,8 @@ struct Board {
     layout: StableLayout,
     graph: Graph,
     shown: HashSet<String>,
+    /// Where each piece on the board starts, by what it is rather than where, to tell a move from new ink.
+    placed: HashMap<String, [f32; 2]>,
     view: [f64; 4],
     /// Whether the reader moved the board themselves, when they last did, and where the talk's ink is.
     reading: bool,
@@ -178,7 +180,7 @@ impl Board {
         // `boardcast-tools pack-glyphs assets/hanzi crates/demo/zh-glyphs.pack --only-from <the samples>`.
         let glyphs = Glyphs::load(HanziSource::PackBytes(include_bytes!("../zh-glyphs.pack"))).expect("the samples' strokes");
         let view = [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1];
-        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), view, reading: false, touched: 0.0, latest: view, holding: false, back: q("#latest") }
+        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), placed: HashMap::new(), view, reading: false, touched: 0.0, latest: view, holding: false, back: q("#latest") }
     }
 
     fn clear(&mut self) {
@@ -188,6 +190,7 @@ impl Board {
         self.layout = StableLayout::default();
         self.graph = Graph::default();
         self.shown.clear();
+        self.placed.clear();
     }
 
     /// Apply a reply and lay the board out again. What was already on the board is redrawn where it now
@@ -200,15 +203,25 @@ impl Board {
         self.ink.set_text_content(None);
         let mut fresh = vec![];
         let mut keys = HashSet::new();
+        let mut placed = HashMap::new();
+        let mut sliding = vec![];
         // Notes and marks can reach past the laid-out boxes, so the view is framed on the ink itself.
         let mut ink = Bounds { ..laid.bounds };
         for piece in &pieces {
             keys.insert(piece.key.clone());
-            let new = !self.shown.contains(&piece.key);
+            // Ink that was on the board somewhere else only moved, pushed along by a line written above it:
+            // it slides to its new place instead of being written again.
+            let before = self.placed.get(&piece.seed).copied();
+            let new = !self.shown.contains(&piece.key) && before.is_none();
             // The same seed in the same order gives the same wobble as in the app.
             let mut r = Rng::new(&piece.seed);
-            for line in &piece.lines {
+            for (n, line) in piece.lines.iter().enumerate() {
                 let inked = line.inked(&mut r);
+                if n == 0 {
+                    if let Some(first) = inked.center.first() {
+                        placed.insert(piece.seed.clone(), *first);
+                    }
+                }
                 let pad = f64::from(inked.width);
                 for p in &inked.center {
                     let (x, y) = (f64::from(p[0]), f64::from(p[1]));
@@ -221,10 +234,32 @@ impl Board {
                     fresh.push(Drawing { node, inked });
                 } else {
                     let _ = node.set_attribute("d", &path_of(&outline(&inked, 1.0)));
+                    let first = placed.get(&piece.seed).copied();
+                    let moved = !self.shown.contains(&piece.key);
+                    if let (true, Some(from), Some(to)) = (moved, before, first) {
+                        let (dx, dy) = (from[0] - to[0], from[1] - to[1]);
+                        let _ = node.set_attribute("style", &format!("transform:translate({dx:.1}px,{dy:.1}px)"));
+                        sliding.push(node);
+                    }
                 }
             }
         }
+        // Moved ink starts where it was and eases into place once the page has drawn it there.
+        if !sliding.is_empty() && !reduced() {
+            wasm_bindgen_futures::spawn_local(async move {
+                frame().await;
+                frame().await;
+                for node in sliding {
+                    let _ = node.set_attribute("style", "transition:transform 220ms cubic-bezier(.2,.7,.3,1);transform:none");
+                }
+            });
+        } else {
+            for node in sliding {
+                let _ = node.remove_attribute("style");
+            }
+        }
         self.shown = keys;
+        self.placed = placed;
         (fresh, ink)
     }
 

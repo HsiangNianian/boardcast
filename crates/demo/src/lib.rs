@@ -1,6 +1,7 @@
 //! The app's board in a web page. It replays the recorded sample meetings: each line is said, the model's
 //! recorded reply is applied, and the board is laid out, composed and inked by the same code the app runs,
-//! stroke by stroke. Only the window around it is drawn here. landing/demo/index.html is the page.
+//! stroke by stroke. A sample with a recording plays along with it, each line said when it was said.
+//! Only the window around it is drawn here. landing/demo/index.html is the page.
 
 use boardcast_board::board_layout::{Bounds, StableLayout};
 use boardcast_board::compose::{compose, Style};
@@ -10,18 +11,24 @@ use boardcast_board::pen::{outline, Inked, Rng};
 use boardcast_board::sugiyama::first_diagram;
 use serde::Deserialize;
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Document, Element};
+use web_sys::{Document, Element, HtmlAudioElement};
 
 #[derive(Deserialize)]
 struct Sample {
     id: String,
     name: String,
     lines: Vec<SampleLine>,
+    /// The meeting's recording, in the site's media folder, for a sample taken from a real one.
+    #[serde(default)]
+    audio: Option<String>,
+    /// Whose recording it is, shown while it plays.
+    #[serde(default)]
+    credit: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -31,11 +38,17 @@ struct SampleLine {
     /// How long the model took to answer when the sample was recorded.
     ms: f64,
     ops: Option<String>,
+    /// When the line is said in the recording, in seconds.
+    #[serde(default)]
+    start: Option<f64>,
+    #[serde(default)]
+    end: Option<f64>,
 }
 
 /// Recorded English meetings for the web demo.
 fn samples() -> Vec<Sample> {
     [
+        include_str!("../../../assets/demos/en-office-plan.json"),
         include_str!("../../../assets/demos/en-release-priorities.json"),
         include_str!("../../../assets/demos/en-auth-correction.json"),
         include_str!("../../../assets/demos/en-upload-branch.json"),
@@ -48,7 +61,7 @@ fn samples() -> Vec<Sample> {
 }
 
 /// Short names for the sample list, in the samples' order.
-const TITLES: [&str; 5] = ["Release checklist", "Sign-in flow", "Upload pipeline", "Service groups", "Owner handoff"];
+const TITLES: [&str; 6] = ["Office plan · recorded", "Release checklist", "Sign-in flow", "Upload pipeline", "Service groups", "Owner handoff"];
 
 /// CSS recolors existing strokes without clearing or restarting the board.
 fn ink_color(rgb: u32) -> String {
@@ -65,6 +78,8 @@ const PEN_SPEED: f32 = 1.4;
 /// Room around the ink, and the least the canvas shows. Compact canvases show less to keep ink legible.
 const MARGIN: f64 = 80.0;
 const MIN_VIEW: (f64, f64) = (900.0, 560.0);
+/// The most of the board shown at once; past this the view follows the newest ink, so writing stays legible.
+const MAX_VIEW_WIDTH: f64 = 1500.0;
 
 fn win() -> web_sys::Window {
     web_sys::window().expect("a window")
@@ -193,10 +208,34 @@ impl Board {
         (fresh, laid.bounds)
     }
 
+    /// Where the newest strokes are, or the board's bounds when there are none.
+    fn near(fresh: &[Drawing], all: &Bounds) -> Bounds {
+        let points = fresh.iter().flat_map(|d| d.inked.center.iter());
+        let mut b = Bounds { x0: f64::MAX, y0: f64::MAX, x1: f64::MIN, y1: f64::MIN };
+        for p in points {
+            (b.x0, b.y0, b.x1, b.y1) = (b.x0.min(f64::from(p[0])), b.y0.min(f64::from(p[1])), b.x1.max(f64::from(p[0])), b.y1.max(f64::from(p[1])));
+        }
+        if b.x0 > b.x1 { Bounds { ..*all } } else { b }
+    }
+
     fn set_view(&mut self, v: [f64; 4]) {
         self.view = v;
         let _ = self.svg.set_attribute("viewBox", &format!("{:.1} {:.1} {:.1} {:.1}", v[0], v[1], v[2], v[3]));
     }
+}
+
+/// The part of the board to show: all of it if that stays legible, or else the newest ink, inside the board.
+fn frame_following(all: &Bounds, newest: &Bounds) -> [f64; 4] {
+    let whole = frame_for(all);
+    if whole[2] <= MAX_VIEW_WIDTH {
+        return whole;
+    }
+    let (w, h) = (MAX_VIEW_WIDTH, MAX_VIEW_WIDTH * whole[3] / whole[2]);
+    let (cx, cy) = ((newest.x0 + newest.x1) / 2.0, (newest.y0 + newest.y1) / 2.0);
+    let clamp = |c: f64, half: f64, lo: f64, hi: f64| if hi - lo <= 2.0 * half { (lo + hi) / 2.0 } else { c.clamp(lo + half, hi - half) };
+    let x = clamp(cx, w / 2.0, all.x0 - MARGIN, all.x1 + MARGIN) - w / 2.0;
+    let y = clamp(cy, h / 2.0, all.y0 - MARGIN, all.y1 + MARGIN) - h / 2.0;
+    [x, y, w, h]
 }
 
 /// The part of the board to show: all its ink, centred, never closer than a set size, in the canvas's shape.
@@ -221,6 +260,9 @@ struct Ui {
     lines: Element,
     tabs: Vec<Element>,
     listen: Element,
+    sound: Element,
+    credit: Element,
+    audio: HtmlAudioElement,
 }
 
 impl Ui {
@@ -236,14 +278,21 @@ struct Control {
     paused: Cell<bool>,
     /// Bumped whenever a sample starts, so the one before stops where it is.
     run: Cell<u32>,
+    /// Whether the reader turned the recording's sound on. A page may only start sound after a click.
+    sound: Cell<bool>,
 }
 
 /// Play one sample through. False if the reader started another one meanwhile.
-async fn play(sample: &Sample, index: usize, board: &RefCell<Board>, ui: &Ui, control: &Control, me: u32) -> bool {
+async fn play(sample: &Sample, index: usize, board: &Rc<RefCell<Board>>, ui: &Rc<Ui>, control: &Rc<Control>, me: u32) -> bool {
     let live = || control.run.get() == me;
     board.borrow_mut().clear();
     ui.lines.set_text_content(None);
     ui.title.set_text_content(Some(TITLES[index]));
+    let _ = ui.audio.pause();
+    let recorded = sample.audio.is_some();
+    let _ = ui.sound.class_list().toggle_with_force("shown", recorded);
+    let _ = ui.credit.class_list().toggle_with_force("shown", recorded);
+    ui.credit.set_text_content(sample.credit.as_deref());
     let _ = ui.listen.class_list().toggle_with_force("paused", control.paused.get());
     q("#listen-label").set_text_content(Some(if control.paused.get() { "resume" } else { "pause" }));
     for (i, t) in ui.tabs.iter().enumerate() {
@@ -251,6 +300,9 @@ async fn play(sample: &Sample, index: usize, board: &RefCell<Board>, ui: &Ui, co
     }
     board.borrow_mut().set_view(frame_for(&Bounds { x0: 0.0, y0: 0.0, x1: 0.0, y1: 0.0 }));
     ui.set_state("listening");
+    if let Some(audio) = &sample.audio {
+        return play_recorded(sample, audio, board, ui, control, me).await;
+    }
     sleep(600.0).await;
     for line in &sample.lines {
         while control.paused.get() && live() {
@@ -303,6 +355,150 @@ async fn play(sample: &Sample, index: usize, board: &RefCell<Board>, ui: &Ui, co
         sleep(900.0).await;
     }
     live()
+}
+
+/// A line in the transcript as it is being said.
+fn line_item(ui: &Ui, speaker: &str) -> (Element, Element) {
+    let li = el("li", "live", "");
+    let _ = li.append_child(&el("b", "who", &speaker.chars().take(1).collect::<String>()));
+    let body = el("div", "", "");
+    let _ = body.append_child(&el("span", "name", speaker));
+    let said = el("p", "", "");
+    let _ = body.append_child(&said);
+    let _ = li.append_child(&body);
+    let _ = ui.lines.append_child(&li);
+    (li, said)
+}
+
+/// The recording's time, in seconds. It follows the audio while that plays, and keeps going on its own
+/// if the audio cannot, so the meeting plays through either way.
+struct Clock {
+    at: Cell<f64>,
+    last: Cell<f64>,
+}
+
+impl Clock {
+    fn tick(&self, now_ms: f64, audio: &HtmlAudioElement, paused: bool) -> f64 {
+        let dt = ((now_ms - self.last.replace(now_ms)) / 1000.0).clamp(0.0, 0.25);
+        let playing = !audio.paused() && audio.error().is_none() && audio.ready_state() >= 2;
+        if playing {
+            self.at.set(audio.current_time());
+        } else if !paused {
+            self.at.set(self.at.get() + dt);
+        }
+        self.at.get()
+    }
+}
+
+/// Play a sample along with its recording: each line typed out while it is said, and the model's reply
+/// drawn once it would have come back, one after another, while the talk goes on.
+async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Board>>, ui: &Rc<Ui>, control: &Rc<Control>, me: u32) -> bool {
+    let live = || control.run.get() == me;
+    let audio = &ui.audio;
+    audio.set_src(&format!("../media/{audio_name}"));
+    audio.set_muted(!control.sound.get());
+    audio.set_current_time(0.0);
+    if !control.paused.get() {
+        let _ = audio.play();
+    }
+    let clock = Clock { at: Cell::new(0.0), last: Cell::new(frame().await) };
+    // Replies wait here for the board, which writes them in order while the transcript runs on.
+    let queue: Rc<RefCell<VecDeque<(String, Element)>>> = Rc::new(RefCell::new(VecDeque::new()));
+    let idle = Rc::new(Cell::new(true));
+    let talk_over = Rc::new(Cell::new(false));
+    {
+        let (queue, idle, talk_over, board, ui, control) = (queue.clone(), idle.clone(), talk_over.clone(), board.clone(), ui.clone(), control.clone());
+        wasm_bindgen_futures::spawn_local(async move {
+            let live = || control.run.get() == me;
+            loop {
+                if !live() {
+                    return;
+                }
+                let next = queue.borrow_mut().pop_front();
+                let Some((ops, li)) = next else {
+                    idle.set(true);
+                    if talk_over.get() {
+                        return;
+                    }
+                    frame().await;
+                    continue;
+                };
+                idle.set(false);
+                let (fresh, bounds) = board.borrow_mut().apply(&ops);
+                if let Some(head) = board.borrow().graph.nodes.iter().find(|n| matches!(n.kind, Kind::Topic)) {
+                    ui.title.set_text_content(Some(&head.label));
+                }
+                ui.set_state("drawing");
+                ease_view(&board, frame_following(&bounds, &Board::near(&fresh, &bounds)), &live).await;
+                write(&fresh, &live).await;
+                let _ = li.class_list().add_1("drawn");
+                ui.set_state("listening");
+            }
+        });
+    }
+    let end = sample.lines.iter().filter_map(|l| l.end).fold(0.0, f64::max);
+    let mut said: Vec<(Element, Element, usize)> = vec![];
+    let mut sent = 0;
+    loop {
+        let now = frame().await;
+        if !live() {
+            let _ = audio.pause();
+            return false;
+        }
+        let paused = control.paused.get();
+        if paused && !audio.paused() {
+            let _ = audio.pause();
+        } else if !paused && audio.paused() && audio.error().is_none() && clock.at.get() < end {
+            audio.set_current_time(clock.at.get());
+            let _ = audio.play();
+        }
+        audio.set_muted(!control.sound.get());
+        let t = clock.tick(now, audio, paused);
+        // Lines come in as they are said, and are typed out over the time they take.
+        while said.len() < sample.lines.len() && sample.lines[said.len()].start.unwrap_or(0.0) <= t {
+            let (li, p) = line_item(ui, &sample.lines[said.len()].speaker);
+            said.push((li, p, 0));
+            ui.lines.set_scroll_top(ui.lines.scroll_height());
+        }
+        for (i, (li, p, shown)) in said.iter_mut().enumerate() {
+            let line = &sample.lines[i];
+            let chars: Vec<char> = line.text.chars().collect();
+            if *shown >= chars.len() {
+                continue;
+            }
+            let (start, stop) = (line.start.unwrap_or(0.0), line.end.unwrap_or(0.0));
+            let k = if reduced() || stop <= start { 1.0 } else { ((t - start) / (stop - start)).clamp(0.0, 1.0) };
+            let n = ((chars.len() as f64 * k).ceil() as usize).min(chars.len());
+            if n > *shown {
+                *shown = n;
+                p.set_text_content(Some(&chars[..n].iter().collect::<String>()));
+                ui.lines.set_scroll_top(ui.lines.scroll_height());
+            }
+            if n == chars.len() {
+                let _ = li.class_list().remove_1("live");
+            }
+        }
+        // A reply reaches the board as long after the line as the model took when the sample was made.
+        while sent < said.len() {
+            let line = &sample.lines[sent];
+            if t < line.end.unwrap_or(0.0) + line.ms.clamp(300.0, 1500.0) / 1000.0 {
+                break;
+            }
+            if let Some(ops) = &line.ops {
+                queue.borrow_mut().push_back((ops.clone(), said[sent].0.clone()));
+            } else {
+                let _ = said[sent].0.class_list().add_1("drawn");
+            }
+            sent += 1;
+        }
+        if sent == sample.lines.len() {
+            talk_over.set(true);
+            if idle.get() && queue.borrow().is_empty() {
+                let _ = audio.pause();
+                return live();
+            }
+        }
+    }
 }
 
 /// Move the view to where the new ink goes, quickly.
@@ -382,8 +578,23 @@ pub fn start() {
             b
         })
         .collect();
-    let ui = Rc::new(Ui { title: q("#title"), state: q("#state"), lines: q("#lines"), tabs: tabs.clone(), listen: q("#listen") });
-    let control = Rc::new(Control { wanted: Cell::new(None), paused: Cell::new(false), run: Cell::new(0) });
+    let audio = HtmlAudioElement::new().expect("an audio element");
+    audio.set_preload("auto");
+    let ui = Rc::new(Ui { title: q("#title"), state: q("#state"), lines: q("#lines"), tabs: tabs.clone(), listen: q("#listen"), sound: q("#sound"), credit: q("#credit"), audio });
+    let control = Rc::new(Control { wanted: Cell::new(None), paused: Cell::new(false), run: Cell::new(0), sound: Cell::new(false) });
+    {
+        let (control, ui) = (control.clone(), ui.clone());
+        on(&q("#sound"), "click", move |_| {
+            control.sound.set(!control.sound.get());
+            ui.audio.set_muted(!control.sound.get());
+            // Sound may only start from a click, so this is where a refused start is tried again.
+            if control.sound.get() && !control.paused.get() && ui.audio.paused() {
+                let _ = ui.audio.play();
+            }
+            let _ = ui.sound.class_list().toggle_with_force("on", control.sound.get());
+            q("#sound-label").set_text_content(Some(if control.sound.get() { "sound on" } else { "sound off" }));
+        });
+    }
     let board = Rc::new(RefCell::new(Board::new()));
 
     for (i, b) in tabs.iter().enumerate() {

@@ -66,6 +66,15 @@ body > .site-header { padding-top: 0; padding-bottom: 28px; }
 .lines li.drawn .who { border-color: var(--text); background: var(--text); color: var(--bg); }
 .input { margin: 10px; padding: 10px 12px; border: 1px solid var(--line); font-size: 13px; color: var(--faint); }
 .dock svg [fill="#000"] { fill: var(--bg); }
+/* The recording's controls and credit show only while a recorded meeting plays. */
+.dock .sound, .credit { display: none; }
+.dock .sound.shown { display: flex; cursor: pointer; }
+.dock .sound .waves, .dock .sound.on .mute { display: none; }
+.dock .sound.on .waves { display: inline; }
+.dock .sound.on { color: var(--rec); }
+.dock .sound.on svg { color: var(--rec); }
+.dock .sound:hover { opacity: .85; }
+.credit.shown { display: block; position: absolute; right: 14px; bottom: 66px; font-size: 10px; text-align: right; max-width: 60%; }
 .embed-label { display: none; }
 
 /* The embedded demo reads left to right: transcript, then the board. */
@@ -90,7 +99,8 @@ html.embed .canvas { grid-column: 2; grid-row: 1; min-width: 0; }
 html.embed .board { bottom: 47px; height: calc(100% - 77px); }
 html.embed .dock { height: 45px; }
 html.embed .dock button { font-size: 12px; padding: 0 16px; }
-html.embed .dock button:not(.listen):not(#replay), html.embed #replay small { display: none; }
+html.embed .dock button:not(.listen):not(#replay):not(.sound), html.embed #replay small { display: none; }
+html.embed .credit.shown { bottom: 53px; }
 html.embed .dock button span { display: block; }
 html.embed .dock .listen .rec { display: grid; width: 22px; height: 22px; }
 html.embed #replay { margin-left: auto; border-left: 1px solid var(--line); border-right: 0; }

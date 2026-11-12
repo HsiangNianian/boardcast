@@ -314,7 +314,8 @@ fn parse_devices(text: &str) -> Vec<Gpu> {
 /// The server's file name in the folder it ships in.
 pub const LLAMA_SERVER: &str = if cfg!(windows) { "llama-server.exe" } else { "llama-server" };
 
-fn server_command(binaries: &std::path::Path) -> Command {
+/// `llama-server` from `binaries`, with its libraries found and, on Windows, no console.
+pub fn server_command(binaries: &std::path::Path) -> Command {
     let mut cmd = Command::new(binaries.join(LLAMA_SERVER));
     #[cfg(target_os = "macos")]
     cmd.env("DYLD_LIBRARY_PATH", binaries);
@@ -379,9 +380,13 @@ fn llama_command(server: &LocalServer, device: Option<&str>, discrete: bool, por
     cmd
 }
 
-/// The child dies with the thread that started it on Linux, and with this process elsewhere.
 fn spawn_llama(server: &LocalServer, device: Option<&str>, discrete: bool, port: u16, projector: Option<&std::path::Path>) -> Result<Child> {
-    let mut cmd = llama_command(server, device, discrete, port, projector);
+    spawn_tied(llama_command(server, device, discrete, port, projector)).with_context(|| format!("starting {}", server.binaries.join(LLAMA_SERVER).display()))
+}
+
+/// Start a child that dies with the thread that started it on Linux, and with this process elsewhere, so
+/// no model server outlives the app however it ends.
+pub fn spawn_tied(mut cmd: Command) -> Result<Child> {
     #[cfg(target_os = "linux")]
     // SAFETY: prctl is async-signal-safe and touches no parent state between fork and exec.
     unsafe {
@@ -390,7 +395,7 @@ fn spawn_llama(server: &LocalServer, device: Option<&str>, discrete: bool, port:
             Ok(())
         });
     }
-    let child = cmd.spawn().with_context(|| format!("starting {}", server.binaries.join(LLAMA_SERVER).display()))?;
+    let child = cmd.spawn()?;
     #[cfg(target_os = "macos")]
     end_with_this_process(child.id());
     #[cfg(windows)]

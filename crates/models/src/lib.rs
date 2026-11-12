@@ -153,6 +153,23 @@ pub fn vision_for(model_file: &str) -> Option<Model> {
     }
 }
 
+/// What finds things in past meetings by what they mean: EmbeddingGemma 300M, an add-on downloaded only when
+/// meeting search is turned on, and never chosen as a board model. It is used under the Gemma Terms of Use.
+pub fn embedding() -> Model {
+    let file = "embeddinggemma-300M-Q8_0.gguf";
+    let path = format!("ggml-org/embeddinggemma-300M-GGUF/resolve/{{}}/{file}");
+    Model {
+        id: "embeddinggemma-300m",
+        label: "Meeting search · EmbeddingGemma 300M",
+        file: file.to_string(),
+        size: 333_590_944,
+        sha256: "b5ce9d77a3fc4b3b39ccb5643c36777911cc4eb46a66962eadfa3f5f60490d63".to_string(),
+        vram_mib: 0,
+        note: None,
+        sources: sources(&path.replace("{}", "master"), &path.replace("{}", "main")),
+    }
+}
+
 pub fn installed(model: &Model, dir: &Path) -> bool {
     dir.join(&model.file).is_file()
 }
@@ -578,6 +595,13 @@ mod tests {
         for vram in [0, 2048, 4096, 8192, 65536] {
             assert!(recommended(vram).starts_with("qwen"), "{vram}");
         }
+    }
+
+    #[test]
+    fn the_search_model_is_an_add_on_and_never_a_board_model() {
+        let m = embedding();
+        assert!(m.sources.iter().any(|s| s.url.starts_with("https://modelscope.cn/models/ggml-org/embeddinggemma-300M-GGUF/resolve/master/")));
+        assert!(catalog().iter().all(|c| c.file != m.file));
     }
 
     #[test]

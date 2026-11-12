@@ -74,7 +74,7 @@ impl Index {
         if raw.len() != header.chunks.len() * header.dims * 4 {
             bail!("{} has {} bytes of vectors for {} passages", path.display(), raw.len(), header.chunks.len());
         }
-        let vectors = raw.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+        let vectors = raw.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
         Ok(Self { fingerprint: header.fingerprint, dims: header.dims, chunks: header.chunks, vectors })
     }
 }

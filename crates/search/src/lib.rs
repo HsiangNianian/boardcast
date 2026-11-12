@@ -12,6 +12,7 @@ pub mod chunk;
 pub mod embed;
 pub mod index;
 pub mod rank;
+pub mod service;
 
 pub use chunk::{Chunk, Said, Source};
 pub use embed::{Embedder, Family};

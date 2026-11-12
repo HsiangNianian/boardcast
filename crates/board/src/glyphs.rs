@@ -60,10 +60,12 @@ enum Hanzi {
 
 pub struct Glyphs {
     latin: HashMap<char, Arc<Glyph>>,
+    cursive: HashMap<char, Arc<Glyph>>,
     punct: HashMap<char, Arc<Glyph>>,
     kana: HashMap<char, Arc<Glyph>>,
     source: Hanzi,
     hanzi: HashMap<char, Option<Arc<Glyph>>>,
+    messy: f32,
 }
 
 impl Glyphs {
@@ -71,6 +73,11 @@ impl Glyphs {
     pub fn load(source: HanziSource) -> Result<Self> {
         let table: HashMap<String, Glyph> = serde_json::from_str(include_str!("../../../assets/glyphs/handwritten.json"))?;
         let latin = table
+            .into_iter()
+            .filter_map(|(k, g)| Some((k.chars().next()?, Arc::new(Glyph { latin: true, ..g }))))
+            .collect();
+        let table: HashMap<String, Glyph> = serde_json::from_str(include_str!("../../../assets/glyphs/cursive.json"))?;
+        let cursive = table
             .into_iter()
             .filter_map(|(k, g)| Some((k.chars().next()?, Arc::new(Glyph { latin: true, ..g }))))
             .collect();
@@ -85,12 +92,26 @@ impl Glyphs {
             HanziSource::Directory(path) => Hanzi::Directory(path),
             HanziSource::PackBytes(bytes) => Hanzi::Pack(Pack::parse(bytes).context("the glyph pack is damaged")?),
         };
-        Ok(Self { latin, punct, kana, source, hanzi: HashMap::new() })
+        Ok(Self { latin, cursive, punct, kana, source, hanzi: HashMap::new(), messy: 0.0 })
     }
 
     /// A boardcast checkout with `assets/hanzi` generated.
     pub fn from_checkout(root: &Path) -> Result<Self> {
         Self::load(HanziSource::Directory(root.join("assets/hanzi")))
+    }
+
+    /// How messy the hand writing with these is, from 0 (neat, the default) to 1.
+    pub fn messy(&self) -> f32 {
+        self.messy
+    }
+
+    pub fn set_messy(&mut self, messy: f32) {
+        self.messy = messy.clamp(0.0, 1.0);
+    }
+
+    /// A small English letter joined up, as a messy hand writes it (Hershey script).
+    pub fn cursive(&self, ch: char) -> Option<Arc<Glyph>> {
+        self.cursive.get(&ch).cloned()
     }
 
     /// Characters without data return `None`; the caller leaves a blank advance.
@@ -252,5 +273,33 @@ mod tests {
         assert!(Pack::parse(&[b"BCGLYPH1".as_slice(), &[0xff; 4]].concat()).is_err());
         assert!(Pack::parse(b"nonsense").is_err());
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// The English strokes run as a hand writes them (scripts/excalifont-strokes.py puts them so): a line
+    /// across goes left to right, a line down goes top to bottom, and a letter is not left in pieces.
+    #[test]
+    fn english_strokes_run_the_way_a_hand_writes() {
+        let table: HashMap<String, Glyph> = serde_json::from_str(include_str!("../../../assets/glyphs/handwritten.json")).unwrap();
+        let length = |s: &Stroke| s.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum::<f32>();
+        let mut wrong = vec![];
+        for (ch, g) in &table {
+            for s in g.strokes.iter().filter(|s| s.len() >= 2 && length(s) >= 0.1) {
+                let (a, b) = (s[0], s[s.len() - 1]);
+                let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+                if dx.hypot(dy) < 0.2 * length(s) {
+                    continue; // a loop
+                }
+                if (dx.abs() > 2.0 * dy.abs() && dx < 0.0) || (dy.abs() > 2.0 * dx.abs() && dy < 0.0) {
+                    wrong.push(ch.clone());
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "strokes running backwards in {wrong:?}");
+        let count = |ch: &str| table[ch].strokes.len();
+        for (ch, n) in [("A", 3), ("E", 3), ("H", 3), ("O", 1), ("X", 2), ("a", 1), ("e", 1), ("i", 2), ("m", 3), ("x", 2)] {
+            assert_eq!(count(ch), n, "strokes in {ch}");
+        }
+        // The dot of an i is written last.
+        assert!(table["i"].strokes[1][0][1] < table["i"].strokes[0][0][1]);
     }
 }

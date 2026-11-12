@@ -176,7 +176,7 @@ impl Board {
         }
         let mut r = Rng::new(&format!("{ch}{}", self.chars));
         let width = pen_for(FONT) * 0.65;
-        let placed = place(&g.strokes, self.x, self.y, FONT, &mut r);
+        let placed = place(&g.strokes, self.x, self.y, FONT, &mut r, 0.0);
         let strokes = placed.iter().map(|s| (ink(s, width, pen_for(FONT) * 0.12, &mut r), INK_STYLE)).collect();
         self.pending = Some(Pending { strokes, index: 0, drawn: 0.0 });
         self.x += FONT * g.advance;

@@ -2,7 +2,7 @@
 //! Icons and the pointing highlight are left out of the spike.
 
 use crate::board_layout::{Layout, Rect, Row, FONT, TITLE};
-use crate::glyphs::{Glyphs, Pt};
+use crate::glyphs::{Glyphs, Pt, Stroke};
 use crate::graph::{Graph, Kind, Node};
 use crate::pen::{
     around, arrow, circle_mark, ink, line, marker, place, rough_box, star, strike, Inked, Rng,
@@ -11,6 +11,12 @@ use crate::spans::{rotate_point, SpanBox};
 
 const WEIGHT: f32 = 0.65;
 const ENGLISH_WEIGHT: f32 = 1.0;
+/// The fine line a quick hand leaves between the end of one stroke and the start of the next.
+const THREAD_WEIGHT: f32 = WEIGHT * 0.45;
+/// Joined-up letters are small and looped; a full English pen fills their loops in.
+const CURSIVE_WEIGHT: f32 = ENGLISH_WEIGHT * 0.7;
+/// From this messiness on, small English letters are written joined up.
+pub const CURSIVE_AT: f32 = 0.7;
 const LABEL_PAD: f32 = 3.0;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -51,6 +57,22 @@ pub struct Piece {
     pub key: String,
     pub seed: String,
     pub lines: Vec<Line>,
+}
+
+fn dist(a: Pt, b: Pt) -> f32 {
+    (a[0] - b[0]).hypot(a[1] - b[1])
+}
+
+fn length(s: &Stroke) -> f32 {
+    s.windows(2).map(|w| dist(w[0], w[1])).sum()
+}
+
+/// A line of text written as the board writes a label of this size, in its ink: for a sample sheet.
+pub fn handwriting(glyphs: &mut Glyphs, text: &str, x: f32, y: f32, size: f32, seed: &str) -> Vec<Line> {
+    let mut canvas = Canvas { glyphs, pieces: vec![] };
+    let shapes = canvas.write(text, x, y, size, seed);
+    canvas.add(seed.to_string(), INK, 1.0, false, shapes, pen_for(size));
+    canvas.pieces.pop().map(|p| p.lines).unwrap_or_default()
 }
 
 fn pen_for(size: f32) -> f32 {
@@ -388,14 +410,14 @@ struct Canvas<'a> {
 }
 
 impl Canvas<'_> {
-    /// `size` is the pen size. Text passes per-stroke weights; everything else uses the default.
+    /// `size` is the pen size; each shape has its weight, a share of it.
     fn add(
         &mut self,
         key: String,
         rgb: u32,
         opacity: f32,
         under: bool,
-        shapes: Vec<(Vec<Pt>, bool)>,
+        shapes: Vec<(Vec<Pt>, f32)>,
         size: f32,
     ) {
         let style = Style {
@@ -403,12 +425,13 @@ impl Canvas<'_> {
             alpha: opacity,
             under,
         };
+        let messy = self.glyphs.messy();
         let lines: Vec<Line> = shapes
             .into_iter()
-            .map(|(points, latin)| Line {
+            .map(|(points, weight)| Line {
                 points,
-                width: size * if latin { ENGLISH_WEIGHT } else { WEIGHT },
-                wobble: size * 0.12,
+                width: size * weight,
+                wobble: size * (0.12 + 0.5 * messy),
                 style,
                 flat: false,
             })
@@ -458,19 +481,51 @@ impl Canvas<'_> {
         });
     }
 
-    fn write(&mut self, text: &str, x: f32, y: f32, size: f32, seed: &str) -> Vec<(Vec<Pt>, bool)> {
+    /// A line of text in the hand's strokes, each with its weight.
+    fn write(&mut self, text: &str, x: f32, y: f32, size: f32, seed: &str) -> Vec<(Vec<Pt>, f32)> {
+        let messy = self.glyphs.messy();
         let mut r = Rng::new(seed);
         let mut out = vec![];
         let mut cx = x;
+        // Where the last joined-up letter of a word left off, for the next to join.
+        let mut joins: Option<Pt> = None;
         for ch in text.chars() {
-            let Some(g) = self.glyphs.get(ch) else {
+            // A hurried hand joins small letters up; capitals stay printed, as in most hands, and are read
+            // more easily on a board.
+            let script = messy >= CURSIVE_AT && ch.is_ascii_lowercase();
+            let glyph = if script { self.glyphs.cursive(ch) } else { self.glyphs.get(ch) };
+            let Some(g) = glyph else {
                 cx += size * 0.6;
+                joins = None;
                 continue;
             };
-            for s in place(&g.strokes, cx, y, size, &mut r) {
-                out.push((s, g.latin));
+            // The printed English letters are already uneven; more on top pulls apart where strokes meet.
+            // Joined-up letters are hurried already, and small: half as much again keeps them legible.
+            let shaken = if script { messy * 0.5 } else if g.latin { messy * 0.2 } else { messy };
+            let placed = place(&g.strokes, cx, y, size, &mut r, shaken);
+            if let (Some(end), Some(start)) = (joins, placed.first().and_then(|s| s.first())) {
+                if dist(end, *start) < size * 0.7 {
+                    out.push((vec![end, *start], CURSIVE_WEIGHT));
+                }
             }
-            cx += g.advance * size * (0.96 + r.next() * 0.08) + size * 0.04;
+            let han = matches!(ch as u32, 0x3400..=0x9FFF);
+            for (i, s) in placed.iter().enumerate() {
+                out.push((s.clone(), if script { CURSIVE_WEIGHT } else if g.latin { ENGLISH_WEIGHT } else { WEIGHT }));
+                // A quick hand carries the pen from one stroke's end to the next stroke's start with a
+                // fine thread, more often the messier it is.
+                let Some(next) = placed.get(i + 1) else { continue };
+                if han && messy > 0.5 && r.next() < (messy - 0.5) * 1.4 {
+                    let (a, b) = (s[s.len() - 1], next[0]);
+                    if dist(a, b) < size * 0.4 {
+                        let mid = [(a[0] + b[0]) / 2.0 + (r.next() - 0.5) * size * 0.1, (a[1] + b[1]) / 2.0];
+                        out.push((vec![a, mid, b], THREAD_WEIGHT));
+                    }
+                }
+            }
+            // A dot is not where the hand goes on from.
+            joins = if script { placed.iter().rev().find(|s| length(s) > size * 0.15).and_then(|s| s.last()).copied() } else { None };
+            // A messier hand writes closer, and less evenly.
+            cx += g.advance * size * (0.96 - 0.1 * messy + r.next() * (0.08 + 0.22 * messy)) + size * 0.04;
         }
         out
     }
@@ -497,7 +552,7 @@ impl Canvas<'_> {
         self.add(key.clone(), rgb, opacity, false, shapes, pen_for(size));
         let Some(n) = n else { return };
         let mut r = Rng::new(&format!("{key}m"));
-        let plain = |v: Vec<Vec<Pt>>| v.into_iter().map(|s| (s, false)).collect::<Vec<_>>();
+        let plain = |v: Vec<Vec<Pt>>| v.into_iter().map(|s| (s, WEIGHT)).collect::<Vec<_>>();
         for mark in &n.marks {
             match mark.as_str() {
                 "划掉" => {
@@ -562,7 +617,7 @@ impl Canvas<'_> {
 
     /// Imported text is on the page already, so only what was marked on it is drawn.
     fn page_marks(&mut self, g: &Graph, l: &Layout) {
-        let plain = |v: Vec<Vec<Pt>>| v.into_iter().map(|s| (s, false)).collect::<Vec<_>>();
+        let plain = |v: Vec<Vec<Pt>>| v.into_iter().map(|s| (s, WEIGHT)).collect::<Vec<_>>();
         let font = FONT as f32;
         for n in g.nodes.iter().filter(|n| n.kind == Kind::Region) {
             let Some([x, y, w, h]) = n.at().map(|a| a.map(|v| v as f32)) else {
@@ -820,7 +875,7 @@ impl Canvas<'_> {
                 rgb,
                 alpha(n),
                 false,
-                vec![(shape, false)],
+                vec![(shape, WEIGHT)],
                 pen_for(size) * 0.9,
             );
         }
@@ -876,7 +931,7 @@ impl Canvas<'_> {
                 RED,
                 1.0,
                 false,
-                vec![(ring, false)],
+                vec![(ring, WEIGHT)],
                 pen_for(size),
             );
         }
@@ -992,7 +1047,7 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
     };
     let font = FONT as f32;
     let title = TITLE as f32;
-    let plain = |v: Vec<Vec<Pt>>| v.into_iter().map(|s| (s, false)).collect::<Vec<_>>();
+    let plain = |v: Vec<Vec<Pt>>| v.into_iter().map(|s| (s, WEIGHT)).collect::<Vec<_>>();
 
     c.page_marks(g, l);
 
@@ -1024,7 +1079,7 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
                 rgb,
                 alpha(head),
                 false,
-                vec![(rule, false)],
+                vec![(rule, WEIGHT)],
                 pen_for(title),
             );
         }
@@ -1255,6 +1310,27 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
 mod tests {
     use super::*;
 
+    fn checkout_glyphs() -> Glyphs {
+        Glyphs::from_checkout(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))).unwrap()
+    }
+
+    #[test]
+    fn a_hurried_hand_joins_small_letters_and_threads_strokes() {
+        let mut glyphs = checkout_glyphs();
+        let neat = handwriting(&mut glyphs, "line", 0.0, 0.0, 40.0, "k");
+        glyphs.set_messy(0.8);
+        let messy = handwriting(&mut glyphs, "line", 0.0, 0.0, 40.0, "k");
+        // Joined up: thinner, the letters' own strokes and the joins between them.
+        assert!(messy.iter().all(|l| l.width < neat[0].width));
+        assert!(messy.len() > neat.len() - 1);
+        // Chinese strokes are threaded together now and then.
+        let thin = |lines: &[Line]| lines.iter().filter(|l| l.width < pen_for(40.0) * WEIGHT * 0.5).count();
+        glyphs.set_messy(0.0);
+        assert_eq!(thin(&handwriting(&mut glyphs, "播种直播", 0.0, 0.0, 40.0, "z")), 0);
+        glyphs.set_messy(1.0);
+        assert!(thin(&handwriting(&mut glyphs, "播种直播", 0.0, 0.0, 40.0, "z")) > 0);
+    }
+
     #[test]
     fn a_label_finds_room_beside_a_slanting_line() {
         let route = [[0.0, 0.0], [300.0, 200.0]];
@@ -1455,7 +1531,6 @@ mod tests {
         }
     }
 
-    #[test]
     #[test]
     fn a_clear_connection_is_left_as_it_was_so_the_board_stays_put() {
         let (left, right) = (

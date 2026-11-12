@@ -23,7 +23,7 @@ pub fn word_strokes(glyphs: &mut Glyphs) -> Vec<Inked> {
     let (mut x, y) = (-width / 2.0, -SIZE / 2.0);
     let mut strokes = vec![];
     for glyph in found {
-        for stroke in place(&glyph.strokes, x, y, SIZE, &mut r) {
+        for stroke in place(&glyph.strokes, x, y, SIZE, &mut r, 0.0) {
             strokes.push(ink(&stroke, SIZE * 0.09, SIZE * 0.012, &mut r));
         }
         x += glyph.advance * SIZE;

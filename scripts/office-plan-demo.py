@@ -69,6 +69,7 @@ last['ops'] = '\n'.join(([last['ops']] if last['ops'] else []) + [renum(p['lines
 lines = [c for l in lines for c in split(l)]
 sample = {
     'id': 'en-office-plan',
+    'title': 'Office plan · English',
     'name': 'A real research-group meeting planning who sits where, from the AMI Meeting Corpus (IB4001), with its recording',
     'lang': 'en',
     'audio': 'en-office-plan.mp3',

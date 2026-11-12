@@ -21,6 +21,8 @@ use web_sys::{Document, Element, HtmlAudioElement};
 #[derive(Deserialize)]
 struct Sample {
     id: String,
+    /// The sample's tab.
+    title: String,
     name: String,
     lines: Vec<SampleLine>,
     /// The meeting's recording, in the site's media folder, for a sample taken from a real one.
@@ -45,23 +47,13 @@ struct SampleLine {
     end: Option<f64>,
 }
 
-/// Recorded English meetings for the web demo.
+/// Real meetings, each played with its recording: one in English, one in Chinese.
 fn samples() -> Vec<Sample> {
-    [
-        include_str!("../../../assets/demos/en-office-plan.json"),
-        include_str!("../../../assets/demos/en-release-priorities.json"),
-        include_str!("../../../assets/demos/en-auth-correction.json"),
-        include_str!("../../../assets/demos/en-upload-branch.json"),
-        include_str!("../../../assets/demos/en-platform-groups.json"),
-        include_str!("../../../assets/demos/en-owner-handoff.json"),
-    ]
+    [include_str!("../../../assets/demos/en-office-plan.json"), include_str!("../../../assets/demos/zh-phone-product.json")]
     .iter()
     .map(|s| serde_json::from_str(s).expect("a sample meeting"))
     .collect()
 }
-
-/// Short names for the sample list, in the samples' order.
-const TITLES: [&str; 6] = ["Office plan · recorded", "Release checklist", "Sign-in flow", "Upload pipeline", "Service groups", "Owner handoff"];
 
 /// CSS recolors existing strokes without clearing or restarting the board.
 fn ink_color(rgb: u32) -> String {
@@ -177,7 +169,8 @@ impl Board {
         let _ = root.append_child(&under);
         let _ = root.append_child(&ink);
         // Only the characters the Chinese samples use, from hanzi-writer-data (Arphic Public License):
-        // `boardcast-tools pack-glyphs assets/hanzi crates/demo/zh-glyphs.pack --only-from <the samples>`.
+        // `boardcast-tools pack-glyphs assets/hanzi crates/demo/zh-glyphs.pack --only-from assets/demos/en-office-plan.json
+        // assets/demos/zh-phone-product.json`.
         let glyphs = Glyphs::load(HanziSource::PackBytes(include_bytes!("../zh-glyphs.pack"))).expect("the samples' strokes");
         let view = [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1];
         Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), placed: HashMap::new(), view, reading: false, touched: 0.0, latest: view, holding: false, back: q("#latest") }
@@ -367,7 +360,7 @@ async fn play(sample: &Sample, index: usize, board: &Rc<RefCell<Board>>, ui: &Rc
     let live = || control.run.get() == me;
     board.borrow_mut().clear();
     ui.lines.set_text_content(None);
-    ui.title.set_text_content(Some(TITLES[index]));
+    ui.title.set_text_content(Some(&sample.title));
     let _ = ui.audio.pause();
     let recorded = sample.audio.is_some();
     let _ = ui.sound.class_list().toggle_with_force("shown", recorded);
@@ -683,9 +676,9 @@ pub fn start() {
     let picker = q("#samples");
     let tabs: Vec<Element> = samples
         .iter()
-        .enumerate()
-        .map(|(i, s)| {
-            let b = el("button", "", TITLES[i]);
+        
+        .map(|s| {
+            let b = el("button", "", &s.title);
             let _ = b.set_attribute("title", &s.name);
             let _ = b.set_attribute("data-sample", &s.id);
             let _ = picker.append_child(&b);

@@ -49,7 +49,7 @@
   --dim: #8a8a8a;
   --faint: #555;
   --hair: #262626;
-  --link: var(--grey);
+  --link: #9fb4ff;
   --accent: #ff5a36;
   --hero-teal: #248e8c80;
   --hero-coral: #e3583b94;
@@ -289,7 +289,7 @@ section.block { padding-top: 140px; }
 .board .ink { stroke: var(--board-ink); } .board .thick { stroke-width: 3.4; } .board .accent { stroke: var(--accent); }
 .board .lasso { stroke: var(--fg); stroke-width: 1.4; opacity: .8; }
 .board .hand { font-family: var(--hand); fill: var(--board-ink); }
-.board .sel { fill: none; stroke: var(--board-blue); stroke-width: 1; stroke-dasharray: 3 3; }
+.board .sel { fill: none; stroke: var(--link); stroke-width: 1; stroke-dasharray: 3 3; }
 .coords { position: absolute; left: 12px; top: 10px; z-index: 2; }
 .marks { position: absolute; z-index: 3; display: flex; border: 1px solid var(--faint); background: var(--l2); opacity: 0; transform: translateY(6px); transition: opacity .25s, transform .25s; font-size: 12px; }
 .marks.on { opacity: 1; transform: none; }
@@ -452,7 +452,11 @@ section.block { padding-top: 140px; }
 .now-foot a:hover { border-color: var(--fg); }
 
 @media (max-width: 1080px) {
-  nav.top { grid-template-columns: 1fr 1fr; } .about { display: none; }
+  /* A tablet keeps the brand and the four items in one row, each a little smaller. */
+  nav.top { grid-template-columns: auto repeat(4, minmax(0, 1fr)); gap: 20px; padding-top: 28px; } .about { display: none; }
+  .brand { font-size: 24px; padding-right: 8px; }
+  .nav-item { grid-template-columns: 32px 1fr; gap: 10px; } .nav-item svg { width: 32px; height: 32px; }
+  .nav-item b { font-size: 17px; } .nav-item span { margin-top: 8px; font-size: 13px; }
   .hero-intro { gap: 32px; grid-template-columns: 1.2fr 1fr; }
   .ink { height: 200px; }
   .said #said-time { display: none; }
@@ -466,6 +470,8 @@ section.block { padding-top: 140px; }
   .try iframe { height: calc(clamp(560px, 70svh, 720px) + 44px); }
 }
 @media (max-width: 760px) {
+  /* A phone puts the brand on its own line and the items two by two under it. */
+  nav.top { grid-template-columns: 1fr 1fr; gap: 20px 16px; } .brand { grid-column: 1 / -1; }
   .hero-intro { grid-template-columns: 1fr; gap: 28px; padding-top: 28px; }
   .hero-copy h1 { max-width: 23ch; font-size: 34px; }
   .hero-copy p { max-width: 48ch; }

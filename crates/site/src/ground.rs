@@ -1,22 +1,19 @@
 //! The ground under the whole page: grey dots in an ordered dither of a soft, slowly drifting field,
-//! brighter around the pointer, like a halftone of moving cloud. A fragment shader draws it each frame
+//! like a halftone of moving cloud. A fragment shader draws it each frame
 //! on a canvas fixed behind the page. Without WebGL the page keeps its still dots from the stylesheet.
 
-use crate::util::{doc, frame, on_passive, reduced, win};
-use std::cell::Cell;
-use std::rc::Rc;
+use crate::util::{doc, frame, reduced, win};
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlCanvasElement, WebGlProgram, WebGlRenderingContext as Gl, WebGlShader};
 
 const VERTEX: &str = "attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }";
 
-/// The field is value noise in a few octaves, drifting; the pointer adds a soft bump. Each 3 px cell
+/// The field is value noise in a few octaves, drifting. Each 3 px cell
 /// is on or off by an 8x8 Bayer threshold, and an on cell shows a 2 px dot in the ink.
 const FRAGMENT: &str = r"
 precision mediump float;
 uniform vec2 res;
 uniform float t;
-uniform vec2 ptr;
 uniform vec4 ink;
 uniform float cell;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -38,9 +35,7 @@ void main() {
   vec2 at = c * cell;
   vec2 uv = at / res.y;
   float n = fbm(uv * 2.4 + vec2(t * 0.018, -t * 0.011));
-  n = smoothstep(0.38, 0.82, n) * 0.62;
-  vec2 d = (at - ptr) / res.y;
-  n += 0.5 * exp(-dot(d, d) * 26.0);
+  n = smoothstep(0.38, 0.82, n) * 0.7;
   float on = step(bayer8(c), n);
   vec2 f = mod(gl_FragCoord.xy, cell);
   float dotted = step(f.x, cell * 0.67) * step(f.y, cell * 0.67);
@@ -102,17 +97,7 @@ pub fn init() {
     gl.enable(Gl::BLEND);
     gl.blend_func(Gl::ONE, Gl::ONE_MINUS_SRC_ALPHA);
     let u = |name: &str| gl.get_uniform_location(&prog, name);
-    let (res, time, ptr, ink_at, cell) = (u("res"), u("t"), u("ptr"), u("ink"), u("cell"));
-
-    let pointer = Rc::new(Cell::new((-9999.0f32, -9999.0f32)));
-    {
-        let pointer = pointer.clone();
-        on_passive(&doc(), "pointermove", move |e| {
-            if let Some(e) = e.dyn_ref::<web_sys::MouseEvent>() {
-                pointer.set((e.client_x() as f32, e.client_y() as f32));
-            }
-        });
-    }
+    let (res, time, ink_at, cell) = (u("res"), u("t"), u("ink"), u("cell"));
     let still = reduced();
     wasm_bindgen_futures::spawn_local(async move {
         let mut last_ink = 0.0;
@@ -137,12 +122,10 @@ pub fn init() {
                 canvas.set_height(ph);
                 gl.viewport(0, 0, pw as i32, ph as i32);
             }
-            let (px, py) = pointer.get();
             // Light ink on dark paper reads stronger than dark on light, so it is thinner.
             let alpha = if colour.iter().sum::<f32>() > 1.5 { 0.16 } else { 0.13 };
             gl.uniform2f(res.as_ref(), pw as f32, ph as f32);
             gl.uniform1f(time.as_ref(), if still { 0.0 } else { (now / 1000.0) as f32 });
-            gl.uniform2f(ptr.as_ref(), px * dpr as f32, ph as f32 - py * dpr as f32);
             gl.uniform4f(ink_at.as_ref(), colour[0], colour[1], colour[2], alpha);
             gl.uniform1f(cell.as_ref(), (3.0 * dpr).round().max(2.0) as f32);
             gl.clear_color(0.0, 0.0, 0.0, 0.0);

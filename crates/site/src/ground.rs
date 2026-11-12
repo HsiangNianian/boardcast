@@ -36,6 +36,9 @@ void main() {
   vec2 uv = at / res.y;
   float n = fbm(uv * 2.4 + vec2(t * 0.018, -t * 0.011));
   n = smoothstep(0.38, 0.82, n) * 0.7;
+  // The faintest levels of an ordered dither are a few lone dots in a regular lattice, which reads as a
+  // dot screen rather than as tone; below this the ground is left empty instead.
+  n *= step(0.09, n);
   float on = step(bayer8(c), n);
   vec2 f = mod(gl_FragCoord.xy, cell);
   float dotted = step(f.x, cell * 0.67) * step(f.y, cell * 0.67);

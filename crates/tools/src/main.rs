@@ -10,11 +10,13 @@
 //!   version-newer <new> <old>   Fails unless <new> is a later version than <old>.
 //!   meetings-check <data-dir>   Rewrites every meeting into <data-dir>'s v2 folder; use on a copy.
 //!   search-eval <root> <model.gguf> <gemma|qwen3> [--out <report.json>]   Meeting search on eval/search/queries.json.
+//!   ink-sample <root> <out.png> [--size <px>] [--messy <0..1>]... <text>...   A sheet of the board's handwriting.
 //!   demo-record <root> <sample-id> <out.json> (--deepseek | --llm <url>) --title … --name … --audio … --credit …
 
 mod agent_eval;
 mod check;
 mod demo_record;
+mod ink_sample;
 mod export;
 mod fetch;
 mod read_pdf;
@@ -45,6 +47,7 @@ fn main() -> Result<()> {
         Some("version-newer") => version_newer(args),
         Some("search-eval") => search_eval::run(args),
         Some("demo-record") => demo_record::run(args),
+        Some("ink-sample") => ink_sample::run(args),
         _ => bail!("usage: check <root> ... | agent-eval <root> <output.json> ..."),
     }
 }

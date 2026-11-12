@@ -1132,6 +1132,8 @@ struct SettingsForm {
     model: Entity<InputState>,
     key: Entity<InputState>,
     remote: bool,
+    /// How messy the board's hand is.
+    messy: Entity<SliderState>,
     saved: Settings,
     note: Option<String>,
     probing: Option<Receiver<Result<u128, String>>>,
@@ -3189,6 +3191,7 @@ impl Workbench {
             appearance: self.form.saved.appearance.clone(),
             input: self.form.saved.input.clone(),
             meeting_search: self.form.saved.meeting_search,
+            messy: self.form.saved.messy,
         }
     }
 
@@ -3224,6 +3227,29 @@ impl Workbench {
             self.ink.borrow_mut().recolor();
         }
         cx.refresh_windows();
+    }
+
+    /// Write in a neater or messier hand from now on. What is on the board is written again in it at once,
+    /// where it was, and the view stays where it is.
+    fn choose_messy(&mut self, messy: f32, cx: &mut Context<Self>) {
+        let messy = (messy.clamp(0.0, 1.0) * 10.0).round() / 10.0;
+        if (self.form.saved.messy - messy).abs() < 0.001 {
+            return;
+        }
+        self.form.saved.messy = messy;
+        if let Err(e) = self.form.saved.save() {
+            self.form.note = Some(format!("{e:#}"));
+        }
+        let mut ink = self.ink.borrow_mut();
+        ink.glyphs.set_messy(messy);
+        // A replay writes each step afresh, in whatever hand is chosen by then.
+        if self.replay.is_none() {
+            let (view, reading) = (ink.view, ink.reading);
+            ink.open(&self.live.graph, &self.live.memory);
+            (ink.view, ink.reading) = (view, reading);
+        }
+        drop(ink);
+        cx.notify();
     }
 
     fn choose_language(&mut self, language: &str, cx: &mut Context<Self>) {
@@ -5291,6 +5317,20 @@ impl Render for Workbench {
                             .collect(),
                     )))
                     .child(row(
+                        tr("Handwriting", "字迹"),
+                        Some(tr("A messier hand leans and rounds its corners; further on it joins its strokes, and writes small English letters joined up.", "越潦草，字越歪、转角越圆；再往后笔画相连，英文小写也连起来写。")),
+                    ).child(
+                        div()
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .gap_2()
+                            .w(px(240.))
+                            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Neat", "工整")))
+                            .child(Slider::new(&self.form.messy).accessibility_label(tr("How messy the handwriting is", "字迹潦草程度")).flex_1().min_w_0())
+                            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Messy", "潦草"))),
+                    ))
+                    .child(row(
                         tr("Search meetings by meaning", "按意思搜索会议"),
                         Some(tr("Finds what was said in any meeting from a question in your own words. Needs a 334 MB model that runs on this computer.", "用自己的话提问，就能在所有会议里找到相关的那段。需要下载一个 334 MB 的本机模型。")),
                     ).child(
@@ -5850,11 +5890,13 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     // Everything slow happens away from the window, which has to appear straight away.
     let (startup, starting) = channel::<Startup>();
     let probe_binaries = binaries.clone();
+    let messy = settings.messy;
     let hanzi_source = resources.hanzi;
     std::thread::spawn(move || {
         let prepared = (|| -> Result<Prepared> {
             let dark = theme::is_dark();
             let mut glyphs = Glyphs::load(hanzi_source)?;
+            glyphs.set_messy(messy);
             let _ = startup.send(Startup::Word(crate::splash::word_strokes(&mut glyphs)));
             let start_meeting = match (reads_meetings.then(|| Store::new(data)), reopen) {
                 (Some(store), Some(id)) => store.load(&id).ok().flatten().map(Live::from_loaded),
@@ -5955,6 +5997,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let ink = Rc::new(RefCell::new(state));
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Type a line, Enter puts it on the board", "输入一句话，回车上板")));
             let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
+            let messy = cx.new(|_| SliderState::new().min(0.0).max(1.0).step(0.1).default_value(settings.messy));
             let glossary = cx.new(|cx| InputState::new(window, cx).placeholder("鉴权; OpenAI; API = A P I, エーピーアイ").default_value(settings.glossary.clone()));
             let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
             let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
@@ -5985,6 +6028,12 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 cx.subscribe_in(&speaker_name, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {
                         this.rename_speaker(window, cx);
+                    }
+                })
+                .detach();
+                cx.subscribe(&messy, |this: &mut Workbench, _, event: &SliderEvent, cx| {
+                    if let SliderEvent::Change(value) = event {
+                        this.choose_messy(value.end(), cx);
                     }
                 })
                 .detach();
@@ -6054,7 +6103,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     inputs: vec![],
                     library_query,
                     label_input,
-                    form: SettingsForm { glossary, base_url, model, key, remote, saved: settings, note: None, probing: None },
+                    form: SettingsForm { glossary, base_url, model, key, remote, messy: messy.clone(), saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,
                     import: ImportState::Idle,

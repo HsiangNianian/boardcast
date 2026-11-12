@@ -676,7 +676,7 @@ pub fn start() {
     let picker = q("#samples");
     let tabs: Vec<Element> = samples
         .iter()
-        
+
         .map(|s| {
             let b = el("button", "", &s.title);
             let _ = b.set_attribute("title", &s.name);

@@ -55,12 +55,15 @@
   --hero-coral: #e3583b94;
   --hero-gold: #dba62c94;
   --hero-dot: #f2f2f22b;
+  /* The first sheet's dots, without its colour, under the whole page. */
+  --page-dot: color-mix(in srgb, var(--fg) 11%, transparent);
   --sans: 'DM Sans Variable', system-ui, sans-serif;
   --mono: 'JetBrains Mono Variable', ui-monospace, monospace;
   --hand: 'Excalifont', cursive;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { background: var(--bg); }
+html { background: var(--bg); }
+body { background: radial-gradient(circle, var(--page-dot) .7px, transparent 1px) 0 0 / 5px 5px, var(--bg); }
 body { color: var(--fg); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
 a { color: inherit; text-decoration: none; }
 ::selection { background: var(--fg); color: var(--bg); }
@@ -69,10 +72,10 @@ a { color: inherit; text-decoration: none; }
 
 /* ———————————————— navigation, as a product manual ———————————————— */
 nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 1.1fr repeat(4, 1fr) .9fr; gap: 28px; padding: 32px 0 0; align-items: start; }
-.brand { font-size: 36px; font-weight: 300; line-height: 1.05; letter-spacing: -.02em; }
+.brand { font-size: 30px; font-weight: 500; line-height: 1.05; letter-spacing: 0; text-transform: uppercase; }
 .nav-item { display: grid; grid-template-columns: 54px 1fr; gap: 12px; cursor: pointer; }
 .nav-item svg { width: 54px; height: 54px; }
-.nav-item b { display: block; font-size: 32px; font-weight: 300; line-height: 1; letter-spacing: -.02em; }
+.nav-item b { display: block; font-size: 22px; font-weight: 500; line-height: 1; letter-spacing: .01em; text-transform: uppercase; }
 .nav-item span { display: block; margin-top: 12px; font-size: 15px; line-height: 1.4; color: var(--link); }
 .nav-item span em { display: block; font-style: normal; }
 .nav-item span em:hover { color: var(--fg); }
@@ -152,7 +155,7 @@ nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 
 .toast b { font-weight: 400; background: var(--bg); color: var(--fg); padding: 1px 6px; margin-right: 8px; }
 body.drawing-lasso { user-select: none; cursor: crosshair; }
 @media (max-width: 1080px) { .tb-rev, .tb-sheet { display: none; } .titleblock { grid-template-columns: auto minmax(0, 1fr) auto; } }
-.hero-copy h1 { max-width: 17ch; font-size: clamp(30px, 3vw, 42px); font-weight: 350; letter-spacing: -.035em; line-height: 1.08; }
+.hero-copy h1 { max-width: 15ch; font-size: clamp(28px, 2.8vw, 40px); font-weight: 500; letter-spacing: -.01em; line-height: 1.08; text-transform: uppercase; }
 .hero-copy p { margin-top: 18px; max-width: 36ch; font-size: 15px; line-height: 1.65; color: var(--grey); }
 .cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
 .cta a { display: inline-flex; gap: 22px; justify-content: space-between; align-items: center; padding: 12px 16px; border: 1px solid var(--fg); font-size: 14px; }
@@ -218,7 +221,7 @@ body.drawing-lasso { user-select: none; cursor: crosshair; }
 section.block { padding-top: 140px; }
 /* A heading is always its two written lines: it takes the width it needs and the text beside it the rest. */
 .head { display: grid; grid-template-columns: auto 1fr; gap: 40px; align-items: end; padding-bottom: 28px; }
-.head h2 { font-size: clamp(44px, 5.6vw, 88px); font-weight: 200; letter-spacing: -.04em; line-height: .96; white-space: nowrap; }
+.head h2 { font-size: clamp(36px, 4.6vw, 72px); font-weight: 500; letter-spacing: -.02em; line-height: 1; white-space: nowrap; text-transform: uppercase; }
 .head h2 em { font-style: normal; color: var(--dim); }
 .head p { font-size: 15px; line-height: 1.65; color: var(--grey); max-width: 30em; }
 .head-side .cta { margin-top: 18px; }
@@ -253,7 +256,7 @@ section.block { padding-top: 140px; }
 .chapter article { position: absolute; inset: 0; opacity: 0; transform: translateY(14px); transition: opacity .18s, transform .18s; }
 .chapter article.on { opacity: 1; transform: none; transition: opacity .4s .18s, transform .4s .18s; }
 .chapter .n { font: 400 12px var(--mono); color: var(--dim); }
-.chapter h3 { margin-top: 16px; font-size: 52px; font-weight: 200; letter-spacing: -.035em; line-height: 1; }
+.chapter h3 { margin-top: 16px; font-size: 40px; font-weight: 500; letter-spacing: -.015em; line-height: 1; text-transform: uppercase; }
 .chapter p { margin-top: 18px; font-size: 15px; line-height: 1.7; color: var(--grey); }
 .chapter kbd { font: 400 12px var(--mono); border: 1px solid var(--faint); padding: 1px 6px; color: var(--fg); }
 .tabs { position: absolute; left: 0; right: 0; bottom: 28px; }
@@ -332,7 +335,7 @@ section.block { padding-top: 140px; }
 .card { position: relative; background: var(--bg); padding: 24px; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
 .card .pict { position: absolute; top: 22px; right: 22px; width: 40px; height: 40px; }
 .card .k { position: absolute; top: 24px; left: 24px; }
-.card h4 { font-size: 30px; font-weight: 300; letter-spacing: -.02em; line-height: 1; }
+.card h4 { font-size: 22px; font-weight: 500; letter-spacing: .01em; line-height: 1; text-transform: uppercase; }
 .card p { margin-top: 10px; font-size: 14px; line-height: 1.6; color: var(--grey); max-width: 30em; }
 .card .art { position: absolute; inset: 56px 24px 110px; display: grid; place-items: center; }
 .w4 { grid-column: span 4; } .w2 { grid-column: span 2; }
@@ -412,7 +415,7 @@ section.block { padding-top: 140px; }
 .dots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--hair); border: 1px solid var(--hair); }
 .dot-card { background: var(--bg); padding: 24px; height: 380px; display: flex; flex-direction: column; justify-content: flex-end; position: relative; }
 .dot-card canvas { position: absolute; left: 0; right: 0; top: 0; height: 250px; width: 100%; }
-.dot-card h4 { font-size: 26px; font-weight: 300; letter-spacing: -.02em; }
+.dot-card h4 { font-size: 20px; font-weight: 500; letter-spacing: .01em; text-transform: uppercase; }
 .dot-card p { margin-top: 8px; font-size: 13px; color: var(--grey); line-height: 1.6; }
 
 .specs { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--fg); }
@@ -424,7 +427,7 @@ section.block { padding-top: 140px; }
 .dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--hair); border: 1px solid var(--hair); margin-top: 48px; }
 .dl a { position: relative; background: var(--bg); padding: 36px 32px 28px; display: flex; flex-direction: column; transition: background .2s, color .2s; }
 .dl-top { display: grid; gap: 14px; justify-items: start; padding-right: 72px; }
-.dl b { font-size: clamp(40px, 4.4vw, 64px); font-weight: 200; letter-spacing: -.04em; line-height: 1; }
+.dl b { font-size: clamp(30px, 3.4vw, 50px); font-weight: 500; letter-spacing: -.01em; line-height: 1; text-transform: uppercase; }
 .dl .here { display: none; color: var(--accent); }
 .dl a.this .here { display: inline; }
 .dl a.this { box-shadow: inset 0 3px 0 var(--accent); }

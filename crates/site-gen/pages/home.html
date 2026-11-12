@@ -20,14 +20,14 @@
         <button class="replay-open label" id="again">↺ write it again</button>
       </div>
       <div class="hero-copy">
-        <h1>a whiteboard that writes down your meeting.</h1>
-        <p>Speak naturally. Watch ideas take shape, stroke by stroke. Speech and the board model run on your own computer.</p>
+        <h1>your meeting, drawn live.</h1>
+        <p>Talk as usual. The board writes it out, stroke by stroke, on your own computer.</p>
         <div class="cta"><a class="solid" href="#live">see it write <span aria-hidden="true">↘</span></a><a href="#get">get boardcast <span aria-hidden="true">↓</span></a></div>
       </div>
     </div>
     <div class="try" id="live">
       <iframe src="./demo/?embed" title="boardcast web demo"></iframe>
-      <div class="try-foot label"><span>5 recorded sample meetings · no microphone needed</span><span>your words. a shared picture.</span></div>
+      <div class="try-foot label"><span>6 sample meetings · 1 recorded · no microphone needed</span><span>your words. a shared picture.</span></div>
     </div>
     <div class="hero-rail">
       <p>made for the conversation.</p>
@@ -39,7 +39,7 @@
 <!-- ———————————————— signals ———————————————— -->
 <section class="sig-scroll" id="signals" data-sheet="02 four lines">
 <div class="block wrap sheet-page sig-pin">
-  <div class="head"><h2>one meeting,<br><em>four lines.</em></h2><p>The sound, the people speaking, what went on the board and what you marked, all on one timeline. Scroll to play the meeting, or point anywhere to read what was said at that moment.</p></div>
+  <div class="head"><h2>one meeting,<br><em>four lines.</em></h2><p>Sound, speakers, board and marks on one timeline. Scroll to play; point to read what was said.</p></div>
   <div class="signals" id="sig">
     <div class="row"><div class="name">voice<small class="label">voice · local asr</small></div><svg viewBox="0 0 1000 92" preserveAspectRatio="none" id="sig-voice"></svg></div>
     <div class="row"><div class="name">voices<small class="label">voices · cam++</small></div><svg viewBox="0 0 1000 92" preserveAspectRatio="none" id="sig-who"></svg></div>
@@ -56,11 +56,11 @@
   <div class="pin">
     <div class="wrap">
       <div class="chapter">
-        <article data-ch="0"><span class="n">01 / listen</span><h3>it listens.</h3><p>Press <kbd>space</kbd> to start. Speech is recognized on your computer, the transcript fills line by line, and the meter shows it can hear you.</p></article>
-        <article data-ch="1"><span class="n">02 / draw</span><h3>then it writes.</h3><p>Finish a sentence and the board writes it out, stroke by stroke: a title, items, an arrow. No template, no hands.</p></article>
-        <article data-ch="2"><span class="n">03 / correct</span><h3>fix it in one click.</h3><p>Click anything on the board to strike, circle, star, rewrite or remove it. All of it can be undone.</p></article>
+        <article data-ch="0"><span class="n">01 / listen</span><h3>it listens.</h3><p>Press <kbd>space</kbd>. Speech is transcribed on your computer, line by line.</p></article>
+        <article data-ch="1"><span class="n">02 / draw</span><h3>then it writes.</h3><p>Finish a sentence and the board writes it: titles, items, arrows.</p></article>
+        <article data-ch="2"><span class="n">03 / correct</span><h3>fix it in one click.</h3><p>Click anything to strike, circle, star, rewrite or remove it.</p></article>
         <article data-ch="3"><span class="n">04 / circle</span><h3>circle, then say.</h3><p>Lasso “canary”, then say “star this”. The model knows what “this” means.</p></article>
-        <article data-ch="4"><span class="n">05 / replay</span><h3>watch it again.</h3><p>After the meeting, drag the replay bar and the board goes back to how it was. Fork a new board from any moment.</p></article>
+        <article data-ch="4"><span class="n">05 / replay</span><h3>watch it again.</h3><p>Drag to any moment of the meeting, or fork a new board from it.</p></article>
       </div>
       <div class="app" id="app">
         <div class="app-title">
@@ -98,14 +98,14 @@
 
 <!-- ———————————————— during ———————————————— -->
 <section class="block wrap sheet-page" id="during" data-sheet="04 during">
-  <div class="head"><h2>during the meeting,<br><em>one click is enough.</em></h2><div class="head-side"><p>Marking, rewriting, circling: each takes a single click. Every card shows what it really does.</p><div class="cta"><a class="solid" href="./demo/">try the web demo <span aria-hidden="true">↗</span></a><a class="line" href="./faq/">questions <span aria-hidden="true">→</span></a></div></div></div>
+  <div class="head"><h2>during,<br><em>one click.</em></h2><div class="head-side"><p>Mark, rewrite or circle in a single click.</p><div class="cta"><a class="solid" href="./demo/">try the web demo <span aria-hidden="true">↗</span></a><a class="line" href="./faq/">questions <span aria-hidden="true">→</span></a></div></div></div>
   <div class="bento">
     <div class="card w4"><span class="k label"><b>1</b> circle</span><svg class="pict" data-icon="lasso" viewBox="0 0 64 64"></svg>
       <div class="art art-lasso"><svg viewBox="0 0 520 170">
         <text class="word" x="50" y="72">cache service</text><text class="word" x="330" y="130">Redis</text>
         <path class="loop" id="l1" pathLength="1"/><path class="loop" id="l2" pathLength="1"/><path class="link" id="lk" pathLength="1"/>
       </svg><div class="lsay"><span class="label" id="lcount"></span><span id="lsay"></span></div></div>
-      <h4>circle</h4><p>Circle “cache service” and “Redis”, then say “connect these”. The model knows which two you mean.</p></div>
+      <h4>circle</h4><p>Circle two things, say “connect these”. It knows which you mean.</p></div>
     <div class="card w2"><span class="k label"><b>2</b> voices</span><svg class="pict" data-icon="speakers" viewBox="0 0 64 64"></svg>
       <div class="art"><div>
         <div class="voice"><b>A</b>Lin · product<span class="wave"></span></div>
@@ -113,13 +113,13 @@
         <div class="voice quiet"><b>C</b>Wang · QA<span class="wave"></span></div>
         <p class="voice-line" id="vline"></p>
       </div></div>
-      <h4>voices</h4><p>Tells speakers apart by voice. Give one a real name and the same voice keeps it.</p></div>
+      <h4>voices</h4><p>Tells speakers apart. Name one once; the voice keeps it.</p></div>
     <div class="card w2"><span class="k label"><b>3</b> local</span><svg class="pict" data-icon="mic" viewBox="0 0 64 64"></svg>
       <div class="art"><div><div class="chain"><span>mic</span><i></i><span>asr</span><i></i><span>board</span><em class="lv"><i></i><i></i><i></i><i></i><i></i></em><em id="asr-w"></em><em id="board-w"></em></div><div class="cloud">upload to cloud</div></div></div>
-      <h4>local</h4><p>No account, no uploaded audio. Once the models are down, it works offline.</p></div>
+      <h4>local</h4><p>No account, no upload. Works offline once set up.</p></div>
     <div class="card w2"><span class="k label"><b>4</b> replay</span><svg class="pict" data-icon="replay" viewBox="0 0 64 64"></svg>
       <div class="art"><div class="scrub"><div class="mini" id="mini"><b data-at=".04">Release</b><span data-at=".22">– tests</span><span data-at=".42">– ship <del data-at=".66">fri</del> <ins data-at=".74">tue</ins></span><span data-at=".86">– canary <em data-at=".94">★</em></span></div><div class="bars" id="bars"></div><div class="time label"><span>00:00</span><span id="bt">06:12</span><span>48:30</span></div></div></div>
-      <h4>replay</h4><p>Drag to any moment to see the board as it was, or fork a new one from there.</p></div>
+      <h4>replay</h4><p>Any moment, as it was. Fork a board from there.</p></div>
     <div class="card w2"><span class="k label"><b>5</b> export</span><svg class="pict" data-icon="export" viewBox="0 0 64 64"></svg>
       <div class="art"><div class="files">
         <div class="f-md"><i class="t"># release review</i><i>- [x] regression</i><i>- [ ] ship tue</i><i class="flow"><s></s><u></u><s></s></i><b>.md</b></div>
@@ -127,23 +127,23 @@
         <div class="f-gif"><i class="h">Release</i><i class="pen"></i><i class="ln"></i><b>.gif</b></div>
         <div class="f-html"><i class="h">Release</i><i class="ln"></i><i class="ln"></i><i class="bar"></i><b>.html</b></div>
       </div></div>
-      <h4>export</h4><p>markdown, png, svg, an animated svg or gif, a whole-meeting pdf, or a replay page.</p></div>
+      <h4>export</h4><p>Markdown, PNG, SVG, GIF, PDF or a replay page.</p></div>
   </div>
 </section>
 
 <!-- ———————————————— after ———————————————— -->
 <section class="block wrap sheet-page" id="after" data-sheet="05 after">
-  <div class="head"><h2>after the meeting,<br><em>it is already sorted.</em></h2><div class="head-side"><p>Each of these is made of dots. Point at one and they gather into what you take home.</p><div class="cta"><a class="solid" href="#get">get boardcast <span aria-hidden="true">↓</span></a><a class="line" href="https://github.com/HsiangNianian/boardcast#take-the-meeting-with-you">every export <span aria-hidden="true">↗</span></a></div></div></div>
+  <div class="head"><h2>after,<br><em>already sorted.</em></h2><div class="head-side"><p>Point at one to see what you take home.</p><div class="cta"><a class="solid" href="#get">get boardcast <span aria-hidden="true">↓</span></a><a class="line" href="https://github.com/HsiangNianian/boardcast#take-the-meeting-with-you">every export <span aria-hidden="true">↗</span></a></div></div></div>
   <div class="dots">
-    <div class="dot-card"><canvas data-icon="doc"></canvas><span class="label"><b>1</b> summary</span><h4>summary</h4><p>Conclusions, decisions and to-dos to edit, tick off and copy.</p></div>
-    <div class="dot-card"><canvas data-icon="replay"></canvas><span class="label"><b>2</b> replay page</span><h4>replay page</h4><p>One .html file for whoever missed it. Nothing to install.</p></div>
-    <div class="dot-card"><canvas data-icon="board"></canvas><span class="label"><b>3</b> whole meeting pdf</span><h4>whole-meeting pdf</h4><p>A page per board, then the summary and transcript, with real text.</p></div>
-    <div class="dot-card"><canvas data-icon="export"></canvas><span class="label"><b>4</b> markdown</span><h4>markdown</h4><p>Key points, a Mermaid flow chart and the transcript.</p></div>
+    <div class="dot-card"><canvas data-icon="doc"></canvas><span class="label"><b>1</b> summary</span><h4>summary</h4><p>Decisions and to-dos, ready to edit.</p></div>
+    <div class="dot-card"><canvas data-icon="replay"></canvas><span class="label"><b>2</b> replay page</span><h4>replay page</h4><p>One .html file for whoever missed it.</p></div>
+    <div class="dot-card"><canvas data-icon="board"></canvas><span class="label"><b>3</b> meeting pdf</span><h4>meeting pdf</h4><p>Every board, the summary and the transcript.</p></div>
+    <div class="dot-card"><canvas data-icon="export"></canvas><span class="label"><b>4</b> markdown</span><h4>markdown</h4><p>Key points, a flow chart and the transcript.</p></div>
   </div>
 </section>
 
 <section class="block wrap sheet-page" id="get" data-sheet="06 specs">
-  <div class="head"><h2>specs.</h2><p>What is inside, written down like a product manual.</p></div>
+  <div class="head"><h2>specs.</h2><p>What is inside.</p></div>
   <div class="specs">
     <dl><dt>speech</dt><dd>parakeet · reazonspeech · sensevoice</dd><dt>speakers</dt><dd>cam++ voiceprints</dd><dt>board model</dt><dd>qwen3.5 4b / 9b · minicpm5</dd><dt>runtime</dt><dd>llama.cpp · vulkan / metal</dd></dl>
     <dl><dt>languages</dt><dd>japanese · english · chinese</dd><dt>export</dt><dd>md · png · svg · gif · pdf · html</dd><dt>network</dt><dd>none required</dd><dt>license</dt><dd>mit</dd></dl>
@@ -170,5 +170,5 @@
 <section class="now wrap sheet-page" id="now-sheet" data-sheet="07 now">
   <p class="said label"><span class="who">you</span><span id="now-time">--:--:--</span><q>let’s start.</q></p>
   <div class="blank canvas"><svg class="ink" id="now-ink" role="img" aria-label="your next meeting."></svg></div>
-  <p class="now-foot">the board is blank until someone speaks. <a href="#get">get boardcast <span aria-hidden="true">↑</span></a></p>
+  <p class="now-foot">blank until someone speaks. <a href="#get">get boardcast <span aria-hidden="true">↑</span></a></p>
 </section>

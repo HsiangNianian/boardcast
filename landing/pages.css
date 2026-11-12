@@ -6,7 +6,9 @@
 :root { --bg: #000; --fg: #f2f2f2; --grey: #c4c4c4; --dim: #8a8a8a; --hair: #262626; --link: #9fb4ff;
   --sans: 'DM Sans Variable', system-ui, sans-serif; --mono: 'JetBrains Mono Variable', ui-monospace, monospace; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { background: var(--bg); }
+html { background: var(--bg); }
+/* The home page's dots, without colour, under every page. */
+body { background: radial-gradient(circle, color-mix(in srgb, var(--fg) 11%, transparent) .7px, transparent 1px) 0 0 / 5px 5px, var(--bg); }
 body { color: var(--fg); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased; }
 a { color: var(--link); text-decoration: none; }
 a:hover { color: var(--fg); }
@@ -19,10 +21,10 @@ a:hover { color: var(--fg); }
 .doc > aside { position: sticky; top: 40px; align-self: start; }
 .doc > aside .label { display: block; margin-bottom: 8px; }
 .doc > aside .updated { margin-top: 20px; font: 400 11px var(--mono); color: var(--dim); }
-.doc h1 { grid-column: 1 / -1; font-size: clamp(48px, 7vw, 104px); font-weight: 200; letter-spacing: -.045em; line-height: .95; }
+.doc h1 { grid-column: 1 / -1; font-size: clamp(40px, 5.6vw, 84px); font-weight: 500; letter-spacing: -.02em; line-height: 1; text-transform: uppercase; }
 .doc h1 em { font-style: normal; color: var(--dim); }
 .doc section + section { margin-top: 56px; }
-.doc h2 { font-size: 30px; font-weight: 300; letter-spacing: -.02em; padding-bottom: 14px; border-bottom: 1px solid var(--fg); }
+.doc h2 { font-size: 22px; font-weight: 500; letter-spacing: .01em; text-transform: uppercase; padding-bottom: 14px; border-bottom: 1px solid var(--fg); }
 .doc h3 { margin-top: 28px; font-size: 19px; font-weight: 400; }
 .doc h4 { margin-top: 22px; font: 400 13px var(--mono); color: var(--fg); }
 .doc p, .doc li { margin-top: 12px; font-size: 16px; line-height: 1.7; color: var(--grey); max-width: 44em; }

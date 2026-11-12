@@ -3,6 +3,7 @@
 
 mod cards;
 mod dots;
+mod ground;
 mod hero;
 mod lasso;
 mod meeting;
@@ -16,24 +17,12 @@ mod util;
 
 use wasm_bindgen::prelude::*;
 
-/// The page's dots brighten around the pointer: its place is handed to the stylesheet, which draws the glow.
-fn glow() {
-    use wasm_bindgen::JsCast;
-    let Some(root) = util::doc().document_element().and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) else { return };
-    util::on_passive(&util::doc(), "pointermove", move |e| {
-        let Some(e) = e.dyn_ref::<web_sys::MouseEvent>() else { return };
-        let style = root.style();
-        let _ = style.set_property("--mx", &format!("{}px", e.client_x()));
-        let _ = style.set_property("--my", &format!("{}px", e.client_y()));
-    });
-}
-
 #[wasm_bindgen(start)]
 pub fn start() {
     for e in util::qa("[data-version]") {
         util::set_text(&e, env!("CARGO_PKG_VERSION"));
     }
-    glow();
+    ground::init();
     pict::init();
     sheet::init();
     lasso::init();

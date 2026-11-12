@@ -195,7 +195,8 @@ pub fn apply(cx: &mut App) {
         theme.foreground = color(p.text);
         theme.border = color(p.line);
         theme.input = color(p.line);
-        theme.ring = color(p.accent);
+        // Focus in the ink of the text, not a colour of its own.
+        theme.ring = color(p.muted);
         theme.muted = color(p.hover);
         theme.muted_foreground = color(p.muted);
         theme.popover = color(p.surface);

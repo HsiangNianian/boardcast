@@ -1,0 +1,16 @@
+[package]
+name = "boardcast-search"
+description = "Finding things said in past meetings by what they mean: chunking, embedding through llama-server, an index per meeting and hybrid ranking"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+boardcast-board.workspace = true
+boardcast-meetings.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+ureq = { version = "2", features = ["json"] }

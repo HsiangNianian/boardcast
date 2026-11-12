@@ -18,6 +18,7 @@ boardcast-export.workspace = true
 boardcast-import.workspace = true
 boardcast-meetings.workspace = true
 boardcast-models.workspace = true
+boardcast-search.workspace = true
 flate2 = "1"
 minisign = "0.7"
 semver = "1"

@@ -9,6 +9,7 @@
 //!   release-manifest <packages> <tag>
 //!   version-newer <new> <old>   Fails unless <new> is a later version than <old>.
 //!   meetings-check <data-dir>   Rewrites every meeting into <data-dir>'s v2 folder; use on a copy.
+//!   search-eval <root> <model.gguf> <gemma|qwen3> [--out <report.json>]   Meeting search on eval/search/queries.json.
 
 mod agent_eval;
 mod check;
@@ -17,6 +18,7 @@ mod fetch;
 mod read_pdf;
 mod release;
 mod score;
+mod search_eval;
 mod summary_eval;
 mod meetings;
 mod voice_files;
@@ -39,6 +41,7 @@ fn main() -> Result<()> {
         Some("pack-glyphs") => pack_glyphs(args),
         Some("download-model") => download_model(args),
         Some("version-newer") => version_newer(args),
+        Some("search-eval") => search_eval::run(args),
         _ => bail!("usage: check <root> ... | agent-eval <root> <output.json> ..."),
     }
 }

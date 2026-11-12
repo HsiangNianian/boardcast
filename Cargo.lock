@@ -823,6 +823,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "boardcast-search"
+version = "0.27.0"
+dependencies = [
+ "anyhow",
+ "boardcast-board",
+ "boardcast-meetings",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ureq",
+]
+
+[[package]]
 name = "boardcast-site"
 version = "0.27.0"
 dependencies = [
@@ -854,6 +867,7 @@ dependencies = [
  "boardcast-import",
  "boardcast-meetings",
  "boardcast-models",
+ "boardcast-search",
  "boardcast-update",
  "flate2",
  "minisign",
@@ -878,6 +892,7 @@ dependencies = [
  "boardcast-import",
  "boardcast-meetings",
  "boardcast-models",
+ "boardcast-search",
  "boardcast-update",
  "chrono",
  "gpui-kit",

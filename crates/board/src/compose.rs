@@ -531,9 +531,11 @@ impl Canvas<'_> {
                     self.add(format!("{key}|o"), RED, 1.0, false, shapes, pen_for(size));
                 }
                 "星标" => {
-                    // A drawn star just after the words, a little taller than them.
+                    // A drawn star just after the words, a little taller than them,
+                    // outside the ring when they are circled too.
+                    let ring = if n.marks.iter().any(|m| m == "圈出") { 18.0 } else { 0.0 };
                     let shapes = plain(vec![star(
-                        x + w + size * 0.95,
+                        x + w + ring + size * 0.95,
                         y + size * 0.48,
                         size * 0.62,
                         &mut r,
@@ -624,8 +626,9 @@ impl Canvas<'_> {
                 );
             }
             if has("星标") {
+                let ring = if has("圈出") { 14.0 } else { 0.0 };
                 let shapes = plain(vec![star(
-                    x - font * 0.5 - 10.0,
+                    x - font * 0.5 - 10.0 - ring,
                     y + h / 2.0,
                     font * 0.5,
                     &mut r,

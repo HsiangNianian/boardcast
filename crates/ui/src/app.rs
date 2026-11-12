@@ -489,6 +489,14 @@ impl Ink {
         }
     }
 
+    /// Light and dark changed: repaint the ink in the new palette, and drop a sharper rendering still being
+    /// made in the old one.
+    fn recolor(&mut self) {
+        self.generation += 1;
+        self.rebuilding = None;
+        self.redraw();
+    }
+
     /// Show another meeting: nothing of the old board remains, and the new one appears at once
     /// rather than being rewritten stroke by stroke.
     fn open(&mut self, graph: &Graph, memory: &serde_json::Value) {
@@ -2800,7 +2808,20 @@ impl Workbench {
         if let Err(e) = self.form.saved.save() {
             self.form.note = Some(format!("{e:#}"));
         }
-        cx.notify();
+        // Read before choosing: choosing light or dark settles it at once.
+        let was_dark = theme::is_dark();
+        theme::choose(appearance);
+        self.restyle(was_dark, cx);
+    }
+
+    /// Put the light or dark palette into effect now. Board ink is baked in the palette it was drawn in,
+    /// so a change of light or dark repaints it.
+    fn restyle(&mut self, was_dark: bool, cx: &mut Context<Self>) {
+        theme::apply(cx);
+        if theme::is_dark() != was_dark {
+            self.ink.borrow_mut().recolor();
+        }
+        cx.refresh_windows();
     }
 
     fn choose_language(&mut self, language: &str, cx: &mut Context<Self>) {
@@ -4566,7 +4587,6 @@ impl Render for Workbench {
                         .on_click(cx.listener(move |this, _, _, cx| this.choose_appearance(id, cx)))
                 }))
             })
-            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Takes effect the next time boardcast starts.", "下次启动 boardcast 时生效。")))
             // Before there is a model, choosing one is the only thing to do here.
             .when(!self.needs_model, |d| {
                 d.child(div().mt_2().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Updates", "更新")))
@@ -4669,8 +4689,6 @@ impl Render for Workbench {
                     d.child(
                         div()
                             .p_3()
-                            .border_t_1()
-                            .border_color(rgb(pal().line))
                             .flex()
                             .flex_col()
                             .gap_1()
@@ -5020,6 +5038,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     });
     gpui_kit::application().with_assets(theme::Assets).run(move |cx: &mut App| {
         gpui_kit::init(cx);
+        theme::load_fonts(cx);
         theme::apply(cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::new(point(px(0.), px(0.)), size(px(1280.), px(800.))))),
@@ -5095,6 +5114,13 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 cx.subscribe_in(&library_query, window, |_: &mut Workbench, _, event, _, cx| {
                     if matches!(event, InputEvent::Change) {
                         cx.notify();
+                    }
+                })
+                .detach();
+                // Following the system, the window turns light or dark with it.
+                cx.observe_window_appearance(window, |this: &mut Workbench, _, cx| {
+                    if theme::follows_system() {
+                        this.restyle(theme::is_dark(), cx);
                     }
                 })
                 .detach();

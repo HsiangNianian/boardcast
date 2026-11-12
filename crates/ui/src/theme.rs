@@ -167,12 +167,22 @@ pub fn icon(name: &str) -> Icon {
     Icon::empty().path(format!("icons/{name}.svg"))
 }
 
-/// Settle light or dark, following the system unless Settings chose, and put that palette into the kit's theme.
-pub fn apply(cx: &mut App) {
+/// The interface's fonts, registered once at start.
+pub fn load_fonts(cx: &mut App) {
     let fonts = vec![Cow::Borrowed(&include_bytes!("../fonts/DMSans.ttf")[..]), Cow::Borrowed(&include_bytes!("../fonts/JetBrainsMono.ttf")[..])];
     if let Err(e) = cx.text_system().add_fonts(fonts) {
         eprintln!("fonts: {e:#}");
     }
+}
+
+/// Whether the light or dark choice follows the system.
+pub fn follows_system() -> bool {
+    FOLLOW_SYSTEM.load(Ordering::Relaxed)
+}
+
+/// Settle light or dark, following the system unless Settings chose, and put that palette into the kit's theme.
+/// Called at start and again whenever the choice or the system's appearance changes.
+pub fn apply(cx: &mut App) {
     if FOLLOW_SYSTEM.load(Ordering::Relaxed) {
         DARK_MODE.store(matches!(cx.window_appearance(), WindowAppearance::Dark | WindowAppearance::VibrantDark), Ordering::Relaxed);
     }

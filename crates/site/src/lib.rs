@@ -3,6 +3,7 @@
 
 mod cards;
 mod dots;
+mod ground;
 mod hero;
 mod lasso;
 mod meeting;
@@ -21,6 +22,7 @@ pub fn start() {
     for e in util::qa("[data-version]") {
         util::set_text(&e, env!("CARGO_PKG_VERSION"));
     }
+    ground::init();
     pict::init();
     sheet::init();
     lasso::init();

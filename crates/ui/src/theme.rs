@@ -117,9 +117,10 @@ gpui_kit_assets::icon_assets!(ExtraIcons, [FileDown, FilePlus, Import, Lasso, Pe
 
 /// The website's pictograms, built from blocks and lines, in place of the toolkit's icons of the same name.
 /// Holes are cut with even-odd fills, since an icon is drawn as one shape in the text's color.
-const PICTOGRAMS: [(&str, &str); 19] = [
+const PICTOGRAMS: [(&str, &str); 21] = [
     ("icons/chevron-left.svg", include_str!("../icons/chevron-left.svg")),
     ("icons/chevron-right.svg", include_str!("../icons/chevron-right.svg")),
+    ("icons/copy.svg", include_str!("../icons/copy.svg")),
     ("icons/file-down.svg", include_str!("../icons/file-down.svg")),
     ("icons/file-plus.svg", include_str!("../icons/file-plus.svg")),
     ("icons/folder-open.svg", include_str!("../icons/folder-open.svg")),
@@ -132,6 +133,7 @@ const PICTOGRAMS: [(&str, &str); 19] = [
     ("icons/rotate-ccw.svg", include_str!("../icons/rotate-ccw.svg")),
     ("icons/settings.svg", include_str!("../icons/settings.svg")),
     ("icons/sparkles.svg", include_str!("../icons/sparkles.svg")),
+    ("icons/star.svg", include_str!("../icons/star.svg")),
     ("icons/trash.svg", include_str!("../icons/trash.svg")),
     ("icons/undo-2.svg", include_str!("../icons/undo-2.svg")),
     ("icons/users.svg", include_str!("../icons/users.svg")),

@@ -10,7 +10,6 @@ pub mod replay_page;
 use anyhow::{bail, Context, Result};
 use boardcast_board::glyphs::{Glyphs, HanziSource};
 use boardcast_board::graph::Graph;
-use boardcast_board::steps::ink_only;
 use boardcast_meetings::{Live, PageImage, ViewOnly};
 use chrono::TimeZone;
 use serde_json::Value;
@@ -108,10 +107,6 @@ pub struct Frozen {
     pub doc: Doc,
     pages: Vec<ink::Composed>,
     current: usize,
-    /// The record of the board on screen, and that board laid out without drafts, for the animation.
-    steps: Vec<Value>,
-    settled: ink::Composed,
-    settled_nodes: Vec<Value>,
     /// Every board with its record. A replay page lays out each step, so it does that on its own glyphs.
     replay_pages: Vec<replay_page::Page>,
     hanzi: HanziSource,
@@ -134,15 +129,12 @@ pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSourc
     let image_of = |i: usize| images.get(i).and_then(Option::as_ref);
     let began = live.created_at().and_then(|ms| chrono::Local.timestamp_millis_opt(ms as i64).single()).unwrap_or_else(chrono::Local::now);
     let pages = boards.iter().enumerate().map(|(i, (graph, memory))| ink::compose_board(graph, memory, image_of(i), glyphs)).collect();
-    let settled_graph = ink_only(&live.graph);
-    let settled = ink::compose_board(&settled_graph, &live.memory, image_of(live.page()), glyphs);
     let replay_pages = boards
         .iter()
         .zip(live.board_steps())
         .enumerate()
         .map(|(i, ((graph, memory), steps))| replay_page::Page { graph: graph.clone(), memory: memory.clone(), steps, image: image_of(i).cloned() })
         .collect();
-    let settled_nodes = settled_graph.nodes.iter().filter_map(|n| serde_json::to_value(n).ok()).collect();
     Frozen {
         doc: Doc {
             title: live.title().to_string(),
@@ -156,9 +148,6 @@ pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSourc
         },
         pages,
         current: live.page(),
-        steps: live.steps.clone(),
-        settled,
-        settled_nodes,
         replay_pages,
         hanzi,
     }
@@ -166,7 +155,7 @@ pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSourc
 
 impl Frozen {
     pub fn render(self, kind: Kind) -> Result<Output> {
-        let Self { doc, pages, current, steps, settled, settled_nodes, replay_pages, hanzi } = self;
+        let Self { doc, pages, current, replay_pages, hanzi } = self;
         let text_only = |bytes: Vec<u8>| Output { bytes, text_left_out: false };
         match kind {
             Kind::Markdown => Ok(text_only(markdown::markdown(&doc, current).into_bytes())),
@@ -178,17 +167,15 @@ impl Frozen {
                 let mut glyphs = Glyphs::load(hanzi)?;
                 Ok(text_only(replay_page::replay_page(&doc, &replay_pages, &mut glyphs).into_bytes()))
             }
-            Kind::AnimatedSvg => {
-                if settled.pieces.is_empty() && settled.page.is_none() {
+            // Both replay the board on screen step by step, which lays it out many times over.
+            Kind::AnimatedSvg | Kind::Gif => {
+                let page = replay_pages.get(current).context("no board to export")?;
+                let mut glyphs = Glyphs::load(hanzi)?;
+                let replay = animate::replay(page, &mut glyphs);
+                if replay.is_empty() {
                     bail!("The board is empty.");
                 }
-                Ok(text_only(animate::animated_svg(&settled, &settled_nodes, &steps, &doc.title).into_bytes()))
-            }
-            Kind::Gif => {
-                if settled.pieces.is_empty() && settled.page.is_none() {
-                    bail!("The board is empty.");
-                }
-                Ok(text_only(animate::gif(&settled, &settled_nodes, &steps)?))
+                Ok(text_only(if kind == Kind::Gif { animate::gif(&replay)? } else { animate::animated_svg(&replay, &doc.title).into_bytes() }))
             }
             Kind::Png | Kind::Svg => {
                 let page = pages.into_iter().nth(current).context("no board to export")?;

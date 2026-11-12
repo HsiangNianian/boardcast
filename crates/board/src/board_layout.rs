@@ -405,6 +405,25 @@ impl StableLayout {
 
     /// Put remembered positions back, so a reopened board keeps its arrangement. Malformed entries are
     /// skipped: at worst those things are placed again.
+    /// Take back what `other` remembers about things this one has forgotten or not met yet. Laying out
+    /// forgets whatever is not on the board, so a replay that knows where things end up puts that back
+    /// before each step, and each part appears where it will stay.
+    pub fn recall(&mut self, other: &StableLayout) {
+        for (k, v) in &other.region_at {
+            self.region_at.entry(k.clone()).or_insert(*v);
+        }
+        for (k, v) in &other.box_at {
+            self.box_at.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+        for (k, v) in &other.route_at {
+            self.route_at.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+        // Nodes of a diagram are kept together: one placed afresh would not fit among remembered ones.
+        if self.node_at.is_empty() {
+            self.node_at.clone_from(&other.node_at);
+        }
+    }
+
     pub fn restore(&mut self, memory: &Value) {
         fn rows<'a>(memory: &'a Value, key: &str) -> impl Iterator<Item = (&'a str, &'a Value)> {
             memory[key].as_array().into_iter().flatten().filter_map(|row| Some((row.get(0)?.as_str()?, row.get(1)?)))

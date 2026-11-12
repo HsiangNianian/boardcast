@@ -80,6 +80,10 @@ const MARGIN: f64 = 80.0;
 const MIN_VIEW: (f64, f64) = (900.0, 560.0);
 /// The most of the board shown at once; past this the view follows the newest ink, so writing stays legible.
 const MAX_VIEW_WIDTH: f64 = 1500.0;
+/// How long after the reader last moved the board new ink out of sight waits before taking the view back.
+const READ_HOLD_MS: f64 = 5000.0;
+/// How near and how far the reader can zoom, as the width of board shown.
+const ZOOM_WIDTH: (f64, f64) = (240.0, 8000.0);
 
 fn win() -> web_sys::Window {
     web_sys::window().expect("a window")
@@ -155,6 +159,11 @@ struct Board {
     graph: Graph,
     shown: HashSet<String>,
     view: [f64; 4],
+    /// Whether the reader moved the board themselves, when they last did, and where the talk's ink is.
+    reading: bool,
+    touched: f64,
+    latest: [f64; 4],
+    back: Element,
 }
 
 impl Board {
@@ -166,10 +175,12 @@ impl Board {
         // Only the characters the Chinese samples use, from hanzi-writer-data (Arphic Public License):
         // `boardcast-tools pack-glyphs assets/hanzi crates/demo/zh-glyphs.pack --only-from <the samples>`.
         let glyphs = Glyphs::load(HanziSource::PackBytes(include_bytes!("../zh-glyphs.pack"))).expect("the samples' strokes");
-        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), view: [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1] }
+        let view = [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1];
+        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), view, reading: false, touched: 0.0, latest: view, back: q("#latest") }
     }
 
     fn clear(&mut self) {
+        self.set_reading(false);
         self.under.set_text_content(None);
         self.ink.set_text_content(None);
         self.layout = StableLayout::default();
@@ -187,6 +198,8 @@ impl Board {
         self.ink.set_text_content(None);
         let mut fresh = vec![];
         let mut keys = HashSet::new();
+        // Notes and marks can reach past the laid-out boxes, so the view is framed on the ink itself.
+        let mut ink = Bounds { ..laid.bounds };
         for piece in &pieces {
             keys.insert(piece.key.clone());
             let new = !self.shown.contains(&piece.key);
@@ -194,6 +207,11 @@ impl Board {
             let mut r = Rng::new(&piece.seed);
             for line in &piece.lines {
                 let inked = line.inked(&mut r);
+                let pad = f64::from(inked.width);
+                for p in &inked.center {
+                    let (x, y) = (f64::from(p[0]), f64::from(p[1]));
+                    (ink.x0, ink.y0, ink.x1, ink.y1) = (ink.x0.min(x - pad), ink.y0.min(y - pad), ink.x1.max(x + pad), ink.y1.max(y + pad));
+                }
                 let node = stroke_node(line.style);
                 let layer = if line.style.under { &self.under } else { &self.ink };
                 let _ = layer.append_child(&node);
@@ -205,7 +223,7 @@ impl Board {
             }
         }
         self.shown = keys;
-        (fresh, laid.bounds)
+        (fresh, ink)
     }
 
     /// Where the newest strokes are, or the board's bounds when there are none.
@@ -216,6 +234,21 @@ impl Board {
             (b.x0, b.y0, b.x1, b.y1) = (b.x0.min(f64::from(p[0])), b.y0.min(f64::from(p[1])), b.x1.max(f64::from(p[0])), b.y1.max(f64::from(p[1])));
         }
         if b.x0 > b.x1 { Bounds { ..*all } } else { b }
+    }
+
+    fn set_reading(&mut self, reading: bool) {
+        self.reading = reading;
+        let _ = self.back.class_list().toggle_with_force("shown", reading);
+    }
+
+    /// The board point under a point of the page, and board units per pixel.
+    fn at(&self, x: f64, y: f64) -> ([f64; 2], f64) {
+        let r = self.svg.get_bounding_client_rect();
+        let v = self.view;
+        // The view is fitted inside the element, centred, so one of its sides has room around it.
+        let s = (v[2] / r.width().max(1.0)).max(v[3] / r.height().max(1.0));
+        let (ox, oy) = ((r.width() * s - v[2]) / 2.0, (r.height() * s - v[3]) / 2.0);
+        ([v[0] - ox + (x - r.left()) * s, v[1] - oy + (y - r.top()) * s], s)
     }
 
     fn set_view(&mut self, v: [f64; 4]) {
@@ -348,7 +381,8 @@ async fn play(sample: &Sample, index: usize, board: &Rc<RefCell<Board>>, ui: &Rc
             ui.title.set_text_content(Some(&head.label));
         }
         ui.set_state("drawing");
-        ease_view(board, frame_for(&bounds), &live).await;
+        let newest = Board::near(&fresh, &bounds);
+        follow(board, frame_for(&bounds), &newest, &live).await;
         write(&fresh, &live).await;
         let _ = li.class_list().add_1("drawn");
         ui.set_state("ready");
@@ -429,7 +463,8 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
                     ui.title.set_text_content(Some(&head.label));
                 }
                 ui.set_state("drawing");
-                ease_view(&board, frame_following(&bounds, &Board::near(&fresh, &bounds)), &live).await;
+                let newest = Board::near(&fresh, &bounds);
+                follow(&board, frame_following(&bounds, &newest), &newest, &live).await;
                 write(&fresh, &live).await;
                 let _ = li.class_list().add_1("drawn");
                 ui.set_state("listening");
@@ -501,7 +536,29 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
     }
 }
 
-/// Move the view to where the new ink goes, quickly.
+/// Take the view to new ink, unless the reader is looking around the board: then only once the ink is out
+/// of their sight and they have left the board alone a while.
+async fn follow(board: &RefCell<Board>, to: [f64; 4], newest: &Bounds, live: &dyn Fn() -> bool) {
+    {
+        let mut b = board.borrow_mut();
+        b.latest = to;
+        if b.reading {
+            let v = b.view;
+            let inside = newest.x0 >= v[0] && newest.y0 >= v[1] && newest.x1 <= v[0] + v[2] && newest.y1 <= v[1] + v[3];
+            if inside || now() - b.touched < READ_HOLD_MS {
+                return;
+            }
+            b.set_reading(false);
+        }
+    }
+    ease_view(board, to, live).await;
+}
+
+fn now() -> f64 {
+    win().performance().map_or(0.0, |p| p.now())
+}
+
+/// Move the view to where the new ink goes, quickly. The reader taking hold of the board stops it.
 async fn ease_view(board: &RefCell<Board>, to: [f64; 4], live: &dyn Fn() -> bool) {
     let from = board.borrow().view;
     if reduced() {
@@ -513,6 +570,9 @@ async fn ease_view(board: &RefCell<Board>, to: [f64; 4], live: &dyn Fn() -> bool
         let t = frame().await;
         let k = ((t - t0) / 450.0).min(1.0);
         let e = 1.0 - (1.0 - k).powi(3);
+        if board.borrow().reading {
+            break;
+        }
         board.borrow_mut().set_view(std::array::from_fn(|i| from[i] + (to[i] - from[i]) * e));
         if k >= 1.0 || !live() {
             break;
@@ -553,6 +613,9 @@ async fn write(strokes: &[Drawing], live: &dyn Fn() -> bool) {
         }
     }
 }
+
+/// A drag under way: the pointer, where it went down, and the view then.
+type Grip = (i32, f64, f64, [f64; 4]);
 
 fn on(target: &web_sys::EventTarget, event: &str, f: impl FnMut(web_sys::Event) + 'static) {
     let f = Closure::<dyn FnMut(web_sys::Event)>::new(f);
@@ -612,6 +675,79 @@ pub fn start() {
             let _ = ui.listen.class_list().toggle_with_force("paused", control.paused.get());
             q("#listen-label").set_text_content(Some(if control.paused.get() { "resume" } else { "pause" }));
         });
+    }
+    // The reader can take hold of the board: drag to look around, pinch or Ctrl and the wheel to zoom.
+    // A plain wheel is left to the page, which the demo sits in.
+    {
+        let drag: Rc<Cell<Option<Grip>>> = Rc::new(Cell::new(None));
+        let svg = q("#board");
+        {
+            let (board, drag, target) = (board.clone(), drag.clone(), svg.clone());
+            on(&svg, "pointerdown", move |e| {
+                let Some(e) = e.dyn_ref::<web_sys::PointerEvent>() else { return };
+                if e.button() != 0 {
+                    return;
+                }
+                let _ = target.set_pointer_capture(e.pointer_id());
+                let _ = target.class_list().add_1("dragging");
+                drag.set(Some((e.pointer_id(), f64::from(e.client_x()), f64::from(e.client_y()), board.borrow().view)));
+            });
+        }
+        {
+            let (board, drag) = (board.clone(), drag.clone());
+            on(&svg, "pointermove", move |e| {
+                let (Some(e), Some((id, x, y, from))) = (e.dyn_ref::<web_sys::PointerEvent>(), drag.get()) else { return };
+                if e.pointer_id() != id {
+                    return;
+                }
+                let mut b = board.borrow_mut();
+                let (_, s) = b.at(x, y);
+                let (dx, dy) = ((f64::from(e.client_x()) - x) * s, (f64::from(e.client_y()) - y) * s);
+                if dx.abs() + dy.abs() < 0.5 && !b.reading {
+                    return;
+                }
+                b.set_reading(true);
+                b.touched = now();
+                b.set_view([from[0] - dx, from[1] - dy, from[2], from[3]]);
+            });
+        }
+        for end in ["pointerup", "pointercancel"] {
+            let (drag, target) = (drag.clone(), svg.clone());
+            on(&svg, end, move |_| {
+                drag.set(None);
+                let _ = target.class_list().remove_1("dragging");
+            });
+        }
+        {
+            let board = board.clone();
+            let wheel = Closure::<dyn FnMut(web_sys::WheelEvent)>::new(move |e: web_sys::WheelEvent| {
+                if !e.ctrl_key() && !e.meta_key() {
+                    return;
+                }
+                e.prevent_default();
+                let mut b = board.borrow_mut();
+                let (p, _) = b.at(f64::from(e.client_x()), f64::from(e.client_y()));
+                let v = b.view;
+                // A wheel notch is about a fifth closer or farther; a pinch, finer.
+                let k = (e.delta_y() * 0.002).exp().clamp(ZOOM_WIDTH.0 / v[2], ZOOM_WIDTH.1 / v[2]);
+                b.set_reading(true);
+                b.touched = now();
+                b.set_view([p[0] - (p[0] - v[0]) * k, p[1] - (p[1] - v[1]) * k, v[2] * k, v[3] * k]);
+            });
+            let options = web_sys::AddEventListenerOptions::new();
+            options.set_passive(false);
+            let _ = svg.add_event_listener_with_callback_and_add_event_listener_options("wheel", wheel.as_ref().unchecked_ref(), &options);
+            wheel.forget();
+        }
+        {
+            let board = board.clone();
+            on(&q("#latest"), "click", move |_| {
+                let to = board.borrow().latest;
+                board.borrow_mut().set_reading(false);
+                let board = board.clone();
+                wasm_bindgen_futures::spawn_local(async move { ease_view(&board, to, &|| true).await });
+            });
+        }
     }
     {
         let control = control.clone();

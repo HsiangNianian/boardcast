@@ -74,7 +74,14 @@ body > .site-header { padding-top: 0; padding-bottom: 28px; }
 .dock .sound.on { color: var(--rec); }
 .dock .sound.on svg { color: var(--rec); }
 .dock .sound:hover { opacity: .85; }
-.credit.shown { display: block; position: absolute; right: 14px; bottom: 66px; font-size: 10px; text-align: right; max-width: 60%; }
+.dock .credit.shown { display: flex; align-items: center; margin-left: auto; padding: 0 16px; font-size: 10px; text-align: right; min-width: 0; overflow: hidden; }
+.dock .credit.shown ~ #replay { margin-left: 0; }
+/* The board can be dragged to look around; once it is, a way back to the talk appears. */
+.board { cursor: grab; touch-action: none; }
+.board.dragging { cursor: grabbing; }
+.latest { all: unset; display: none; position: absolute; left: 14px; top: 30px; padding: 3px 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: 400 11px var(--mono); cursor: pointer; }
+.latest.shown { display: block; }
+.latest:hover { border-color: var(--text); }
 .embed-label { display: none; }
 
 /* The embedded demo reads left to right: transcript, then the board. */
@@ -100,7 +107,7 @@ html.embed .board { bottom: 47px; height: calc(100% - 77px); }
 html.embed .dock { height: 45px; }
 html.embed .dock button { font-size: 12px; padding: 0 16px; }
 html.embed .dock button:not(.listen):not(#replay):not(.sound), html.embed #replay small { display: none; }
-html.embed .credit.shown { bottom: 53px; }
+html.embed .latest { top: 36px; }
 html.embed .dock button span { display: block; }
 html.embed .dock .listen .rec { display: grid; width: 22px; height: 22px; }
 html.embed #replay { margin-left: auto; border-left: 1px solid var(--line); border-right: 0; }

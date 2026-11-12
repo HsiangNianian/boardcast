@@ -10,6 +10,7 @@ assets/hanzi/
 resources/llama/
 resources/voice/
 eval/asr/.data/
+eval/asr/.models/
 target/
 # The model downloader is code; only downloaded models are ignored above.
 !crates/models/

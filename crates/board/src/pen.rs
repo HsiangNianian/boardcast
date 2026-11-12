@@ -277,12 +277,14 @@ pub fn arrow(points: &[Pt], r: &mut Rng) -> Vec<Stroke> {
     vec![shaft.clone(), head(spread), head(-spread)]
 }
 
-/// A five-pointed star in one continuous stroke.
-pub fn star(cx: f32, cy: f32, radius: f32) -> Stroke {
-    (0..=10)
+/// A five-pointed star the way a hand draws one: a single line from the top, crossing itself to each point in
+/// turn and back up. The points sit a little unevenly and the whole star leans a touch.
+pub fn star(cx: f32, cy: f32, radius: f32, r: &mut Rng) -> Stroke {
+    let lean = (r.next() - 0.5) * 0.16;
+    (0..=5)
         .map(|i| {
-            let a = -std::f32::consts::FRAC_PI_2 + std::f32::consts::PI * i as f32 / 5.0;
-            let k = if i % 2 == 0 { radius } else { radius * 0.45 };
+            let a = -std::f32::consts::FRAC_PI_2 + lean + std::f32::consts::TAU * 2.0 * i as f32 / 5.0;
+            let k = radius * (0.92 + r.next() * 0.14);
             [cx + a.cos() * k, cy + a.sin() * k]
         })
         .collect()

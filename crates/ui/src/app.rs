@@ -98,6 +98,25 @@ const ESTIMATED_SHARE: f32 = 0.7;
 const SIDE_W: f32 = 340.0;
 const JUMP_SHOWN: Duration = Duration::from_millis(2500);
 const JUMP_SCROLLING: Duration = Duration::from_millis(300);
+/// A heard line is typed in a few characters at a time, as the web demo does.
+const TYPE_STEP: Duration = Duration::from_millis(28);
+const TYPE_CHARS: usize = 3;
+
+/// The line being typed into the transcript, and whether the list follows it to the bottom.
+struct Typing {
+    line: usize,
+    started: Instant,
+    /// Typed lines appear whole; heard ones are typed in.
+    animate: bool,
+    /// The reader was at the newest line, so the list keeps it in view. Scrolled back, they are left there.
+    follow: bool,
+}
+
+impl Typing {
+    fn chars(&self) -> usize {
+        TYPE_CHARS * (self.started.elapsed().as_millis() / TYPE_STEP.as_millis()).saturating_add(1) as usize
+    }
+}
 /// How far everything else fades while one speaker is traced.
 const TRACE_VEIL: f32 = 0.7;
 const TRACE_MARK: f32 = 0.5;
@@ -107,6 +126,8 @@ const MIN_ZOOM: f32 = 0.2;
 const MAX_ZOOM: f32 = 4.0;
 /// A new sharpness level is rendered once zooming has paused this long.
 const RERASTER_AFTER: Duration = Duration::from_millis(120);
+/// How long the view takes to move to where new content needs it, easing out.
+const GLIDE: Duration = Duration::from_millis(450);
 /// Writing speed. A backlog speeds it up so the board never falls far behind the talk.
 const PEN_PX_PER_SECOND: f32 = 1500.0;
 
@@ -226,6 +247,8 @@ struct Ink {
     view: Option<View>,
     /// The user zoomed or panned: new content must not move the view until they return to latest.
     reading: bool,
+    /// The view moves on its own from here, starting then, rather than jumping.
+    glide: Option<(View, Instant)>,
     /// A label is being rewritten in the selection's bar.
     editing: bool,
     canvas: Bounds<Pixels>,
@@ -482,6 +505,7 @@ impl Ink {
         self.hints = None;
         self.view = None;
         self.reading = false;
+        self.glide = None;
         self.drag = None;
         self.extent = BoardBounds::default();
         self.generation += 1;
@@ -507,15 +531,45 @@ impl Ink {
     /// The controls float somewhere new: unless the user chose the view, fit the board between them.
     fn set_insets(&mut self, insets: [f32; 4]) {
         if self.insets != insets {
-            self.insets = insets;
             if !self.reading {
+                self.glide_from_here();
                 self.view = None;
             }
+            self.insets = insets;
         }
     }
 
-    fn shown(&self) -> View {
+    /// Where the view is going: the one kept, or the fit.
+    fn target(&self) -> View {
         self.view.unwrap_or_else(|| self.fit())
+    }
+
+    /// The view on screen now: the target, or on the way to it. The scale changes by the same ratio each step
+    /// and the centre moves in a straight line, so the board neither swings aside nor overshoots.
+    fn shown(&self) -> View {
+        let to = self.target();
+        let Some((from, started)) = self.glide else { return to };
+        let p = started.elapsed().as_secs_f32() / GLIDE.as_secs_f32();
+        if p >= 1.0 || from.k <= 0.0 || to.k <= 0.0 {
+            return to;
+        }
+        let e = 1.0 - (1.0 - p).powi(3);
+        let (hw, hh) = (f32::from(self.canvas.size.width) / 2.0, f32::from(self.canvas.size.height) / 2.0);
+        let centre = |v: View| (v.x + hw / v.k, v.y + hh / v.k);
+        let (a, b) = (centre(from), centre(to));
+        let k = from.k * (to.k / from.k).powf(e);
+        let (cx, cy) = (a.0 + (b.0 - a.0) * e, a.1 + (b.1 - a.1) * e);
+        View { k, x: cx - hw / k, y: cy - hh / k }
+    }
+
+    fn gliding(&self) -> bool {
+        self.glide.is_some_and(|(_, started)| started.elapsed() < GLIDE)
+    }
+
+    /// The view is about to change on its own: move there from what is on screen instead of jumping.
+    /// Opening a meeting or seeking a replay shows the result at once.
+    fn glide_from_here(&mut self) {
+        self.glide = (!self.instant).then(|| (self.shown(), Instant::now()));
     }
 
     /// New content keeps the view while it fits, so the board does not rescale with every line.
@@ -523,7 +577,8 @@ impl Ink {
         if self.reading {
             return;
         }
-        let cur = self.shown();
+        // Measured against where the view is going, so a move already under way is not cut short.
+        let cur = self.target();
         let (w, h) = (f32::from(self.canvas.size.width), f32::from(self.canvas.size.height));
         let [left, top, right, bottom] = self.insets;
         let inside = self.extent.x1 > self.extent.x0
@@ -534,6 +589,9 @@ impl Ink {
         let view = inside.then_some(cur);
         if view.map(|v| v.k) != self.view.map(|v| v.k) {
             self.zoomed_at = Instant::now();
+        }
+        if view.is_none() {
+            self.glide_from_here();
         }
         self.view = view;
     }
@@ -546,10 +604,12 @@ impl Ink {
         let (mx, my) = (v.x + px_ / v.k, v.y + py / v.k);
         self.view = Some(View { k, x: mx - px_ / k, y: my - py / k });
         self.reading = true;
+        self.glide = None;
         self.zoomed_at = Instant::now();
     }
 
     fn show_latest(&mut self) {
+        self.glide_from_here();
         self.reading = false;
         self.view = None;
         self.zoomed_at = Instant::now();
@@ -587,7 +647,8 @@ impl Ink {
                 }
             }
         }
-        if self.zoomed_at.elapsed() < RERASTER_AFTER {
+        // Not while the view is still moving: the next frame would want a different sharpness.
+        if self.zoomed_at.elapsed() < RERASTER_AFTER || self.gliding() {
             return;
         }
         let k = self.shown().k;
@@ -691,6 +752,11 @@ impl Ink {
             self.instant = false;
         }
         let now = Instant::now();
+        // The view gets there first, then the pen writes, so new ink is never started off screen.
+        if self.gliding() && !self.instant {
+            self.last = Some(now);
+            return;
+        }
         let dt = self.last.replace(now).map_or(0.016, |l| (now - l).as_secs_f32()).min(0.1);
         let mut budget = if self.instant { f32::MAX } else { PEN_PX_PER_SECOND * (1.0 + self.queue.len() as f32 / 60.0) * dt };
         while budget > 0.0 {
@@ -960,6 +1026,7 @@ struct Workbench {
     transcript_scroll: gpui_kit::ScrollHandle,
     /// The line just jumped to, shown for a moment.
     jumped_line: Option<(usize, Instant)>,
+    typing: Option<Typing>,
     pdfium: PathBuf,
     /// Where the stroke data is, for work that needs its own copy.
     hanzi: HanziSource,
@@ -1183,6 +1250,14 @@ fn line_note(line: &serde_json::Value, model_loading: bool) -> String {
 }
 
 impl Workbench {
+    /// A line was just added: type it in if it was heard, and keep the newest line in view unless the reader
+    /// has scrolled back through the meeting.
+    fn line_arrived(&mut self, animate: bool) {
+        let (offset, max) = (f32::from(self.transcript_scroll.offset().y), f32::from(self.transcript_scroll.max_offset().y));
+        let follow = -offset >= max - 24.0;
+        self.typing = Some(Typing { line: self.live.lines.len().saturating_sub(1), started: Instant::now(), animate, follow });
+    }
+
     fn session(&self) -> &boardcast_agent::Session {
         self.pipeline.session()
     }
@@ -1307,6 +1382,7 @@ impl Workbench {
                 Event::Heard { meeting, speaker, text, asr_ms } => {
                     if meeting == self.session().meeting() {
                         self.live.add_line(speaker.as_deref(), &text, asr_ms);
+                        self.line_arrived(true);
                     }
                 }
                 Event::Spoken { meeting, sentence } => {
@@ -1315,6 +1391,7 @@ impl Workbench {
                         let mut sentence = sentence;
                         sentence.text = self.as_glossary_writes(&sentence.text);
                         self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
+                        self.line_arrived(true);
                         self.keep_heard_text();
                         if self.follow_pages(&sentence.text, cx) {
                             continue;
@@ -1381,10 +1458,22 @@ impl Workbench {
                 changed = true;
             } else if at.elapsed() < JUMP_SCROLLING {
                 // A list scrolls only once it has been laid out, which the transcript may not have
-                // been if another panel was showing. Newest first on screen.
-                self.transcript_scroll.scroll_to_item(self.live.lines.len().saturating_sub(line + 1));
+                // been if another panel was showing.
+                self.transcript_scroll.scroll_to_item(line);
                 changed = true;
             }
+        }
+        if let Some(typing) = &self.typing {
+            if typing.follow {
+                self.transcript_scroll.scroll_to_bottom();
+            }
+            let len = self.live.lines.get(typing.line).and_then(|l| l["text"].as_str()).map_or(0, |t| t.chars().count());
+            // Kept a little past the last character, so the list is laid out before it stops following.
+            let typed = !typing.animate || typing.chars() >= len;
+            if typed && typing.started.elapsed() > JUMP_SCROLLING {
+                self.typing = None;
+            }
+            changed = true;
         }
         // The bar has to keep moving even while nothing is reported.
         changed |= self.preparing.as_ref().is_some_and(Preparing::showing);
@@ -2057,6 +2146,7 @@ impl Workbench {
         self.speaker_line = None;
         self.speaker_hovered = None;
         self.jumped_line = None;
+        self.typing = None;
         self.live = live;
         self.live.adopt_summary_source(&fingerprint_of(&self.live));
         self.show_page_image();
@@ -2974,6 +3064,7 @@ impl Workbench {
         self.input.update(cx, |state, cx| state.set_value("", window, cx));
         let speaker = self.speaker.clone();
         self.live.add_line(speaker.as_deref(), &text, None);
+        self.line_arrived(false);
         if self.follow_pages(&text, cx) {
             cx.notify();
             return;
@@ -3293,6 +3384,16 @@ fn speaker_badge(speakers: &[String], name: &str) -> Tag {
     Tag::custom(rgb(background).into(), rgb(ink).into(), rgb(background).into()).xsmall().rounded(px(10.)).child(initial(name))
 }
 
+/// A speaker's badge on a transcript line: in outline while the line waits for the board, filled once it is on it.
+fn line_badge(speakers: &[String], name: &str, drawn: bool) -> Tag {
+    if drawn {
+        return speaker_badge(speakers, name);
+    }
+    const INKS: [u32; 6] = [0xa6_1e_4d, 0x1c_4f_9c, 0x1f_7a_45, 0x9f_4f_0b, 0x5b_3c_c4, 0x47_55_69];
+    let ink = INKS[speakers.iter().position(|s| s == name).unwrap_or(0) % INKS.len()];
+    Tag::custom(gpui_kit::transparent_black(), rgb(ink).into(), rgb(ink).into()).xsmall().rounded(px(10.)).child(initial(name))
+}
+
 /// The highlighter that goes with a speaker's badge: the same hue, strong enough to show under ink.
 fn speaker_marker(speakers: &[String], name: &str) -> u32 {
     const MARKERS: [u32; 6] = [0xf7_83_ac, 0x74_c0_fc, 0x69_db_7c, 0xff_a9_4d, 0xb1_97_fc, 0xad_b5_bd];
@@ -3405,10 +3506,11 @@ fn rss_mb() -> u64 {
 
 impl Render for Workbench {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // Only animate while there is ink to write; an idle board costs no frames.
+        // Only animate while there is ink to write, the view is moving or a line is being typed; an idle board
+        // costs no frames.
         {
             let ink = self.ink.borrow();
-            if !ink.queue.is_empty() || ink.zoom_test.is_some() {
+            if !ink.queue.is_empty() || ink.zoom_test.is_some() || ink.gliding() || self.typing.as_ref().is_some_and(|t| t.animate) {
                 window.request_animation_frame();
             }
         }
@@ -3457,6 +3559,7 @@ impl Render for Workbench {
                     let d = e.position - from;
                     b.view = Some(View { x: view.x - f32::from(d.x) / view.k, y: view.y - f32::from(d.y) / view.k, k: view.k });
                     b.reading = true;
+                    b.glide = None;
                     b.zoomed_at = Instant::now();
                     cx.notify();
                 }
@@ -4054,8 +4157,16 @@ impl Render for Workbench {
             .gap_3()
             .flex()
             .flex_col()
-            .children(self.live.lines[..shown_lines].iter().enumerate().rev().map(|(i, l)| {
+            .children(self.live.lines[..shown_lines].iter().enumerate().map(|(i, l)| {
                 let manual = l["manual"].as_bool().unwrap_or(false);
+                // The badge is drawn in outline until the model has put the line on the board.
+                let drawn = !l["ms"].is_null() && !l["failed"].as_bool().unwrap_or(false);
+                let text = l["text"].as_str().unwrap_or_default();
+                let typing = self.typing.as_ref().filter(|t| t.line == i && t.animate).map(Typing::chars).filter(|&n| n < text.chars().count());
+                let text = match typing {
+                    Some(n) => format!("{}▍", text.chars().take(n).collect::<String>()),
+                    None => text.to_string(),
+                };
                 let note = line_note(l, self.preparing.is_some());
                 let jumped = self.jumped_line.is_some_and(|(line, _)| line == i);
                 div()
@@ -4073,7 +4184,7 @@ impl Render for Workbench {
                                 .gap_1()
                                 .mb_1()
                                 .cursor_pointer()
-                                .child(speaker_badge(&speakers, &name))
+                                .child(line_badge(&speakers, &name, drawn))
                                 .child(div().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.choose_speaker(picked.clone(), window, cx);
@@ -4081,7 +4192,7 @@ impl Render for Workbench {
                                 })),
                         )
                     })
-                    .child(div().text_sm().when(manual, |d| d.text_color(rgb(pal().faint))).child(l["text"].as_str().unwrap_or_default().to_string()))
+                    .child(div().text_sm().when(manual, |d| d.text_color(rgb(pal().faint))).child(text))
                     .when(!note.is_empty() && !manual, |d| {
                         d.child(div().text_xs().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { pal().danger } else { pal().faint })).child(note))
                     })
@@ -4872,6 +4983,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 extent: BoardBounds::default(),
                 view: None,
                 reading: false,
+                glide: None,
                 canvas: Bounds::new(point(px(0.), px(0.)), size(px(960.), px(756.))),
                 editing: false,
                 dpr: 1.0,
@@ -5045,6 +5157,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     speaker_hovered: None,
                     transcript_scroll: gpui_kit::ScrollHandle::new(),
                     jumped_line: None,
+                    typing: None,
                     pdfium,
                     hanzi,
                     exporting: None,

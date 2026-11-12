@@ -1,7 +1,7 @@
 name: Website
 
-# Trunk bundles the WASM assets; crates/site-gen renders the five pages before publication.
-# Requires Settings → Pages → Source: GitHub Actions.
+# Trunk bundles the WASM assets; crates/site-gen renders the five pages before publication, with the
+# download sizes read from the latest release. Requires Settings → Pages → Source: GitHub Actions.
 
 on:
   push:
@@ -17,6 +17,11 @@ on:
       - 'Cargo.lock'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
+  # A new release changes the download sizes. Release publishes with GITHUB_TOKEN, which starts no
+  # `release` event, so the site follows the workflow instead.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
 
 permissions:
   contents: read
@@ -29,6 +34,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -42,6 +48,10 @@ jobs:
           tool: trunk
       - name: Build the website
         working-directory: landing
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # The published page never goes out without its download sizes.
+          BOARDCAST_REQUIRE_RELEASE: '1'
         # The demo is a page of its own under demo/, built after the site, which empties dist/ first.
         run: |
           cargo test --locked -p boardcast-site-gen

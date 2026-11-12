@@ -88,10 +88,10 @@ nav.top { position: relative; z-index: 3; display: grid; grid-template-columns: 
 .nav-item:hover .pict .s, .card:hover .pict .s { stroke: var(--grey); }
 
 /* ———————————————— the drawing sheet around everything ———————————————— */
-/* Content scrolling up passes under the top margin and ruler, not through them. */
-.frame { position: fixed; inset: 12px; z-index: 30; pointer-events: none; border: 1px solid var(--hair); box-shadow: 0 -12px 0 var(--bg); }
+/* The margin around the sheet is paper on every side: content and the hero's colours stop at the frame. */
+.frame { position: fixed; inset: 12px; z-index: 30; pointer-events: none; border: 1px solid var(--hair); box-shadow: 0 0 0 12px var(--bg); }
 .ruler { position: absolute; font: 400 9px var(--mono); color: var(--faint); }
-.ruler.top { left: 0; right: 0; top: 0; height: 14px; background: repeating-linear-gradient(90deg, var(--hair) 0 1px, transparent 1px calc(100% / 48)) 0 0 / 100% 5px no-repeat, var(--bg); }
+.ruler.top { left: 0; right: 0; top: 0; height: 14px; background: repeating-linear-gradient(90deg, var(--hair) 0 1px, transparent 1px calc(100% / 48)) 0 0 / 100% 5px no-repeat; }
 .ruler.left { top: 0; bottom: 0; left: 0; width: 14px; background: repeating-linear-gradient(180deg, var(--hair) 0 1px, transparent 1px calc(100% / 32)) 0 0 / 5px 100% no-repeat; }
 .ruler span { position: absolute; }
 .ruler.top span { top: 5px; transform: translateX(-50%); }
@@ -184,6 +184,21 @@ body.drawing-lasso { user-select: none; cursor: crosshair; }
   .hero-copy p { margin-top: 12px; font-size: 14px; }
   .cta { margin-top: 16px; }
   .hero-rail { padding-top: 16px; padding-bottom: 16px; }
+}
+
+/* Each sheet after the app stands on its own: at least a screen tall, its content in the middle. */
+@media (min-width: 1081px) {
+  .sheet-page { min-height: 100svh; display: flex; flex-direction: column; justify-content: center; padding-top: 72px; padding-bottom: 72px; }
+  .sheet-page.block { padding-top: 72px; }
+  /* Sheet 02 holds still while the scroll plays the meeting along its timeline. */
+  .sig-scroll { height: 280vh; }
+  .sig-pin { position: sticky; top: 0; }
+  /* Room above the timeline for the cursor's clock. */
+  #signals .head { padding-bottom: 40px; }
+}
+@media (min-width: 1081px) and (max-height: 960px) {
+  .sheet-page, .sheet-page.block { padding-top: 40px; padding-bottom: 40px; }
+  .sheet-page .head { padding-bottom: 20px; }
 }
 
 /* ———————————————— signals: one meeting, four lines ———————————————— */
@@ -391,17 +406,31 @@ section.block { padding-top: 140px; }
 .specs dt, .specs dd { padding: 14px 0; border-bottom: 1px solid var(--hair); font-size: 15px; }
 .specs dt { font: 400 12px var(--mono); color: var(--dim); padding-top: 17px; }
 .specs dl + dl { padding-left: 40px; }
+/* Downloads: each package with its real size, and how to open it the first time. The one for this computer is marked. */
 .dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--hair); border: 1px solid var(--hair); margin-top: 48px; }
-.dl a { background: var(--bg); padding: 40px 32px; display: grid; grid-template-columns: 1fr auto; align-items: end; }
+.dl a { position: relative; background: var(--bg); padding: 36px 32px 28px; display: flex; flex-direction: column; transition: background .2s, color .2s; }
+.dl-top { display: grid; gap: 14px; justify-items: start; padding-right: 72px; }
 .dl b { font-size: clamp(40px, 4.4vw, 64px); font-weight: 200; letter-spacing: -.04em; line-height: 1; }
-.dl span { display: block; margin-top: 14px; color: var(--link); font-size: 16px; }
-.dl em { font: 400 13px var(--mono); font-style: normal; }
+.dl .here { display: none; color: var(--accent); }
+.dl a.this .here { display: inline; }
+.dl a.this { box-shadow: inset 0 3px 0 var(--accent); }
+.dl ul { list-style: none; margin: 26px 0 22px; }
+.dl li { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--hair); font-size: 14px; color: var(--grey); }
+.dl li:first-child { color: var(--fg); }
+.dl li em { font: 400 12px var(--mono); font-style: normal; color: var(--dim); white-space: nowrap; }
+.dl p { margin-top: auto; }
+.dl a > i { position: absolute; right: 32px; top: 40px; font: 400 13px var(--mono); font-style: normal; }
 .dl a:hover { background: var(--fg); color: var(--bg); }
-.dl a:hover span { color: var(--bg); }
-.now { padding-top: 160px; padding-bottom: 120px; text-align: center; }
-.now .clock { font-size: clamp(90px, 16vw, 240px); font-weight: 200; letter-spacing: -.06em; line-height: 1; font-variant-numeric: tabular-nums; }
-.now .clock .sep { animation: blink 2s steps(2) infinite; }
-.now p { margin-top: 18px; font-size: 22px; color: var(--grey); }
+.dl a:hover li, .dl a:hover li em, .dl a:hover .label { color: var(--bg); border-color: color-mix(in srgb, var(--bg) 25%, transparent); }
+.dl a:hover .here { color: var(--accent); }
+/* The last sheet: the reader's own said line, and a blank board the pen writes on. */
+.now { padding-top: 160px; padding-bottom: 120px; }
+.now .said .who { width: auto; padding: 0 6px; }
+.now .blank { margin-top: 18px; height: clamp(200px, 26vw, 320px); border: 1px solid var(--hair); background-color: var(--l1); }
+.now .blank .ink { height: 100%; margin: 0; }
+.now-foot { margin-top: 18px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; font-size: 15px; color: var(--grey); }
+.now-foot a { color: var(--fg); border-bottom: 1px solid var(--faint); }
+.now-foot a:hover { border-color: var(--fg); }
 
 @media (max-width: 1080px) {
   nav.top { grid-template-columns: 1fr 1fr; } .about { display: none; }
@@ -436,11 +465,19 @@ section.block { padding-top: 140px; }
   nav.top { grid-template-columns: 1fr; padding-top: 24px; } .nav-item { display: none; }
   .said { gap: 8px; font-size: 10px; }
   .said .who { flex-shrink: 0; }
-  .ink { height: 135px; }
+  .frame { box-shadow: 0 0 0 6px var(--bg); }
+  /* The handwriting is as tall as its two lines; only a pointer that can circle needs room for the note. */
+  .ink { height: 92px; }
   .ink .w.big { stroke-width: 2.4; }
-  .hero-copy h1 { font-size: 32px; }
-  .cta { margin-top: 20px; }
-  .cta a { gap: 16px; padding: 11px 14px; }
+  /* The first screen is the opening alone: below the name, the said line, the handwriting and the offer fill
+     the rest of the screen, and the sample starts below it. */
+  .hero-intro { gap: clamp(28px, 6svh, 56px); min-height: calc(100svh - 100px); align-content: center; padding-top: 8px; padding-bottom: 40px; }
+  .replay-open { margin-top: 10px; }
+  .hero-copy h1 { font-size: clamp(28px, 4.2svh, 36px); }
+  .hero-copy p { margin-top: 10px; font-size: 14px; line-height: 1.6; }
+  .cta { display: grid; grid-template-columns: 1fr 1fr; margin-top: 20px; }
+  .cta a { gap: 12px; padding: 12px 14px; }
+  .try iframe { height: 520px; }
   section.block { padding-top: 96px; }
   .head { gap: 16px; } .head h2 { font-size: min(40px, 8.4vw); }
   .row { grid-template-columns: 64px 1fr; height: 72px; } .row svg { height: 72px; } .row .name { font-size: 14px; } .row .name small { display: none; }
@@ -450,11 +487,13 @@ section.block { padding-top: 140px; }
   .canvas svg.board { left: 12px; top: 28px; width: calc(100% - 24px); }
   .dock .meter, .dock .mic small { display: none; } .dock button { padding: 10px; } .dock .mic { grid-template-columns: 24px auto; }
   .tabs { bottom: 14px; } .tabs .wrap { gap: 12px; overflow: hidden; } .tabs span { font-size: 10px; white-space: nowrap; } .tabs .auto { display: none; }
-  .bento { grid-auto-rows: 300px; } .card h4 { font-size: 26px; }
+  /* On a phone each card is as tall as its picture and words, so the two never overlap. */
+  .bento { grid-auto-rows: auto; } .card { min-height: 300px; } .card h4 { font-size: 26px; }
+  .card .art { position: relative; inset: auto; margin: 44px 0 22px; min-height: 120px; }
   .files { transform: scale(.78); }
   .specs dl { grid-template-columns: 110px 1fr; }
   .dl a { padding: 28px 20px; }
-  .now { padding-top: 96px; padding-bottom: 80px; } .now p { font-size: 17px; }
+  .now { padding-top: 96px; padding-bottom: 80px; }
 
   .try { margin-inline: -14px; }
   .try-foot span:last-child { display: none; }
@@ -463,3 +502,4 @@ section.block { padding-top: 140px; }
 
 footer a:hover { color: var(--fg); }
 @media (max-width: 360px) { .files { transform: scale(.64); } }
+@media (max-width: 600px) and (any-pointer: fine) { .ink { height: 135px; } }

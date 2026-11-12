@@ -120,4 +120,10 @@ html.embed #replay { margin-left: auto; border-left: 1px solid var(--line); bord
   html.embed .side-head { padding: 10px 12px; }
   html.embed .lines { padding: 10px 12px; gap: 10px; }
   html.embed .canvas { grid-column: 1; grid-row: 2; }
+  /* A narrow header keeps the samples and an arrow; the samples fade at the edge to show they scroll. */
+  html.embed .full-demo-words { display: none; }
+  html.embed .full-demo { padding: 0 4px; font-size: 14px; }
+  html.embed .samples { mask-image: linear-gradient(90deg, #000 80%, transparent); }
+  /* The transcript keeps its newest lines at the bottom; the ones above fade out instead of being cut. */
+  html.embed .lines { mask-image: linear-gradient(transparent, #000 28px); }
 }

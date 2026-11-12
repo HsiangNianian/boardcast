@@ -1,8 +1,9 @@
 //! One meeting as four lines on a timeline: the sound, who spoke, what went on the board, and the marks.
-//! A cursor walks the meeting by itself until the reader points at it, and shows what was said then.
+//! Where the sheet is pinned, the scroll plays the meeting along the timeline; elsewhere a cursor walks it by
+//! itself. Pointing at the lines takes over either way, and shows what was said then.
 
 use crate::meeting::{clock_at, Said, LINES, MEETING};
-use crate::util::{add_class, append, append_text, clamp, clear, clear_interval, el, has_class, interval, q, q_in, random, reduced, remove_class, set_style, set_text, svg_el};
+use crate::util::{add_class, append, append_text, clamp, clear, clear_interval, el, has_class, interval, on_passive, q, q_in, random, reduced, remove_class, set_style, set_text, svg_el, win};
 use std::cell::Cell;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;
@@ -97,6 +98,30 @@ pub fn init() {
             show((f64::from(e.client_x()) - r.left()) / r.width());
         });
     }
+    // How far the scroll is through the pinned sheet, or nothing where the sheet is not pinned.
+    let scroller = q("#signals");
+    let progress = move || {
+        let w = win();
+        let travel = f64::from(scroller.client_height()) - w.inner_height().ok()?.as_f64()?;
+        if travel < 40.0 {
+            return None;
+        }
+        Some(clamp(-scroller.get_bounding_client_rect().top() / travel))
+    };
+    let progress = Rc::new(progress);
+    {
+        let (sig, show, progress) = (sig.clone(), show.clone(), progress.clone());
+        on_passive(&win(), "scroll", move |_| {
+            if !has_class(&sig, "in") {
+                return;
+            }
+            if let Some(f) = progress() {
+                // Scrolling takes the cursor back from the pointer.
+                add_class(&sig, "auto");
+                show(f);
+            }
+        });
+    }
     let watched: Element = sig.clone();
     let seen = crate::util::observer(None, Some(0.4), move |entry, io| {
         if !entry.is_intersecting() {
@@ -104,6 +129,11 @@ pub fn init() {
         }
         io.disconnect();
         add_class(&sig, "in");
+        if let Some(f) = progress() {
+            add_class(&sig, "auto");
+            show(f);
+            return;
+        }
         if reduced() {
             return;
         }

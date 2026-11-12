@@ -18,6 +18,7 @@ a:hover { color: var(--fg); }
 .doc { padding-top: 96px; padding-bottom: 120px; display: grid; grid-template-columns: 220px 1fr; gap: 56px; }
 .doc > aside { position: sticky; top: 40px; align-self: start; }
 .doc > aside .label { display: block; margin-bottom: 8px; }
+.doc > aside .updated { margin-top: 20px; font: 400 11px var(--mono); color: var(--dim); }
 .doc h1 { grid-column: 1 / -1; font-size: clamp(48px, 7vw, 104px); font-weight: 200; letter-spacing: -.045em; line-height: .95; }
 .doc h1 em { font-style: normal; color: var(--dim); }
 .doc section + section { margin-top: 56px; }

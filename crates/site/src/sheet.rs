@@ -1,6 +1,10 @@
-//! The drawing sheet around the page: rulers on two edges and a title block that follows the section in view.
+//! The drawing sheet around the page: rulers on two edges, and a timeline along the bottom. The page is the
+//! meeting: scrolling plays it, and the timeline shows how far in, as a recording's time, which sheet is in view
+//! and where each sheet starts.
 
-use crate::util::{append, clear, data, el, interval, on_passive, q, qa, set_style, set_text, text, two, win};
+
+use crate::meeting::MEETING;
+use crate::util::{append, clear, clamp, data, el, on_passive, q, qa, set_style, set_text, text, toggle, two, win};
 use std::rc::Rc;
 
 pub fn init() {
@@ -36,14 +40,43 @@ pub fn init() {
         on_passive(&win(), event, move |_| update());
     }
 
-    // The meeting's clock, running from when the page opened.
-    let time = q("#tb-time");
-    let t0 = js_sys::Date::now();
-    let base = f64::from(14 * 3600 + 2 * 60 + 4);
-    interval(1000, move || {
-        let s = base + ((js_sys::Date::now() - t0) / 1000.0).floor();
-        set_text(&time, &format!("{}:{}:{}", two(s / 3600.0), two((s / 60.0) % 60.0), two(s % 60.0)));
+    // One segment per sheet, as long as the sheet is tall, so the playhead crosses each in step with the page.
+    let track = q("#tb-track");
+    let sheets = qa("[data-sheet]");
+    let segments: Vec<_> = sheets
+        .iter()
+        .map(|s| {
+            let seg = el("span", "tb-seg", "");
+            let sheet = data(s, "sheet").unwrap_or_default();
+            append(&seg, &el("em", "", sheet.split(' ').next().unwrap_or("")));
+            append(&track, &seg);
+            seg
+        })
+        .collect();
+    append(&track, &el("em", "tb-fin", "fin"));
+    // Minutes and seconds into the recording, not the meeting's own clock, which sheet 02 shows.
+    let elapsed = |sec: f64| format!("{}:{}", two((sec / 60.0).floor()), two(sec % 60.0));
+    set_text(&q("#tb-total"), &elapsed(MEETING));
+    let (time, head) = (q("#tb-time"), q("#tb-head"));
+    let play = Rc::new(move || {
+        let w = win();
+        let y = w.scroll_y().unwrap_or(0.0).max(0.0);
+        let page = f64::from(crate::util::doc().document_element().map_or(0, |e| e.scroll_height()));
+        let view = w.inner_height().ok().and_then(|h| h.as_f64()).unwrap_or(0.0);
+        let f = if page > view { clamp(y / (page - view)) } else { 0.0 };
+        set_style(&head, "left", &format!("{}%", f * 100.0));
+        set_text(&time, &elapsed(f * MEETING));
+        for (seg, sheet) in segments.iter().zip(&sheets) {
+            let r = sheet.get_bounding_client_rect();
+            set_style(seg, "flex-grow", &format!("{}", r.height().max(1.0)));
+            toggle(seg, "past", r.bottom() <= view * 0.5);
+        }
     });
+    play();
+    for event in ["scroll", "resize"] {
+        let play = play.clone();
+        on_passive(&win(), event, move |_| play());
+    }
 
     let n = q("#tb-n");
     let title = q("#tb-title");

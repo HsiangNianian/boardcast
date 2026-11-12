@@ -892,6 +892,7 @@ dependencies = [
  "boardcast-import",
  "boardcast-meetings",
  "boardcast-models",
+ "boardcast-search",
  "boardcast-update",
  "chrono",
  "gpui-kit",

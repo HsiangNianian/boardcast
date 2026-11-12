@@ -19,6 +19,8 @@ use std::process::Child;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant, SystemTime};
 
+/// The most passages shown from any one meeting.
+const PER_MEETING: usize = 3;
 /// How long the embedding server is kept once nothing has asked for it.
 const IDLE: Duration = Duration::from_secs(180);
 
@@ -177,8 +179,16 @@ impl Worker {
                 indexes.push((id.clone(), index.clone()));
             }
         }
-        Ok(rank(&indexes, &query, text, WORD_WEIGHT, limit)
+        // A few passages from each meeting at most, so one long meeting does not crowd out the rest.
+        let mut per_meeting: HashMap<&str, usize> = HashMap::new();
+        Ok(rank(&indexes, &query, text, WORD_WEIGHT, usize::MAX)
             .into_iter()
+            .filter(|h| {
+                let seen = per_meeting.entry(h.meeting).or_default();
+                *seen += 1;
+                *seen <= PER_MEETING
+            })
+            .take(limit)
             .map(|h| Found { meeting: h.meeting.to_string(), title: titles.get(h.meeting).cloned().unwrap_or_default(), source: h.chunk.source.clone(), text: h.chunk.text.clone(), score: h.score })
             .collect())
     }

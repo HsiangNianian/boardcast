@@ -931,6 +931,26 @@ impl Panel {
     }
 }
 
+/// The meeting search worker, and what it has said.
+struct MeetingSearch {
+    jobs: std::sync::mpsc::Sender<boardcast_search::service::Job>,
+    events: Receiver<boardcast_search::service::Event>,
+    /// Meetings looked at in the current round of indexing, of how many.
+    indexing: Option<(usize, usize)>,
+    /// The query asked last, its ticket, and when it was typed, so a query waits for typing to pause.
+    asked: String,
+    typed_at: Option<Instant>,
+    ticket: u64,
+    hits: Vec<boardcast_search::service::Found>,
+    /// The meeting saved since it was last indexed, and when.
+    saved_at: Option<Instant>,
+    error: Option<String>,
+}
+
+/// How long typing must pause before a query is asked, and a save before the meeting is indexed again.
+const QUERY_AFTER: Duration = Duration::from_millis(350);
+const REINDEX_AFTER: Duration = Duration::from_secs(10);
+
 /// What the board model is doing. Kept as a state and put in words when shown, so it follows the
 /// interface language; once the model is ready there is nothing to say.
 #[derive(Clone, Copy, PartialEq)]
@@ -1165,6 +1185,9 @@ struct Workbench {
     transcript_scroll: gpui_kit::ScrollHandle,
     /// The line just jumped to, shown for a moment.
     jumped_line: Option<(usize, Instant)>,
+    /// Meeting search, while it is turned on and its model is here.
+    search: Option<MeetingSearch>,
+    search_tried: bool,
     typing: Option<Typing>,
     pdfium: PathBuf,
     /// Where the stroke data is, for work that needs its own copy.
@@ -1630,6 +1653,7 @@ impl Workbench {
         self.pump_replay(&mut changed, cx);
         self.pump_summary(&mut changed, cx);
         self.pump_download(&mut changed);
+        self.pump_search(&mut changed);
         self.pump_update(&mut changed);
         changed |= self.autosave();
         if changed {
@@ -2145,11 +2169,148 @@ impl Workbench {
                     self.needs_model = false;
                 }
                 self.form.note = Some(format!("{label} {}", tr("is ready.", "已就绪。")));
-                self.apply_backend();
+                if id == boardcast_models::embedding().id {
+                    self.start_search();
+                } else {
+                    self.apply_backend();
+                }
             }
             Ok(Outcome::Cancelled) => self.form.note = Some(tr("Paused. Download again to continue from where it stopped.", "已暂停。再次下载会从中断处继续。").into()),
             Err(error) => self.form.note = Some(error),
         }
+    }
+
+    /// Start meeting search if it is on and its model is here, and bring every meeting's index up to date.
+    fn start_search(&mut self) {
+        let model = boardcast_models::embedding();
+        let (Some(store), Some(data)) = (&self.store, self.models.parent()) else { return };
+        if self.search.is_some() || !self.form.saved.meeting_search || !boardcast_models::installed(&model, &self.models) {
+            return;
+        }
+        let binaries = self.binaries.clone();
+        let spawn: boardcast_search::service::Spawn = Box::new(move |args| boardcast_agent::spawn_tied({
+            let mut cmd = boardcast_agent::server_command(&binaries);
+            cmd.args(args).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+            cmd
+        }));
+        let (jobs, events) = boardcast_search::service::start(data, self.models.join(&model.file), spawn);
+        let all: Vec<String> = store.list().unwrap_or_default().into_iter().filter(|m| m.read_error.is_none()).map(|m| m.id).collect();
+        let _ = jobs.send(boardcast_search::service::Job::Index(all));
+        self.search = Some(MeetingSearch { jobs, events, indexing: None, asked: String::new(), typed_at: None, ticket: 0, hits: vec![], saved_at: None, error: None });
+    }
+
+    /// Turn meeting search on or off. On, it downloads its model first if need be.
+    fn set_meeting_search(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.form.saved.meeting_search = on;
+        if let Err(e) = self.form.saved.save() {
+            self.form.note = Some(format!("{e:#}"));
+        }
+        if on {
+            let model = boardcast_models::embedding();
+            if boardcast_models::installed(&model, &self.models) {
+                self.start_search();
+            } else {
+                self.start_download(model, cx);
+            }
+        } else {
+            // Dropping the worker's channel stops it, and its model with it.
+            self.search = None;
+        }
+        cx.notify();
+    }
+
+    fn pump_search(&mut self, changed: &mut bool) {
+        use boardcast_search::service::{Event as SearchEvent, Job};
+        let current = self.live.id().to_string();
+        let library: Vec<String> = self.library.iter().filter(|m| m.read_error.is_none()).map(|m| m.id.clone()).collect();
+        if self.search.is_none() && !self.search_tried {
+            // At start, once: search that was turned on comes back on.
+            self.search_tried = true;
+            self.start_search();
+        }
+        let Some(search) = &mut self.search else { return };
+        while let Ok(event) = search.events.try_recv() {
+            *changed = true;
+            match event {
+                SearchEvent::Indexing { done, total } => search.indexing = (done < total).then_some((done, total)),
+                SearchEvent::Indexed { .. } => {}
+                SearchEvent::Found { ticket, hits } => {
+                    if ticket == search.ticket {
+                        search.hits = hits;
+                        search.error = None;
+                    }
+                }
+                SearchEvent::Failed(error) => {
+                    search.indexing = None;
+                    search.error = Some(error);
+                }
+            }
+        }
+        if search.saved_at.is_some_and(|at| at.elapsed() >= REINDEX_AFTER) {
+            search.saved_at = None;
+            let _ = search.jobs.send(Job::Index(vec![current]));
+        }
+        if search.typed_at.is_some_and(|at| at.elapsed() >= QUERY_AFTER) {
+            search.typed_at = None;
+            search.ticket += 1;
+            let _ = search.jobs.send(Job::Find { text: search.asked.clone(), meetings: library, limit: 12, ticket: search.ticket });
+        }
+    }
+
+    /// Where meeting search stands, for the settings: downloading, indexing, ready, or what went wrong.
+    fn search_status(&self) -> Option<(String, bool)> {
+        if !self.form.saved.meeting_search {
+            return None;
+        }
+        let model = boardcast_models::embedding();
+        if let Some(download) = self.download.as_ref().filter(|d| d.id == model.id) {
+            let share = download.progress.as_ref().map_or(0.0, |p| p.done as f64 / p.total.max(1) as f64);
+            return Some((format!("{} {:.0}%", tr("Downloading the model", "正在下载模型"), share * 100.0), false));
+        }
+        let search = self.search.as_ref()?;
+        if let Some(error) = &search.error {
+            return Some((error.clone(), true));
+        }
+        Some(match search.indexing {
+            Some((done, total)) => (format!("{} {done} / {total}", tr("Reading meetings", "正在读取会议")), false),
+            None => (tr("Ready. Type in the meetings' search box.", "已就绪。在会议页的搜索框里输入即可。").to_string(), false),
+        })
+    }
+
+    /// The library's query changed: ask again once typing pauses, or clear the results.
+    fn search_typed(&mut self, text: &str) {
+        let Some(search) = &mut self.search else { return };
+        let text = text.trim();
+        if text == search.asked {
+            return;
+        }
+        search.asked = text.to_string();
+        search.hits.clear();
+        search.typed_at = (text.chars().count() >= 2).then(Instant::now);
+    }
+
+    /// Open a found passage: its meeting, at its line, its board or the summary.
+    fn open_found(&mut self, found: &boardcast_search::service::Found, cx: &mut Context<Self>) {
+        use boardcast_search::Source;
+        self.open_meeting(&found.meeting, cx);
+        if self.live.id() != found.meeting {
+            return;
+        }
+        match &found.source {
+            Source::Transcript { first, .. } => {
+                self.panel = Panel::Transcript;
+                self.transcript_open = true;
+                self.jumped_line = Some((*first, Instant::now()));
+            }
+            Source::Board { page, .. } => {
+                if *page != self.live.page() {
+                    self.go_to_page(*page, cx);
+                }
+                self.panel = Panel::Transcript;
+            }
+            Source::Summary { .. } => self.panel = Panel::Summary,
+        }
+        cx.notify();
     }
 
     fn start_download(&mut self, model: Model, cx: &mut Context<Self>) {
@@ -2192,6 +2353,9 @@ impl Workbench {
             Ok(revision) => {
                 self.live.saved(revision);
                 self.saved_changes = covers;
+                if let Some(search) = &mut self.search {
+                    search.saved_at = Some(Instant::now());
+                }
                 self.save = if self.live.changes == covers { SaveState::Saved } else { SaveState::Dirty };
             }
             Err(error) => {
@@ -2967,6 +3131,7 @@ impl Workbench {
             interface_language: self.form.saved.interface_language.clone(),
             appearance: self.form.saved.appearance.clone(),
             input: self.form.saved.input.clone(),
+            meeting_search: self.form.saved.meeting_search,
         }
     }
 
@@ -4539,7 +4704,9 @@ impl Render for Workbench {
                         d.child(div().mt_1().child(button(("retry-line", i), tr("Draw it again", "重新上板")).on_click(cx.listener(move |this, _, _, cx| this.retry_line(i, cx)))))
                     })
             }));
-        let query = self.library_query.read(cx).value().trim().to_lowercase();
+        let typed = self.library_query.read(cx).value().to_string();
+        self.search_typed(&typed);
+        let query = typed.trim().to_lowercase();
         let mut found: Vec<(usize, &Info)> = self.library.iter().enumerate().filter(|(_, m)| query.is_empty() || m.title.to_lowercase().contains(&query)).collect();
         // Pinned meetings first, in the order they were pinned; the rest stay newest first.
         let pin_rank = |id: &str| self.pinned.iter().position(|p| p == id).unwrap_or(usize::MAX);
@@ -4551,7 +4718,7 @@ impl Render for Workbench {
             .flex()
             .flex_col()
             // A handful of meetings reads at a glance; past that, a search finds one.
-            .when(self.library.len() > LIBRARY_SEARCH_FROM, |d| d.child(div().pb_3().child(Input::new(&self.library_query).small().cleanable(true))))
+            .when(self.library.len() > LIBRARY_SEARCH_FROM || self.search.is_some(), |d| d.child(div().pb_3().child(Input::new(&self.library_query).small().cleanable(true))))
             .child(
                 div()
                     .id("library-list")
@@ -4632,7 +4799,41 @@ impl Render for Workbench {
                     .when(self.store.is_some() && self.library.is_empty(), |d| {
                         d.child(div().py_4().text_sm().text_color(rgb(pal().faint)).child(tr("No meetings yet. A meeting is saved here as soon as something is said or typed.", "还没有会议。开始说话或输入后，会议会自动保存在这里。")))
                     })
-                    .when(!self.library.is_empty() && found.is_empty(), |d| {
+                    // What was said that matches, by meaning, under the meetings whose names do.
+                    .when_some(self.search.as_ref().filter(|s| !s.hits.is_empty() && !query.is_empty()).map(|s| s.hits.clone()), |d, hits| {
+                        d.child(div().pt_5().pb_2().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).text_color(rgb(pal().muted)).border_b_1().border_color(rgb(pal().line)).child(tr("In what was said", "会议内容")))
+                            .children(hits.into_iter().enumerate().map(|(i, found)| {
+                                let place = match &found.source {
+                                    boardcast_search::Source::Transcript { .. } => tr("transcript", "转写"),
+                                    boardcast_search::Source::Board { .. } => tr("board", "板书"),
+                                    boardcast_search::Source::Summary { .. } => tr("summary", "摘要"),
+                                };
+                                let snippet: String = found.text.split('\n').map(|l| l.trim()).collect::<Vec<_>>().join("  ").chars().take(180).collect();
+                                let open = found.clone();
+                                div()
+                                    .id(("found", i))
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .px_3()
+                                    .py_3()
+                                    .border_b_1()
+                                    .border_color(rgb(pal().line))
+                                    .cursor_pointer()
+                                    .hover(|d| d.bg(rgb(pal().selected)))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(div().text_sm().overflow_hidden().whitespace_nowrap().child(found.title.clone()))
+                                            .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).child(place)),
+                                    )
+                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(snippet))
+                                    .on_click(cx.listener(move |this, _, _, cx| this.open_found(&open, cx)))
+                            }))
+                    })
+                    .when(!self.library.is_empty() && found.is_empty() && self.search.as_ref().is_none_or(|s| s.hits.is_empty()), |d| {
                         d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(tr("No meeting has that in its name.", "没有名称里含这些字的会议。")))
                     })
                     .when_some(self.deleted_meeting.clone(), |d, (_, title)| {
@@ -5025,6 +5226,13 @@ impl Render for Workbench {
                             .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("appearance-{id}").into()), label, look == id).on_click(cx.listener(move |this, _, _, cx| this.choose_appearance(id, cx))))
                             .collect(),
                     )))
+                    .child(row(
+                        tr("Search meetings by meaning", "按意思搜索会议"),
+                        Some(tr("Finds what was said in any meeting from a question in your own words. Needs a 334 MB model that runs on this computer.", "用自己的话提问，就能在所有会议里找到相关的那段。需要下载一个 334 MB 的本机模型。")),
+                    ).child(
+                        Switch::new("meeting-search").checked(self.form.saved.meeting_search).accessibility_label(tr("Search meetings by meaning", "按意思搜索会议")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_meeting_search(*on, cx))),
+                    ))
+                    .when_some(self.search_status(), |d, (text, failed)| d.child(div().pt_1().text_xs().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(text)))
                     .into_any_element()
             }
             SettingsTab::About => {
@@ -5803,6 +6011,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     speaker_hovered: None,
                     transcript_scroll: gpui_kit::ScrollHandle::new(),
                     jumped_line: None,
+                    search: None,
+                    search_tried: false,
                     typing: None,
                     pdfium,
                     hanzi,
@@ -5836,6 +6046,12 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     close_refused: false,
                 };
                 workbench.show_page_image();
+                // Opened on the meetings page, the list has to be read now, as opening the page would.
+                if workbench.panel == Panel::Library {
+                    if let Some(list) = workbench.store.as_ref().and_then(|s| s.list().ok()) {
+                        workbench.library = list;
+                    }
+                }
                 workbench
             });
             let closing = view.clone();

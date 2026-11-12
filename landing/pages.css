@@ -3,7 +3,7 @@
 @font-face { font-family: 'DM Sans Variable'; font-style: normal; font-display: swap; font-weight: 100 1000; src: url('fonts/dm-sans-latin-wght-normal.woff2') format('woff2-variations'); }
 @font-face { font-family: 'JetBrains Mono Variable'; font-style: normal; font-display: swap; font-weight: 100 800; src: url('fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations'); }
 
-:root { --bg: #000; --fg: #f2f2f2; --grey: #c4c4c4; --dim: #8a8a8a; --hair: #262626; --link: var(--grey);
+:root { --bg: #000; --fg: #f2f2f2; --grey: #c4c4c4; --dim: #8a8a8a; --hair: #262626; --link: #9fb4ff;
   --sans: 'DM Sans Variable', system-ui, sans-serif; --mono: 'JetBrains Mono Variable', ui-monospace, monospace; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { background: var(--bg); }

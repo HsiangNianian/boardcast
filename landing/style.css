@@ -49,7 +49,7 @@
   --dim: #8a8a8a;
   --faint: #555;
   --hair: #262626;
-  --link: var(--grey);
+  --link: #9fb4ff;
   --accent: #ff5a36;
   --hero-teal: #248e8c80;
   --hero-coral: #e3583b94;
@@ -289,7 +289,7 @@ section.block { padding-top: 140px; }
 .board .ink { stroke: var(--board-ink); } .board .thick { stroke-width: 3.4; } .board .accent { stroke: var(--accent); }
 .board .lasso { stroke: var(--fg); stroke-width: 1.4; opacity: .8; }
 .board .hand { font-family: var(--hand); fill: var(--board-ink); }
-.board .sel { fill: none; stroke: var(--board-blue); stroke-width: 1; stroke-dasharray: 3 3; }
+.board .sel { fill: none; stroke: var(--link); stroke-width: 1; stroke-dasharray: 3 3; }
 .coords { position: absolute; left: 12px; top: 10px; z-index: 2; }
 .marks { position: absolute; z-index: 3; display: flex; border: 1px solid var(--faint); background: var(--l2); opacity: 0; transform: translateY(6px); transition: opacity .25s, transform .25s; font-size: 12px; }
 .marks.on { opacity: 1; transform: none; }

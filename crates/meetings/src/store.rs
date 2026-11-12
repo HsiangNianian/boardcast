@@ -391,6 +391,54 @@ impl Store {
         Ok(format!("{ASSET}{key}"))
     }
 
+    /// Take a meeting off the list. Its files stay where they are, under the same tombstone the older app
+    /// writes, so `restore` brings it back as it was.
+    pub fn delete(&self, id: &str) -> Result<()> {
+        valid(id)?;
+        let dir = self.current_dir();
+        fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        let _lock = Self::lock(&dir, id)?;
+        let tomb = dir.join(format!("{id}.deleted"));
+        fs::write(&tomb, "").with_context(|| format!("writing {}", tomb.display()))?;
+        Ok(())
+    }
+
+    /// Undo `delete`.
+    pub fn restore(&self, id: &str) -> Result<()> {
+        valid(id)?;
+        let dir = self.current_dir();
+        let _lock = Self::lock(&dir, id)?;
+        let tomb = dir.join(format!("{id}.deleted"));
+        match fs::remove_file(&tomb) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e).with_context(|| format!("removing {}", tomb.display())),
+            _ => Ok(()),
+        }
+    }
+
+    /// The meetings kept at the top of the list, most recently pinned first.
+    pub fn pinned(&self) -> Vec<String> {
+        fs::read_to_string(self.root.join("pinned.json"))
+            .ok()
+            .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|id| valid(id).is_ok())
+            .collect()
+    }
+
+    pub fn set_pinned(&self, id: &str, pinned: bool) -> Result<()> {
+        valid(id)?;
+        let mut ids = self.pinned();
+        ids.retain(|i| i != id);
+        if pinned {
+            ids.insert(0, id.to_string());
+        }
+        fs::create_dir_all(&self.root)?;
+        let path = self.root.join("pinned.json");
+        fs::write(&path, serde_json::to_string(&ids)?).with_context(|| format!("writing {}", path.display()))?;
+        Ok(())
+    }
+
     /// The meeting to reopen at startup.
     pub fn last_opened(&self) -> Option<String> {
         fs::read_to_string(self.root.join("gpui-last-meeting")).ok().map(|s| s.trim().to_string()).filter(|s| valid(s).is_ok())
@@ -406,6 +454,26 @@ impl Store {
 #[cfg(test)]
 mod image_tests {
     use super::*;
+
+    #[test]
+    fn a_deleted_meeting_comes_back_and_pins_keep_their_order() {
+        let root = temporary("delete");
+        let store = Store::new(root.clone());
+        let dir = root.join("meetings/v2");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("20260101-000000-abcd.json"), r#"{"id":"20260101-000000-abcd","title":"One"}"#).unwrap();
+        assert_eq!(store.list().unwrap().len(), 1);
+        store.delete("20260101-000000-abcd").unwrap();
+        assert!(store.list().unwrap().is_empty());
+        assert!(store.load("20260101-000000-abcd").unwrap().is_none());
+        store.restore("20260101-000000-abcd").unwrap();
+        assert_eq!(store.list().unwrap()[0].title, "One");
+        store.set_pinned("20260101-000000-abcd", true).unwrap();
+        store.set_pinned("20260102-000000-efgh", true).unwrap();
+        assert_eq!(store.pinned(), vec!["20260102-000000-efgh".to_string(), "20260101-000000-abcd".to_string()]);
+        store.set_pinned("20260102-000000-efgh", false).unwrap();
+        assert_eq!(store.pinned(), vec!["20260101-000000-abcd".to_string()]);
+    }
 
     fn temporary(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("boardcast-images-{name}-{}", std::process::id()));

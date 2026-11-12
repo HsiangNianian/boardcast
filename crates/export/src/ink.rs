@@ -21,8 +21,6 @@ const PNG_MAX_SIDE: f64 = 8000.0;
 pub struct Composed {
     pub(crate) pieces: Vec<Piece>,
     pub(crate) bounds: Bounds,
-    /// Each region's id and the nodes in it, which settle when an unnamed region appeared.
-    pub(crate) regions: Vec<(String, Vec<String>)>,
     pub(crate) page: Option<Page>,
 }
 
@@ -52,9 +50,8 @@ pub fn compose_board(graph: &Graph, memory: &Value, image: Option<&PageImage>, g
     layout.restore(memory);
     let laid = layout.layout(graph, &mut first_diagram);
     let (pieces, _) = compose(graph, &laid, glyphs);
-    let regions = laid.regions.iter().map(|r| (r.rect.id.clone(), r.rows.iter().map(|row| row.id.clone()).collect())).collect();
     let page = image.zip(graph.underlay()).map(|(image, (w, h))| Page { image: image.clone(), w, h });
-    Composed { pieces, bounds: laid.bounds, regions, page }
+    Composed { pieces, bounds: laid.bounds, page }
 }
 
 impl Composed {

@@ -1,11 +1,17 @@
-//! The animated SVG, ported from src/ink/animate.ts: the final board written stroke by stroke in the
-//! order of the meeting, then left whole. CSS only, so a viewer without animation shows the whole board.
+//! The animated board, as the app replays it: each step of the meeting laid out as it stood then, new
+//! ink written stroke by stroke, and what moved or went away redrawn where it now is. The GIF draws it
+//! frame by frame; the SVG does it in CSS, so a viewer without animation shows the finished board.
 
-use crate::ink::Composed;
-use boardcast_board::pen::{outline, Rng};
-use boardcast_board::compose::PAPER;
-use serde_json::Value;
-use std::collections::HashMap;
+use crate::ink::Page;
+use crate::replay_page;
+use boardcast_board::board_layout::StableLayout;
+use boardcast_board::compose::{compose, Style, PAPER};
+use boardcast_board::glyphs::Glyphs;
+use boardcast_board::graph::Graph;
+use boardcast_board::pen::{outline, Inked, Rng};
+use boardcast_board::steps::{apply_step, ink_only};
+use boardcast_board::sugiyama::first_diagram;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 /// The same pen speed as on the board, in pixels per millisecond, with a shortest stroke and a pause between strokes.
@@ -19,158 +25,123 @@ pub const TOTAL: f64 = 12000.0;
 const PADDING: f64 = 48.0;
 const MASK_WIDTH: f32 = 26.0;
 
-const MARKS: [&str; 5] = ["划掉", "圈出", "下划线", "星标", "高亮"];
-
-/// The node, edge (`from>to`), group or region that a piece of ink belongs to, from the start of its key.
-pub fn owner_of(key: &str) -> String {
-    let head = key.split('|').next().unwrap_or_default();
-    let node = |s: &str| s.strip_prefix('n').is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()));
-    if let Some(at) = head.find(['>', '~']) {
-        let (from, to) = (&head[..at], &head[at + 1..]);
-        let to = to.strip_suffix('l').filter(|t| node(t)).unwrap_or(to);
-        if node(from) && node(to) {
-            return format!("{from}>{to}");
-        }
-    }
-    if let Some(digits) = head.strip_prefix('g').and_then(|h| h.strip_suffix('t')) {
-        if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) {
-            return head[..head.len() - 1].to_string();
-        }
-    }
-    head.to_string()
+/// A stroke of the replay: its ink, when the pen starts on it and how long it takes, and when it goes
+/// away again because its piece moved or was taken off.
+pub struct Played {
+    pub inked: Inked,
+    pub style: Style,
+    pub delay: f64,
+    pub duration: f64,
+    pub until: Option<f64>,
+    /// The same stroke written earlier, and how far this one is moved from it, when it only moved.
+    pub copy_of: Option<(usize, f32, f32)>,
 }
 
-/// A mark has a letter at the end of its key; on imported text, the second part is the mark itself.
-fn mark_of(key: &str) -> Option<&str> {
-    let parts: Vec<&str> = key.split('|').collect();
-    if parts.len() < 2 {
-        return None;
-    }
-    if let Some(mark) = MARKS.iter().find(|m| **m == parts[1]) {
-        return Some(mark);
-    }
-    match parts[parts.len() - 1] {
-        "x" => Some("划掉"),
-        "u" => Some("下划线"),
-        "o" => Some("圈出"),
-        "s" => Some("星标"),
-        "h" => Some("高亮"),
-        _ => None,
+/// A whole replay of one board: its strokes, the area it ever covers, the page under it, and how long it runs.
+pub struct Replay {
+    pub strokes: Vec<Played>,
+    pub frame: (f64, f64, f64, f64),
+    pub page: Option<Page>,
+    pub end: f64,
+}
+
+impl Replay {
+    pub fn is_empty(&self) -> bool {
+        self.strokes.is_empty() && self.page.is_none()
     }
 }
 
-fn number_in(id: &str) -> f64 {
-    let digits: String = id.chars().skip_while(|c| !c.is_ascii_digit()).take_while(char::is_ascii_digit).collect();
-    digits.parse().unwrap_or(0.0)
-}
-
-/// Which round of the meeting each piece of ink appeared in, smallest first: when its node, edge or
-/// group first shows in the record, and for a mark, when it was added. Things with no record come last.
-pub fn ranks(nodes: &[Value], regions: &[(String, Vec<String>)], steps: &[Value], keys: &[String]) -> Vec<f64> {
-    let mut first: HashMap<String, f64> = HashMap::new();
-    let mut marked: HashMap<String, f64> = HashMap::new();
-    let set = |step: &Value, part: &str| step["d"][part]["set"].as_array().cloned().unwrap_or_default();
-    for (i, step) in steps.iter().enumerate() {
-        let i = i as f64;
-        for n in set(step, "nodes") {
-            let id = n["id"].as_str().unwrap_or_default();
-            first.entry(id.to_string()).or_insert(i);
-            for m in n["marks"].as_array().into_iter().flatten().filter_map(Value::as_str) {
-                marked.entry(format!("{id}|{m}")).or_insert(i);
-            }
-            for s in n["spans"].as_array().into_iter().flatten() {
-                marked.entry(format!("{id}|{}", s["mark"].as_str().unwrap_or_default())).or_insert(i);
-            }
-        }
-        for e in set(step, "edges") {
-            first.entry(format!("{}>{}", e["from"].as_str().unwrap_or_default(), e["to"].as_str().unwrap_or_default())).or_insert(i);
-        }
-        for g in set(step, "groups") {
-            first.entry(g["id"].as_str().unwrap_or_default().to_string()).or_insert(i);
-        }
+/// Lay the board out step by step, as the app's replay does, and time each new piece of ink.
+pub fn replay(page: &replay_page::Page, glyphs: &mut Glyphs) -> Replay {
+    let mut graphs = vec![];
+    let mut g = Graph::default();
+    for step in &page.steps {
+        g = apply_step(&g, step);
+        graphs.push(ink_only(&g));
     }
-    let late = steps.len() as f64;
-    let node = |id: &str| first.get(id).copied().unwrap_or(late + number_in(id));
-    let known = |id: &str| nodes.iter().any(|n| n["id"] == id);
-    let rank_of = |owner: &str| -> f64 {
-        if let Some(rank) = first.get(owner) {
-            return *rank;
-        }
-        if known(owner) {
-            return node(owner);
-        }
-        // An edge cannot come before both of its ends.
-        if let Some((from, to)) = owner.split_once('>') {
-            return node(from).max(node(to));
-        }
-        // A group follows its earliest member, and an unnamed region its earliest row.
-        let earliest = |ids: Vec<f64>| ids.into_iter().reduce(f64::min);
-        let members = nodes.iter().filter(|n| n["group"] == owner).map(|n| node(n["id"].as_str().unwrap_or_default())).collect();
-        if let Some(rank) = earliest(members) {
-            return rank;
-        }
-        let rows = regions.iter().find(|(id, _)| id == owner).map_or(vec![], |(_, rows)| rows.iter().map(|r| node(r)).collect());
-        earliest(rows).unwrap_or(late + 1e6)
-    };
-    keys.iter()
-        .map(|key| {
-            let owner = owner_of(key);
-            let base = rank_of(&owner);
-            match mark_of(key).filter(|_| known(&owner)) {
-                Some(mark) => base.max(marked.get(&format!("{owner}|{mark}")).copied().unwrap_or(base)),
-                None => base,
-            }
-        })
-        .collect()
-}
-
-/// What the timing needs to know about a piece.
-pub struct Timing {
-    pub under: bool,
-    pub lengths: Vec<f64>,
-}
-
-/// When each stroke starts, and how long it takes, in milliseconds.
-#[derive(Debug, PartialEq)]
-pub struct Timed {
-    pub delays: Vec<f64>,
-    pub durations: Vec<f64>,
-}
-
-/// One stroke after another in rank order, sped up as a whole if it would run past `total`.
-pub fn timeline(pieces: &[Timing], rank: &[f64], total: f64) -> (Vec<Timed>, f64) {
-    let mut order: Vec<usize> = (0..pieces.len()).collect();
-    order.sort_by(|a, b| rank[*a].total_cmp(&rank[*b]));
+    // The record can end short of the board as kept, which is what the replay finishes on.
+    graphs.push(ink_only(&page.graph));
     let stroke_time = |length: f64| (length / SPEED).max(MIN_STROKE);
-    let mut turns: Vec<f64> = rank.to_vec();
-    turns.sort_by(f64::total_cmp);
-    turns.dedup();
-    let natural: f64 = pieces.iter().filter(|p| !p.under).flat_map(|p| &p.lengths).map(|l| stroke_time(*l) + GAP).sum::<f64>() + (turns.len() as f64 - 1.0).max(0.0) * PAUSE;
-    let k = if natural > total { total / natural } else { 1.0 };
+    // Each part starts where it finally ended up, so the board ends as it is kept and its parts do not
+    // wander about; rows still go in where they were said, pushing what is under them down.
+    let mut kept = StableLayout::default();
+    kept.restore(&page.memory);
+    let mut layout = StableLayout::default();
+    let mut strokes: Vec<Played> = vec![];
+    // What is on the board now: each piece by its key, with its seed, its look and its strokes in `strokes`.
+    let mut shown: HashMap<String, (String, Style, Vec<usize>)> = HashMap::new();
+    let mut area: Option<[f64; 4]> = None;
     let mut at = 0.0;
-    let mut last = None;
-    let mut timed: Vec<Option<Timed>> = pieces.iter().map(|_| None).collect();
-    for i in order {
-        let piece = &pieces[i];
-        if last.is_some_and(|l| l != rank[i]) {
-            at += PAUSE * k;
+    for g in &graphs {
+        layout.recall(&kept);
+        let laid = layout.layout(g, &mut first_diagram);
+        let (pieces, _) = compose(g, &laid, glyphs);
+        if !g.nodes.is_empty() || g.underlay().is_some() {
+            let b = &laid.bounds;
+            area = Some(area.map_or([b.x0, b.y0, b.x1, b.y1], |a| [a[0].min(b.x0), a[1].min(b.y0), a[2].max(b.x1), a[3].max(b.y1)]));
         }
-        last = Some(rank[i]);
-        // A highlight is not written; it appears with its round.
-        if piece.under {
-            timed[i] = Some(Timed { delays: piece.lengths.iter().map(|_| at.round()).collect(), durations: piece.lengths.iter().map(|_| 0.0).collect() });
-            continue;
+        let wanted: HashMap<&str, Style> = pieces.iter().filter_map(|p| p.lines.first().map(|l| (p.key.as_str(), l.style))).collect();
+        // What was already written, by its seed, which stays the same when a piece only moves.
+        let written: HashMap<String, Vec<usize>> = shown.values().map(|(seed, _, ids)| (seed.clone(), ids.clone())).collect();
+        // Whatever moved, changed its look or went away leaves the board as this step begins.
+        shown.retain(|key, (_, style, ids)| {
+            let keep = wanted.get(key.as_str()) == Some(style);
+            if !keep {
+                for &i in ids.iter() {
+                    strokes[i].until = Some(at);
+                }
+            }
+            keep
+        });
+        let mut pen = at;
+        let mut wrote = false;
+        for piece in &pieces {
+            let Some(style) = piece.lines.first().map(|l| l.style) else { continue };
+            if shown.contains_key(&piece.key) {
+                continue;
+            }
+            // Ink already written that only moved or took a new look (crossed-out words fading) shows in its
+            // new place at once, as a highlight does; only what is new is written out.
+            let before = written.get(&piece.seed);
+            let at_once = style.under || before.is_some();
+            let mut r = Rng::new(&piece.seed);
+            let mut ids = vec![];
+            for (n, line) in piece.lines.iter().enumerate() {
+                let inked = line.inked(&mut r);
+                // A stroke that kept its shape and only shifted is the earlier one, moved.
+                let copy_of = before.and_then(|b| b.get(n)).and_then(|&i| {
+                    let original = strokes[i].copy_of.map_or(i, |(o, _, _)| o);
+                    let (a, b) = (&strokes[original].inked.center, &inked.center);
+                    let (dx, dy) = (b.first()?[0] - a.first()?[0], b.first()?[1] - a.first()?[1]);
+                    let same = a.len() == b.len() && a.iter().zip(b.iter()).all(|(p, q)| (q[0] - p[0] - dx).abs() < 0.01 && (q[1] - p[1] - dy).abs() < 0.01);
+                    same.then_some((original, dx, dy))
+                });
+                let (delay, duration) = if at_once {
+                    (at, 0.0)
+                } else {
+                    let d = stroke_time(f64::from(inked.length));
+                    let start = pen;
+                    pen += d + GAP;
+                    wrote = true;
+                    (start, d)
+                };
+                ids.push(strokes.len());
+                strokes.push(Played { inked, style: line.style, delay, duration, until: None, copy_of });
+            }
+            shown.insert(piece.key.clone(), (piece.seed.clone(), style, ids));
         }
-        let (mut delays, mut durations) = (vec![], vec![]);
-        for length in &piece.lengths {
-            let duration = stroke_time(*length) * k;
-            delays.push(at.round());
-            durations.push(duration.round());
-            at += duration + GAP * k;
-        }
-        timed[i] = Some(Timed { delays, durations });
+        at = if wrote { pen } else { at } + PAUSE;
     }
-    (timed.into_iter().map(|t| t.expect("every piece is in the order")).collect(), at.round())
+    // However long the meeting was, the board is written in `TOTAL` at most.
+    let k = if at > TOTAL { TOTAL / at } else { 1.0 };
+    for s in &mut strokes {
+        s.delay = (s.delay * k).round();
+        s.duration = (s.duration * k).round();
+        s.until = s.until.map(|u| (u * k).round());
+    }
+    let a = area.unwrap_or([0.0, 0.0, 800.0, 500.0]);
+    let image = page.image.clone().zip(page.graph.underlay()).map(|(image, (w, h))| Page { image, w, h });
+    Replay { strokes, frame: (a[0] - PADDING, a[1] - PADDING, a[2] - a[0] + 2.0 * PADDING, a[3] - a[1] + 2.0 * PADDING), page: image, end: (at * k).round() }
 }
 
 fn path(points: &[[f32; 2]]) -> String {
@@ -186,27 +157,13 @@ const GIF_FPS: f64 = 10.0;
 const GIF_SIDE: f64 = 960.0;
 const GIF_HOLD_MS: u16 = 2500;
 
-/// The animated board as a GIF: the same strokes in the same order and time as the animated SVG, written
-/// frame by frame, then the whole board held a moment before it starts again.
-pub fn gif(board: &Composed, nodes: &[Value], steps: &[Value]) -> anyhow::Result<Vec<u8>> {
+/// The replay as a GIF: the same strokes at the same times as the animated SVG, written frame by frame,
+/// then the whole board held a moment before it starts again.
+pub fn gif(replay: &Replay) -> anyhow::Result<Vec<u8>> {
     use tiny_skia::{Color, FilterQuality, Pixmap, PixmapPaint, Transform};
 
-    let mut inked = vec![];
-    for piece in &board.pieces {
-        let mut r = Rng::new(&piece.seed);
-        inked.push(piece.lines.iter().map(|line| (line.inked(&mut r), line.style)).collect::<Vec<_>>());
-    }
-    let timing: Vec<Timing> = board
-        .pieces
-        .iter()
-        .zip(&inked)
-        .map(|(p, lines)| Timing { under: p.lines.first().is_some_and(|l| l.style.under), lengths: lines.iter().map(|(i, _)| f64::from(i.length)).collect() })
-        .collect();
-    let keys: Vec<String> = board.pieces.iter().map(|p| p.seed.clone()).collect();
-    let (timed, end) = timeline(&timing, &ranks(nodes, &board.regions, steps, &keys), TOTAL);
-
-    let b = &board.bounds;
-    let (x, y, w, h) = (b.x0 - PADDING, b.y0 - PADDING, b.x1 - b.x0 + 2.0 * PADDING, b.y1 - b.y0 + 2.0 * PADDING);
+    let (x, y, w, h) = replay.frame;
+    let end = replay.end;
     let scale = (GIF_SIDE / w.max(h)).min(2.0);
     let (pw, ph) = ((w * scale).round().max(1.0) as u32, (h * scale).round().max(1.0) as u32);
     let at = Transform::from_translate(-x as f32, -y as f32).post_scale(scale as f32, scale as f32);
@@ -214,7 +171,7 @@ pub fn gif(board: &Composed, nodes: &[Value], steps: &[Value]) -> anyhow::Result
     let mut base = Pixmap::new(pw, ph).ok_or_else(|| anyhow::anyhow!("the GIF is too big to make"))?;
     let [_, r, g, bl] = PAPER.to_be_bytes();
     base.fill(Color::from_rgba8(r, g, bl, 255));
-    if let Some(page) = &board.page {
+    if let Some(page) = &replay.page {
         let picture = crate::ink::page_pixmap(&page.image)?;
         let fit = Transform::from_scale((page.w / f64::from(picture.width())) as f32, (page.h / f64::from(picture.height())) as f32).post_concat(at);
         base.draw_pixmap(0, 0, picture.as_ref(), &PixmapPaint { quality: FilterQuality::Bilinear, ..PixmapPaint::default() }, fit, None);
@@ -241,13 +198,10 @@ pub fn gif(board: &Composed, nodes: &[Value], steps: &[Value]) -> anyhow::Result
             let t = f as f64 * step;
             let mut canvas = base.clone();
             for under in [true, false] {
-                for (i, lines) in inked.iter().enumerate() {
-                    for (j, (ink, style)) in lines.iter().enumerate().filter(|(_, (_, s))| s.under == under) {
-                        let (delay, duration) = (timed[i].delays[j], timed[i].durations[j]);
-                        let k = if duration <= 0.0 { if t >= delay { 1.0 } else { 0.0 } } else { ((t - delay) / duration).clamp(0.0, 1.0) };
-                        if k > 0.0 {
-                            crate::ink::fill_stroke(&mut canvas, &outline(ink, k as f32), *style, at);
-                        }
+                for s in replay.strokes.iter().filter(|s| s.style.under == under && s.until.is_none_or(|u| t < u)) {
+                    let k = if s.duration <= 0.0 { if t >= s.delay { 1.0 } else { 0.0 } } else { ((t - s.delay) / s.duration).clamp(0.0, 1.0) };
+                    if k > 0.0 {
+                        crate::ink::fill_stroke(&mut canvas, &outline(&s.inked, k as f32), s.style, at);
                     }
                 }
             }
@@ -300,75 +254,67 @@ fn changed_area(a: &[u8], b: &[u8], w: u32, h: u32) -> Option<(u32, u32, u32, u3
     (x0 <= x1).then(|| (x0, y0, x1 - x0 + 1, y1 - y0 + 1))
 }
 
-/// Written from the final board, which is laid out as the file will show it.
-pub fn animated_svg(board: &Composed, nodes: &[Value], steps: &[Value], title: &str) -> String {
-    struct Written {
-        d: String,
-        center: String,
-        length: f32,
-        width: f32,
-    }
-    let mut written: Vec<Vec<Written>> = vec![];
-    for piece in &board.pieces {
-        let mut r = Rng::new(&piece.seed);
-        written.push(
-            piece
-                .lines
-                .iter()
-                .map(|line| {
-                    let inked = line.inked(&mut r);
-                    Written { d: format!("{}Z", path(&outline(&inked, 1.0))), center: path(&inked.center), length: inked.length, width: inked.width }
-                })
-                .collect(),
-        );
-    }
-    let timing: Vec<Timing> = board
-        .pieces
-        .iter()
-        .zip(&written)
-        .map(|(p, w)| Timing { under: p.lines.first().is_some_and(|l| l.style.under), lengths: w.iter().map(|s| f64::from(s.length)).collect() })
-        .collect();
-    let keys: Vec<String> = board.pieces.iter().map(|p| p.seed.clone()).collect();
-    let (timed, _) = timeline(&timing, &ranks(nodes, &board.regions, steps, &keys), TOTAL);
-    let b = &board.bounds;
-    let (x, y, w, h) = (b.x0 - PADDING, b.y0 - PADDING, b.x1 - b.x0 + 2.0 * PADDING, b.y1 - b.y0 + 2.0 * PADDING);
+/// The replay in CSS: each stroke uncovered along its centre line in its time, and hidden again when its
+/// piece moves or goes away.
+pub fn animated_svg(replay: &Replay, title: &str) -> String {
+    let (x, y, w, h) = replay.frame;
     let mut out = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{x} {y} {w} {h}\" width=\"{}\" height=\"{}\">\n<title>{}</title>\n", w.round(), h.round(), crate::ink::xml_text(title));
     out.push_str(concat!(
         "<style>\n",
         "@keyframes w{from{stroke-dashoffset:var(--length)}to{stroke-dashoffset:0}}\n",
         "@keyframes pop{from{opacity:0}to{opacity:1}}\n",
+        "@keyframes here{from,to{visibility:visible}}\n",
         ".w{fill:none;stroke:#fff;stroke-linecap:round;stroke-linejoin:round;animation-name:w;animation-timing-function:linear;animation-fill-mode:both}\n",
         ".pop{animation:pop 1ms both}\n",
-        "@media (prefers-reduced-motion:reduce){.w{animation:none;stroke-dashoffset:0}.pop{animation:none}}\n",
+        // Ink that later moves or goes away is hidden unless its time is playing, so a still picture is the finished board.
+        ".gone{visibility:hidden;animation-name:here;animation-timing-function:step-end}\n",
+        "@media (prefers-reduced-motion:reduce){.w{animation:none;stroke-dashoffset:0}.pop,.gone{animation:none}}\n",
         "</style>\n",
     ));
     let _ = writeln!(out, "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"#{PAPER:06x}\"/>");
-    if let Some(page) = &board.page {
+    if let Some(page) = &replay.page {
         let _ = writeln!(out, "<image href=\"{}\" x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\"/>", page.image.data_url(), page.w, page.h);
+    }
+    // Strokes that are later moved are kept once and shown again where they moved to.
+    let copied: HashSet<usize> = replay.strokes.iter().filter_map(|s| s.copy_of.map(|(o, _, _)| o)).collect();
+    // Plain shapes, apart from the written ones with their masks and times, so a copy shows whatever the original does.
+    let mut kept: Vec<usize> = copied.iter().copied().collect();
+    kept.sort_unstable();
+    if !kept.is_empty() {
+        out.push_str("<defs>");
+        for i in kept {
+            let _ = write!(out, "<path id=\"s{i}\" d=\"{}Z\"/>", path(&outline(&replay.strokes[i].inked, 1.0)));
+        }
+        out.push_str("</defs>\n");
     }
     let mut mask = 0;
     for under in [true, false] {
-        for (i, piece) in board.pieces.iter().enumerate() {
-            let Some(style) = piece.lines.first().map(|l| l.style).filter(|s| s.under == under) else { continue };
-            let blend = if under { " style=\"mix-blend-mode:multiply\"" } else { "" };
-            let _ = write!(out, "<g fill=\"#{:06x}\" opacity=\"{}\"{blend}>", style.rgb, style.alpha);
-            for (j, stroke) in written[i].iter().enumerate() {
-                let (delay, duration) = (timed[i].delays[j], timed[i].durations[j]);
-                if duration == 0.0 {
-                    if delay > 0.0 {
-                        let _ = write!(out, "<path d=\"{}\" class=\"pop\" style=\"animation-delay:{delay}ms\"/>", stroke.d);
-                    } else {
-                        let _ = write!(out, "<path d=\"{}\"/>", stroke.d);
-                    }
-                    continue;
+        for s in replay.strokes.iter().filter(|s| s.style.under == under) {
+            let d = format!("{}Z", path(&outline(&s.inked, 1.0)));
+            let blend = if under { ";mix-blend-mode:multiply" } else { "" };
+            // A stroke that goes away again is hidden from then on; one that stays is left alone.
+            let gone = s.until.map_or(String::new(), |u| format!(" class=\"gone\" style=\"animation-duration:{u}ms{blend}\""));
+            let style = if gone.is_empty() && under { " style=\"mix-blend-mode:multiply\"".to_string() } else { gone };
+            let _ = write!(out, "<g fill=\"#{:06x}\" opacity=\"{}\"{style}>", s.style.rgb, s.style.alpha);
+            if let Some((original, dx, dy)) = s.copy_of {
+                let pop = if s.delay > 0.0 { format!(" class=\"pop\" style=\"animation-delay:{}ms\"", s.delay) } else { String::new() };
+                let _ = write!(out, "<use href=\"#s{original}\" transform=\"translate({dx:.2} {dy:.2})\"{pop}/>");
+            } else if s.duration == 0.0 {
+                if s.delay > 0.0 {
+                    let _ = write!(out, "<path d=\"{d}\" class=\"pop\" style=\"animation-delay:{}ms\"/>", s.delay);
+                } else {
+                    let _ = write!(out, "<path d=\"{d}\"/>");
                 }
-                let length = stroke.length + 1.0;
+            } else {
+                let length = s.inked.length + 1.0;
                 // Wide enough to uncover the whole stroke, or a wide one would stay clipped for good.
-                let reveal = MASK_WIDTH.max(stroke.width * 3.0);
+                let reveal = MASK_WIDTH.max(s.inked.width * 3.0);
                 let _ = write!(
                     out,
-                    "<mask id=\"m{mask}\" maskUnits=\"userSpaceOnUse\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"><path class=\"w\" d=\"{}\" stroke-width=\"{reveal}\" stroke-dasharray=\"{length:.1}\" stroke-dashoffset=\"0\" style=\"--length:{length:.1};animation-duration:{duration}ms;animation-delay:{delay}ms\"/></mask><path d=\"{}\" mask=\"url(#m{mask})\"/>",
-                    stroke.center, stroke.d,
+                    "<mask id=\"m{mask}\" maskUnits=\"userSpaceOnUse\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"><path class=\"w\" d=\"{}\" stroke-width=\"{reveal}\" stroke-dasharray=\"{length:.1}\" stroke-dashoffset=\"0\" style=\"--length:{length:.1};animation-duration:{}ms;animation-delay:{}ms\"/></mask><path d=\"{d}\" mask=\"url(#m{mask})\"/>",
+                    path(&s.inked.center),
+                    s.duration,
+                    s.delay,
                 );
                 mask += 1;
             }
@@ -382,74 +328,48 @@ pub fn animated_svg(board: &Composed, nodes: &[Value], steps: &[Value], title: &
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
+
+    /// A board built over four steps, the last putting a row under the first item, above the second.
+    fn page_with_an_insert() -> replay_page::Page {
+        let mut g = Graph::default();
+        let mut steps = vec![];
+        for (i, ops) in ["T 「Release checklist」", "L n1 「Load testing」", "L n1 「Release notes」", "L n2 「Before launch」\nM n2 星标"].iter().enumerate() {
+            let before = g.clone();
+            g.apply(&boardcast_board::graph::parse_ops(ops));
+            let d = boardcast_board::steps::diff(&before, &g).unwrap();
+            steps.push(serde_json::json!({ "d": d, "t": i as f64 * 1000.0 }));
+        }
+        replay_page::Page { graph: g, memory: Value::Null, steps, image: None }
+    }
+
+    #[test]
+    fn the_replay_lays_out_each_step_and_moves_what_an_insert_pushes_down() {
+        let mut glyphs = Glyphs::from_checkout(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))).unwrap();
+        let page = page_with_an_insert();
+        let replay = replay(&page, &mut glyphs);
+        // "Release notes" sat right under "Load testing" until a row went in between: it moves down at once,
+        // without being written again.
+        assert!(replay.strokes.iter().any(|s| s.until.is_some()), "nothing moved");
+        let moved: Vec<&Played> = replay.strokes.iter().filter(|s| s.until.is_none() && s.duration == 0.0 && !s.style.under).collect();
+        assert!(!moved.is_empty(), "what moved was written again");
+        // Everything still on the board at the end is written by then.
+        assert!(replay.strokes.iter().filter(|s| s.until.is_none()).all(|s| s.delay + s.duration <= replay.end));
+        assert!(replay.end <= TOTAL);
+        assert!(animated_svg(&replay, "t").contains("class=\"gone\""));
+    }
 
     #[test]
     fn the_gif_writes_the_board_out_and_holds_it() {
         use image::AnimationDecoder;
-        let mut g = boardcast_board::graph::Graph::default();
-        g.apply(&boardcast_board::graph::parse_ops("T 「Release checklist」\nL 「Release checklist」 「Load testing」\nM n2 星标"));
-        let mut glyphs = boardcast_board::glyphs::Glyphs::from_checkout(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))).unwrap();
-        let board = crate::ink::compose_board(&g, &Value::Null, None, &mut glyphs);
-        let nodes: Vec<Value> = g.nodes.iter().map(|n| serde_json::to_value(n).unwrap()).collect();
-        let bytes = gif(&board, &nodes, &[]).unwrap();
+        let mut glyphs = Glyphs::from_checkout(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))).unwrap();
+        let page = page_with_an_insert();
+        let bytes = gif(&replay(&page, &mut glyphs)).unwrap();
         let frames: Vec<image::Frame> = image::codecs::gif::GifDecoder::new(std::io::Cursor::new(&bytes)).unwrap().into_frames().collect_frames().unwrap();
         assert!(frames.len() > 5, "{} frames", frames.len());
         let ink = |f: &image::Frame| f.buffer().pixels().filter(|p| p.0[0] < 128).count();
         assert!(ink(&frames[0]) < ink(frames.last().unwrap()), "the first frame has less ink than the last");
         let (hold, _) = frames.last().unwrap().delay().numer_denom_ms();
         assert_eq!(hold, u32::from(GIF_HOLD_MS));
-    }
-
-    fn goldens() -> Value {
-        serde_json::from_str(include_str!("../../board/fixtures/goldens.json")).unwrap()
-    }
-
-    #[test]
-    fn ranks_match_the_typescript_engine() {
-        let g = goldens();
-        let cases = g["ranks"].as_array().unwrap();
-        assert!(cases.len() >= 8);
-        for case in cases {
-            let regions: Vec<(String, Vec<String>)> = serde_json::from_value(case["regions"].clone()).unwrap();
-            let keys: Vec<String> = serde_json::from_value(case["keys"].clone()).unwrap();
-            let got = ranks(case["nodes"].as_array().unwrap(), &regions, case["steps"].as_array().unwrap(), &keys);
-            let expected: Vec<f64> = serde_json::from_value(case["ranks"].clone()).unwrap();
-            for (i, (a, b)) in got.iter().zip(&expected).enumerate() {
-                assert_eq!(a, b, "{} key {}", case["file"], keys[i]);
-            }
-        }
-    }
-
-    #[test]
-    fn timing_matches_the_typescript_engine() {
-        let g = goldens();
-        for case in g["timelines"].as_array().unwrap() {
-            let pieces: Vec<Timing> = case["pieces"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|p| Timing { under: p["under"].as_bool().unwrap_or(false), lengths: serde_json::from_value(p["lengths"].clone()).unwrap() })
-                .collect();
-            let rank: Vec<f64> = serde_json::from_value(case["rank"].clone()).unwrap();
-            let (timed, end) = timeline(&pieces, &rank, case["total"].as_f64().unwrap());
-            assert_eq!(end, case["end"].as_f64().unwrap());
-            for (t, e) in timed.iter().zip(case["timed"].as_array().unwrap()) {
-                let delays: Vec<f64> = serde_json::from_value(e["delays"].clone()).unwrap();
-                let durations: Vec<f64> = serde_json::from_value(e["durs"].clone()).unwrap();
-                assert_eq!(t.delays, delays);
-                assert_eq!(t.durations, durations);
-            }
-        }
-    }
-
-    #[test]
-    fn owners_and_marks_are_read_from_keys() {
-        assert_eq!(owner_of("n1>n2l|bg"), "n1>n2");
-        assert_eq!(owner_of("n1~n2"), "n1>n2");
-        assert_eq!(owner_of("g3t|名字"), "g3");
-        assert_eq!(owner_of("n4|box"), "n4");
-        assert_eq!(mark_of("n4|文字|h"), Some("高亮"));
-        assert_eq!(mark_of("n4|圈出"), Some("圈出"));
-        assert_eq!(mark_of("n4"), None);
     }
 }

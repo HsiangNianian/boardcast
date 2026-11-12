@@ -32,7 +32,8 @@ pub type Spawn = Box<dyn Fn(&[String]) -> Result<Child> + Send>;
 pub enum Job {
     /// Bring these meetings' indexes up to date, in this order.
     Index(Vec<String>),
-    /// Find `text` among these meetings, at most `limit` passages.
+    /// Find `text` among these meetings: at most `limit` passages of where things stand, then at most
+    /// `limit` of what was said.
     Find { text: String, meetings: Vec<String>, limit: usize, ticket: u64 },
     /// Forget a meeting's index, as when it is removed for good.
     Forget(String),
@@ -46,6 +47,17 @@ pub struct Found {
     pub source: Source,
     pub text: String,
     pub score: f32,
+}
+
+impl Found {
+    /// Whether a passage says where things stand, as a board or a summary does, rather than what was said.
+    pub fn stands_for(source: &Source) -> bool {
+        !matches!(source, Source::Transcript { .. })
+    }
+
+    pub fn stands(&self) -> bool {
+        Self::stands_for(&self.source)
+    }
 }
 
 pub enum Event {
@@ -190,22 +202,34 @@ impl Worker {
                 indexes.push((id.clone(), index.clone()));
             }
         }
-        // A few passages from each meeting at most, so one long meeting does not crowd out the rest.
-        let mut per_meeting: HashMap<&str, usize> = HashMap::new();
         let hits = rank(&indexes, &query, text, WORD_WEIGHT, usize::MAX);
-        // Nothing that matches only weakly, by itself or next to what matched best: no answer beats a wrong one.
-        let best = hits.first().map_or(0.0, |h| h.score);
-        Ok(hits
-            .into_iter()
-            .filter(|h| h.score >= MIN_SCORE && h.score >= best - WITHIN_BEST)
-            .filter(|h| {
-                let seen = per_meeting.entry(h.meeting).or_default();
-                *seen += 1;
-                *seen <= PER_MEETING
-            })
-            .take(limit)
-            .map(|h| Found { meeting: h.meeting.to_string(), title: titles.get(h.meeting).cloned().unwrap_or_default(), source: h.chunk.source.clone(), text: h.chunk.text.clone(), score: h.score })
-            .collect())
+        // Where things stand (boards and summaries, as the meeting left them) and what was said on the way
+        // (the transcript) answer different questions, so each is cut on its own: a conclusion a little less
+        // like the question than some remark is still the answer.
+        let mut out = vec![];
+        for stands in [true, false] {
+            let group: Vec<_> = hits.iter().filter(|h| Found::stands_for(&h.chunk.source) == stands).collect();
+            // Nothing that matches only weakly, by itself or next to what matched best: no answer beats a wrong one.
+            let best = group.first().map_or(0.0, |h| h.score);
+            // A few passages from each meeting at most, so one long meeting does not crowd out the rest.
+            let mut per_meeting: HashMap<&str, usize> = HashMap::new();
+            // The same words in one meeting, as a node kept on two boards, are shown once.
+            let mut seen: std::collections::HashSet<(&str, &str)> = std::collections::HashSet::new();
+            out.extend(
+                group
+                    .into_iter()
+                    .filter(|h| h.score >= MIN_SCORE && h.score >= best - WITHIN_BEST)
+                    .filter(|h| seen.insert((h.meeting, h.chunk.text.as_str())))
+                    .filter(|h| {
+                        let seen = per_meeting.entry(h.meeting).or_default();
+                        *seen += 1;
+                        *seen <= PER_MEETING
+                    })
+                    .take(limit)
+                    .map(|h| Found { meeting: h.meeting.to_string(), title: titles.get(h.meeting).cloned().unwrap_or_default(), source: h.chunk.source.clone(), text: h.chunk.text.clone(), score: h.score }),
+            );
+        }
+        Ok(out)
     }
 }
 

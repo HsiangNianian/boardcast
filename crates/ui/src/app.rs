@@ -2301,7 +2301,7 @@ impl Workbench {
             search.typed_at = None;
             search.ticket += 1;
             search.asking = true;
-            let _ = search.jobs.send(Job::Find { text: search.asked.clone(), meetings: library, limit: 12, ticket: search.ticket });
+            let _ = search.jobs.send(Job::Find { text: search.asked.clone(), meetings: library, limit: 8, ticket: search.ticket });
         }
     }
 
@@ -4856,39 +4856,43 @@ impl Render for Workbench {
                     .when(self.store.is_some() && self.library.is_empty(), |d| {
                         d.child(div().py_4().text_sm().text_color(rgb(pal().faint)).child(tr("No meetings yet. A meeting is saved here as soon as something is said or typed.", "还没有会议。开始说话或输入后，会议会自动保存在这里。")))
                     })
-                    // What was said that matches, by meaning, under the meetings whose names do.
+                    // What matches by meaning, under the meetings whose names do: first where things stand (the
+                    // boards and summaries as the meetings left them), then what was said on the way.
                     .when_some(self.search.as_ref().filter(|s| !s.hits.is_empty() && !query.is_empty()).map(|s| s.hits.clone()), |d, hits| {
-                        d.child(div().pt_5().pb_2().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).text_color(rgb(pal().muted)).border_b_1().border_color(rgb(pal().line)).child(tr("In what was said", "会议内容")))
-                            .children(hits.into_iter().enumerate().map(|(i, found)| {
-                                let place = match &found.source {
-                                    boardcast_search::Source::Transcript { .. } => tr("transcript", "转写"),
-                                    boardcast_search::Source::Board { .. } => tr("board", "板书"),
-                                    boardcast_search::Source::Summary { .. } => tr("summary", "摘要"),
-                                };
-                                let snippet: String = found.text.split('\n').map(|l| l.trim()).collect::<Vec<_>>().join("  ").chars().take(180).collect();
-                                let open = found.clone();
-                                div()
-                                    .id(("found", i))
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .px_3()
-                                    .py_3()
-                                    .border_b_1()
-                                    .border_color(rgb(pal().line))
-                                    .cursor_pointer()
-                                    .hover(|d| d.bg(rgb(pal().selected)))
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .child(div().text_sm().overflow_hidden().whitespace_nowrap().child(found.title.clone()))
-                                            .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).child(place)),
-                                    )
-                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(snippet))
-                                    .on_click(cx.listener(move |this, _, _, cx| this.open_found(&open, cx)))
-                            }))
+                        let row = |i: usize, found: boardcast_search::service::Found, cx: &mut Context<Self>| {
+                            let place = match &found.source {
+                                boardcast_search::Source::Transcript { .. } => tr("transcript", "转写"),
+                                boardcast_search::Source::Board { .. } => tr("board", "板书"),
+                                boardcast_search::Source::Summary { .. } => tr("summary", "摘要"),
+                            };
+                            let snippet: String = found.text.split('\n').map(|l| l.trim()).collect::<Vec<_>>().join("  ").chars().take(180).collect();
+                            let open = found.clone();
+                            div()
+                                .id(("found", i))
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .px_3()
+                                .py_3()
+                                .border_b_1()
+                                .border_color(rgb(pal().line))
+                                .cursor_pointer()
+                                .hover(|d| d.bg(rgb(pal().selected)))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(div().text_sm().overflow_hidden().whitespace_nowrap().child(found.title.clone()))
+                                        .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).child(place)),
+                                )
+                                .child(div().text_xs().text_color(rgb(pal().muted)).child(snippet))
+                                .on_click(cx.listener(move |this, _, _, cx| this.open_found(&open, cx)))
+                        };
+                        let heading = |name: &'static str| div().pt_5().pb_2().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).text_color(rgb(pal().muted)).border_b_1().border_color(rgb(pal().line)).child(name);
+                        let (stands, said): (Vec<_>, Vec<_>) = hits.into_iter().enumerate().partition(|(_, f)| f.stands());
+                        d.when(!stands.is_empty(), |d| d.child(heading(tr("Where things stand", "板上结论"))).children(stands.into_iter().map(|(i, f)| row(i, f, cx))))
+                            .when(!said.is_empty(), |d| d.child(heading(tr("What was said", "讨论原话"))).children(said.into_iter().map(|(i, f)| row(i, f, cx))))
                     })
                     .when(self.search.as_ref().is_some_and(|s| s.asking) && !query.is_empty(), |d| {
                         d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(tr("Searching what was said…", "正在搜索会议内容…")))

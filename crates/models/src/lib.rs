@@ -153,8 +153,9 @@ pub fn vision_for(model_file: &str) -> Option<Model> {
     }
 }
 
-/// What finds things in past meetings by what they mean: EmbeddingGemma 300M, an add-on downloaded only when
-/// meeting search is turned on, and never chosen as a board model. It is used under the Gemma Terms of Use.
+/// What finds things in past meetings by what they mean: EmbeddingGemma 300M, never chosen as a board model.
+/// Every package carries it (`boardcast-tools fetch search`); a checkout without it downloads it when meeting
+/// search is turned on. It is used and shipped under the Gemma Terms of Use (assets/licenses/gemma-*).
 pub fn embedding() -> Model {
     let file = "embeddinggemma-300M-Q8_0.gguf";
     let path = format!("ggml-org/embeddinggemma-300M-GGUF/resolve/{{}}/{file}");

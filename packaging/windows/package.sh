@@ -11,7 +11,7 @@ cd "$root"
 variants="${VARIANTS:-all}"
 
 cargo build --release -p boardcast-tools
-for what in glyphs "llama windows-x64" voice "pdfium win-x64"; do
+for what in glyphs "llama windows-x64" voice search "pdfium win-x64"; do
   target/release/boardcast-tools.exe fetch $what
 done
 cargo build --release -p boardcast-ui
@@ -42,6 +42,7 @@ for variant in $variants; do
   cp resources/voice/silero_vad.onnx "$lib/voice/"
   cp resources/voice/speaker/campplus_zh_en.onnx "$lib/voice/speaker/"
   copy_models "$variant" "$lib/voice"
+  copy_search "$lib/search"
   printf '%s\n' "$variant" > "$lib/variant"
 
   cp LICENSE assets/licenses/* crates/ui/fonts/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$out/licenses/"

@@ -50,6 +50,11 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      - name: Cache the meeting search model
+        uses: actions/cache@v4
+        with:
+          path: resources/search
+          key: search-${{ hashFiles('crates/models/src/lib.rs') }}
       # The script ends by running each packaged app's self-check. A second variant checks the model selection.
       - run: sh packaging/linux/package.sh
         env:
@@ -98,6 +103,11 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      - name: Cache the meeting search model
+        uses: actions/cache@v4
+        with:
+          path: resources/search
+          key: search-${{ hashFiles('crates/models/src/lib.rs') }}
       # The script ends by running each packaged app's self-check, and builds and self-tests the Apple speech helper.
       - run: sh packaging/macos/package.sh
         env:
@@ -129,6 +139,11 @@ jobs:
         with:
           path: resources/voice
           key: voice-${{ hashFiles('crates/tools/src/voice_files.rs') }}
+      - name: Cache the meeting search model
+        uses: actions/cache@v4
+        with:
+          path: resources/search
+          key: search-${{ hashFiles('crates/models/src/lib.rs') }}
       - run: sh packaging/windows/package.sh
         env:
           VARIANTS: all

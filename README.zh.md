@@ -34,15 +34,14 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
    | 安装包 | 能识别 | 语音模型 |
    |---|---|---|
-   | `…-macos.zip`、`…-linux.tar.gz` | 日语、英语和中文，各用最合适的模型 | 约 1.1 GB |
+   | `…-macos.zip`、`…-linux.tar.gz`、`…-windows.zip` | 日语、英语和中文，各用最合适的模型 | 约 1.1 GB |
    | `…-ja` | 日语，用 ReazonSpeech | 约 160 MB |
    | `…-en` | 英语，用 Parakeet | 约 660 MB |
-   | `…-sensevoice` | 中文、英语、日语、韩语和粤语，用 SenseVoice | 约 230 MB |
-   | `…-macos-apple.zip` | Mac 自带识别器支持的语言 | 无 |
+   | `…-macos-none.zip` | Mac 自带识别器支持的语言 | 无 |
 
-   目前提供 Apple Silicon 的 macOS 和 x64 的 Linux 安装包，现在的应用还没有 Windows 安装包。
+   每个安装包还都带着会议搜索用的模型，约 334 MB。目前提供 macOS（Apple Silicon 和 Intel）、x64 的 Linux 和 x64 的 Windows 安装包。
 
-2. **macOS：** 应用只做了临时签名，第一次打开请按住 Control 点击 › 打开。**Linux：** 解压后运行 `./install.sh`（装到 `~/.local`，不需要 root；`--uninstall` 卸载并保留数据）。之后的版本会自动安装。
+2. **macOS：** 应用只做了临时签名，第一次打开请按住 Control 点击 › 打开。**Linux：** 解压后运行 `./install.sh`（装到 `~/.local`，不需要 root；`--uninstall` 卸载并保留数据）。之后的版本会自动安装。**Windows：** 解压后运行 `bin\boardcast.exe`；没有安装程序，暂时也不会自动更新。
 3. 第一次启动时，设置会停在**板书模型**：下载一个在本机运行的模型，或者设置远程模型。语音识别已经内置。
 4. 点**开始收音**（或按 `空格`），也可以在转写下方的输入框里打一句话，回车上板。
 
@@ -118,6 +117,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
 下载可以暂停和续传，会检查剩余空间并校验 SHA-256，依次尝试 ModelScope、hf-mirror 和 Hugging Face。第一次启动会为显卡编译着色器，大约半分钟，只需一次。
 
+- **会议搜索**：用自己的话提问，就能在所有会议里找到相关的那段。用的是 [EmbeddingGemma 300M](https://huggingface.co/google/embeddinggemma-300m)，每个安装包都自带，在本机运行，遵循 [Gemma 使用条款](https://ai.google.dev/gemma/terms)。默认打开，可以在**设置 › 通用**里关掉；第一次启动会给所有会议建索引，需要一些时间。
 - **默认本地**：音频在本机识别，会议也留在本机。不需要账号或 API key。
 - **按需远程**：在**远程模型**里填 OpenAI 兼容的地址、模型和 key，或者一键填写 DeepSeek，然后**测试连接**并**保存**。发给该服务的是每句话、说话人名字和板书文字，不发送音频。
 - **key 的保存**：key 存在设置目录的 `remote.json` 里，只有你自己能读，也不会写进日志。

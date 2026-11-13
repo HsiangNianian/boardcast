@@ -34,15 +34,14 @@ The desktop app is a native rewrite in Rust on [GPUI](crates/README.md). The ear
 
    | Package | Recognizes | Speech models |
    |---|---|---|
-   | `…-macos.zip`, `…-linux.tar.gz` | Japanese, English and Chinese, each with its best model | about 1.1 GB |
+   | `…-macos.zip`, `…-linux.tar.gz`, `…-windows.zip` | Japanese, English and Chinese, each with its best model | about 1.1 GB |
    | `…-ja` | Japanese, with ReazonSpeech | about 160 MB |
    | `…-en` | English, with Parakeet | about 660 MB |
-   | `…-sensevoice` | Chinese, English, Japanese, Korean and Cantonese, with SenseVoice | about 230 MB |
-   | `…-macos-apple.zip` | Whatever your Mac's own recognizer supports | none |
+   | `…-macos-none.zip` | Whatever your Mac's own recognizer supports | none |
 
-   Packages are built for macOS on Apple Silicon and for Linux x64. There is no Windows package of the current app yet.
+   Every package also carries the 334 MB model behind meeting search. Packages are built for macOS (Apple Silicon and Intel), Linux x64 and Windows x64.
 
-2. **macOS:** the app is signed only ad hoc, so open it with Control-click › Open the first time. **Linux:** unpack the archive and run `./install.sh` (into `~/.local`, no root needed; `--uninstall` removes it and keeps your data). Later versions then install themselves.
+2. **macOS:** the app is signed only ad hoc, so open it with Control-click › Open the first time. **Linux:** unpack the archive and run `./install.sh` (into `~/.local`, no root needed; `--uninstall` removes it and keeps your data). Later versions then install themselves. **Windows:** unpack the archive and run `bin\boardcast.exe`; there is no installer, and it does not update itself yet.
 3. On first launch, Settings opens on **Board model**: download a model that runs on this computer, or set up a remote one. Speech recognition is already included.
 4. Click **Start listening** (or press `Space`), or type a line in the transcript's input and press Enter.
 
@@ -118,6 +117,7 @@ The app bundles llama.cpp's `llama-server` and runs it for you: Vulkan on Linux 
 
 Downloads can be paused and resumed, check free space and verify SHA-256, trying ModelScope, hf-mirror and Hugging Face in turn. The first start compiles shaders for your graphics card, which takes about half a minute, once.
 
+- **Meeting search** finds what was said in any meeting from a question in your own words. It uses [EmbeddingGemma 300M](https://huggingface.co/google/embeddinggemma-300m), which comes with every package and runs on your computer, under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms). It is on unless you turn it off in **Settings › General**; the first start builds an index of every meeting, which takes a while.
 - **Local by default**: audio is recognized on your computer and meetings stay there. No account or API key is needed.
 - **Remote by choice**: under **Remote**, enter an OpenAI-compatible address, model and key, or fill in DeepSeek with one click, then **Test** and **Save**. Lines, speaker names and board text go to that service; audio does not.
 - **Key storage**: the key is kept in `remote.json` in the settings folder, readable only by you, and never logged.

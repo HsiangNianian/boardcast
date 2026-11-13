@@ -13,6 +13,8 @@ pub struct Resources {
     pub voice: PathBuf,
     /// The PDF library.
     pub pdfium: PathBuf,
+    /// The meeting search model, shipped with every package; a checkout may not have it.
+    pub search: PathBuf,
     pub installed: bool,
 }
 
@@ -35,7 +37,7 @@ fn checkout_dir() -> Option<PathBuf> {
 
 pub fn locate(data: &Path) -> Resources {
     if let Some(dir) = installed_dir() {
-        return Resources { hanzi: HanziSource::Pack(dir.join("glyphs.pack")), binaries: dir.join("llama"), pdfium: dir.join("pdfium"), voice: dir.join("voice"), installed: true };
+        return Resources { hanzi: HanziSource::Pack(dir.join("glyphs.pack")), binaries: dir.join("llama"), pdfium: dir.join("pdfium"), voice: dir.join("voice"), search: dir.join("search"), installed: true };
     }
     let root = checkout_dir().unwrap_or_else(|| PathBuf::from("."));
     let bundled = root.join("resources/voice");
@@ -44,6 +46,7 @@ pub fn locate(data: &Path) -> Resources {
         binaries: root.join("resources/llama"),
         pdfium: root.join("target/pdfium"),
         voice: if bundled.join("silero_vad.onnx").is_file() { bundled } else { data.join("models/voice") },
+        search: root.join("resources/search"),
         installed: false,
     }
 }
@@ -79,6 +82,8 @@ impl Resources {
             ("voice activity model", self.voice.join("silero_vad.onnx")),
             ("speaker model", self.voice.join("speaker/campplus_zh_en.onnx")),
             ("PDF library", boardcast_import::pdf::library_file(&self.pdfium)),
+            // Every package carries it, the one without speech models too.
+            ("meeting search model", self.search.join(boardcast_models::embedding().file)),
         ]
         .into_iter()
         .chain(speech)

@@ -941,6 +941,8 @@ struct MeetingSearch {
     /// Most meetings had no index when search started, so this round builds them all and takes a while: the
     /// board says so until it is done. With how many meetings there are.
     building: Option<usize>,
+    /// Indexing is held while listening, when the CPU is for hearing and the board.
+    held: bool,
     /// The query asked last, its ticket, and when it was typed, so a query waits for typing to pause.
     asked: String,
     typed_at: Option<Instant>,
@@ -2254,7 +2256,7 @@ impl Workbench {
         let missing = boardcast_search::service::unindexed(data, &all);
         let building = (missing > 0 && missing * 2 >= all.len()).then_some(all.len());
         let _ = jobs.send(boardcast_search::service::Job::Index(all));
-        self.search = Some(MeetingSearch { jobs, events, indexing: None, building, asked: String::new(), typed_at: None, ticket: 0, asking: false, hits: vec![], saved: HashMap::new(), error: None });
+        self.search = Some(MeetingSearch { jobs, events, indexing: None, building, held: false, asked: String::new(), typed_at: None, ticket: 0, asking: false, hits: vec![], saved: HashMap::new(), error: None });
     }
 
     /// Turn meeting search on or off. On, it downloads its model first if the app came without it.
@@ -2311,6 +2313,11 @@ impl Workbench {
                     search.error = Some(error);
                 }
             }
+        }
+        // Indexing waits while listening, and goes on from where it stopped once listening stops.
+        if search.held != listening {
+            search.held = listening;
+            let _ = search.jobs.send(Job::Hold(listening));
         }
         if !listening {
             let due: Vec<String> = search.saved.iter().filter(|(_, at)| at.elapsed() >= REINDEX_AFTER).map(|(id, _)| id.clone()).collect();
@@ -4811,7 +4818,7 @@ impl Render for Workbench {
                     })
             }));
         // Building every meeting's search index takes a while, so the board and the library say so until it is done.
-        let building = self.search.as_ref().and_then(|s| s.building.map(|total| s.indexing.unwrap_or((0, total))));
+        let building = self.search.as_ref().and_then(|s| s.building.map(|total| (s.indexing.unwrap_or((0, total)), s.held)));
         let typed = self.library_query.read(cx).value().to_string();
         self.search_typed(&typed);
         let query = typed.trim().to_lowercase();
@@ -4827,7 +4834,12 @@ impl Render for Workbench {
             .flex_col()
             // A handful of meetings reads at a glance; past that, a search finds one.
             .when(self.library.len() > LIBRARY_SEARCH_FROM || self.search.is_some(), |d| d.child(div().pb_3().child(Input::new(&self.library_query).small().cleanable(true))))
-            .when_some(building, |d, (done, total)| {
+            .when_some(building, |d, ((done, total), held)| {
+                let text = if held {
+                    tr("The search index waits while listening. Until it is done, a search may miss some meetings.", "收音中，搜索索引暂停构建，完成前可能搜不到部分会议。")
+                } else {
+                    tr("Building the search index. Until it is done, a search may miss some meetings.", "正在构建搜索索引，完成前可能搜不到部分会议。")
+                };
                 d.child(
                     div()
                         .pb_3()
@@ -4836,8 +4848,8 @@ impl Render for Workbench {
                         .gap_2()
                         .text_xs()
                         .text_color(rgb(pal().muted))
-                        .child(Spinner::new().xsmall().color(rgb(pal().muted).into()))
-                        .child(format!("{} {done} / {total}", tr("Building the search index. Until it is done, a search may miss some meetings.", "正在构建搜索索引，完成前可能搜不到部分会议。"))),
+                        .when(!held, |d| d.child(Spinner::new().xsmall().color(rgb(pal().muted).into())))
+                        .child(format!("{text} {done} / {total}")),
                 )
             })
             .child(
@@ -5731,7 +5743,7 @@ impl Render for Workbench {
                 .gap_1()
                 .when_some(view_only, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().bg(rgb(pal().selected)).border_1().border_color(rgb(pal().line)).child(text)))
                 .when_some(banner, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().text_color(rgb(pal().danger)).bg(rgb(pal().danger_soft)).border_1().border_color(rgb(pal().line)).child(text)))
-                .when_some(building, |d, (done, total)| {
+                .when_some(building, |d, ((done, total), held)| {
                     d.child(
                         div()
                             .occlude()
@@ -5746,8 +5758,8 @@ impl Render for Workbench {
                             .bg(rgb(pal().surface))
                             .border_1()
                             .border_color(rgb(pal().line))
-                            .child(Spinner::new().small().color(rgb(pal().muted).into()))
-                            .child(tr("Building the search index for your meetings", "正在为会议构建搜索索引"))
+                            .when(!held, |d| d.child(Spinner::new().small().color(rgb(pal().muted).into())))
+                            .child(if held { tr("Search index paused while listening", "收音中，搜索索引暂停构建") } else { tr("Building the search index for your meetings", "正在为会议构建搜索索引") })
                             .child(div().text_xs().text_color(rgb(pal().faint)).child(format!("{done} / {total}"))),
                     )
                 })

@@ -37,6 +37,9 @@ pub enum Job {
     Find { text: String, meetings: Vec<String>, limit: usize, ticket: u64 },
     /// Forget a meeting's index, as when it is removed for good.
     Forget(String),
+    /// Hold indexing, as while the app listens, when the CPU is for hearing; or go on from where it stopped.
+    /// A meeting already being indexed is finished first. Questions are still answered meanwhile.
+    Hold(bool),
 }
 
 /// A passage found, with what the interface needs to show it and open the meeting there.
@@ -258,8 +261,9 @@ pub fn start(data: &Path, model: PathBuf, spawn: Spawn) -> (Sender<Job>, Receive
             // meanwhile is answered between two meetings, not after all of them.
             let mut todo: VecDeque<String> = VecDeque::new();
             let (mut done, mut total) = (0, 0);
+            let mut held = false;
             loop {
-                let job = if todo.is_empty() {
+                let job = if todo.is_empty() || held {
                     match inbox.recv_timeout(Duration::from_secs(15)) {
                         Ok(job) => Some(job),
                         Err(RecvTimeoutError::Timeout) => {
@@ -295,6 +299,10 @@ pub fn start(data: &Path, model: PathBuf, spawn: Spawn) -> (Sender<Job>, Receive
                         let _ = std::fs::remove_file(worker.path(&id));
                         worker.cache.remove(&id);
                         todo.retain(|t| *t != id);
+                        continue;
+                    }
+                    Some(Job::Hold(hold)) => {
+                        held = hold;
                         continue;
                     }
                     None => {
@@ -336,6 +344,20 @@ pub fn start(data: &Path, model: PathBuf, spawn: Spawn) -> (Sender<Job>, Receive
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn indexing_waits_while_held_and_goes_on_after() {
+        let data = std::env::temp_dir().join(format!("boardcast-held-{}", std::process::id()));
+        let spawn: Spawn = Box::new(|_| bail!("no model in this test"));
+        let (jobs, events) = start(&data, data.join("model.gguf"), spawn);
+        jobs.send(Job::Hold(true)).unwrap();
+        jobs.send(Job::Index(vec!["a".into(), "b".into()])).unwrap();
+        assert!(events.recv_timeout(Duration::from_millis(400)).is_err(), "nothing is indexed while held");
+        jobs.send(Job::Hold(false)).unwrap();
+        assert!(events.recv_timeout(Duration::from_secs(5)).is_ok(), "indexing goes on once let go");
+        drop(jobs);
+        let _ = std::fs::remove_dir_all(&data);
+    }
 
     #[test]
     fn meetings_without_an_index_are_counted() {

@@ -72,6 +72,17 @@ impl Provider {
         })
     }
 
+    /// Whether a reply is held to a few operations, so a long line has to be said in pieces: a local model,
+    /// whose grammar allows 8 operations in 160 tokens. A remote reply has room for the whole line.
+    fn short_reply(&self) -> bool {
+        match self {
+            Self::Local { .. } => true,
+            Self::Remote { .. } => false,
+            #[cfg(test)]
+            Self::Scripted(_) => true,
+        }
+    }
+
     fn is_deepseek(&self) -> bool {
         matches!(self, Self::Remote { base_url, .. } if base_url.contains("deepseek.com"))
     }
@@ -222,9 +233,99 @@ pub fn propose(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &
     propose_with(provider, graph, recent, next, guidance, hint, &sound::Glossary::default(), &[])
 }
 
+/// How long a line a local model hears in one turn, counting a Chinese or Japanese character as 1 and any
+/// other character as 0.3. A local reply holds at most 8 operations, which a longer line runs past: the rest
+/// of it never reaches the board. On the eval's long-line case, cutting the line raised Qwen 4B from node
+/// 0.50 / edge 0.00 to 0.90 / 0.61, but lowered DeepSeek from 0.93 / 0.80 to 0.85 / 0.63 over three
+/// passes each: a remote reply has room for the whole line and does better seeing all of it.
+const PIECE_UNITS: f32 = 90.0;
+
+fn units(text: &str) -> f32 {
+    text.chars().filter(|c| !c.is_whitespace()).map(|c| if (c as u32) >= 0x2E80 { 1.0 } else { 0.3 }).sum()
+}
+
+/// A line cut into pieces the model can answer whole: at sentence ends, and at commas where one sentence
+/// alone is too long, each piece as many sentences as fit. A line short enough stays as it is.
+pub fn pieces(text: &str) -> Vec<String> {
+    if units(text) <= PIECE_UNITS {
+        return vec![text.to_string()];
+    }
+    // Ends of sentences, and of clauses as a fallback; a full stop ends one only before a space or the end,
+    // so "10.5" and "v0.29" stay whole.
+    let cut = |text: &str, marks: &[char]| -> Vec<String> {
+        let chars: Vec<char> = text.chars().collect();
+        let (mut out, mut start) = (vec![], 0);
+        for (i, &c) in chars.iter().enumerate() {
+            let full_stop = c == '.' && chars.get(i + 1).is_none_or(|n| n.is_whitespace());
+            if marks.contains(&c) || (full_stop && marks.contains(&'.')) {
+                out.push(chars[start..=i].iter().collect::<String>());
+                start = i + 1;
+            }
+        }
+        if start < chars.len() {
+            out.push(chars[start..].iter().collect());
+        }
+        out.into_iter().filter(|s: &String| !s.trim().is_empty()).collect()
+    };
+    let mut sentences = vec![];
+    for sentence in cut(text, &['。', '！', '？', '；', '!', '?', ';', '.']) {
+        if units(&sentence) > PIECE_UNITS {
+            sentences.extend(cut(&sentence, &['，', '、', ',']));
+        } else {
+            sentences.push(sentence);
+        }
+    }
+    let mut out: Vec<String> = vec![];
+    for sentence in sentences {
+        match out.last_mut() {
+            Some(last) if units(last) + units(&sentence) <= PIECE_UNITS => last.push_str(&sentence),
+            _ => out.push(sentence),
+        }
+    }
+    out.into_iter().map(|p| p.trim().to_string()).collect()
+}
+
 /// As [`propose`], telling the model how the glossary writes names and which words in the line may be the
-/// board's labels heard in other characters.
+/// board's labels heard in other characters. A long line is said a few sentences at a time ([`pieces`]):
+/// each piece sees the board as the pieces before it left it, and has them as its recent lines. The
+/// replies come back as one, as if the line had been answered in one turn. Only a model with a short reply
+/// is given pieces (see [`PIECE_UNITS`]), and a line about what was circled is not cut, since what it asks
+/// for must happen once.
 pub fn propose_with(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &Utterance, guidance: Guidance, hint: Option<&str>, glossary: &sound::Glossary, references: &[(u32, String)]) -> Result<Reply> {
+    let parts = if provider.short_reply() && next.pointing.is_empty() { pieces(&next.text) } else { vec![next.text.clone()] };
+    if parts.len() == 1 {
+        return propose_once(provider, graph, recent, next, guidance, hint, glossary, references);
+    }
+    let (mut board, mut heard) = (graph.clone(), recent.to_vec());
+    let mut whole = Reply { ops: String::new(), ms: 0, tokens_in: 0, tokens_cached: 0, tokens_out: 0, prompt_read: None, prompt_ms: None, predicted_ms: None };
+    for (i, text) in parts.into_iter().enumerate() {
+        let piece = Utterance { speaker: next.speaker.clone(), text, pointing: vec![] };
+        let context = &heard[heard.len().saturating_sub(CONTEXT_LINES)..];
+        let reply = propose_once(provider, &board, context, &piece, guidance, if i == 0 { hint } else { None }, glossary, references)?;
+        board.apply(&parse_ops(&reply.ops));
+        if !reply.ops.trim().is_empty() {
+            if !whole.ops.is_empty() {
+                whole.ops.push('\n');
+            }
+            whole.ops.push_str(reply.ops.trim());
+        }
+        whole.ms += reply.ms;
+        whole.tokens_in += reply.tokens_in;
+        whole.tokens_cached += reply.tokens_cached;
+        whole.tokens_out += reply.tokens_out;
+        let add = |a: Option<u64>, b: Option<u64>| match (a, b) { (None, None) => None, (a, b) => Some(a.unwrap_or(0) + b.unwrap_or(0)) };
+        let addf = |a: Option<f64>, b: Option<f64>| match (a, b) { (None, None) => None, (a, b) => Some(a.unwrap_or(0.0) + b.unwrap_or(0.0)) };
+        whole.prompt_read = add(whole.prompt_read, reply.prompt_read);
+        whole.prompt_ms = addf(whole.prompt_ms, reply.prompt_ms);
+        whole.predicted_ms = addf(whole.predicted_ms, reply.predicted_ms);
+        heard.push(piece);
+    }
+    Ok(whole)
+}
+
+/// One model turn for one piece of a line.
+#[allow(clippy::too_many_arguments)]
+fn propose_once(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &Utterance, guidance: Guidance, hint: Option<&str>, glossary: &sound::Glossary, references: &[(u32, String)]) -> Result<Reply> {
     let english = board_is_english(recent, next);
     let all = prompts();
     let mut messages: Vec<Value> = all[if english { "en" } else { "zh" }].as_array().cloned().context("prompts")?;
@@ -880,6 +981,52 @@ mod tests {
 
     fn remote(base: String) -> Provider {
         Provider::Remote { base_url: base, key: "sk-secret-123".into(), model: "m".into() }
+    }
+
+    #[test]
+    fn a_long_line_is_cut_at_sentence_ends_and_a_short_one_is_not() {
+        assert_eq!(pieces("加一个支付服务。"), vec!["加一个支付服务。"]);
+        let long = "首先用户在 App 里点下单，App 不直接打订单服务，而是先过 API 网关，网关这边做鉴权和限流。".repeat(4);
+        let cut = pieces(&long);
+        assert!(cut.len() > 1, "{cut:?}");
+        assert!(cut.iter().all(|p| units(p) <= PIECE_UNITS), "{cut:?}");
+        assert_eq!(cut.join("").chars().filter(|c| !c.is_whitespace()).collect::<String>(), long.chars().filter(|c| !c.is_whitespace()).collect::<String>());
+        assert!(cut.iter().all(|p| p.ends_with('。')), "cut where sentences end: {cut:?}");
+        // English, and a full stop inside a number is not an end.
+        let en = "The mobile app talks to billing through the gateway at version 10.5 today. Billing writes to Postgres via a pooler. ".repeat(4);
+        let cut = pieces(&en);
+        assert!(cut.len() > 1 && cut.iter().all(|p| p.ends_with('.')), "{cut:?}");
+        assert!(cut.iter().any(|p| p.contains("10.5")), "{cut:?}");
+        // One sentence too long for a piece is cut at its commas.
+        let run_on = format!("{}。", "订单服务调库存服务做预占，".repeat(12));
+        assert!(pieces(&run_on).len() > 1);
+    }
+
+    #[test]
+    fn each_piece_of_a_long_line_sees_the_board_the_pieces_before_it_drew() {
+        let heard = Arc::new(Mutex::new(vec![]));
+        let log = heard.clone();
+        let provider = Provider::Scripted(Arc::new(move |said: &str| {
+            log.lock().unwrap().push(said.to_string());
+            let n = log.lock().unwrap().len();
+            Ok(format!("N 「服务{n}」"))
+        }));
+        let line = Utterance { speaker: Some("A".into()), text: "我们有一个订单服务，它负责接收用户下单的请求并且做参数校验。".repeat(4), pointing: vec![] };
+        let reply = propose_with(&provider, &Graph::default(), &[], &line, Guidance::default(), None, &sound::Glossary::default(), &[]).unwrap();
+        let said = heard.lock().unwrap().clone();
+        assert!(said.len() > 1, "said in pieces");
+        assert!(said[1].contains("服务1"), "the second piece sees the first piece's node: {}", said[1]);
+        let mut g = Graph::default();
+        g.apply(&parse_ops(&reply.ops));
+        assert_eq!(g.nodes.len(), said.len(), "every piece's ops come back: {}", reply.ops);
+        // A remote model hears the line whole.
+        let whole = remote("http://127.0.0.1:1".into());
+        assert!(!whole.short_reply() && provider.short_reply() && Provider::Local { base: String::new() }.short_reply());
+        // What was circled is not cut, so it happens once.
+        heard.lock().unwrap().clear();
+        let circled = Utterance { pointing: vec!["n1".into()], ..line };
+        propose_with(&provider, &Graph::default(), &[], &circled, Guidance::default(), None, &sound::Glossary::default(), &[]).unwrap();
+        assert_eq!(heard.lock().unwrap().len(), 1);
     }
 
     #[test]

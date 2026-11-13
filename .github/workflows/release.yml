@@ -1,17 +1,21 @@
 name: Release
 
-# Pushing a tag v<version> publishes every package variant (see packaging/models.sh) for Linux and the Mac:
+# Pushing a tag v<version> publishes every package variant (see packaging/models.sh) for Linux, the Mac and Windows:
 #   git tag -a v0.23.0 -m "What changed, shown in the update prompt and on the release page"
 #   git push origin v0.23.0
 # The version must be the workspace's. The tag's message is the notes; a tag without one gets notes
 # generated from the merged pull requests. A version with a pre-release part (0.23.0-1) is published
 # as a pre-release, which the updater never offers.
 #
-# A release stays a draft until every package is up, so nobody downloads half of it, and is then marked
-# latest, which is where the updater reads its manifest; the manifest is also copied to the rolling
-# `gpui-latest` pre-release, where the alphas looked. It lists Linux packages only, as the updater
-# only installs on Linux; Mac and Windows apps are downloaded by hand. Windows is added once the release is
-# out, so a Windows build that fails holds up nothing else.
+# Every platform builds at once, and the release is published once they have all finished. It stays a
+# draft until its packages are up, so nobody downloads half of it, and is then marked latest, which is
+# where the updater reads its manifest; the manifest is also copied to the rolling `gpui-latest`
+# pre-release, where the alphas looked. It lists Linux packages only, as the updater only installs on
+# Linux; Mac and Windows apps are downloaded by hand.
+#
+# So only Linux has to build for a release to go out. A Mac or Windows build that fails holds nothing up:
+# the release goes out without it, the run says which packages are missing, and "Re-run failed jobs"
+# builds them again and adds them to the release, which is otherwise left as it is.
 on:
   push:
     tags: ['v*']
@@ -98,6 +102,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux-packages
+          overwrite: true
           path: |
             target/package/boardcast-*-linux*.tar.gz*
             target/package/manifest.json
@@ -106,6 +111,8 @@ jobs:
 
   macos:
     strategy:
+      # One Mac failing leaves the other to finish, and be published.
+      fail-fast: false
       matrix:
         # Apple silicon, then Intel.
         runner: [macos-26, macos-15-intel]
@@ -136,55 +143,15 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: macos-packages-${{ matrix.runner }}
+          overwrite: true
           path: target/package/boardcast-*-macos*.zip
           retention-days: 3
 
-  publish:
-    needs: [linux, macos]
-    runs-on: ubuntu-22.04
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      VERSION: ${{ needs.linux.outputs.version }}
-      PRERELEASE: ${{ needs.linux.outputs.prerelease }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          path: packages
-          merge-multiple: true
-      - name: Publish
-        run: |
-          mv packages/manifest.json manifest.json
-          packages=$(ls packages/boardcast-*.tar.gz packages/boardcast-*.zip)
-          if [ -s packages/notes.txt ]; then
-            { cat packages/notes.txt; printf '\n'; cat packaging/release-notes.md; } > notes.md
-            notes="--notes-file notes.md"
-          else
-            cp packaging/release-notes.md notes.md
-            notes="--notes-file notes.md --generate-notes"
-          fi
-          if [ "$PRERELEASE" = true ]; then
-            gh release create "$TAG" --draft --prerelease --verify-tag --title "boardcast $VERSION" $notes
-            gh release upload "$TAG" $packages manifest.json
-            gh release edit "$TAG" --draft=false
-            exit 0
-          fi
-          gh release create "$TAG" --draft --verify-tag --title "boardcast $VERSION" $notes
-          gh release upload "$TAG" $packages manifest.json
-          gh release edit "$TAG" --draft=false --latest
-          # Installs from the alphas read their manifest here; it points at this release's packages.
-          if gh release view gpui-latest >/dev/null 2>&1; then
-            gh release upload gpui-latest manifest.json --clobber
-          fi
-
   windows:
-    needs: publish
     runs-on: windows-2022
     defaults:
       run:
         shell: bash
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -202,4 +169,77 @@ jobs:
       - run: sh packaging/windows/package.sh
         env:
           VARIANTS: ${{ env.WINDOWS_VARIANTS }}
-      - run: gh release upload "$TAG" target/package/boardcast-*-windows*.zip --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          overwrite: true
+          path: target/package/boardcast-*-windows*.zip
+          retention-days: 3
+
+  # Once every build has finished, whichever way: Linux is what the updater installs, so without it there is
+  # no release; the Mac and Windows go out if they built, and are added by a re-run if they did not.
+  publish:
+    needs: [linux, macos, windows]
+    if: ${{ !cancelled() && needs.linux.result == 'success' }}
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ needs.linux.outputs.version }}
+      PRERELEASE: ${{ needs.linux.outputs.prerelease }}
+      MACOS: ${{ needs.macos.result }}
+      WINDOWS: ${{ needs.windows.result }}
+    steps:
+      - uses: actions/checkout@v4
+      # Every package built in this run, in any attempt: a re-run finds what the first attempt built.
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Say which packages are missing
+        run: |
+          for platform in "macOS $MACOS" "Windows $WINDOWS"; do
+            set -- $platform
+            if [ "$2" != success ]; then
+              note="The $1 packages did not build ($2), so the release goes out without them. Re-run the failed jobs to add them."
+              echo "::warning::$note"
+              echo "- $note" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          ls -l packages
+      - name: Publish
+        run: |
+          mv packages/manifest.json manifest.json
+          # Without a Mac or Windows build there are no zips, which is not an error here.
+          packages=$(ls packages/boardcast-*.tar.gz packages/boardcast-*.zip 2>/dev/null || true)
+          state=$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null || echo none)
+          if [ "$state" = false ]; then
+            # Already out: this is a re-run after a build failed. Only what is not there yet is added, and
+            # nothing else changes, so a newer release stays the latest.
+            have=$(gh release view "$TAG" --json assets -q '.assets[].name')
+            new=$(for p in $packages; do printf '%s\n' "$have" | grep -qxF "$(basename "$p")" || echo "$p"; done)
+            if [ -n "$new" ]; then gh release upload "$TAG" $new; fi
+            echo "Added to $TAG: ${new:-nothing}"
+            exit 0
+          fi
+          if [ "$state" = none ]; then
+            if [ -s packages/notes.txt ]; then
+              { cat packages/notes.txt; printf '\n'; cat packaging/release-notes.md; } > notes.md
+              notes="--notes-file notes.md"
+            else
+              cp packaging/release-notes.md notes.md
+              notes="--notes-file notes.md --generate-notes"
+            fi
+            prerelease=$([ "$PRERELEASE" = true ] && echo --prerelease || true)
+            gh release create "$TAG" --draft $prerelease --verify-tag --title "boardcast $VERSION" $notes
+          fi
+          # A draft left by an attempt that stopped halfway is finished the same way.
+          gh release upload "$TAG" $packages manifest.json --clobber
+          if [ "$PRERELEASE" = true ]; then
+            gh release edit "$TAG" --draft=false
+            exit 0
+          fi
+          gh release edit "$TAG" --draft=false --latest
+          # Installs from the alphas read their manifest here; it points at this release's packages.
+          if gh release view gpui-latest >/dev/null 2>&1; then
+            gh release upload gpui-latest manifest.json --clobber
+          fi

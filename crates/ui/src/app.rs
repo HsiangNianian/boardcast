@@ -1214,6 +1214,8 @@ struct Workbench {
     /// A model given on the command line outranks the settings.
     forced_backend: bool,
     models: PathBuf,
+    /// Where the package keeps the meeting search model.
+    search_dir: PathBuf,
     binaries: PathBuf,
     download: Option<Download>,
     update: UpdateState,
@@ -2223,37 +2225,43 @@ impl Workbench {
         }
     }
 
+    /// The meeting search model: the one that came with the app, or else one downloaded before it did (a
+    /// checkout, or an install from before 0.29).
+    fn embedding_file(&self) -> Option<PathBuf> {
+        let file = boardcast_models::embedding().file;
+        [self.search_dir.join(&file), self.models.join(&file)].into_iter().find(|path| path.is_file())
+    }
+
     /// Start meeting search if it is on and its model is here, and bring every meeting's index up to date.
     fn start_search(&mut self) {
-        let model = boardcast_models::embedding();
         let (Some(store), Some(data)) = (&self.store, self.models.parent()) else { return };
-        if self.search.is_some() || !self.form.saved.meeting_search || !boardcast_models::installed(&model, &self.models) {
+        if self.search.is_some() || !self.form.saved.meeting_search {
             return;
         }
+        let Some(model) = self.embedding_file() else { return };
         let binaries = self.binaries.clone();
         let spawn: boardcast_search::service::Spawn = Box::new(move |args| boardcast_agent::spawn_tied({
             let mut cmd = boardcast_agent::server_command(&binaries);
             cmd.args(args).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
             cmd
         }));
-        let (jobs, events) = boardcast_search::service::start(data, self.models.join(&model.file), spawn);
+        let (jobs, events) = boardcast_search::service::start(data, model, spawn);
         let all: Vec<String> = store.list().unwrap_or_default().into_iter().filter(|m| m.read_error.is_none()).map(|m| m.id).collect();
         let _ = jobs.send(boardcast_search::service::Job::Index(all));
         self.search = Some(MeetingSearch { jobs, events, indexing: None, asked: String::new(), typed_at: None, ticket: 0, asking: false, hits: vec![], saved: HashMap::new(), error: None });
     }
 
-    /// Turn meeting search on or off. On, it downloads its model first if need be.
+    /// Turn meeting search on or off. On, it downloads its model first if the app came without it.
     fn set_meeting_search(&mut self, on: bool, cx: &mut Context<Self>) {
         self.form.saved.meeting_search = on;
         if let Err(e) = self.form.saved.save() {
             self.form.note = Some(format!("{e:#}"));
         }
         if on {
-            let model = boardcast_models::embedding();
-            if boardcast_models::installed(&model, &self.models) {
+            if self.embedding_file().is_some() {
                 self.start_search();
             } else {
-                self.start_download(model, cx);
+                self.start_download(boardcast_models::embedding(), cx);
             }
         } else {
             // Dropping the worker's channel stops it, and its model with it.
@@ -5332,7 +5340,7 @@ impl Render for Workbench {
                     ))
                     .child(row(
                         tr("Search meetings by meaning", "按意思搜索会议"),
-                        Some(tr("Finds what was said in any meeting from a question in your own words. Needs a 334 MB model that runs on this computer.", "用自己的话提问，就能在所有会议里找到相关的那段。需要下载一个 334 MB 的本机模型。")),
+                        Some(tr("Finds what was said in any meeting from a question in your own words. Its model comes with the app and runs on this computer.", "用自己的话提问，就能在所有会议里找到相关的那段。模型随应用附带，在本机运行。")),
                     ).child(
                         Switch::new("meeting-search").checked(self.form.saved.meeting_search).accessibility_label(tr("Search meetings by meaning", "按意思搜索会议")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_meeting_search(*on, cx))),
                     ))
@@ -5875,6 +5883,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let guidance = skill.then_some(Guidance { rules: true, hint: true });
     let hanzi = resources.hanzi.clone();
     let pdfium = resources.pdfium.clone();
+    let search_dir = resources.search.clone();
     let start_board = match &demo {
         Some(name) => Some(demo_board(root.as_ref().context("--demo needs --root <checkout>")?, name)?),
         None => synthetic.map(synthetic_board),
@@ -6135,6 +6144,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     summarize_when_done,
                     forced_backend,
                     models,
+                    search_dir,
                     binaries,
                     download: None,
                     update: UpdateState::Idle,

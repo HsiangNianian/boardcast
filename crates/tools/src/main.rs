@@ -2,7 +2,7 @@
 //!   check <root> (--all-demos | --demo <name> | --ops <file>) [--tidy]
 //!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [--deepseek | --llm <url>] [--skill | --rules-only | --hints-only]
 //!              [--only-dev | --only-holdout] [--only <id>] [--workers <n>]
-//!   fetch voice | pdfium [platform] | llama [platform] | glyphs
+//!   fetch voice | search | pdfium [platform] | llama [platform] | glyphs
 //!   pack-glyphs <assets/hanzi> <glyphs.pack> [--only-from <file>...]   Only the characters those files use.
 //!   download-model <id> <dir>
 //!   sign <file>...              Writes <file>.sig with the update key; see release.rs.

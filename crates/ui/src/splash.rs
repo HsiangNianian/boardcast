@@ -6,6 +6,7 @@ use crate::theme::pal;
 use boardcast_board::glyphs::{Glyphs, Pt};
 use boardcast_board::pen::{ink, line, outline, place, Inked, Rng};
 use gpui_kit::{canvas, div, point, prelude::*, px, rgb, Background, Bounds, Hsla, IntoElement, PathBuilder, Pixels, Window};
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 const WORD: &str = "boardcast";
@@ -31,6 +32,53 @@ pub fn word_strokes(glyphs: &mut Glyphs) -> Vec<Inked> {
     let under: Vec<Pt> = line([-width / 2.0 - 6.0, SIZE * 0.72], [width / 2.0 + 6.0, SIZE * 0.72], &mut r, 0.008);
     strokes.push(ink(&under, SIZE * 0.07, SIZE * 0.012, &mut r));
     strokes
+}
+
+/// The name as the pen wrote it, small and still, for the top of the sidebar: its outlines from (0, 0), and
+/// how much room they take.
+pub struct Wordmark {
+    shapes: Vec<Vec<Pt>>,
+    width: f32,
+    height: f32,
+}
+
+/// None when the pen has no letters to write it with; the caller sets the name in type instead.
+pub fn wordmark(glyphs: &mut Glyphs) -> Option<Rc<Wordmark>> {
+    let mut strokes = word_strokes(glyphs);
+    // The line under the name belongs to the splash.
+    strokes.pop();
+    let mut shapes: Vec<Vec<Pt>> = strokes.iter().map(|s| outline(s, 1.0)).filter(|shape| shape.len() > 2).collect();
+    let points = || shapes.iter().flatten();
+    let (x0, y0) = (points().map(|p| p[0]).reduce(f32::min)?, points().map(|p| p[1]).reduce(f32::min)?);
+    let (x1, y1) = (points().map(|p| p[0]).reduce(f32::max)?, points().map(|p| p[1]).reduce(f32::max)?);
+    shapes.iter_mut().flatten().for_each(|p| *p = [p[0] - x0, p[1] - y0]);
+    Some(Rc::new(Wordmark { shapes, width: x1 - x0, height: (y1 - y0).max(1.0) }))
+}
+
+/// The wordmark, `height` pixels tall.
+pub fn wordmark_element(mark: &Rc<Wordmark>, height: f32) -> impl IntoElement {
+    let k = height / mark.height;
+    let width = mark.width * k;
+    let mark = mark.clone();
+    canvas(
+        |_, _, _| (),
+        move |bounds: Bounds<Pixels>, (), window: &mut Window, _| {
+            let color: Hsla = rgb(pal().ink(INK)).into();
+            for shape in &mark.shapes {
+                let at = |p: &Pt| bounds.origin + point(px(p[0] * k), px(p[1] * k));
+                let mut pb = PathBuilder::fill();
+                pb.move_to(at(&shape[0]));
+                shape[1..].iter().for_each(|p| pb.line_to(at(p)));
+                pb.close();
+                if let Ok(path) = pb.build() {
+                    window.paint_path(path, Background::from(color));
+                }
+            }
+        },
+    )
+    .w(px(width))
+    .h(px(height))
+    .flex_none()
 }
 
 pub fn splash(strokes: &[Inked], started: Instant, window: &mut Window) -> impl IntoElement {

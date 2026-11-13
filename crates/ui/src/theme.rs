@@ -14,6 +14,8 @@ pub struct Palette {
     pub paper: u32,
     /// What floats over the board, a touch apart from the paper under it.
     pub surface: u32,
+    /// The sidebar: the app around the meeting, a shade away from the meeting itself.
+    pub chrome: u32,
     pub line: u32,
     hover: u32,
     pub selected: u32,
@@ -38,6 +40,7 @@ pub struct Palette {
 const LIGHT: Palette = Palette {
     paper: PAPER,
     surface: 0xff_ff_ff,
+    chrome: 0xf3_f3_f1,
     line: 0xe2_e2_e2,
     hover: 0xf2_f2_f2,
     selected: 0xec_ec_ec,
@@ -60,6 +63,7 @@ const LIGHT: Palette = Palette {
 const DARK: Palette = Palette {
     paper: 0x07_07_07,
     surface: 0x00_00_00,
+    chrome: 0x0e_0e_0e,
     line: 0x26_26_26,
     hover: 0x14_14_14,
     selected: 0x1f_1f_1f,
@@ -117,7 +121,7 @@ gpui_kit_assets::icon_assets!(ExtraIcons, [FileDown, FilePlus, Import, Lasso, Pe
 
 /// The website's pictograms, built from blocks and lines, in place of the toolkit's icons of the same name.
 /// Holes are cut with even-odd fills, since an icon is drawn as one shape in the text's color.
-const PICTOGRAMS: [(&str, &str); 21] = [
+const PICTOGRAMS: [(&str, &str); 29] = [
     ("icons/chevron-left.svg", include_str!("../icons/chevron-left.svg")),
     ("icons/chevron-right.svg", include_str!("../icons/chevron-right.svg")),
     ("icons/copy.svg", include_str!("../icons/copy.svg")),
@@ -126,11 +130,19 @@ const PICTOGRAMS: [(&str, &str); 21] = [
     ("icons/folder-open.svg", include_str!("../icons/folder-open.svg")),
     ("icons/import.svg", include_str!("../icons/import.svg")),
     ("icons/lasso.svg", include_str!("../icons/lasso.svg")),
+    ("icons/map.svg", include_str!("../icons/map.svg")),
+    ("icons/minus.svg", include_str!("../icons/minus.svg")),
+    ("icons/panel-left-close.svg", include_str!("../icons/panel-left-close.svg")),
+    ("icons/panel-left-open.svg", include_str!("../icons/panel-left-open.svg")),
     ("icons/panel-right-close.svg", include_str!("../icons/panel-right-close.svg")),
     ("icons/panel-right-open.svg", include_str!("../icons/panel-right-open.svg")),
+    ("icons/pause.svg", include_str!("../icons/pause.svg")),
     ("icons/pencil.svg", include_str!("../icons/pencil.svg")),
+    ("icons/play.svg", include_str!("../icons/play.svg")),
+    ("icons/plus.svg", include_str!("../icons/plus.svg")),
     ("icons/redo-2.svg", include_str!("../icons/redo-2.svg")),
     ("icons/rotate-ccw.svg", include_str!("../icons/rotate-ccw.svg")),
+    ("icons/search.svg", include_str!("../icons/search.svg")),
     ("icons/settings.svg", include_str!("../icons/settings.svg")),
     ("icons/sparkles.svg", include_str!("../icons/sparkles.svg")),
     ("icons/star.svg", include_str!("../icons/star.svg")),

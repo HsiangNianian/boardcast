@@ -4,7 +4,7 @@
 //! For development, with a checkout as <root>:
 //!   boardcast --root <root> [--case <id>] [--wav <path>] [--exit-when-done] [--demo <name>]
 //!             [--synthetic <chars>] [--zoom-test] [--zoom <k>]
-//!             [--panel library|summary|export|import|speakers|settings]
+//!             [--panel library|summary|export|import|speakers|settings] [--replay]
 //!   boardcast bench <root> <stroke|merged:N|raster> <speed> <targets,..> [marks]
 
 // No console window behind the app on Windows; the command-line flags attach to the one they were run from.

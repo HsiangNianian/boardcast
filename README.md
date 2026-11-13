@@ -118,7 +118,6 @@ The app bundles llama.cpp's `llama-server` and runs it for you: Vulkan on Linux 
 |---|---|---|
 | **Qwen3.5-4B · Q4_K_M** | about 2.7 GB | The default; works on laptops and integrated graphics. |
 | **Qwen3.5-9B · Q4_K_M** | about 5.7 GB | Larger; 6 GB of graphics memory or more is recommended. |
-| **MiniCPM5-2B**, **MiniCPM5-1B**, **MiniCPM-V 4.7 1B** | smaller | For lighter machines; the app notes each one's limits beside it. |
 
 Downloads can be paused and resumed, check free space and verify SHA-256, trying ModelScope, hf-mirror and Hugging Face in turn. The first start compiles shaders for your graphics card, which takes about half a minute, once.
 

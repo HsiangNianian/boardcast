@@ -53,22 +53,8 @@ fn sources(modelscope: &str, huggingface: &str) -> Vec<Source> {
     ]
 }
 
-fn minicpm(id: &'static str, label: &'static str, repo: &str, file: &str, size: u64, sha256: &str, note: (&'static str, &'static str)) -> Model {
-    Model {
-        id,
-        label,
-        file: file.to_string(),
-        size,
-        sha256: sha256.to_string(),
-        vram_mib: 0,
-        note: Some(note),
-        sources: sources(&format!("OpenBMB/{repo}/resolve/master/{file}"), &format!("openbmb/{repo}/resolve/main/{file}")),
-    }
-}
-
 /// The best boards first, as the first one present is used when none was chosen; among those without a
 /// caveat, smallest first. Qwen's files and hashes are the older app's, so a model it downloaded is reused.
-/// The notes follow the evaluation in `crates/README.md`.
 pub fn catalog() -> Vec<Model> {
     vec![
         Model {
@@ -91,33 +77,6 @@ pub fn catalog() -> Vec<Model> {
             note: None,
             sources: sources("unsloth/Qwen3.5-9B-GGUF/resolve/master/Qwen3.5-9B-Q4_K_M.gguf", "unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf"),
         },
-        minicpm(
-            "minicpm5-2b",
-            "MiniCPM5-2B",
-            "MiniCPM5-2B-GGUF",
-            "MiniCPM5-2B-Q4_K_M.gguf",
-            1_561_318_368,
-            "ec2d5801640099e97d8d7e8003ad4d81f336e757811f03a26173dddf386602fd",
-            ("Smaller and faster, but its boards miss more of what was said.", "更小更快，但板书会漏掉更多内容。"),
-        ),
-        minicpm(
-            "minicpm-v-4.7-1b",
-            "MiniCPM-V 4.7 1B",
-            "MiniCPM-V-4.7-1B-gguf",
-            "MiniCPM-V-4_7-1B-Q4_K_M.gguf",
-            672_003_680,
-            "f18f594747e5317ab490cff9c06339c9cfb89acbe2f02ebc48a4e167bc23576d",
-            ("Draws boards poorly. It can read images with its add-on.", "板书效果较差。配上看图组件可以读图。"),
-        ),
-        minicpm(
-            "minicpm5-1b",
-            "MiniCPM5-1B",
-            "MiniCPM5-1B-GGUF",
-            "MiniCPM5-1B-Q4_K_M.gguf",
-            688_065_920,
-            "81b64d05a23b17b34c475f42b3e72fbde62d4b92cc34541f7a8031d0752deafa",
-            ("Very fast, but draws boards poorly and loses most points.", "速度很快，但板书效果较差，大部分要点会丢失。"),
-        ),
     ]
 }
 
@@ -145,9 +104,6 @@ pub fn vision_for(model_file: &str) -> Option<Model> {
         Some(add_on("qwen3.5-4b-vision", "Vision add-on · Qwen3.5-4B", "Qwen3.5-4B-mmproj-F16.gguf", 672_423_616, "cd88edcf8d031894960bb0c9c5b9b7e1fea6ebee02b9f7ce925a00d12891f864", unsloth("unsloth/Qwen3.5-4B-GGUF")))
     } else if model_file.starts_with("Qwen3.5-9B") {
         Some(add_on("qwen3.5-9b-vision", "Vision add-on · Qwen3.5-9B", "Qwen3.5-9B-mmproj-F16.gguf", 918_166_080, "f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f", unsloth("unsloth/Qwen3.5-9B-GGUF")))
-    } else if model_file.starts_with("MiniCPM-V-4_7-1B") {
-        let source = sources("OpenBMB/MiniCPM-V-4.7-1B-gguf/resolve/master/mmproj-model-f16.gguf", "openbmb/MiniCPM-V-4.7-1B-gguf/resolve/main/mmproj-model-f16.gguf");
-        Some(add_on("minicpm-v-4.7-1b-vision", "Vision add-on · MiniCPM-V 4.7 1B", "MiniCPM-V-4_7-1B-mmproj-f16.gguf", 1_110_117_984, "fb9cc047a3cdad5317fd8433a4aeda2d22f00f02ca4bd93b34ad84165b25a900", source))
     } else {
         None
     }
@@ -178,7 +134,9 @@ pub fn installed(model: &Model, dir: &Path) -> bool {
 /// The file the user chose, or else the first one present.
 pub fn current(dir: &Path) -> Option<PathBuf> {
     let chosen = fs::read_to_string(dir.join(SELECTED)).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-    if let Some(path) = chosen.map(|file| dir.join(file)).filter(|p| p.is_file()) {
+    // A choice since taken out of the catalog falls back to what is in it, as if nothing had been chosen.
+    let listed = |file: &String| catalog().iter().any(|m| &m.file == file);
+    if let Some(path) = chosen.filter(listed).map(|file| dir.join(file)).filter(|p| p.is_file()) {
         return Some(path);
     }
     catalog().iter().find(|m| installed(m, dir)).map(|m| dir.join(&m.file))
@@ -575,27 +533,14 @@ mod tests {
     }
 
     #[test]
-    fn qwen_stays_the_default_when_a_small_model_is_also_there() {
+    fn a_choice_no_longer_listed_falls_back_to_the_catalog() {
         let dir = Dir::new();
         let models = catalog();
-        let small = models.iter().find(|m| m.id == "minicpm5-1b").unwrap();
-        fs::write(dir.0.join(&small.file), b"x").unwrap();
-        assert_eq!(current(&dir.0), Some(dir.0.join(&small.file)));
-        fs::write(dir.0.join(&models[0].file), b"x").unwrap();
-        assert_eq!(current(&dir.0), Some(dir.0.join(&models[0].file)));
-        select(small, &dir.0).unwrap();
-        assert_eq!(current(&dir.0), Some(dir.0.join(&small.file)));
-    }
-
-    #[test]
-    fn a_model_with_a_caveat_can_be_chosen_but_is_not_recommended() {
-        let models = catalog();
-        for id in ["minicpm5-1b", "minicpm5-2b", "minicpm-v-4.7-1b"] {
-            assert!(models.iter().find(|m| m.id == id).unwrap().note.is_some(), "{id}");
-        }
-        for vram in [0, 2048, 4096, 8192, 65536] {
-            assert!(recommended(vram).starts_with("qwen"), "{vram}");
-        }
+        fs::write(dir.0.join("Retired-1B-Q4_K_M.gguf"), b"x").unwrap();
+        fs::write(dir.0.join(SELECTED), "Retired-1B-Q4_K_M.gguf").unwrap();
+        assert_eq!(current(&dir.0), None);
+        fs::write(dir.0.join(&models[1].file), b"x").unwrap();
+        assert_eq!(current(&dir.0), Some(dir.0.join(&models[1].file)));
     }
 
     #[test]
@@ -608,8 +553,7 @@ mod tests {
     #[test]
     fn only_models_that_can_see_have_a_vision_add_on() {
         let has = |id: &str| vision_for(&catalog().into_iter().find(|m| m.id == id).unwrap().file).is_some();
-        assert!(has("qwen3.5-4b") && has("qwen3.5-9b") && has("minicpm-v-4.7-1b"));
-        assert!(!has("minicpm5-1b") && !has("minicpm5-2b"));
+        assert!(catalog().iter().all(|m| has(m.id)));
     }
 
     #[test]

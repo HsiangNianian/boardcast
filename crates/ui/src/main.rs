@@ -16,6 +16,7 @@ mod i18n;
 mod pipeline;
 mod raster;
 mod resources;
+mod shortcuts;
 mod splash;
 mod theme;
 

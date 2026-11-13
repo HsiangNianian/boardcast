@@ -1323,12 +1323,14 @@ mod tests {
         // Joined up: thinner, the letters' own strokes and the joins between them.
         assert!(messy.iter().all(|l| l.width < neat[0].width));
         assert!(messy.len() > neat.len() - 1);
-        // Chinese strokes are threaded together now and then.
+        // Chinese strokes are threaded together now and then. A character of four strokes, each starting
+        // near where the last one ended, stands in for the stroke data, which CI does not fetch.
+        glyphs.add_hanzi('之', vec![vec![[0.2, 0.2], [0.5, 0.3]], vec![[0.55, 0.35], [0.3, 0.5]], vec![[0.3, 0.55], [0.7, 0.6]], vec![[0.7, 0.65], [0.4, 0.8]]]);
         let thin = |lines: &[Line]| lines.iter().filter(|l| l.width < pen_for(40.0) * WEIGHT * 0.5).count();
         glyphs.set_messy(0.0);
-        assert_eq!(thin(&handwriting(&mut glyphs, "播种直播", 0.0, 0.0, 40.0, "z")), 0);
+        assert_eq!(thin(&handwriting(&mut glyphs, "之之之", 0.0, 0.0, 40.0, "z")), 0);
         glyphs.set_messy(1.0);
-        assert!(thin(&handwriting(&mut glyphs, "播种直播", 0.0, 0.0, 40.0, "z")) > 0);
+        assert!(thin(&handwriting(&mut glyphs, "之之之", 0.0, 0.0, 40.0, "z")) > 0);
     }
 
     #[test]

@@ -115,6 +115,12 @@ impl Glyphs {
     }
 
     /// Characters without data return `None`; the caller leaves a blank advance.
+    /// A Chinese character's strokes, as a test gives them: CI does not fetch the stroke data.
+    #[cfg(test)]
+    pub(crate) fn add_hanzi(&mut self, ch: char, strokes: Vec<Stroke>) {
+        self.hanzi.insert(ch, Some(Arc::new(Glyph { strokes, advance: 1.0, latin: false })));
+    }
+
     pub fn get(&mut self, ch: char) -> Option<Arc<Glyph>> {
         if let Some(g) = self.punct.get(&ch).or_else(|| self.kana.get(&ch)) {
             return Some(g.clone());

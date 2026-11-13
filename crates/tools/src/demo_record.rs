@@ -2,16 +2,16 @@
 //! to the board model the app uses, and each reply is kept with how long it took and when the line is
 //! heard in the recording.
 //!
-//!   demo-record <root> <sample-id> <out.json> (--deepseek | --llm <url>) --title <tab> --name <description>
+//!   demo-record <root> <sample-id> <out.json> <model> --title <tab> --name <description>
 //!               --audio <file in landing/public/media> --credit <who made the recording>
 //!
 //! The sample is one of the speech evaluation's (eval/asr/meetings.json or corpus.json). Speakers are named
 //! A, B, C… in the order they first speak. A turn longer than ten seconds is cut at its sentence ends, as the
-//! app would hear it in pieces, each timed by its length. `--deepseek` reads DEEPSEEK_API_KEY and never
-//! writes it.
+//! app would hear it in pieces, each timed by its length. `<model>` is chosen as in every tool
+//! (model_flags.rs), and no key is ever written.
 
 use anyhow::{bail, Context, Result};
-use boardcast_agent::{propose, Provider, CONTEXT_LINES};
+use boardcast_agent::{propose, CONTEXT_LINES};
 use boardcast_board::graph::{parse_ops, Graph, Utterance};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -60,12 +60,14 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let root = PathBuf::from(args.next().context("boardcast root")?);
     let id = args.next().context("sample id")?;
     let out = PathBuf::from(args.next().context("output .json")?);
-    let (mut provider, mut title, mut name, mut audio, mut credit) = (None, None, None, None, None);
+    let mut model = crate::model_flags::ModelFlags::default();
+    let (mut title, mut name, mut audio, mut credit) = (None, None, None, None);
     while let Some(flag) = args.next() {
+        if model.take(&flag, &mut args)? {
+            continue;
+        }
         let mut value = || args.next().with_context(|| format!("a value for {flag}"));
         match flag.as_str() {
-            "--deepseek" => provider = Some(Provider::deepseek_from_env()?),
-            "--llm" => provider = Some(Provider::Local { base: value()? }),
             "--title" => title = Some(value()?),
             "--name" => name = Some(value()?),
             "--audio" => audio = Some(value()?),
@@ -73,7 +75,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             other => bail!("unknown flag {other}"),
         }
     }
-    let provider = provider.context("--deepseek or --llm <url>")?;
+    let (provider, _) = model.chosen()?.context("a model: --deepseek, --remote <url> --model <name>, --saved or --llm <url>")?;
     let s = sample(&root, &id)?;
     let mut letters: HashMap<String, String> = HashMap::new();
     let mut lines = vec![];

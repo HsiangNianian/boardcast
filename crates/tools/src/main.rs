@@ -1,6 +1,6 @@
 //! Board tooling with no window, for CI and model evaluation.
 //!   check <root> (--all-demos | --demo <name> | --ops <file>) [--tidy]
-//!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [--deepseek | --llm <url>] [--skill | --rules-only | --hints-only]
+//!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [<model>] [--skill | --rules-only | --hints-only]
 //!              [--only-dev | --only-holdout] [--only <id>] [--workers <n>]
 //!   fetch voice | search | pdfium [platform] | llama [platform] | glyphs
 //!   pack-glyphs <assets/hanzi> <glyphs.pack> [--only-from <file>...]   Only the characters those files use.
@@ -11,7 +11,8 @@
 //!   meetings-check <data-dir>   Rewrites every meeting into <data-dir>'s v2 folder; use on a copy.
 //!   search-eval <root> <model.gguf> <gemma|qwen3> [--out <report.json>]   Meeting search on eval/search/queries.json.
 //!   ink-sample <root> <out.png> [--size <px>] [--messy <0..1>]... <text>...   A sheet of the board's handwriting.
-//!   demo-record <root> <sample-id> <out.json> (--deepseek | --llm <url>) --title … --name … --audio … --credit …
+//!   demo-record <root> <sample-id> <out.json> <model> --title … --name … --audio … --credit …
+//!   <model> is --llm <url> | --deepseek | --remote <url> --model <name> | --saved; see model_flags.rs.
 
 mod agent_eval;
 mod check;
@@ -25,6 +26,7 @@ mod score;
 mod search_eval;
 mod summary_eval;
 mod meetings;
+mod model_flags;
 mod voice_files;
 
 use anyhow::{bail, Context, Result};

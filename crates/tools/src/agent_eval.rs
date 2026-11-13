@@ -2,11 +2,13 @@
 //! board against its answer. It replaces eval/run.ts, which measured the earlier app's TypeScript engine.
 //!
 //!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [--only id,id]
-//!                [--llm <url> | --deepseek] [--skill | --rules-only | --hints-only] [--workers N]
+//!                [<model>] [--skill | --rules-only | --hints-only] [--workers N]
 //!
 //! The output file keeps each case's final board and what the layout checker found. A Markdown report goes to
 //! eval/reports/ and, in GitHub Actions, the job summary. A failed request fails the run, since a case it
-//! breaks scores like a bad answer. `--deepseek` reads its key from DEEPSEEK_API_KEY and never writes it.
+//! breaks scores like a bad answer. `<model>` is the same in every tool (model_flags.rs): `--llm <url>`,
+//! `--deepseek`, `--remote <url> --model <name>` or `--saved`; without one, the app's llama-server port. A run is
+//! named after its model unless `--label` names it; no key is ever written.
 
 use crate::score::{f1, score, Gold};
 use anyhow::{bail, Context, Result};
@@ -91,6 +93,8 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
     let mut hint: Option<String> = None;
     let (mut hard_steps, mut hints_sent, mut soft_total, mut empty, mut errors) = (0, 0, 0, 0, 0);
     let (mut latencies, mut tokens_out, mut log) = (vec![], vec![], String::new());
+    // Input tokens, and how many of them the service had cached, for what a run costs.
+    let (mut tokens_in, mut tokens_cached) = (0_u64, 0_u64);
     let (mut prompt_read, mut prompt_ms, mut predicted_ms) = (vec![], vec![], vec![]);
     for turn in &case.turns {
         let next = turn.utterance();
@@ -102,6 +106,8 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
             Ok(reply) => {
                 latencies.push(reply.ms);
                 tokens_out.push(reply.tokens_out);
+                tokens_in += reply.tokens_in;
+                tokens_cached += reply.tokens_cached;
                 prompt_read.extend(reply.prompt_read);
                 prompt_ms.extend(reply.prompt_ms.map(|ms| ms.round() as u64));
                 predicted_ms.extend(reply.predicted_ms.map(|ms| ms.round() as u64));
@@ -161,6 +167,8 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
         "hints_sent": hints_sent,
         "model_ms": latencies.iter().sum::<u128>(),
         "turns": case.turns.len(),
+        "tokens_in": tokens_in,
+        "tokens_cached": tokens_cached,
         "tokens_out": tokens_out.iter().sum::<u64>(),
         "empty_replies": empty,
         "errors": errors,
@@ -194,9 +202,12 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let root = PathBuf::from(args.next().context("boardcast root")?);
     let output = args.next().context("output file")?;
     let mut guidance = Guidance::default();
-    let mut provider = Provider::Local { base: "http://127.0.0.1:18765".into() };
-    let (mut set, mut only, mut workers, mut repeat, mut label) = ("all".to_string(), None::<String>, 1, 1, "local".to_string());
+    let mut model = crate::model_flags::ModelFlags::default();
+    let (mut set, mut only, mut workers, mut repeat, mut label) = ("all".to_string(), None::<String>, 1, 1, None::<String>);
     while let Some(flag) = args.next() {
+        if model.take(&flag, &mut args)? {
+            continue;
+        }
         match flag.as_str() {
             "--skill" => (guidance.rules, guidance.hint) = (true, true),
             "--rules-only" => guidance.rules = true,
@@ -207,12 +218,13 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--only" => only = args.next(),
             "--workers" => workers = args.next().context("count")?.parse()?,
             "--repeat" => repeat = args.next().context("count")?.parse::<usize>()?.max(1),
-            "--label" => label = args.next().context("label")?,
-            "--llm" => provider = Provider::Local { base: args.next().context("url")? },
-            "--deepseek" => provider = Provider::deepseek_from_env()?,
+            "--label" => label = Some(args.next().context("label")?),
             other => bail!("unknown flag {other}"),
         }
     }
+    // A run is named after its model unless the caller names it.
+    let (provider, named) = model.or_local()?;
+    let label = label.unwrap_or(named);
     let Some((_, files)) = SETS.iter().find(|(name, _)| *name == set) else {
         bail!("--set is one of {}", SETS.map(|(n, _)| n).join(", "));
     };

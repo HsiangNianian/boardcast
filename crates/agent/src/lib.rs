@@ -206,6 +206,9 @@ pub struct Reply {
     pub ops: String,
     pub ms: u128,
     pub tokens_in: u64,
+    /// How many of `tokens_in` the service served from its prompt cache, which it bills for less. DeepSeek
+    /// names them `prompt_cache_hit_tokens`, OpenAI-style services `prompt_tokens_details.cached_tokens`.
+    pub tokens_cached: u64,
     pub tokens_out: u64,
     /// What llama-server reports: the prompt tokens it actually read, after its prefix cache, and how long
     /// reading and writing took. Remote services leave these out.
@@ -245,6 +248,7 @@ pub fn propose_with(provider: &Provider, graph: &Graph, recent: &[Utterance], ne
         ops: strip_thinking(message(&reply)?).to_string(),
         ms: started.elapsed().as_millis(),
         tokens_in: reply["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
+        tokens_cached: reply["usage"]["prompt_cache_hit_tokens"].as_u64().or_else(|| reply["usage"]["prompt_tokens_details"]["cached_tokens"].as_u64()).unwrap_or(0),
         tokens_out: reply["usage"]["completion_tokens"].as_u64().unwrap_or(0),
         prompt_read: reply["timings"]["prompt_n"].as_u64(),
         prompt_ms: reply["timings"]["prompt_ms"].as_f64(),

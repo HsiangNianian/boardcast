@@ -2,14 +2,13 @@
 //! a guess stays an open question, an answered question leaves them, a withdrawn plan is no decision, a
 //! lettered speaker owns nothing (#68). Checks are words that must or must not appear in named sections.
 //!
-//!   summary-eval <root> [--llm <url> | --deepseek] [--repeat N] [--only id,id]
+//!   summary-eval <root> [<model>] [--repeat N] [--only id,id]
 //!
-//! `--deepseek` reads its key from DEEPSEEK_API_KEY and never writes it. A report goes to
+//! `<model>` is chosen as in every tool (model_flags.rs), and no key is ever written. A report goes to
 //! eval/reports/summary.md.
 
 use anyhow::{bail, Context, Result};
 use boardcast_agent::summary::{summarize, Line};
-use boardcast_agent::Provider;
 use serde::Deserialize;
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -72,17 +71,19 @@ fn failures(summary: &str, checks: &[Check]) -> Vec<String> {
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let root = PathBuf::from(args.next().context("boardcast root")?);
-    let mut provider = Provider::Local { base: "http://127.0.0.1:18765".into() };
-    let (mut repeat, mut only, mut label) = (1, None::<String>, "local".to_string());
+    let mut model = crate::model_flags::ModelFlags::default();
+    let (mut repeat, mut only) = (1, None::<String>);
     while let Some(flag) = args.next() {
+        if model.take(&flag, &mut args)? {
+            continue;
+        }
         match flag.as_str() {
-            "--llm" => provider = Provider::Local { base: args.next().context("url")? },
-            "--deepseek" => (provider, label) = (Provider::deepseek_from_env()?, "deepseek".into()),
             "--repeat" => repeat = args.next().context("count")?.parse::<usize>()?.max(1),
             "--only" => only = args.next(),
             other => bail!("unknown flag {other}"),
         }
     }
+    let (provider, label) = model.or_local()?;
     let mut cases: Vec<Case> = serde_json::from_slice(&std::fs::read(root.join("eval/summary-cases.json"))?).context("reading eval/summary-cases.json")?;
     cases.retain(|c| only.as_ref().is_none_or(|ids| ids.split(',').any(|id| id == c.id)));
     if cases.is_empty() {

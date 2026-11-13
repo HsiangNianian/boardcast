@@ -6010,9 +6010,7 @@ impl Render for Workbench {
                                 this.transcript_open = true;
                                 cx.notify();
                             }))
-                    }))
-                    .child(div().flex_1())
-                    .child(icon_button("close-panel", "x", tr("Put the panel away", "收起面板")).on_click(cx.listener(|this, _, _, cx| this.toggle_side(cx)))),
+                    })),
             )
             .when(side_panel == Panel::Transcript, |d| {
                 d.child(transcript).when(editable, |d| {
@@ -6130,11 +6128,7 @@ impl Render for Workbench {
                                             .flex()
                                             .items_center()
                                             .gap_2()
-                                            .when(self.store.is_some() && !sidebar_shown, |d| d.child(Button::new("library-page-new").small().primary().label(tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx)))))
-                                            .child(icon_button("close-library", "x", tr("Close (Esc)", "关闭（Esc）")).on_click(cx.listener(|this, _, _, cx| {
-                                                this.panel = Panel::Transcript;
-                                                cx.notify();
-                                            }))),
+                                            .when(self.store.is_some() && !sidebar_shown, |d| d.child(Button::new("library-page-new").small().primary().label(tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))))),
                                     ),
                             )
                             .child(library),

@@ -1,9 +1,30 @@
 name: Eval
 
 on:
+  # A push or pull request runs only the evaluations what changed concerns (the changes job); these paths
+  # leave out what concerns neither. A schedule or a manual run runs whichever it asks for, as before.
   push:
     branches: [main]
+    paths: &paths
+      - 'crates/agent/**'
+      - 'crates/board/**'
+      - 'crates/tools/Cargo.toml'
+      - 'crates/tools/src/main.rs'
+      - 'crates/tools/src/agent_eval.rs'
+      - 'crates/tools/src/score.rs'
+      - 'crates/tools/src/voice_files.rs'
+      - 'crates/tools/src/fetch.rs'
+      - 'crates/asr-eval/**'
+      - 'crates/audio/**'
+      - 'assets/dictionaries/**'
+      - 'assets/glyphs/**'
+      - 'eval/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/eval.yml'
+      - '!**/README.md'
   pull_request:
+    paths: *paths
   schedule:
     - cron: '30 2 * * 1'
     - cron: '30 2 * * 4'
@@ -38,9 +59,57 @@ env:
   LABEL: ${{ inputs.label || 'qwen3.5-4b-q4km-cpu' }}
 
 jobs:
+  changes:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      board: ${{ steps.filter.outputs.board }}
+      asr: ${{ steps.filter.outputs.asr }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            # The board model's prompts and rules, the board it writes on and the text widths it lays out
+            # with, the evaluation and its cases.
+            board:
+              - 'crates/agent/**'
+              - 'crates/board/**'
+              - 'crates/tools/src/main.rs'
+              - 'crates/tools/src/agent_eval.rs'
+              - 'crates/tools/src/score.rs'
+              - 'crates/tools/Cargo.toml'
+              - 'assets/dictionaries/**'
+              - 'assets/glyphs/**'
+              - 'eval/*.json'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/eval.yml'
+              - '!**/README.md'
+            # Hearing: the audio crate, the speech models it is given, telling speakers apart, and the corpus.
+            asr:
+              - 'crates/asr-eval/**'
+              - 'crates/audio/**'
+              - 'crates/board/src/speakers.rs'
+              - 'crates/board/Cargo.toml'
+              - 'crates/tools/src/voice_files.rs'
+              - 'crates/tools/src/fetch.rs'
+              - 'eval/asr/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/eval.yml'
+              - '!**/README.md'
+
   board:
     name: text to board
-    if: github.event_name != 'schedule' && inputs.meeting_asr != true
+    needs: changes
+    # Not on a schedule, which is for hearing; on a push or pull request, only when it concerns the board.
+    if: ${{ !cancelled() && github.event_name != 'schedule' && inputs.meeting_asr != true && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.board == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -95,6 +164,8 @@ jobs:
 
   asr:
     name: ASR · ${{ matrix.engine }} · VAD ${{ matrix.vad }}
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.asr == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ (inputs.meeting_asr == true || github.event.schedule == '30 2 * * 4') && 180 || 60 }}
     strategy:
@@ -142,7 +213,8 @@ jobs:
   asr-comparison:
     name: ASR comparison
     needs: asr
-    if: always() && !cancelled()
+    # Also after some failed, to compare what there is; not when hearing was not evaluated at all.
+    if: ${{ !cancelled() && needs.asr.result != 'skipped' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5

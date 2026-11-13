@@ -3958,8 +3958,9 @@ impl Workbench {
                 .child(div().flex_1().min_w_0().child(label))
                 .when_some(aside, |d, aside| d.child(div().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(aside)))
         };
-        // A group of meetings opens and folds from its name. Folded, it says how many it holds; the meeting
-        // that is open stays in sight either way.
+        // A group of meetings opens and folds from its name, with a chevron that shows it can: down while it
+        // is open, right when folded, when it also says how many it holds. The meeting that is open stays in
+        // sight either way.
         let folded = |group: &str| self.form.saved.folded_groups.iter().any(|g| g == group);
         let group_label = |group: &'static str, text: &'static str, count: usize| {
             let shut = self.form.saved.folded_groups.iter().any(|g| g == group);
@@ -3978,7 +3979,8 @@ impl Workbench {
                 .text_color(rgb(pal().faint))
                 .hover(|d| d.text_color(rgb(pal().text)))
                 .child(text)
-                .when(shut, |d| d.child(format!("· {count}")).child(icon("chevron-right").size(px(10.))))
+                .when(shut, |d| d.child(format!("· {count}")))
+                .child(icon(if shut { "chevron-right" } else { "chevron-down" }).size(px(10.)))
                 .tooltip(move |window, cx| Tooltip::new(if shut { tr("Show these meetings", "展开这些会议") } else { tr("Fold these meetings away", "收起这些会议") }).build(window, cx))
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_group(group, cx)))
                 .into_any_element()

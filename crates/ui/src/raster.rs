@@ -60,8 +60,8 @@ impl Layer {
         let pad = 1.0 / scale;
         for ty in tile_of(area.top() - pad)..=tile_of(area.bottom() + pad) {
             for tx in tile_of(area.left() - pad)..=tile_of(area.right() + pad) {
-                let Some(pixels) = Pixmap::new(TILE as u32, TILE as u32) else { continue };
-                let tile = self.tiles.entry((tx, ty)).or_insert(Tile { pixels, image: None, dirty: false });
+                // Made only for a tile nothing has touched yet: most strokes land on one that is there.
+                let tile = self.tiles.entry((tx, ty)).or_insert_with(|| Tile { pixels: Pixmap::new(TILE as u32, TILE as u32).expect("a tile has a size"), image: None, dirty: false });
                 let at = Transform::from_row(scale, 0.0, 0.0, scale, (-tx * TILE) as f32, (-ty * TILE) as f32);
                 tile.pixels.fill_path(&path, &paint, FillRule::Winding, at, None);
                 tile.dirty = true;

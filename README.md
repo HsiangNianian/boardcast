@@ -54,17 +54,17 @@ An installed copy looks for a new version shortly after starting. It installs in
 | **Talk and draw**: flows, topics, nested items, questions, formulas and notes share one board. | **Summarize**: collect conclusions, decisions and to-dos into a summary you can edit, tick off and copy. |
 | **Circle and refer**: circle things, then say "connect these two" or "star this", and the model knows what you mean. | **Replay and fork**: watch the board grow, seek, change speed, or start a new board from any recorded moment. |
 | **Correct the board**: select something to strike, circle, underline, star or highlight it, change its words or remove it. Undo and redo cover all of it. | **Trace who said what**: hover a speaker to see their part of the board; jump from an item to the line behind it. |
-| **Tell speakers apart** by voice and give them real names; the same voice keeps its name. | **Find a meeting** again in the meeting list and carry on where it stopped. |
+| **Tell speakers apart** by voice and give them real names; the same voice keeps its name. | **Find a meeting** again in the sidebar, or search all of them, and carry on where it stopped. |
 
 Boards are drawn stroke by stroke in Chinese, Japanese and English. Light mode uses whiteboard markers; when the system is dark, the board becomes a chalkboard. The interface is in English or Chinese, following the system or your choice in Settings; board labels and summaries follow the meeting's language.
 
 ### Circle and refer
 
-Click the lasso in the bottom bar, then drag around things on the board. Draw as many loops as you like; everything with its middle inside a loop is taken in, up to eight. The next line, spoken or typed, carries those targets to the model, and the circles go away. `Esc` or the lasso cancels. Circles never become part of the board or its exports.
+Click **Circle** in the tool bar under the board, then drag around things on the board. Draw as many loops as you like; everything with its middle inside a loop is taken in, up to eight. The next line, spoken or typed, carries those targets to the model, and the circles go away. `Esc` or the same button cancels. Circles never become part of the board or its exports.
 
 ### Discuss your source material
 
-Use **Import** or drop a file on the board:
+Use **Import** in the sidebar, or drop a file on the board:
 
 | Source | What you can do |
 |---|---|
@@ -100,10 +100,15 @@ Shortcuts work while the board has focus and leave text fields alone. On macOS, 
 |---|---|
 | `Space` | Start or stop listening |
 | `/` | Type a line |
-| `Esc` | Clear the circles or the selection, or close the panel |
+| `Esc` | Clear the circles or the selection, or close the page or dialog |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
 | `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / fit the board |
+| `M` | Show or close the map of the board |
 | `Ctrl+Shift+R` | Replay; then `Space` plays or pauses, `←` `→` step and `Esc` leaves |
+| `Ctrl+N` | New meeting |
+| `Ctrl+K` | Search meetings |
+| `Ctrl+B` | Show or hide the sidebar |
+| `Ctrl+,` | Settings |
 
 ## Models and privacy
 

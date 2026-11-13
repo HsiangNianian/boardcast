@@ -3328,6 +3328,21 @@ impl Workbench {
     }
 
     /// Bring the map of the board out or close it, and remember which.
+    /// Fold a group of meetings in the sidebar away, or open it again; the choice is kept across launches.
+    fn toggle_group(&mut self, group: &str, cx: &mut Context<Self>) {
+        let folded = &mut self.form.saved.folded_groups;
+        match folded.iter().position(|g| g == group) {
+            Some(at) => {
+                folded.remove(at);
+            }
+            None => folded.push(group.to_string()),
+        }
+        if let Err(e) = self.form.saved.save() {
+            self.form.note = Some(format!("{e:#}"));
+        }
+        cx.notify();
+    }
+
     fn toggle_map(&mut self, cx: &mut Context<Self>) {
         self.form.saved.minimap_hidden = !self.form.saved.minimap_hidden;
         if let Err(e) = self.form.saved.save() {
@@ -3451,6 +3466,7 @@ impl Workbench {
             sidebar_hidden: self.form.saved.sidebar_hidden,
             minimap_hidden: self.form.saved.minimap_hidden,
             minimap_at: self.form.saved.minimap_at,
+            folded_groups: self.form.saved.folded_groups.clone(),
         }
     }
 
@@ -3938,7 +3954,31 @@ impl Workbench {
                 .child(div().flex_1().min_w_0().child(label))
                 .when_some(aside, |d, aside| d.child(div().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(aside)))
         };
-        let label = |text: &'static str| div().flex_none().px_2().pt_4().pb_1().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(text);
+        // A group of meetings opens and folds from its name. Folded, it says how many it holds; the meeting
+        // that is open stays in sight either way.
+        let folded = |group: &str| self.form.saved.folded_groups.iter().any(|g| g == group);
+        let group_label = |group: &'static str, text: &'static str, count: usize| {
+            let shut = self.form.saved.folded_groups.iter().any(|g| g == group);
+            div()
+                .id(("side-group", ["pinned", "today", "yesterday", "earlier"].iter().position(|g| *g == group).unwrap_or(0)))
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap_1()
+                .px_2()
+                .pt_4()
+                .pb_1()
+                .cursor_pointer()
+                .font_family(theme::MONO)
+                .text_size(px(10.))
+                .text_color(rgb(pal().faint))
+                .hover(|d| d.text_color(rgb(pal().text)))
+                .child(text)
+                .when(shut, |d| d.child(format!("· {count}")).child(icon("chevron-right").size(px(10.))))
+                .tooltip(move |window, cx| Tooltip::new(if shut { tr("Show these meetings", "展开这些会议") } else { tr("Fold these meetings away", "收起这些会议") }).build(window, cx))
+                .on_click(cx.listener(move |this, _, _, cx| this.toggle_group(group, cx)))
+                .into_any_element()
+        };
         let current = self.live.id().to_string();
         let today = chrono::Local::now().date_naive();
         // How long ago a meeting was last touched: today, yesterday, or before.
@@ -3976,23 +4016,23 @@ impl Workbench {
                 .into_any_element()
         };
         if !pinned.is_empty() {
-            rows.push(label(tr("pinned", "置顶")).into_any_element());
-            for (i, m) in &pinned {
+            rows.push(group_label("pinned", tr("pinned", "置顶"), pinned.len()));
+            for (i, m) in pinned.iter().filter(|(_, m)| !folded("pinned") || m.id == current) {
                 rows.push(row(*i, m.id.clone(), if m.id == current { self.live.title().to_string() } else { m.title.clone() }));
             }
         }
-        let names = [tr("today", "今天"), tr("yesterday", "昨天"), tr("earlier", "更早")];
-        for (days, name) in names.into_iter().enumerate() {
+        let names = [("today", tr("today", "今天")), ("yesterday", tr("yesterday", "昨天")), ("earlier", tr("earlier", "更早"))];
+        for (days, (key, name)) in names.into_iter().enumerate() {
             let group: Vec<&(usize, &Info)> = recent.iter().filter(|(_, m)| age(m) == days as i64).collect();
             let first = days == 0 && unsaved;
             if group.is_empty() && !first {
                 continue;
             }
-            rows.push(label(name).into_any_element());
+            rows.push(group_label(key, name, group.len() + usize::from(first)));
             if first {
                 rows.push(row(usize::MAX, current.clone(), self.live.title().to_string()));
             }
-            for (i, m) in group {
+            for (i, m) in group.into_iter().filter(|(_, m)| !folded(key) || m.id == current) {
                 rows.push(row(*i, m.id.clone(), if m.id == current { self.live.title().to_string() } else { m.title.clone() }));
             }
         }

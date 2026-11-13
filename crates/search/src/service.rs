@@ -107,9 +107,21 @@ struct Worker {
     cache: HashMap<String, (SystemTime, Index)>,
 }
 
+/// Where a meeting's index is kept, under the app's data folder.
+fn index_path(folder: &Path, meeting: &str) -> PathBuf {
+    folder.join(format!("{meeting}.index"))
+}
+
+/// How many of these meetings have no index yet, as before the first search on this computer. The app
+/// says so while it builds them, as that takes a while; keeping indexes up to date afterwards does not.
+pub fn unindexed(data: &Path, meetings: &[String]) -> usize {
+    let folder = data.join("search");
+    meetings.iter().filter(|m| !index_path(&folder, m).is_file()).count()
+}
+
 impl Worker {
     fn path(&self, meeting: &str) -> PathBuf {
-        self.folder.join(format!("{meeting}.index"))
+        index_path(&self.folder, meeting)
     }
 
     fn embedder(&mut self) -> Result<&Embedder> {
@@ -324,6 +336,17 @@ pub fn start(data: &Path, model: PathBuf, spawn: Spawn) -> (Sender<Job>, Receive
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn meetings_without_an_index_are_counted() {
+        let data = std::env::temp_dir().join(format!("boardcast-unindexed-{}", std::process::id()));
+        let meetings = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        assert_eq!(unindexed(&data, &meetings), 3, "no search folder at all");
+        std::fs::create_dir_all(data.join("search")).unwrap();
+        std::fs::write(data.join("search/b.index"), b"").unwrap();
+        assert_eq!(unindexed(&data, &meetings), 2);
+        let _ = std::fs::remove_dir_all(&data);
+    }
 
     /// The whole round on a real model: index two meetings, then find one by what it means. Skipped where
     /// the model (eval/search/.models) or llama-server (resources/llama) is not there.

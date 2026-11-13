@@ -117,7 +117,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
 下载可以暂停和续传，会检查剩余空间并校验 SHA-256，依次尝试 ModelScope、hf-mirror 和 Hugging Face。第一次启动会为显卡编译着色器，大约半分钟，只需一次。
 
-- **会议搜索**：用自己的话提问，就能在所有会议里找到相关的那段。用的是 [EmbeddingGemma 300M](https://huggingface.co/google/embeddinggemma-300m)，每个安装包都自带，在本机运行，遵循 [Gemma 使用条款](https://ai.google.dev/gemma/terms)。在**设置 › 通用**里打开。
+- **会议搜索**：用自己的话提问，就能在所有会议里找到相关的那段。用的是 [EmbeddingGemma 300M](https://huggingface.co/google/embeddinggemma-300m)，每个安装包都自带，在本机运行，遵循 [Gemma 使用条款](https://ai.google.dev/gemma/terms)。默认打开，可以在**设置 › 通用**里关掉；第一次启动会给所有会议建索引，需要一些时间。
 - **默认本地**：音频在本机识别，会议也留在本机。不需要账号或 API key。
 - **按需远程**：在**远程模型**里填 OpenAI 兼容的地址、模型和 key，或者一键填写 DeepSeek，然后**测试连接**并**保存**。发给该服务的是每句话、说话人名字和板书文字，不发送音频。
 - **key 的保存**：key 存在设置目录的 `remote.json` 里，只有你自己能读，也不会写进日志。

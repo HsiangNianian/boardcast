@@ -33,6 +33,7 @@ use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::progress::Progress as ProgressBar;
 use gpui_kit::component::separator::Separator;
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState};
+use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tooltip::Tooltip;
@@ -937,6 +938,9 @@ struct MeetingSearch {
     events: Receiver<boardcast_search::service::Event>,
     /// Meetings looked at in the current round of indexing, of how many.
     indexing: Option<(usize, usize)>,
+    /// Most meetings had no index when search started, so this round builds them all and takes a while: the
+    /// board says so until it is done. With how many meetings there are.
+    building: Option<usize>,
     /// The query asked last, its ticket, and when it was typed, so a query waits for typing to pause.
     asked: String,
     typed_at: Option<Instant>,
@@ -2247,8 +2251,10 @@ impl Workbench {
         }));
         let (jobs, events) = boardcast_search::service::start(data, model, spawn);
         let all: Vec<String> = store.list().unwrap_or_default().into_iter().filter(|m| m.read_error.is_none()).map(|m| m.id).collect();
+        let missing = boardcast_search::service::unindexed(data, &all);
+        let building = (missing > 0 && missing * 2 >= all.len()).then_some(all.len());
         let _ = jobs.send(boardcast_search::service::Job::Index(all));
-        self.search = Some(MeetingSearch { jobs, events, indexing: None, asked: String::new(), typed_at: None, ticket: 0, asking: false, hits: vec![], saved: HashMap::new(), error: None });
+        self.search = Some(MeetingSearch { jobs, events, indexing: None, building, asked: String::new(), typed_at: None, ticket: 0, asking: false, hits: vec![], saved: HashMap::new(), error: None });
     }
 
     /// Turn meeting search on or off. On, it downloads its model first if the app came without it.
@@ -2284,7 +2290,12 @@ impl Workbench {
         while let Ok(event) = search.events.try_recv() {
             *changed = true;
             match event {
-                SearchEvent::Indexing { done, total } => search.indexing = (done < total).then_some((done, total)),
+                SearchEvent::Indexing { done, total } => {
+                    search.indexing = (done < total).then_some((done, total));
+                    if search.indexing.is_none() {
+                        search.building = None;
+                    }
+                }
                 SearchEvent::Indexed { .. } => {}
                 SearchEvent::Found { ticket, hits } => {
                     if ticket == search.ticket {
@@ -2295,6 +2306,7 @@ impl Workbench {
                 }
                 SearchEvent::Failed(error) => {
                     search.indexing = None;
+                    search.building = None;
                     search.asking = false;
                     search.error = Some(error);
                 }
@@ -2324,6 +2336,9 @@ impl Workbench {
         if let Some(download) = self.download.as_ref().filter(|d| d.id == model.id) {
             let share = download.progress.as_ref().map_or(0.0, |p| p.done as f64 / p.total.max(1) as f64);
             return Some((format!("{} {:.0}%", tr("Downloading the model", "正在下载模型"), share * 100.0), false));
+        }
+        if self.search.is_none() && self.embedding_file().is_none() {
+            return Some((tr("Its model is not here. Turn it off and on again to download it.", "模型不在这里。关掉再打开即可下载。").to_string(), true));
         }
         let search = self.search.as_ref()?;
         if let Some(error) = &search.error {
@@ -4795,6 +4810,8 @@ impl Render for Workbench {
                         d.child(div().mt_1().child(button(("retry-line", i), tr("Draw it again", "重新上板")).on_click(cx.listener(move |this, _, _, cx| this.retry_line(i, cx)))))
                     })
             }));
+        // Building every meeting's search index takes a while, so the board and the library say so until it is done.
+        let building = self.search.as_ref().and_then(|s| s.building.map(|total| s.indexing.unwrap_or((0, total))));
         let typed = self.library_query.read(cx).value().to_string();
         self.search_typed(&typed);
         let query = typed.trim().to_lowercase();
@@ -4810,6 +4827,19 @@ impl Render for Workbench {
             .flex_col()
             // A handful of meetings reads at a glance; past that, a search finds one.
             .when(self.library.len() > LIBRARY_SEARCH_FROM || self.search.is_some(), |d| d.child(div().pb_3().child(Input::new(&self.library_query).small().cleanable(true))))
+            .when_some(building, |d, (done, total)| {
+                d.child(
+                    div()
+                        .pb_3()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .text_xs()
+                        .text_color(rgb(pal().muted))
+                        .child(Spinner::new().xsmall().color(rgb(pal().muted).into()))
+                        .child(format!("{} {done} / {total}", tr("Building the search index. Until it is done, a search may miss some meetings.", "正在构建搜索索引，完成前可能搜不到部分会议。"))),
+                )
+            })
             .child(
                 div()
                     .id("library-list")
@@ -5689,7 +5719,7 @@ impl Render for Workbench {
             )
         });
         // Over the board, where a message can't be missed, and never on top of the controls.
-        let notices = (view_only.is_some() || banner.is_some()).then(|| {
+        let notices = (view_only.is_some() || banner.is_some() || building.is_some()).then(|| {
             div()
                 .absolute()
                 .top(px(36.))
@@ -5701,6 +5731,26 @@ impl Render for Workbench {
                 .gap_1()
                 .when_some(view_only, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().bg(rgb(pal().selected)).border_1().border_color(rgb(pal().line)).child(text)))
                 .when_some(banner, |d, text| d.child(div().occlude().max_w(px(560.)).px_3().py_1().rounded_lg().text_sm().text_color(rgb(pal().danger)).bg(rgb(pal().danger_soft)).border_1().border_color(rgb(pal().line)).child(text)))
+                .when_some(building, |d, (done, total)| {
+                    d.child(
+                        div()
+                            .occlude()
+                            .max_w(px(560.))
+                            .px_3()
+                            .py_1()
+                            .rounded_lg()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .text_sm()
+                            .bg(rgb(pal().surface))
+                            .border_1()
+                            .border_color(rgb(pal().line))
+                            .child(Spinner::new().small().color(rgb(pal().muted).into()))
+                            .child(tr("Building the search index for your meetings", "正在为会议构建搜索索引"))
+                            .child(div().text_xs().text_color(rgb(pal().faint)).child(format!("{done} / {total}"))),
+                    )
+                })
         });
         // The board with its corner label above and the dock attached below, and the side panel beside them.
         let canvas_area = div()

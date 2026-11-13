@@ -117,7 +117,7 @@ The app bundles llama.cpp's `llama-server` and runs it for you: Vulkan on Linux 
 
 Downloads can be paused and resumed, check free space and verify SHA-256, trying ModelScope, hf-mirror and Hugging Face in turn. The first start compiles shaders for your graphics card, which takes about half a minute, once.
 
-- **Meeting search** finds what was said in any meeting from a question in your own words. It uses [EmbeddingGemma 300M](https://huggingface.co/google/embeddinggemma-300m), which comes with every package and runs on your computer, under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms). Turn it on in **Settings › General**.
+- **Meeting search** finds what was said in any meeting from a question in your own words. It uses [EmbeddingGemma 300M](https://huggingface.co/google/embeddinggemma-300m), which comes with every package and runs on your computer, under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms). It is on unless you turn it off in **Settings › General**; the first start builds an index of every meeting, which takes a while.
 - **Local by default**: audio is recognized on your computer and meetings stay there. No account or API key is needed.
 - **Remote by choice**: under **Remote**, enter an OpenAI-compatible address, model and key, or fill in DeepSeek with one click, then **Test** and **Save**. Lines, speaker names and board text go to that service; audio does not.
 - **Key storage**: the key is kept in `remote.json` in the settings folder, readable only by you, and never logged.

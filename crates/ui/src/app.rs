@@ -6883,7 +6883,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     } else {
         backend_from(&settings, false, &binaries, &models)
     };
-    let guidance = skill.then_some(Guidance { rules: true, hint: true });
+    let guidance = skill.then_some(Guidance { rules: true, hint: true, ..Default::default() });
     let hanzi = resources.hanzi.clone();
     let pdfium = resources.pdfium.clone();
     let search_dir = resources.search.clone();

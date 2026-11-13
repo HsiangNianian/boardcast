@@ -172,6 +172,8 @@ BOARDCAST_API_KEY=… cargo run --release -p boardcast-tools -- agent-eval . boa
 cargo run --release -p boardcast-tools -- agent-eval . board.json --saved --set all --repeat 3 --workers 4
 ```
 
+The model is asked as the app asks it: a remote model with tool calls (one tool per board command, `crates/agent/src/tools.rs`), a local one with command lines held to a grammar. `--harness commands|tools|tools-check` asks it another way; `tools-check` also shows the model the board its calls drew and lets it correct them, for up to two more rounds.
+
 Each run also writes a `.json` summary beside its Markdown report in `eval/reports/`. `eval-report` draws one or more of them side by side as a page to print: scores, latency, cost (with `--price <label>=<hit>,<miss>,<out>` per 1M tokens), the trend over a folder of earlier reports (`--history`), and every case. The Eval workflow does this on every board change and puts `board-eval.pdf` in its `eval-report` artifact; with a `DEEPSEEK_API_KEY` secret it also runs DeepSeek on the same cases, for comparison and cost.
 
 ```sh

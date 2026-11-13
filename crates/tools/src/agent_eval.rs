@@ -27,6 +27,9 @@ use std::sync::Mutex;
 #[derive(Deserialize)]
 struct Case {
     id: String,
+    /// The set the case comes from: dev, holdout or pointing.
+    #[serde(skip)]
+    set: String,
     #[serde(default)]
     name: String,
     /// Where the meeting starts, for cases about a board already drawn; otherwise empty.
@@ -231,7 +234,15 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let mut cases: Vec<Case> = vec![];
     for file in *files {
         let text = std::fs::read(root.join("eval").join(file))?;
-        cases.extend(serde_json::from_slice::<Vec<Case>>(&text).with_context(|| format!("reading eval/{file}"))?);
+        let mut read: Vec<Case> = serde_json::from_slice(&text).with_context(|| format!("reading eval/{file}"))?;
+        let from = match *file {
+            "cases.json" => "dev",
+            "holdout.json" => "holdout",
+            "pointing.json" => "pointing",
+            other => other,
+        };
+        read.iter_mut().for_each(|c| c.set = from.to_string());
+        cases.extend(read);
     }
     cases.retain(|c| only.as_ref().is_none_or(|ids| ids.split(',').any(|id| id == c.id)));
     if cases.is_empty() {
@@ -282,6 +293,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     // Seconds since 1970: they sort, and never collide within a run.
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
     std::fs::write(dir.join(format!("{label}-{set}-{stamp}.md")), &report)?;
+    // The same run for `eval-report` to read, which draws runs side by side and over time.
+    std::fs::write(dir.join(format!("{label}-{set}-{stamp}.json")), serde_json::to_vec_pretty(&summary(&cases, &passes, &label, &set, stamp))?)?;
     if let Ok(summary) = std::env::var("GITHUB_STEP_SUMMARY") {
         use std::io::Write;
         std::fs::OpenOptions::new().append(true).create(true).open(summary)?.write_all(format!("{report}\n").as_bytes())?;
@@ -292,6 +305,58 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         bail!("{errors} requests failed, so these scores do not measure the model");
     }
     Ok(())
+}
+
+/// A run as data: each metric's mean in every pass, the latency and tokens, and every case's scores averaged
+/// over the passes, with how far they moved. Commit and date come from CI when it runs there.
+fn summary(cases: &[Case], passes: &[Vec<Run>], label: &str, set: &str, stamp: u64) -> Value {
+    let pass_mean = |pass: &[Run], k: usize| {
+        let xs: Vec<f64> = pass.iter().filter_map(|r| r.metrics[k]).collect();
+        (!xs.is_empty()).then(|| mean(&xs))
+    };
+    let headline: serde_json::Map<String, Value> = METRICS
+        .iter()
+        .enumerate()
+        .map(|(k, name)| {
+            let per: Vec<f64> = passes.iter().filter_map(|p| pass_mean(p, k)).collect();
+            let counted = passes[0].iter().filter(|r| r.metrics[k].is_some()).count();
+            (name.to_string(), json!({ "passes": per, "cases": counted }))
+        })
+        .collect();
+    let latencies: Vec<u128> = passes.iter().flatten().flat_map(|r| r.latencies.iter().copied()).collect();
+    let total = |key: &str| passes.iter().flatten().map(|r| r.row[key].as_u64().unwrap_or(0)).sum::<u64>();
+    let rows: Vec<Value> = cases
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            let mut scores = serde_json::Map::new();
+            let mut moved = 0.0_f64;
+            for (k, name) in METRICS.iter().enumerate() {
+                let xs: Vec<f64> = passes.iter().filter_map(|p| p[i].metrics[k]).collect();
+                if !xs.is_empty() {
+                    let (lo, hi) = xs.iter().fold((f64::MAX, f64::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+                    moved = moved.max(hi - lo);
+                    scores.insert(name.to_string(), json!(mean(&xs)));
+                }
+            }
+            let ms: Vec<u128> = passes.iter().flat_map(|p| p[i].latencies.iter().copied()).collect();
+            json!({ "id": c.id, "set": c.set, "name": c.name, "lines": c.turns.len(), "scores": scores, "moved": moved, "p50_ms": percentile(&ms, 50) })
+        })
+        .collect();
+    json!({
+        "label": label,
+        "set": set,
+        "passes": passes.len(),
+        "stamp": stamp,
+        "commit": std::env::var("GITHUB_SHA").ok(),
+        "metrics": headline,
+        "latency_ms": { "p50": percentile(&latencies, 50), "p95": percentile(&latencies, 95) },
+        "failed_requests": passes.iter().flatten().map(|r| r.errors).sum::<usize>(),
+        // Per pass: what one run over these cases reads and writes, for its cost.
+        "tokens": { "in": total("tokens_in") / passes.len() as u64, "cached": total("tokens_cached") / passes.len() as u64, "out": total("tokens_out") / passes.len() as u64 },
+        "lines": cases.iter().map(|c| c.turns.len()).sum::<usize>(),
+        "cases": rows,
+    })
 }
 
 fn report(cases: &[Case], passes: &[Vec<Run>], label: &str, set: &str) -> String {

@@ -4,18 +4,25 @@ name: Website
 # download sizes read from the latest release. Requires Settings → Pages → Source: GitHub Actions.
 
 on:
+  # Only when the site is built from what changed: its pages and code, the board the demo writes with and
+  # its strokes, the demo's recordings, and the version it shows.
   push:
     branches: [main]
-  # Pull requests only build it, so a broken site never reaches main.
-  pull_request:
-    paths:
+    paths: &paths
       - 'landing/**'
       - 'crates/site/**'
       - 'crates/site-gen/**'
       - 'crates/demo/**'
       - 'crates/board/**'
+      - 'assets/glyphs/**'
+      - 'assets/demos/**'
+      - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/pages.yml'
+      - '!**/README.md'
+  # Pull requests only build it, so a broken site never reaches main.
+  pull_request:
+    paths: *paths
   workflow_dispatch:
   # A new release changes the download sizes. Release publishes with GITHUB_TOKEN, which starts no
   # `release` event, so the site follows the workflow instead.

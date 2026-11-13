@@ -3,25 +3,96 @@ name: Rust
 on:
   push:
     branches: [main]
-    paths:
+    paths: &paths
       - 'crates/**'
+      - 'assets/**'
+      # The cases the crates' tests read.
+      - 'eval/follow-cases.json'
+      - 'eval/phonetic-cases.json'
+      - 'eval/summary-cases.json'
       - 'packaging/**'
+      - 'scripts/build-apple-speech.sh'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - 'assets/demos/**'
+      - 'LICENSE'
       - '.github/workflows/rust.yml'
+      # The website and the web demo, and documents, have their own workflow or none.
+      - '!crates/site/**'
+      - '!crates/site-gen/**'
+      - '!crates/demo/**'
+      - '!crates/asr-eval/**'
+      - '!**/README.md'
   pull_request:
-    paths:
-      - 'crates/**'
-      - 'packaging/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'assets/demos/**'
-      - '.github/workflows/rust.yml'
+    paths: *paths
+
+# A pull request pushed again stops the run for what it replaced; runs on main all finish.
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Which jobs what changed concerns: the crates' tests for the crates, and each platform's package for
+  # the app and that platform's packaging. The workflow's own paths leave out what concerns none.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      core: ${{ steps.filter.outputs.core }}
+      linux: ${{ steps.filter.outputs.linux }}
+      macos: ${{ steps.filter.outputs.macos }}
+      windows: ${{ steps.filter.outputs.windows }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            # What the app is built from. The evaluation crate and the website's are not part of it.
+            app: &app
+              - 'crates/**'
+              - 'assets/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/rust.yml'
+              - '!crates/site/**'
+              - '!crates/site-gen/**'
+              - '!crates/demo/**'
+              - '!crates/asr-eval/**'
+              - '!**/README.md'
+            # The crates the core job tests, and the cases their tests read; not the window or audio.
+            core:
+              - *app
+              - 'eval/follow-cases.json'
+              - 'eval/phonetic-cases.json'
+              - 'eval/summary-cases.json'
+              - '!crates/ui/**'
+              - '!crates/audio/**'
+            linux:
+              - *app
+              - 'LICENSE'
+              - 'packaging/models.sh'
+              - 'packaging/icons/**'
+              - 'packaging/linux/**'
+            macos:
+              - *app
+              - 'LICENSE'
+              - 'packaging/models.sh'
+              - 'packaging/icons/**'
+              - 'packaging/macos/**'
+              - 'scripts/build-apple-speech.sh'
+            windows:
+              - *app
+              - 'LICENSE'
+              - 'packaging/models.sh'
+              - 'packaging/windows/**'
+
   core:
     name: core crates
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +106,8 @@ jobs:
 
   package:
     name: linux package
+    needs: changes
+    if: needs.changes.outputs.linux == 'true'
     # An older base than developers use, so the package runs on more distributions.
     runs-on: ubuntu-22.04
     steps:
@@ -81,6 +154,8 @@ jobs:
 
   macos:
     name: macos package (${{ matrix.runner }})
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
     # No Mac is at hand during development, so this is what tells whether it builds and starts at all.
     strategy:
       fail-fast: false
@@ -125,6 +200,8 @@ jobs:
 
   windows:
     name: windows package
+    needs: changes
+    if: needs.changes.outputs.windows == 'true'
     # No Windows machine is at hand either; this is the first sign of whether it builds and starts.
     runs-on: windows-2022
     defaults:

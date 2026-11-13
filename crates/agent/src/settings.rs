@@ -45,11 +45,13 @@ pub struct Settings {
     /// Where the map was dragged to: whether it keeps to the board's right edge and to its bottom edge, and
     /// how far it is from those edges. None for where it starts, at the top right.
     pub minimap_at: Option<(bool, bool, f32, f32)>,
+    /// The sidebar's groups of meetings folded away, by name: pinned, today, yesterday, earlier.
+    pub folded_groups: Vec<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), interface_language: "auto".into(), appearance: "auto".into(), input: String::new(), meeting_search: true, messy: 0.0, sidebar_hidden: false, minimap_hidden: false, minimap_at: None }
+        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), interface_language: "auto".into(), appearance: "auto".into(), input: String::new(), meeting_search: true, messy: 0.0, sidebar_hidden: false, minimap_hidden: false, minimap_at: None, folded_groups: vec![] }
     }
 }
 
@@ -110,13 +112,14 @@ impl Settings {
                 let far = |key: &str| at[key].as_f64().filter(|d| d.is_finite() && *d >= 0.0).map(|d| d as f32);
                 Some((at["right"].as_bool()?, at["bottom"].as_bool()?, far("x")?, far("y")?))
             })(),
+            folded_groups: v["foldedGroups"].as_array().map(|a| a.iter().filter_map(|g| g.as_str().map(str::to_string)).collect()).unwrap_or_default(),
         }
     }
 
     pub fn save(&self) -> Result<()> {
         let dir = config_dir()?;
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "turnPages": self.turn_pages, "glossary": self.glossary, "templates": self.templates.iter().map(|(name, topics)| json!({ "name": name, "topics": topics })).collect::<Vec<_>>(), "systemSpeech": self.system_speech, "speechLanguage": self.speech_language, "interfaceLanguage": self.interface_language, "appearance": self.appearance, "input": self.input, "searchMeetings": self.meeting_search, "messy": self.messy, "sidebarHidden": self.sidebar_hidden, "minimapHidden": self.minimap_hidden, "minimapAt": self.minimap_at.map(|(right, bottom, x, y)| json!({ "right": right, "bottom": bottom, "x": x, "y": y })) }))?;
+        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "turnPages": self.turn_pages, "glossary": self.glossary, "templates": self.templates.iter().map(|(name, topics)| json!({ "name": name, "topics": topics })).collect::<Vec<_>>(), "systemSpeech": self.system_speech, "speechLanguage": self.speech_language, "interfaceLanguage": self.interface_language, "appearance": self.appearance, "input": self.input, "searchMeetings": self.meeting_search, "messy": self.messy, "sidebarHidden": self.sidebar_hidden, "minimapHidden": self.minimap_hidden, "minimapAt": self.minimap_at.map(|(right, bottom, x, y)| json!({ "right": right, "bottom": bottom, "x": x, "y": y })), "foldedGroups": self.folded_groups }))?;
         let tmp = dir.join("remote.json.tmp");
         // Private from the first byte: the key must never sit in a file others can read.
         let _ = fs::remove_file(&tmp);
@@ -183,7 +186,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("boardcast-settings-{}", std::process::id()));
         std::env::set_var("BOARDCAST_CONFIG", &dir);
-        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, turn_pages: true, glossary: "鉴权; API = A P I".into(), templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])], system_speech: true, speech_language: "ja-JP".into(), interface_language: "zh".into(), appearance: "dark".into(), input: "pulse:monitor".into(), meeting_search: false, messy: 0.25, sidebar_hidden: true, minimap_hidden: true, minimap_at: Some((false, true, 24.0, 80.5)) };
+        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, turn_pages: true, glossary: "鉴权; API = A P I".into(), templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])], system_speech: true, speech_language: "ja-JP".into(), interface_language: "zh".into(), appearance: "dark".into(), input: "pulse:monitor".into(), meeting_search: false, messy: 0.25, sidebar_hidden: true, minimap_hidden: true, minimap_at: Some((false, true, 24.0, 80.5)), folded_groups: vec!["earlier".into(), "pinned".into()] };
         s.save().unwrap();
         assert_eq!(Settings::load(), s);
         assert_eq!(fs::metadata(dir.join("remote.json")).unwrap().permissions().mode() & 0o777, 0o600);

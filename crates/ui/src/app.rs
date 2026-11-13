@@ -6995,8 +6995,10 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             // Under this, the board and the transcript beside it have no room left to be read.
             window_min_size: Some(size(px(720.), px(480.))),
             app_id: Some("boardcast".into()),
-            // On a Mac the system bar goes, and ours takes its place with the window buttons in it.
-            ..if cfg!(target_os = "macos") {
+            // On a Mac and on Windows the system bar goes, and ours takes its place with the window buttons in it:
+            // the toolkit draws Windows' buttons itself, so keeping the system bar there showed both. Linux keeps
+            // what the compositor draws, and the toolkit adds buttons only when the compositor leaves it to us.
+            ..if cfg!(any(target_os = "macos", target_os = "windows")) {
                 let base = TitleBar::window_options();
                 WindowOptions { titlebar: base.titlebar.map(|t| gpui_kit::TitlebarOptions { title: Some("boardcast".into()), ..t }), ..base }
             } else {

@@ -49,11 +49,15 @@ pub struct Settings {
     pub folded_groups: Vec<String>,
     /// Keyboard shortcuts the user changed, as action and keys: ("map", "mod-shift-m"). The rest keep theirs.
     pub shortcuts: Vec<(String, String)>,
+    /// How model downloads and remote models reach the internet: "system" (the system's proxy, if any),
+    /// "custom" (through `proxy_url`), or "off" (directly). Nothing on this computer goes through a proxy.
+    pub proxy: String,
+    pub proxy_url: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), interface_language: "auto".into(), appearance: "auto".into(), input: String::new(), meeting_search: true, messy: 0.0, sidebar_hidden: false, minimap_hidden: false, minimap_at: None, folded_groups: vec![], shortcuts: vec![] }
+        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), interface_language: "auto".into(), appearance: "auto".into(), input: String::new(), meeting_search: true, messy: 0.0, sidebar_hidden: false, minimap_hidden: false, minimap_at: None, folded_groups: vec![], shortcuts: vec![], proxy: "system".into(), proxy_url: String::new() }
     }
 }
 
@@ -115,6 +119,8 @@ impl Settings {
                 Some((at["right"].as_bool()?, at["bottom"].as_bool()?, far("x")?, far("y")?))
             })(),
             shortcuts: v["shortcuts"].as_object().map(|o| o.iter().filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string()))).collect()).unwrap_or_default(),
+            proxy: v["proxy"].as_str().filter(|p| matches!(*p, "system" | "custom" | "off")).unwrap_or("system").to_string(),
+            proxy_url: text("proxyUrl"),
             folded_groups: v["foldedGroups"].as_array().map(|a| a.iter().filter_map(|g| g.as_str().map(str::to_string)).collect()).unwrap_or_default(),
         }
     }
@@ -122,7 +128,7 @@ impl Settings {
     pub fn save(&self) -> Result<()> {
         let dir = config_dir()?;
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "turnPages": self.turn_pages, "glossary": self.glossary, "templates": self.templates.iter().map(|(name, topics)| json!({ "name": name, "topics": topics })).collect::<Vec<_>>(), "systemSpeech": self.system_speech, "speechLanguage": self.speech_language, "interfaceLanguage": self.interface_language, "appearance": self.appearance, "input": self.input, "searchMeetings": self.meeting_search, "messy": self.messy, "sidebarHidden": self.sidebar_hidden, "minimapHidden": self.minimap_hidden, "minimapAt": self.minimap_at.map(|(right, bottom, x, y)| json!({ "right": right, "bottom": bottom, "x": x, "y": y })), "foldedGroups": self.folded_groups, "shortcuts": self.shortcuts.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>() }))?;
+        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "turnPages": self.turn_pages, "glossary": self.glossary, "templates": self.templates.iter().map(|(name, topics)| json!({ "name": name, "topics": topics })).collect::<Vec<_>>(), "systemSpeech": self.system_speech, "speechLanguage": self.speech_language, "interfaceLanguage": self.interface_language, "appearance": self.appearance, "input": self.input, "searchMeetings": self.meeting_search, "messy": self.messy, "sidebarHidden": self.sidebar_hidden, "minimapHidden": self.minimap_hidden, "minimapAt": self.minimap_at.map(|(right, bottom, x, y)| json!({ "right": right, "bottom": bottom, "x": x, "y": y })), "foldedGroups": self.folded_groups, "proxy": self.proxy, "proxyUrl": self.proxy_url, "shortcuts": self.shortcuts.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>() }))?;
         let tmp = dir.join("remote.json.tmp");
         // Private from the first byte: the key must never sit in a file others can read.
         let _ = fs::remove_file(&tmp);
@@ -189,7 +195,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("boardcast-settings-{}", std::process::id()));
         std::env::set_var("BOARDCAST_CONFIG", &dir);
-        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, turn_pages: true, glossary: "鉴权; API = A P I".into(), templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])], system_speech: true, speech_language: "ja-JP".into(), interface_language: "zh".into(), appearance: "dark".into(), input: "pulse:monitor".into(), meeting_search: false, messy: 0.25, sidebar_hidden: true, minimap_hidden: true, minimap_at: Some((false, true, 24.0, 80.5)), folded_groups: vec!["earlier".into(), "pinned".into()], shortcuts: vec![("map".into(), "mod-shift-m".into()), ("tidy".into(), "mod-t".into())] };
+        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, turn_pages: true, glossary: "鉴权; API = A P I".into(), templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])], system_speech: true, speech_language: "ja-JP".into(), interface_language: "zh".into(), appearance: "dark".into(), input: "pulse:monitor".into(), meeting_search: false, messy: 0.25, sidebar_hidden: true, minimap_hidden: true, minimap_at: Some((false, true, 24.0, 80.5)), folded_groups: vec!["earlier".into(), "pinned".into()], shortcuts: vec![("map".into(), "mod-shift-m".into()), ("tidy".into(), "mod-t".into())], proxy: "custom".into(), proxy_url: "socks5://127.0.0.1:7891".into() };
         s.save().unwrap();
         assert_eq!(Settings::load(), s);
         assert_eq!(fs::metadata(dir.join("remote.json")).unwrap().permissions().mode() & 0o777, 0o600);

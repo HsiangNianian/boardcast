@@ -4,6 +4,7 @@
 //! same way. Unfinished data waits in `<name>.part`, so a cancelled or broken download resumes. The file
 //! only takes its real name after its size and SHA-256 match, so a damaged download is never used.
 
+pub mod net;
 use anyhow::{anyhow, bail, Context, Result};
 use sha2::{Digest, Sha256};
 #[cfg(unix)]
@@ -198,8 +199,10 @@ pub enum Outcome {
     Cancelled,
 }
 
-fn agent(direct: bool) -> ureq::Agent {
-    ureq::AgentBuilder::new().try_proxy_from_env(!direct).timeout_connect(Duration::from_secs(20)).timeout_read(STALL).build()
+/// A client for one source, through the proxy the user chose (see [`net`]). A source marked direct skips the
+/// system's proxy, as a mirror in China is faster without it.
+fn agent(url: &str, direct: bool) -> ureq::Agent {
+    net::agent_for(url, direct, Duration::from_secs(20)).timeout_read(STALL).build()
 }
 
 /// Download a model, resuming anything left by an earlier attempt. `report` runs a few times a second.
@@ -251,7 +254,7 @@ pub fn download(model: &Model, dir: &Path, cancel: &AtomicBool, report: &mut dyn
             return Ok(Outcome::Cancelled);
         }
         report(Progress { done: have, total: model.size, speed: 0, source: Some(source.name.clone()), verifying: false });
-        let mut request = agent(source.direct).get(&source.url);
+        let mut request = agent(&source.url, source.direct).get(&source.url);
         if have > 0 {
             request = request.set("Range", &format!("bytes={have}-"));
         }

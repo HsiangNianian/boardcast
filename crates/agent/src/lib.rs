@@ -185,7 +185,7 @@ impl Provider {
     fn send(&self, url: &str, body: &Value) -> Result<Value> {
         let mut last = anyhow!("no attempt made");
         for attempt in 0..ATTEMPTS {
-            let mut call = http().post(url).timeout(Duration::from_secs(300));
+            let mut call = http(url).post(url).timeout(Duration::from_secs(300));
             if let Self::Remote { key, .. } = self {
                 call = call.set("Authorization", &format!("Bearer {key}"));
             }
@@ -652,7 +652,7 @@ fn prepare_prompt(base: &str, updates: &Sender<Update>) {
     let Some(mut messages) = prompts()["zh"].as_array().cloned() else { return };
     messages.push(json!({ "role": "user", "content": "你好" }));
     let body = json!({ "model": "local", "messages": messages, "temperature": 0, "max_tokens": 1, "cache_prompt": true, "stream": true, "return_progress": true, "chat_template_kwargs": { "enable_thinking": false } });
-    let response = match http().post(&chat_url(base)).send_json(&body) {
+    let response = match http(&chat_url(base)).post(&chat_url(base)).send_json(&body) {
         Ok(response) => response,
         Err(e) => {
             eprintln!("could not prepare the prompt: {e}");
@@ -673,7 +673,7 @@ fn wait_until_up(url: &str, child: &mut Child) -> Result<()> {
         if let Some(status) = child.try_wait()? {
             bail!("llama-server exited during startup ({status})");
         }
-        if http().get(url).timeout(Duration::from_secs(2)).call().is_ok() {
+        if http(url).get(url).timeout(Duration::from_secs(2)).call().is_ok() {
             return Ok(());
         }
         thread::sleep(Duration::from_millis(250));
@@ -683,9 +683,25 @@ fn wait_until_up(url: &str, child: &mut Child) -> Result<()> {
 
 /// Requests honour the proxy settings in the environment, as the older app does.
 /// One client for every request, so connections are kept and reused rather than opened each time.
-fn http() -> ureq::Agent {
-    static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
-    AGENT.get_or_init(|| ureq::AgentBuilder::new().try_proxy_from_env(true).build()).clone()
+/// A client for a URL: straight to this computer's own servers, and elsewhere through the proxy chosen in
+/// Settings. Each keeps its connections, so a remote model is not shaken hands with again for every line.
+fn http(url: &str) -> ureq::Agent {
+    use boardcast_models::net;
+    static LOCAL: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
+    static REMOTE: Mutex<Option<(net::Proxy, ureq::Agent)>> = Mutex::new(None);
+    if net::is_local(url) {
+        return LOCAL.get_or_init(|| ureq::AgentBuilder::new().try_proxy_from_env(false).build()).clone();
+    }
+    let chosen = net::chosen();
+    let mut remote = REMOTE.lock().expect("client lock");
+    match remote.as_ref() {
+        Some((proxy, agent)) if *proxy == chosen => agent.clone(),
+        _ => {
+            let agent = net::agent_for(url, false, Duration::from_secs(30)).build();
+            *remote = Some((chosen, agent.clone()));
+            agent
+        }
+    }
 }
 
 /// Which model answers the next line. It can change at any time from the settings.

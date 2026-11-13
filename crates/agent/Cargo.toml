@@ -13,6 +13,7 @@ pinyin = { version = "0.11", default-features = false, features = ["plain", "het
 anyhow.workspace = true
 base64 = "0.22"
 boardcast-board.workspace = true
+boardcast-models.workspace = true
 regex = "1"
 serde_json.workspace = true
 ureq = { version = "2", features = ["json", "proxy-from-env"] }

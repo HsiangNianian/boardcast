@@ -1256,6 +1256,9 @@ struct SettingsForm {
     remote: bool,
     /// How messy the board's hand is.
     messy: Entity<SliderState>,
+    /// The proxy's address, when the user gives one, and why it cannot be used if it cannot.
+    proxy_url: Entity<InputState>,
+    proxy_note: Option<String>,
     saved: Settings,
     note: Option<String>,
     probing: Option<Receiver<Result<u128, String>>>,
@@ -3429,6 +3432,39 @@ impl Workbench {
             .into_any_element()
     }
 
+    /// Choose how model downloads and remote models reach the internet.
+    fn choose_proxy(&mut self, choice: &str, cx: &mut Context<Self>) {
+        self.form.saved.proxy = choice.to_string();
+        self.apply_proxy();
+        cx.notify();
+    }
+
+    /// Put the proxy setting to use and keep it. An address that cannot be used is kept as typed, with why,
+    /// and the system's proxy is used meanwhile.
+    fn apply_proxy(&mut self) {
+        use boardcast_models::net::{self, Proxy};
+        let (choice, address) = (self.form.saved.proxy.clone(), self.form.saved.proxy_url.clone());
+        self.form.proxy_note = None;
+        let proxy = match Proxy::from_setting(&choice, &address) {
+            Proxy::Custom(a) => match Proxy::check(&a) {
+                Ok(()) => Proxy::Custom(a),
+                Err(why) => {
+                    self.form.proxy_note = Some(if why == "no scheme" {
+                        tr("The address must start with http://, https:// or socks5://. Until then, the system's proxy is used.", "地址需要以 http://、https:// 或 socks5:// 开头；在此之前使用系统代理。").to_string()
+                    } else {
+                        format!("{}{why}", tr("This address cannot be used, so the system's proxy is used: ", "这个地址无法使用，暂时使用系统代理："))
+                    });
+                    Proxy::System
+                }
+            },
+            other => other,
+        };
+        net::set(proxy);
+        if let Err(e) = self.form.saved.save() {
+            self.form.note = Some(format!("{e:#}"));
+        }
+    }
+
     /// Keep the shortcuts as they are now.
     fn save_shortcuts(&mut self) {
         self.form.saved.shortcuts = self.keys.custom().to_vec();
@@ -3626,6 +3662,8 @@ impl Workbench {
             minimap_at: self.form.saved.minimap_at,
             folded_groups: self.form.saved.folded_groups.clone(),
             shortcuts: self.keys.custom().to_vec(),
+            proxy: self.form.saved.proxy.clone(),
+            proxy_url: self.form.saved.proxy_url.clone(),
         }
     }
 
@@ -6021,6 +6059,7 @@ impl Render for Workbench {
                     .into_any_element()
             }
             SettingsTab::General => {
+                let proxy = self.form.saved.proxy.clone();
                 let language = self.form.saved.interface_language.clone();
                 let look = self.form.saved.appearance.clone();
                 div()
@@ -6060,6 +6099,27 @@ impl Render for Workbench {
                         Switch::new("meeting-search").checked(self.form.saved.meeting_search).accessibility_label(tr("Search meetings by meaning", "按意思搜索会议")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_meeting_search(*on, cx))),
                     ))
                     .when_some(self.search_status(), |d, (text, failed)| d.child(div().pt_1().text_xs().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(text)))
+                    .child(row(
+                        tr("Network proxy", "网络代理"),
+                        Some(tr("For downloading models and for a remote model. The model on this computer is always reached directly.", "用于下载模型和远程模型。本机运行的模型始终直连。")),
+                    ).child(segmented(
+                        [("system", tr("System", "跟随系统")), ("custom", tr("Custom", "自定义")), ("off", tr("None", "不使用"))]
+                            .into_iter()
+                            .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("proxy-{id}").into()), label, proxy == id).on_click(cx.listener(move |this, _, _, cx| this.choose_proxy(id, cx))))
+                            .collect(),
+                    )))
+                    .when(proxy == "custom", |d| {
+                        d.child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .pt_2()
+                                .child(Input::new(&self.form.proxy_url))
+                                .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("http://host:port or socks5://host:port", "http://主机:端口 或 socks5://主机:端口")))
+                                .when_some(self.form.proxy_note.clone(), |d, note| d.child(div().text_xs().text_color(rgb(pal().danger)).child(note))),
+                        )
+                    })
                     .into_any_element()
             }
             SettingsTab::Shortcuts => {
@@ -6875,6 +6935,10 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let check_at = (prefix.is_some() && !scripted).then(|| Instant::now() + Duration::from_secs(8));
     let binaries = resources.binaries.clone();
     let settings = Settings::load();
+    boardcast_models::net::set(match boardcast_models::net::Proxy::from_setting(&settings.proxy, &settings.proxy_url) {
+        boardcast_models::net::Proxy::Custom(a) if boardcast_models::net::Proxy::check(&a).is_err() => boardcast_models::net::Proxy::System,
+        chosen => chosen,
+    });
     let forced_backend = deepseek || llm.is_some();
     let backend = if deepseek {
         Backend::Ready(Provider::deepseek_from_env()?)
@@ -7025,6 +7089,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let messy = cx.new(|_| SliderState::new().min(0.0).max(1.0).step(0.1).default_value(settings.messy));
             let glossary = cx.new(|cx| InputState::new(window, cx).placeholder("鉴权; OpenAI; API = A P I, エーピーアイ").default_value(settings.glossary.clone()));
             let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
+            let proxy_url = cx.new(|cx| InputState::new(window, cx).placeholder("http://127.0.0.1:7890").default_value(settings.proxy_url.clone()));
             let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
             let editor = cx.new(|cx| TextareaState::new(window, cx));
             let arxiv_input = cx.new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
@@ -7047,6 +7112,14 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                         if let Err(e) = this.form.saved.save() {
                             this.form.note = Some(format!("{e:#}"));
                         }
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&proxy_url, window, |this: &mut Workbench, field, event, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.form.saved.proxy_url = field.read(cx).value().trim().to_string();
+                        this.apply_proxy();
+                        cx.notify();
                     }
                 })
                 .detach();
@@ -7133,7 +7206,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     inputs: vec![],
                     library_query,
                     label_input,
-                    form: SettingsForm { glossary, base_url, model, key, remote, messy: messy.clone(), saved: settings, note: None, probing: None },
+                    form: SettingsForm { glossary, base_url, model, key, remote, messy: messy.clone(), proxy_url, proxy_note: None, saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,
                     import: ImportState::Idle,

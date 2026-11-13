@@ -121,7 +121,7 @@ gpui_kit_assets::icon_assets!(ExtraIcons, [FileDown, FilePlus, Import, Lasso, Pe
 
 /// The website's pictograms, built from blocks and lines, in place of the toolkit's icons of the same name.
 /// Holes are cut with even-odd fills, since an icon is drawn as one shape in the text's color.
-const PICTOGRAMS: [(&str, &str); 29] = [
+const PICTOGRAMS: [(&str, &str); 30] = [
     ("icons/chevron-left.svg", include_str!("../icons/chevron-left.svg")),
     ("icons/chevron-right.svg", include_str!("../icons/chevron-right.svg")),
     ("icons/copy.svg", include_str!("../icons/copy.svg")),
@@ -138,6 +138,7 @@ const PICTOGRAMS: [(&str, &str); 29] = [
     ("icons/panel-right-open.svg", include_str!("../icons/panel-right-open.svg")),
     ("icons/pause.svg", include_str!("../icons/pause.svg")),
     ("icons/pencil.svg", include_str!("../icons/pencil.svg")),
+    ("icons/pin.svg", include_str!("../icons/pin.svg")),
     ("icons/play.svg", include_str!("../icons/play.svg")),
     ("icons/plus.svg", include_str!("../icons/plus.svg")),
     ("icons/redo-2.svg", include_str!("../icons/redo-2.svg")),

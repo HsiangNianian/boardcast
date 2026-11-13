@@ -1280,6 +1280,8 @@ struct Workbench {
     pinned: Vec<String>,
     /// The meeting just taken off the list, which can still come back: its id and name.
     deleted_meeting: Option<(String, String)>,
+    /// A pinned meeting whose delete is waiting to be confirmed in its row; one that is not pinned goes at once.
+    confirm_delete: Option<String>,
     /// What can be listened to, as of opening Settings.
     inputs: Vec<boardcast_audio::Input>,
     /// The label being written for the selected thing on the board.
@@ -3388,6 +3390,7 @@ impl Workbench {
 
     /// Take a meeting off the list; it can be brought back until the list is opened again.
     fn delete_meeting(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.confirm_delete = None;
         let Some(store) = &self.store else { return };
         match store.delete(id) {
             Ok(()) => {
@@ -3425,6 +3428,7 @@ impl Workbench {
 
     fn toggle_panel(&mut self, panel: Panel, cx: &mut Context<Self>) {
         self.panel = if self.panel == panel { Panel::Transcript } else { panel };
+        self.confirm_delete = None;
         if self.panel == Panel::Settings {
             self.inputs = boardcast_audio::inputs();
         }
@@ -5469,7 +5473,8 @@ impl Render for Workbench {
                         let id = m.id.clone();
                         let current = id == self.live.id();
                         let pinned = self.pinned.iter().any(|p| *p == id);
-                        let (pin_id, delete_id) = (id.clone(), id.clone());
+                        let confirming = self.confirm_delete.as_deref() == Some(id.as_str());
+                        let (pin_id, delete_id, sure_id) = (id.clone(), id.clone(), id.clone());
                         let detail = match &m.read_error {
                             Some(error) => format!("{}{error}", tr("Could not be read, and the file is left as it is: ", "无法读取，文件保持原样：")),
                             None => format!("{} · {} {}", local_time(m.updated_at), m.lines, tr("lines", "句")),
@@ -5497,14 +5502,36 @@ impl Render for Workbench {
                                     .when(current, |d| d.child(div().size(px(6.)).flex_none().rounded_full().bg(rgb(pal().recording))))
                                     .child(div().text_sm().overflow_hidden().whitespace_nowrap().when(m.read_error.is_some(), |d| d.text_color(rgb(pal().muted))).child(m.title.clone())),
                             )
-                            .child(
+                            // A pinned meeting asks first, in its own row.
+                            .when(confirming, |d| {
+                                d.child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .flex_none()
+                                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                        .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Delete this pinned meeting?", "删除这场置顶的会议？")))
+                                        .child(Button::new(("confirm-delete", i)).small().danger().label(tr("Delete", "删除")).on_click(cx.listener(move |this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            this.delete_meeting(&sure_id, cx);
+                                        })))
+                                        .child(Button::new(("cancel-delete", i)).small().ghost().label(tr("Cancel", "取消")).on_click(cx.listener(|this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            this.confirm_delete = None;
+                                            cx.notify();
+                                        }))),
+                                )
+                            })
+                            .when(!confirming, |d| d.child(
                                 div()
                                     .flex()
                                     .items_center()
                                     .gap_2()
                                     .flex_none()
                                     .child(div().max_w(px(360.)).overflow_hidden().whitespace_nowrap().font_family(theme::MONO).text_xs().text_color(rgb(if m.read_error.is_some() { pal().danger } else { pal().faint })).child(detail))
-                                    // Shown on hover, and the star stays once a meeting is pinned.
+                                    // Shown on hover, and the pin stays once a meeting is pinned, in ink: red is for recording and
+                                    // for what is marked on the board.
                                     .when(self.store.is_some(), |d| {
                                         d.child(
                                             div()
@@ -5512,7 +5539,7 @@ impl Render for Workbench {
                                                 .p_1()
                                                 .cursor_pointer()
                                                 .when(!pinned, |d| d.opacity(0.).group_hover("meeting-row", |s| s.opacity(1.)))
-                                                .child(icon("star").size_3().text_color(rgb(if pinned { pal().recording } else { pal().faint })))
+                                                .child(icon("pin").size_3().text_color(rgb(if pinned { pal().text } else { pal().faint })))
                                                 .tooltip(move |window, cx| Tooltip::new(if pinned { tr("Unpin", "取消置顶") } else { tr("Pin to the top", "置顶") }).build(window, cx))
                                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -5535,11 +5562,16 @@ impl Render for Workbench {
                                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                                                 .on_click(cx.listener(move |this, _, _, cx| {
                                                     cx.stop_propagation();
-                                                    this.delete_meeting(&delete_id, cx);
+                                                    if pinned {
+                                                        this.confirm_delete = Some(delete_id.clone());
+                                                        cx.notify();
+                                                    } else {
+                                                        this.delete_meeting(&delete_id, cx);
+                                                    }
                                                 })),
                                         )
                                     }),
-                            )
+                            ))
                             .when(m.read_error.is_none(), |d| d.on_click(cx.listener(move |this, _, _, cx| this.open_meeting(&id, cx))))
                     })),
             );
@@ -5976,11 +6008,7 @@ impl Render for Workbench {
                             .items_center()
                             .justify_between()
                             .pb_4()
-                            .child(div().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Settings", "设置")))
-                            .child(icon_button("close-settings", "x", tr("Close (Esc)", "关闭（Esc）")).on_click(cx.listener(|this, _, _, cx| {
-                                this.panel = Panel::Transcript;
-                                cx.notify();
-                            }))),
+                            .child(div().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Settings", "设置"))),
                     )
                     .child(div().flex().items_center().gap_6().h(px(36.)).flex_none().border_b_1().border_color(rgb(pal().line)).children(tabs.into_iter().map(|(t, label)| {
                         let on = t == tab;
@@ -6872,6 +6900,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     library,
                     pinned,
                     deleted_meeting: None,
+                    confirm_delete: None,
                     inputs: vec![],
                     library_query,
                     label_input,

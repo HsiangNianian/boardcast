@@ -781,6 +781,7 @@ dependencies = [
  "gif 0.14.2",
  "image",
  "krilla",
+ "rav1e",
  "serde_json",
  "tiny-skia",
  "ttf-parser",

@@ -79,6 +79,8 @@ Use **Import** in the sidebar, or drop a file on the board:
 | **Markdown** | Key points, a Mermaid flow chart and the transcript. |
 | **PNG / SVG** | This board, as it looks on screen; SVG stays sharp at any size. |
 | **Animated SVG** | This board, written out stroke by stroke in the order of the meeting. |
+| **GIF** | The same, for chats and documents that don't play SVG. |
+| **Video (WebM)** | The same as an AV1 video: smaller and sharper than the GIF, for browsers, GitHub and web pages. |
 | **Replay page** | One `.html` file for someone who missed the meeting. Nothing to install. |
 | **Whole meeting PDF** | A page per board, then the summary and transcript, with selectable text. |
 

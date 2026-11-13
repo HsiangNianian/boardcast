@@ -1,9 +1,9 @@
 //! Wires the audio chain to the board agent on background threads, and reports to the UI over a channel.
 
 use boardcast_agent::{Backend, Guidance, Said, Session, Update};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use boardcast_audio::system::SystemSpeech;
-use boardcast_audio::{capture, play_wav, Ear, Recognizers, Sentence};
+use boardcast_audio::{capture, play_wav, Ear, Language, Recognizers, Sentence};
 use boardcast_board::graph::Utterance;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -33,7 +33,8 @@ pub struct Speech {
     pub helper: Option<PathBuf>,
     /// Use the system's recognizer rather than the bundled models.
     pub system: bool,
-    /// The language the system's recognizer listens for, or "auto".
+    /// The meeting's language, which both the system's recognizer and the models follow: "zh-CN",
+    /// "en-US", "ja-JP" or "auto".
     pub language: String,
 }
 
@@ -60,11 +61,21 @@ fn ear_for(models: &Path, speech: &Speech) -> Result<(Ear, String, Option<String
             Err(e) => note = Some(format!("{e:#}")),
         }
     }
-    let models_there = Recognizers::load(models);
+    let models_there = Recognizers::load(models).hearing(Language::from_setting(&speech.language));
     if models_there.is_empty() {
         if let Some(helper) = speech.helper.as_deref().filter(|_| !speech.system) {
             let (ear, with) = system(helper)?;
             return Ok((ear, with, None));
+        }
+        // A package without speech models, such as a Mac's "-none" one, has nothing to fall back to.
+        if let Some(why) = note {
+            bail!(
+                "{}{why}",
+                crate::i18n::tr(
+                    "Apple's speech recognition did not start, and this package has no speech models to hear instead. A package without \"-none\" in its name has them. ",
+                    "Apple 语音识别没能启动，而这个安装包里没有可替代的语音模型；名字里不带 \"-none\" 的安装包带有语音模型。",
+                )
+            );
         }
     }
     let with = models_there.names().join(" + ");

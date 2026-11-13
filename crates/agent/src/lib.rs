@@ -9,6 +9,7 @@
 pub mod settings;
 pub mod sound;
 pub mod summary;
+pub mod tools;
 pub mod vision;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -87,8 +88,16 @@ impl Provider {
         matches!(self, Self::Remote { base_url, .. } if base_url.contains("deepseek.com"))
     }
 
+    /// How this model is asked, unless told otherwise. A remote model answers with tool calls, which make the
+    /// agent easy to extend and scored the same as command lines on DeepSeek (edge F1 0.868 against 0.863
+    /// over three passes); a local one keeps command lines held to a grammar, which the 4B answers better
+    /// (item F1 0.89 against 0.81) and in less context than the tools' 4,899-token prompt.
     pub fn default_guidance(&self) -> Guidance {
-        Guidance { rules: self.is_deepseek(), hint: false }
+        let harness = match self {
+            Self::Remote { .. } => tools::Harness::Tools,
+            _ => tools::Harness::Commands,
+        };
+        Guidance { rules: self.is_deepseek(), hint: false, harness }
     }
 
     /// An ordinary question with no grammar, as a summary needs.
@@ -144,6 +153,31 @@ impl Provider {
             }
         };
         self.send(&url, &body)
+    }
+
+    /// A turn answered with tool calls rather than command lines: no grammar, room for the calls.
+    fn call_tools(&self, messages: &[Value]) -> Result<Value> {
+        let tools = tools::definitions();
+        let body = match self {
+            Self::Remote { model, .. } => {
+                let mut body = json!({ "model": model, "messages": messages, "tools": tools, "tool_choice": "auto", "temperature": 0, "max_tokens": 4096, "stream": false });
+                if self.is_deepseek() {
+                    body["thinking"] = json!({ "type": "enabled" });
+                    body["reasoning_effort"] = json!("high");
+                }
+                body
+            }
+            Self::Local { .. } => json!({ "model": "local", "messages": messages, "tools": tools, "tool_choice": "auto", "temperature": 0, "max_tokens": 1024, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": false } }),
+            #[cfg(test)]
+            Self::Scripted(reply) => {
+                // A script answers with command lines; each becomes the call it stands for.
+                let said = messages.last().and_then(|m| m["content"].as_str()).unwrap_or_default().to_string();
+                let text = reply(&said)?;
+                let calls: Vec<Value> = parse_ops(&text).iter().filter_map(tools::call).enumerate().map(|(i, (name, args))| json!({ "id": format!("s{i}"), "type": "function", "function": { "name": name, "arguments": args.to_string() } })).collect();
+                return Ok(json!({ "choices": [{ "message": { "content": "", "tool_calls": calls } }] }));
+            }
+        };
+        self.send(&self.endpoint(), &body)
     }
 
     /// One request, retried while the failure might pass. A reply that cannot be used says what came
@@ -211,6 +245,8 @@ fn message(reply: &Value) -> Result<&str> {
 pub struct Guidance {
     pub rules: bool,
     pub hint: bool,
+    /// Command lines, as the app answers, or tool calls, which only the evaluation tries for now.
+    pub harness: tools::Harness,
 }
 
 pub struct Reply {
@@ -323,6 +359,40 @@ pub fn propose_with(provider: &Provider, graph: &Graph, recent: &[Utterance], ne
     Ok(whole)
 }
 
+/// A turn answered with tool calls. Each call is the command line it stands for, so the reply is the same
+/// as the command harness's and the board applies it the same way. Checked, the model then sees the board its
+/// calls drew and may correct it, until it calls nothing or the rounds run out.
+fn propose_tools(provider: &Provider, graph: &Graph, prompt: Vec<Value>, harness: tools::Harness) -> Result<Reply> {
+    let mut messages = tools::messages(&prompt[..prompt.len() - 1]);
+    messages.push(prompt[prompt.len() - 1].clone());
+    let started = Instant::now();
+    let (mut board, mut lines) = (graph.clone(), vec![]);
+    let mut whole = Reply { ops: String::new(), ms: 0, tokens_in: 0, tokens_cached: 0, tokens_out: 0, prompt_read: None, prompt_ms: None, predicted_ms: None };
+    let rounds = if harness == tools::Harness::ToolsChecked { 1 + tools::CHECK_ROUNDS } else { 1 };
+    for round in 0..rounds {
+        let reply = provider.call_tools(&messages)?;
+        whole.tokens_in += reply["usage"]["prompt_tokens"].as_u64().unwrap_or(0);
+        whole.tokens_cached += reply["usage"]["prompt_cache_hit_tokens"].as_u64().or_else(|| reply["usage"]["prompt_tokens_details"]["cached_tokens"].as_u64()).unwrap_or(0);
+        whole.tokens_out += reply["usage"]["completion_tokens"].as_u64().unwrap_or(0);
+        let calls = tools::calls(&reply);
+        if calls.is_empty() {
+            break;
+        }
+        for command in calls.iter().filter_map(|(_, c)| c.as_ref()) {
+            board.apply(&parse_ops(command));
+            lines.push(command.clone());
+        }
+        if round + 1 == rounds {
+            break;
+        }
+        messages.push(tools::echo(&reply)?);
+        messages.extend(tools::results(&calls, &board, round + 2 == rounds));
+    }
+    whole.ops = lines.join("\n");
+    whole.ms = started.elapsed().as_millis();
+    Ok(whole)
+}
+
 /// One model turn for one piece of a line.
 #[allow(clippy::too_many_arguments)]
 fn propose_once(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &Utterance, guidance: Guidance, hint: Option<&str>, glossary: &sound::Glossary, references: &[(u32, String)]) -> Result<Reply> {
@@ -343,6 +413,9 @@ fn propose_once(provider: &Provider, graph: &Graph, recent: &[Utterance], next: 
         content = format!("{note}\n{content}");
     }
     messages.push(json!({ "role": "user", "content": content }));
+    if guidance.harness != tools::Harness::Commands {
+        return propose_tools(provider, graph, messages, guidance.harness);
+    }
     let started = Instant::now();
     let reply = provider.call(messages, graph, english)?;
     Ok(Reply {
@@ -909,6 +982,8 @@ mod tests {
         assert!(!Provider::Local { base: String::new() }.default_guidance().rules);
         let remote = |url: &str| Provider::Remote { base_url: url.into(), key: String::new(), model: String::new() };
         assert!(remote("https://api.deepseek.com").default_guidance().rules);
+        assert_eq!(remote("https://example.com/v1").default_guidance().harness, tools::Harness::Tools, "a remote model answers with tools");
+        assert_eq!(Provider::Local { base: String::new() }.default_guidance().harness, tools::Harness::Commands, "a local one with command lines");
         assert!(!remote("https://example.com/v1").default_guidance().rules, "only measured on DeepSeek");
         assert!(!remote("https://api.deepseek.com").default_guidance().hint);
     }
@@ -977,6 +1052,36 @@ mod tests {
             }
         });
         base
+    }
+
+    /// A server that answers every request with `body` and keeps each request's body, read whole.
+    fn serve_recording(body: &'static str) -> (String, Arc<Mutex<Vec<String>>>) {
+        use std::io::{BufRead, BufReader, Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let asked = Arc::new(Mutex::new(vec![]));
+        let keep = asked.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut length = 0;
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                        break;
+                    }
+                    if let Some(n) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                        length = n.trim().parse().unwrap_or(0);
+                    }
+                }
+                let mut request = vec![0_u8; length];
+                let _ = reader.read_exact(&mut request);
+                keep.lock().unwrap().push(String::from_utf8_lossy(&request).to_string());
+                let mut stream = stream;
+                let _ = write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            }
+        });
+        (base, asked)
     }
 
     fn remote(base: String) -> Provider {
@@ -1086,6 +1191,29 @@ mod tests {
         fn wait(&self) {
             self.drained.recv_timeout(Duration::from_secs(5)).unwrap();
         }
+    }
+
+    #[test]
+    fn a_remote_model_is_offered_the_tools_and_its_calls_draw_the_line() {
+        let (base, asked) = serve_recording(
+            r#"{"choices":[{"message":{"content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"link","arguments":"{\"from\":\"甲\",\"to\":\"乙\",\"label\":\"调用\"}"}}]}}],"usage":{"prompt_tokens":10,"completion_tokens":5}}"#,
+        );
+        let (said, said_rx) = channel();
+        let (ready_tx, ready_rx) = channel();
+        let (drained_tx, drained) = channel();
+        let (updates_tx, updates) = channel();
+        let session = Session::start(Backend::Ready(remote(base)), None, said_rx, ready_tx, drained_tx, updates_tx);
+        ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(updates.recv_timeout(Duration::from_secs(5)).unwrap(), Update::Ready));
+        let h = Harness { session, said, updates, drained };
+        h.say("甲调用乙");
+        h.wait();
+        let Update::Drawn { graph, ops, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("expected a drawing") };
+        assert_eq!((graph.nodes.len(), graph.edges.len()), (2, 1));
+        assert_eq!(ops, "E 「甲」 -> 「乙」 : 「调用」", "the call comes back as the command it stands for");
+        let body: Value = serde_json::from_str(&asked.lock().unwrap()[0]).unwrap();
+        assert!(body["tools"].as_array().is_some_and(|t| t.iter().any(|t| t["function"]["name"] == "link")), "offered the tools");
+        assert!(body.get("grammar").is_none(), "no grammar for a remote model");
     }
 
     #[test]

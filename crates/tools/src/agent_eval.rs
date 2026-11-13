@@ -2,7 +2,7 @@
 //! board against its answer. It replaces eval/run.ts, which measured the earlier app's TypeScript engine.
 //!
 //!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [--only id,id]
-//!                [<model>] [--skill | --rules-only | --hints-only] [--workers N]
+//!                [<model>] [--harness commands|tools|tools-check] [--skill | --rules-only | --hints-only] [--workers N]
 //!
 //! The output file keeps each case's final board and what the layout checker found. A Markdown report goes to
 //! eval/reports/ and, in GitHub Actions, the job summary. A failed request fails the run, since a case it
@@ -204,7 +204,8 @@ fn cell(v: Option<f64>) -> String {
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let root = PathBuf::from(args.next().context("boardcast root")?);
     let output = args.next().context("output file")?;
-    let mut guidance = Guidance::default();
+    // The model is asked as the app asks it (Provider::default_guidance) unless these say otherwise.
+    let (mut rules, mut harness) = (None::<(bool, bool)>, None);
     let mut model = crate::model_flags::ModelFlags::default();
     let (mut set, mut only, mut workers, mut repeat, mut label) = ("all".to_string(), None::<String>, 1, 1, None::<String>);
     while let Some(flag) = args.next() {
@@ -212,9 +213,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             continue;
         }
         match flag.as_str() {
-            "--skill" => (guidance.rules, guidance.hint) = (true, true),
-            "--rules-only" => guidance.rules = true,
-            "--hints-only" => guidance.hint = true,
+            "--skill" => rules = Some((true, true)),
+            "--rules-only" => rules = Some((true, rules.is_some_and(|r| r.1))),
+            "--hints-only" => rules = Some((rules.is_some_and(|r| r.0), true)),
             "--set" => set = args.next().context("set")?,
             "--only-dev" => set = "dev".into(),
             "--only-holdout" => set = "holdout".into(),
@@ -222,12 +223,23 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--workers" => workers = args.next().context("count")?.parse()?,
             "--repeat" => repeat = args.next().context("count")?.parse::<usize>()?.max(1),
             "--label" => label = Some(args.next().context("label")?),
+            "--harness" => {
+                let name = args.next().context("harness")?;
+                harness = Some(boardcast_agent::tools::Harness::parse(&name).with_context(|| format!("--harness is commands, tools or tools-check, not {name}"))?);
+            }
             other => bail!("unknown flag {other}"),
         }
     }
     // A run is named after its model unless the caller names it.
     let (provider, named) = model.or_local()?;
     let label = label.unwrap_or(named);
+    let mut guidance = provider.default_guidance();
+    if let Some((r, h)) = rules {
+        (guidance.rules, guidance.hint) = (r, h);
+    }
+    if let Some(h) = harness {
+        guidance.harness = h;
+    }
     let Some((_, files)) = SETS.iter().find(|(name, _)| *name == set) else {
         bail!("--set is one of {}", SETS.map(|(n, _)| n).join(", "));
     };

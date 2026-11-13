@@ -152,30 +152,64 @@ fn path(points: &[[f32; 2]]) -> String {
     d
 }
 
-/// GIF frames a second, the longest side in pixels, and how long the finished board holds before it loops.
+/// GIF and video frames a second, the longest side in pixels, and how long the finished board holds before
+/// it loops or ends.
 const GIF_FPS: f64 = 10.0;
 const GIF_SIDE: f64 = 960.0;
 const GIF_HOLD_MS: u16 = 2500;
 
+/// The replay drawn as pixels at any moment: the paper and any page under the board, drawn once, and the
+/// strokes as far as the pen has got.
+struct Frames<'a> {
+    replay: &'a Replay,
+    base: tiny_skia::Pixmap,
+    at: tiny_skia::Transform,
+    width: u32,
+    height: u32,
+}
+
+impl<'a> Frames<'a> {
+    /// At most `side` pixels on the longer side; `even` rounds both sides to even numbers, as a video's
+    /// halved colour planes need.
+    fn new(replay: &'a Replay, side: f64, even: bool) -> anyhow::Result<Self> {
+        use tiny_skia::{Color, FilterQuality, Pixmap, PixmapPaint, Transform};
+        let (x, y, w, h) = replay.frame;
+        let scale = (side / w.max(h)).min(2.0);
+        let round = |v: f64| if even { ((v / 2.0).round() as u32 * 2).max(2) } else { v.round().max(1.0) as u32 };
+        let (width, height) = (round(w * scale), round(h * scale));
+        let at = Transform::from_translate(-x as f32, -y as f32).post_scale(scale as f32, scale as f32);
+        let mut base = Pixmap::new(width, height).ok_or_else(|| anyhow::anyhow!("the animation is too big to make"))?;
+        let [_, r, g, bl] = PAPER.to_be_bytes();
+        base.fill(Color::from_rgba8(r, g, bl, 255));
+        if let Some(page) = &replay.page {
+            let picture = crate::ink::page_pixmap(&page.image)?;
+            let fit = Transform::from_scale((page.w / f64::from(picture.width())) as f32, (page.h / f64::from(picture.height())) as f32).post_concat(at);
+            base.draw_pixmap(0, 0, picture.as_ref(), &PixmapPaint { quality: FilterQuality::Bilinear, ..PixmapPaint::default() }, fit, None);
+        }
+        Ok(Self { replay, base, at, width, height })
+    }
+
+    /// The board at `t` milliseconds, as RGBA.
+    fn at(&self, t: f64) -> Vec<u8> {
+        let mut canvas = self.base.clone();
+        for under in [true, false] {
+            for s in self.replay.strokes.iter().filter(|s| s.style.under == under && s.until.is_none_or(|u| t < u)) {
+                let k = if s.duration <= 0.0 { if t >= s.delay { 1.0 } else { 0.0 } } else { ((t - s.delay) / s.duration).clamp(0.0, 1.0) };
+                if k > 0.0 {
+                    crate::ink::fill_stroke(&mut canvas, &outline(&s.inked, k as f32), s.style, self.at);
+                }
+            }
+        }
+        canvas.take()
+    }
+}
+
 /// The replay as a GIF: the same strokes at the same times as the animated SVG, written frame by frame,
 /// then the whole board held a moment before it starts again.
 pub fn gif(replay: &Replay) -> anyhow::Result<Vec<u8>> {
-    use tiny_skia::{Color, FilterQuality, Pixmap, PixmapPaint, Transform};
-
-    let (x, y, w, h) = replay.frame;
     let end = replay.end;
-    let scale = (GIF_SIDE / w.max(h)).min(2.0);
-    let (pw, ph) = ((w * scale).round().max(1.0) as u32, (h * scale).round().max(1.0) as u32);
-    let at = Transform::from_translate(-x as f32, -y as f32).post_scale(scale as f32, scale as f32);
-    // The paper and any page under the board, drawn once.
-    let mut base = Pixmap::new(pw, ph).ok_or_else(|| anyhow::anyhow!("the GIF is too big to make"))?;
-    let [_, r, g, bl] = PAPER.to_be_bytes();
-    base.fill(Color::from_rgba8(r, g, bl, 255));
-    if let Some(page) = &replay.page {
-        let picture = crate::ink::page_pixmap(&page.image)?;
-        let fit = Transform::from_scale((page.w / f64::from(picture.width())) as f32, (page.h / f64::from(picture.height())) as f32).post_concat(at);
-        base.draw_pixmap(0, 0, picture.as_ref(), &PixmapPaint { quality: FilterQuality::Bilinear, ..PixmapPaint::default() }, fit, None);
-    }
+    let frames_of = Frames::new(replay, GIF_SIDE, false)?;
+    let (pw, ph) = (frames_of.width, frames_of.height);
 
     let mut bytes = vec![];
     {
@@ -195,17 +229,7 @@ pub fn gif(replay: &Replay) -> anyhow::Result<Vec<u8>> {
         let mut previous: Option<Vec<u8>> = None;
         let mut pending: Option<(Vec<u8>, (u32, u32, u32, u32), u32)> = None;
         for f in 0..frames {
-            let t = f as f64 * step;
-            let mut canvas = base.clone();
-            for under in [true, false] {
-                for s in replay.strokes.iter().filter(|s| s.style.under == under && s.until.is_none_or(|u| t < u)) {
-                    let k = if s.duration <= 0.0 { if t >= s.delay { 1.0 } else { 0.0 } } else { ((t - s.delay) / s.duration).clamp(0.0, 1.0) };
-                    if k > 0.0 {
-                        crate::ink::fill_stroke(&mut canvas, &outline(&s.inked, k as f32), s.style, at);
-                    }
-                }
-            }
-            let pixels = canvas.take();
+            let pixels = frames_of.at(f as f64 * step);
             // Only what changed since the frame before is stored, over it; a frame with no change only
             // lengthens the one before.
             let changed = match &previous {
@@ -234,6 +258,94 @@ pub fn gif(replay: &Replay) -> anyhow::Result<Vec<u8>> {
         }
     }
     Ok(bytes)
+}
+
+/// The replay as a WebM video (AV1): the same frames as the GIF, ten a second, then the finished board held
+/// as long. A board with no motion between frames costs almost nothing, so the hold is plain repeated frames.
+pub fn webm(replay: &Replay) -> anyhow::Result<Vec<u8>> {
+    use rav1e::prelude::*;
+    let frames_of = Frames::new(replay, GIF_SIDE, true)?;
+    let (w, h) = (frames_of.width as usize, frames_of.height as usize);
+    let config = EncoderConfig {
+        width: w,
+        height: h,
+        time_base: Rational::new(1, GIF_FPS as u64),
+        bit_depth: 8,
+        chroma_sampling: ChromaSampling::Cs420,
+        pixel_range: PixelRange::Limited,
+        color_description: Some(ColorDescription { color_primaries: ColorPrimaries::BT709, transfer_characteristics: TransferCharacteristics::BT709, matrix_coefficients: MatrixCoefficients::BT709 }),
+        // Handwriting is thin lines on flat paper: a lower quantizer than the default keeps its edges.
+        quantizer: 70,
+        speed_settings: SpeedSettings::from_preset(10),
+        max_key_frame_interval: 600,
+        low_latency: true,
+        ..Default::default()
+    };
+    let mut encoder: Context<u8> = Config::new().with_encoder_config(config).with_threads(0).new_context().map_err(|e| anyhow::anyhow!("the video encoder would not start: {e:?}"))?;
+    let step = 1000.0 / GIF_FPS;
+    let count = (replay.end / step).ceil() as usize + 1 + (f64::from(GIF_HOLD_MS) / step).round() as usize;
+    let mut out: Vec<crate::webm::Frame> = vec![];
+    let take = |encoder: &mut Context<u8>, out: &mut Vec<crate::webm::Frame>| -> anyhow::Result<bool> {
+        loop {
+            match encoder.receive_packet() {
+                Ok(p) => out.push(crate::webm::Frame { number: p.input_frameno, key: p.frame_type == FrameType::KEY, data: p.data }),
+                Err(EncoderStatus::Encoded) => {}
+                Err(EncoderStatus::NeedMoreData) => return Ok(false),
+                Err(EncoderStatus::LimitReached) => return Ok(true),
+                Err(e) => anyhow::bail!("the video encoder failed: {e:?}"),
+            }
+        }
+    };
+    // The finished board, drawn once when the replay reaches its end and shown for every frame after.
+    let mut finished: Option<Vec<u8>> = None;
+    for f in 0..count {
+        let t = f as f64 * step;
+        let rgba = if t >= replay.end {
+            finished.get_or_insert_with(|| frames_of.at(replay.end)).clone()
+        } else {
+            frames_of.at(t)
+        };
+        let mut frame = encoder.new_frame();
+        let (y, u, v) = yuv420(&rgba, w, h);
+        frame.planes[0].copy_from_raw_u8(&y, w, 1);
+        frame.planes[1].copy_from_raw_u8(&u, w / 2, 1);
+        frame.planes[2].copy_from_raw_u8(&v, w / 2, 1);
+        encoder.send_frame(frame).map_err(|e| anyhow::anyhow!("the video encoder failed: {e:?}"))?;
+        take(&mut encoder, &mut out)?;
+    }
+    encoder.flush();
+    while !take(&mut encoder, &mut out)? {}
+    Ok(crate::webm::write(w as u32, h as u32, GIF_FPS as u32, &encoder.container_sequence_header(), &out))
+}
+
+/// RGBA as BT.709 limited-range Y, Cb and Cr, the colour planes halved both ways (each from four pixels).
+fn yuv420(rgba: &[u8], w: usize, h: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    let px = |x: usize, y: usize| {
+        let i = (y * w + x) * 4;
+        (f64::from(rgba[i]), f64::from(rgba[i + 1]), f64::from(rgba[i + 2]))
+    };
+    let mut luma = vec![0_u8; w * h];
+    for y in 0..h {
+        for x in 0..w {
+            let (r, g, b) = px(x, y);
+            luma[y * w + x] = (16.0 + 219.0 * (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0).round() as u8;
+        }
+    }
+    let (cw, ch) = (w / 2, h / 2);
+    let (mut cb, mut cr) = (vec![0_u8; cw * ch], vec![0_u8; cw * ch]);
+    for y in 0..ch {
+        for x in 0..cw {
+            let mut sum = (0.0, 0.0, 0.0);
+            for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                let (r, g, b) = px(2 * x + dx, 2 * y + dy);
+                sum = (sum.0 + r / 4.0, sum.1 + g / 4.0, sum.2 + b / 4.0);
+            }
+            let (r, g, b) = sum;
+            cb[y * cw + x] = (128.0 + 224.0 * (-0.1146 * r - 0.3854 * g + 0.5 * b) / 255.0).round().clamp(16.0, 240.0) as u8;
+            cr[y * cw + x] = (128.0 + 224.0 * (0.5 * r - 0.4542 * g - 0.0458 * b) / 255.0).round().clamp(16.0, 240.0) as u8;
+        }
+    }
+    (luma, cb, cr)
 }
 
 /// The smallest rectangle holding every pixel that differs between two frames, if any does.
@@ -371,5 +483,30 @@ mod tests {
         assert!(ink(&frames[0]) < ink(frames.last().unwrap()), "the first frame has less ink than the last");
         let (hold, _) = frames.last().unwrap().delay().numer_denom_ms();
         assert_eq!(hold, u32::from(GIF_HOLD_MS));
+    }
+
+    #[test]
+    fn the_video_has_a_frame_for_every_tenth_of_a_second_and_the_hold() {
+        let mut glyphs = Glyphs::from_checkout(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))).unwrap();
+        let replay = replay(&page_with_an_insert(), &mut glyphs);
+        let bytes = webm(&replay).unwrap();
+        let find = |needle: &[u8]| bytes.windows(needle.len()).filter(|w| *w == needle).count();
+        assert!(bytes.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) && find(b"webm") == 1 && find(b"V_AV1") == 1);
+        // Each frame is a SimpleBlock of track 1; the first starts the video and is a key frame.
+        let step = 1000.0 / GIF_FPS;
+        let expected = (replay.end / step).ceil() as usize + 1 + (f64::from(GIF_HOLD_MS) / step).round() as usize;
+        let blocks = bytes.windows(2).enumerate().filter(|(_, w)| w[0] == 0xA3).filter(|(i, _)| {
+            // An element ID, its size, then track 1 (0x81): a block, not a byte that happens to be 0xA3.
+            let len_bytes = bytes[i + 1].leading_zeros() as usize + 1;
+            bytes.get(i + 1 + len_bytes) == Some(&0x81)
+        });
+        assert!(blocks.count() >= expected, "a block for each of the {expected} frames");
+        // The codec's private data (ID 63 A2, then a one-byte size): the av1C record, marker and version 1, then
+        // the sequence header OBU (type 1, so a header byte of 0x0A) that the mapping asks for.
+        let at = bytes.windows(2).position(|w| w == [0x63, 0xA2]).expect("CodecPrivate");
+        let len = usize::from(bytes[at + 2] & 0x7f);
+        let private = &bytes[at + 3..at + 3 + len];
+        assert_eq!(private[0], 0x81, "av1C starts with its marker and version");
+        assert_eq!(private[4], 0x0A, "the sequence header OBU follows the four-byte record");
     }
 }

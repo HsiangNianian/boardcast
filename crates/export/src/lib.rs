@@ -6,6 +6,7 @@ pub mod ink;
 pub mod markdown;
 pub mod pdf;
 pub mod replay_page;
+mod webm;
 
 use anyhow::{bail, Context, Result};
 use boardcast_board::glyphs::{Glyphs, HanziSource};
@@ -23,6 +24,8 @@ pub enum Kind {
     AnimatedSvg,
     /// The animated board as a GIF, for chats and documents that don't play an SVG.
     Gif,
+    /// The animated board as a WebM video (AV1): sharper and smaller than the GIF, for browsers and sites.
+    Webm,
     Pdf,
     ReplayPage,
 }
@@ -35,6 +38,7 @@ impl Kind {
             Self::Svg => "svg",
             Self::AnimatedSvg => "anim.svg",
             Self::Gif => "gif",
+            Self::Webm => "webm",
             Self::Pdf => "pdf",
             Self::ReplayPage => "html",
         }
@@ -42,7 +46,7 @@ impl Kind {
 
     /// Markdown and PDF cover the whole meeting; a picture is of the board on screen.
     pub fn needs_a_drawn_board(self) -> bool {
-        matches!(self, Self::Png | Self::Svg | Self::AnimatedSvg | Self::Gif)
+        matches!(self, Self::Png | Self::Svg | Self::AnimatedSvg | Self::Gif | Self::Webm)
     }
 
     pub fn from_path(path: &Path) -> Option<Self> {
@@ -55,6 +59,7 @@ impl Kind {
             "svg" => Some(Self::Svg),
             "pdf" => Some(Self::Pdf),
             "gif" => Some(Self::Gif),
+            "webm" => Some(Self::Webm),
             "html" => Some(Self::ReplayPage),
             _ => None,
         }
@@ -168,14 +173,18 @@ impl Frozen {
                 Ok(text_only(replay_page::replay_page(&doc, &replay_pages, &mut glyphs).into_bytes()))
             }
             // Both replay the board on screen step by step, which lays it out many times over.
-            Kind::AnimatedSvg | Kind::Gif => {
+            Kind::AnimatedSvg | Kind::Gif | Kind::Webm => {
                 let page = replay_pages.get(current).context("no board to export")?;
                 let mut glyphs = Glyphs::load(hanzi)?;
                 let replay = animate::replay(page, &mut glyphs);
                 if replay.is_empty() {
                     bail!("The board is empty.");
                 }
-                Ok(text_only(if kind == Kind::Gif { animate::gif(&replay)? } else { animate::animated_svg(&replay, &doc.title).into_bytes() }))
+                Ok(text_only(match kind {
+                    Kind::Gif => animate::gif(&replay)?,
+                    Kind::Webm => animate::webm(&replay)?,
+                    _ => animate::animated_svg(&replay, &doc.title).into_bytes(),
+                }))
             }
             Kind::Png | Kind::Svg => {
                 let page = pages.into_iter().nth(current).context("no board to export")?;

@@ -11,6 +11,7 @@ boardcast-meetings.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 fontdb = "0.23"
 gif = "0.14"
+rav1e = { version = "0.8", default-features = false, features = ["threading"] }
 image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 krilla = "0.8"
 serde_json.workspace = true

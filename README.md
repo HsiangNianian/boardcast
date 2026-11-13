@@ -152,7 +152,7 @@ Everything is Rust, the website included: it is built with [Trunk](https://trunk
 
 | Set | Current size | Purpose |
 |---|---|---|
-| [`eval/cases.json`](eval/cases.json) | 28 meetings | Development and regression, including English and a real-meeting regression |
+| [`eval/cases.json`](eval/cases.json) | 32 meetings | Development and regression, including English, a real-meeting regression, and the known failures: a chain through a middle node, one very long line, and several sentences arriving as one turn |
 | [`eval/holdout.json`](eval/holdout.json) | 27 meetings | Held out from prompt tuning |
 | [`eval/pointing.json`](eval/pointing.json) | 18 cases | Chinese and English pointing cases with fixed starting boards |
 | [`eval/revisions.json`](eval/revisions.json) | 3 cases | Transcription revisions that must keep node identity and unrelated content; not run until the GPUI app revises transcripts |
@@ -163,6 +163,13 @@ Start a working llama-server, then run:
 cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set dev --label my-model
 cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set holdout --label my-model
 cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
+```
+
+Or a remote model: any OpenAI-compatible service with `--remote <url> --model <name>` and the key in `BOARDCAST_API_KEY`, DeepSeek with `--deepseek` and `DEEPSEEK_API_KEY`, or the remote model saved in the app's Settings with `--saved`. `summary-eval` and `demo-record` take the same options. A report is named after the service and model, and no key is written to it; the output file records each case's input, cached and output tokens, for what a run costs.
+
+```sh
+BOARDCAST_API_KEY=… cargo run --release -p boardcast-tools -- agent-eval . board.json --remote https://api.example.com/v1 --model some-model --set all --workers 4
+cargo run --release -p boardcast-tools -- agent-eval . board.json --saved --set all --repeat 3 --workers 4
 ```
 
 Speech recognition has its own suites:

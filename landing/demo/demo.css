@@ -1,17 +1,39 @@
-/* The app's window around its own board; appearance.css shares the site's light or dark theme. */
+/* The app's window around its own board, laid out and sized as the app draws it (crates/ui/src/app.rs);
+   appearance.css shares the site's light or dark theme. */
 
 @font-face { font-family: 'DM Sans Variable'; font-style: normal; font-display: swap; font-weight: 100 1000; src: url('../fonts/dm-sans-latin-wght-normal.woff2') format('woff2-variations'); }
 @font-face { font-family: 'JetBrains Mono Variable'; font-style: normal; font-display: swap; font-weight: 100 800; src: url('../fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations'); }
+@font-face { font-family: 'Excalifont'; font-style: normal; font-display: swap; src: url('../fonts/excalifont-latin.woff2') format('woff2'); }
 
 :root {
   --bg: #000; --paper: #070707; --line: #262626; --grid: #151515; --text: #f2f2f2; --muted: #c4c4c4; --faint: #8a8a8a;
   --accent: #9fb4ff; --rec: #ff5a36;
   --sans: 'DM Sans Variable', system-ui, sans-serif; --mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  /* The window's own layers, as the app's palette names them: what floats over the board, the sidebar, the board. */
+  --surface: var(--bg); --chrome: #0e0e0e; --canvas: var(--paper); --hover: #141414;
+  --shadow: 0 4px 6px -1px rgb(0 0 0 / .5), 0 2px 4px -2px rgb(0 0 0 / .5);
+  /* Speaker badges: a fill and its ink, and the outline a line has until it is on the board. */
+  --p0: #3a1424; --p0i: #f7a3c4; --p1: #142640; --p1i: #a8c8ff; --p2: #12301f; --p2i: #8ee0b0;
+  --p3: #3a2410; --p3i: #ffc489; --p4: #241a40; --p4i: #c9b8ff; --p5: #1f242b; --p5i: #c2cad6;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --chrome: var(--l2); --hover: var(--l1); --shadow: 0 4px 6px -1px rgb(0 0 0 / .08), 0 2px 4px -2px rgb(0 0 0 / .08);
+    --p0: #fcd7ea; --p0i: #a61e4d; --p1: #d6e6ff; --p1i: #1c4f9c; --p2: #d4f5e7; --p2i: #1f7a45;
+    --p3: #fde8c8; --p3i: #9f4f0b; --p4: #e5dcff; --p4i: #5b3cc4; --p5: #e2e8f0; --p5i: #475569;
+  }
+}
+:root[data-theme="light"] {
+  --chrome: var(--l2); --hover: var(--l1); --shadow: 0 4px 6px -1px rgb(0 0 0 / .08), 0 2px 4px -2px rgb(0 0 0 / .08);
+  --p0: #fcd7ea; --p0i: #a61e4d; --p1: #d6e6ff; --p1i: #1c4f9c; --p2: #d4f5e7; --p2i: #1f7a45;
+  --p3: #fde8c8; --p3i: #9f4f0b; --p4: #e5dcff; --p4i: #5b3cc4; --p5: #e2e8f0; --p5i: #475569;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: var(--bg); color: var(--text); font-family: var(--sans); font-weight: 300; -webkit-font-smoothing: antialiased; }
 body { max-width: 1440px; margin: 0 auto; padding: 32px 40px 40px; }
 a { color: inherit; text-decoration: none; }
+button { all: unset; box-sizing: border-box; }
+svg { flex: none; }
 .mono { font: 400 12px var(--mono); color: var(--faint); }
 
 body > .site-header { padding-top: 0; padding-bottom: 28px; }
@@ -20,126 +42,169 @@ body > .site-header { padding-top: 0; padding-bottom: 28px; }
 .intro p { margin-top: 14px; max-width: 46em; font-size: 15px; line-height: 1.65; color: var(--muted); }
 .get { display: inline-flex; gap: 22px; align-items: center; padding: 14px 16px; background: var(--text); color: var(--bg); font-size: 16px; white-space: nowrap; }
 .get:hover { background: var(--muted); }
+:where(.window) button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-.samples { display: flex; flex-wrap: wrap; gap: 1px; background: var(--line); border: 1px solid var(--line); border-bottom: 0; }
-.samples button { all: unset; cursor: pointer; flex: 1 1 auto; padding: 12px 16px; background: var(--bg); font: 400 12px var(--mono); color: var(--faint); text-align: left; }
-.samples button:hover { color: var(--text); }
-.samples button.on { color: var(--bg); background: var(--text); }
-.samples button:focus-visible, .dock button:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+/* The window. */
+.window { border: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; height: min(820px, calc(100vh - 80px)); min-height: 520px; overflow: hidden; }
+.ico { display: grid; place-items: center; width: 26px; height: 26px; color: var(--text); }
+.ico svg { width: 14px; height: 14px; }
+/* The sidebar icon shows whether the sidebar is out, as the app's does. A window wide enough shows the
+   sidebar until it is put away; a narrower one keeps it away until it is asked for, over the board. */
+#sidebar-toggle { cursor: pointer; border-radius: 2px; }
+#sidebar-toggle:hover { background: var(--hover); }
+.side-shut, .window.flip .side-open { display: none; }
+.window.flip .side-shut { display: block; }
+.sep { width: 1px; height: 18px; margin: 0 4px; background: var(--line); }
 
-.window { border: 1px solid var(--line); background: var(--paper); display: flex; flex-direction: column; height: min(760px, calc(100vh - 120px)); min-height: 460px; }
-.titlebar { display: flex; gap: 22px; align-items: center; height: 34px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
-.titlebar .name { font-size: 16px; color: var(--text); }
-.titlebar .state.hot { color: var(--text); }
-.titlebar .icons { margin-left: auto; display: flex; gap: 12px; }
-.titlebar .icons i { width: 12px; height: 12px; border: 2px solid var(--muted); }
-.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 340px; }
-.canvas { position: relative; overflow: hidden; background-color: var(--paper);
-  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 72px 72px; }
-.coords { position: absolute; left: 14px; top: 12px; font-size: 10px; }
-.board { position: absolute; inset: 30px 0 58px; width: 100%; height: calc(100% - 88px); }
-.dock { position: absolute; left: 0; right: 0; bottom: 0; display: flex; height: 56px; border-top: 1px solid var(--line); background: var(--bg); }
-.dock button { all: unset; cursor: default; display: flex; gap: 10px; align-items: center; padding: 0 18px; border-right: 1px solid var(--line); font-size: 15px; color: var(--text); }
-.dock button svg { width: 20px; height: 20px; color: var(--text); }
-.dock button small { display: block; font: 400 10px var(--mono); color: var(--faint); }
-.dock .listen, #replay { cursor: pointer; }
-.dock .listen { background: var(--text); color: var(--bg); }
-.dock .listen small { color: #666; }
-.dock .listen .rec { width: 26px; height: 26px; display: grid; place-items: center; background: var(--bg); }
-.dock .listen .rec::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--rec); }
-.dock .listen.on .rec::after { border-radius: 0; animation: pulse 1.2s ease-in-out infinite; }
-.dock .listen.paused .rec::after { animation: none; border-radius: 50%; }
-.dock #replay:hover, .dock .listen:hover { opacity: .85; }
-@keyframes pulse { 50% { opacity: .35; } }
+/* The title bar: the meeting and how it stands on the left, what is done with all of it on the right. */
+.titlebar { display: flex; gap: 12px; align-items: center; height: 40px; flex: none; padding: 0 4px 0 8px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.titlebar .name { max-width: 320px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 16px; font-weight: 400; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--line); border-radius: 2px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.chip.hot { color: var(--rec); }
+.chip.hot::before { background: var(--rec); }
+.bar-end { margin-left: auto; display: flex; align-items: center; gap: 4px; padding-right: 4px; }
+.bar-btn { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 2px; font-size: 14px; font-weight: 400; color: var(--text); }
+.bar-btn svg { width: 14px; height: 14px; }
+#replay { cursor: pointer; }
+#replay:hover { background: var(--hover); }
 
-.side { border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
-.side-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-.side-head b { font-size: 20px; font-weight: 300; }
-.side-head span { color: var(--muted); }
-.lines { flex: 1; min-height: 0; overflow: hidden auto; list-style: none; padding: 10px 16px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
-.lines li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; }
-.lines .who { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--faint); font: 400 10px var(--mono); }
-.lines .name { font: 400 11px var(--mono); color: var(--faint); }
-.lines p { margin-top: 3px; font-size: 14px; line-height: 1.5; color: var(--muted); }
-.lines li.live p { color: var(--text); }
-.lines li.live p::after { content: '▍'; color: var(--faint); }
-.lines li.drawn .who { border-color: var(--text); background: var(--text); color: var(--bg); }
-.input { margin: 10px; padding: 10px 12px; border: 1px solid var(--line); font-size: 13px; color: var(--faint); }
-.dock svg [fill="#000"] { fill: var(--bg); }
-/* The recording's controls and credit show only while a recorded meeting plays. */
-.dock .sound, .credit { display: none; }
-.dock .sound.shown { display: flex; cursor: pointer; }
-.dock .sound .waves, .dock .sound.on .mute { display: none; }
-.dock .sound.on .waves { display: inline; }
-.dock .sound.on { color: var(--rec); }
-.dock .sound.on svg { color: var(--rec); }
-.dock .sound:hover { opacity: .85; }
-.dock .credit.shown { display: flex; align-items: center; margin-left: auto; padding: 0 16px; font-size: 10px; text-align: right; min-width: 0; overflow: hidden; }
-.dock .credit.shown ~ #replay { margin-left: 0; }
-/* The board can be dragged to look around; once it is, a way back to the talk appears. */
-.board { cursor: grab; touch-action: none; }
+.body { flex: 1; min-height: 0; display: grid; grid-template-columns: 236px minmax(0, 1fr) 340px; }
+
+/* The sidebar: the app around the meeting. Its one live part is the list of samples, as meetings. */
+.sidebar { display: flex; flex-direction: column; min-height: 0; padding: 0 8px 8px; border-right: 1px solid var(--line); background: var(--chrome); }
+.wordmark { display: flex; align-items: center; height: 56px; padding: 0 8px; font: 400 30px/1 'Excalifont', var(--sans); letter-spacing: .01em; }
+.new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 32px; margin-bottom: 10px; border-radius: 2px; background: var(--text); color: var(--bg); font-size: 14px; font-weight: 400; opacity: .35; }
+.new svg { width: 11px; height: 11px; }
+.nav { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 2px; font-size: 14px; font-weight: 400; }
+.nav svg { width: 14px; height: 14px; color: var(--muted); }
+.nav small, .meetings button small { margin-left: auto; font: 400 10px var(--mono); color: var(--faint); }
+.group { padding: 16px 8px 4px; font: 400 10px var(--mono); color: var(--faint); }
+.meetings { display: flex; flex-direction: column; gap: 1px; }
+.meetings button { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 2px; font-size: 14px; font-weight: 400; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meetings button:hover { background: var(--hover); }
+.meetings button.on { background: var(--line); }
+.note { padding: 12px 8px 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+.sidebar .foot { margin: auto -8px 0; padding: 0 16px; height: 46px; border-top: 1px solid var(--line); border-radius: 0; }
+
+/* The board, with faint dots under the ink every 24 pixels as in the app, and its tools floating over it. */
+.canvas { position: relative; overflow: hidden; min-width: 0; container-type: inline-size; background-color: var(--canvas);
+  background-image: radial-gradient(circle, var(--line) 1px, transparent 1.2px); background-size: 24px 24px; background-position: 12px 12px; }
+.board { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
 .board.dragging { cursor: grabbing; }
-.latest { all: unset; display: none; position: absolute; left: 14px; top: 30px; padding: 3px 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: 400 11px var(--mono); cursor: pointer; }
-.latest.shown { display: block; }
+.float { position: absolute; display: flex; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; box-shadow: var(--shadow); }
+.latest { display: none; left: 50%; top: 12px; transform: translateX(-50%); height: 28px; padding: 0 8px; font-size: 12px; color: var(--text); cursor: pointer; white-space: nowrap; }
+.latest.shown { display: flex; }
 .latest:hover { border-color: var(--text); }
-.embed-label { display: none; }
 
-/* The embedded demo reads left to right: transcript, then the board. */
+.zoom { left: 12px; bottom: 12px; height: 32px; padding: 0 3px; }
+.zoom button { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 2px; color: var(--text); cursor: pointer; }
+.zoom button svg { width: 12px; height: 12px; }
+.zoom button:hover { background: var(--hover); }
+.zoom .pct { width: 44px; font: 400 11px var(--mono); color: var(--muted); }
+.zoom .pct:hover { color: var(--text); background: none; }
+/* On a narrower board the zoom gives way, as the tools need its width. */
+@container (max-width: 760px) { .zoom { display: none; } }
+
+.tools { left: 50%; bottom: 12px; transform: translateX(-50%); height: 44px; padding: 0 4px; gap: 2px; white-space: nowrap; }
+.tool { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 2px; font-size: 14px; font-weight: 400; color: var(--text); }
+.tool.icon { width: 34px; padding: 0; justify-content: center; }
+.tool svg { width: 16px; height: 16px; }
+.tool.off { opacity: .4; }
+.tools .sep { height: 20px; }
+/* Red with the level beside it while the meeting plays, as the app is while it listens; black when paused. */
+.listen { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 2px; background: var(--rec); color: #fff; font-size: 14px; font-weight: 400; cursor: pointer; }
+.listen .rec { width: 10px; height: 10px; background: #fff; }
+.listen kbd { display: none; align-items: center; height: 18px; padding: 0 5px; border: 1px solid currentColor; border-radius: 2px; font: 400 10px var(--mono); opacity: .55; }
+.listen .level { display: flex; align-items: flex-end; gap: 2px; height: 18px; }
+.listen .level i { width: 3px; height: 4px; background: #fff; animation: level .9s ease-in-out infinite alternate; }
+.listen .level i:nth-child(2) { animation-delay: -.5s; } .listen .level i:nth-child(3) { animation-delay: -.2s; }
+.listen .level i:nth-child(4) { animation-delay: -.7s; } .listen .level i:nth-child(5) { animation-delay: -.35s; }
+.listen .level i:nth-child(6) { animation-delay: -.8s; } .listen .level i:nth-child(7) { animation-delay: -.1s; }
+@keyframes level { to { height: 17px; } }
+.listen.paused { background: var(--text); color: var(--bg); }
+.listen.paused .rec { border-radius: 50%; background: var(--rec); }
+.listen.paused .level { display: none; }
+.listen.paused kbd { display: flex; }
+.listen:hover { opacity: .88; }
+.sound { display: none; cursor: pointer; }
+.sound.shown { display: inline-flex; }
+.sound:hover { background: var(--hover); }
+.sound .waves, .sound.on .mute { display: none; }
+.sound.on .waves { display: inline; }
+.sound.on { color: var(--rec); }
+@media (prefers-reduced-motion: reduce) { .listen .level i { animation: none; height: 10px; } }
+
+/* The panel beside the board: transcript, summary and speakers, a tab each. */
+.side { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-left: 1px solid var(--line); background: var(--surface); }
+.tabs { display: flex; align-items: center; gap: 20px; height: 40px; flex: none; padding: 0 4px 0 16px; border-bottom: 1px solid var(--line); }
+.tab { display: flex; align-items: center; height: 100%; border-bottom: 2px solid transparent; font-size: 14px; color: var(--muted); }
+.tab.on { border-color: var(--text); color: var(--text); font-weight: 500; }
+.tabs .close { margin-left: auto; }
+.lines { flex: 1; min-height: 0; overflow: hidden auto; list-style: none; padding: 16px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: none; }
+.lines li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 4px; row-gap: 4px; }
+.lines li > div { display: contents; }
+.lines .who { display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border: 1px solid var(--pi, var(--faint)); border-radius: 10px; font: 500 10px var(--sans); color: var(--pi, var(--faint)); }
+.lines .name { font-size: 12px; font-weight: 600; }
+.lines p { grid-column: 1 / -1; font-size: 14px; line-height: 1.5; font-weight: 400; color: var(--text); }
+.lines li.live p::after { content: '▍'; color: var(--faint); }
+.lines li.drawn .who { background: var(--pb, var(--line)); border-color: var(--pb, var(--line)); }
+.who.p0 { --pb: var(--p0); --pi: var(--p0i); } .who.p1 { --pb: var(--p1); --pi: var(--p1i); } .who.p2 { --pb: var(--p2); --pi: var(--p2i); }
+.who.p3 { --pb: var(--p3); --pi: var(--p3i); } .who.p4 { --pb: var(--p4); --pi: var(--p4i); } .who.p5 { --pb: var(--p5); --pi: var(--p5i); }
+.credit { display: none; flex: none; padding: 8px 16px; border-top: 1px solid var(--line); font-size: 10px; line-height: 1.5; }
+.credit.shown { display: block; }
+.input { flex: none; padding: 12px; border-top: 1px solid var(--line); }
+.input span { display: flex; align-items: center; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 2px; font-size: 14px; color: var(--faint); }
+
+/* In the site's first page the demo is the same window, filling its frame. */
 html.embed body { display: flex; flex-direction: column; height: 100vh; padding: 0; max-width: none; }
-html.embed .site-header, html.embed .sitemap, html.embed .top, html.embed .app-label, html.embed .input, html.embed .titlebar { display: none; }
-html.embed .embed-label { display: inline; }
-html.embed .sample-header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; height: 45px; flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--bg); font: 400 11px var(--mono); letter-spacing: .04em; }
-html.embed .sample-caption { white-space: nowrap; font-size: 10px; letter-spacing: 0; }
-html.embed .sample-caption b { margin-left: 12px; color: var(--rec); font-size: 16px; font-weight: 400; }
-html.embed .full-demo { display: flex; align-items: center; justify-self: end; min-height: 44px; white-space: nowrap; }
-html.embed .full-demo:hover { color: var(--accent); }
+html.embed .site-header, html.embed .sitemap, html.embed .top { display: none; }
 html.embed .window { flex: 1; height: auto; min-height: 0; border: 0; }
-html.embed .samples { min-width: 0; max-width: 100%; border: 0; gap: 0; background: transparent; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
-html.embed .samples::-webkit-scrollbar { display: none; }
-html.embed .samples button { display: flex; align-items: center; flex: 0 0 auto; min-height: 44px; font-size: 11px; padding: 0 10px; scroll-snap-align: start; }
-html.embed .body { grid-template-columns: minmax(240px, 28%) minmax(0, 1fr); }
-html.embed .side { display: flex; grid-column: 1; grid-row: 1; border: 0; border-right: 1px solid var(--line); min-width: 0; }
-html.embed .side-head { padding: 12px 16px; }
-html.embed .side-head b { font: 400 10px var(--mono); color: var(--faint); }
-html.embed .lines { padding: 16px; gap: 18px; }
-html.embed .canvas { grid-column: 2; grid-row: 1; min-width: 0; }
-html.embed .board { bottom: 47px; height: calc(100% - 77px); }
-html.embed .dock { height: 45px; }
-html.embed .dock button { font-size: 12px; padding: 0 16px; }
-html.embed .dock button:not(.listen):not(#replay):not(.sound), html.embed #replay small { display: none; }
-html.embed .latest { top: 36px; }
-html.embed .dock button span { display: block; }
-html.embed .dock .listen .rec { display: grid; width: 22px; height: 22px; }
-html.embed #replay { margin-left: auto; border-left: 1px solid var(--line); border-right: 0; }
 
-@media (max-width: 1080px) {
-  html.embed .sample-header { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 0 12px; }
-  html.embed .sample-caption { display: none; }
-  html.embed .samples { justify-self: center; }
-  html.embed .full-demo { font-size: 10px; }
+/* Behind the site's first page on a phone the demo is its board alone: no window around it, no paper under it, and
+   nothing to press. The page above sets how strongly it shows. */
+html.bg, html.bg body { background: transparent; }
+html.bg body { height: 100vh; padding: 0; max-width: none; overflow: hidden; }
+html.bg .site-header, html.bg .sitemap, html.bg .top, html.bg .titlebar, html.bg .sidebar, html.bg .side,
+html.bg .zoom, html.bg .tools, html.bg .latest { display: none !important; }
+html.bg .window { height: 100vh; min-height: 0; border: 0; background: transparent; }
+html.bg .body { display: block; height: 100%; }
+html.bg .canvas { height: 100%; background: none; }
+html.bg .board { inset: 0; height: 100%; cursor: default; }
+.body { position: relative; }
+.window.flip .body { grid-template-columns: minmax(0, 1fr) 340px; }
+.window.flip .sidebar { display: none; }
+
+@media (max-width: 1180px) {
+  .body, .window.flip .body { grid-template-columns: minmax(0, 1fr) 300px; }
+  .sidebar { display: none; }
+  .side-open { display: none; } .side-shut { display: block; }
+  .window.flip .side-open { display: block; } .window.flip .side-shut { display: none; }
+  .window.flip .sidebar { display: flex; position: absolute; z-index: 5; left: 0; top: 0; bottom: 0; width: 236px; box-shadow: var(--shadow); }
 }
 
 @media (max-width: 900px) {
   body { padding: 20px 16px; }
   .top { grid-template-columns: 1fr; gap: 16px; }
-  .body { grid-template-columns: 1fr; } .side { display: none; }
-  .dock button span { display: none; } .dock button { padding: 0 14px; } .titlebar .sample, .titlebar .icons { display: none; }
-  .window { height: 70vh; }
-  .titlebar .mono:not(.state) { display: none; } .titlebar .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .samples { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .samples button { flex: 0 0 auto; }
   .intro p { font-size: 14px; }
+  .body, .window.flip .body { grid-template-columns: minmax(0, 1fr) clamp(240px, 34%, 300px); }
+  .window { height: 70vh; }
+  .titlebar .chip:not(.state), .bar-end .bar-btn.idle, .bar-end .sep { display: none; }
+  .titlebar .name { min-width: 0; }
+  .tools .idle, .tools .sep, .listen kbd, .listen.paused kbd, .zoom { display: none; }
 }
 
 @media (max-width: 700px) {
-  html.embed .body { grid-template-columns: 1fr; grid-template-rows: clamp(140px, 25vh, 180px) minmax(0, 1fr); }
-  html.embed .side { border-right: 0; border-bottom: 1px solid var(--line); }
-  html.embed .side-head { padding: 10px 12px; }
-  html.embed .lines { padding: 10px 12px; gap: 10px; }
-  html.embed .canvas { grid-column: 1; grid-row: 2; }
-  /* A narrow header keeps the samples and an arrow; the samples fade at the edge to show they scroll. */
-  html.embed .full-demo-words { display: none; }
-  html.embed .full-demo { padding: 0 4px; font-size: 14px; }
-  html.embed .samples { mask-image: linear-gradient(90deg, #000 80%, transparent); }
+  /* A phone puts the transcript under the board: its newest lines, and whose recording it is. */
+  .window { height: min(720px, 82svh); }
+  .body, .window.flip .body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) clamp(150px, 30%, 200px); }
+  .side { border-left: 0; border-top: 1px solid var(--line); }
+  .tabs, .input, .titlebar .side-panel, #replay span { display: none; }
+  #replay { padding: 0 6px; }
+  .lines { padding: 10px 16px 6px; gap: 10px; }
   /* The transcript keeps its newest lines at the bottom; the ones above fade out instead of being cut. */
-  html.embed .lines { mask-image: linear-gradient(transparent, #000 28px); }
+  .lines { mask-image: linear-gradient(transparent, #000 28px); }
+  .credit { padding: 6px 16px 8px; font-size: 9px; }
+  /* The ink is framed above the tools, which float over the board's lower edge. */
+  .board { top: 4px; height: calc(100% - 64px); }
 }

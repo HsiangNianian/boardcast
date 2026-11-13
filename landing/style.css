@@ -176,10 +176,19 @@ body.drawing-lasso { user-select: none; cursor: crosshair; }
 }
 :root[data-theme="light"] { --hero-teal: #5ab8b955; --hero-coral: #f8a08777; --hero-gold: #eccb6077; }
 
-/* The live sample, in a thin frame. */
+/* The live sample, in a thin frame, below the opening on a wide screen. */
 .try { border: 1px solid var(--hair); background: var(--bg); scroll-margin-top: 44px; box-shadow: 0 20px 70px #00000018; }
 .try iframe { display: block; width: 100%; height: clamp(340px, 44vh, 400px); border: 0; background: var(--l1); }
 .try-foot { display: flex; justify-content: space-between; gap: 16px; padding: 12px 16px; border-top: 1px solid var(--hair); font-size: 10px; }
+/* On a phone the English sample plays behind the opening instead, faint, and fading out at the top and bottom. */
+.hero-board { display: none; position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; border: 0; pointer-events: none;
+  opacity: .2; mask-image: linear-gradient(transparent 4%, #000 22%, #000 62%, transparent 92%); }
+.phone-only { display: none !important; }
+@media (max-width: 760px) {
+  .try, .wide-only { display: none !important; }
+  .hero-board { display: block; }
+  .phone-only { display: inline-flex !important; }
+}
 
 /* Keep the demo readable; shorter viewports scroll through the first sheet. */
 @media (min-width: 1081px) {
@@ -229,6 +238,8 @@ section.block { padding-top: 140px; }
 /* The timeline's paper, under the caption too. It fades into the ground at its sides and below, so the dots
    thin out towards it instead of being cut off at a hard edge. The sheet keeps it behind its own text. */
 .sig-pin { isolation: isolate; }
+/* The paper reaches past the sheet's sides; the section clips it there, so the page never scrolls sideways. */
+.sig-scroll { overflow-x: clip; }
 .signals::before { content: ''; position: absolute; z-index: -1; inset: 0 -56px -150px; background: var(--bg); pointer-events: none;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 56px, #000 calc(100% - 56px), transparent), linear-gradient(180deg, #000 calc(100% - 72px), transparent);
   -webkit-mask-composite: source-in;
@@ -276,67 +287,104 @@ section.block { padding-top: 140px; }
 .tabs .auto::before { content: ''; border-left: 7px solid var(--accent); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
 .tabs .auto.on { opacity: 1; }
 
-.app { border: 1px solid var(--hair); background: var(--l1); position: relative; }
-.app-title { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 24px; align-items: center; height: 44px; padding: 0 16px; border-bottom: 1px solid var(--hair); font: 400 12px var(--mono); color: var(--dim); }
-.app-title .name { color: var(--fg); font-family: var(--sans); font-size: 15px; font-weight: 300; }
-.sq { display: flex; gap: 6px; } .sq i { width: 10px; height: 10px; background: var(--faint); }
-.rec { color: var(--accent); display: flex; gap: 8px; align-items: center; }
-.rec::before { content: ''; width: 8px; height: 8px; background: var(--accent); animation: blink 1.4s steps(2) infinite; }
-.rec.off { color: var(--dim); } .rec.off::before { background: var(--dim); animation: none; }
-@keyframes blink { 50% { opacity: 0; } }
-.state { color: var(--fg); min-width: 110px; text-align: right; }
-.state::before { content: 'board / '; color: var(--dim); }
-.state.hot { color: var(--accent); }
-.app-body { display: grid; grid-template-columns: 1fr 300px; height: min(560px, 64vh); }
-.canvas { position: relative; container-type: inline-size; overflow: hidden; background:
-    linear-gradient(var(--hair) 1px, transparent 1px) 0 0 / 100% 72px,
-    linear-gradient(90deg, var(--hair) 1px, transparent 1px) 0 0 / 72px 100%; }
-.canvas::after { content: ''; position: absolute; inset: 0; background: radial-gradient(transparent 45%, var(--l1) 100%); pointer-events: none; }
+/* The app's window, sized and coloured as the app draws it (crates/ui/src/app.rs), its sidebar put away. */
+.app { --app-surface: var(--bg); --app-hover: var(--l2); --app-shadow: 0 4px 6px -1px rgb(0 0 0 / .5), 0 2px 4px -2px rgb(0 0 0 / .5);
+  position: relative; min-width: 0; border: 1px solid var(--hair); background: var(--app-surface); }
+:root[data-theme="light"] .app { --app-shadow: 0 4px 6px -1px rgb(0 0 0 / .08), 0 2px 4px -2px rgb(0 0 0 / .08); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .app { --app-shadow: 0 4px 6px -1px rgb(0 0 0 / .08), 0 2px 4px -2px rgb(0 0 0 / .08); } }
+.app svg { flex: none; }
+.app-ico { display: grid; place-items: center; width: 26px; height: 26px; color: var(--fg); }
+.app-ico svg { width: 14px; height: 14px; }
+.app-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--hair); }
+.app-title { display: flex; min-width: 0; overflow: hidden; gap: 12px; align-items: center; height: 40px; padding: 0 4px 0 8px; border-bottom: 1px solid var(--hair); }
+.app-title .name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 16px; font-weight: 400; }
+/* A red dot and the meeting's clock while it listens; a grey square for the time recorded once it stops. */
+.rec { display: flex; gap: 8px; align-items: center; font: 400 12px var(--mono); color: var(--accent); }
+.rec::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.rec.off { color: var(--dim); } .rec.off::before { border-radius: 0; background: var(--dim); }
+.app-chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--hair); border-radius: 2px; font-size: 12px; color: var(--grey); white-space: nowrap; }
+.app-chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
+.app-chip.hot { color: var(--accent); } .app-chip.hot::before { background: var(--accent); }
+.app-end { margin-left: auto; display: flex; align-items: center; gap: 4px; padding-right: 4px; }
+.app-btn { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 2px; font-size: 14px; font-weight: 400; white-space: nowrap; transition: background .2s; }
+.app-btn svg { width: 14px; height: 14px; }
+.app-btn.active { background: var(--l3); }
+.app-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; height: min(560px, 64vh); }
+.canvas { position: relative; container-type: inline-size; overflow: hidden; background-color: var(--l1);
+  background-image: radial-gradient(circle, var(--hair) 1px, transparent 1.2px); background-size: 24px 24px; background-position: 12px 12px; }
 .canvas svg.board { position: absolute; left: 36px; top: 34px; width: calc(100% - 72px); height: calc(100% - 140px); overflow: visible; z-index: 1; }
 .board .stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.6; }
 .board .ink { stroke: var(--board-ink); } .board .thick { stroke-width: 3.4; } .board .accent { stroke: var(--accent); }
 .board .lasso { stroke: var(--fg); stroke-width: 1.4; opacity: .8; }
 .board .hand { font-family: var(--hand); fill: var(--board-ink); }
 .board .sel { fill: none; stroke: var(--link); stroke-width: 1; stroke-dasharray: 3 3; }
-.coords { position: absolute; left: 12px; top: 10px; z-index: 2; }
-.marks { position: absolute; z-index: 3; display: flex; border: 1px solid var(--faint); background: var(--l2); opacity: 0; transform: translateY(6px); transition: opacity .25s, transform .25s; font-size: 12px; }
+.marks { position: absolute; z-index: 3; display: flex; border: 1px solid var(--hair); border-radius: 4px; background: var(--app-surface); box-shadow: var(--app-shadow); opacity: 0; transform: translateY(6px); transition: opacity .25s, transform .25s; font-size: 12px; }
 .marks.on { opacity: 1; transform: none; }
-.marks span { padding: 6px 10px; border-right: 1px solid var(--hair); color: var(--grey); }
-.marks span:last-child { border-right: 0; }
+.marks span { padding: 6px 10px; color: var(--grey); }
 .marks span.hit { background: var(--fg); color: var(--bg); }
-.dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; border-top: 1px solid var(--hair); background: var(--l1); }
-.dock button { all: unset; display: grid; grid-template-columns: 24px auto; gap: 8px; align-items: center; padding: 12px 14px; border-right: 1px solid var(--hair); font-size: 16px; color: var(--fg); transition: background .2s, color .2s; }
-.dock button svg { width: 24px; height: 24px; }
-.dock button small { display: block; font: 400 10px var(--mono); color: var(--dim); }
-.dock button.active { background: var(--l3); }
-.dock .mic { background: var(--fg); color: var(--bg); grid-template-columns: 28px auto auto; }
-.dock .mic small { color: #666; }
-.dock .mic .stop { width: 28px; height: 28px; display: grid; place-items: center; background: var(--bg); }
-.dock .mic .stop::after { content: ''; width: 10px; height: 10px; background: var(--accent); }
-.dock .mic.off { background: var(--l2); color: var(--fg); }
-.dock .mic.off .stop::after { border-radius: 50%; background: var(--fg); }
-@container (max-width: 590px) {
-  .dock button:not(.mic) { grid-template-columns: 24px; gap: 0; }
-  .dock button:not(.mic) span { display: none; }
+
+/* What floats over the board's lower edge: the zoom at its corner, the tools in the middle. */
+.app-float { position: absolute; z-index: 4; bottom: 12px; display: flex; align-items: center; border: 1px solid var(--hair); border-radius: 4px; background: var(--app-surface); box-shadow: var(--app-shadow); white-space: nowrap; }
+.app-zoom { left: 12px; height: 32px; padding: 0 10px; gap: 14px; font: 400 11px var(--mono); color: var(--grey); }
+.app-zoom svg { width: 12px; height: 12px; color: var(--fg); }
+.app-tools { left: 50%; transform: translateX(-50%); height: 44px; padding: 0 4px; }
+.app-live, .app-replay { display: flex; align-items: center; gap: 2px; }
+.app-replay { display: none; width: min(560px, calc(100cqi - 140px)); }
+.app-tools.on .app-live { display: none; }
+.app-tools.on .app-replay { display: flex; }
+.app-tool { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 2px; font-size: 14px; font-weight: 400; transition: background .2s; }
+.app-tool.icon { width: 34px; padding: 0; justify-content: center; }
+.app-tool svg { width: 16px; height: 16px; }
+.app-tool.off { opacity: .4; }
+.app-tool.active { background: var(--l3); }
+.app-tools .app-sep { height: 20px; }
+/* Red with the level beside it while it listens; black, with its key, when it does not. */
+.mic { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 2px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 400; }
+.mic .dot { width: 10px; height: 10px; background: #fff; }
+.mic kbd { display: none; align-items: center; height: 18px; padding: 0 5px; border: 1px solid currentColor; border-radius: 2px; font: 400 10px var(--mono); opacity: .55; }
+.meter { display: flex; gap: 2px; height: 18px; align-items: flex-end; }
+.meter i { width: 3px; height: 3px; background: #fff; transition: height .08s; }
+.mic.off { background: var(--fg); color: var(--bg); }
+.mic.off .dot { border-radius: 50%; background: var(--accent); }
+.mic.off .meter { display: none; } .mic.off kbd { display: flex; }
+/* The replay's bar, in place of the tools: pause, where it is in the meeting, speed, and a fork from there. */
+.app-replay .play { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 2px; background: var(--fg); color: var(--bg); }
+.app-replay .play svg { width: 14px; height: 14px; }
+.app-replay .rb-track { position: relative; flex: 1; height: 4px; margin: 0 12px; border-radius: 2px; background: var(--hair); }
+.app-replay .rb-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: var(--fg); }
+.app-replay .rb-knob { position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; border: 2px solid var(--fg); background: var(--app-surface); }
+.app-replay .rb-time { padding: 0 4px; font: 400 11px var(--mono); color: var(--grey); }
+/* The zoom gives way first, as the tools need the board's width. */
+@container (max-width: 780px) { .app-zoom { display: none; } }
+@container (max-width: 560px) {
+  .app-zoom, .app-live .icon, .app-live .app-sep, .mic kbd, .app-replay .app-tool, .app-replay .app-sep { display: none !important; }
+  .app-replay { width: calc(100cqi - 40px); }
 }
-.meter { display: flex; gap: 2px; height: 26px; align-items: flex-end; }
-.meter i { width: 3px; height: 3px; background: var(--bg); transition: height .08s; }
-.replaybar { position: absolute; left: 0; right: 0; bottom: 53px; z-index: 4; padding: 12px 18px; border-top: 1px solid var(--hair); background: var(--l1); display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; opacity: 0; transform: translateY(8px); transition: opacity .3s, transform .3s; }
-.replaybar.on { opacity: 1; transform: none; }
-.replaybar .track { height: 2px; background: var(--hair); position: relative; }
-.replaybar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--fg); }
-.replaybar .head { position: absolute; top: -5px; width: 2px; height: 12px; background: var(--fg); }
-.side { border-left: 1px solid var(--hair); display: flex; flex-direction: column; min-height: 0; }
-.side-head { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px 12px; border-bottom: 1px solid var(--hair); }
-.side-head b { font-size: 20px; font-weight: 300; }
-.transcript { list-style: none; padding: 4px 16px; display: flex; flex-direction: column-reverse; justify-content: flex-end; flex: 1; overflow: hidden; }
-.transcript li { display: grid; grid-template-columns: 30px 1fr; gap: 6px; padding: 11px 0; border-bottom: 1px solid var(--hair); font-size: 14px; line-height: 1.5; transition: opacity .3s, transform .3s; }
+
+/* The panel beside the board, on its transcript: each line under its speaker's badge, outlined until it is drawn. */
+.side { border-left: 1px solid var(--hair); display: flex; flex-direction: column; min-height: 0; background: var(--app-surface); }
+.app-tabs { display: flex; align-items: center; gap: 20px; height: 40px; flex: none; padding: 0 4px 0 16px; border-bottom: 1px solid var(--hair); }
+.app-tabs > span { display: flex; align-items: center; gap: 6px; height: 100%; border-bottom: 2px solid transparent; font-size: 14px; color: var(--grey); }
+.app-tabs > span.on { border-color: var(--fg); color: var(--fg); font-weight: 500; }
+.app-tabs small { font: 400 10px var(--mono); color: var(--dim); }
+.app-tabs .app-ico { margin-left: auto; border: 0; }
+.transcript { list-style: none; padding: 16px; display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 0; overflow: hidden; }
+.transcript li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px; }
 .transcript li.gone { display: none; }
-.transcript li b { font: 400 11px var(--mono); color: var(--dim); padding-top: 3px; }
-.transcript li.drawn b { color: var(--accent); }
-.transcript li.live span::after { content: '▍'; animation: blink .8s steps(2) infinite; color: var(--dim); }
-.input { margin: 12px 16px 16px; padding-top: 12px; border-top: 1px solid var(--fg); display: flex; justify-content: space-between; font-size: 13px; color: var(--dim); }
-.input kbd { font: 400 11px var(--mono); color: var(--fg); }
+.transcript .who { display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border: 1px solid var(--pi); border-radius: 10px; font: 500 10px var(--sans); color: var(--pi); transition: background .3s; }
+.transcript li.drawn .who { background: var(--pb); border-color: var(--pb); }
+.transcript .nm { font-size: 12px; font-weight: 600; }
+.transcript p { grid-column: 1 / -1; font-size: 14px; line-height: 1.5; font-weight: 400; }
+.transcript li.live p::after { content: '▍'; animation: blink .8s steps(2) infinite; color: var(--dim); }
+@keyframes blink { 50% { opacity: 0; } }
+/* The app's badge colours for the first three speakers, light and dark. */
+.who.p0 { --pb: #3a1424; --pi: #f7a3c4; } .who.p1 { --pb: #142640; --pi: #a8c8ff; } .who.p2 { --pb: #12301f; --pi: #8ee0b0; }
+:root[data-theme="light"] .who.p0 { --pb: #fcd7ea; --pi: #a61e4d; } :root[data-theme="light"] .who.p1 { --pb: #d6e6ff; --pi: #1c4f9c; } :root[data-theme="light"] .who.p2 { --pb: #d4f5e7; --pi: #1f7a45; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .who.p0 { --pb: #fcd7ea; --pi: #a61e4d; } :root:not([data-theme="dark"]) .who.p1 { --pb: #d6e6ff; --pi: #1c4f9c; } :root:not([data-theme="dark"]) .who.p2 { --pb: #d4f5e7; --pi: #1f7a45; }
+}
+.input { flex: none; padding: 12px; border-top: 1px solid var(--hair); }
+.input span { display: flex; align-items: center; height: 32px; padding: 0 10px; border: 1px solid var(--hair); border-radius: 2px; font-size: 14px; color: var(--dim); }
 
 /* ———————————————— during: cards ———————————————— */
 .bento { display: grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 320px; gap: 1px; background: var(--hair); border: 1px solid var(--hair); }
@@ -452,6 +500,12 @@ section.block { padding-top: 140px; }
 .dl a:hover .here { color: var(--accent); }
 /* The last sheet: the reader's own said line, and a blank board the pen writes on. */
 .now { padding-top: 160px; padding-bottom: 120px; }
+/* The site's map, which a phone shows at the end in place of the navigation at the top. */
+.phone-sitemap { display: none; }
+@media (max-width: 600px) {
+  .phone-sitemap { display: block; }
+  .phone-sitemap .sitemap { margin-top: 0; }
+}
 .now .said .who { width: auto; padding: 0 6px; }
 .now .blank { margin-top: 18px; height: clamp(200px, 26vw, 320px); border: 1px solid var(--hair); background-color: var(--l1); }
 .now .blank .ink { height: 100%; margin: 0; }
@@ -475,7 +529,7 @@ section.block { padding-top: 140px; }
   .bento { grid-template-columns: 1fr; } .w4, .w2 { grid-column: auto; }
   .dots { grid-template-columns: 1fr 1fr; }
   .row { grid-template-columns: 110px 1fr; } .caption { grid-template-columns: 110px 1fr; } .row .name { font-size: 16px; }
-  .try iframe { height: calc(clamp(560px, 70svh, 720px) + 44px); }
+  .try iframe { height: clamp(560px, 70svh, 720px); }
 }
 @media (max-width: 760px) {
   /* A phone puts the brand on its own line and the items two by two under it. */
@@ -488,12 +542,10 @@ section.block { padding-top: 140px; }
 }
 @media (max-width: 600px) {
   /* Sides only: the sections set their own top and bottom. */
-  .wrap { padding-left: 20px; padding-right: 20px; } .dots, .dl { grid-template-columns: 1fr; } .app-title > span:not(.rec):not(.name) { display: none; }
+  .wrap { padding-left: 20px; padding-right: 20px; } .dots, .dl { grid-template-columns: 1fr; } .app-title .app-chip, .app-end .app-btn:not(#b-replay), .app-end .app-sep { display: none; }
   /* The sheet's furniture stays out of the way of a narrow screen. */
-  .ruler, .tb-clock, .tb-seg em, .tb-fin { display: none; }
-  .titleblock { left: 6px; right: 6px; bottom: 6px; height: 44px; grid-template-columns: minmax(0, 1fr) auto; }
-  .tb-track { margin: 0 16px; padding-right: 0 !important; align-items: center; }
-  #theme-toggle { width: 44px; }
+  /* The rulers and the title block with its track are left out: a phone follows the system's theme. */
+  .ruler, .titleblock { display: none; }
   .frame { inset: 6px; }
   nav.top { grid-template-columns: 1fr; padding-top: 24px; } .nav-item { display: none; }
   .said { gap: 8px; font-size: 10px; }
@@ -510,15 +562,17 @@ section.block { padding-top: 140px; }
   .hero-copy p { margin-top: 10px; font-size: 14px; line-height: 1.6; }
   .cta { display: grid; grid-template-columns: 1fr 1fr; margin-top: 20px; }
   .cta a { gap: 12px; padding: 12px 14px; }
-  .try iframe { height: 520px; }
   section.block { padding-top: 96px; }
   .head { gap: 16px; } .head h2 { font-size: min(40px, 8.4vw); }
+  /* The timeline's backdrop reaches only as far as the page's sides, or the page would scroll sideways. */
+  .signals::before { left: -20px; right: -20px;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 20px), transparent), linear-gradient(180deg, #000 calc(100% - 72px), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 20px), transparent), linear-gradient(180deg, #000 calc(100% - 72px), transparent); }
   .row { grid-template-columns: 64px 1fr; height: 72px; } .row svg { height: 72px; } .row .name { font-size: 14px; } .row .name small { display: none; }
   .caption { grid-template-columns: 64px 1fr; } .caption p { font-size: 17px; }
   .pin .wrap { gap: 12px; } .chapter { height: 112px; } .chapter h3 { font-size: 28px; margin-top: 10px; }
-  .app-title { gap: 12px; padding: 0 12px; } .app-body { height: min(440px, 56vh); }
+  .app-title { gap: 10px; } .app-body { height: min(440px, 56vh); }
   .canvas svg.board { left: 12px; top: 28px; width: calc(100% - 24px); }
-  .dock .meter, .dock .mic small { display: none; } .dock button { padding: 10px; } .dock .mic { grid-template-columns: 24px auto; }
   .tabs { bottom: 14px; } .tabs .wrap { gap: 12px; overflow: hidden; } .tabs span { font-size: 10px; white-space: nowrap; } .tabs .auto { display: none; }
   /* On a phone each card is as tall as its picture and words, so the two never overlap. */
   .bento { grid-auto-rows: auto; } .card { min-height: 300px; } .card h4 { font-size: 26px; }
@@ -528,9 +582,6 @@ section.block { padding-top: 140px; }
   .dl a { padding: 28px 20px; }
   .now { padding-top: 96px; padding-bottom: 80px; }
 
-  .try { margin-inline: -14px; }
-  .try-foot span:last-child { display: none; }
-  .try-foot { padding: 12px; font-size: 10px; line-height: 1.5; }
 }
 
 @media (max-width: 360px) { .files { transform: scale(.64); } }

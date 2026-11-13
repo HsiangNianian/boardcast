@@ -210,15 +210,16 @@ fn navigation(page: &Page) -> String {
     )
 }
 
-/// The demo ends on a plain map of the site: a heading over each group of links, as site footers go. The documents
-/// have none: their navigation already links each other, and the home page ends on its last sheet.
+/// The demo ends on a plain map of the site: a heading over each group of links, as site footers go. So does the
+/// home page on a phone, where its illustrated navigation at the top is left out. The documents have none: their
+/// navigation already links each other.
 fn footer(page: &Page) -> String {
-    if page.slug != "demo" {
+    if !matches!(page.slug, "" | "demo") {
         return String::new();
     }
     let home = root(page);
     let releases = "https://github.com/HsiangNianian/boardcast/releases/latest";
-    format!(
+    let map = format!(
         r#"<footer class="sitemap">
   <a class="sitemap-brand" href="{home}">board<br>cast</a>
   <div><b>product</b><a href="{home}#story">talk &amp; draw</a><a href="{home}#story">circle</a><a href="{home}#story">replay</a></div>
@@ -228,7 +229,12 @@ fn footer(page: &Page) -> String {
 </footer>"#,
         env!("CARGO_PKG_VERSION"),
         links(page, DOCUMENT_LINKS),
-    )
+    );
+    // On the home page it sits in the sheet's margins, and only a phone shows it (landing/style.css).
+    if page.slug.is_empty() {
+        return format!(r#"<div class="wrap phone-sitemap">{map}</div>"#);
+    }
+    map
 }
 
 /// A document's summary beside it, with the date it was last updated.
@@ -339,7 +345,8 @@ mod tests {
             let html = render(page, "", "", &Assets::new());
             assert!(html.contains(&format!("<title>{}</title>", escape(page.title))));
             assert!(html.contains("<h1>"));
-            assert_eq!(html.contains(r#"<footer class="sitemap">"#), page.slug == "demo");
+            assert_eq!(html.contains(r#"<footer class="sitemap">"#), matches!(page.slug, "" | "demo"));
+            assert_eq!(html.contains("phone-sitemap"), page.slug.is_empty());
             assert!(!html.contains("{{ ") && !html.contains("last updated"));
             assert_eq!(html.matches("<html lang=\"en\">").count(), 1);
             assert!(html.contains(&format!("href=\"{}privacy/\"", root(page))));

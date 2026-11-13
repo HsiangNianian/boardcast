@@ -76,6 +76,25 @@ const MAX_VIEW_WIDTH: f64 = 1500.0;
 const READ_HOLD_MS: f64 = 5000.0;
 /// How near and how far the reader can zoom, as the width of board shown.
 const ZOOM_WIDTH: (f64, f64) = (240.0, 8000.0);
+/// Board units per pixel behind the site's first page, where the board is texture rather than something to read.
+const BACKGROUND_SCALE: f64 = 1.5;
+
+/// How many times faster than it was said the meeting plays behind the site's first page, pen included, so
+/// the board there keeps changing.
+const BACKGROUND_SPEED: f64 = 4.0;
+
+/// How fast the meeting and the pen go: as said in the demo, faster behind the first page.
+fn pace() -> f64 {
+    if background() { BACKGROUND_SPEED } else { 1.0 }
+}
+
+/// Whether the demo plays behind the site's first page.
+fn background() -> bool {
+    doc().document_element().is_some_and(|r| r.class_list().contains("bg"))
+}
+
+/// How much one press of a zoom button changes the width of board shown.
+const ZOOM_STEP: f64 = 1.25;
 
 fn win() -> web_sys::Window {
     web_sys::window().expect("a window")
@@ -160,6 +179,8 @@ struct Board {
     /// Whether the reader is holding the board down right now.
     holding: bool,
     back: Element,
+    /// How far the board is zoomed, as the app shows it at the board's lower corner.
+    zoom: Element,
 }
 
 impl Board {
@@ -173,7 +194,7 @@ impl Board {
         // assets/demos/zh-phone-product.json`.
         let glyphs = Glyphs::load(HanziSource::PackBytes(include_bytes!("../zh-glyphs.pack"))).expect("the samples' strokes");
         let view = [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1];
-        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), placed: HashMap::new(), view, reading: false, touched: 0.0, latest: view, holding: false, back: q("#latest") }
+        Self { svg: root, under, ink, glyphs, layout: StableLayout::default(), graph: Graph::default(), shown: HashSet::new(), placed: HashMap::new(), view, reading: false, touched: 0.0, latest: view, holding: false, back: q("#latest"), zoom: q("#zoom") }
     }
 
     fn clear(&mut self) {
@@ -284,16 +305,22 @@ impl Board {
     fn set_view(&mut self, v: [f64; 4]) {
         self.view = v;
         let _ = self.svg.set_attribute("viewBox", &format!("{:.1} {:.1} {:.1} {:.1}", v[0], v[1], v[2], v[3]));
+        let r = self.svg.get_bounding_client_rect();
+        if r.width() > 0.0 && r.height() > 0.0 {
+            let pixels_per_unit = (r.width() / v[2]).min(r.height() / v[3]);
+            self.zoom.set_text_content(Some(&format!("{:.0}%", pixels_per_unit * 100.0)));
+        }
     }
 }
 
 /// The part of the board to show: all of it if that stays legible, or else the newest ink, inside the board.
 fn frame_following(all: &Bounds, newest: &Bounds) -> [f64; 4] {
     let whole = frame_for(all);
-    if whole[2] <= MAX_VIEW_WIDTH {
+    let most = if background() { q("#board").get_bounding_client_rect().width() * BACKGROUND_SCALE } else { MAX_VIEW_WIDTH };
+    if whole[2] <= most {
         return whole;
     }
-    let (w, h) = (MAX_VIEW_WIDTH, MAX_VIEW_WIDTH * whole[3] / whole[2]);
+    let (w, h) = (most, most * whole[3] / whole[2]);
     let (cx, cy) = ((newest.x0 + newest.x1) / 2.0, (newest.y0 + newest.y1) / 2.0);
     let clamp = |c: f64, half: f64, lo: f64, hi: f64| if hi - lo <= 2.0 * half { (lo + hi) / 2.0 } else { c.clamp(lo + half, hi - half) };
     let x = clamp(cx, w / 2.0, all.x0 - MARGIN, all.x1 + MARGIN) - w / 2.0;
@@ -307,7 +334,9 @@ fn frame_for(b: &Bounds) -> [f64; 4] {
     let r = q("#board").get_bounding_client_rect();
     let narrow = (r.width() / MIN_VIEW.0).min(r.height() / MIN_VIEW.1).clamp(0.45, 1.0);
     let margin = MARGIN * narrow;
-    let (w, h) = ((bw + margin * 2.0).max(MIN_VIEW.0 * narrow), (bh + margin * 2.0).max(MIN_VIEW.1 * narrow));
+    // Behind the first page the ink keeps one size, smaller than the demo's, however wide the window is.
+    let least = if background() { (r.width() * BACKGROUND_SCALE, r.height() * BACKGROUND_SCALE) } else { (MIN_VIEW.0 * narrow, MIN_VIEW.1 * narrow) };
+    let (w, h) = ((bw + margin * 2.0).max(least.0), (bh + margin * 2.0).max(least.1));
     let aspect = if r.height() > 0.0 { r.width() / r.height() } else { 1.6 };
     let (w, h) = if w / h > aspect { (w, w / aspect) } else { (h * aspect, h) };
     [cx - w / 2.0, cy - h / 2.0, w, h]
@@ -321,7 +350,10 @@ struct Ui {
     title: Element,
     state: Element,
     lines: Element,
+    /// Each sample's place in the sidebar.
     tabs: Vec<Element>,
+    /// Who has spoken so far, in order, for the colour of each speaker's badge.
+    speakers: RefCell<Vec<String>>,
     listen: Element,
     sound: Element,
     credit: Element,
@@ -329,9 +361,10 @@ struct Ui {
 }
 
 impl Ui {
+    /// How the board stands, in the app's words, in the chip beside the title.
     fn set_state(&self, s: &str) {
-        self.state.set_text_content(Some(&format!("board / {s}")));
-        let _ = self.state.class_list().toggle_with_force("hot", s == "drawing");
+        self.state.set_text_content(Some(s));
+        let _ = self.state.class_list().toggle_with_force("hot", s == "Drawing");
     }
 }
 
@@ -347,6 +380,8 @@ struct Control {
     /// goes on by itself when it is back, unless the reader paused it.
     off_screen: Cell<bool>,
     hidden: Cell<bool>,
+    /// Whether the recording is never loaded, so the meeting plays by its own clock.
+    silent: bool,
 }
 
 impl Control {
@@ -367,12 +402,13 @@ async fn play(sample: &Sample, index: usize, board: &Rc<RefCell<Board>>, ui: &Rc
     let _ = ui.credit.class_list().toggle_with_force("shown", recorded);
     ui.credit.set_text_content(sample.credit.as_deref());
     let _ = ui.listen.class_list().toggle_with_force("paused", control.paused.get());
-    q("#listen-label").set_text_content(Some(if control.paused.get() { "resume" } else { "pause" }));
+    q("#listen-label").set_text_content(Some(if control.paused.get() { "Resume" } else { "Pause" }));
     for (i, t) in ui.tabs.iter().enumerate() {
         let _ = t.class_list().toggle_with_force("on", i == index);
     }
+    ui.speakers.borrow_mut().clear();
     board.borrow_mut().set_view(frame_for(&Bounds { x0: 0.0, y0: 0.0, x1: 0.0, y1: 0.0 }));
-    ui.set_state("listening");
+    ui.set_state("Listening");
     if let Some(audio) = &sample.audio {
         return play_recorded(sample, audio, board, ui, control, me).await;
     }
@@ -385,14 +421,7 @@ async fn play(sample: &Sample, index: usize, board: &Rc<RefCell<Board>>, ui: &Rc
             return false;
         }
         // The line comes in as it is recognized.
-        let li = el("li", "live", "");
-        let _ = li.append_child(&el("b", "who", &line.speaker.chars().take(1).collect::<String>()));
-        let body = el("div", "", "");
-        let _ = body.append_child(&el("span", "name", &line.speaker));
-        let said = el("p", "", "");
-        let _ = body.append_child(&said);
-        let _ = li.append_child(&body);
-        let _ = ui.lines.append_child(&li);
+        let (li, said) = line_item(ui, &line.speaker);
         let chars: Vec<char> = line.text.chars().collect();
         let step = if reduced() { chars.len().max(1) } else { 3 };
         let mut shown = 0;
@@ -407,25 +436,25 @@ async fn play(sample: &Sample, index: usize, board: &Rc<RefCell<Board>>, ui: &Rc
         }
         let _ = li.class_list().remove_1("live");
         // The model thinks for about as long as it did when the sample was made.
-        ui.set_state("thinking");
+        ui.set_state("Thinking");
         sleep(line.ms.clamp(300.0, 1500.0)).await;
         if !live() {
             return false;
         }
         let Some(ops) = &line.ops else {
-            ui.set_state("listening");
+            ui.set_state("Listening");
             continue;
         };
         let (fresh, bounds) = board.borrow_mut().apply(ops);
         if let Some(head) = board.borrow().graph.nodes.iter().find(|n| matches!(n.kind, Kind::Topic)) {
             ui.title.set_text_content(Some(&head.label));
         }
-        ui.set_state("drawing");
+        ui.set_state("Drawing");
         let newest = Board::near(&fresh, &bounds);
         follow(board, frame_for(&bounds), &newest, &live).await;
         write(&fresh, &live).await;
         let _ = li.class_list().add_1("drawn");
-        ui.set_state("ready");
+        ui.set_state("Ready");
         sleep(900.0).await;
     }
     live()
@@ -434,7 +463,14 @@ async fn play(sample: &Sample, index: usize, board: &Rc<RefCell<Board>>, ui: &Rc
 /// A line in the transcript as it is being said.
 fn line_item(ui: &Ui, speaker: &str) -> (Element, Element) {
     let li = el("li", "live", "");
-    let _ = li.append_child(&el("b", "who", &speaker.chars().take(1).collect::<String>()));
+    let n = {
+        let mut speakers = ui.speakers.borrow_mut();
+        speakers.iter().position(|s| s == speaker).unwrap_or_else(|| {
+            speakers.push(speaker.to_string());
+            speakers.len() - 1
+        })
+    };
+    let _ = li.append_child(&el("b", &format!("who p{}", n % 6), &speaker.chars().take(1).collect::<String>()));
     let body = el("div", "", "");
     let _ = body.append_child(&el("span", "name", speaker));
     let said = el("p", "", "");
@@ -458,7 +494,7 @@ impl Clock {
         if playing {
             self.at.set(audio.current_time());
         } else if !paused {
-            self.at.set(self.at.get() + dt);
+            self.at.set(self.at.get() + dt * pace());
         }
         self.at.get()
     }
@@ -469,11 +505,13 @@ impl Clock {
 async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Board>>, ui: &Rc<Ui>, control: &Rc<Control>, me: u32) -> bool {
     let live = || control.run.get() == me;
     let audio = &ui.audio;
-    audio.set_src(&format!("../media/{audio_name}"));
-    audio.set_muted(!control.sound.get());
-    audio.set_current_time(0.0);
-    if !control.paused.get() && !control.away() {
-        let _ = audio.play();
+    if !control.silent {
+        audio.set_src(&format!("../media/{audio_name}"));
+        audio.set_muted(!control.sound.get());
+        audio.set_current_time(0.0);
+        if !control.paused.get() && !control.away() {
+            let _ = audio.play();
+        }
     }
     let clock = Clock { at: Cell::new(0.0), last: Cell::new(frame().await) };
     // Replies wait here for the board, which writes them in order while the transcript runs on.
@@ -502,12 +540,12 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
                 if let Some(head) = board.borrow().graph.nodes.iter().find(|n| matches!(n.kind, Kind::Topic)) {
                     ui.title.set_text_content(Some(&head.label));
                 }
-                ui.set_state("drawing");
+                ui.set_state("Drawing");
                 let newest = Board::near(&fresh, &bounds);
                 follow(&board, frame_following(&bounds, &newest), &newest, &live).await;
                 write(&fresh, &live).await;
                 let _ = li.class_list().add_1("drawn");
-                ui.set_state("listening");
+                ui.set_state("Listening");
             }
         });
     }
@@ -523,7 +561,7 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
         let paused = control.paused.get() || control.away();
         if paused && !audio.paused() {
             let _ = audio.pause();
-        } else if !paused && audio.paused() && audio.error().is_none() && clock.at.get() < end {
+        } else if !paused && !control.silent && audio.paused() && audio.error().is_none() && clock.at.get() < end {
             // A paused recording waits where it stopped, so it simply goes on. Seeking an MP3 lands only
             // near the time asked for, so it is moved only when the clock ran on without it.
             if (audio.current_time() - clock.at.get()).abs() > 1.0 {
@@ -635,7 +673,7 @@ async fn write(strokes: &[Drawing], live: &dyn Fn() -> bool) {
     let lengths: Vec<f32> = strokes.iter().map(|s| s.inked.length.max(1.0)).collect();
     let total: f32 = lengths.iter().sum();
     // A long reply is written faster, so no line waits more than a few seconds for its ink.
-    let speed = PEN_SPEED.max(total / 3500.0);
+    let speed = PEN_SPEED.max(total / 3500.0) * pace() as f32;
     let t0 = frame().await;
     let mut done = 0;
     let mut before = 0.0;
@@ -669,14 +707,20 @@ fn on(target: &web_sys::EventTarget, event: &str, f: impl FnMut(web_sys::Event) 
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    let embed = win().location().search().unwrap_or_default().contains("embed");
-    let _ = doc().document_element().expect("a root").class_list().toggle_with_force("embed", embed);
+    // In the site's first page the demo is its window alone, filling the frame; behind that page on a phone it
+    // is only its board: the English meeting replayed over and over, faster, without its sound, and without
+    // anything to press.
+    let search = win().location().search().unwrap_or_default();
+    let background = search.contains("bg");
+    let root = doc().document_element().expect("a root");
+    let _ = root.class_list().toggle_with_force("embed", search.contains("embed"));
+    let _ = root.class_list().toggle_with_force("bg", background);
 
     let samples = Rc::new(samples());
-    let picker = q("#samples");
+    // The samples are listed as meetings in the window's sidebar.
+    let picker = q("#sample-list");
     let tabs: Vec<Element> = samples
         .iter()
-
         .map(|s| {
             let b = el("button", "", &s.title);
             let _ = b.set_attribute("title", &s.name);
@@ -685,10 +729,13 @@ pub fn start() {
             b
         })
         .collect();
+    if let Some(v) = doc().get_element_by_id("version") {
+        v.set_text_content(Some(concat!("v", env!("CARGO_PKG_VERSION"))));
+    }
     let audio = HtmlAudioElement::new().expect("an audio element");
     audio.set_preload("auto");
-    let ui = Rc::new(Ui { title: q("#title"), state: q("#state"), lines: q("#lines"), tabs: tabs.clone(), listen: q("#listen"), sound: q("#sound"), credit: q("#credit"), audio });
-    let control = Rc::new(Control { wanted: Cell::new(None), paused: Cell::new(false), run: Cell::new(0), sound: Cell::new(false), off_screen: Cell::new(false), hidden: Cell::new(false) });
+    let ui = Rc::new(Ui { title: q("#title"), state: q("#state"), lines: q("#lines"), tabs: tabs.clone(), speakers: RefCell::new(vec![]), listen: q("#listen"), sound: q("#sound"), credit: q("#credit"), audio });
+    let control = Rc::new(Control { wanted: Cell::new(None), paused: Cell::new(false), run: Cell::new(0), sound: Cell::new(false), off_screen: Cell::new(false), hidden: Cell::new(false), silent: background });
     // A recording stops when the demo leaves the screen: scrolled past on the site's first page, where it is
     // embedded (an observer in a frame watches the top window's viewport), or in a tab put aside.
     {
@@ -719,14 +766,28 @@ pub fn start() {
                 let _ = ui.audio.play();
             }
             let _ = ui.sound.class_list().toggle_with_force("on", control.sound.get());
-            q("#sound-label").set_text_content(Some(if control.sound.get() { "sound on" } else { "sound off" }));
+            q("#sound-label").set_text_content(Some(if control.sound.get() { "Sound on" } else { "Sound off" }));
         });
     }
     let board = Rc::new(RefCell::new(Board::new()));
+    // The sidebar icon puts the sidebar away or brings it back. A narrow window shows it over the board, and
+    // puts it away again once a sample is picked from it.
+    let window = q(".window");
+    {
+        let window = window.clone();
+        on(&q("#sidebar-toggle"), "click", move |_| {
+            let _ = window.class_list().toggle("flip");
+        });
+    }
+    let narrow = || win().inner_width().ok().and_then(|w| w.as_f64()).is_some_and(|w| w <= 1180.0);
 
-    for (i, b) in tabs.iter().enumerate() {
+    for (i, b) in tabs.into_iter().enumerate() {
         let control = control.clone();
-        on(b, "click", move |_| {
+        let window = window.clone();
+        on(&b, "click", move |_| {
+            if narrow() {
+                let _ = window.class_list().remove_1("flip");
+            }
             control.wanted.set(Some(i));
             control.paused.set(false);
             control.run.set(control.run.get() + 1);
@@ -737,7 +798,7 @@ pub fn start() {
         on(&q("#listen"), "click", move |_| {
             control.paused.set(!control.paused.get());
             let _ = ui.listen.class_list().toggle_with_force("paused", control.paused.get());
-            q("#listen-label").set_text_content(Some(if control.paused.get() { "resume" } else { "pause" }));
+            q("#listen-label").set_text_content(Some(if control.paused.get() { "Resume" } else { "Pause" }));
         });
     }
     // The reader can take hold of the board: drag to look around, and the wheel or a pinch to zoom, as in
@@ -824,13 +885,27 @@ pub fn start() {
                 }
             });
         }
-        {
+        // Back to the talk, from the offer at the top or the zoom figure, which fits the board in the app.
+        for back in ["#latest", "#zoom"] {
             let board = board.clone();
-            on(&q("#latest"), "click", move |_| {
+            on(&q(back), "click", move |_| {
                 let to = board.borrow().latest;
                 board.borrow_mut().set_reading(false);
                 let board = board.clone();
                 wasm_bindgen_futures::spawn_local(async move { ease_view(&board, to, &|| true).await });
+            });
+        }
+        // The zoom buttons step about the board's centre, as the app's do.
+        for (button, step) in [("#zoom-in", 1.0 / ZOOM_STEP), ("#zoom-out", ZOOM_STEP)] {
+            let board = board.clone();
+            on(&q(button), "click", move |_| {
+                let mut b = board.borrow_mut();
+                let v = b.view;
+                let k = step.clamp(ZOOM_WIDTH.0 / v[2], ZOOM_WIDTH.1 / v[2]);
+                let (cx, cy) = (v[0] + v[2] / 2.0, v[1] + v[3] / 2.0);
+                b.set_reading(true);
+                b.touched = now();
+                b.set_view([cx - v[2] * k / 2.0, cy - v[3] * k / 2.0, v[2] * k, v[3] * k]);
             });
         }
     }
@@ -854,7 +929,7 @@ pub fn start() {
                 // Hold the finished board a moment, then go on to the next sample.
                 sleep(3200.0).await;
                 if control.run.get() == me {
-                    index = (index + 1) % samples.len();
+                    index = if control.silent { 0 } else { (index + 1) % samples.len() };
                     control.run.set(me + 1);
                 }
             }

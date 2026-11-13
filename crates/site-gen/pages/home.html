@@ -11,6 +11,10 @@
 
 <!-- ———————————————— hero ———————————————— -->
 <section class="hero" id="hero" data-sheet="01 talk">
+  <!-- On a phone the demo plays behind the opening: the English sample meeting, faster and without sound. A
+       wider screen has the demo's window below the opening instead. Each frame gets its page only when its
+       layout shows (crates/site/src/lib.rs), so a screen loads one demo, not two. -->
+  <iframe class="hero-board" id="hero-board" data-src="./demo/?bg" title="" aria-hidden="true" tabindex="-1"></iframe>
   <div class="wrap">
     {{ navigation }}
     <div class="hero-intro">
@@ -22,11 +26,11 @@
       <div class="hero-copy">
         <h1>your meeting, drawn live.</h1>
         <p>Talk as usual. The board writes it out, stroke by stroke, on your own computer.</p>
-        <div class="cta"><a class="solid" href="#live">see it write <span aria-hidden="true">↘</span></a><a href="#get">get boardcast <span aria-hidden="true">↓</span></a></div>
+        <div class="cta"><a class="solid wide-only" href="#live">see it write <span aria-hidden="true">↘</span></a><a class="solid phone-only" href="./demo/">see it write <span aria-hidden="true">↗</span></a><a href="#get">get boardcast <span aria-hidden="true">↓</span></a></div>
       </div>
     </div>
     <div class="try" id="live">
-      <iframe src="./demo/?embed" title="boardcast web demo"></iframe>
+      <iframe id="live-demo" data-src="./demo/?embed" title="boardcast web demo"></iframe>
       <div class="try-foot label"><span>2 real meetings · English, 中文 · with their sound</span><span>your words. a shared picture.</span></div>
     </div>
     <div class="hero-rail">
@@ -62,32 +66,53 @@
         <article data-ch="3"><span class="n">04 / circle</span><h3>circle, then say.</h3><p>Lasso “canary”, then say “star this”. The model knows what “this” means.</p></article>
         <article data-ch="4"><span class="n">05 / replay</span><h3>watch it again.</h3><p>Drag to any moment of the meeting, or fork a new board from it.</p></article>
       </div>
+      <!-- The app's window as it is, its sidebar put away: the meeting and its state above, the board with its
+           tools floating over it, and the transcript beside it. The icons are the app's own pictograms. -->
       <div class="app" id="app">
         <div class="app-title">
-          <div class="sq"><i></i><i></i><i></i></div>
+          <span class="app-ico" aria-hidden="true"><svg viewBox="0 0 64 64"><rect x="5" y="9" width="54" height="46" fill="none" stroke="currentColor" stroke-width="6" /><rect x="5" y="9" width="21" height="46" fill="currentColor" /></svg></span>
           <span class="name">Release review</span>
-          <span>start 14:02</span>
           <span class="rec" id="clock">14:02:00</span>
-          <span class="state" id="state">idle</span>
+          <span class="app-chip" id="state">Ready</span>
+          <span class="app-end">
+            <span class="app-btn" id="b-replay"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill-rule="evenodd" fill="currentColor" d="M5 32a27 27 0 1 0 54 0a27 27 0 1 0 -54 0ZM28.0 15.0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0ZM38.0 18.2a4 4 0 1 0 8 0a4 4 0 1 0 -8 0ZM44.2 26.7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0ZM44.2 37.3a4 4 0 1 0 8 0a4 4 0 1 0 -8 0ZM38.0 45.8a4 4 0 1 0 8 0a4 4 0 1 0 -8 0ZM28.0 49.0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0ZM18.0 45.8a4 4 0 1 0 8 0a4 4 0 1 0 -8 0ZM11.8 37.3a4 4 0 1 0 8 0a4 4 0 1 0 -8 0ZM27 32a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z" /></svg>Replay</span>
+            <span class="app-btn"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 34v22h52V34" fill="none" stroke="currentColor" stroke-width="6" /><rect x="28" y="20" width="8" height="24" fill="currentColor" /><path d="M17 22 L32 4 L47 22Z" fill="currentColor" /></svg>Export</span>
+            <span class="app-sep" aria-hidden="true"></span>
+            <span class="app-ico" aria-hidden="true"><svg viewBox="0 0 64 64"><rect x="5" y="9" width="54" height="46" fill="none" stroke="currentColor" stroke-width="6" /><path d="M40 9v46" stroke="currentColor" stroke-width="6" /></svg></span>
+          </span>
         </div>
         <div class="app-body">
           <div class="canvas">
-            <span class="coords label" id="coords">x 0 / y 0 / 100%</span>
             <svg class="board" id="board" viewBox="20 30 560 230" preserveAspectRatio="xMinYMin meet"></svg>
             <div class="marks" id="marks"><span class="m-strike">strike</span><span>circle</span><span>star</span><span>edit</span><span>remove</span></div>
-            <div class="replaybar" id="replaybar"><span class="label">replay</span><div class="track"><div class="fill" id="rfill"></div><div class="head" id="rhead"></div></div><span class="label" id="rtime">00:00</span></div>
-            <div class="dock">
-              <button class="mic" id="mic"><span class="stop"></span><span id="mic-label">stop<small>space</small></span><span class="meter" id="meter"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
-              <button id="b-lasso" aria-label="circle" title="circle (⌘ L)"><svg class="pict" data-icon="lasso" viewBox="0 0 64 64"></svg><span>circle<small>⌘ L</small></span></button>
-              <button aria-label="summary" title="summary (⌘ ⇧ S)"><svg class="pict" data-icon="doc" viewBox="0 0 64 64"></svg><span>summary<small>⌘ ⇧ S</small></span></button>
-              <button id="b-replay" aria-label="replay" title="replay (⌘ ⇧ R)"><svg class="pict" data-icon="replay" viewBox="0 0 64 64"></svg><span>replay<small>⌘ ⇧ R</small></span></button>
-              <button aria-label="export" title="export (⌘ E)"><svg class="pict" data-icon="export" viewBox="0 0 64 64"></svg><span>export<small>⌘ E</small></span></button>
+            <div class="app-float app-zoom" aria-hidden="true">
+              <svg viewBox="0 0 64 64"><rect x="8" y="27" width="48" height="10" fill="currentColor" /></svg><span>100%</span><svg viewBox="0 0 64 64"><path fill="currentColor" d="M27 8h10v19h19v10H37v19H27V37H8V27h19z" /></svg>
+            </div>
+            <!-- The tools, which give way to the replay's own bar while the meeting plays back. -->
+            <div class="app-float app-tools" id="replaybar">
+              <span class="app-live">
+                <span class="mic" id="mic"><span class="dot" aria-hidden="true"></span><span id="mic-label">Stop listening</span><span class="meter" id="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><kbd>Space</kbd></span>
+                <span class="app-tool" id="b-lasso"><svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="34" cy="24" rx="24" ry="16" fill="none" stroke="currentColor" stroke-width="6" /><rect x="8" y="47" width="12" height="12" fill="currentColor" /></svg>Circle</span>
+                <span class="app-sep" aria-hidden="true"></span>
+                <span class="app-tool icon" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M22 22H40a13 13 0 0 1 0 26H16" fill="none" stroke="currentColor" stroke-width="7" /><path d="M26 7 L8 22 L26 37Z" fill="currentColor" /></svg></span>
+                <span class="app-tool icon off" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M42 22H24a13 13 0 0 0 0 26H48" fill="none" stroke="currentColor" stroke-width="7" /><path d="M38 7 L56 22 L38 37Z" fill="currentColor" /></svg></span>
+                <span class="app-tool icon" aria-hidden="true"><svg viewBox="0 0 64 64"><rect x="6" y="6" width="22" height="22" fill="currentColor" /><rect x="36" y="6" width="22" height="22" fill="currentColor" /><rect x="6" y="36" width="22" height="22" fill="currentColor" /><rect x="39" y="39" width="16" height="16" fill="none" stroke="currentColor" stroke-width="6" /></svg></span>
+              </span>
+              <span class="app-replay">
+                <span class="play" aria-hidden="true"><svg viewBox="0 0 64 64"><rect x="12" y="8" width="14" height="48" fill="currentColor" /><rect x="38" y="8" width="14" height="48" fill="currentColor" /></svg></span>
+                <span class="rb-track"><span class="rb-fill" id="rfill"></span><span class="rb-knob" id="rhead"></span></span>
+                <span class="rb-time" id="rtime">00:00 / 12:00</span>
+                <span class="app-tool">1×</span>
+                <span class="app-tool">Fork a board</span>
+                <span class="app-sep" aria-hidden="true"></span>
+                <span class="app-tool icon" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M12 12 L52 52 M52 12 L12 52" stroke="currentColor" stroke-width="8" /></svg></span>
+              </span>
             </div>
           </div>
           <aside class="side">
-            <div class="side-head"><b>transcript</b><span class="label">3 voices / en</span></div>
+            <div class="app-tabs"><span class="on">Transcript</span><span>Summary</span><span>Speakers <small>3</small></span><span class="app-ico" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M12 12 L52 52 M52 12 L12 52" stroke="currentColor" stroke-width="8" /></svg></span></div>
             <ol class="transcript" id="lines"></ol>
-            <div class="input">type a line <kbd>/</kbd></div>
+            <div class="input"><span>Type a line, Enter puts it on the board</span></div>
           </aside>
         </div>
       </div>

@@ -2,6 +2,8 @@
 //!   check <root> (--all-demos | --demo <name> | --ops <file>) [--tidy]
 //!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [<model>] [--skill | --rules-only | --hints-only]
 //!              [--only-dev | --only-holdout] [--only <id>] [--workers <n>]
+//!   eval-report <root> <out.html> [--history <dir>] [--price <label>=<hit>,<miss>,<out>]... <summary.json>...
+//!              Runs side by side, cost, the trend over earlier reports and every case, as a page to print.
 //!   fetch voice | search | pdfium [platform] | llama [platform] | glyphs
 //!   pack-glyphs <assets/hanzi> <glyphs.pack> [--only-from <file>...]   Only the characters those files use.
 //!   download-model <id> <dir>
@@ -15,6 +17,7 @@
 //!   <model> is --llm <url> | --deepseek | --remote <url> --model <name> | --saved; see model_flags.rs.
 
 mod agent_eval;
+mod eval_report;
 mod check;
 mod demo_record;
 mod ink_sample;
@@ -37,6 +40,7 @@ fn main() -> Result<()> {
     match args.next().as_deref() {
         Some("check") => check::run(args),
         Some("agent-eval") => agent_eval::run(args),
+        Some("eval-report") => eval_report::run(args),
         Some("summary-eval") => summary_eval::run(args),
         Some("meetings-check") => meetings::run(args),
         Some("export") => export::run(args),

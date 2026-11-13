@@ -225,7 +225,15 @@ section.block { padding-top: 140px; }
 .head h2 em { font-style: normal; color: var(--dim); }
 .head p { font-size: 15px; line-height: 1.65; color: var(--grey); max-width: 30em; }
 .head-side .cta { margin-top: 18px; }
-.signals { position: relative; border-top: 1px solid var(--fg); cursor: crosshair; user-select: none; background: var(--bg); }
+.signals { position: relative; border-top: 1px solid var(--fg); cursor: crosshair; user-select: none; }
+/* The timeline's paper, under the caption too. It fades into the ground at its sides and below, so the dots
+   thin out towards it instead of being cut off at a hard edge. The sheet keeps it behind its own text. */
+.sig-pin { isolation: isolate; }
+.signals::before { content: ''; position: absolute; z-index: -1; inset: 0 -56px -150px; background: var(--bg); pointer-events: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 56px, #000 calc(100% - 56px), transparent), linear-gradient(180deg, #000 calc(100% - 72px), transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(90deg, transparent, #000 56px, #000 calc(100% - 56px), transparent), linear-gradient(180deg, #000 calc(100% - 72px), transparent);
+  mask-composite: intersect; }
 .row { display: grid; grid-template-columns: 220px 1fr; border-bottom: 1px solid var(--hair); height: 92px; align-items: center; }
 .row .name { font-size: 20px; font-weight: 300; }
 .row .name small { display: block; margin-top: 4px; }

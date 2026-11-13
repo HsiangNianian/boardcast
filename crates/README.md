@@ -156,19 +156,6 @@ cargo run --release -p boardcast-audio --example speaker-eval -- resources/voice
 | `en-ami`, -22 dB | 4 of 4 | 0.893 | 0.929 |
 | `zh-alimeeting`, -39 dB, far-field with much overlap | 4 of 4 | 0.680 | 0.640 |
 
-The smaller local models were compared with Qwen 4B on the same cases, prompt and grammar, without rules or hints. The
-prompt was tuned for Qwen, which may favour it, and only Q4_K_M files were tried. Worse and better count holdout cases
-against Qwen 4B. Time is the model's per turn, and memory is the whole graphics card's peak, on an RTX 3060 Laptop.
-
-| Model | Node precision | Edge precision | Item recall | Mark accuracy | Worse / better | Time | Memory |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Qwen 4B | 0.974 | 0.886 | 0.891 | 0.852 | | 667 ms | 3049 MiB |
-| MiniCPM5-2B | 0.903 | 0.741 | 0.561 | 0.789 | 15 / 4 | 300 ms | 1845 MiB |
-| MiniCPM-V 4.7 1B | 0.733 | 0.333 | 0.394 | 0.378 | 25 / 1 | 317 ms | 759 MiB |
-| MiniCPM5-1B | 0.438 | 0.204 | 0.076 | 0.059 | 26 / 0 | 162 ms | 961 MiB |
-
-So Qwen stays the default, and the other three can be chosen in Settings with a note saying what they fall short on.
-
 ## Not validated
 
 Real clicks on the mark toolbar, the undo buttons and shortcuts, the library and settings panels, and the download

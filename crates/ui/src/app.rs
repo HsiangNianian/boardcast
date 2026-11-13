@@ -2952,7 +2952,7 @@ impl Workbench {
         };
         let file = model.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
         let Some(add_on) = boardcast_models::vision_for(&file) else {
-            self.import = ImportState::Failed(tr("This local model can't read images. To read one, choose Qwen3.5 or MiniCPM-V in Settings.", "这个本地模型不能看图。要读图，请在设置里选择 Qwen3.5 或 MiniCPM-V。").to_string());
+            self.import = ImportState::Failed(tr("This local model can't read images. To read one, choose Qwen3.5 in Settings.", "这个本地模型不能看图。要读图，请在设置里选择 Qwen3.5。").to_string());
             cx.notify();
             return;
         };

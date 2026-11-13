@@ -37,6 +37,9 @@ pub enum Job {
     Find { text: String, meetings: Vec<String>, limit: usize, ticket: u64 },
     /// Forget a meeting's index, as when it is removed for good.
     Forget(String),
+    /// Hold indexing, as while the app listens, when the CPU is for hearing; or go on from where it stopped.
+    /// A meeting already being indexed is finished first. Questions are still answered meanwhile.
+    Hold(bool),
 }
 
 /// A passage found, with what the interface needs to show it and open the meeting there.
@@ -107,9 +110,21 @@ struct Worker {
     cache: HashMap<String, (SystemTime, Index)>,
 }
 
+/// Where a meeting's index is kept, under the app's data folder.
+fn index_path(folder: &Path, meeting: &str) -> PathBuf {
+    folder.join(format!("{meeting}.index"))
+}
+
+/// How many of these meetings have no index yet, as before the first search on this computer. The app
+/// says so while it builds them, as that takes a while; keeping indexes up to date afterwards does not.
+pub fn unindexed(data: &Path, meetings: &[String]) -> usize {
+    let folder = data.join("search");
+    meetings.iter().filter(|m| !index_path(&folder, m).is_file()).count()
+}
+
 impl Worker {
     fn path(&self, meeting: &str) -> PathBuf {
-        self.folder.join(format!("{meeting}.index"))
+        index_path(&self.folder, meeting)
     }
 
     fn embedder(&mut self) -> Result<&Embedder> {
@@ -246,8 +261,9 @@ pub fn start(data: &Path, model: PathBuf, spawn: Spawn) -> (Sender<Job>, Receive
             // meanwhile is answered between two meetings, not after all of them.
             let mut todo: VecDeque<String> = VecDeque::new();
             let (mut done, mut total) = (0, 0);
+            let mut held = false;
             loop {
-                let job = if todo.is_empty() {
+                let job = if todo.is_empty() || held {
                     match inbox.recv_timeout(Duration::from_secs(15)) {
                         Ok(job) => Some(job),
                         Err(RecvTimeoutError::Timeout) => {
@@ -283,6 +299,10 @@ pub fn start(data: &Path, model: PathBuf, spawn: Spawn) -> (Sender<Job>, Receive
                         let _ = std::fs::remove_file(worker.path(&id));
                         worker.cache.remove(&id);
                         todo.retain(|t| *t != id);
+                        continue;
+                    }
+                    Some(Job::Hold(hold)) => {
+                        held = hold;
                         continue;
                     }
                     None => {
@@ -324,6 +344,31 @@ pub fn start(data: &Path, model: PathBuf, spawn: Spawn) -> (Sender<Job>, Receive
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn indexing_waits_while_held_and_goes_on_after() {
+        let data = std::env::temp_dir().join(format!("boardcast-held-{}", std::process::id()));
+        let spawn: Spawn = Box::new(|_| bail!("no model in this test"));
+        let (jobs, events) = start(&data, data.join("model.gguf"), spawn);
+        jobs.send(Job::Hold(true)).unwrap();
+        jobs.send(Job::Index(vec!["a".into(), "b".into()])).unwrap();
+        assert!(events.recv_timeout(Duration::from_millis(400)).is_err(), "nothing is indexed while held");
+        jobs.send(Job::Hold(false)).unwrap();
+        assert!(events.recv_timeout(Duration::from_secs(5)).is_ok(), "indexing goes on once let go");
+        drop(jobs);
+        let _ = std::fs::remove_dir_all(&data);
+    }
+
+    #[test]
+    fn meetings_without_an_index_are_counted() {
+        let data = std::env::temp_dir().join(format!("boardcast-unindexed-{}", std::process::id()));
+        let meetings = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        assert_eq!(unindexed(&data, &meetings), 3, "no search folder at all");
+        std::fs::create_dir_all(data.join("search")).unwrap();
+        std::fs::write(data.join("search/b.index"), b"").unwrap();
+        assert_eq!(unindexed(&data, &meetings), 2);
+        let _ = std::fs::remove_dir_all(&data);
+    }
 
     /// The whole round on a real model: index two meetings, then find one by what it means. Skipped where
     /// the model (eval/search/.models) or llama-server (resources/llama) is not there.

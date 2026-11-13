@@ -30,3 +30,11 @@ copy_models() {
     esac
   done
 }
+
+# copy_search <search dir in the package>: the meeting search model, which every variant carries, with the
+# notice the Gemma Terms of Use ask to go with it (the terms themselves are among the licenses).
+copy_search() {
+  mkdir -p "$1"
+  cp resources/search/*.gguf "$1/"
+  cp assets/licenses/gemma-NOTICE.txt "$1/NOTICE.txt"
+}

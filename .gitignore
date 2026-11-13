@@ -9,6 +9,7 @@ eval/reports/
 assets/hanzi/
 resources/llama/
 resources/voice/
+resources/search/
 eval/asr/.data/
 eval/asr/.models/
 target/

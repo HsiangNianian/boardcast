@@ -1,5 +1,6 @@
 //! What a checkout needs before it builds or packages, downloaded and checked:
 //!   fetch voice                 the speech models, into resources/voice (see voice_files.rs)
+//!   fetch search                the meeting search model, into resources/search
 //!   fetch pdfium [platform]     a pinned PDFium build, into target/pdfium
 //!   fetch llama [platform]      llama.cpp's prebuilt llama-server, trimmed, into resources/llama
 //!   fetch glyphs                stroke data for Chinese and Japanese characters, into assets/hanzi
@@ -19,10 +20,11 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let platform = args.next();
     match what.as_deref() {
         Some("voice") => voice(),
+        Some("search") => search(),
         Some("pdfium") => pdfium(platform.as_deref()),
         Some("llama") => llama(platform.as_deref()),
         Some("glyphs") => glyphs(),
-        _ => bail!("usage: fetch voice | pdfium [platform] | llama [platform] | glyphs"),
+        _ => bail!("usage: fetch voice | search | pdfium [platform] | llama [platform] | glyphs"),
     }
 }
 
@@ -151,6 +153,30 @@ fn voice() -> Result<()> {
     if fetched > 0 {
         println!("fetch: {fetched} voice files into resources/voice");
     }
+    Ok(())
+}
+
+/// The meeting search model, as the app downloads it, checked the same way. A model it no longer uses is
+/// cleared out, so a package never carries two.
+fn search() -> Result<()> {
+    let model = boardcast_models::embedding();
+    let dir = root().join("resources/search");
+    let dest = dir.join(&model.file);
+    if good(&dest, &model.sha256) {
+        return Ok(());
+    }
+    let _ = fs::remove_dir_all(&dir);
+    println!("fetch: {}", model.file);
+    let mut last = u64::MAX;
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    boardcast_models::download(&model, &dir, &cancel, &mut |p| {
+        let tenth = p.done * 10 / p.total.max(1);
+        if tenth != last {
+            last = tenth;
+            println!("  {}% from {}", tenth * 10, p.source.unwrap_or_default());
+        }
+    })?;
+    ensure!(good(&dest, &model.sha256), "{} does not match its checksum", dest.display());
     Ok(())
 }
 

@@ -195,8 +195,15 @@ final class Legacy: Engine {
         guard status == .authorized else {
             throw Failure(message: "Speech recognition is not allowed. Turn it on for boardcast in System Settings › Privacy & Security › Speech Recognition.")
         }
-        guard let recognizer = SFSpeechRecognizer(locale: wanted) ?? SFSpeechRecognizer(), recognizer.isAvailable else {
+        // The system's default recognizer stands in only when it hears the same language, such as en_US for an
+        // English Mac set to a region Apple has no recognizer for; never one for another language.
+        let fallback = SFSpeechRecognizer().flatMap { $0.locale.language.languageCode == wanted.language.languageCode ? $0 : nil }
+        guard let recognizer = SFSpeechRecognizer(locale: wanted) ?? fallback, recognizer.isAvailable else {
             throw Failure(message: "Apple speech recognition is not available for \(wanted.identifier)")
+        }
+        // Without this the recognizer sends the audio to Apple's servers, and meetings stay on this Mac.
+        guard recognizer.supportsOnDeviceRecognition else {
+            throw Failure(message: "This Mac can't recognize \(recognizer.locale.identifier) on its own, and Apple would send the meeting's audio to its servers")
         }
         // Its answers come on this queue rather than the main one, which nothing here services.
         recognizer.queue = OperationQueue()
@@ -206,9 +213,8 @@ final class Legacy: Engine {
     func recognize(_ samples: [Float]) async throws -> String {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = false
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        }
+        // Checked when starting; required here too, so a recognizer that changes its mind fails rather than uploads.
+        request.requiresOnDeviceRecognition = true
         if #available(macOS 13.0, *) {
             request.addsPunctuation = true
         }

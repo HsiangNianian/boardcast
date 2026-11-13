@@ -22,13 +22,13 @@
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
     window.dispatchEvent(new Event("boardcast-theme-change"));
-    // Keep the embedded demo in sync even when browser storage is blocked.
-    document.querySelector(".try iframe")?.contentWindow?.dispatchEvent(new CustomEvent("boardcast-theme-choice", { detail: choice }));
+    // Keep the demo in the first page in sync even when browser storage is blocked.
+    for (const frame of document.querySelectorAll(".try iframe, iframe.hero-board")) frame.contentWindow?.dispatchEvent(new CustomEvent("boardcast-theme-choice", { detail: choice }));
   }
   update();
   document.addEventListener("DOMContentLoaded", () => {
     update();
-    document.querySelector(".try iframe")?.addEventListener("load", update);
+    for (const frame of document.querySelectorAll(".try iframe, iframe.hero-board")) frame.addEventListener("load", update);
     document.querySelector("#theme-toggle")?.addEventListener("click", () => {
       const automatic = system.matches ? "dark" : "light";
       const next = (choice || automatic) === "dark" ? "light" : "dark";

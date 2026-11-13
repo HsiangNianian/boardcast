@@ -2,7 +2,7 @@
 //! drawn from the scroll position, so scrolling back erases it. Until the reader scrolls, it plays itself.
 
 use crate::meeting::{clock_at, LINES, MEETING};
-use crate::util::{add_class, append, clamp, clear, el, every_frame, hand, interval, lasso_loop, now, on_passive, q, q_in, qa, reduced, remove_class, set_attr, set_style, set_text, star, svg_el, text, to_d, toggle, win, Pt};
+use crate::util::{add_class, append, clamp, el, every_frame, hand, interval, lasso_loop, now, on_passive, q, q_in, qa, reduced, remove_class, set_attr, set_style, set_text, star, svg_el, text, to_d, toggle, win, Pt};
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -80,7 +80,6 @@ struct Ui {
     rfill: Element,
     rhead: Element,
     rtime: Element,
-    coords: Element,
 }
 
 fn render(board: &Board, ui: &Ui, p: f64) {
@@ -106,9 +105,9 @@ fn render(board: &Board, ui: &Ui, p: f64) {
         toggle(li, "gone", k <= 0.0);
         let chars: Vec<char> = l.say.chars().collect();
         let shown: String = chars[..((chars.len() as f64 * k).ceil() as usize).min(chars.len())].iter().collect();
-        let span = q_in(li, "span");
-        if text(&span) != shown {
-            set_text(&span, &shown);
+        let said = q_in(li, "p");
+        if text(&said) != shown {
+            set_text(&said, &shown);
         }
         toggle(li, "live", k > 0.0 && k < 1.0);
         toggle(li, "drawn", q >= DRAWN_AT[i]);
@@ -123,17 +122,15 @@ fn render(board: &Board, ui: &Ui, p: f64) {
     }
     let typing = LINE_AT.iter().any(|&at| q > at && q < at + 0.04);
     let drawing = board.parts.iter().any(|pt| q > pt.from && q < pt.to);
-    set_text(&ui.state, if drawing { "drawing" } else if typing { "listening" } else if q > 0.02 { "saved" } else { "idle" });
+    set_text(&ui.state, if drawing { "Drawing" } else if typing { "Listening" } else if q > 0.02 { "Saved" } else { "Ready" });
     toggle(&ui.state, "hot", drawing);
     let listening = p < 0.8;
     set_text(&ui.clock, &clock_at(clamp(q / 0.8) * MEETING * 0.9));
     toggle(&ui.clock, "off", !listening);
     toggle(&ui.mic, "off", !listening);
-    let word = if listening { "stop" } else { "listen" };
-    if ui.mic_label.first_child().and_then(|c| c.text_content()).as_deref() != Some(word) {
-        clear(&ui.mic_label);
-        crate::util::append_text(&ui.mic_label, word);
-        append(&ui.mic_label, &el("small", "", "space"));
+    let word = if listening { "Stop listening" } else { "Start listening" };
+    if text(&ui.mic_label) != word {
+        set_text(&ui.mic_label, word);
     }
     let t = now();
     for (i, b) in ui.meter.iter().enumerate() {
@@ -156,8 +153,8 @@ fn render(board: &Board, ui: &Ui, p: f64) {
     let r = clamp((p - 0.82) / 0.15);
     set_style(&ui.rfill, "width", &format!("{}%", r * 100.0));
     set_style(&ui.rhead, "left", &format!("{}%", r * 100.0));
-    set_text(&ui.rtime, &clock_at(r * MEETING)[3..]);
-    set_text(&ui.coords, &format!("x 0 / y 0 / 100% · {}", if replaying { "replay" } else { "live" }));
+    let minutes = |sec: f64| format!("{:02}:{:02}", (sec / 60.0).floor(), (sec % 60.0).floor());
+    set_text(&ui.rtime, &format!("{} / {}", minutes(r * MEETING), minutes(MEETING)));
 }
 
 fn draw_board() -> Board {
@@ -224,9 +221,12 @@ pub fn init() {
     let lis = LINES
         .iter()
         .map(|l| {
+            // The speaker's badge, coloured as the app colours its first, second and third voice.
             let li = el("li", "", "");
-            append(&li, &el("b", "", &format!("0{}", l.who)));
-            append(&li, &el("span", "", ""));
+            let n = ["A", "B", "C"].iter().position(|w| *w == l.who).unwrap_or(0);
+            append(&li, &el("b", &format!("who p{n}"), l.who));
+            append(&li, &el("span", "nm", &format!("Speaker {}", l.who)));
+            append(&li, &el("p", "", ""));
             append(&list, &li);
             li
         })
@@ -250,7 +250,6 @@ pub fn init() {
         rfill: q("#rfill"),
         rhead: q("#rhead"),
         rtime: q("#rtime"),
-        coords: q("#coords"),
     };
 
     let sec = Section(q("#story").unchecked_into());

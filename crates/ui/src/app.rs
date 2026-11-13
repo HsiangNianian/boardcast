@@ -16,6 +16,7 @@ use crate::i18n::tr;
 use crate::theme::{self, icon, pal};
 use crate::pipeline::{Event, Pipeline, Script, Speech};
 use crate::resources;
+use crate::shortcuts::{Action, Group, Keys, Shortcuts, ACTIONS, FIXED};
 use boardcast_models::{Model, Outcome, Progress};
 use boardcast_update::Release;
 use crate::raster::Layer;
@@ -1101,6 +1102,7 @@ enum SettingsTab {
     Model,
     Speech,
     General,
+    Shortcuts,
     About,
 }
 
@@ -1282,6 +1284,14 @@ struct Workbench {
     deleted_meeting: Option<(String, String)>,
     /// A pinned meeting whose delete is waiting to be confirmed in its row; one that is not pinned goes at once.
     confirm_delete: Option<String>,
+    /// The keyboard shortcuts as they are now, the user's where they changed them.
+    keys: Shortcuts,
+    /// The window listing them is open.
+    shortcuts_shown: bool,
+    /// A shortcut waiting in Settings for the keys that will start it, and why the last keys pressed were not
+    /// taken.
+    recording_keys: Option<Action>,
+    keys_note: Option<String>,
     /// What can be listened to, as of opening Settings.
     inputs: Vec<boardcast_audio::Input>,
     /// The label being written for the selected thing on the board.
@@ -3211,6 +3221,34 @@ impl Workbench {
     }
 
     fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let pressed = Keys::of(&event.keystroke);
+        // A shortcut waiting in Settings for its keys takes the next ones pressed; Escape alone leaves it as it was.
+        if let Some(action) = self.recording_keys {
+            if pressed.modifier_only() {
+                return;
+            }
+            if pressed.key == "escape" && !pressed.command && !pressed.shift && !pressed.alt {
+                self.recording_keys = None;
+                self.keys_note = None;
+            } else {
+                match self.keys.set(action, pressed) {
+                    Ok(()) => {
+                        self.recording_keys = None;
+                        self.keys_note = None;
+                        self.save_shortcuts();
+                    }
+                    Err(why) => self.keys_note = Some(why),
+                }
+            }
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        if self.shortcuts_shown && event.keystroke.key == "escape" {
+            self.shortcuts_shown = false;
+            cx.notify();
+            return;
+        }
         if event.keystroke.key == "escape" && self.ink.borrow().editing {
             self.finish_label(false, window, cx);
             return;
@@ -3231,35 +3269,29 @@ impl Workbench {
         if !self.focus.is_focused(window) {
             return;
         }
+        // A replay keeps its own keys, which cannot be changed: Escape, Space and the arrows.
         if let Some(at) = self.replay.as_ref().map(|r| r.player.at) {
             match keys.key.as_str() {
                 "escape" => self.exit_replay(cx),
-                "r" if keys.modifiers.shift && (keys.modifiers.control || keys.modifiers.platform) => self.exit_replay(cx),
-                "space" => self.toggle_replay(cx),
-                "left" => self.seek_replay(at.saturating_sub(1), cx),
-                "right" => self.seek_replay(at + 1, cx),
-                _ => {}
+                "space" if plain => self.toggle_replay(cx),
+                "left" if plain => self.seek_replay(at.saturating_sub(1), cx),
+                "right" if plain => self.seek_replay(at + 1, cx),
+                _ => match self.keys.action(&pressed) {
+                    Some(Action::Replay) => self.exit_replay(cx),
+                    Some(Action::Shortcuts) => {
+                        self.shortcuts_shown = !self.shortcuts_shown;
+                        cx.notify();
+                    }
+                    _ => {}
+                },
             }
             return;
         }
-        if keys.modifiers.control || keys.modifiers.platform {
-            match keys.key.as_str() {
-                "r" if keys.modifiers.shift => self.start_replay(window, cx),
-                "z" if keys.modifiers.shift => self.step(true, cx),
-                "z" => self.step(false, cx),
-                "y" => self.step(true, cx),
-                "=" | "+" => self.zoom_by(ZOOM_STEP, cx),
-                "-" => self.zoom_by(1.0 / ZOOM_STEP, cx),
-                "0" => self.fit_board(cx),
-                "n" if self.store.is_some() => self.new_meeting(cx),
-                "k" => self.search_meetings(window, cx),
-                "b" => self.toggle_sidebar(window, cx),
-                "," => self.toggle_panel(Panel::Settings, cx),
-                _ => {}
-            }
+        if let Some(action) = self.keys.action(&pressed) {
+            self.run_action(action, window, cx);
             return;
         }
-        if keys.modifiers.alt || keys.modifiers.shift {
+        if !plain {
             return;
         }
         match keys.key.as_str() {
@@ -3275,13 +3307,133 @@ impl Workbench {
                 }
                 cx.notify();
             }
-            "space" if self.editable() => {
+            _ => {}
+        }
+    }
+
+    /// What a shortcut does.
+    fn run_action(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        match action {
+            Action::Listen if self.editable() => {
                 self.toggle_mic();
                 cx.notify();
             }
-            "/" if self.editable() => self.focus_input(window, cx),
-            "m" => self.toggle_map(cx),
+            Action::TypeLine if self.editable() => self.focus_input(window, cx),
+            Action::Undo => self.step(false, cx),
+            Action::Redo => self.step(true, cx),
+            Action::Tidy if self.editable() => self.tidy(cx),
+            Action::ZoomIn => self.zoom_by(ZOOM_STEP, cx),
+            Action::ZoomOut => self.zoom_by(1.0 / ZOOM_STEP, cx),
+            Action::Fit => self.fit_board(cx),
+            Action::Map => self.toggle_map(cx),
+            Action::Replay => self.start_replay(window, cx),
+            Action::NewMeeting if self.store.is_some() => self.new_meeting(cx),
+            Action::Search => self.search_meetings(window, cx),
+            Action::Sidebar => self.toggle_sidebar(window, cx),
+            Action::Settings => self.toggle_panel(Panel::Settings, cx),
+            Action::Shortcuts => {
+                self.shortcuts_shown = !self.shortcuts_shown;
+                cx.notify();
+            }
             _ => {}
+        }
+    }
+
+    /// Every shortcut, grouped, over the dimmed window; a click outside or Esc closes it.
+    fn shortcuts_window(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+        let mut veil: Hsla = rgb(pal().strong).into();
+        veil.a = 0.18;
+        let cap = |text: String| div().flex().flex_none().items_center().h(px(22.)).px(px(7.)).border_1().border_color(rgb(pal().line)).rounded(px(2.)).bg(rgb(pal().paper)).font_family(theme::MONO).text_size(px(11.)).child(text);
+        let line = |name: String, keys: Option<String>| {
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_4()
+                .h(px(32.))
+                .text_sm()
+                .child(div().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().child(name))
+                .child(match keys {
+                    Some(keys) => cap(keys).into_any_element(),
+                    None => div().text_xs().text_color(rgb(pal().faint)).child(tr("none", "未设置")).into_any_element(),
+                })
+        };
+        let group = |g: Group| {
+            div()
+                .flex()
+                .flex_col()
+                .child(div().pb_1().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(g.name()))
+                .children(ACTIONS.iter().filter(|a| a.4 == g).map(|a| line(a.0.name().to_string(), self.keys.label(a.0))))
+        };
+        div()
+            .id("shortcuts-veil")
+            .occlude()
+            .absolute()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(veil)
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.shortcuts_shown = false;
+                cx.notify();
+            }))
+            .child(
+                div()
+                    .id("shortcuts-window")
+                    .occlude()
+                    .w(px(720.))
+                    .max_h(gpui_kit::relative(0.85))
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_col()
+                    .gap_4()
+                    .p_6()
+                    .bg(rgb(pal().surface))
+                    .border_1()
+                    .border_color(rgb(pal().line))
+                    .rounded(px(3.))
+                    .shadow_lg()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(div().text_lg().child(tr("Keyboard shortcuts", "键盘快捷键")))
+                            .child(div().flex().items_center().gap_2().text_xs().text_color(rgb(pal().muted)).child(cap("Esc".into())).child(tr("to close", "关闭"))),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_8()
+                            .child(div().flex_1().min_w_0().flex().flex_col().gap_4().child(group(Group::Meeting)).child(group(Group::App)))
+                            .child(div().flex_1().min_w_0().child(group(Group::Board))),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .child(div().pb_1().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(tr("always the same", "固定不变")))
+                            .children(FIXED.iter().map(|(k, en, zh)| line(tr(en, zh).to_string(), Keys::parse(k).map(|k| k.label())))),
+                    )
+                    .child(
+                        div().pt_1().child(button("shortcuts-change", tr("Change shortcuts in Settings", "在设置里修改快捷键")).on_click(cx.listener(|this, _, _, cx| {
+                            this.shortcuts_shown = false;
+                            this.settings_tab = SettingsTab::Shortcuts;
+                            this.panel = Panel::Settings;
+                            cx.notify();
+                        }))),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    /// Keep the shortcuts as they are now.
+    fn save_shortcuts(&mut self) {
+        self.form.saved.shortcuts = self.keys.custom().to_vec();
+        if let Err(e) = self.form.saved.save() {
+            self.form.note = Some(format!("{e:#}"));
         }
     }
 
@@ -3429,6 +3581,8 @@ impl Workbench {
     fn toggle_panel(&mut self, panel: Panel, cx: &mut Context<Self>) {
         self.panel = if self.panel == panel { Panel::Transcript } else { panel };
         self.confirm_delete = None;
+        self.recording_keys = None;
+        self.keys_note = None;
         if self.panel == Panel::Settings {
             self.inputs = boardcast_audio::inputs();
         }
@@ -3471,6 +3625,7 @@ impl Workbench {
             minimap_hidden: self.form.saved.minimap_hidden,
             minimap_at: self.form.saved.minimap_at,
             folded_groups: self.form.saved.folded_groups.clone(),
+            shortcuts: self.keys.custom().to_vec(),
         }
     }
 
@@ -4068,14 +4223,14 @@ impl Workbench {
                             .w_full()
                             .h(px(32.))
                             .map(|b| match self.store {
-                                Some(_) => b.tooltip(if cfg!(target_os = "macos") { tr("New meeting (⌘N)", "新建会议（⌘N）") } else { tr("New meeting (Ctrl+N)", "新建会议（Ctrl+N）") }).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))),
+                                Some(_) => b.tooltip(self.keys.tip(Action::NewMeeting, tr("New meeting", "新建会议"))).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))),
                                 // A sample has nowhere to keep a meeting, so the button says why instead of doing nothing.
                                 None => b.tooltip(tr("A sample is not saved, so it cannot start a new meeting", "示例不会保存，不能从这里新建会议")).disabled(true),
                             })
                             .child(div().flex().items_center().gap_2().child(icon("plus").size(px(11.))).child(div().text_sm().child(tr("New meeting", "新建会议")))),
                     )
                     .child(div().h(px(8.)))
-                    .child(nav("side-search", "search", tr("Search", "搜索"), false, Some(if cfg!(target_os = "macos") { "⌘K" } else { "Ctrl K" }.to_string())).on_click(cx.listener(|this, _, window, cx| this.search_meetings(window, cx))))
+                    .child(nav("side-search", "search", tr("Search", "搜索"), false, self.keys.label(Action::Search)).on_click(cx.listener(|this, _, window, cx| this.search_meetings(window, cx))))
                     .child(nav("side-all", "folder-open", tr("All meetings", "全部会议"), self.panel == Panel::Library, (!self.library.is_empty()).then(|| self.library.len().to_string())).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
                     .child(nav("side-import", "import", tr("Import", "导入"), self.panel == Panel::Import, None).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx)))),
             )
@@ -4490,7 +4645,7 @@ fn button(id: impl Into<gpui_kit::ElementId>, label: impl Into<gpui_kit::SharedS
 }
 
 /// An icon that does something, named in a tooltip.
-fn icon_button(id: &'static str, name: &'static str, tooltip: &'static str) -> Button {
+fn icon_button(id: &'static str, name: &'static str, tooltip: impl Into<gpui_kit::SharedString>) -> Button {
     Button::new(id).small().ghost().icon(icon(name)).tooltip(tooltip)
 }
 
@@ -4917,7 +5072,6 @@ impl Render for Workbench {
         let waiting = spoken_lines().filter(|(_, l)| l["ms"].is_null() && !l["failed"].as_bool().unwrap_or(false)).count();
         let not_drawn: Vec<usize> = spoken_lines().filter(|(_, l)| l["failed"].as_bool().unwrap_or(false)).map(|(i, _)| i).collect();
         let mono = |text: String| div().font_family(theme::MONO).text_xs().whitespace_nowrap().child(text);
-        let key = |mac: &'static str, other: &'static str| if cfg!(target_os = "macos") { mac } else { other };
         // What floats over the board: a surface with an edge and a little shadow under it.
         let float = || div().occlude().flex().items_center().bg(rgb(pal().surface)).border_1().border_color(rgb(pal().line)).rounded(px(4.)).shadow_md();
         // A word on how things stand, with a dot in the colour of how much it matters.
@@ -4956,7 +5110,7 @@ impl Render for Workbench {
             .min_w_0()
             .child(
                 div().on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()).child(
-                    icon_button("sidebar-toggle", if sidebar_shown { "panel-left-close" } else { "panel-left-open" }, key(tr("Meetings and settings (⌘B)", "会议与设置（⌘B）"), tr("Meetings and settings (Ctrl+B)", "会议与设置（Ctrl+B）")))
+                    icon_button("sidebar-toggle", if sidebar_shown { "panel-left-close" } else { "panel-left-open" }, self.keys.tip(Action::Sidebar, tr("Meetings and settings", "会议与设置")))
                         .on_click(cx.listener(|this, _, window, cx| this.toggle_sidebar(window, cx))),
                 ),
             )
@@ -5046,7 +5200,7 @@ impl Render for Workbench {
             })
             .child(
                 bar_button("replay", "rotate-ccw", if self.replay.is_some() { tr("Exit replay", "退出回放") } else { tr("Replay", "回放") })
-                    .tooltip(if self.replay.is_some() { tr("Exit replay (Esc)", "退出回放（Esc）") } else { key(tr("Watch the board grow again (⇧⌘R)", "看板书重新长一遍（⇧⌘R）"), tr("Watch the board grow again (Ctrl+Shift+R)", "看板书重新长一遍（Ctrl+Shift+R）")) })
+                    .tooltip(if self.replay.is_some() { tr("Exit replay (Esc)", "退出回放（Esc）").to_string() } else { self.keys.tip(Action::Replay, tr("Watch the board grow again", "看板书重新长一遍")) })
                     .selected(self.replay.is_some())
                     .disabled(self.live.steps.is_empty())
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -5071,9 +5225,9 @@ impl Render for Workbench {
             (ink.circling, ink.pointed.len())
         };
         let tool_h = px(TOOLS_H - 10.0);
-        let tool_icon = |id: &'static str, name: &'static str, tooltip: &'static str| Button::new(id).ghost().h(tool_h).w(tool_h).icon(icon(name)).tooltip(tooltip);
+        let tool_icon = |id: &'static str, name: &'static str, tooltip: String| Button::new(id).ghost().h(tool_h).w(tool_h).icon(icon(name)).tooltip(tooltip);
         // A key as it is printed on the keyboard.
-        let keycap = |text: &'static str| div().flex().items_center().h(px(18.)).px(px(5.)).border_1().rounded(px(2.)).font_family(theme::MONO).text_size(px(10.)).child(text);
+        let keycap = |text: String| div().flex().items_center().h(px(18.)).px(px(5.)).border_1().rounded(px(2.)).font_family(theme::MONO).text_size(px(10.)).child(text);
         let tool_bar = editable.then(|| {
             float()
                 .id("tools")
@@ -5086,7 +5240,7 @@ impl Render for Workbench {
                         .map(|b| if listening { b.danger() } else { b.primary() })
                         .h(tool_h)
                         .px_3()
-                        .tooltip(if listening { tr("Stop listening (Space)", "停止收音（空格）") } else { tr("Start listening (Space)", "开始收音（空格）") })
+                        .tooltip(self.keys.tip(Action::Listen, if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") }))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.toggle_mic();
                             cx.notify();
@@ -5098,7 +5252,7 @@ impl Render for Workbench {
                                 .gap_2()
                                 .child(div().size(px(10.)).flex_none().map(|d| if listening { d.bg(rgb(pal().on_strong)) } else { d.rounded_full().bg(rgb(pal().recording)) }))
                                 .child(div().text_sm().child(if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") }))
-                                .when(!listening, |d| d.child(keycap(tr("Space", "空格")).border_color(rgb(pal().on_strong)).opacity(0.55)))
+                                .when_some(self.keys.label(Action::Listen).filter(|_| !listening), |d, keys| d.child(keycap(keys).border_color(rgb(pal().on_strong)).opacity(0.55)))
                                 .when(listening, |d| {
                                     let level = self.level;
                                     d.child(div().flex().items_end().gap(px(2.)).h(px(18.)).children((0..7).map(|i| {
@@ -5136,9 +5290,9 @@ impl Render for Workbench {
                         }))),
                 )
                 .child(Separator::vertical().h(px(20.)).mx_1())
-                .child(tool_icon("undo", "undo-2", key(tr("Undo (⌘Z)", "撤销（⌘Z）"), tr("Undo (Ctrl+Z)", "撤销（Ctrl+Z）"))).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
-                .child(tool_icon("redo", "redo-2", key(tr("Redo (⇧⌘Z)", "重做（⇧⌘Z）"), tr("Redo (Ctrl+Shift+Z)", "重做（Ctrl+Shift+Z）"))).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
-                .child(tool_icon("tidy", "wand-sparkles", tr("Tidy the layout", "整理排版")).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
+                .child(tool_icon("undo", "undo-2", self.keys.tip(Action::Undo, tr("Undo", "撤销"))).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
+                .child(tool_icon("redo", "redo-2", self.keys.tip(Action::Redo, tr("Redo", "重做"))).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
+                .child(tool_icon("tidy", "wand-sparkles", self.keys.tip(Action::Tidy, tr("Tidy the layout", "整理排版"))).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
         });
         let map_on = !self.form.saved.minimap_hidden;
         // How far the board is zoomed, at its lower corner; the figure itself fits the board again.
@@ -5146,7 +5300,7 @@ impl Render for Workbench {
             .id("zoom-tools")
             .h(px(32.))
             .px(px(3.))
-            .child(icon_button("zoom-out", "minus", key(tr("Zoom out (⌘−)", "缩小（⌘−）"), tr("Zoom out (Ctrl−)", "缩小（Ctrl−）"))).on_click(cx.listener(|this, _, _, cx| this.zoom_by(1.0 / ZOOM_STEP, cx))))
+            .child(icon_button("zoom-out", "minus", self.keys.tip(Action::ZoomOut, tr("Zoom out", "缩小"))).on_click(cx.listener(|this, _, _, cx| this.zoom_by(1.0 / ZOOM_STEP, cx))))
             .child(
                 div()
                     .id("zoom")
@@ -5158,13 +5312,16 @@ impl Render for Workbench {
                     .text_size(px(11.))
                     .text_color(rgb(pal().muted))
                     .hover(|d| d.text_color(rgb(pal().text)))
-                    .tooltip(|window, cx| Tooltip::new(if cfg!(target_os = "macos") { tr("Fit the board (⌘0)", "适应屏幕（⌘0）") } else { tr("Fit the board (Ctrl+0)", "适应屏幕（Ctrl+0）") }).build(window, cx))
+                    .tooltip({
+                        let tip = self.keys.tip(Action::Fit, tr("Fit the board", "适应屏幕"));
+                        move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                    })
                     .on_click(cx.listener(|this, _, _, cx| this.fit_board(cx)))
                     .child(format!("{:.0}%", zoom * 100.0)),
             )
-            .child(icon_button("zoom-in", "plus", key(tr("Zoom in (⌘+)", "放大（⌘+）"), tr("Zoom in (Ctrl+)", "放大（Ctrl+）"))).on_click(cx.listener(|this, _, _, cx| this.zoom_by(ZOOM_STEP, cx))))
+            .child(icon_button("zoom-in", "plus", self.keys.tip(Action::ZoomIn, tr("Zoom in", "放大"))).on_click(cx.listener(|this, _, _, cx| this.zoom_by(ZOOM_STEP, cx))))
             .child(Separator::vertical().h(px(16.)).mx(px(3.)))
-            .child(icon_button("map-toggle", "map", if map_on { tr("Close the map of the board (M)", "收起板书小地图（M）") } else { tr("Map of the board (M)", "板书小地图（M）") }).selected(map_on).on_click(cx.listener(|this, _, _, cx| this.toggle_map(cx))));
+            .child(icon_button("map-toggle", "map", self.keys.tip(Action::Map, if map_on { tr("Close the map of the board", "收起板书小地图") } else { tr("Map of the board", "板书小地图") })).selected(map_on).on_click(cx.listener(|this, _, _, cx| this.toggle_map(cx))));
         // A meeting with several boards turns between them at the other corner.
         let page_tools = (pages > 1).then(|| {
             float()
@@ -5903,6 +6060,66 @@ impl Render for Workbench {
                     .when_some(self.search_status(), |d, (text, failed)| d.child(div().pt_1().text_xs().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(text)))
                     .into_any_element()
             }
+            SettingsTab::Shortcuts => {
+                let mut list = div().flex().flex_col().child(heading(
+                    tr("Shortcuts", "快捷键"),
+                    Some(tr("Click a shortcut, then press the keys for it. Esc leaves it as it was.", "点一个快捷键，再按下新的组合键；按 Esc 保持不变。")),
+                ));
+                for group in [Group::Meeting, Group::Board, Group::App] {
+                    list = list.child(div().pt_4().pb_1().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(group.name()));
+                    for (i, (action, ..)) in ACTIONS.iter().enumerate().filter(|(_, a)| a.4 == group) {
+                        let action = *action;
+                        let waiting = self.recording_keys == Some(action);
+                        let shown = if waiting { tr("Press keys…", "请按下组合键…").to_string() } else { self.keys.label(action).unwrap_or_else(|| tr("None", "无").to_string()) };
+                        let note = self.keys_note.clone().filter(|_| waiting);
+                        list = list.child(
+                            row(action.name(), None).child(
+                                div()
+                                    .flex()
+                                    .flex_none()
+                                    .items_center()
+                                    .gap_2()
+                                    .when(self.keys.changed(action) && !waiting, |d| {
+                                        d.child(Button::new(("shortcut-reset", i)).small().ghost().label(tr("Reset", "恢复默认")).on_click(cx.listener(move |this, _, _, cx| {
+                                            this.keys.reset(action);
+                                            this.save_shortcuts();
+                                            cx.notify();
+                                        })))
+                                    })
+                                    .child(
+                                        Button::new(("shortcut", i))
+                                            .small()
+                                            .map(|b| if waiting { b.primary() } else { b.outline() })
+                                            .min_w(px(120.))
+                                            .label(shown)
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.recording_keys = Some(action);
+                                                this.keys_note = None;
+                                                // The keys go to the board's handler, which takes them while a shortcut waits.
+                                                window.focus(&this.focus, cx);
+                                                cx.notify();
+                                            })),
+                                    ),
+                            ),
+                        );
+                        if let Some(note) = note {
+                            list = list.child(div().pt_1().pb_2().text_xs().text_color(rgb(pal().danger)).child(note));
+                        }
+                    }
+                }
+                let fixed: Vec<String> = FIXED.iter().map(|(k, en, zh)| format!("{} · {}", Keys::parse(k).map(|k| k.label()).unwrap_or_default(), tr(en, zh))).collect();
+                list.child(div().pt_4().text_xs().text_color(rgb(pal().muted)).child(format!("{} {}", tr("Always the same:", "固定不变："), fixed.join("；"))))
+                    .when(!self.keys.custom().is_empty(), |d| {
+                        d.child(div().pt_4().child(button("shortcuts-reset-all", tr("Reset all shortcuts", "全部恢复默认")).on_click(cx.listener(|this, _, _, cx| {
+                            this.keys.reset_all();
+                            this.recording_keys = None;
+                            this.keys_note = None;
+                            this.save_shortcuts();
+                            cx.notify();
+                        }))))
+                    })
+                    .into_any_element()
+            }
             SettingsTab::About => {
                 let update: gpui_kit::AnyElement = match &self.update {
                     _ if self.prefix.is_none() => div().text_xs().text_color(rgb(pal().muted)).child(tr("Installed copies update.", "只有安装版可以更新。")).into_any_element(),
@@ -5980,6 +6197,7 @@ impl Render for Workbench {
             (SettingsTab::Model, tr("Board model", "板书模型")),
             (SettingsTab::Speech, tr("Speech", "语音")),
             (SettingsTab::General, tr("General", "通用")),
+            (SettingsTab::Shortcuts, tr("Shortcuts", "快捷键")),
             (SettingsTab::About, tr("About", "关于")),
         ]
         .into_iter()
@@ -6283,7 +6501,7 @@ impl Render for Workbench {
         let blank = editable && pages <= 1 && self.live.lines.is_empty() && self.live.graph.nodes.is_empty() && self.live.graph.underlay().is_none();
         let welcome = blank.then(|| {
             let starts: Vec<(String, Vec<String>)> = templates().into_iter().map(|(name, topics)| (name.to_string(), topics)).chain(self.form.saved.templates.iter().cloned()).take(6).collect();
-            let hint_key = |text: &'static str| keycap(text).h(px(20.)).px(px(6.)).border_color(rgb(pal().line)).bg(rgb(pal().surface)).text_color(rgb(pal().muted));
+            let hint_key = |text: String| keycap(text).h(px(20.)).px(px(6.)).border_color(rgb(pal().line)).bg(rgb(pal().surface)).text_color(rgb(pal().muted));
             div().absolute().size_full().flex().items_center().justify_center().pb(px(TOOLS_H + TOOLS_GAP)).child(
                 div()
                     .w(px(540.))
@@ -6306,11 +6524,9 @@ impl Render for Workbench {
                             .gap_2()
                             .text_xs()
                             .text_color(rgb(pal().muted))
-                            .child(hint_key(tr("Space", "空格")))
-                            .child(tr("to listen", "开始收音"))
-                            .child(div().w(px(10.)))
-                            .child(hint_key("/"))
-                            .child(tr("to type a line", "输入一句话")),
+                            .when_some(self.keys.label(Action::Listen), |d, keys| d.child(hint_key(keys)).child(tr("to listen", "开始收音")).child(div().w(px(10.))))
+                            .when_some(self.keys.label(Action::TypeLine), |d, keys| d.child(hint_key(keys)).child(tr("to type a line", "输入一句话")).child(div().w(px(10.))))
+                            .when_some(self.keys.label(Action::Shortcuts), |d, keys| d.child(hint_key(keys)).child(tr("for all shortcuts", "查看所有快捷键"))),
                     )
                     .when(self.store.is_some(), |d| {
                         d.child(div().pt_5().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(tr("or start from a template", "或者从模板开始"))).child(
@@ -6384,7 +6600,10 @@ impl Render for Workbench {
                         .opacity(0.)
                         .group_hover("minimap", |s| s.opacity(1.))
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .tooltip(|window, cx| Tooltip::new(tr("Close the map (M)", "收起小地图（M）")).build(window, cx))
+                        .tooltip({
+                            let tip = self.keys.tip(Action::Map, tr("Close the map", "收起小地图"));
+                            move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                        })
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_map(cx)))
                         .child(icon("x").size(px(8.))),
                 );
@@ -6503,6 +6722,7 @@ impl Render for Workbench {
             .when_some(overlay.take_if(|_| !in_dialog), |d, page| d.child(page))
             .when_some(preparing_page, |d, page| d.child(page));
         let sidebar = sidebar_shown.then(|| self.sidebar(listening, cx));
+        let shortcuts_window = self.shortcuts_shown.then(|| self.shortcuts_window(cx));
         let content = div()
             .relative()
             .flex_1()
@@ -6511,7 +6731,8 @@ impl Render for Workbench {
             .flex()
             .when_some(sidebar, |d, sidebar| d.child(sidebar))
             .child(meeting)
-            .when_some(overlay, |d, dialog| d.child(dialog));
+            .when_some(overlay, |d, dialog| d.child(dialog))
+            .when_some(shortcuts_window, |d, window| d.child(window));
         div()
             .id("workbench")
             .track_focus(&self.focus)
@@ -6901,6 +7122,10 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     pinned,
                     deleted_meeting: None,
                     confirm_delete: None,
+                    keys: Shortcuts::new(&settings.shortcuts),
+                    shortcuts_shown: false,
+                    recording_keys: None,
+                    keys_note: None,
                     inputs: vec![],
                     library_query,
                     label_input,

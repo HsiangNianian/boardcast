@@ -117,6 +117,57 @@ pub enum Engine {
     System,
 }
 
+/// The language a meeting is held in, as chosen in Settings. English is heard whatever is chosen, as
+/// meetings in Chinese or Japanese are full of it; the choice settles what everything else is heard as.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Language {
+    /// SenseVoice tells each sentence's language and passes it on.
+    #[default]
+    Auto,
+    /// Kana and Hangul are Chinese misheard, and are heard again as Chinese.
+    Chinese,
+    /// Parakeet hears everything.
+    English,
+    /// ReazonSpeech hears everything that isn't English, kana or not.
+    Japanese,
+}
+
+impl Language {
+    /// From the setting, which is also the system recognizer's locale: "zh-CN", "en-US", "ja-JP" or "auto".
+    pub fn from_setting(setting: &str) -> Self {
+        match setting.split(['-', '_']).next() {
+            Some("zh") => Self::Chinese,
+            Some("en") => Self::English,
+            Some("ja") => Self::Japanese,
+            _ => Self::Auto,
+        }
+    }
+}
+
+/// Who reads a sentence again after its first reading.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Again {
+    English,
+    Japanese,
+    Chinese,
+}
+
+/// Who reads a sentence again, from what the first reading made of it. `long` is whether it is long
+/// enough for ReazonSpeech.
+fn read_again(language: Language, engine: Engine, text: &str, long: bool) -> Option<Again> {
+    match engine {
+        Engine::SenseVoice | Engine::Reazon if is_english(text) => Some(Again::English),
+        Engine::SenseVoice if is_korean(text) || (language == Language::Chinese && is_japanese(text)) => Some(Again::Chinese),
+        Engine::SenseVoice if long && (language == Language::Japanese || (language == Language::Auto && is_japanese(text))) => Some(Again::Japanese),
+        _ => None,
+    }
+}
+
+/// Whether text heard again as Chinese still isn't, and is better left out.
+fn still_not_chinese(language: Language, text: &str) -> bool {
+    is_korean(text) || (language == Language::Chinese && is_japanese(text))
+}
+
 /// Shorter than this, ReazonSpeech makes up words, so SenseVoice's reading stands.
 const MIN_JAPANESE: usize = SAMPLE_RATE as usize * 3 / 10;
 
@@ -268,6 +319,8 @@ pub struct Recognizers {
     pub sense_voice_dir: Option<PathBuf>,
     /// SenseVoice for Chinese only, loaded the first time a sentence comes out as Korean.
     pub chinese: Option<OfflineRecognizer>,
+    /// The language chosen, which settles who hears what.
+    pub language: Language,
 }
 
 impl Recognizers {
@@ -276,12 +329,17 @@ impl Recognizers {
         let dir = models.join("sense-voice");
         let sense_voice = load_sense_voice_if_there(&dir);
         let sense_voice_dir = sense_voice.is_some().then_some(dir);
-        Self { system: None, sense_voice, english: load_parakeet(&models.join("parakeet-en")), japanese: load_reazon(&models.join("reazon-ja")), sense_voice_dir, chinese: None }
+        Self { system: None, sense_voice, english: load_parakeet(&models.join("parakeet-en")), japanese: load_reazon(&models.join("reazon-ja")), sense_voice_dir, chinese: None, language: Language::Auto }
+    }
+
+    /// The same recognizers, hearing `language`.
+    pub fn hearing(self, language: Language) -> Self {
+        Self { language, ..self }
     }
 
     /// Only the system's recognizer, for when it was chosen and nothing else needs loading.
     pub fn system(recognizer: Box<dyn Recognizer>) -> Self {
-        Self { system: Some(recognizer), sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None }
+        Self { system: Some(recognizer), sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None, language: Language::Auto }
     }
 
     /// The models there, by name, for saying what hears.
@@ -304,20 +362,26 @@ impl Recognizers {
                 }
             };
         }
+        if self.language == Language::English {
+            if let Some(english) = &self.english {
+                return (recognize(english, samples), Engine::Parakeet);
+            }
+        }
         let (text, engine) = match (&self.sense_voice, &self.japanese, &self.english) {
-            (Some(asr), _, _) => (self.not_korean(recognize(asr, samples), samples), Engine::SenseVoice),
+            (Some(asr), _, _) => (recognize(asr, samples), Engine::SenseVoice),
             (None, Some(japanese), _) if samples.len() >= MIN_JAPANESE => (recognize(japanese, samples), Engine::Reazon),
             (None, Some(_), None) => return (String::new(), Engine::Reazon),
             (None, _, Some(english)) => (recognize(english, samples), Engine::Parakeet),
             (None, _, None) => return (String::new(), Engine::SenseVoice),
         };
         // What the first reading says about the language decides who reads it again.
-        let again = match engine {
-            Engine::SenseVoice if is_japanese(&text) && samples.len() >= MIN_JAPANESE => self.japanese.as_ref().map(|j| (j, Engine::Reazon)),
-            Engine::SenseVoice | Engine::Reazon if is_english(&text) => self.english.as_ref().map(|e| (e, Engine::Parakeet)),
-            _ => None,
+        let better = match read_again(self.language, engine, &text, samples.len() >= MIN_JAPANESE) {
+            Some(Again::Chinese) => return (self.as_chinese(samples), Engine::SenseVoice),
+            Some(Again::English) => self.english.as_ref().map(|e| (e, Engine::Parakeet)),
+            Some(Again::Japanese) => self.japanese.as_ref().map(|j| (j, Engine::Reazon)),
+            None => None,
         };
-        if let Some((asr, better)) = again {
+        if let Some((asr, better)) = better {
             let text = recognize(asr, samples);
             if !text.is_empty() {
                 return (text, better);
@@ -328,17 +392,15 @@ impl Recognizers {
 }
 
 impl Recognizers {
-    /// Korean from SenseVoice is Chinese it misheard: read the sentence again as Chinese. Should that
-    /// fail as well, nothing is written rather than Korean.
-    fn not_korean(&mut self, text: String, samples: &[f32]) -> String {
-        if !is_korean(&text) {
-            return text;
-        }
+    /// A sentence SenseVoice heard as Korean, or as Japanese when Chinese was chosen, is Chinese it
+    /// misheard: read it again as Chinese. Should that fail as well, nothing is written rather than the
+    /// wrong language.
+    fn as_chinese(&mut self, samples: &[f32]) -> String {
         if self.chinese.is_none() {
             self.chinese = self.sense_voice_dir.as_ref().and_then(|dir| load_sense_voice_for(dir, "zh").map_err(|e| eprintln!("{e:#}")).ok());
         }
         let again = self.chinese.as_ref().map(|zh| recognize(zh, samples)).unwrap_or_default();
-        if is_korean(&again) { String::new() } else { again }
+        if still_not_chinese(self.language, &again) { String::new() } else { again }
     }
 }
 
@@ -651,6 +713,37 @@ mod tests {
     }
 
     #[test]
+    fn the_setting_names_the_language() {
+        assert_eq!(Language::from_setting("zh-CN"), Language::Chinese);
+        assert_eq!(Language::from_setting("en-US"), Language::English);
+        assert_eq!(Language::from_setting("ja_JP"), Language::Japanese);
+        assert_eq!(Language::from_setting("auto"), Language::Auto);
+        assert_eq!(Language::from_setting(""), Language::Auto);
+    }
+
+    #[test]
+    fn the_language_chosen_decides_who_reads_again() {
+        use Language::*;
+        let sv = Engine::SenseVoice;
+        // English is heard whatever was chosen.
+        for language in [Auto, Chinese, Japanese] {
+            assert_eq!(read_again(language, sv, "The gateway forwards it.", true), Some(Again::English), "{language:?}");
+        }
+        // Kana goes to ReazonSpeech when told apart, and is misheard Chinese when Chinese was chosen.
+        assert_eq!(read_again(Auto, sv, "はい、そうです", true), Some(Again::Japanese));
+        assert_eq!(read_again(Chinese, sv, "はい、そうです", true), Some(Again::Chinese));
+        // Japanese chosen: ReazonSpeech hears what SenseVoice took for Chinese too, but not a short sound.
+        assert_eq!(read_again(Japanese, sv, "会議を始めます", true), Some(Again::Japanese));
+        assert_eq!(read_again(Japanese, sv, "会議", false), None);
+        assert_eq!(read_again(Auto, sv, "会议开始", true), None);
+        // Hangul is misheard Chinese, as before.
+        assert_eq!(read_again(Auto, sv, "네", true), Some(Again::Chinese));
+        // Chinese with English terms stays with SenseVoice.
+        assert_eq!(read_again(Chinese, sv, "Account 下面有 User API。", true), None);
+        assert!(still_not_chinese(Chinese, "はい") && !still_not_chinese(Auto, "はい") && still_not_chinese(Auto, "네"));
+    }
+
+    #[test]
     fn hangul_is_korean_and_nothing_else_is() {
         assert!(is_korean("어") && is_korean("네, 알겠습니다"));
         assert!(!is_korean("哦") && !is_korean("こんにちは") && !is_korean("Release notes") && !is_korean(""));
@@ -675,9 +768,9 @@ mod tests {
 
     #[test]
     fn the_system_recognizer_takes_every_sentence_and_nothing_is_no_ear() {
-        let mut asr = Recognizers { system: Some(Box::new(Fixed("こんにちは"))), sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None };
+        let mut asr = Recognizers { system: Some(Box::new(Fixed("こんにちは"))), sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None, language: Language::Auto };
         assert_eq!(asr.hear(&[0.0; 16_000]), ("こんにちは".to_string(), Engine::System));
-        let none = Recognizers { system: None, sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None };
+        let none = Recognizers { system: None, sense_voice: None, english: None, japanese: None, sense_voice_dir: None, chinese: None, language: Language::Auto };
         assert!(none.is_empty());
         assert!(Ear::with(Path::new("/nowhere"), none).is_err());
     }

@@ -1666,7 +1666,7 @@ impl Workbench {
         cx.notify();
     }
 
-    /// Hear with Apple's recognizer or the speech models, in `language` for Apple's.
+    /// Hear with Apple's recognizer or the speech models, in `language`, which both follow.
     fn choose_speech(&mut self, system: bool, language: Option<&str>, cx: &mut Context<Self>) {
         let saved = &mut self.form.saved;
         saved.system_speech = system;
@@ -5765,17 +5765,23 @@ impl Render for Workbench {
                     )
                     .when(self.speech_helper.is_some(), |d| {
                         let system = self.form.saved.system_speech;
-                        let language = self.form.saved.speech_language.clone();
-                        let languages = [("auto", tr("System", "跟随系统")), ("ja-JP", "日本語"), ("en-US", "English"), ("zh-CN", "中文")];
                         d.child(row(tr("Recognize speech with", "语音识别"), None).child(segmented(vec![
                             choice("speech-models".into(), tr("Speech models", "语音模型"), !system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, cx))),
                             choice("speech-apple".into(), "Apple", system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, cx))),
                         ])))
-                        .when(system, |d| {
-                            d.child(row(tr("Language heard", "识别语言"), Some(tr("Apple's recognizer hears one language at a time.", "Apple 的识别一次只听一种语言。"))).child(segmented(
-                                languages.into_iter().map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("speech-language-{id}").into()), label, language == id).on_click(cx.listener(move |this, _, _, cx| this.choose_speech(true, Some(id), cx)))).collect(),
-                            )))
-                        })
+                    })
+                    .child({
+                        let system = self.speech_helper.is_some() && self.form.saved.system_speech;
+                        let language = self.form.saved.speech_language.clone();
+                        let languages = [("auto", tr("Automatic", "自动")), ("zh-CN", "中文"), ("en-US", "English"), ("ja-JP", "日本語")];
+                        let hint = if system {
+                            tr("Apple hears one language at a time, and Automatic follows the Mac's. Chinese also hears English.", "Apple 一次只听一种语言，自动即跟随系统语言。选中文时也能听英文。")
+                        } else {
+                            tr("Automatic tells each sentence's language. A chosen language is what everything else is heard as; English is always heard.", "自动会逐句判断语言。选定语言后，其余内容都按该语言识别；英文始终能听。")
+                        };
+                        row(tr("Language heard", "识别语言"), Some(hint)).child(segmented(
+                            languages.into_iter().map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("speech-language-{id}").into()), label, language == id).on_click(cx.listener(move |this, _, _, cx| this.choose_speech(this.form.saved.system_speech, Some(id), cx)))).collect(),
+                        ))
                     })
                     .when_some(self.hearing.clone(), |d, with| d.child(div().pt_2().text_xs().text_color(rgb(pal().faint)).child(format!("{} {with}", tr("Hearing with", "当前识别：")))))
                     .into_any_element()

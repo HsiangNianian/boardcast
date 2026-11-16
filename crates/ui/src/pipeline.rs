@@ -222,8 +222,9 @@ impl Pipeline {
         self.mic_stop.is_some()
     }
 
-    /// Start or stop listening, to `input` when it is given and still there.
-    pub fn toggle_mic(&mut self, input: Option<String>) {
+    /// Start or stop listening, to `input` when it is given and still there. With `keep`, what is heard is
+    /// also saved there as it comes, and the file is finished when listening stops.
+    pub fn toggle_mic(&mut self, input: Option<String>, keep: Option<std::path::PathBuf>) {
         if let Some(stop) = self.mic_stop.take() {
             stop.store(true, Ordering::Relaxed);
             return;
@@ -232,6 +233,38 @@ impl Pipeline {
         self.mic_stop = Some(stop.clone());
         let samples = self.samples.clone();
         let tx = self.event_tx.clone();
+        // What is heard goes on to the ear as before, and into the file too when one is kept.
+        let samples = match keep {
+            None => samples,
+            Some(path) => {
+                let (tee, heard) = channel::<Vec<f32>>();
+                let failed = tx.clone();
+                thread::spawn(move || {
+                    let mut keeper = match boardcast_audio::keep::Keeper::create(&path) {
+                        Ok(k) => Some(k),
+                        Err(e) => {
+                            let _ = failed.send(Event::Failed(format!("{}{e:#}", crate::i18n::tr("The meeting's audio can't be kept: ", "会议录音无法保存："))));
+                            None
+                        }
+                    };
+                    for chunk in heard {
+                        if let Some(k) = keeper.as_mut() {
+                            if let Err(e) = k.write(&chunk) {
+                                let _ = failed.send(Event::Failed(format!("{}{e:#}", crate::i18n::tr("The meeting's audio stopped being kept: ", "会议录音中断："))));
+                                keeper = None;
+                            }
+                        }
+                        let _ = samples.send(chunk);
+                    }
+                    if let Some(k) = keeper {
+                        if let Err(e) = k.finish() {
+                            let _ = failed.send(Event::Failed(format!("{}{e:#}", crate::i18n::tr("The meeting's audio could not be finished: ", "会议录音没能保存完整："))));
+                        }
+                    }
+                });
+                tee
+            }
+        };
         thread::spawn(move || {
             let warn = tx.clone();
             let fell_back = move |_: &str| {

@@ -2,6 +2,7 @@
 //! Any of the recognizers may be missing; SenseVoice, when there, decides which language a sentence is in.
 //! It knows nothing about boards; callers receive each sentence through a callback.
 
+pub mod keep;
 use anyhow::{anyhow, Context, Result};
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, OfflineTransducerModelConfig, SileroVadModelConfig, SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, VadModelConfig, VoiceActivityDetector, Wave};
 use std::collections::VecDeque;

@@ -675,6 +675,20 @@ impl Live {
         self.touch();
     }
 
+    /// The audio kept of this meeting, a file for each time it listened: its name, when it began and how long
+    /// it is, in milliseconds.
+    pub fn audio(&self) -> Vec<(String, f64, f64)> {
+        array(&self.raw, "audio").iter().filter_map(|a| Some((a["file"].as_str()?.to_string(), a["start"].as_f64()?, a["ms"].as_f64()?))).collect()
+    }
+
+    /// Note a file of this meeting's audio, once listening into it has stopped.
+    pub fn add_audio(&mut self, file: &str, start: f64, ms: f64) {
+        let mut all = array(&self.raw, "audio");
+        all.push(json!({ "file": file, "start": start.round(), "ms": ms.max(0.0).round() }));
+        self.raw.insert("audio".into(), Value::Array(all));
+        self.touch();
+    }
+
     pub fn summary(&self) -> &str {
         self.raw.get("summary").and_then(Value::as_str).unwrap_or_default()
     }
@@ -890,6 +904,17 @@ mod tests {
 
     fn page_board(no: u32) -> Graph {
         serde_json::from_value(json!({ "nodes": [{ "id": "n1", "label": format!("第 {no} 页"), "aliases": [], "kind": "region", "marks": [], "ink": "ink", "at": { "x": 1, "y": 2, "w": 3, "h": 4 } }], "edges": [], "groups": [], "nextNode": 2, "nextGroup": 1, "underlay": { "w": 900, "h": 1200, "no": no } })).unwrap()
+    }
+
+    #[test]
+    fn kept_audio_is_noted_and_saved_with_the_meeting() {
+        let mut live = Live::new();
+        assert!(live.audio().is_empty());
+        live.add_audio("audio-1000.opus", 1000.4, 61_234.6);
+        live.add_audio("audio-90000.opus", 90_000.0, 5_000.0);
+        assert_eq!(live.audio(), [("audio-1000.opus".to_string(), 1000.0, 61_235.0), ("audio-90000.opus".to_string(), 90_000.0, 5_000.0)]);
+        let saved = live.snapshot();
+        assert_eq!(saved["audio"].as_array().map(Vec::len), Some(2), "it goes in the meeting's file");
     }
 
     #[test]

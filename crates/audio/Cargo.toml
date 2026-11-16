@@ -10,6 +10,10 @@ publish.workspace = true
 [dependencies]
 anyhow.workspace = true
 cpal = "0.18"
+# The meeting's audio, kept when the setting asks: Opus in Ogg, with libopus built in rather than looked for.
+audiopus_sys = { version = "0.2", features = ["static"] }
+ogg = "0.9"
+opus = "0.3"
 sherpa-onnx = "2.0.1"
 serde_json.workspace = true
 

@@ -19,6 +19,7 @@ pub enum Action {
     Map,
     Replay,
     NewMeeting,
+    NewBoard,
     Search,
     Sidebar,
     Settings,
@@ -45,11 +46,12 @@ impl Group {
 
 /// Every action: its name in the settings file, what it is called, where it is listed, and its keys at first.
 /// `mod` is Ctrl, or ⌘ on a Mac.
-pub const ACTIONS: [(Action, &str, &str, &str, Group, &str); 15] = [
+pub const ACTIONS: [(Action, &str, &str, &str, Group, &str); 16] = [
     (Action::Listen, "listen", "Start or stop listening", "开始或停止收音", Group::Meeting, "space"),
     (Action::TypeLine, "type-line", "Type a line", "输入一句话", Group::Meeting, "/"),
     (Action::Replay, "replay", "Watch the board grow again", "看板书重新长一遍", Group::Meeting, "mod-shift-r"),
     (Action::NewMeeting, "new-meeting", "New meeting", "新建会议", Group::Meeting, "mod-n"),
+    (Action::NewBoard, "new-board", "New board in this meeting", "在这场会议里新开一张板", Group::Meeting, "mod-shift-n"),
     (Action::Undo, "undo", "Undo", "撤销", Group::Board, "mod-z"),
     (Action::Redo, "redo", "Redo", "重做", Group::Board, "mod-shift-z"),
     (Action::Tidy, "tidy", "Tidy the layout", "整理排版", Group::Board, ""),

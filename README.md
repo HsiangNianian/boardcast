@@ -118,6 +118,7 @@ Shortcuts work while the board has focus and leave text fields alone. On macOS, 
 | `M` | Show or close the map of the board |
 | `Ctrl+Shift+R` | Replay; then `Space` plays or pauses, `←` `→` step and `Esc` leaves |
 | `Ctrl+N` | New meeting |
+| `Ctrl+Shift+N` | New board in this meeting (also the + beside the board number, at the lower right) |
 | `Ctrl+K` | Search meetings |
 | `Ctrl+B` | Show or hide the sidebar |
 | `Ctrl+,` | Settings |

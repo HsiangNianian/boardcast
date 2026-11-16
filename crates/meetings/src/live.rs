@@ -246,6 +246,25 @@ impl Live {
         self.touch();
     }
 
+    /// Start a blank board after the others and show it. The one being left is kept as it is.
+    pub fn add_board(&mut self, note: &str) {
+        self.store_page();
+        if self.raw.get("pages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
+            self.raw.insert("pages".into(), json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]));
+        }
+        let pages = self.raw.get_mut("pages").and_then(Value::as_array_mut).expect("made above");
+        pages.push(json!({ "graph": Graph::default(), "layout": Value::Null, "steps": [] }));
+        let to = pages.len() - 1;
+        self.raw.insert("page".into(), json!(to));
+        self.graph = Graph::default();
+        self.memory = Value::Null;
+        self.steps = vec![];
+        self.recorded = Graph::default();
+        self.undo = History::default();
+        self.add_note(note);
+        self.touch();
+    }
+
     /// Carry a topic, with everything under it, over to a new board and show that board: the talk moved on
     /// to it. On the board it leaves, its going can be undone and is replayed like any change.
     pub fn split_topic(&mut self, topic: &str, note: &str) -> bool {
@@ -871,6 +890,20 @@ mod tests {
 
     fn page_board(no: u32) -> Graph {
         serde_json::from_value(json!({ "nodes": [{ "id": "n1", "label": format!("第 {no} 页"), "aliases": [], "kind": "region", "marks": [], "ink": "ink", "at": { "x": 1, "y": 2, "w": 3, "h": 4 } }], "edges": [], "groups": [], "nextNode": 2, "nextGroup": 1, "underlay": { "w": 900, "h": 1200, "no": no } })).unwrap()
+    }
+
+    #[test]
+    fn a_new_board_is_blank_shown_and_leaves_the_last_one_as_it_was() {
+        let mut live = Live::new();
+        live.change_board(page_board(1), Value::Null);
+        let kept = live.graph.clone();
+        live.add_board("新开了一张板");
+        assert_eq!((live.pages(), live.page()), (2, 1));
+        assert!(live.graph.nodes.is_empty() && live.steps.is_empty() && !live.can_undo());
+        assert_eq!(live.boards()[0], kept, "the board left behind keeps what it had");
+        assert_eq!(live.lines.last().unwrap()["text"], "新开了一张板");
+        live.add_board("again");
+        assert_eq!((live.pages(), live.page()), (3, 2));
     }
 
     #[test]

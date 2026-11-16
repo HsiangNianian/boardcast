@@ -2995,6 +2995,23 @@ impl Workbench {
     }
 
     /// Give the offered topic its own board, and carry on there.
+    /// Start a blank board in this meeting and turn to it; the talk goes on there.
+    fn new_board(&mut self, cx: &mut Context<Self>) {
+        if !self.editable() || self.replay.is_some() {
+            cx.notify();
+            return;
+        }
+        self.live.add_board(tr("Started a new board", "新开了一张板"));
+        self.page_hint = None;
+        self.topic_hint = None;
+        self.page_quiet = QUIET_AFTER_TURNING;
+        let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
+        self.session().open(self.live.graph.clone(), history);
+        self.ink.borrow_mut().open(&self.live.graph, &self.live.memory);
+        self.show_page_image();
+        cx.notify();
+    }
+
     fn split_topic(&mut self, cx: &mut Context<Self>) {
         let Some((id, label)) = self.topic_hint.take() else { return };
         if self.replay.is_some() || !self.live.split_topic(&id, &tr("Moved “{t}” to a new board", "把「{t}」移到了新的一张板").replace("{t}", &label)) {
@@ -3770,6 +3787,7 @@ impl Workbench {
             Action::Map => self.toggle_map(cx),
             Action::Replay => self.start_replay(window, cx),
             Action::NewMeeting if self.store.is_some() => self.new_meeting(cx),
+            Action::NewBoard => self.new_board(cx),
             Action::Search => self.search_meetings(window, cx),
             Action::Sidebar => self.toggle_sidebar(window, cx),
             Action::Settings => self.toggle_panel(Panel::Settings, cx),
@@ -6107,7 +6125,8 @@ impl Render for Workbench {
             .child(Separator::vertical().h(px(16.)).mx(px(3.)))
             .child(icon_button("map-toggle", "map", self.keys.tip(Action::Map, if map_on { tr("Close the map of the board", "收起板书小地图") } else { tr("Map of the board", "板书小地图") })).selected(map_on).on_click(cx.listener(|this, _, _, cx| this.toggle_map(cx))));
         // A meeting with several boards turns between them at the other corner.
-        let page_tools = (pages > 1).then(|| {
+        // Always there: which board this is, the way to the others, and a new one.
+        let page_tools = Some(
             float()
                 .id("page-tools")
                 .h(px(32.))
@@ -6115,7 +6134,11 @@ impl Render for Workbench {
                 .child(icon_button("previous", "chevron-left", tr("Previous board", "上一张板")).disabled(page == 0).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx))))
                 .child(div().px_1().text_color(rgb(pal().muted)).child(mono(format!("{} / {pages}", page + 1))))
                 .child(icon_button("next", "chevron-right", tr("Next board", "下一张板")).disabled(page + 1 >= pages).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx))))
-        });
+                .when(self.editable(), |d| {
+                    d.child(Separator::vertical().h(px(16.)).mx(px(2.)))
+                        .child(icon_button("new-board", "plus", self.keys.tip(Action::NewBoard, tr("New board", "新开一张板"))).on_click(cx.listener(|this, _, _, cx| this.new_board(cx))))
+                }),
+        );
         // What the board offers, at its upper corner: the way back to the newest ink, and a board the talk has moved to.
         let offer = |id: &'static str, tone: u32| float().id(id).h(px(28.)).px_2().cursor_pointer().text_xs().whitespace_nowrap().text_color(rgb(tone)).hover(|d| d.border_color(rgb(pal().text)));
         // Following the talk is the usual state and goes unsaid; looking elsewhere offers the way back.

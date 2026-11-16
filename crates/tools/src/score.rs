@@ -44,6 +44,9 @@ pub struct Gold {
     /// Kept as a question or formula; any one keyword is enough.
     pub questions: Option<Vec<Names>>,
     pub formulas: Option<Vec<Names>>,
+    /// Parts of an imported page that should be cut out as clips, each as one or more boxes ([x, y, w, h] on
+    /// the page) any of which counts. Present and empty: nothing should be cut.
+    pub crops: Option<Vec<Vec<[f64; 4]>>>,
 }
 
 #[derive(Debug, Default)]
@@ -61,6 +64,10 @@ pub struct Score {
     /// Strikes, emphasis, questions and formulas found.
     pub mark_acc: Option<f64>,
     pub group_acc: Option<f64>,
+    /// Clips that cut what was asked for, and what was asked for that was cut; a box counts when it overlaps
+    /// by half or more.
+    pub crop_p: Option<f64>,
+    pub crop_r: Option<f64>,
     pub violations: Vec<String>,
     pub missing: Vec<String>,
     pub extra: Vec<String>,
@@ -321,6 +328,24 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
         ok as f64 / groups.len() as f64
     });
 
+    // Crops: a clip matches a wanted part when their boxes overlap by half or more (intersection over union).
+    let clips: Vec<(String, [f64; 4])> = g.nodes.iter().filter_map(|n| n.clip().map(|c| (n.label.clone(), [c.x, c.y, c.w, c.h]))).collect();
+    let overlap = |a: &[f64; 4], b: &[f64; 4]| {
+        let w = (a[0] + a[2]).min(b[0] + b[2]) - a[0].max(b[0]);
+        let h = (a[1] + a[3]).min(b[1] + b[3]) - a[1].max(b[1]);
+        let inter = w.max(0.0) * h.max(0.0);
+        inter / (a[2] * a[3] + b[2] * b[3] - inter)
+    };
+    let hits = |clip: &[f64; 4], wanted: &[[f64; 4]]| wanted.iter().any(|b| overlap(clip, b) >= 0.5);
+    let (crop_p, crop_r) = match &gold.crops {
+        Some(wanted) => {
+            let right = clips.iter().filter(|(_, c)| wanted.iter().any(|w| hits(c, w))).count();
+            let found = wanted.iter().filter(|w| clips.iter().any(|(_, c)| hits(c, w))).count();
+            (Some(ratio(right, clips.len())), Some(ratio(found, wanted.len())))
+        }
+        None => (None, None),
+    };
+
     let arrow = |s: &str| s.replacen('>', " → ", 1);
     let mut missing: Vec<String> = vec![];
     missing.extend(gold_nodes.iter().filter(|e| !taken.contains(e.key)).map(|e| format!("node {}", e.key)));
@@ -333,6 +358,10 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
     extra.extend(pred_nodes.iter().filter(|n| !map.contains_key(n.id.as_str())).map(|n| format!("node {}", n.label)));
     extra.extend(pred_items.iter().filter(|n| !map.contains_key(n.id.as_str())).map(|n| format!("item {}", n.label)));
     extra.extend(pred_edges.iter().filter(|e| !gold_edges.contains(*e)).map(|e| format!("edge {}", arrow(e))));
+    if let Some(wanted) = &gold.crops {
+        missing.extend(wanted.iter().filter(|w| !clips.iter().any(|(_, c)| hits(c, w))).map(|w| format!("crop at {:?}", w[0])));
+        extra.extend(clips.iter().filter(|(_, c)| !wanted.iter().any(|w| hits(c, w))).map(|(label, _)| format!("crop {label}")));
+    }
 
     Score {
         node_p: ratio(pred_node_hit, pred_nodes.len()),
@@ -346,6 +375,8 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
         strike_r: score_strike.then(|| ratio(strike_tp, strike_gold.len())),
         mark_acc: (mark_all > 0).then(|| mark_hit as f64 / mark_all as f64),
         group_acc,
+        crop_p,
+        crop_r,
         violations,
         missing,
         extra,
@@ -356,6 +387,22 @@ pub fn score(g: &Graph, gold: &Gold) -> Score {
 mod tests {
     use super::*;
     use serde_json::Value;
+
+    #[test]
+    fn a_crop_counts_when_it_overlaps_what_was_asked_for_by_half() {
+        let mut g = Graph::default();
+        g.extra.insert("underlay".into(), serde_json::json!({ "w": 600.0, "h": 800.0 }));
+        let clip = |x, y, w, h| boardcast_board::graph::Clip { src: String::new(), pw: 600.0, ph: 800.0, x, y, w, h };
+        g.add_clip("table", "", &clip(56.0, 106.0, 488.0, 90.0));
+        g.add_clip("figure", "", &clip(56.0, 316.0, 488.0, 24.0));
+        let gold = |crops: serde_json::Value| -> Gold { serde_json::from_value(serde_json::json!({ "crops": crops })).unwrap() };
+        let s = score(&g, &gold(serde_json::json!([[[56.0, 106.0, 488.0, 98.0]], [[56.0, 226.0, 488.0, 68.0]]])));
+        assert_eq!((s.crop_p, s.crop_r), (Some(0.5), Some(0.5)), "the table is right, the figure was not asked for, the paragraph is missing");
+        assert!(s.extra.iter().any(|e| e == "crop figure") && s.missing.len() == 1, "{:?} {:?}", s.extra, s.missing);
+        let none = score(&g, &gold(serde_json::json!([])));
+        assert_eq!((none.crop_p, none.crop_r), (Some(0.0), Some(1.0)), "nothing should have been cut");
+        assert_eq!(score(&Graph::default(), &gold(serde_json::json!([]))).crop_p, Some(1.0));
+    }
 
     /// Every recorded demo's final board, scored by eval/score.ts before it was removed: the port must agree.
     #[test]

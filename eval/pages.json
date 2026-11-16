@@ -1,0 +1,3946 @@
+[
+  {
+    "id": "crop-table-zh",
+    "name": "zh: 把表格剪出来",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Table 4: Latency by batch size on one GPU.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 80,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 80,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Table",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "4:",
+                  "x": 106,
+                  "w": 16
+                },
+                {
+                  "t": "Latency",
+                  "x": 128,
+                  "w": 56
+                },
+                {
+                  "t": "by",
+                  "x": 190,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 212,
+                  "w": 40
+                },
+                {
+                  "t": "size",
+                  "x": 258,
+                  "w": 32
+                },
+                {
+                  "t": "on",
+                  "x": 296,
+                  "w": 16
+                },
+                {
+                  "t": "one",
+                  "x": 318,
+                  "w": 24
+                },
+                {
+                  "t": "GPU.",
+                  "x": 348,
+                  "w": 32
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n2",
+          "label": "Batch Latency Memory …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 110,
+            "w": 480,
+            "h": 82
+          },
+          "rows": [
+            {
+              "y": 110,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "Latency",
+                  "x": 106,
+                  "w": 56
+                },
+                {
+                  "t": "Memory",
+                  "x": 168,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 132,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-8",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "41ms",
+                  "x": 122,
+                  "w": 32
+                },
+                {
+                  "t": "2.1GB",
+                  "x": 160,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 154,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-32",
+                  "x": 60,
+                  "w": 64
+                },
+                {
+                  "t": "97ms",
+                  "x": 130,
+                  "w": 32
+                },
+                {
+                  "t": "5.8GB",
+                  "x": 168,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 176,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-128",
+                  "x": 60,
+                  "w": 72
+                },
+                {
+                  "t": "340ms",
+                  "x": 138,
+                  "w": 40
+                },
+                {
+                  "t": "19GB",
+                  "x": 184,
+                  "w": 32
+                }
+              ]
+            }
+          ],
+          "text": "Batch Latency Memory Batch-8 41ms 2.1GB Batch-32 97ms 5.8GB Batch-128 340ms 19GB"
+        },
+        {
+          "id": "n3",
+          "label": "Caching the key-value pairs cuts …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 230,
+            "w": 480,
+            "h": 56
+          },
+          "rows": [
+            {
+              "y": 230,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Caching",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "the",
+                  "x": 122,
+                  "w": 24
+                },
+                {
+                  "t": "key-value",
+                  "x": 152,
+                  "w": 72
+                },
+                {
+                  "t": "pairs",
+                  "x": 230,
+                  "w": 40
+                },
+                {
+                  "t": "cuts",
+                  "x": 276,
+                  "w": 32
+                },
+                {
+                  "t": "latency",
+                  "x": 314,
+                  "w": 56
+                }
+              ]
+            },
+            {
+              "y": 250,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "by",
+                  "x": 60,
+                  "w": 16
+                },
+                {
+                  "t": "a",
+                  "x": 82,
+                  "w": 8
+                },
+                {
+                  "t": "third",
+                  "x": 96,
+                  "w": 40
+                },
+                {
+                  "t": "at",
+                  "x": 142,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 164,
+                  "w": 40
+                },
+                {
+                  "t": "32,",
+                  "x": 210,
+                  "w": 24
+                },
+                {
+                  "t": "while",
+                  "x": 240,
+                  "w": 40
+                },
+                {
+                  "t": "memory",
+                  "x": 286,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 270,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "grows",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "only",
+                  "x": 106,
+                  "w": 32
+                },
+                {
+                  "t": "a",
+                  "x": 144,
+                  "w": 8
+                },
+                {
+                  "t": "little,",
+                  "x": 158,
+                  "w": 56
+                },
+                {
+                  "t": "as",
+                  "x": 220,
+                  "w": 16
+                },
+                {
+                  "t": "Table",
+                  "x": 242,
+                  "w": 40
+                },
+                {
+                  "t": "4",
+                  "x": 288,
+                  "w": 8
+                },
+                {
+                  "t": "shows.",
+                  "x": 302,
+                  "w": 48
+                }
+              ]
+            }
+          ],
+          "text": "Caching the key-value pairs cuts latency by a third at batch 32, while memory grows only a little, as Table 4 shows."
+        },
+        {
+          "id": "n4",
+          "label": "Figure 5: The serving pipeline.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 320,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 320,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Figure",
+                  "x": 60,
+                  "w": 48
+                },
+                {
+                  "t": "5:",
+                  "x": 114,
+                  "w": 16
+                },
+                {
+                  "t": "The",
+                  "x": 136,
+                  "w": 24
+                },
+                {
+                  "t": "serving",
+                  "x": 166,
+                  "w": 56
+                },
+                {
+                  "t": "pipeline.",
+                  "x": 228,
+                  "w": 72
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1,
+      "underlay": {
+        "w": 600,
+        "h": 800
+      }
+    },
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "把表 4 拿出来，我们对着它把延迟过一遍。"
+      }
+    ],
+    "gold": {
+      "crops": [
+        [
+          [
+            56,
+            106,
+            488,
+            90
+          ],
+          [
+            56,
+            76,
+            488,
+            24
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "id": "crop-table-en",
+    "name": "en: pull the table out",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Table 4: Latency by batch size on one GPU.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 80,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 80,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Table",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "4:",
+                  "x": 106,
+                  "w": 16
+                },
+                {
+                  "t": "Latency",
+                  "x": 128,
+                  "w": 56
+                },
+                {
+                  "t": "by",
+                  "x": 190,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 212,
+                  "w": 40
+                },
+                {
+                  "t": "size",
+                  "x": 258,
+                  "w": 32
+                },
+                {
+                  "t": "on",
+                  "x": 296,
+                  "w": 16
+                },
+                {
+                  "t": "one",
+                  "x": 318,
+                  "w": 24
+                },
+                {
+                  "t": "GPU.",
+                  "x": 348,
+                  "w": 32
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n2",
+          "label": "Batch Latency Memory …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 110,
+            "w": 480,
+            "h": 82
+          },
+          "rows": [
+            {
+              "y": 110,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "Latency",
+                  "x": 106,
+                  "w": 56
+                },
+                {
+                  "t": "Memory",
+                  "x": 168,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 132,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-8",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "41ms",
+                  "x": 122,
+                  "w": 32
+                },
+                {
+                  "t": "2.1GB",
+                  "x": 160,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 154,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-32",
+                  "x": 60,
+                  "w": 64
+                },
+                {
+                  "t": "97ms",
+                  "x": 130,
+                  "w": 32
+                },
+                {
+                  "t": "5.8GB",
+                  "x": 168,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 176,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-128",
+                  "x": 60,
+                  "w": 72
+                },
+                {
+                  "t": "340ms",
+                  "x": 138,
+                  "w": 40
+                },
+                {
+                  "t": "19GB",
+                  "x": 184,
+                  "w": 32
+                }
+              ]
+            }
+          ],
+          "text": "Batch Latency Memory Batch-8 41ms 2.1GB Batch-32 97ms 5.8GB Batch-128 340ms 19GB"
+        },
+        {
+          "id": "n3",
+          "label": "Caching the key-value pairs cuts …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 230,
+            "w": 480,
+            "h": 56
+          },
+          "rows": [
+            {
+              "y": 230,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Caching",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "the",
+                  "x": 122,
+                  "w": 24
+                },
+                {
+                  "t": "key-value",
+                  "x": 152,
+                  "w": 72
+                },
+                {
+                  "t": "pairs",
+                  "x": 230,
+                  "w": 40
+                },
+                {
+                  "t": "cuts",
+                  "x": 276,
+                  "w": 32
+                },
+                {
+                  "t": "latency",
+                  "x": 314,
+                  "w": 56
+                }
+              ]
+            },
+            {
+              "y": 250,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "by",
+                  "x": 60,
+                  "w": 16
+                },
+                {
+                  "t": "a",
+                  "x": 82,
+                  "w": 8
+                },
+                {
+                  "t": "third",
+                  "x": 96,
+                  "w": 40
+                },
+                {
+                  "t": "at",
+                  "x": 142,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 164,
+                  "w": 40
+                },
+                {
+                  "t": "32,",
+                  "x": 210,
+                  "w": 24
+                },
+                {
+                  "t": "while",
+                  "x": 240,
+                  "w": 40
+                },
+                {
+                  "t": "memory",
+                  "x": 286,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 270,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "grows",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "only",
+                  "x": 106,
+                  "w": 32
+                },
+                {
+                  "t": "a",
+                  "x": 144,
+                  "w": 8
+                },
+                {
+                  "t": "little,",
+                  "x": 158,
+                  "w": 56
+                },
+                {
+                  "t": "as",
+                  "x": 220,
+                  "w": 16
+                },
+                {
+                  "t": "Table",
+                  "x": 242,
+                  "w": 40
+                },
+                {
+                  "t": "4",
+                  "x": 288,
+                  "w": 8
+                },
+                {
+                  "t": "shows.",
+                  "x": 302,
+                  "w": 48
+                }
+              ]
+            }
+          ],
+          "text": "Caching the key-value pairs cuts latency by a third at batch 32, while memory grows only a little, as Table 4 shows."
+        },
+        {
+          "id": "n4",
+          "label": "Figure 5: The serving pipeline.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 320,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 320,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Figure",
+                  "x": 60,
+                  "w": 48
+                },
+                {
+                  "t": "5:",
+                  "x": 114,
+                  "w": 16
+                },
+                {
+                  "t": "The",
+                  "x": 136,
+                  "w": 24
+                },
+                {
+                  "t": "serving",
+                  "x": 166,
+                  "w": 56
+                },
+                {
+                  "t": "pipeline.",
+                  "x": 228,
+                  "w": 72
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1,
+      "underlay": {
+        "w": 600,
+        "h": 800
+      }
+    },
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "Take table 4 out so we can go over the latency numbers."
+      }
+    ],
+    "gold": {
+      "crops": [
+        [
+          [
+            56,
+            106,
+            488,
+            90
+          ],
+          [
+            56,
+            76,
+            488,
+            24
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "id": "crop-two-lines-zh",
+    "name": "zh: 剪两行来对比",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Table 4: Latency by batch size on one GPU.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 80,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 80,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Table",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "4:",
+                  "x": 106,
+                  "w": 16
+                },
+                {
+                  "t": "Latency",
+                  "x": 128,
+                  "w": 56
+                },
+                {
+                  "t": "by",
+                  "x": 190,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 212,
+                  "w": 40
+                },
+                {
+                  "t": "size",
+                  "x": 258,
+                  "w": 32
+                },
+                {
+                  "t": "on",
+                  "x": 296,
+                  "w": 16
+                },
+                {
+                  "t": "one",
+                  "x": 318,
+                  "w": 24
+                },
+                {
+                  "t": "GPU.",
+                  "x": 348,
+                  "w": 32
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n2",
+          "label": "Batch Latency Memory …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 110,
+            "w": 480,
+            "h": 82
+          },
+          "rows": [
+            {
+              "y": 110,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "Latency",
+                  "x": 106,
+                  "w": 56
+                },
+                {
+                  "t": "Memory",
+                  "x": 168,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 132,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-8",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "41ms",
+                  "x": 122,
+                  "w": 32
+                },
+                {
+                  "t": "2.1GB",
+                  "x": 160,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 154,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-32",
+                  "x": 60,
+                  "w": 64
+                },
+                {
+                  "t": "97ms",
+                  "x": 130,
+                  "w": 32
+                },
+                {
+                  "t": "5.8GB",
+                  "x": 168,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 176,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-128",
+                  "x": 60,
+                  "w": 72
+                },
+                {
+                  "t": "340ms",
+                  "x": 138,
+                  "w": 40
+                },
+                {
+                  "t": "19GB",
+                  "x": 184,
+                  "w": 32
+                }
+              ]
+            }
+          ],
+          "text": "Batch Latency Memory Batch-8 41ms 2.1GB Batch-32 97ms 5.8GB Batch-128 340ms 19GB"
+        },
+        {
+          "id": "n3",
+          "label": "Caching the key-value pairs cuts …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 230,
+            "w": 480,
+            "h": 56
+          },
+          "rows": [
+            {
+              "y": 230,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Caching",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "the",
+                  "x": 122,
+                  "w": 24
+                },
+                {
+                  "t": "key-value",
+                  "x": 152,
+                  "w": 72
+                },
+                {
+                  "t": "pairs",
+                  "x": 230,
+                  "w": 40
+                },
+                {
+                  "t": "cuts",
+                  "x": 276,
+                  "w": 32
+                },
+                {
+                  "t": "latency",
+                  "x": 314,
+                  "w": 56
+                }
+              ]
+            },
+            {
+              "y": 250,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "by",
+                  "x": 60,
+                  "w": 16
+                },
+                {
+                  "t": "a",
+                  "x": 82,
+                  "w": 8
+                },
+                {
+                  "t": "third",
+                  "x": 96,
+                  "w": 40
+                },
+                {
+                  "t": "at",
+                  "x": 142,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 164,
+                  "w": 40
+                },
+                {
+                  "t": "32,",
+                  "x": 210,
+                  "w": 24
+                },
+                {
+                  "t": "while",
+                  "x": 240,
+                  "w": 40
+                },
+                {
+                  "t": "memory",
+                  "x": 286,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 270,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "grows",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "only",
+                  "x": 106,
+                  "w": 32
+                },
+                {
+                  "t": "a",
+                  "x": 144,
+                  "w": 8
+                },
+                {
+                  "t": "little,",
+                  "x": 158,
+                  "w": 56
+                },
+                {
+                  "t": "as",
+                  "x": 220,
+                  "w": 16
+                },
+                {
+                  "t": "Table",
+                  "x": 242,
+                  "w": 40
+                },
+                {
+                  "t": "4",
+                  "x": 288,
+                  "w": 8
+                },
+                {
+                  "t": "shows.",
+                  "x": 302,
+                  "w": 48
+                }
+              ]
+            }
+          ],
+          "text": "Caching the key-value pairs cuts latency by a third at batch 32, while memory grows only a little, as Table 4 shows."
+        },
+        {
+          "id": "n4",
+          "label": "Figure 5: The serving pipeline.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 320,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 320,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Figure",
+                  "x": 60,
+                  "w": 48
+                },
+                {
+                  "t": "5:",
+                  "x": 114,
+                  "w": 16
+                },
+                {
+                  "t": "The",
+                  "x": 136,
+                  "w": 24
+                },
+                {
+                  "t": "serving",
+                  "x": 166,
+                  "w": 56
+                },
+                {
+                  "t": "pipeline.",
+                  "x": 228,
+                  "w": 72
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1,
+      "underlay": {
+        "w": 600,
+        "h": 800
+      }
+    },
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "Batch-8 和 Batch-32 这两行剪出来对比一下。"
+      }
+    ],
+    "gold": {
+      "crops": [
+        [
+          [
+            56,
+            128,
+            488,
+            24
+          ]
+        ],
+        [
+          [
+            56,
+            150,
+            488,
+            24
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "id": "crop-two-lines-en",
+    "name": "en: cut two rows to compare",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Table 4: Latency by batch size on one GPU.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 80,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 80,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Table",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "4:",
+                  "x": 106,
+                  "w": 16
+                },
+                {
+                  "t": "Latency",
+                  "x": 128,
+                  "w": 56
+                },
+                {
+                  "t": "by",
+                  "x": 190,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 212,
+                  "w": 40
+                },
+                {
+                  "t": "size",
+                  "x": 258,
+                  "w": 32
+                },
+                {
+                  "t": "on",
+                  "x": 296,
+                  "w": 16
+                },
+                {
+                  "t": "one",
+                  "x": 318,
+                  "w": 24
+                },
+                {
+                  "t": "GPU.",
+                  "x": 348,
+                  "w": 32
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n2",
+          "label": "Batch Latency Memory …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 110,
+            "w": 480,
+            "h": 82
+          },
+          "rows": [
+            {
+              "y": 110,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "Latency",
+                  "x": 106,
+                  "w": 56
+                },
+                {
+                  "t": "Memory",
+                  "x": 168,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 132,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-8",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "41ms",
+                  "x": 122,
+                  "w": 32
+                },
+                {
+                  "t": "2.1GB",
+                  "x": 160,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 154,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-32",
+                  "x": 60,
+                  "w": 64
+                },
+                {
+                  "t": "97ms",
+                  "x": 130,
+                  "w": 32
+                },
+                {
+                  "t": "5.8GB",
+                  "x": 168,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 176,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-128",
+                  "x": 60,
+                  "w": 72
+                },
+                {
+                  "t": "340ms",
+                  "x": 138,
+                  "w": 40
+                },
+                {
+                  "t": "19GB",
+                  "x": 184,
+                  "w": 32
+                }
+              ]
+            }
+          ],
+          "text": "Batch Latency Memory Batch-8 41ms 2.1GB Batch-32 97ms 5.8GB Batch-128 340ms 19GB"
+        },
+        {
+          "id": "n3",
+          "label": "Caching the key-value pairs cuts …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 230,
+            "w": 480,
+            "h": 56
+          },
+          "rows": [
+            {
+              "y": 230,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Caching",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "the",
+                  "x": 122,
+                  "w": 24
+                },
+                {
+                  "t": "key-value",
+                  "x": 152,
+                  "w": 72
+                },
+                {
+                  "t": "pairs",
+                  "x": 230,
+                  "w": 40
+                },
+                {
+                  "t": "cuts",
+                  "x": 276,
+                  "w": 32
+                },
+                {
+                  "t": "latency",
+                  "x": 314,
+                  "w": 56
+                }
+              ]
+            },
+            {
+              "y": 250,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "by",
+                  "x": 60,
+                  "w": 16
+                },
+                {
+                  "t": "a",
+                  "x": 82,
+                  "w": 8
+                },
+                {
+                  "t": "third",
+                  "x": 96,
+                  "w": 40
+                },
+                {
+                  "t": "at",
+                  "x": 142,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 164,
+                  "w": 40
+                },
+                {
+                  "t": "32,",
+                  "x": 210,
+                  "w": 24
+                },
+                {
+                  "t": "while",
+                  "x": 240,
+                  "w": 40
+                },
+                {
+                  "t": "memory",
+                  "x": 286,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 270,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "grows",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "only",
+                  "x": 106,
+                  "w": 32
+                },
+                {
+                  "t": "a",
+                  "x": 144,
+                  "w": 8
+                },
+                {
+                  "t": "little,",
+                  "x": 158,
+                  "w": 56
+                },
+                {
+                  "t": "as",
+                  "x": 220,
+                  "w": 16
+                },
+                {
+                  "t": "Table",
+                  "x": 242,
+                  "w": 40
+                },
+                {
+                  "t": "4",
+                  "x": 288,
+                  "w": 8
+                },
+                {
+                  "t": "shows.",
+                  "x": 302,
+                  "w": 48
+                }
+              ]
+            }
+          ],
+          "text": "Caching the key-value pairs cuts latency by a third at batch 32, while memory grows only a little, as Table 4 shows."
+        },
+        {
+          "id": "n4",
+          "label": "Figure 5: The serving pipeline.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 320,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 320,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Figure",
+                  "x": 60,
+                  "w": 48
+                },
+                {
+                  "t": "5:",
+                  "x": 114,
+                  "w": 16
+                },
+                {
+                  "t": "The",
+                  "x": 136,
+                  "w": 24
+                },
+                {
+                  "t": "serving",
+                  "x": 166,
+                  "w": 56
+                },
+                {
+                  "t": "pipeline.",
+                  "x": 228,
+                  "w": 72
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1,
+      "underlay": {
+        "w": 600,
+        "h": 800
+      }
+    },
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "Cut out the Batch-8 and Batch-32 rows so we can compare them."
+      }
+    ],
+    "gold": {
+      "crops": [
+        [
+          [
+            56,
+            128,
+            488,
+            24
+          ]
+        ],
+        [
+          [
+            56,
+            150,
+            488,
+            24
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "id": "crop-paragraph-zh",
+    "name": "zh: 剪一段待会引用",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Table 4: Latency by batch size on one GPU.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 80,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 80,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Table",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "4:",
+                  "x": 106,
+                  "w": 16
+                },
+                {
+                  "t": "Latency",
+                  "x": 128,
+                  "w": 56
+                },
+                {
+                  "t": "by",
+                  "x": 190,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 212,
+                  "w": 40
+                },
+                {
+                  "t": "size",
+                  "x": 258,
+                  "w": 32
+                },
+                {
+                  "t": "on",
+                  "x": 296,
+                  "w": 16
+                },
+                {
+                  "t": "one",
+                  "x": 318,
+                  "w": 24
+                },
+                {
+                  "t": "GPU.",
+                  "x": 348,
+                  "w": 32
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n2",
+          "label": "Batch Latency Memory …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 110,
+            "w": 480,
+            "h": 82
+          },
+          "rows": [
+            {
+              "y": 110,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "Latency",
+                  "x": 106,
+                  "w": 56
+                },
+                {
+                  "t": "Memory",
+                  "x": 168,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 132,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-8",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "41ms",
+                  "x": 122,
+                  "w": 32
+                },
+                {
+                  "t": "2.1GB",
+                  "x": 160,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 154,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-32",
+                  "x": 60,
+                  "w": 64
+                },
+                {
+                  "t": "97ms",
+                  "x": 130,
+                  "w": 32
+                },
+                {
+                  "t": "5.8GB",
+                  "x": 168,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 176,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-128",
+                  "x": 60,
+                  "w": 72
+                },
+                {
+                  "t": "340ms",
+                  "x": 138,
+                  "w": 40
+                },
+                {
+                  "t": "19GB",
+                  "x": 184,
+                  "w": 32
+                }
+              ]
+            }
+          ],
+          "text": "Batch Latency Memory Batch-8 41ms 2.1GB Batch-32 97ms 5.8GB Batch-128 340ms 19GB"
+        },
+        {
+          "id": "n3",
+          "label": "Caching the key-value pairs cuts …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 230,
+            "w": 480,
+            "h": 56
+          },
+          "rows": [
+            {
+              "y": 230,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Caching",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "the",
+                  "x": 122,
+                  "w": 24
+                },
+                {
+                  "t": "key-value",
+                  "x": 152,
+                  "w": 72
+                },
+                {
+                  "t": "pairs",
+                  "x": 230,
+                  "w": 40
+                },
+                {
+                  "t": "cuts",
+                  "x": 276,
+                  "w": 32
+                },
+                {
+                  "t": "latency",
+                  "x": 314,
+                  "w": 56
+                }
+              ]
+            },
+            {
+              "y": 250,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "by",
+                  "x": 60,
+                  "w": 16
+                },
+                {
+                  "t": "a",
+                  "x": 82,
+                  "w": 8
+                },
+                {
+                  "t": "third",
+                  "x": 96,
+                  "w": 40
+                },
+                {
+                  "t": "at",
+                  "x": 142,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 164,
+                  "w": 40
+                },
+                {
+                  "t": "32,",
+                  "x": 210,
+                  "w": 24
+                },
+                {
+                  "t": "while",
+                  "x": 240,
+                  "w": 40
+                },
+                {
+                  "t": "memory",
+                  "x": 286,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 270,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "grows",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "only",
+                  "x": 106,
+                  "w": 32
+                },
+                {
+                  "t": "a",
+                  "x": 144,
+                  "w": 8
+                },
+                {
+                  "t": "little,",
+                  "x": 158,
+                  "w": 56
+                },
+                {
+                  "t": "as",
+                  "x": 220,
+                  "w": 16
+                },
+                {
+                  "t": "Table",
+                  "x": 242,
+                  "w": 40
+                },
+                {
+                  "t": "4",
+                  "x": 288,
+                  "w": 8
+                },
+                {
+                  "t": "shows.",
+                  "x": 302,
+                  "w": 48
+                }
+              ]
+            }
+          ],
+          "text": "Caching the key-value pairs cuts latency by a third at batch 32, while memory grows only a little, as Table 4 shows."
+        },
+        {
+          "id": "n4",
+          "label": "Figure 5: The serving pipeline.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 320,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 320,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Figure",
+                  "x": 60,
+                  "w": 48
+                },
+                {
+                  "t": "5:",
+                  "x": 114,
+                  "w": 16
+                },
+                {
+                  "t": "The",
+                  "x": 136,
+                  "w": 24
+                },
+                {
+                  "t": "serving",
+                  "x": 166,
+                  "w": 56
+                },
+                {
+                  "t": "pipeline.",
+                  "x": 228,
+                  "w": 72
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1,
+      "underlay": {
+        "w": 600,
+        "h": 800
+      }
+    },
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "讲 key-value 缓存的这段剪出来放旁边，待会儿要引用。"
+      }
+    ],
+    "gold": {
+      "crops": [
+        [
+          [
+            56,
+            226,
+            488,
+            64
+          ],
+          [
+            56,
+            226,
+            488,
+            24
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "id": "crop-paragraph-en",
+    "name": "en: clip a paragraph to quote",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Table 4: Latency by batch size on one GPU.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 80,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 80,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Table",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "4:",
+                  "x": 106,
+                  "w": 16
+                },
+                {
+                  "t": "Latency",
+                  "x": 128,
+                  "w": 56
+                },
+                {
+                  "t": "by",
+                  "x": 190,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 212,
+                  "w": 40
+                },
+                {
+                  "t": "size",
+                  "x": 258,
+                  "w": 32
+                },
+                {
+                  "t": "on",
+                  "x": 296,
+                  "w": 16
+                },
+                {
+                  "t": "one",
+                  "x": 318,
+                  "w": 24
+                },
+                {
+                  "t": "GPU.",
+                  "x": 348,
+                  "w": 32
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n2",
+          "label": "Batch Latency Memory …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 110,
+            "w": 480,
+            "h": 82
+          },
+          "rows": [
+            {
+              "y": 110,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "Latency",
+                  "x": 106,
+                  "w": 56
+                },
+                {
+                  "t": "Memory",
+                  "x": 168,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 132,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-8",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "41ms",
+                  "x": 122,
+                  "w": 32
+                },
+                {
+                  "t": "2.1GB",
+                  "x": 160,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 154,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-32",
+                  "x": 60,
+                  "w": 64
+                },
+                {
+                  "t": "97ms",
+                  "x": 130,
+                  "w": 32
+                },
+                {
+                  "t": "5.8GB",
+                  "x": 168,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 176,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-128",
+                  "x": 60,
+                  "w": 72
+                },
+                {
+                  "t": "340ms",
+                  "x": 138,
+                  "w": 40
+                },
+                {
+                  "t": "19GB",
+                  "x": 184,
+                  "w": 32
+                }
+              ]
+            }
+          ],
+          "text": "Batch Latency Memory Batch-8 41ms 2.1GB Batch-32 97ms 5.8GB Batch-128 340ms 19GB"
+        },
+        {
+          "id": "n3",
+          "label": "Caching the key-value pairs cuts …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 230,
+            "w": 480,
+            "h": 56
+          },
+          "rows": [
+            {
+              "y": 230,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Caching",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "the",
+                  "x": 122,
+                  "w": 24
+                },
+                {
+                  "t": "key-value",
+                  "x": 152,
+                  "w": 72
+                },
+                {
+                  "t": "pairs",
+                  "x": 230,
+                  "w": 40
+                },
+                {
+                  "t": "cuts",
+                  "x": 276,
+                  "w": 32
+                },
+                {
+                  "t": "latency",
+                  "x": 314,
+                  "w": 56
+                }
+              ]
+            },
+            {
+              "y": 250,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "by",
+                  "x": 60,
+                  "w": 16
+                },
+                {
+                  "t": "a",
+                  "x": 82,
+                  "w": 8
+                },
+                {
+                  "t": "third",
+                  "x": 96,
+                  "w": 40
+                },
+                {
+                  "t": "at",
+                  "x": 142,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 164,
+                  "w": 40
+                },
+                {
+                  "t": "32,",
+                  "x": 210,
+                  "w": 24
+                },
+                {
+                  "t": "while",
+                  "x": 240,
+                  "w": 40
+                },
+                {
+                  "t": "memory",
+                  "x": 286,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 270,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "grows",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "only",
+                  "x": 106,
+                  "w": 32
+                },
+                {
+                  "t": "a",
+                  "x": 144,
+                  "w": 8
+                },
+                {
+                  "t": "little,",
+                  "x": 158,
+                  "w": 56
+                },
+                {
+                  "t": "as",
+                  "x": 220,
+                  "w": 16
+                },
+                {
+                  "t": "Table",
+                  "x": 242,
+                  "w": 40
+                },
+                {
+                  "t": "4",
+                  "x": 288,
+                  "w": 8
+                },
+                {
+                  "t": "shows.",
+                  "x": 302,
+                  "w": 48
+                }
+              ]
+            }
+          ],
+          "text": "Caching the key-value pairs cuts latency by a third at batch 32, while memory grows only a little, as Table 4 shows."
+        },
+        {
+          "id": "n4",
+          "label": "Figure 5: The serving pipeline.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 320,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 320,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Figure",
+                  "x": 60,
+                  "w": 48
+                },
+                {
+                  "t": "5:",
+                  "x": 114,
+                  "w": 16
+                },
+                {
+                  "t": "The",
+                  "x": 136,
+                  "w": 24
+                },
+                {
+                  "t": "serving",
+                  "x": 166,
+                  "w": 56
+                },
+                {
+                  "t": "pipeline.",
+                  "x": 228,
+                  "w": 72
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1,
+      "underlay": {
+        "w": 600,
+        "h": 800
+      }
+    },
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "Clip the paragraph about key-value caching, we'll quote it later."
+      }
+    ],
+    "gold": {
+      "crops": [
+        [
+          [
+            56,
+            226,
+            488,
+            64
+          ],
+          [
+            56,
+            226,
+            488,
+            24
+          ]
+        ]
+      ]
+    }
+  },
+  {
+    "id": "look-not-crop-zh",
+    "name": "zh: 只是看，不剪",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Table 4: Latency by batch size on one GPU.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 80,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 80,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Table",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "4:",
+                  "x": 106,
+                  "w": 16
+                },
+                {
+                  "t": "Latency",
+                  "x": 128,
+                  "w": 56
+                },
+                {
+                  "t": "by",
+                  "x": 190,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 212,
+                  "w": 40
+                },
+                {
+                  "t": "size",
+                  "x": 258,
+                  "w": 32
+                },
+                {
+                  "t": "on",
+                  "x": 296,
+                  "w": 16
+                },
+                {
+                  "t": "one",
+                  "x": 318,
+                  "w": 24
+                },
+                {
+                  "t": "GPU.",
+                  "x": 348,
+                  "w": 32
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n2",
+          "label": "Batch Latency Memory …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 110,
+            "w": 480,
+            "h": 82
+          },
+          "rows": [
+            {
+              "y": 110,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "Latency",
+                  "x": 106,
+                  "w": 56
+                },
+                {
+                  "t": "Memory",
+                  "x": 168,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 132,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-8",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "41ms",
+                  "x": 122,
+                  "w": 32
+                },
+                {
+                  "t": "2.1GB",
+                  "x": 160,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 154,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-32",
+                  "x": 60,
+                  "w": 64
+                },
+                {
+                  "t": "97ms",
+                  "x": 130,
+                  "w": 32
+                },
+                {
+                  "t": "5.8GB",
+                  "x": 168,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 176,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-128",
+                  "x": 60,
+                  "w": 72
+                },
+                {
+                  "t": "340ms",
+                  "x": 138,
+                  "w": 40
+                },
+                {
+                  "t": "19GB",
+                  "x": 184,
+                  "w": 32
+                }
+              ]
+            }
+          ],
+          "text": "Batch Latency Memory Batch-8 41ms 2.1GB Batch-32 97ms 5.8GB Batch-128 340ms 19GB"
+        },
+        {
+          "id": "n3",
+          "label": "Caching the key-value pairs cuts …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 230,
+            "w": 480,
+            "h": 56
+          },
+          "rows": [
+            {
+              "y": 230,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Caching",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "the",
+                  "x": 122,
+                  "w": 24
+                },
+                {
+                  "t": "key-value",
+                  "x": 152,
+                  "w": 72
+                },
+                {
+                  "t": "pairs",
+                  "x": 230,
+                  "w": 40
+                },
+                {
+                  "t": "cuts",
+                  "x": 276,
+                  "w": 32
+                },
+                {
+                  "t": "latency",
+                  "x": 314,
+                  "w": 56
+                }
+              ]
+            },
+            {
+              "y": 250,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "by",
+                  "x": 60,
+                  "w": 16
+                },
+                {
+                  "t": "a",
+                  "x": 82,
+                  "w": 8
+                },
+                {
+                  "t": "third",
+                  "x": 96,
+                  "w": 40
+                },
+                {
+                  "t": "at",
+                  "x": 142,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 164,
+                  "w": 40
+                },
+                {
+                  "t": "32,",
+                  "x": 210,
+                  "w": 24
+                },
+                {
+                  "t": "while",
+                  "x": 240,
+                  "w": 40
+                },
+                {
+                  "t": "memory",
+                  "x": 286,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 270,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "grows",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "only",
+                  "x": 106,
+                  "w": 32
+                },
+                {
+                  "t": "a",
+                  "x": 144,
+                  "w": 8
+                },
+                {
+                  "t": "little,",
+                  "x": 158,
+                  "w": 56
+                },
+                {
+                  "t": "as",
+                  "x": 220,
+                  "w": 16
+                },
+                {
+                  "t": "Table",
+                  "x": 242,
+                  "w": 40
+                },
+                {
+                  "t": "4",
+                  "x": 288,
+                  "w": 8
+                },
+                {
+                  "t": "shows.",
+                  "x": 302,
+                  "w": 48
+                }
+              ]
+            }
+          ],
+          "text": "Caching the key-value pairs cuts latency by a third at batch 32, while memory grows only a little, as Table 4 shows."
+        },
+        {
+          "id": "n4",
+          "label": "Figure 5: The serving pipeline.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 320,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 320,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Figure",
+                  "x": 60,
+                  "w": 48
+                },
+                {
+                  "t": "5:",
+                  "x": 114,
+                  "w": 16
+                },
+                {
+                  "t": "The",
+                  "x": 136,
+                  "w": 24
+                },
+                {
+                  "t": "serving",
+                  "x": 166,
+                  "w": 56
+                },
+                {
+                  "t": "pipeline.",
+                  "x": 228,
+                  "w": 72
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1,
+      "underlay": {
+        "w": 600,
+        "h": 800
+      }
+    },
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "我们先看一下表 4。"
+      }
+    ],
+    "gold": {
+      "crops": []
+    }
+  },
+  {
+    "id": "look-not-crop-en",
+    "name": "en: only looking",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Table 4: Latency by batch size on one GPU.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 80,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 80,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Table",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "4:",
+                  "x": 106,
+                  "w": 16
+                },
+                {
+                  "t": "Latency",
+                  "x": 128,
+                  "w": 56
+                },
+                {
+                  "t": "by",
+                  "x": 190,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 212,
+                  "w": 40
+                },
+                {
+                  "t": "size",
+                  "x": 258,
+                  "w": 32
+                },
+                {
+                  "t": "on",
+                  "x": 296,
+                  "w": 16
+                },
+                {
+                  "t": "one",
+                  "x": 318,
+                  "w": 24
+                },
+                {
+                  "t": "GPU.",
+                  "x": 348,
+                  "w": 32
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n2",
+          "label": "Batch Latency Memory …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 110,
+            "w": 480,
+            "h": 82
+          },
+          "rows": [
+            {
+              "y": 110,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "Latency",
+                  "x": 106,
+                  "w": 56
+                },
+                {
+                  "t": "Memory",
+                  "x": 168,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 132,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-8",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "41ms",
+                  "x": 122,
+                  "w": 32
+                },
+                {
+                  "t": "2.1GB",
+                  "x": 160,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 154,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-32",
+                  "x": 60,
+                  "w": 64
+                },
+                {
+                  "t": "97ms",
+                  "x": 130,
+                  "w": 32
+                },
+                {
+                  "t": "5.8GB",
+                  "x": 168,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 176,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-128",
+                  "x": 60,
+                  "w": 72
+                },
+                {
+                  "t": "340ms",
+                  "x": 138,
+                  "w": 40
+                },
+                {
+                  "t": "19GB",
+                  "x": 184,
+                  "w": 32
+                }
+              ]
+            }
+          ],
+          "text": "Batch Latency Memory Batch-8 41ms 2.1GB Batch-32 97ms 5.8GB Batch-128 340ms 19GB"
+        },
+        {
+          "id": "n3",
+          "label": "Caching the key-value pairs cuts …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 230,
+            "w": 480,
+            "h": 56
+          },
+          "rows": [
+            {
+              "y": 230,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Caching",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "the",
+                  "x": 122,
+                  "w": 24
+                },
+                {
+                  "t": "key-value",
+                  "x": 152,
+                  "w": 72
+                },
+                {
+                  "t": "pairs",
+                  "x": 230,
+                  "w": 40
+                },
+                {
+                  "t": "cuts",
+                  "x": 276,
+                  "w": 32
+                },
+                {
+                  "t": "latency",
+                  "x": 314,
+                  "w": 56
+                }
+              ]
+            },
+            {
+              "y": 250,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "by",
+                  "x": 60,
+                  "w": 16
+                },
+                {
+                  "t": "a",
+                  "x": 82,
+                  "w": 8
+                },
+                {
+                  "t": "third",
+                  "x": 96,
+                  "w": 40
+                },
+                {
+                  "t": "at",
+                  "x": 142,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 164,
+                  "w": 40
+                },
+                {
+                  "t": "32,",
+                  "x": 210,
+                  "w": 24
+                },
+                {
+                  "t": "while",
+                  "x": 240,
+                  "w": 40
+                },
+                {
+                  "t": "memory",
+                  "x": 286,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 270,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "grows",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "only",
+                  "x": 106,
+                  "w": 32
+                },
+                {
+                  "t": "a",
+                  "x": 144,
+                  "w": 8
+                },
+                {
+                  "t": "little,",
+                  "x": 158,
+                  "w": 56
+                },
+                {
+                  "t": "as",
+                  "x": 220,
+                  "w": 16
+                },
+                {
+                  "t": "Table",
+                  "x": 242,
+                  "w": 40
+                },
+                {
+                  "t": "4",
+                  "x": 288,
+                  "w": 8
+                },
+                {
+                  "t": "shows.",
+                  "x": 302,
+                  "w": 48
+                }
+              ]
+            }
+          ],
+          "text": "Caching the key-value pairs cuts latency by a third at batch 32, while memory grows only a little, as Table 4 shows."
+        },
+        {
+          "id": "n4",
+          "label": "Figure 5: The serving pipeline.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 320,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 320,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Figure",
+                  "x": 60,
+                  "w": 48
+                },
+                {
+                  "t": "5:",
+                  "x": 114,
+                  "w": 16
+                },
+                {
+                  "t": "The",
+                  "x": 136,
+                  "w": 24
+                },
+                {
+                  "t": "serving",
+                  "x": 166,
+                  "w": 56
+                },
+                {
+                  "t": "pipeline.",
+                  "x": 228,
+                  "w": 72
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1,
+      "underlay": {
+        "w": 600,
+        "h": 800
+      }
+    },
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "Okay, let's look at table 4 first."
+      }
+    ],
+    "gold": {
+      "crops": []
+    }
+  },
+  {
+    "id": "mark-not-crop-zh",
+    "name": "zh: 圈数字，不剪",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Table 4: Latency by batch size on one GPU.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 80,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 80,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Table",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "4:",
+                  "x": 106,
+                  "w": 16
+                },
+                {
+                  "t": "Latency",
+                  "x": 128,
+                  "w": 56
+                },
+                {
+                  "t": "by",
+                  "x": 190,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 212,
+                  "w": 40
+                },
+                {
+                  "t": "size",
+                  "x": 258,
+                  "w": 32
+                },
+                {
+                  "t": "on",
+                  "x": 296,
+                  "w": 16
+                },
+                {
+                  "t": "one",
+                  "x": 318,
+                  "w": 24
+                },
+                {
+                  "t": "GPU.",
+                  "x": 348,
+                  "w": 32
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n2",
+          "label": "Batch Latency Memory …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 110,
+            "w": 480,
+            "h": 82
+          },
+          "rows": [
+            {
+              "y": 110,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "Latency",
+                  "x": 106,
+                  "w": 56
+                },
+                {
+                  "t": "Memory",
+                  "x": 168,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 132,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-8",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "41ms",
+                  "x": 122,
+                  "w": 32
+                },
+                {
+                  "t": "2.1GB",
+                  "x": 160,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 154,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-32",
+                  "x": 60,
+                  "w": 64
+                },
+                {
+                  "t": "97ms",
+                  "x": 130,
+                  "w": 32
+                },
+                {
+                  "t": "5.8GB",
+                  "x": 168,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 176,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-128",
+                  "x": 60,
+                  "w": 72
+                },
+                {
+                  "t": "340ms",
+                  "x": 138,
+                  "w": 40
+                },
+                {
+                  "t": "19GB",
+                  "x": 184,
+                  "w": 32
+                }
+              ]
+            }
+          ],
+          "text": "Batch Latency Memory Batch-8 41ms 2.1GB Batch-32 97ms 5.8GB Batch-128 340ms 19GB"
+        },
+        {
+          "id": "n3",
+          "label": "Caching the key-value pairs cuts …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 230,
+            "w": 480,
+            "h": 56
+          },
+          "rows": [
+            {
+              "y": 230,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Caching",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "the",
+                  "x": 122,
+                  "w": 24
+                },
+                {
+                  "t": "key-value",
+                  "x": 152,
+                  "w": 72
+                },
+                {
+                  "t": "pairs",
+                  "x": 230,
+                  "w": 40
+                },
+                {
+                  "t": "cuts",
+                  "x": 276,
+                  "w": 32
+                },
+                {
+                  "t": "latency",
+                  "x": 314,
+                  "w": 56
+                }
+              ]
+            },
+            {
+              "y": 250,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "by",
+                  "x": 60,
+                  "w": 16
+                },
+                {
+                  "t": "a",
+                  "x": 82,
+                  "w": 8
+                },
+                {
+                  "t": "third",
+                  "x": 96,
+                  "w": 40
+                },
+                {
+                  "t": "at",
+                  "x": 142,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 164,
+                  "w": 40
+                },
+                {
+                  "t": "32,",
+                  "x": 210,
+                  "w": 24
+                },
+                {
+                  "t": "while",
+                  "x": 240,
+                  "w": 40
+                },
+                {
+                  "t": "memory",
+                  "x": 286,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 270,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "grows",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "only",
+                  "x": 106,
+                  "w": 32
+                },
+                {
+                  "t": "a",
+                  "x": 144,
+                  "w": 8
+                },
+                {
+                  "t": "little,",
+                  "x": 158,
+                  "w": 56
+                },
+                {
+                  "t": "as",
+                  "x": 220,
+                  "w": 16
+                },
+                {
+                  "t": "Table",
+                  "x": 242,
+                  "w": 40
+                },
+                {
+                  "t": "4",
+                  "x": 288,
+                  "w": 8
+                },
+                {
+                  "t": "shows.",
+                  "x": 302,
+                  "w": 48
+                }
+              ]
+            }
+          ],
+          "text": "Caching the key-value pairs cuts latency by a third at batch 32, while memory grows only a little, as Table 4 shows."
+        },
+        {
+          "id": "n4",
+          "label": "Figure 5: The serving pipeline.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 320,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 320,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Figure",
+                  "x": 60,
+                  "w": 48
+                },
+                {
+                  "t": "5:",
+                  "x": 114,
+                  "w": 16
+                },
+                {
+                  "t": "The",
+                  "x": 136,
+                  "w": 24
+                },
+                {
+                  "t": "serving",
+                  "x": 166,
+                  "w": 56
+                },
+                {
+                  "t": "pipeline.",
+                  "x": 228,
+                  "w": 72
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1,
+      "underlay": {
+        "w": 600,
+        "h": 800
+      }
+    },
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "表里 97ms 这个数字圈一下。"
+      }
+    ],
+    "gold": {
+      "crops": []
+    }
+  },
+  {
+    "id": "mark-not-crop-en",
+    "name": "en: circle a number",
+    "board": {
+      "nodes": [
+        {
+          "id": "n1",
+          "label": "Table 4: Latency by batch size on one GPU.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 80,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 80,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Table",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "4:",
+                  "x": 106,
+                  "w": 16
+                },
+                {
+                  "t": "Latency",
+                  "x": 128,
+                  "w": 56
+                },
+                {
+                  "t": "by",
+                  "x": 190,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 212,
+                  "w": 40
+                },
+                {
+                  "t": "size",
+                  "x": 258,
+                  "w": 32
+                },
+                {
+                  "t": "on",
+                  "x": 296,
+                  "w": 16
+                },
+                {
+                  "t": "one",
+                  "x": 318,
+                  "w": 24
+                },
+                {
+                  "t": "GPU.",
+                  "x": 348,
+                  "w": 32
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n2",
+          "label": "Batch Latency Memory …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 110,
+            "w": 480,
+            "h": 82
+          },
+          "rows": [
+            {
+              "y": 110,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "Latency",
+                  "x": 106,
+                  "w": 56
+                },
+                {
+                  "t": "Memory",
+                  "x": 168,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 132,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-8",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "41ms",
+                  "x": 122,
+                  "w": 32
+                },
+                {
+                  "t": "2.1GB",
+                  "x": 160,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 154,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-32",
+                  "x": 60,
+                  "w": 64
+                },
+                {
+                  "t": "97ms",
+                  "x": 130,
+                  "w": 32
+                },
+                {
+                  "t": "5.8GB",
+                  "x": 168,
+                  "w": 40
+                }
+              ]
+            },
+            {
+              "y": 176,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Batch-128",
+                  "x": 60,
+                  "w": 72
+                },
+                {
+                  "t": "340ms",
+                  "x": 138,
+                  "w": 40
+                },
+                {
+                  "t": "19GB",
+                  "x": 184,
+                  "w": 32
+                }
+              ]
+            }
+          ],
+          "text": "Batch Latency Memory Batch-8 41ms 2.1GB Batch-32 97ms 5.8GB Batch-128 340ms 19GB"
+        },
+        {
+          "id": "n3",
+          "label": "Caching the key-value pairs cuts …",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 230,
+            "w": 480,
+            "h": 56
+          },
+          "rows": [
+            {
+              "y": 230,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Caching",
+                  "x": 60,
+                  "w": 56
+                },
+                {
+                  "t": "the",
+                  "x": 122,
+                  "w": 24
+                },
+                {
+                  "t": "key-value",
+                  "x": 152,
+                  "w": 72
+                },
+                {
+                  "t": "pairs",
+                  "x": 230,
+                  "w": 40
+                },
+                {
+                  "t": "cuts",
+                  "x": 276,
+                  "w": 32
+                },
+                {
+                  "t": "latency",
+                  "x": 314,
+                  "w": 56
+                }
+              ]
+            },
+            {
+              "y": 250,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "by",
+                  "x": 60,
+                  "w": 16
+                },
+                {
+                  "t": "a",
+                  "x": 82,
+                  "w": 8
+                },
+                {
+                  "t": "third",
+                  "x": 96,
+                  "w": 40
+                },
+                {
+                  "t": "at",
+                  "x": 142,
+                  "w": 16
+                },
+                {
+                  "t": "batch",
+                  "x": 164,
+                  "w": 40
+                },
+                {
+                  "t": "32,",
+                  "x": 210,
+                  "w": 24
+                },
+                {
+                  "t": "while",
+                  "x": 240,
+                  "w": 40
+                },
+                {
+                  "t": "memory",
+                  "x": 286,
+                  "w": 48
+                }
+              ]
+            },
+            {
+              "y": 270,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "grows",
+                  "x": 60,
+                  "w": 40
+                },
+                {
+                  "t": "only",
+                  "x": 106,
+                  "w": 32
+                },
+                {
+                  "t": "a",
+                  "x": 144,
+                  "w": 8
+                },
+                {
+                  "t": "little,",
+                  "x": 158,
+                  "w": 56
+                },
+                {
+                  "t": "as",
+                  "x": 220,
+                  "w": 16
+                },
+                {
+                  "t": "Table",
+                  "x": 242,
+                  "w": 40
+                },
+                {
+                  "t": "4",
+                  "x": 288,
+                  "w": 8
+                },
+                {
+                  "t": "shows.",
+                  "x": 302,
+                  "w": 48
+                }
+              ]
+            }
+          ],
+          "text": "Caching the key-value pairs cuts latency by a third at batch 32, while memory grows only a little, as Table 4 shows."
+        },
+        {
+          "id": "n4",
+          "label": "Figure 5: The serving pipeline.",
+          "aliases": [],
+          "kind": "region",
+          "marks": [],
+          "ink": "ink",
+          "at": {
+            "x": 60,
+            "y": 320,
+            "w": 480,
+            "h": 16
+          },
+          "rows": [
+            {
+              "y": 320,
+              "h": 16,
+              "segs": [
+                {
+                  "t": "Figure",
+                  "x": 60,
+                  "w": 48
+                },
+                {
+                  "t": "5:",
+                  "x": 114,
+                  "w": 16
+                },
+                {
+                  "t": "The",
+                  "x": 136,
+                  "w": 24
+                },
+                {
+                  "t": "serving",
+                  "x": 166,
+                  "w": 56
+                },
+                {
+                  "t": "pipeline.",
+                  "x": 228,
+                  "w": 72
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [],
+      "groups": [],
+      "nextNode": 5,
+      "nextGroup": 1,
+      "underlay": {
+        "w": 600,
+        "h": 800
+      }
+    },
+    "turns": [
+      {
+        "speaker": "A",
+        "text": "Circle the 97ms in the table."
+      }
+    ],
+    "gold": {
+      "crops": []
+    }
+  }
+]

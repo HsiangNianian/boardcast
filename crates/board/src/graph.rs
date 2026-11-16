@@ -227,6 +227,29 @@ impl Graph {
         lines.into_iter().map(|(_, _, l)| l).collect::<Vec<_>>().join("\n").trim().to_string()
     }
 
+    /// What has been drawn by hand on an imported block or a clip, in the words the model is shown: someone's
+    /// yellow highlighter, someone's red pen. A page's marks count for the block they touch.
+    fn hand_marks_on(&self, n: &Node) -> Vec<String> {
+        let touches = |a: &Annotation| match (&a.on, n.kind) {
+            (Some(on), Kind::Clip) => on == &n.id,
+            (None, Kind::Region) => n.at().is_some_and(|[x, y, w, h]| a.points.iter().any(|p| p[0] >= x - 4.0 && p[0] <= x + w + 4.0 && p[1] >= y - 4.0 && p[1] <= y + h + 4.0)),
+            _ => false,
+        };
+        let mut out: Vec<String> = vec![];
+        for a in self.annotations().iter().filter(|a| touches(a)) {
+            let said = match a.tool.as_str() {
+                "pen" => "手写红笔",
+                "green" => "手动绿色高亮",
+                "pink" => "手动粉色高亮",
+                _ => "手动黄色高亮",
+            };
+            if !out.iter().any(|o| o == said) {
+                out.push(said.to_string());
+            }
+        }
+        out
+    }
+
     /// What has been drawn by hand on the board, oldest first.
     pub fn annotations(&self) -> Vec<Annotation> {
         self.extra.get("annotations").and_then(|a| serde_json::from_value(a.clone()).ok()).unwrap_or_default()
@@ -253,6 +276,37 @@ impl Graph {
         if let Some(i) = self.index(id).filter(|&i| self.nodes[i].kind == Kind::Clip) {
             self.nodes[i].extra.insert("placed".into(), json!({ "x": x.round(), "y": y.round() }));
         }
+    }
+
+    /// Cut an imported block out as a clip: the whole block, or just the lines that hold `quote`. The picture is
+    /// the page under this board, which the clip names with an empty `src` until whoever shows it fills it in.
+    /// A block already cut out the same way is not cut again.
+    fn crop_region(&mut self, id: &str, quote: Option<&str>) {
+        let Some((pw, ph)) = self.underlay() else { return };
+        let Some(n) = self.nodes.iter().find(|n| n.id == id && n.kind == Kind::Region) else { return };
+        let Some([x, y, w, h]) = n.at() else { return };
+        let (mut top, mut bottom) = (y, y + h);
+        // A block imported without its lines can only be cut whole.
+        let rows = n.rows();
+        if let Some(quote) = quote.filter(|_| !rows.is_empty()) {
+            let Some(span) = locate(&rows, quote, "", Unit::Word) else { return };
+            top = span.boxes.iter().map(|b| b.y as f64).fold(f64::MAX, f64::min);
+            bottom = span.boxes.iter().map(|b| (b.y + b.h) as f64).fold(f64::MIN, f64::max);
+        }
+        let pad = 4.0;
+        let (x0, y0) = ((x - pad).max(0.0), (top - pad).max(0.0));
+        let (x1, y1) = ((x + w + pad).min(pw), (bottom + pad).min(ph));
+        let clip = Clip { src: String::new(), pw, ph, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+        let near = |a: f64, b: f64| (a - b).abs() < 1.0;
+        if self.nodes.iter().filter_map(|n| n.clip()).any(|c| near(c.x, clip.x) && near(c.y, clip.y) && near(c.w, clip.w) && near(c.h, clip.h)) {
+            return;
+        }
+        let label = match quote {
+            Some(q) => q.to_string(),
+            None => n.label.clone(),
+        };
+        let text = self.text_in(&clip);
+        self.add_clip(&label, &text, &clip);
     }
 
     /// Put a clip of an imported page on the board, as a card of its own, and give back its id.
@@ -448,6 +502,7 @@ impl Graph {
         for s in n.spans() {
             extra.push(format!("{}「{}」", s.mark, utf16_prefix(&s.text, 20)));
         }
+        extra.extend(self.hand_marks_on(n));
         if let Some(icon) = &n.icon {
             extra.push(format!("图标 {icon}"));
         }
@@ -584,6 +639,10 @@ impl Graph {
                         }
                     }
                 }
+                Op::C(target, quote) => {
+                    let Some(id) = self.resolve(target, None) else { continue };
+                    self.crop_region(&id, quote.as_deref());
+                }
                 Op::D(target) => {
                     let Some(id) = self.resolve(target, None) else { continue };
                     let gone = self.subtree(&id);
@@ -710,6 +769,8 @@ pub enum Op {
     A(Ref, String),
     G(String, Vec<Ref>),
     D(Ref),
+    /// Cut an imported block out of its page as a clip card: the whole block, or the lines holding a quote.
+    C(Ref, Option<String>),
 }
 
 struct Tok {
@@ -766,6 +827,7 @@ pub fn parse_ops(text: &str) -> Vec<Op> {
             "T" => first.map(Op::T),
             "H" => a.map(Op::H),
             "D" => a.map(Op::D),
+            "C" => a.map(|a| Op::C(a, rest.get(1).filter(|t| t.quoted && !t.text.is_empty()).map(|t| t.text.clone()))),
             "E" => a.zip(b).map(|(a, b)| Op::E(a, b, rest.get(2).map(|t| t.text.clone()).filter(|t| !t.is_empty()))),
             "X" => a.zip(b).map(|(a, b)| Op::X(a, b)),
             "R" => a.zip(second).map(|(a, s)| Op::R(a, s)),
@@ -878,9 +940,11 @@ pub fn grammar(g: &Graph, max_ops: usize, english: bool) -> String {
     ids.sort_by_key(|id| std::cmp::Reverse(id.len()));
     let reference = if ids.is_empty() { "ref ::= name".to_string() } else { format!("ref ::= name | {}", ids.join(" | ")) };
     let alt = |xs: &[&str]| xs.iter().map(|x| format!("\"{x}\"")).collect::<Vec<_>>().join(" | ");
-    [
+    // Cutting a clip is offered only where there is imported text to cut it from.
+    let crop = g.nodes.iter().any(|n| n.kind == Kind::Region);
+    let mut rules = vec![
         format!("root ::= \"-\" | op (\"\\n\" op){{0,{}}}", max_ops - 1),
-        "op ::= e | x | gr | t | l | q | f | k | m | i | h | r | a | d".into(),
+        format!("op ::= e | x | gr | t | l | q | f | k | m | i | h | r | a | d{}", if crop { " | c" } else { "" }),
         "e ::= \"E \" ref \" -> \" ref (\" : \" name)?".into(),
         "x ::= \"X \" ref \" -> \" ref".into(),
         "gr ::= \"G \" name (\" \" ref){1,6}".into(),
@@ -898,8 +962,11 @@ pub fn grammar(g: &Graph, max_ops: usize, english: bool) -> String {
         "d ::= \"D \" ref".into(),
         reference,
         format!("name ::= \"「\" [^「」\\n]{{1,{name_max}}} \"」\""),
-    ]
-    .join("\n")
+    ];
+    if crop {
+        rules.push("c ::= \"C \" ref (\" \" quote)?".into());
+    }
+    rules.join("\n")
 }
 
 #[cfg(test)]

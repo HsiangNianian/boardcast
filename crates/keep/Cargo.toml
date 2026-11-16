@@ -1,0 +1,15 @@
+[package]
+name = "boardcast-keep"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# A meeting's audio as kept files, and as Opus for other files, with nothing from the system: the tools use it
+# to export with sound, before the audio crate's native libraries are fetched.
+[dependencies]
+anyhow.workspace = true
+# Opus in Ogg, with libopus built in rather than looked for.
+audiopus_sys = { version = "0.2", features = ["static"] }
+ogg = "0.9"
+opus = "0.3"

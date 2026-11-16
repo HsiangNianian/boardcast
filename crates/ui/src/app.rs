@@ -12,7 +12,8 @@ use boardcast_agent::settings::Settings;
 use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
 use boardcast_meetings::{Inbox, Tucked, default_dir, Info, Live, Store, ViewOnly};
 use boardcast_board::pen::{marker, outline, Inked, Rng};
-use crate::i18n::tr;
+use crate::i18n::t;
+use crate::ta;
 use crate::theme::{self, icon, pal};
 use crate::pipeline::{Event, Pipeline, Script, Speech};
 use crate::resources;
@@ -30,6 +31,7 @@ use boardcast_board::speakers::{by_of_edge, by_of_node, first_seen, initial, sai
 use boardcast_board::steps::{clock, replay_to, sound_times, steps_heard, Player};
 use gpui_kit::base::input::{Textarea, TextareaState};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::progress::Progress as ProgressBar;
 use gpui_kit::component::separator::Separator;
@@ -1222,9 +1224,9 @@ impl ModelStatus {
     fn text(self) -> Option<&'static str> {
         match self {
             ModelStatus::Quiet => None,
-            ModelStatus::Starting => Some(tr("Starting…", "启动中…")),
-            ModelStatus::Loading => Some(tr("Loading the board model…", "正在加载板书模型…")),
-            ModelStatus::NoModel => Some(tr("Choose a board model to start", "请先选择板书模型")),
+            ModelStatus::Starting => Some(t("starting")),
+            ModelStatus::Loading => Some(t("loading-the-board-model")),
+            ModelStatus::NoModel => Some(t("choose-a-board-model-to")),
         }
     }
 }
@@ -1328,7 +1330,13 @@ const HAND_SAMPLE_WRITING: Duration = Duration::from_millis(1400);
 /// with how wide and tall they are.
 fn hand_sample(glyphs: &mut Glyphs) -> (Vec<Inked>, f32, f32) {
     let mut g = Graph::default();
-    g.apply(&parse_ops(tr("T 「Weekly sync」\nL 「Weekly sync」 「ship the beta on Friday」\nL 「Weekly sync」 「ask Mia about the docs」", "T 「周会」\nL 「周会」 「周五发布 beta 版」\nL 「周会」 「找 Mia 确认文档」")));
+    // The words come from the interface's language; the board's own marks around them stay as they are.
+    let (mut title, mut first, mut second) = (t("sample-title"), t("sample-first-point"), t("sample-second-point"));
+    // The pen does not write every script yet; then the hand is shown in English.
+    if [title, first, second].iter().flat_map(|s| s.chars()).any(|c| !c.is_whitespace() && glyphs.get(c).is_none()) {
+        (title, first, second) = ("Weekly sync", "ship the beta on Friday", "ask Mia about the docs");
+    }
+    g.apply(&parse_ops(&format!("T 「{title}」\nL 「{title}」 「{first}」\nL 「{title}」 「{second}」")));
     let laid = StableLayout::default().layout(&g, &mut first_diagram);
     let (pieces, _) = compose(&g, &laid, glyphs);
     let mut strokes: Vec<Inked> = pieces
@@ -1494,7 +1502,7 @@ struct Workbench {
     welcome_line: Option<(String, Vec<Inked>, f32, f32, Instant)>,
     /// A few words in the board's hand for Settings: the hand they were written in, their strokes, how wide
     /// and tall they are, and when the writing began, so a new hand writes them out again.
-    hand_sample: Option<(f32, Vec<Inked>, f32, f32, Instant)>,
+    hand_sample: Option<((f32, &'static str), Vec<Inked>, f32, f32, Instant)>,
     /// The file the audio is being kept in while listening, and when it began.
     keeping: Option<(String, f64)>,
     /// The board a document was opened from, and which document, for the way back.
@@ -1717,10 +1725,10 @@ fn erased(mark: &[[f64; 2]], rub: &[[f32; 2]], reach: f64) -> bool {
 
 fn mark_tool_name(tool: &str) -> &'static str {
     match tool {
-        "pen" => tr("Red pen", "红笔"),
-        "green" => tr("Green highlighter", "绿色荧光笔"),
-        "pink" => tr("Pink highlighter", "粉色荧光笔"),
-        _ => tr("Yellow highlighter", "黄色荧光笔"),
+        "pen" => t("red-pen"),
+        "green" => t("green-highlighter"),
+        "pink" => t("pink-highlighter"),
+        _ => t("yellow-highlighter"),
     }
 }
 
@@ -1911,9 +1919,9 @@ fn fingerprint_of(live: &Live) -> String {
 /// What is still to happen to a line, said under it; a line on the board needs nothing.
 fn line_note(line: &serde_json::Value, model_loading: bool) -> String {
     if line["failed"].as_bool().unwrap_or(false) {
-        tr("Not drawn", "没有画上").to_string()
+        t("not-drawn").to_string()
     } else if line["ms"].is_null() {
-        if model_loading { tr("Waiting for the model…", "等模型就绪后上板…") } else { tr("Drawing…", "正在画…") }.to_string()
+        if model_loading { t("waiting-for-the-model") } else { t("drawing") }.to_string()
     } else {
         String::new()
     }
@@ -1923,10 +1931,10 @@ fn line_note(line: &serde_json::Value, model_loading: bool) -> String {
 fn line_timing(line: &serde_json::Value) -> Option<String> {
     let mut parts = vec![];
     if let Some(ms) = line["heard"]["asrMs"].as_u64() {
-        parts.push(format!("{} {ms} ms", tr("Heard in", "识别")));
+        parts.push(ta!("heard-in-ms", ms = ms));
     }
     if let Some(ms) = line["ms"].as_u64().filter(|ms| *ms > 0) {
-        parts.push(format!("{} {ms} ms", tr("drawn in", "上板")));
+        parts.push(ta!("drawn-in-ms", ms = ms));
     }
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
@@ -2145,11 +2153,11 @@ impl Workbench {
                     }
                     eprintln!("model failed: {message}");
                     self.live.model_failed(&spoken(&lines));
-                    self.notice = Some(format!("{}{message}", tr("The model did not answer: ", "模型没有回应：")));
+                    self.notice = Some(crate::ta!("the-model-did-not-answer", error = format!("{message}")));
                 }
                 Event::Hearing { with, note } => {
                     if let Some(note) = note {
-                        self.notice = Some(format!("{}{note}", tr("Apple's speech recognition did not start, so the speech models hear instead: ", "Apple 语音识别没能启动，改用语音模型：")));
+                        self.notice = Some(crate::ta!("apple-s-speech-recognition-did", error = format!("{note}")));
                     }
                     self.hearing = Some(with);
                 }
@@ -2260,7 +2268,7 @@ impl Workbench {
             }
             Err(error) => {
                 eprintln!("summary failed: {error}");
-                self.summary.note = Some(format!("{}{error}", tr("Could not write the summary: ", "生成摘要失败：")));
+                self.summary.note = Some(crate::ta!("could-not-write-the-summary", error = format!("{error}")));
             }
         }
         if self.summarize_when_done && self.exit_when_done {
@@ -2275,7 +2283,7 @@ impl Workbench {
         let provider = match self.session().provider() {
             Ok(provider) => provider,
             Err(error) => {
-                self.summary.note = Some(format!("{}{error:#}", tr("Could not write the summary: ", "生成摘要失败：")));
+                self.summary.note = Some(crate::ta!("could-not-write-the-summary", error = format!("{error:#}")));
                 cx.notify();
                 return;
             }
@@ -2418,7 +2426,7 @@ impl Workbench {
         }
         let waiting = self.live.lines.iter().any(|l| l["ms"].is_null() && !l["manual"].as_bool().unwrap_or(false));
         if self.pipeline.listening() || waiting {
-            self.notice = Some(tr("Can't replay while listening or while the model is drawing.", "收音中或模型还在画时不能回放。").into());
+            self.notice = Some(t("can-t-replay-while-listening").into());
             cx.notify();
             return;
         }
@@ -2426,7 +2434,7 @@ impl Workbench {
         let steps: Vec<serde_json::Value> = timeline.iter().map(|(_, s)| s.clone()).collect();
         let total = steps.len();
         if total == 0 {
-            self.notice = Some(tr("This meeting has no board history to replay.", "这场会没有可以回放的记录。").into());
+            self.notice = Some(t("this-meeting-has-no-board").into());
             cx.notify();
             return;
         }
@@ -2587,7 +2595,7 @@ impl Workbench {
         self.live.go_to_page(board);
         let memory = self.ink.borrow().board.snapshot();
         let (from, to) = (self.live.page() + 1, self.live.pages() + 1);
-        let note = if tr("en", "zh") == "en" { format!("Board {to} forked from board {from} as it was at {when}") } else { format!("从第 {from} 张板回放到 {when} 的那一刻，另起了第 {to} 张板") };
+        let note = ta!("board-forked", to = to, from = from, when = when);
         self.replay = None;
         self.live.fork_page(at, memory, &note);
         let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
@@ -2618,7 +2626,7 @@ impl Workbench {
             Some(store) => store.page_image(&id, name).ok(),
             None => boardcast_meetings::decode_data_url(name).ok(),
         };
-        let mut frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
+        let mut frozen = boardcast_export::freeze(&self.live, !crate::i18n::chinese(), &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
         // The video with sound needs it, and a replay page carries it when there is some.
         let sound = matches!(kind, ExportKind::LiveVideo | ExportKind::ReplayPage).then(|| self.sound_files()).filter(|f| !f.is_empty());
         let directory = self.export_dir.clone().unwrap_or_else(|| {
@@ -2685,8 +2693,8 @@ impl Workbench {
         match rx.try_recv() {
             Ok(result) => {
                 self.form.note = Some(match result {
-                    Ok(ms) => format!("{} {ms} ms", tr("Connected in", "连接成功，用时")),
-                    Err(e) => format!("{}{e}", tr("Could not connect: ", "连接失败：")),
+                    Ok(ms) => ta!("connected-in-ms", ms = ms),
+                    Err(e) => crate::ta!("could-not-connect", error = format!("{e}")),
                 });
                 self.form.probing = None;
                 *changed = true;
@@ -2793,7 +2801,7 @@ impl Workbench {
         }
         match std::process::Command::new(prefix.join("bin/boardcast")).spawn() {
             Ok(_) => cx.quit(),
-            Err(e) => self.update = UpdateState::Failed(format!("{}{e}", tr("Could not start the new version: ", "无法启动新版本："))),
+            Err(e) => self.update = UpdateState::Failed(crate::ta!("could-not-start-the-new", error = format!("{e}"))),
         }
         cx.notify();
     }
@@ -2822,14 +2830,14 @@ impl Workbench {
                 if boardcast_models::catalog().iter().any(|m| m.id == id) {
                     self.needs_model = false;
                 }
-                self.form.note = Some(format!("{label} {}", tr("is ready.", "已就绪。")));
+                self.form.note = Some(ta!("name-is-ready", name = label.to_string()));
                 if id == boardcast_models::embedding().id {
                     self.start_search();
                 } else {
                     self.apply_backend();
                 }
             }
-            Ok(Outcome::Cancelled) => self.form.note = Some(tr("Paused. Download again to continue from where it stopped.", "已暂停。再次下载会从中断处继续。").into()),
+            Ok(Outcome::Cancelled) => self.form.note = Some(t("paused-download-again-to-continue").into()),
             Err(error) => self.form.note = Some(error),
         }
     }
@@ -2945,18 +2953,18 @@ impl Workbench {
         let model = boardcast_models::embedding();
         if let Some(download) = self.download.as_ref().filter(|d| d.id == model.id) {
             let share = download.progress.as_ref().map_or(0.0, |p| p.done as f64 / p.total.max(1) as f64);
-            return Some((format!("{} {:.0}%", tr("Downloading the model", "正在下载模型"), share * 100.0), false));
+            return Some((ta!("downloading-the-model-percent", percent = (share * 100.0).round()), false));
         }
         if self.search.is_none() && self.embedding_file().is_none() {
-            return Some((tr("Its model is not here. Turn it off and on again to download it.", "模型不在这里。关掉再打开即可下载。").to_string(), true));
+            return Some((t("its-model-is-not-here").to_string(), true));
         }
         let search = self.search.as_ref()?;
         if let Some(error) = &search.error {
             return Some((error.clone(), true));
         }
         Some(match search.indexing {
-            Some((done, total)) => (format!("{} {done} / {total}", tr("Reading meetings", "正在读取会议")), false),
-            None => (tr("Ready. Type in the meetings' search box.", "已就绪。在会议页的搜索框里输入即可。").to_string(), false),
+            Some((done, total)) => (ta!("reading-meetings-of", done = done, total = total), false),
+            None => (t("ready-type-in-the-meetings").to_string(), false),
         })
     }
 
@@ -3179,7 +3187,7 @@ impl Workbench {
         match self.flush() {
             Ok(()) => true,
             Err(error) => {
-                self.notice = Some(format!("{}{error}", tr("Staying on this meeting because it could not be saved: ", "这场会保存失败，先留在这里：")));
+                self.notice = Some(crate::ta!("staying-on-this-meeting-because", error = format!("{error}")));
                 false
             }
         }
@@ -3247,8 +3255,8 @@ impl Workbench {
                     self.show(Live::from_loaded(loaded));
                     self.panel = Panel::Transcript;
                 }
-                Ok(None) => self.notice = Some(tr("That meeting no longer exists.", "这场会已经不存在了。").into()),
-                Err(e) => self.notice = Some(format!("{}{e:#}", tr("Could not open the meeting: ", "打不开这场会："))),
+                Ok(None) => self.notice = Some(t("that-meeting-no-longer-exists").into()),
+                Err(e) => self.notice = Some(crate::ta!("could-not-open-the-meeting", error = format!("{e:#}"))),
             }
         }
         cx.notify();
@@ -3296,7 +3304,7 @@ impl Workbench {
             cx.notify();
             return;
         }
-        self.live.add_board(tr("Started a new board", "新开了一张板"));
+        self.live.add_board(t("started-a-new-board"));
         self.page_hint = None;
         self.topic_hint = None;
         self.page_quiet = QUIET_AFTER_TURNING;
@@ -3309,7 +3317,7 @@ impl Workbench {
 
     fn split_topic(&mut self, cx: &mut Context<Self>) {
         let Some((id, label)) = self.topic_hint.take() else { return };
-        if self.replay.is_some() || !self.live.split_topic(&id, &tr("Moved “{t}” to a new board", "把「{t}」移到了新的一张板").replace("{t}", &label)) {
+        if self.replay.is_some() || !self.live.split_topic(&id, &ta!("moved-t-to-a-new", t = label.to_string())) {
             cx.notify();
             return;
         }
@@ -3358,7 +3366,7 @@ impl Workbench {
 
     fn go_to_page(&mut self, page: usize, cx: &mut Context<Self>) {
         if self.replay.is_some() {
-            self.notice = Some(tr("Can't switch boards during replay. Exit replay first.", "回放时不能切换板，请先退出回放。").into());
+            self.notice = Some(t("can-t-switch-boards-during").into());
             cx.notify();
             return;
         }
@@ -3375,7 +3383,7 @@ impl Workbench {
     /// Open an imported document's first page, remembering the board it was opened from.
     fn open_document(&mut self, doc: &str, cx: &mut Context<Self>) {
         let Some(&first) = self.live.document_pages(doc).first() else {
-            self.notice = Some(tr("This document's pages are no longer in this meeting.", "这份文档的页面已不在这场会议里。").into());
+            self.notice = Some(t("this-document-s-pages-are").into());
             cx.notify();
             return;
         };
@@ -3437,11 +3445,11 @@ impl Workbench {
             [path] if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) => self.start_import(ImportSource::File(path.clone()), cx),
             [path] if path.extension().and_then(|e| e.to_str()).is_some_and(|e| IMAGE_TYPES.contains(&e.to_ascii_lowercase().as_str())) => self.import_image_file(path.clone(), cx),
             [_] => {
-                self.import = ImportState::Failed(tr("You can import PDFs and images (PNG, JPEG, WebP and GIF).", "可以导入 PDF 和图片（PNG、JPEG、WebP、GIF）。").to_string());
+                self.import = ImportState::Failed(t("you-can-import-pdfs-and").to_string());
                 cx.notify();
             }
             _ => {
-                self.import = ImportState::Failed(tr("Choose one file at a time. Nothing was imported.", "一次选一个文件，什么都没有导入。").to_string());
+                self.import = ImportState::Failed(t("choose-one-file-at-a").to_string());
                 cx.notify();
             }
         }
@@ -3457,13 +3465,13 @@ impl Workbench {
     /// Reading an image takes a model on this device, whichever model draws the board.
     fn import_image_file(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         let Some(model) = boardcast_models::current(&self.models) else {
-            self.import = ImportState::Failed(tr("Reading text in an image takes a local model, and images are not sent anywhere else. Download one in Settings first.", "读图里的字需要本地模型，图片不会发到别处。请先在设置里下载一个。").to_string());
+            self.import = ImportState::Failed(t("reading-text-in-an-image").to_string());
             cx.notify();
             return;
         };
         let file = model.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
         let Some(add_on) = boardcast_models::vision_for(&file) else {
-            self.import = ImportState::Failed(tr("This local model can't read images. To read one, choose Qwen3.5 in Settings.", "这个本地模型不能看图。要读图，请在设置里选择 Qwen3.5。").to_string());
+            self.import = ImportState::Failed(t("this-local-model-can-t").to_string());
             cx.notify();
             return;
         };
@@ -3484,7 +3492,7 @@ impl Workbench {
                 self.start_import(ImportSource::Arxiv(id), cx);
             }
             None => {
-                self.import = ImportState::Failed(tr("That's not an arXiv ID: paste an arxiv.org/abs/… link or an ID like 2401.12345", "没认出 arXiv 编号：贴 arxiv.org/abs/… 的链接，或者 2401.12345 这样的编号").to_string());
+                self.import = ImportState::Failed(t("that-s-not-an-arxiv").to_string());
                 cx.notify();
             }
         }
@@ -3498,14 +3506,14 @@ impl Workbench {
         let cancel = Arc::new(AtomicBool::new(false));
         let stop = cancel.clone();
         let library = self.pdfium.clone();
-        let english = tr("en", "zh") == "en";
+        let english = !crate::i18n::chinese();
         let vision = self.vision();
         let (tx, updates) = channel();
         std::thread::spawn(move || {
             let result = read_import(source, vision, &library, english, &stop, &tx);
             let _ = tx.send(ImportUpdate::Finished(result.map_err(|e| format!("{e:#}"))));
         });
-        self.import = ImportState::Reading { progress: tr("Reading the selected file…", "正在读取所选文件…").to_string(), cancel, updates };
+        self.import = ImportState::Reading { progress: t("reading-the-selected-file").to_string(), cancel, updates };
         cx.notify();
     }
 
@@ -3521,7 +3529,7 @@ impl Workbench {
     fn place_import(&mut self, fresh: bool, window: &mut Window, cx: &mut Context<Self>) {
         let spec = self.import_pages.read(cx).value().to_string();
         let Some(wanted) = page_ranges(&spec) else {
-            self.notice = Some(tr("Write pages as numbers and ranges, like 1-5, 8.", "页码写成数字和范围，比如 1-5, 8。").into());
+            self.notice = Some(t("write-pages-as-numbers-and").into());
             cx.notify();
             return;
         };
@@ -3529,7 +3537,7 @@ impl Workbench {
             if !wanted.is_empty() {
                 let asked = |p: &NewPage| wanted.iter().any(|(a, b)| (*a..=*b).contains(&page_number(&p.graph)));
                 if !preview.pages.iter().any(asked) {
-                    self.notice = Some(tr("None of those pages are in the file.", "文件里没有这些页。").into());
+                    self.notice = Some(t("none-of-those-pages-are").into());
                     cx.notify();
                     return;
                 }
@@ -3548,7 +3556,7 @@ impl Workbench {
     fn place_read_import(&mut self, fresh: bool, cx: &mut Context<Self>) {
         self.exit_replay(cx);
         if self.live.lines.iter().any(|l| l["ms"].is_null() && !l["manual"].as_bool().unwrap_or(false)) {
-            self.notice = Some(tr("The model is still drawing. Import when it is done.", "模型还在画，画完再导入。").into());
+            self.notice = Some(t("the-model-is-still-drawing").into());
             cx.notify();
             return;
         }
@@ -3565,7 +3573,7 @@ impl Workbench {
             match store.put_image(&id, "image/jpeg", &page.jpeg) {
                 Ok(reference) => stored.push(reference),
                 Err(error) => {
-                    self.notice = Some(format!("{}{error:#}", tr("The imported pages could not be saved. Nothing was added: ", "导入页保存失败，什么都没有加进去：")));
+                    self.notice = Some(crate::ta!("the-imported-pages-could-not", error = format!("{error:#}")));
                     if !fresh {
                         self.live = keep;
                     }
@@ -3625,7 +3633,7 @@ impl Workbench {
         let picture = read.and_then(|image| match image.map_err(|e| format!("{e:#}")).and_then(|i| page_render_image(&i.bytes)) {
             Ok(picture) => Some(picture),
             Err(error) => {
-                self.notice = Some(format!("{}{error}", tr("The imported page could not be shown: ", "导入页显示失败：")));
+                self.notice = Some(crate::ta!("the-imported-page-could-not", error = format!("{error}")));
                 None
             }
         });
@@ -3734,7 +3742,7 @@ impl Workbench {
                     Annotation { tool: tool.to_string(), on: None, points: line.iter().map(|p| [f64::from(p[0]), f64::from(p[1])]).collect() }
                 }
                 _ => {
-                    self.notice = Some(tr("Marks go on an imported page or a clip.", "标注要画在导入的页面或摘录上。").to_string());
+                    self.notice = Some(t("marks-go-on-an-imported").to_string());
                     return;
                 }
             },
@@ -3778,7 +3786,7 @@ impl Workbench {
         let png = match picture {
             Ok(png) => png,
             Err(e) => {
-                self.notice = Some(format!("{}{e:#}", tr("This card could not go into the inbox: ", "这张卡片没能放进收纳栏：")));
+                self.notice = Some(crate::ta!("this-card-could-not-go", error = format!("{e:#}")));
                 return;
             }
         };
@@ -3790,7 +3798,7 @@ impl Workbench {
                 self.tray.push((card, picture));
             }
             Err(e) => {
-                self.notice = Some(format!("{}{e:#}", tr("This card could not go into the inbox: ", "这张卡片没能放进收纳栏：")));
+                self.notice = Some(crate::ta!("this-card-could-not-go", error = format!("{e:#}")));
                 return;
             }
         }
@@ -3812,7 +3820,7 @@ impl Workbench {
         let src = match src {
             Ok(src) => src,
             Err(e) => {
-                self.notice = Some(format!("{}{e:#}", tr("This card could not be put on the board: ", "这张卡片没能放到板上：")));
+                self.notice = Some(crate::ta!("this-card-could-not-be", error = format!("{e:#}")));
                 return;
             }
         };
@@ -4110,7 +4118,7 @@ impl Workbench {
                 .child(div().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().child(name))
                 .child(match keys {
                     Some(keys) => cap(keys).into_any_element(),
-                    None => div().text_xs().text_color(rgb(pal().faint)).child(tr("none", "未设置")).into_any_element(),
+                    None => div().text_xs().text_color(rgb(pal().faint)).child(t("none")).into_any_element(),
                 })
         };
         let group = |g: Group| {
@@ -4118,7 +4126,7 @@ impl Workbench {
                 .flex()
                 .flex_col()
                 .child(div().pb_1().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(g.name()))
-                .children(ACTIONS.iter().filter(|a| a.4 == g).map(|a| line(a.0.name().to_string(), self.keys.label(a.0))))
+                .children(ACTIONS.iter().filter(|a| a.2 == g).map(|a| line(a.0.name().to_string(), self.keys.label(a.0))))
         };
         div()
             .id("shortcuts-veil")
@@ -4155,8 +4163,8 @@ impl Workbench {
                             .flex()
                             .items_center()
                             .justify_between()
-                            .child(div().text_lg().child(tr("Keyboard shortcuts", "键盘快捷键")))
-                            .child(div().flex().items_center().gap_2().text_xs().text_color(rgb(pal().muted)).child(cap("Esc".into())).child(tr("to close", "关闭"))),
+                            .child(div().text_lg().child(t("keyboard-shortcuts")))
+                            .child(div().flex().items_center().gap_2().text_xs().text_color(rgb(pal().muted)).child(cap("Esc".into())).child(t("to-close"))),
                     )
                     .child(
                         div()
@@ -4169,11 +4177,11 @@ impl Workbench {
                         div()
                             .flex()
                             .flex_col()
-                            .child(div().pb_1().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(tr("always the same", "固定不变")))
-                            .children(FIXED.iter().map(|(k, en, zh)| line(tr(en, zh).to_string(), Keys::parse(k).map(|k| k.label())))),
+                            .child(div().pb_1().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(t("always-the-same")))
+                            .children(FIXED.iter().map(|(k, id)| line(t(id).to_string(), Keys::parse(k).map(|k| k.label())))),
                     )
                     .child(
-                        div().pt_1().child(button("shortcuts-change", tr("Change shortcuts in Settings", "在设置里修改快捷键")).on_click(cx.listener(|this, _, _, cx| {
+                        div().pt_1().child(button("shortcuts-change", t("change-shortcuts-in-settings")).on_click(cx.listener(|this, _, _, cx| {
                             this.shortcuts_shown = false;
                             this.settings_tab = SettingsTab::Shortcuts;
                             this.panel = Panel::Settings;
@@ -4201,7 +4209,7 @@ impl Workbench {
         let address = match net::with_login(&address, &saved.proxy_user, &saved.proxy_password) {
             Ok(address) => address,
             Err(_) => {
-                self.form.proxy_note = Some(tr("A username cannot contain a colon (:). Until it is fixed, the proxy is used without a login.", "用户名不能包含冒号（:）；改好之前，代理不带账号使用。").to_string());
+                self.form.proxy_note = Some(t("a-username-cannot-contain-a").to_string());
                 address
             }
         };
@@ -4210,9 +4218,9 @@ impl Workbench {
                 Ok(()) => Proxy::Custom(a),
                 Err(why) => {
                     self.form.proxy_note = Some(if why == "no scheme" {
-                        tr("The address must start with http://, https:// or socks5://. Until then, the system's proxy is used.", "地址需要以 http://、https:// 或 socks5:// 开头；在此之前使用系统代理。").to_string()
+                        t("the-address-must-start-with").to_string()
                     } else {
-                        format!("{}{why}", tr("This address cannot be used, so the system's proxy is used: ", "这个地址无法使用，暂时使用系统代理："))
+                        crate::ta!("this-address-cannot-be-used", error = format!("{why}"))
                     });
                     Proxy::System
                 }
@@ -4350,7 +4358,7 @@ impl Workbench {
                 }
                 self.deleted_meeting = Some((id.to_string(), title));
             }
-            Err(e) => self.notice = Some(format!("{}{e:#}", tr("Could not delete the meeting: ", "删除会议失败："))),
+            Err(e) => self.notice = Some(crate::ta!("could-not-delete-the-meeting", error = format!("{e:#}"))),
         }
         cx.notify();
     }
@@ -4359,7 +4367,7 @@ impl Workbench {
         let (Some(store), Some((id, _))) = (&self.store, self.deleted_meeting.take()) else { return };
         match store.restore(&id).and_then(|()| store.list()) {
             Ok(list) => self.library = list,
-            Err(e) => self.notice = Some(format!("{}{e:#}", tr("Could not bring the meeting back: ", "恢复会议失败："))),
+            Err(e) => self.notice = Some(crate::ta!("could-not-bring-the-meeting", error = format!("{e:#}"))),
         }
         cx.notify();
     }
@@ -4390,7 +4398,7 @@ impl Workbench {
                         self.pinned = store.pinned();
                         self.deleted_meeting = None;
                     }
-                    Err(e) => self.notice = Some(format!("{}{e:#}", tr("Could not list meetings: ", "读取会议列表失败："))),
+                    Err(e) => self.notice = Some(crate::ta!("could-not-list-meetings", error = format!("{e:#}"))),
                 }
             }
         }
@@ -4468,11 +4476,12 @@ impl Workbench {
     /// where it was, and the view stays where it is.
     /// The Settings sample in the board's hand as it is now, written again from the start when the hand changed.
     fn hand_sample(&mut self) -> (Vec<Inked>, f32, f32, Instant) {
-        let messy = self.form.saved.messy;
-        let fresh = self.hand_sample.as_ref().is_some_and(|(m, ..)| (*m - messy).abs() < 0.001);
+        // Written again in a new hand, or in the words of a new language.
+        let made = (self.form.saved.messy, crate::i18n::code());
+        let fresh = self.hand_sample.as_ref().is_some_and(|((m, code), ..)| (*m - made.0).abs() < 0.001 && *code == made.1);
         if !fresh {
             let (strokes, w, h) = hand_sample(&mut self.ink.borrow_mut().glyphs);
-            self.hand_sample = Some((messy, strokes, w, h, Instant::now()));
+            self.hand_sample = Some((made, strokes, w, h, Instant::now()));
         }
         let (_, strokes, w, h, started) = self.hand_sample.clone().expect("made above");
         (strokes, w, h, started)
@@ -4511,7 +4520,7 @@ impl Workbench {
     fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let settings = self.form_settings(cx);
         if settings.enabled && !settings.is_complete() {
-            self.form.note = Some(tr("Fill in the address, model and API key first.", "请先填写地址、模型和 API key。").into());
+            self.form.note = Some(t("fill-in-the-address-model").into());
             cx.notify();
             return;
         }
@@ -4519,10 +4528,10 @@ impl Workbench {
             Ok(()) => {
                 self.form.saved = settings;
                 self.form.key.update(cx, |state, cx| state.set_value("", window, cx));
-                self.form.note = Some(tr("Saved.", "已保存。").into());
+                self.form.note = Some(t("saved").into());
                 self.apply_backend();
             }
-            Err(e) => self.form.note = Some(format!("{}{e:#}", tr("Could not save: ", "保存失败："))),
+            Err(e) => self.form.note = Some(crate::ta!("could-not-save", error = format!("{e:#}"))),
         }
         cx.notify();
     }
@@ -4530,7 +4539,7 @@ impl Workbench {
     fn test_settings(&mut self, cx: &mut Context<Self>) {
         let settings = self.form_settings(cx);
         if !settings.is_complete() {
-            self.form.note = Some(tr("Fill in the address, model and API key first.", "请先填写地址、模型和 API key。").into());
+            self.form.note = Some(t("fill-in-the-address-model").into());
             cx.notify();
             return;
         }
@@ -4542,7 +4551,7 @@ impl Workbench {
             let _ = tx.send(reply.map(|r| r.ms).map_err(|e| format!("{e:#}")));
         });
         self.form.probing = Some(rx);
-        self.form.note = Some(tr("Testing…", "正在测试…").into());
+        self.form.note = Some(t("testing").into());
         cx.notify();
     }
 
@@ -4584,7 +4593,7 @@ impl Workbench {
         names.extend(node.aliases.iter().map(String::as_str));
         let found = said_at(&self.live.lines, who, &names, self.live.page(), first_seen(&self.live.steps, id));
         let Some(line) = found else {
-            self.notice = Some(tr("The line behind this isn't in the transcript.", "会议记录里找不到这条板书对应的话。").into());
+            self.notice = Some(t("the-line-behind-this-isn").into());
             cx.notify();
             return;
         };
@@ -4654,8 +4663,8 @@ impl Workbench {
                 .when(chosen, |d| d.bg(rgb(pal().selected)))
                 .child(speaker_badge(&names, name))
                 .child(div().flex_1().min_w_0().text_sm().child(name.clone()))
-                .when(self.speaker.as_deref() == Some(name.as_str()), |d| d.child(div().text_xs().text_color(rgb(pal().accent)).child(tr("next", "下一句"))))
-                .child(div().text_xs().text_color(rgb(pal().faint)).child(format!("{lines} {}", tr("lines", "句"))))
+                .when(self.speaker.as_deref() == Some(name.as_str()), |d| d.child(div().text_xs().text_color(rgb(pal().accent)).child(t("next"))))
+                .child(div().text_xs().text_color(rgb(pal().faint)).child(ta!("line-count", n = lines)))
                 .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx)))
         }).collect::<Vec<_>>();
         // A line picked in the transcript can go to someone else on its own, when it is still this speaker's.
@@ -4675,7 +4684,7 @@ impl Workbench {
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(pal().line))
-                    .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Only this line was someone else:", "只有这一句是别人说的：")))
+                    .child(div().text_xs().text_color(rgb(pal().muted)).child(t("only-this-line-was-someone")))
                     .child(div().text_sm().child(format!("“{text}”")))
                     .child(div().flex().flex_wrap().gap_1().children(others.into_iter().enumerate().map(|(k, (name, new))| {
                         let to = name.clone();
@@ -4692,34 +4701,27 @@ impl Workbench {
                             .border_1()
                             .border_color(rgb(pal().line))
                             .child(speaker_badge(&names, &name))
-                            .child(if new { tr("Someone new ({name})", "新的人（{name}）").replace("{name}", &name) } else { name.clone() })
+                            .child(if new { ta!("someone-new-name", name = name.to_string()) } else { name.clone() })
                             .on_click(cx.listener(move |this, _, window, cx| this.move_line(i, to.clone(), window, cx)))
                     })))
-                    .child(div().text_xs().text_color(rgb(pal().faint)).child(tr("Its voice moves too, so later lines in that voice follow.", "声纹也一起挪过去，之后同样声音的句子会跟着走。"))),
+                    .child(div().text_xs().text_color(rgb(pal().faint)).child(t("its-voice-moves-too-so"))),
             )
         });
         let editing = self.speaker_chosen.clone().filter(|name| editable && names.contains(name)).map(|from| {
             let to = self.speaker_name.read(cx).value().trim().to_string();
             let merging = to != from && names.contains(&to);
             let (lines, items, boards) = self.live.speaker_impact(&from);
-            let affects = tr("Affects {lines} transcript lines and {items} board items on {boards} boards.", "会改动 {lines} 句记录，以及 {boards} 张板上的 {items} 项内容。")
-                .replace("{lines}", &lines.to_string())
-                .replace("{items}", &items.to_string())
-                .replace("{boards}", &boards.to_string());
+            let affects = ta!("affects-lines-transcript-lines-and", lines = lines, items = items, boards = boards);
             let notice = (to != from && !to.is_empty()).then(|| {
-                let text = if merging {
-                    tr("“{to}” already exists, so “{from}” will become part of that speaker, voice included. This can't be undone.", "“{to}”已经存在，“{from}”会并入这个人，声纹也一起合并。这一步不能撤销。")
-                } else {
-                    tr("“{from}” becomes “{to}”, including lines still waiting for the board.", "“{from}”会改成“{to}”，还在排队上板的句子也一样。")
-                };
-                text.replace("{from}", &from).replace("{to}", &to)
+                let id = if merging { "to-already-exists-so-from" } else { "from-becomes-to-including-lines" };
+                ta!(id, from = from.to_string(), to = to.to_string())
             });
             let next = from.clone();
             div()
                 .flex()
                 .flex_col()
                 .gap_2()
-                .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("New name", "新名字")))
+                .child(div().text_xs().text_color(rgb(pal().muted)).child(t("new-name")))
                 .child(Input::new(&self.speaker_name))
                 .child(div().text_xs().text_color(rgb(pal().muted)).child(affects))
                 .when_some(notice, |d, text| d.child(div().text_xs().text_color(rgb(if merging { pal().warning } else { pal().muted })).child(text)))
@@ -4728,11 +4730,11 @@ impl Workbench {
                         .flex()
                         .gap_1()
                         .child(
-                            button("rename-speaker", if merging { tr("Merge speakers", "合并说话人") } else { tr("Rename", "改名") })
+                            button("rename-speaker", if merging { t("merge-speakers") } else { t("rename") })
                                 .when(to.is_empty() || to == from, |b| b.opacity(0.4))
                                 .on_click(cx.listener(|this, _, window, cx| this.rename_speaker(window, cx))),
                         )
-                        .child(button("use-speaker", tr("Use for next line", "下一句用这个人")).on_click(cx.listener(move |this, _, _, cx| {
+                        .child(button("use-speaker", t("use-for-next-line")).on_click(cx.listener(move |this, _, _, cx| {
                             this.speaker = Some(next.clone());
                             cx.notify();
                         }))),
@@ -4746,7 +4748,7 @@ impl Workbench {
             .flex()
             .flex_col()
             .gap_2()
-            .when(names.is_empty(), |d| d.child(div().text_sm().text_color(rgb(pal().faint)).child(tr("Nobody has spoken yet.", "还没有人说话。"))))
+            .when(names.is_empty(), |d| d.child(div().text_sm().text_color(rgb(pal().faint)).child(t("nobody-has-spoken-yet"))))
             .children(rows)
             .when_some(one_line, |d, one_line| d.child(one_line))
             .when_some(editing, |d, editing| d.child(editing))
@@ -4783,7 +4785,7 @@ impl Workbench {
         self.count_listening();
         if let Err(error) = self.flush() {
             self.close_refused = true;
-            self.notice = Some(format!("{}{error}", tr("Not saved, so the window stayed open. Close again to discard: ", "没有保存成功，窗口先不关。再关一次将丢弃未保存内容：")));
+            self.notice = Some(crate::ta!("not-saved-so-the-window", error = format!("{error}")));
             cx.notify();
             return false;
         }
@@ -4987,7 +4989,7 @@ impl Workbench {
                         .rounded(px(15.))
                         .icon(icon(if playing { "pause" } else { "play" }))
                         .disabled(hearing)
-                        .tooltip(if playing { tr("Pause (Space)", "暂停（空格）") } else { tr("Play (Space)", "播放（空格）") })
+                        .tooltip(if playing { t("pause-space") } else { t("play-space") })
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_replay(cx))),
                 )
                 .child(div().w(px(2.)))
@@ -4997,7 +4999,7 @@ impl Workbench {
                 .child(Separator::vertical().h(px(18.)).mx_1())
                 // With sound the replay runs in real time, so there is no speed to choose.
                 .when(sound.is_none() && !hearing, |d| {
-                    d.child(Button::new("replay-speed").ghost().small().label(format!("{}×", player.speed)).tooltip(tr("Speed", "速度")).on_click(cx.listener(|this, _, _, cx| {
+                    d.child(Button::new("replay-speed").ghost().small().label(format!("{}×", player.speed)).tooltip(t("speed")).on_click(cx.listener(|this, _, _, cx| {
                         if let Some(replay) = &mut this.replay {
                             replay.player.next_speed();
                         }
@@ -5006,9 +5008,9 @@ impl Workbench {
                     })))
                 })
                 .when(self.live.read_only.is_none(), |d| {
-                    d.child(icon_button("replay-fork", "fork", tr("Fork a board: start a new board from this moment", "另起一板：从这一刻另起一张板")).disabled(!can_fork).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
+                    d.child(icon_button("replay-fork", "fork", t("fork-a-board-start-a")).disabled(!can_fork).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
                 })
-                .child(icon_button("replay-exit", "x", tr("Exit replay (Esc)", "退出回放（Esc）")).on_click(cx.listener(|this, _, _, cx| this.exit_replay(cx)))),
+                .child(icon_button("replay-exit", "x", t("exit-replay-esc")).on_click(cx.listener(|this, _, _, cx| this.exit_replay(cx)))),
         )
     }
 
@@ -5054,7 +5056,7 @@ impl Workbench {
                 .child(text)
                 .when(shut, |d| d.child(format!("· {count}")))
                 .child(icon(if shut { "chevron-right" } else { "chevron-down" }).size(px(10.)))
-                .tooltip(move |window, cx| Tooltip::new(if shut { tr("Show these meetings", "展开这些会议") } else { tr("Fold these meetings away", "收起这些会议") }).build(window, cx))
+                .tooltip(move |window, cx| Tooltip::new(if shut { t("show-these-meetings") } else { t("fold-these-meetings-away") }).build(window, cx))
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_group(group, cx)))
                 .into_any_element()
         };
@@ -5095,12 +5097,12 @@ impl Workbench {
                 .into_any_element()
         };
         if !pinned.is_empty() {
-            rows.push(group_label("pinned", tr("pinned", "置顶"), pinned.len()));
+            rows.push(group_label("pinned", t("pinned"), pinned.len()));
             for (i, m) in pinned.iter().filter(|(_, m)| !folded("pinned") || m.id == current) {
                 rows.push(row(*i, m.id.clone(), if m.id == current { self.live.title().to_string() } else { m.title.clone() }));
             }
         }
-        let names = [("today", tr("today", "今天")), ("yesterday", tr("yesterday", "昨天")), ("earlier", tr("earlier", "更早"))];
+        let names = [("today", t("today")), ("yesterday", t("yesterday")), ("earlier", t("earlier"))];
         for (days, (key, name)) in names.into_iter().enumerate() {
             let group: Vec<&(usize, &Info)> = recent.iter().filter(|(_, m)| age(m) == days as i64).collect();
             let first = days == 0 && unsaved;
@@ -5140,16 +5142,16 @@ impl Workbench {
                             .w_full()
                             .h(px(32.))
                             .map(|b| match self.store {
-                                Some(_) => b.tooltip(self.keys.tip(Action::NewMeeting, tr("New meeting", "新建会议"))).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))),
+                                Some(_) => b.tooltip(self.keys.tip(Action::NewMeeting, t("new-meeting"))).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))),
                                 // A sample has nowhere to keep a meeting, so the button says why instead of doing nothing.
-                                None => b.tooltip(tr("A sample is not saved, so it cannot start a new meeting", "示例不会保存，不能从这里新建会议")).disabled(true),
+                                None => b.tooltip(t("a-sample-is-not-saved")).disabled(true),
                             })
-                            .child(div().flex().items_center().gap_2().child(icon("plus").size(px(11.))).child(div().text_sm().child(tr("New meeting", "新建会议")))),
+                            .child(div().flex().items_center().gap_2().child(icon("plus").size(px(11.))).child(div().text_sm().child(t("new-meeting")))),
                     )
                     .child(div().h(px(8.)))
-                    .child(nav("side-search", "search", tr("Search", "搜索"), false, self.keys.label(Action::Search)).on_click(cx.listener(|this, _, window, cx| this.search_meetings(window, cx))))
-                    .child(nav("side-all", "folder-open", tr("All meetings", "全部会议"), self.panel == Panel::Library, (!self.library.is_empty()).then(|| self.library.len().to_string())).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
-                    .child(nav("side-import", "import", tr("Import", "导入"), self.panel == Panel::Import, None).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx)))),
+                    .child(nav("side-search", "search", t("search"), false, self.keys.label(Action::Search)).on_click(cx.listener(|this, _, window, cx| this.search_meetings(window, cx))))
+                    .child(nav("side-all", "folder-open", t("all-meetings"), self.panel == Panel::Library, (!self.library.is_empty()).then(|| self.library.len().to_string())).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Library, cx))))
+                    .child(nav("side-import", "import", t("import"), self.panel == Panel::Import, None).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Import, cx)))),
             )
             .child(
                 div()
@@ -5162,7 +5164,7 @@ impl Workbench {
                     .flex()
                     .flex_col()
                     .gap(px(1.))
-                    .when(self.store.is_none(), |d| d.child(div().px_2().pt_4().text_xs().text_color(rgb(pal().muted)).child(tr("This is a sample. It is not saved, and your own meetings are not listed beside it.", "这是示例，不会保存，这里也不列出你自己的会议。"))))
+                    .when(self.store.is_none(), |d| d.child(div().px_2().pt_4().text_xs().text_color(rgb(pal().muted)).child(t("this-is-a-sample-it"))))
                     .children(rows)
                     .when(more > 0, |d| {
                         d.child(
@@ -5178,7 +5180,7 @@ impl Workbench {
                                 .text_xs()
                                 .text_color(rgb(pal().faint))
                                 .hover(|d| d.text_color(rgb(pal().text)))
-                                .child(format!("{more} {}", tr("more in All meetings →", "场更早的会议，见全部会议 →")))
+                                .child(ta!("more-in-all-meetings-count", n = more))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     if this.panel != Panel::Library {
                                         this.toggle_panel(Panel::Library, cx);
@@ -5209,11 +5211,11 @@ impl Workbench {
                                 .text_xs()
                                 .text_color(rgb(pal().muted))
                                 .when(!held, |d| d.child(Spinner::new().xsmall().color(rgb(pal().muted).into())))
-                                .child(div().flex_1().min_w_0().overflow_hidden().whitespace_nowrap().child(if held { tr("Search index paused", "搜索索引已暂停") } else { tr("Indexing for search", "正在建立搜索索引") }))
+                                .child(div().flex_1().min_w_0().overflow_hidden().whitespace_nowrap().child(if held { t("search-index-paused") } else { t("indexing-for-search") }))
                                 .child(div().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(format!("{done}/{total}"))),
                         )
                     })
-                    .child(nav("side-settings", "settings", tr("Settings", "设置"), self.panel == Panel::Settings, Some(format!("v{}", boardcast_update::VERSION))).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx)))),
+                    .child(nav("side-settings", "settings", t("settings"), self.panel == Panel::Settings, Some(format!("v{}", boardcast_update::VERSION))).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx)))),
             )
     }
 
@@ -5226,41 +5228,41 @@ impl Workbench {
                 let (fetch, retry) = (add_on.clone(), path.clone());
                 let downloading = self.download.as_ref().filter(|d| d.id == add_on.id);
                 let progress = downloading.map(|d| match &d.progress {
-                    Some(p) if p.verifying => tr("Checking what was already downloaded…", "正在检查已下载的部分…").to_string(),
+                    Some(p) if p.verifying => t("checking-what-was-already-downloaded").to_string(),
                     Some(p) => format!("{} / {}", gigabytes(p.done), gigabytes(p.total)),
-                    None => tr("Starting…", "正在开始…").to_string(),
+                    None => t("starting").to_string(),
                 });
                 let ready = boardcast_models::installed(add_on, &self.models);
                 panel
-                    .child(div().text_sm().child(tr("To read the text in an image, the local model needs its vision add-on. Images stay on this device.", "要读图里的字，本地模型需要看图组件。图片只在本机处理。")))
-                    .child(hint(if downloading.is_some() { add_on.label } else { tr("One download, and then images just work.", "下载一次，之后都能用。") }))
+                    .child(div().text_sm().child(t("to-read-the-text-in")))
+                    .child(hint(if downloading.is_some() { add_on.label } else { t("one-download-and-then-images") }))
                     .when_some(progress, |d, text| d.child(div().text_xs().child(text)))
-                    .when(ready, |d| d.child(button("read-image", tr("Read the image", "读取图片")).on_click(cx.listener(move |this, _, _, cx| this.import_image_file(retry.clone(), cx)))))
+                    .when(ready, |d| d.child(button("read-image", t("read-the-image")).on_click(cx.listener(move |this, _, _, cx| this.import_image_file(retry.clone(), cx)))))
                     .when(!ready && downloading.is_none() && self.download.is_none(), |d| {
-                        d.child(button("get-vision", format!("{} · {}", tr("Download", "下载"), gigabytes(add_on.size))).on_click(cx.listener(move |this, _, _, cx| this.start_download(fetch.clone(), cx))))
+                        d.child(button("get-vision", format!("{} · {}", t("download"), gigabytes(add_on.size))).on_click(cx.listener(move |this, _, _, cx| this.start_download(fetch.clone(), cx))))
                     })
-                    .child(button("import-cancel", tr("Cancel", "取消")).on_click(cx.listener(|this, _, _, cx| this.stop_import(cx))))
+                    .child(button("import-cancel", t("cancel")).on_click(cx.listener(|this, _, _, cx| this.stop_import(cx))))
             }
             ImportState::Reading { progress, .. } => panel
                 .child(div().text_sm().child(progress.clone()))
-                .child(hint(tr("You can carry on with the meeting while this reads.", "读取的时候，会议可以继续。")))
-                .child(button("stop-import", tr("Stop", "停止")).on_click(cx.listener(|this, _, _, cx| this.stop_import(cx)))),
+                .child(hint(t("you-can-carry-on-with")))
+                .child(button("stop-import", t("stop")).on_click(cx.listener(|this, _, _, cx| this.stop_import(cx)))),
             ImportState::Ready(preview) => panel
-                .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(format!("{} · {} {}", preview.name, preview.pages.len(), tr("boards", "张板"))))
+                .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(format!("{} · {}", preview.name, ta!("board-count", n = preview.pages.len()))))
                 .child(div().text_xs().text_color(rgb(pal().muted)).child(preview.ready.clone()))
                 .children(preview.details.iter().map(|d| div().text_xs().text_color(rgb(pal().warning)).child(d.clone())))
                 .when(preview.pages.len() > 1, |d| {
-                    d.child(div().mt_1().text_xs().text_color(rgb(pal().muted)).child(tr("Pages to import", "要导入的页"))).child(Input::new(&self.import_pages).small())
+                    d.child(div().mt_1().text_xs().text_color(rgb(pal().muted)).child(t("pages-to-import"))).child(Input::new(&self.import_pages).small())
                 })
-                .child(button("import-new", tr("New meeting", "新开一场会")).on_click(cx.listener(|this, _, window, cx| this.place_import(true, window, cx))))
-                .when(can_add_here, |d| d.child(button("import-here", tr("Add to this meeting", "加到这场会")).on_click(cx.listener(|this, _, window, cx| this.place_import(false, window, cx)))))
-                .child(button("import-cancel", tr("Cancel", "取消")).on_click(cx.listener(|this, _, window, cx| {
+                .child(button("import-new", t("new-meeting")).on_click(cx.listener(|this, _, window, cx| this.place_import(true, window, cx))))
+                .when(can_add_here, |d| d.child(button("import-here", t("add-to-this-meeting")).on_click(cx.listener(|this, _, window, cx| this.place_import(false, window, cx)))))
+                .child(button("import-cancel", t("cancel")).on_click(cx.listener(|this, _, window, cx| {
                     this.import_pages.update(cx, |state, cx| state.set_value("", window, cx));
                     this.stop_import(cx);
                 }))),
             state => panel
                 .when_some(if let ImportState::Failed(error) = state { Some(error.clone()) } else { None }, |d, error| d.child(div().text_sm().text_color(rgb(pal().danger)).child(error)))
-                .child(hint(tr("A PDF page or an image becomes a board, with its text in place to circle, link and note on during the meeting.", "PDF 的每一页或一张图片变成一张板，文字留在原位，开会时可以圈画、连线、写批注。")))
+                .child(hint(t("a-pdf-page-or-an")))
                 // Where a file goes: the button, or a drop anywhere in the window.
                 .child(
                     div()
@@ -5274,16 +5276,16 @@ impl Workbench {
                         .border_dashed()
                         .border_color(rgb(pal().faint))
                         .rounded(px(3.))
-                        .child(Button::new("pick-import").small().primary().label(tr("Choose a file…", "选择文件…")).on_click(cx.listener(|this, _, _, cx| this.pick_import_file(cx))))
-                        .child(hint(tr("or drop a PDF or an image anywhere in the window", "或者把 PDF、图片拖进窗口"))),
+                        .child(Button::new("pick-import").small().primary().label(t("choose-a-file")).on_click(cx.listener(|this, _, _, cx| this.pick_import_file(cx))))
+                        .child(hint(t("or-drop-a-pdf-or"))),
                 )
-                .child(div().mt_3().text_xs().text_color(rgb(pal().muted)).child(tr("An arXiv paper, by link or ID", "arXiv 论文的链接或编号")))
+                .child(div().mt_3().text_xs().text_color(rgb(pal().muted)).child(t("an-arxiv-paper-by-link")))
                 .child(
                     div()
                         .flex()
                         .gap_2()
                         .child(div().flex_1().child(Input::new(&self.arxiv_input).small()))
-                        .child(button("import-arxiv", tr("Download and read", "下载并读取")).on_click(cx.listener(|this, _, window, cx| this.import_arxiv(window, cx)))),
+                        .child(button("import-arxiv", t("download-and-read")).on_click(cx.listener(|this, _, window, cx| this.import_arxiv(window, cx)))),
                 ),
         }
     }
@@ -5293,24 +5295,24 @@ impl Workbench {
         let content = self.live.has_content();
         let heard = !self.live.audio().is_empty();
         let mut formats = vec![
-            (ExportKind::Markdown, "Markdown", tr("Key points, a Mermaid flow chart and the transcript.", "要点、Mermaid 流程图和会议记录。"), content),
-            (ExportKind::Png, tr("PNG image", "PNG 图片"), tr("This board, as it looks on screen.", "当前这张板，和画面上一样。"), drawn),
-            (ExportKind::Svg, tr("SVG vector", "SVG 矢量图"), tr("This board. Stays sharp at any size.", "当前这张板，放大不糊。"), drawn),
-            (ExportKind::AnimatedSvg, tr("Animated SVG", "动态 SVG"), tr("This board, written out stroke by stroke in the order of the meeting.", "当前这张板，按会议顺序逐笔写出。"), drawn),
-            (ExportKind::Gif, "GIF", tr("This board, written out stroke by stroke, for chats and documents that don't play SVG.", "当前这张板，逐笔写出，可以直接贴进群聊和文档。"), drawn),
-            (ExportKind::Webm, tr("Video (WebM)", "视频（WebM）"), tr("This board, written out stroke by stroke, as a small, sharp video for browsers, GitHub and web pages.", "当前这张板，逐笔写出，体积小、更清晰，适合浏览器、GitHub 和网页。"), drawn),
+            (ExportKind::Markdown, "Markdown", t("key-points-a-mermaid-flow"), content),
+            (ExportKind::Png, t("png-image"), t("this-board-as-it-looks"), drawn),
+            (ExportKind::Svg, t("svg-vector"), t("this-board-stays-sharp-at"), drawn),
+            (ExportKind::AnimatedSvg, t("animated-svg"), t("this-board-written-out-stroke"), drawn),
+            (ExportKind::Gif, "GIF", t("this-board-written-out-stroke-2"), drawn),
+            (ExportKind::Webm, t("video-webm"), t("this-board-written-out-stroke-3"), drawn),
             (
                 ExportKind::ReplayPage,
-                tr("Replay page", "回放网页"),
-                if heard { tr("One .html file for someone who missed the meeting, with its sound. Nothing to install.", "一个 .html 文件，带会议录音，发给没参会的人，双击就能看。") } else { tr("One .html file for someone who missed the meeting. Nothing to install.", "一个 .html 文件，发给没参会的人，双击就能看。") },
+                t("replay-page"),
+                if heard { t("one-html-file-for-someone-2") } else { t("one-html-file-for-someone") },
                 content,
             ),
-            (ExportKind::Pdf, tr("Whole meeting PDF", "整场会 PDF"), tr("A page per board, then the summary and transcript, with selectable text.", "每张板一页，后面是摘要和会议记录，文字可以选中复制。"), content),
+            (ExportKind::Pdf, t("whole-meeting-pdf"), t("a-page-per-board-then"), content),
         ];
         // The whole meeting in real time, with what was said, once there is a recording.
         if heard {
             let at = formats.iter().position(|f| f.0 == ExportKind::Webm).map_or(formats.len(), |i| i + 1);
-            formats.insert(at, (ExportKind::LiveVideo, tr("Video with sound", "带声音的视频"), tr("The whole meeting in real time with its recording, every board as it was drawn.", "整场会按真实时间播放，带录音，每张板都按当时的样子画出。"), content));
+            formats.insert(at, (ExportKind::LiveVideo, t("video-with-sound"), t("the-whole-meeting-in-real"), content));
         }
         let busy = self.exporting;
         let rows = formats.into_iter().enumerate().map(|(i, (kind, name, hint, available))| {
@@ -5331,7 +5333,7 @@ impl Workbench {
                     div()
                         .flex_1()
                         .min_w_0()
-                        .child(div().text_sm().child(if busy == Some(kind) { format!("{name} · {}", tr("Exporting…", "正在导出…")) } else { name.to_string() }))
+                        .child(div().text_sm().child(if busy == Some(kind) { format!("{name} · {}", t("exporting")) } else { name.to_string() }))
                         .child(div().text_xs().text_color(rgb(pal().muted)).child(hint)),
                 )
                 .child(div().pt(px(2.)).font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).whitespace_nowrap().child(format!(".{} ↓", kind.extension())))
@@ -5343,16 +5345,13 @@ impl Workbench {
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .child(div().text_xs().child(format!("{} {}", tr("Saved to", "已保存到"), path.display())))
+                    .child(div().text_xs().child(ta!("saved-to-path", path = path.display().to_string())))
                     .when(*text_left_out, |d| {
-                        d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr(
-                            "No usable font was found, so the summary and transcript are not in this PDF. Markdown has them.",
-                            "没有找到可用的字体，这份 PDF 里没有摘要和会议记录。可以导出 Markdown 获取这些内容。",
-                        )))
+                        d.child(div().text_xs().text_color(rgb(pal().warning)).child(t("no-usable-font-was-found")))
                     })
-                    .child(button("reveal-export", tr("Show in folder", "在文件夹中显示")).on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&shown))))
+                    .child(button("reveal-export", t("show-in-folder")).on_click(cx.listener(move |_, _, _, cx| cx.reveal_path(&shown))))
             }
-            Exported::Failed(error) => div().text_xs().text_color(rgb(pal().danger)).child(format!("{}{error}", tr("Could not export: ", "导出失败："))),
+            Exported::Failed(error) => div().text_xs().text_color(rgb(pal().danger)).child(crate::ta!("could-not-export", error = format!("{error}"))),
         });
         div()
             .id("export-panel")
@@ -5362,7 +5361,7 @@ impl Workbench {
             .flex_col()
             .gap_2()
             .when(self.live.read_only == Some(ViewOnly::ImportedContent), |d| {
-                d.child(div().text_xs().text_color(rgb(pal().warning)).child(tr("Free-edit content is not included.", "自由编辑内容不会导出。")))
+                d.child(div().text_xs().text_color(rgb(pal().warning)).child(t("free-edit-content-is-not")))
             })
             .children(rows)
             .when_some(result, |d, result| d.child(result))
@@ -5380,15 +5379,15 @@ impl Workbench {
         let stale = editable && !text.is_empty() && self.live.summary_source().is_some_and(|source| source != current);
         let draft_stale = self.summary.draft.as_ref().is_some_and(|(_, source)| source != current);
         let busy = self.summary.job.as_ref().map(|job| match job.step {
-            Some((done, total)) if total > 1 && done + 1 < total => format!("{} {}/{}…", tr("Writing part", "分段整理"), done + 1, total - 1),
-            Some((_, total)) if total > 1 => tr("Putting it together…", "合成摘要…").to_string(),
-            _ => tr("Writing…", "整理中…").to_string(),
+            Some((done, total)) if total > 1 && done + 1 < total => ta!("writing-part-of", part = done + 1, parts = total - 1),
+            Some((_, total)) if total > 1 => t("putting-it-together").to_string(),
+            _ => t("writing").to_string(),
         });
         let can_make = editable && self.summary.draft.is_none() && (self.live.has_content() || !text.is_empty());
         let destination = match self.session().provider() {
             Ok(Provider::Remote { base_url, model, .. }) => {
                 let host = base_url.split("//").last().unwrap_or(&base_url).split('/').next().unwrap_or_default().to_string();
-                Some(format!("{} {model}{} {host}", tr("Uses the cloud model", "用云端的"), tr("; the whole transcript is sent to", "生成：整场会议记录会发到")))
+                Some(ta!("uses-cloud-model-sent-to", model = model.to_string(), host = host.to_string()))
             }
             _ => None,
         };
@@ -5397,7 +5396,7 @@ impl Workbench {
         // One line at the top on where the summary stands, with what can be done to it beside.
         let (state, state_color): (Option<String>, u32) = match &busy {
             Some(status) => (Some(status.clone()), pal().recording),
-            None if stale => (Some(tr("The meeting has moved on", "会议有了新内容").to_string()), pal().warning),
+            None if stale => (Some(t("the-meeting-has-moved-on").to_string()), pal().warning),
             None => (self.summary.note.clone(), pal().muted),
         };
         let bar = div()
@@ -5428,34 +5427,34 @@ impl Workbench {
                     .items_center()
                     .gap_1()
                     .flex_none()
-                    .when(editable && busy.is_some(), |d| d.child(button("stop-summary", tr("Stop", "停止")).on_click(cx.listener(|this, _, _, cx| this.stop_summary(cx)))))
+                    .when(editable && busy.is_some(), |d| d.child(button("stop-summary", t("stop")).on_click(cx.listener(|this, _, _, cx| this.stop_summary(cx)))))
                     .when(editable && busy.is_none() && has_text && !editing, |d| {
                         d.child(
                             Button::new("make-summary")
                                 .small()
                                 .map(|b| if stale { b.primary() } else { b.outline() })
-                                .label(tr("Write again", "重新生成"))
+                                .label(t("write-again"))
                                 .disabled(!can_make)
                                 .when(can_make, |b| b.on_click(cx.listener(|this, _, _, cx| this.make_summary(cx)))),
                         )
                     })
                     .when(has_text && !editing, |d| {
                         let (markdown, plain) = (text.clone(), summary::plain_text(&text));
-                        d.child(icon_button("copy-plain", "copy", tr("Copy as plain text", "复制为纯文本")).on_click(cx.listener(move |this, _, _, cx| this.copy_summary(plain.clone(), tr("Copied as plain text", "已复制纯文本"), cx))))
+                        d.child(icon_button("copy-plain", "copy", t("copy-as-plain-text")).on_click(cx.listener(move |this, _, _, cx| this.copy_summary(plain.clone(), t("copied-as-plain-text"), cx))))
                             .child(
                                 Button::new("copy-markdown")
                                     .small()
                                     .ghost()
                                     .label("MD")
-                                    .tooltip(tr("Copy the Markdown source", "复制 Markdown 原文"))
-                                    .on_click(cx.listener(move |this, _, _, cx| this.copy_summary(markdown.clone(), tr("Copied the Markdown source", "已复制 Markdown 原文"), cx))),
+                                    .tooltip(t("copy-the-markdown-source"))
+                                    .on_click(cx.listener(move |this, _, _, cx| this.copy_summary(markdown.clone(), t("copied-the-markdown-source"), cx))),
                             )
                     })
                     .when(editable && has_text && !editing, |d| {
-                        d.child(icon_button("edit-summary", "pencil", tr("Edit", "修改")).on_click(cx.listener(|this, _, window, cx| this.edit_summary(window, cx))))
-                            .child(icon_button("clear-summary", "trash", tr("Delete", "删除")).on_click(cx.listener(|this, _, window, cx| this.clear_summary(window, cx))))
+                        d.child(icon_button("edit-summary", "pencil", t("edit")).on_click(cx.listener(|this, _, window, cx| this.edit_summary(window, cx))))
+                            .child(icon_button("clear-summary", "trash", t("delete")).on_click(cx.listener(|this, _, window, cx| this.clear_summary(window, cx))))
                     })
-                    .when(editing, |d| d.child(Button::new("edit-summary").small().primary().label(tr("Done", "完成")).on_click(cx.listener(|this, _, window, cx| this.edit_summary(window, cx))))),
+                    .when(editing, |d| d.child(Button::new("edit-summary").small().primary().label(t("done")).on_click(cx.listener(|this, _, window, cx| this.edit_summary(window, cx))))),
             );
         let tick = editable.then_some(&*cx);
         let reading = (!editing).then(|| summary_blocks(&text, "todo", tick)).unwrap_or_default();
@@ -5470,9 +5469,9 @@ impl Workbench {
             .flex()
             .flex_col()
             .when(self.summary.cleared.is_some(), |d| {
-                d.child(div().flex().items_center().justify_between().gap_2().mb_3().px_3().py_2().bg(rgb(pal().selected)).child(div().text_xs().child(tr("Summary deleted.", "摘要已删除。"))).child(button("undo-clear", tr("Undo", "撤销")).on_click(cx.listener(|this, _, _, cx| this.undo_clear(cx)))))
+                d.child(div().flex().items_center().justify_between().gap_2().mb_3().px_3().py_2().bg(rgb(pal().selected)).child(div().text_xs().child(t("summary-deleted"))).child(button("undo-clear", t("undo")).on_click(cx.listener(|this, _, _, cx| this.undo_clear(cx)))))
             })
-            .when(busy.is_some() && has_text, |d| d.child(div().mb_3().text_xs().text_color(rgb(pal().muted)).child(tr("Your current text stays here and can be edited while the new one is written.", "正在生成新摘要，当前内容仍可查看和编辑。"))))
+            .when(busy.is_some() && has_text, |d| d.child(div().mb_3().text_xs().text_color(rgb(pal().muted)).child(t("your-current-text-stays-here"))))
             // Nothing yet: what it will hold, and the one thing to do.
             .when(empty, |d| {
                 d.child(
@@ -5483,14 +5482,14 @@ impl Workbench {
                         .items_center()
                         .gap_3()
                         .child(icon("sparkles").size_6().text_color(rgb(pal().faint)))
-                        .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("No summary yet", "还没有摘要")))
-                        .child(div().max_w(px(240.)).text_xs().text_center().text_color(rgb(pal().muted)).child(tr("A draft from what was said: conclusions, decisions, to-dos and open questions. You can edit it.", "根据原话整理一份草稿：结论、决定、待办、待讨论，之后可以修改。")))
+                        .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(t("no-summary-yet")))
+                        .child(div().max_w(px(240.)).text_xs().text_center().text_color(rgb(pal().muted)).child(t("a-draft-from-what-was")))
                         .when(editable, |d| {
                             d.child(
                                 Button::new("make-summary")
                                     .small()
                                     .primary()
-                                    .label(tr("Write summary", "生成摘要"))
+                                    .label(t("write-summary"))
                                     .disabled(!can_make)
                                     .when(can_make, |b| b.on_click(cx.listener(|this, _, _, cx| this.make_summary(cx)))),
                             )
@@ -5518,8 +5517,8 @@ impl Workbench {
                                 .py_2()
                                 .bg(rgb(pal().strong))
                                 .text_color(rgb(pal().on_strong))
-                                .child(div().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("New draft", "新草稿")))
-                                .when(draft_stale, |d| d.child(div().text_xs().opacity(0.7).child(tr("the meeting has moved on since", "之后会议又有了新内容")))),
+                                .child(div().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(t("new-draft")))
+                                .when(draft_stale, |d| d.child(div().text_xs().opacity(0.7).child(t("the-meeting-has-moved-on-2")))),
                         )
                         .child(div().p_3().flex().flex_col().children(proposed))
                         .child(
@@ -5528,8 +5527,8 @@ impl Workbench {
                                 .gap_2()
                                 .px_3()
                                 .pb_3()
-                                .child(Button::new("use-draft").small().primary().label(tr("Replace current", "替换当前摘要")).on_click(cx.listener(|this, _, _, cx| this.use_draft(cx))))
-                                .child(button("keep-current", tr("Keep current", "保留当前")).on_click(cx.listener(|this, _, _, cx| {
+                                .child(Button::new("use-draft").small().primary().label(t("replace-current")).on_click(cx.listener(|this, _, _, cx| this.use_draft(cx))))
+                                .child(button("keep-current", t("keep-current")).on_click(cx.listener(|this, _, _, cx| {
                                     this.summary.draft = None;
                                     cx.notify();
                                 }))),
@@ -5613,7 +5612,7 @@ fn template_card(id: impl Into<gpui_kit::ElementId>, name: String, topics: &[Str
                 .justify_between()
                 .gap_2()
                 .child(div().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().text_sm().font_weight(gpui_kit::FontWeight::MEDIUM).child(name))
-                .child(div().flex_none().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(format!("{} {}", topics.len(), tr("topics", "个话题")))),
+                .child(div().flex_none().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(ta!("topic-count", n = topics.len()))),
         )
         .child(
             div()
@@ -5637,12 +5636,12 @@ fn template_card(id: impl Into<gpui_kit::ElementId>, name: String, topics: &[Str
 
 /// Meetings that keep to a shape, with the topics they start from.
 fn templates() -> Vec<(&'static str, Vec<String>)> {
-    let topics = |list: [(&'static str, &'static str); 3]| list.iter().map(|(en, zh)| tr(en, zh).to_string()).collect::<Vec<_>>();
+    let topics = |ids: &[&str]| ids.iter().map(|id| t(&format!("topic-{id}")).to_string()).collect::<Vec<_>>();
     vec![
-        (tr("Weekly meeting", "周会"), topics([("Last week", "上周进展"), ("This week", "本周计划"), ("Risks", "风险")])),
-        (tr("Retrospective", "复盘"), topics([("Went well", "做得好的"), ("To improve", "要改进的"), ("Actions", "行动项")])),
-        (tr("Stand-up", "站会"), topics([("Yesterday", "昨天"), ("Today", "今天"), ("Blocked", "阻塞")])),
-        (tr("Design review", "方案评审"), [("Background", "背景"), ("Options", "方案"), ("Risks", "风险"), ("Decision", "结论")].iter().map(|(en, zh)| tr(en, zh).to_string()).collect()),
+        (t("weekly-meeting"), topics(&["last-week", "this-week", "risks"])),
+        (t("retrospective"), topics(&["went-well", "to-improve", "actions"])),
+        (t("stand-up"), topics(&["yesterday", "today", "blocked"])),
+        (t("design-review"), topics(&["background", "options", "risks", "decision"])),
     ]
 }
 
@@ -6140,8 +6139,8 @@ impl Render for Workbench {
                             Button::new("open-document")
                                 .small()
                                 .ghost()
-                                .label(tr("Open", "打开"))
-                                .tooltip(tr("Open the document's pages (or double-click the card)", "打开这份文档的页面（或双击卡片）"))
+                                .label(t("open"))
+                                .tooltip(t("open-the-document-s-pages"))
                                 .on_click(cx.listener(move |this, _, _, cx| this.open_document(&doc, cx))),
                         )
                     })
@@ -6163,7 +6162,7 @@ impl Render for Workbench {
                         )
                     })
                     .when(has_text && !editing, |d| {
-                        let units = [(MarkUnit::Word, "unit-word", tr("Word", "词")), (MarkUnit::Sentence, "unit-sentence", tr("Sentence", "句")), (MarkUnit::Block, "unit-block", tr("Block", "段"))];
+                        let units = [(MarkUnit::Word, "unit-word", t("word")), (MarkUnit::Sentence, "unit-sentence", t("sentence")), (MarkUnit::Block, "unit-block", t("block"))];
                         d.children(units.into_iter().map(|(unit, name, label)| {
                             let chooser = self.ink.clone();
                             div()
@@ -6186,7 +6185,7 @@ impl Render for Workbench {
                     .children(MARKS.iter().filter(|_| !editing).map(|(mark, english)| {
                         let on = active.iter().any(|m| m == mark);
                         let id = id.clone();
-                        let label = if tr("en", "zh") == "zh" { *mark } else { *english };
+                        let label = if crate::i18n::chinese() { *mark } else { *english };
                         div()
                             .id(*mark)
                             .px_2()
@@ -6202,21 +6201,21 @@ impl Render for Workbench {
                     .when(!fixed && !editing, |d| {
                         let (rewrite, removed) = (id.clone(), id.clone());
                         d.child(Separator::vertical().h(px(18.)))
-                            .child(icon_button("rewrite", "pencil", tr("Change the words", "改字")).on_click(cx.listener(move |this, _, window, cx| this.start_label(&rewrite, window, cx))))
-                            .child(icon_button("remove", "trash", tr("Remove, with what hangs under it", "删除（连同下面挂着的）")).on_click(cx.listener(move |this, _, _, cx| this.remove(&removed, cx))))
+                            .child(icon_button("rewrite", "pencil", t("change-the-words")).on_click(cx.listener(move |this, _, window, cx| this.start_label(&rewrite, window, cx))))
+                            .child(icon_button("remove", "trash", t("remove-with-what-hangs-under")).on_click(cx.listener(move |this, _, _, cx| this.remove(&removed, cx))))
                     }),
             );
         }
         let editable = self.editable();
         let (page, pages) = (self.live.page(), self.live.pages());
         let save_label: String = match &self.save {
-            _ if self.store.is_none() => tr("Sample, not saved", "示例，不保存").into(),
+            _ if self.store.is_none() => t("sample-not-saved").into(),
             // The replay controls say so already.
             _ if self.replay.is_some() => String::new(),
-            _ if !editable => tr("View only", "只读").into(),
+            _ if !editable => t("view-only").into(),
             // Saving is the normal case and takes a moment, so only a failure is worth a word.
             SaveState::Idle | SaveState::Dirty | SaveState::Saving | SaveState::Saved => String::new(),
-            SaveState::Failed(_) => tr("Not saved", "保存失败").into(),
+            SaveState::Failed(_) => t("not-saved").into(),
         };
         // Pages and dialogs cover the board; the side keeps the transcript, the summary and the speakers beside it.
         let side_panel = if self.panel.beside_board() { self.panel } else { Panel::Transcript };
@@ -6252,11 +6251,11 @@ impl Render for Workbench {
         let (state_text, state_color, state_line) = match () {
             // The replay controls and the label beside it say these.
             _ if self.replay.is_some() || !editable => (String::new(), pal().faint, None),
-            _ if !not_drawn.is_empty() => (format!("{} {}", not_drawn.len(), tr("not drawn: show", "句没画上：查看")), pal().danger, not_drawn.last().copied()),
-            _ if self.needs_model => (tr("Choose a board model", "请先选择板书模型").to_string(), pal().warning, None),
-            _ if waiting > 0 && self.preparing.is_some() => (format!("{waiting} {}", tr("waiting for the model", "句等模型就绪")), pal().warning, None),
-            _ if waiting > 1 => (format!("{} · {} {}", tr("Drawing", "正在画"), waiting - 1, tr("waiting", "句排队")), pal().recording, None),
-            _ if waiting == 1 => (tr("Drawing", "正在画").to_string(), pal().recording, None),
+            _ if !not_drawn.is_empty() => (ta!("not-drawn-count-show", n = not_drawn.len()), pal().danger, not_drawn.last().copied()),
+            _ if self.needs_model => (t("choose-a-board-model").to_string(), pal().warning, None),
+            _ if waiting > 0 && self.preparing.is_some() => (ta!("count-waiting-for-the-model", n = waiting), pal().warning, None),
+            _ if waiting > 1 => (ta!("drawing-count-waiting", n = waiting - 1), pal().recording, None),
+            _ if waiting == 1 => (t("drawing-2").to_string(), pal().recording, None),
             // Listening shows in the red clock beside it, and a ready board needs no word.
             _ => (self.status.text().unwrap_or_default().to_string(), pal().faint, None),
         };
@@ -6269,7 +6268,7 @@ impl Render for Workbench {
             .min_w_0()
             .child(
                 div().on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation()).child(
-                    icon_button("sidebar-toggle", if sidebar_shown { "panel-left-close" } else { "panel-left-open" }, self.keys.tip(Action::Sidebar, tr("Meetings and settings", "会议与设置")))
+                    icon_button("sidebar-toggle", if sidebar_shown { "panel-left-close" } else { "panel-left-open" }, self.keys.tip(Action::Sidebar, t("meetings-and-settings")))
                         .on_click(cx.listener(|this, _, window, cx| this.toggle_sidebar(window, cx))),
                 ),
             )
@@ -6289,9 +6288,9 @@ impl Render for Workbench {
                             .child(self.live.title().to_string())
                             .when_some(
                                 match (&started, editable) {
-                                    (Some(started), true) => Some(format!("{} {started} · {}", tr("Started at", "开始于"), tr("click to rename", "点击改名"))),
-                                    (Some(started), false) => Some(format!("{} {started}", tr("Started at", "开始于"))),
-                                    (None, true) => Some(tr("Click to rename", "点击改名").to_string()),
+                                    (Some(started), true) => Some(format!("{} · {}", ta!("started-at-time", time = started.to_string()), t("click-to-rename"))),
+                                    (Some(started), false) => Some(ta!("started-at-time", time = started.to_string())),
+                                    (None, true) => Some(t("click-to-rename-2").to_string()),
                                     (None, false) => None,
                                 },
                                 |d, tip| d.tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx)),
@@ -6316,8 +6315,8 @@ impl Render for Workbench {
                                 .text_color(rgb(pal().muted))
                                 .cursor_pointer()
                                 .hover(|d| d.text_color(rgb(pal().text)))
-                                .child(format!("{} {}", tr("Board", "板"), from + 1))
-                                .tooltip(|window, cx| Tooltip::new(tr("Back to the board it was opened from", "回到打开它的那块板")).build(window, cx))
+                                .child(ta!("board-number", n = from + 1))
+                                .tooltip(|window, cx| Tooltip::new(t("back-to-the-board-it")).build(window, cx))
                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                                 .on_click(cx.listener(|this, _, _, cx| this.leave_document(cx))),
                         )
@@ -6370,8 +6369,8 @@ impl Render for Workbench {
             .pr_2()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .when_some(match &self.update {
-                UpdateState::Available(release) => Some(format!("{} {}", tr("Update to", "更新到"), release.version)),
-                UpdateState::ReadyToRestart(_) => Some(tr("Restart to update", "重启完成更新").to_string()),
+                UpdateState::Available(release) => Some(ta!("update-to-version", version = release.version.to_string())),
+                UpdateState::ReadyToRestart(_) => Some(t("restart-to-update").to_string()),
                 _ => None,
             }, |d, label| {
                 d.child(Button::new("update-chip").small().success().label(label).on_click(cx.listener(|this, _, _, cx| {
@@ -6383,8 +6382,8 @@ impl Render for Workbench {
                 })))
             })
             .child(
-                bar_button("replay", "rotate-ccw", if self.replay.is_some() { tr("Exit replay", "退出回放") } else { tr("Replay", "回放") })
-                    .tooltip(if self.replay.is_some() { tr("Exit replay (Esc)", "退出回放（Esc）").to_string() } else { self.keys.tip(Action::Replay, tr("Watch the board grow again", "看板书重新长一遍")) })
+                bar_button("replay", "rotate-ccw", if self.replay.is_some() { t("exit-replay") } else { t("replay") })
+                    .tooltip(if self.replay.is_some() { t("exit-replay-esc").to_string() } else { self.keys.tip(Action::Replay, t("watch-the-board-grow-again")) })
                     .selected(self.replay.is_some())
                     .disabled(self.live.steps.is_empty())
                     .on_click(cx.listener(|this, _, window, cx| {
@@ -6395,10 +6394,10 @@ impl Render for Workbench {
                         }
                     })),
             )
-            .child(bar_button("export", "file-down", tr("Export", "导出")).selected(self.panel == Panel::Export).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
+            .child(bar_button("export", "file-down", t("export")).selected(self.panel == Panel::Export).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
             .child(Separator::vertical().h(px(18.)).mx_1())
             .child(
-                icon_button("side-toggle", if side_shown { "panel-right-close" } else { "panel-right-open" }, tr("Transcript, summary and speakers", "转写、摘要和说话人"))
+                icon_button("side-toggle", if side_shown { "panel-right-close" } else { "panel-right-open" }, t("transcript-summary-and-speakers"))
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_side(cx))),
             );
         let window_bar = title_bar().child(meeting_side).child(open_side);
@@ -6454,7 +6453,7 @@ impl Render for Workbench {
                     .cursor_pointer()
                     .when(mark_tool == ERASER, |d| d.border_2().border_color(rgb(pal().text)))
                     .child(icon("eraser").size(px(13.)))
-                    .tooltip(|window, cx| Tooltip::new(tr("Eraser: drag across hand marks to take them away", "橡皮：拖过手画的标注就擦掉")).build(window, cx))
+                    .tooltip(|window, cx| Tooltip::new(t("eraser-drag-across-hand-marks")).build(window, cx))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.ink.borrow_mut().mark_tool = ERASER;
                         cx.notify();
@@ -6473,7 +6472,7 @@ impl Render for Workbench {
                         .map(|b| if listening { b.danger() } else { b.primary() })
                         .h(tool_h)
                         .px_3()
-                        .tooltip(self.keys.tip(Action::Listen, if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") }))
+                        .tooltip(self.keys.tip(Action::Listen, if listening { t("stop-listening") } else { t("start-listening") }))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.toggle_mic();
                             cx.notify();
@@ -6484,7 +6483,7 @@ impl Render for Workbench {
                                 .items_center()
                                 .gap_2()
                                 .child(div().size(px(10.)).flex_none().map(|d| if listening { d.bg(rgb(pal().on_strong)) } else { d.rounded_full().bg(rgb(pal().recording)) }))
-                                .when(dock.mic != Mic::Dot, |d| d.child(div().text_sm().whitespace_nowrap().child(if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") })))
+                                .when(dock.mic != Mic::Dot, |d| d.child(div().text_sm().whitespace_nowrap().child(if listening { t("stop-listening") } else { t("start-listening") })))
                                 .when_some(self.keys.label(Action::Listen).filter(|_| !listening && dock.mic == Mic::Full), |d, keys| d.child(keycap(keys).border_color(rgb(pal().on_strong)).opacity(0.55)))
                                 .when(listening && dock.mic != Mic::Dot, |d| {
                                     let level = self.level;
@@ -6503,9 +6502,9 @@ impl Render for Workbench {
                         .px_3()
                         .selected(circling)
                         .tooltip(match (circling, circled) {
-                            (false, _) => tr("Circle things on the board, then say what to do with them", "圈住板上的东西，再说要怎么处理"),
-                            (true, 0) => tr("Draw around things on the board. Esc stops", "在板上画圈，Esc 取消"),
-                            _ => tr("Now say what to do with them. Esc stops", "现在说要怎么处理，Esc 取消"),
+                            (false, _) => t("circle-things-on-the-board"),
+                            (true, 0) => t("draw-around-things-on-the"),
+                            _ => t("now-say-what-to-do"),
                         })
                         .on_click(cx.listener(|this, _, _, cx| {
                             let mut ink = this.ink.borrow_mut();
@@ -6518,9 +6517,9 @@ impl Render for Workbench {
                             cx.notify();
                         }))
                         .child(div().flex().items_center().gap_2().child(icon("lasso").size(px(16.))).map(|d| match circled {
-                            n if circling && n > 0 && named => d.child(div().text_sm().child(format!("{} · {n}", tr("Circle", "圈选")))),
+                            n if circling && n > 0 && named => d.child(div().text_sm().child(format!("{} · {n}", t("circle")))),
                             n if circling && n > 0 => d.child(div().text_sm().child(n.to_string())),
-                            _ if named => d.child(div().text_sm().child(tr("Circle", "圈选"))),
+                            _ if named => d.child(div().text_sm().child(t("circle"))),
                             _ => d,
                         })),
                 )
@@ -6531,7 +6530,7 @@ impl Render for Workbench {
                             .h(tool_h)
                             .px_3()
                             .selected(cropping)
-                            .tooltip(if cropping { tr("Drag a box over the page. Esc stops", "在页面上拖出一个框，Esc 取消") } else { tr("Cut a part of the page out as a card", "把页面的一部分剪成一张卡片") })
+                            .tooltip(if cropping { t("drag-a-box-over-the") } else { t("cut-a-part-of-the") })
                             .on_click(cx.listener(|this, _, _, cx| {
                                 let mut ink = this.ink.borrow_mut();
                                 if ink.cropping {
@@ -6542,7 +6541,7 @@ impl Render for Workbench {
                                 }
                                 cx.notify();
                             }))
-                            .child(div().flex().items_center().gap_2().child(icon("crop").size(px(16.))).when(named, |d| d.child(div().text_sm().child(tr("Crop", "裁剪"))))),
+                            .child(div().flex().items_center().gap_2().child(icon("crop").size(px(16.))).when(named, |d| d.child(div().text_sm().child(t("crop"))))),
                     )
                 })
                 .when(on_page || has_clips, |d| {
@@ -6553,9 +6552,9 @@ impl Render for Workbench {
                             .px_3()
                             .selected(marking)
                             .tooltip(if marking {
-                                tr("Draw over the page or a clip. Esc stops", "在页面或摘录上画，Esc 取消")
+                                t("draw-over-the-page-or")
                             } else {
-                                tr("Highlight or draw by hand on the page and on clips", "在页面和摘录上手动高亮或书写")
+                                t("highlight-or-draw-by-hand")
                             })
                             .on_click(cx.listener(|this, _, _, cx| {
                                 let mut ink = this.ink.borrow_mut();
@@ -6567,14 +6566,14 @@ impl Render for Workbench {
                                 }
                                 cx.notify();
                             }))
-                            .child(div().flex().items_center().gap_2().child(icon("highlighter").size(px(16.))).when(named, |d| d.child(div().text_sm().child(tr("Mark", "标注"))))),
+                            .child(div().flex().items_center().gap_2().child(icon("highlighter").size(px(16.))).when(named, |d| d.child(div().text_sm().child(t("mark"))))),
                     )
                 })
                 .when(dock.edit, |d| {
                     d.child(Separator::vertical().h(px(20.)).mx_1())
-                        .child(tool_icon("undo", "undo-2", self.keys.tip(Action::Undo, tr("Undo", "撤销"))).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
-                        .child(tool_icon("redo", "redo-2", self.keys.tip(Action::Redo, tr("Redo", "重做"))).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
-                        .child(tool_icon("tidy", "wand-sparkles", self.keys.tip(Action::Tidy, tr("Tidy the layout", "整理排版"))).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
+                        .child(tool_icon("undo", "undo-2", self.keys.tip(Action::Undo, t("undo"))).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
+                        .child(tool_icon("redo", "redo-2", self.keys.tip(Action::Redo, t("redo"))).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
+                        .child(tool_icon("tidy", "wand-sparkles", self.keys.tip(Action::Tidy, t("tidy-the-layout"))).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
                 })
         });
         let map_on = !self.form.saved.minimap_hidden;
@@ -6583,7 +6582,7 @@ impl Render for Workbench {
             .id("zoom-tools")
             .h(px(32.))
             .px(px(3.))
-            .child(icon_button("zoom-out", "minus", self.keys.tip(Action::ZoomOut, tr("Zoom out", "缩小"))).on_click(cx.listener(|this, _, _, cx| this.zoom_by(1.0 / ZOOM_STEP, cx))))
+            .child(icon_button("zoom-out", "minus", self.keys.tip(Action::ZoomOut, t("zoom-out"))).on_click(cx.listener(|this, _, _, cx| this.zoom_by(1.0 / ZOOM_STEP, cx))))
             .child(
                 div()
                     .id("zoom")
@@ -6596,15 +6595,15 @@ impl Render for Workbench {
                     .text_color(rgb(pal().muted))
                     .hover(|d| d.text_color(rgb(pal().text)))
                     .tooltip({
-                        let tip = self.keys.tip(Action::Fit, tr("Fit the board", "适应屏幕"));
+                        let tip = self.keys.tip(Action::Fit, t("fit-the-board"));
                         move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
                     })
                     .on_click(cx.listener(|this, _, _, cx| this.fit_board(cx)))
                     .child(format!("{:.0}%", zoom * 100.0)),
             )
-            .child(icon_button("zoom-in", "plus", self.keys.tip(Action::ZoomIn, tr("Zoom in", "放大"))).on_click(cx.listener(|this, _, _, cx| this.zoom_by(ZOOM_STEP, cx))))
+            .child(icon_button("zoom-in", "plus", self.keys.tip(Action::ZoomIn, t("zoom-in"))).on_click(cx.listener(|this, _, _, cx| this.zoom_by(ZOOM_STEP, cx))))
             .child(Separator::vertical().h(px(16.)).mx(px(3.)))
-            .child(icon_button("map-toggle", "map", self.keys.tip(Action::Map, if map_on { tr("Close the map of the board", "收起板书小地图") } else { tr("Map of the board", "板书小地图") })).selected(map_on).on_click(cx.listener(|this, _, _, cx| this.toggle_map(cx))));
+            .child(icon_button("map-toggle", "map", self.keys.tip(Action::Map, if map_on { t("close-the-map-of-the") } else { t("map-of-the-board") })).selected(map_on).on_click(cx.listener(|this, _, _, cx| this.toggle_map(cx))));
         // A meeting with several boards turns between them at the other corner.
         // Always there: which board this is, the way to the others, and a new one.
         let page_tools = Some(
@@ -6612,12 +6611,12 @@ impl Render for Workbench {
                 .id("page-tools")
                 .h(px(32.))
                 .px(px(3.))
-                .when(!dock.page_compact, |d| d.child(icon_button("previous", "chevron-left", tr("Previous board", "上一张板")).disabled(page == 0).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx)))))
+                .when(!dock.page_compact, |d| d.child(icon_button("previous", "chevron-left", t("previous-board")).disabled(page == 0).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx)))))
                 .child(div().px_1().text_color(rgb(pal().muted)).whitespace_nowrap().child(mono(format!("{} / {pages}", page + 1))))
-                .when(!dock.page_compact, |d| d.child(icon_button("next", "chevron-right", tr("Next board", "下一张板")).disabled(page + 1 >= pages).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx)))))
+                .when(!dock.page_compact, |d| d.child(icon_button("next", "chevron-right", t("next-board")).disabled(page + 1 >= pages).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx)))))
                 .when(self.editable(), |d| {
                     d.child(Separator::vertical().h(px(16.)).mx(px(2.)))
-                        .child(icon_button("new-board", "plus", self.keys.tip(Action::NewBoard, tr("New board", "新开一张板"))).on_click(cx.listener(|this, _, _, cx| this.new_board(cx))))
+                        .child(icon_button("new-board", "plus", self.keys.tip(Action::NewBoard, t("new-board"))).on_click(cx.listener(|this, _, _, cx| this.new_board(cx))))
                 }),
         );
         // What the board offers, at its upper corner: the way back to the newest ink, and a board the talk has moved to.
@@ -6633,7 +6632,7 @@ impl Render for Workbench {
             .gap_2()
             .when(offers_latest, |d| {
                 let back = self.ink.clone();
-                d.child(offer("latest", pal().text).child(tr("↓ Back to latest", "↓ 回到最新")).on_click(cx.listener(move |_, _, _, cx| {
+                d.child(offer("latest", pal().text).child(t("back-to-latest")).on_click(cx.listener(move |_, _, _, cx| {
                     back.borrow_mut().show_latest();
                     cx.notify();
                 })))
@@ -6642,34 +6641,34 @@ impl Render for Workbench {
                 d.child(
                     offer("page-hint", pal().accent)
                         .border_color(rgb(pal().accent))
-                        .tooltip(|window, cx| Tooltip::new(tr("This seems to be about another page. Click, or say “go there”.", "刚才说的像是另一页的内容。点一下，或者说「跳过去」。")).build(window, cx))
+                        .tooltip(|window, cx| Tooltip::new(t("this-seems-to-be-about")).build(window, cx))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.page_quiet = QUIET_AFTER_TURNING;
                             this.go_to_page(board, cx);
                         }))
-                        .child(tr("→ Page {n} · {title}", "→ 第 {n} 页 · {title}").replace("{n}", &number.to_string()).replace("{title}", &title)),
+                        .child(ta!("page-n-title", n = number, title = title.to_string())),
                 )
             })
             .when_some(topic_offer, |d, (_, label)| {
                 d.child(
                     offer("topic-hint", pal().accent)
                         .border_color(rgb(pal().accent))
-                        .tooltip(|window, cx| Tooltip::new(tr("The talk moved on to a new topic. Click to give it a board of its own.", "讨论换到了新话题。点一下，把它移到新的一张板上。")).build(window, cx))
+                        .tooltip(|window, cx| Tooltip::new(t("the-talk-moved-on-to")).build(window, cx))
                         .on_click(cx.listener(|this, _, _, cx| this.split_topic(cx)))
-                        .child(tr("New topic “{t}” → new board", "新话题「{t}」→ 新开一张板").replace("{t}", &label)),
+                        .child(ta!("new-topic-t-new-board", t = label.to_string())),
                 )
             });
         // While listening with the transcript out of sight, the latest line still shows that the room is being heard.
         let transcript_shown = side_shown && side_panel == Panel::Transcript;
         let caption = self.live.lines.iter().rev().find(|l| !l["manual"].as_bool().unwrap_or(false)).and_then(|l| l["text"].as_str()).map(str::to_string).filter(|_| listening && !transcript_shown && self.replay.is_none());
         let banner = self.notice.clone().or_else(|| match &self.save {
-            SaveState::Failed(error) => Some(format!("{}{error}", tr("Your meeting is still open here, but it was not saved: ", "这场会还在这里，但没有保存成功："))),
+            SaveState::Failed(error) => Some(crate::ta!("your-meeting-is-still-open", error = format!("{error}"))),
             _ => None,
         });
         let view_only = self.live.read_only.map(|reason| match reason {
-            ViewOnly::Unreadable => tr("This meeting's board could not be read. It is view-only and its file is unchanged.", "这场会的板书读取失败，只能查看，文件不会被改动。"),
-            ViewOnly::NewerFormat => tr("This meeting was saved by a newer version, so it is view-only.", "这场会是新版本保存的，只能查看。"),
-            ViewOnly::ImportedContent => tr("This meeting has free-edit content, which this version does not show. It is view-only here, and its file is unchanged.", "这场会含自由编辑内容，这个版本不显示，这里只能查看，文件不会被改动。"),
+            ViewOnly::Unreadable => t("this-meeting-s-board-could"),
+            ViewOnly::NewerFormat => t("this-meeting-was-saved-by"),
+            ViewOnly::ImportedContent => t("this-meeting-has-free-edit"),
         });
         // During a replay the transcript has only reached that moment.
         let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&r.steps).min(self.live.lines.len()));
@@ -6693,8 +6692,8 @@ impl Render for Workbench {
                         .justify_center()
                         .gap_1()
                         .text_center()
-                        .child(div().text_sm().child(tr("Nothing said yet", "还没有人说话")))
-                        .child(div().max_w(px(220.)).text_xs().text_color(rgb(pal().muted)).child(tr("What is heard or typed is kept here line by line, as it goes on the board.", "听到或输入的话会一句句记在这里，同时写上板。"))),
+                        .child(div().text_sm().child(t("nothing-said-yet")))
+                        .child(div().max_w(px(220.)).text_xs().text_color(rgb(pal().muted)).child(t("what-is-heard-or-typed"))),
                 )
             })
             .children(self.live.lines[..shown_lines].iter().enumerate().map(|(i, l)| {
@@ -6737,7 +6736,7 @@ impl Render for Workbench {
                         d.child(div().text_xs().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { pal().danger } else { pal().faint })).child(note))
                     })
                     .when(l["failed"].as_bool().unwrap_or(false) && editable, |d| {
-                        d.child(div().mt_1().child(button(("retry-line", i), tr("Draw it again", "重新上板")).on_click(cx.listener(move |this, _, _, cx| this.retry_line(i, cx)))))
+                        d.child(div().mt_1().child(button(("retry-line", i), t("draw-it-again")).on_click(cx.listener(move |this, _, _, cx| this.retry_line(i, cx)))))
                     })
             }));
         // Building every meeting's search index takes a while, so the board and the library say so until it is done.
@@ -6759,9 +6758,9 @@ impl Render for Workbench {
             .when(self.store.is_some(), |d| d.child(div().pb_3().child(Input::new(&self.library_query).cleanable(true))))
             .when_some(building, |d, ((done, total), held)| {
                 let text = if held {
-                    tr("The search index waits while listening. Until it is done, a search may miss some meetings.", "收音中，搜索索引暂停构建，完成前可能搜不到部分会议。")
+                    t("the-search-index-waits-while")
                 } else {
-                    tr("Building the search index. Until it is done, a search may miss some meetings.", "正在构建搜索索引，完成前可能搜不到部分会议。")
+                    t("building-the-search-index-until")
                 };
                 d.child(
                     div()
@@ -6784,7 +6783,7 @@ impl Render for Workbench {
                     .flex()
                     .flex_col()
                     .when(self.store.is_none(), |d| {
-                        d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(tr("This is a sample, which is not saved, so there are no meetings to list here.", "这是示例，不会保存，这里没有会议可以列出。")))
+                        d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(t("this-is-a-sample-which")))
                     })
                     .when(self.store.is_some() && query.is_empty(), |d| {
                         let own: Vec<(String, Vec<String>, Option<usize>)> = templates()
@@ -6799,7 +6798,7 @@ impl Render for Workbench {
                         let count = own.len() + usize::from(has_topics);
                         let per_row = if count % 3 != 1 || count < 3 { 3.0 } else { 2.0 };
                         let card_w = (LIBRARY_W - (per_row - 1.0) * 8.0) / per_row;
-                        d.child(section(tr("Start from a template", "从模板新建")))
+                        d.child(section(t("start-from-a-template")))
                             .child(
                                 div()
                                     .flex()
@@ -6835,7 +6834,7 @@ impl Render for Workbench {
                                                         .group_hover("template", |s| s.opacity(1.))
                                                         .cursor_pointer()
                                                         .child(icon("x").size(px(9.)).text_color(rgb(pal().muted)))
-                                                        .tooltip(|window, cx| Tooltip::new(tr("Forget this template", "删除这个模板")).build(window, cx))
+                                                        .tooltip(|window, cx| Tooltip::new(t("forget-this-template")).build(window, cx))
                                                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                                                         .on_click(cx.listener(move |this, _, _, cx| {
                                                             cx.stop_propagation();
@@ -6865,23 +6864,23 @@ impl Render for Workbench {
                                                 .px_4()
                                                 .on_click(cx.listener(|this, _, _, cx| this.save_template(cx)))
                                                 .child(icon("plus").size(px(11.)).flex_none())
-                                                .child(div().min_w_0().text_center().child(tr("Keep this board's topics as a template", "把这张板的话题存成模板"))),
+                                                .child(div().min_w_0().text_center().child(t("keep-this-board-s-topics"))),
                                         )
                                     }),
                             )
-                            .child(section(tr("Meetings", "会议")))
+                            .child(section(t("meetings")))
                     })
                     .when(self.store.is_some() && self.library.is_empty(), |d| {
-                        d.child(div().py_4().text_sm().text_color(rgb(pal().faint)).child(tr("No meetings yet. A meeting is saved here as soon as something is said or typed.", "还没有会议。开始说话或输入后，会议会自动保存在这里。")))
+                        d.child(div().py_4().text_sm().text_color(rgb(pal().faint)).child(t("no-meetings-yet-a-meeting")))
                     })
                     // What matches by meaning, under the meetings whose names do: first where things stand (the
                     // boards and summaries as the meetings left them), then what was said on the way.
                     .when_some(self.search.as_ref().filter(|s| !s.hits.is_empty() && !query.is_empty()).map(|s| s.hits.clone()), |d, hits| {
                         let row = |i: usize, found: boardcast_search::service::Found, cx: &mut Context<Self>| {
                             let place = match &found.source {
-                                boardcast_search::Source::Transcript { .. } => tr("transcript", "转写"),
-                                boardcast_search::Source::Board { .. } => tr("board", "板书"),
-                                boardcast_search::Source::Summary { .. } => tr("summary", "摘要"),
+                                boardcast_search::Source::Transcript { .. } => t("transcript"),
+                                boardcast_search::Source::Board { .. } => t("board-2"),
+                                boardcast_search::Source::Summary { .. } => t("summary"),
                             };
                             let snippet: String = found.text.split('\n').map(|l| l.trim()).collect::<Vec<_>>().join("  ").chars().take(180).collect();
                             let open = found.clone();
@@ -6909,14 +6908,14 @@ impl Render for Workbench {
                         };
                         let heading = |name: &'static str| div().pt_5().pb_2().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).text_color(rgb(pal().muted)).border_b_1().border_color(rgb(pal().line)).child(name);
                         let (stands, said): (Vec<_>, Vec<_>) = hits.into_iter().enumerate().partition(|(_, f)| f.stands());
-                        d.when(!stands.is_empty(), |d| d.child(heading(tr("Where things stand", "板上结论"))).children(stands.into_iter().map(|(i, f)| row(i, f, cx))))
-                            .when(!said.is_empty(), |d| d.child(heading(tr("What was said", "讨论原话"))).children(said.into_iter().map(|(i, f)| row(i, f, cx))))
+                        d.when(!stands.is_empty(), |d| d.child(heading(t("where-things-stand"))).children(stands.into_iter().map(|(i, f)| row(i, f, cx))))
+                            .when(!said.is_empty(), |d| d.child(heading(t("what-was-said"))).children(said.into_iter().map(|(i, f)| row(i, f, cx))))
                     })
                     .when(self.search.as_ref().is_some_and(|s| s.asking) && !query.is_empty(), |d| {
-                        d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(tr("Searching what was said…", "正在搜索会议内容…")))
+                        d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(t("searching-what-was-said")))
                     })
                     .when(!self.library.is_empty() && found.is_empty() && self.search.as_ref().is_none_or(|s| s.hits.is_empty() && !s.asking), |d| {
-                        d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(if self.search.is_some() { tr("Nothing in the meetings' names or in what was said matches that.", "会议名称和会议内容里都没有找到相关的。") } else { tr("No meeting has that in its name.", "没有名称里含这些字的会议。") }))
+                        d.child(div().p_2().text_sm().text_color(rgb(pal().faint)).child(if self.search.is_some() { t("nothing-in-the-meetings-names") } else { t("no-meeting-has-that-in") }))
                     })
                     .when_some(self.deleted_meeting.clone(), |d, (_, title)| {
                         d.child(
@@ -6930,8 +6929,8 @@ impl Render for Workbench {
                                 .py_2()
                                 .bg(rgb(pal().selected))
                                 .text_xs()
-                                .child(format!("{}「{title}」", tr("Deleted ", "已删除")))
-                                .child(button("restore-meeting", tr("Undo", "撤销")).on_click(cx.listener(|this, _, _, cx| this.restore_meeting(cx)))),
+                                .child(ta!("deleted-title", title = title.to_string()))
+                                .child(button("restore-meeting", t("undo")).on_click(cx.listener(|this, _, _, cx| this.restore_meeting(cx)))),
                         )
                     })
                     .children(found.into_iter().flat_map(|(i, m)| {
@@ -6945,7 +6944,7 @@ impl Render for Workbench {
                         };
                         let heading = (last_group != Some(group)).then(|| {
                             last_group = Some(group);
-                            let name = [tr("Pinned", "置顶"), tr("Today", "今天"), tr("Yesterday", "昨天"), tr("Earlier", "更早")][group];
+                            let name = [t("pinned-2"), t("today-2"), t("yesterday-2"), t("earlier-2")][group];
                             div().pt_4().pb_1().px_3().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(name.to_lowercase()).into_any_element()
                         });
                         let id = m.id.clone();
@@ -6956,9 +6955,9 @@ impl Render for Workbench {
                         // When, as the group says it: the time today and yesterday, the date before; then how long.
                         let when = if group == 1 || group == 2 { local_time(m.updated_at).split(' ').nth(1).unwrap_or_default().to_string() } else { local_time(m.updated_at).split(' ').next().unwrap_or_default().to_string() };
                         let detail = match &m.read_error {
-                            Some(error) => format!("{}{error}", tr("Could not be read, and the file is left as it is: ", "无法读取，文件保持原样：")),
-                            None if m.pages > 1 => format!("{when} · {} {} · {} {}", m.lines, if m.lines == 1 { tr("line", "句") } else { tr("lines", "句") }, m.pages, tr("boards", "张板")),
-                            None => format!("{when} · {} {}", m.lines, if m.lines == 1 { tr("line", "句") } else { tr("lines", "句") }),
+                            Some(error) => crate::ta!("could-not-be-read-and", error = format!("{error}")),
+                            None if m.pages > 1 => format!("{when} · {} · {}", ta!("line-count", n = m.lines), ta!("board-count", n = m.pages)),
+                            None => format!("{when} · {}", ta!("line-count", n = m.lines)),
                         };
                         // A row of a list: the name with when and how long under it, its actions on the right.
                         let row = div()
@@ -6992,12 +6991,12 @@ impl Render for Workbench {
                                         .gap_2()
                                         .flex_none()
                                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                        .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Delete this pinned meeting?", "删除这场置顶的会议？")))
-                                        .child(Button::new(("confirm-delete", i)).small().danger().label(tr("Delete", "删除")).on_click(cx.listener(move |this, _, _, cx| {
+                                        .child(div().text_xs().text_color(rgb(pal().muted)).child(t("delete-this-pinned-meeting")))
+                                        .child(Button::new(("confirm-delete", i)).small().danger().label(t("delete")).on_click(cx.listener(move |this, _, _, cx| {
                                             cx.stop_propagation();
                                             this.delete_meeting(&sure_id, cx);
                                         })))
-                                        .child(Button::new(("cancel-delete", i)).small().ghost().label(tr("Cancel", "取消")).on_click(cx.listener(|this, _, _, cx| {
+                                        .child(Button::new(("cancel-delete", i)).small().ghost().label(t("cancel")).on_click(cx.listener(|this, _, _, cx| {
                                             cx.stop_propagation();
                                             this.confirm_delete = None;
                                             cx.notify();
@@ -7020,7 +7019,7 @@ impl Render for Workbench {
                                                 .cursor_pointer()
                                                 .when(!pinned, |d| d.opacity(0.).group_hover("meeting-row", |s| s.opacity(1.)))
                                                 .child(icon("pin").size_3().text_color(rgb(if pinned { pal().text } else { pal().faint })))
-                                                .tooltip(move |window, cx| Tooltip::new(if pinned { tr("Unpin", "取消置顶") } else { tr("Pin to the top", "置顶") }).build(window, cx))
+                                                .tooltip(move |window, cx| Tooltip::new(if pinned { t("unpin") } else { t("pin-to-the-top") }).build(window, cx))
                                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                                                 .on_click(cx.listener(move |this, _, _, cx| {
                                                     cx.stop_propagation();
@@ -7039,7 +7038,7 @@ impl Render for Workbench {
                                 .opacity(0.)
                                 .group_hover("meeting-row", |s| s.opacity(1.))
                                 .child(icon("folder").size_3().text_color(rgb(pal().faint)))
-                                .tooltip(|window, cx| Tooltip::new(tr("Open its folder: the meeting, its pictures and its audio", "打开它的文件夹：会议、图片和录音")).build(window, cx))
+                                .tooltip(|window, cx| Tooltip::new(t("open-its-folder-the-meeting")).build(window, cx))
                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
@@ -7057,7 +7056,7 @@ impl Render for Workbench {
                                                 .opacity(0.)
                                                 .group_hover("meeting-row", |s| s.opacity(1.))
                                                 .child(icon("trash").size_3().text_color(rgb(pal().faint)))
-                                                .tooltip(|window, cx| Tooltip::new(tr("Delete", "删除")).build(window, cx))
+                                                .tooltip(|window, cx| Tooltip::new(t("delete")).build(window, cx))
                                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                                                 .on_click(cx.listener(move |this, _, _, cx| {
                                                     cx.stop_propagation();
@@ -7082,7 +7081,7 @@ impl Render for Workbench {
         let using_remote = self.form.saved.enabled && self.form.saved.is_complete();
         let progress_row = self.download.as_ref().map(|d| {
             let text = match &d.progress {
-                Some(p) if p.verifying => format!("{} {}", d.label, tr("checking what was already downloaded…", "正在检查已下载的部分…")),
+                Some(p) if p.verifying => ta!("name-checking-what-was-downloaded", name = d.label.to_string()),
                 Some(p) => format!(
                     "{} {} / {}{}",
                     d.label,
@@ -7090,7 +7089,7 @@ impl Render for Workbench {
                     gigabytes(p.total),
                     if p.speed > 0 { format!(" · {:.1} MB/s", p.speed as f64 / 1e6) } else { String::new() },
                 ),
-                None => format!("{} {}", d.label, tr("starting…", "正在开始…")),
+                None => ta!("name-starting", name = d.label.to_string()),
             };
             let fraction = d.progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
             (text, fraction)
@@ -7122,16 +7121,16 @@ impl Render for Workbench {
                                 .gap_2()
                                 .child(div().text_sm().child(name))
                                 .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).child(size))
-                                .when(recommended, |d| d.child(div().px(px(6.)).rounded(px(3.)).bg(rgb(pal().selected)).text_xs().text_color(rgb(pal().accent)).child(tr("Recommended", "推荐")))),
+                                .when(recommended, |d| d.child(div().px(px(6.)).rounded(px(3.)).bg(rgb(pal().selected)).text_xs().text_color(rgb(pal().accent)).child(t("recommended-2")))),
                         )
-                        .when_some(model.note, |d, (en, zh)| d.child(div().text_xs().text_color(rgb(pal().muted)).child(tr(en, zh)))),
+                        .when_some(model.note, |d, (en, zh)| d.child(div().text_xs().text_color(rgb(pal().muted)).child(if crate::i18n::chinese() { zh } else { en }))),
                 )
-                .when(active, |d| d.child(div().flex().items_center().gap(px(6.)).text_xs().text_color(rgb(pal().muted)).child(div().size(px(7.)).rounded_full().bg(rgb(pal().accent))).child(tr("In use", "使用中"))))
+                .when(active, |d| d.child(div().flex().items_center().gap(px(6.)).text_xs().text_color(rgb(pal().muted)).child(div().size(px(7.)).rounded_full().bg(rgb(pal().accent))).child(t("in-use"))))
                 .when(installed && !active, |d| {
-                    d.child(button(("use-model", i), tr("Use", "使用")).on_click(cx.listener(move |this, _, _, cx| this.use_model(&action, cx))))
+                    d.child(button(("use-model", i), t("use")).on_click(cx.listener(move |this, _, _, cx| this.use_model(&action, cx))))
                 })
                 .when(!installed && !busy, |d| {
-                    d.child(button(("get-model", i), tr("Download", "下载")).on_click(cx.listener(move |this, _, _, cx| this.start_download(fetch.clone(), cx))))
+                    d.child(button(("get-model", i), t("download")).on_click(cx.listener(move |this, _, _, cx| this.start_download(fetch.clone(), cx))))
                 })
         }).collect::<Vec<_>>();
         let forced = self.forced_backend;
@@ -7192,12 +7191,12 @@ impl Render for Workbench {
         };
         let page: gpui_kit::AnyElement = match tab {
             SettingsTab::Model => {
-                let place = row(tr("Runs", "运行在"), Some(tr("On this computer nothing leaves it; a remote model is reached over the network.", "在本机运行时什么都不会离开电脑；远程模型通过网络访问。"))).child(segmented(vec![
-                    choice("use-local".into(), tr("On this computer", "本机"), !self.form.remote).on_click(cx.listener(|this, _, _, cx| {
+                let place = row(t("runs"), Some(t("on-this-computer-nothing-leaves"))).child(segmented(vec![
+                    choice("use-local".into(), t("on-this-computer"), !self.form.remote).on_click(cx.listener(|this, _, _, cx| {
                         this.form.remote = false;
                         cx.notify();
                     })),
-                    choice("use-remote".into(), tr("Remote", "远程"), self.form.remote).on_click(cx.listener(|this, _, _, cx| {
+                    choice("use-remote".into(), t("remote"), self.form.remote).on_click(cx.listener(|this, _, _, cx| {
                         this.form.remote = true;
                         cx.notify();
                     })),
@@ -7212,7 +7211,7 @@ impl Render for Workbench {
                             .px_4()
                             .py_3()
                             .child(div().flex_1().flex().flex_col().gap_1().child(div().text_xs().child(text)).child(div().h(px(4.)).w_full().rounded(px(2.)).bg(rgb(pal().track)).child(div().h_full().rounded(px(2.)).w(gpui_kit::relative(fraction)).bg(rgb(pal().strong)))))
-                            .child(button("stop-download", tr("Pause", "暂停")).on_click(cx.listener(|this, _, _, cx| {
+                            .child(button("stop-download", t("pause")).on_click(cx.listener(|this, _, _, cx| {
                                 if let Some(download) = &this.download {
                                     download.cancel.store(true, Ordering::Relaxed);
                                 }
@@ -7231,7 +7230,7 @@ impl Render for Workbench {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Fill in", "一键填写")))
+                            .child(div().text_xs().text_color(rgb(pal().muted)).child(t("fill-in")))
                             .children(REMOTE_PRESETS.iter().enumerate().map(|(i, (name, base, model))| {
                                 button(("remote-preset", i), *name).on_click(cx.listener(move |this, _, window, cx| {
                                     this.form.base_url.update(cx, |s, cx| s.set_value(*base, window, cx));
@@ -7241,45 +7240,45 @@ impl Render for Workbench {
                                 }))
                             })),
                     )
-                    .child(field(tr("API address", "接口地址"), &self.form.base_url))
-                    .child(field(tr("Model", "模型"), &self.form.model))
-                    .child(field(tr("API key", "API key"), &self.form.key))
+                    .child(field(t("api-address"), &self.form.base_url))
+                    .child(field(t("model"), &self.form.model))
+                    .child(field(t("api-key"), &self.form.key))
                     .child(div().text_xs().text_color(rgb(pal().faint)).child(match key_hint {
-                        Some(hint) => format!("{} {hint}{}", tr("Saved key:", "已保存的 key："), tr(". Leave empty to keep it.", "。留空则继续使用。")),
-                        None => tr("No key saved. It is stored only on this computer.", "还没有保存 key。key 只存在这台电脑上。").to_string(),
+                        Some(hint) => ta!("saved-key-leave-empty", hint = hint.to_string()),
+                        None => t("no-key-saved-it-is").to_string(),
                     }))
                     .child(
                         div()
                             .flex()
                             .gap_2()
-                            .child(Button::new("save-settings").small().primary().label(tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
-                            .child(button("test-settings", tr("Test", "测试连接")).on_click(cx.listener(|this, _, _, cx| this.test_settings(cx)))),
+                            .child(Button::new("save-settings").small().primary().label(t("save")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
+                            .child(button("test-settings", t("test")).on_click(cx.listener(|this, _, _, cx| this.test_settings(cx)))),
                     );
                 div()
                     .flex()
                     .flex_col()
                     .child(intro(if self.needs_model {
-                        tr("To draw the board, download a model that runs on this computer, or set up a remote one. Speech recognition is already included.", "要开始画板书，请下载一个在本机运行的模型，或者设置远程模型。语音识别已经内置。")
+                        t("to-draw-the-board-download")
                     } else {
-                        tr("The model turns what is said into the board.", "板书模型把说的话变成板书。")
+                        t("the-model-turns-what-is")
                     }))
                     .child(section(None, vec![place.into_any_element()]))
-                    .when(!self.form.remote, |d| d.child(section(Some(tr("models", "模型")), models)))
-                    .when(self.form.remote, |d| d.child(section(Some(tr("remote model", "远程模型")), vec![remote.into_any_element()])))
+                    .when(!self.form.remote, |d| d.child(section(Some(t("models")), models)))
+                    .when(self.form.remote, |d| d.child(section(Some(t("remote-model")), vec![remote.into_any_element()])))
                     // Leaving the remote model takes effect on saving, like choosing it does.
                     .when(!self.form.remote && self.form.saved.enabled, |d| {
-                        d.child(div().flex().pt_3().child(Button::new("save-local").small().primary().label(tr("Save", "保存")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx)))))
+                        d.child(div().flex().pt_3().child(Button::new("save-local").small().primary().label(t("save")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx)))))
                     })
                     .when_some(self.form.note.clone(), |d, note| d.child(footnote(note.into(), pal().text)))
-                    .when(forced, |d| d.child(footnote(tr("The command line chose the model, so these settings apply next launch.", "当前模型由命令行指定，这些设置下次启动生效。").into(), pal().warning)))
-                    .when(local_only, |d| d.child(footnote(tr("This meeting is local-only, so it keeps using the local model.", "这场会设置为只用本地模型，不会发送到远程。").into(), pal().warning)))
+                    .when(forced, |d| d.child(footnote(t("the-command-line-chose-the").into(), pal().warning)))
+                    .when(local_only, |d| d.child(footnote(t("this-meeting-is-local-only").into(), pal().warning)))
                     .into_any_element()
             }
             SettingsTab::Speech => {
                 let chosen = self.form.saved.input.clone();
-                let inputs = std::iter::once((String::new(), tr("The system's default input", "系统默认输入").to_string()))
+                let inputs = std::iter::once((String::new(), t("the-system-s-default-input").to_string()))
                     .chain(self.inputs.iter().map(|i| (i.id.clone(), i.name.clone())))
-                    .chain((!chosen.is_empty() && !self.inputs.iter().any(|i| i.id == chosen)).then(|| (chosen.clone(), tr("The chosen input, not connected now", "选择的设备（现在没有连接）").to_string())));
+                    .chain((!chosen.is_empty() && !self.inputs.iter().any(|i| i.id == chosen)).then(|| (chosen.clone(), t("the-chosen-input-not-connected").to_string())));
                 // A long list of inputs scrolls in its card rather than pushing everything else down.
                 let input_list = div().id("inputs").flex().flex_col().max_h(px(236.)).overflow_y_scroll().children(inputs.enumerate().map(|(i, (id, name))| {
                     let on = id == chosen;
@@ -7314,20 +7313,20 @@ impl Render for Workbench {
                 let language = self.form.saved.speech_language.clone();
                 // Telling the language sentence by sentence is still an experiment; Apple's Automatic only
                 // follows the Mac's language.
-                let auto = if system { tr("Automatic", "自动") } else { tr("Automatic (experimental)", "自动（实验性）") };
+                let auto = if system { t("automatic") } else { t("automatic-experimental") };
                 let languages = [("auto", auto), ("zh-CN", "中文"), ("en-US", "English"), ("ja-JP", "日本語")];
                 let hint = if system {
-                    tr("Apple hears one language at a time, and Automatic follows the Mac's. Chinese also hears English.", "Apple 一次只听一种语言，自动即跟随系统语言。选中文时也能听英文。")
+                    t("apple-hears-one-language-at")
                 } else {
-                    tr("Automatic tells each sentence's language, and is still experimental: it can mistake one language for another. A chosen language is what everything else is heard as; English is always heard.", "自动会逐句判断语言，目前仍是实验功能，可能把一种语言误认成另一种。选定语言后，其余内容都按该语言识别；英文始终能听。")
+                    t("automatic-tells-each-sentence-s")
                 };
                 let mut recognition: Vec<gpui_kit::AnyElement> = vec![];
                 if self.speech_helper.is_some() {
                     let system = self.form.saved.system_speech;
                     recognition.push(
-                        row(tr("Recognize speech with", "语音识别"), None)
+                        row(t("recognize-speech-with"), None)
                             .child(segmented(vec![
-                                choice("speech-models".into(), tr("Speech models", "语音模型"), !system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, cx))),
+                                choice("speech-models".into(), t("speech-models"), !system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, cx))),
                                 choice("speech-apple".into(), "Apple", system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, cx))),
                             ]))
                             .into_any_element(),
@@ -7341,7 +7340,7 @@ impl Render for Workbench {
                         .gap_2()
                         .px_4()
                         .py_3()
-                        .child(div().text_sm().child(tr("Language heard", "识别语言")))
+                        .child(div().text_sm().child(t("language-heard")))
                         .child(div().text_xs().text_color(rgb(pal().muted)).child(hint))
                         .child(div().flex().pt_1().child(segmented(
                             languages.into_iter().map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("speech-language-{id}").into()), label, language == id).on_click(cx.listener(move |this, _, _, cx| this.choose_speech(this.form.saved.system_speech, Some(id), cx)))).collect(),
@@ -7355,64 +7354,84 @@ impl Render for Workbench {
                         .gap_1()
                         .px_4()
                         .py_3()
-                        .child(div().text_sm().child(tr("Glossary", "术语表")))
-                        .child(div().text_xs().text_color(rgb(pal().muted)).child(tr(
-                            "Names as they should be written, apart by semicolons; ways they are misheard go after an equals sign: API = A P I.",
-                            "名字应该怎么写，用分号隔开；听错的写法写在等号后面，例如：API = A P I。",
-                        )))
+                        .child(div().text_sm().child(t("glossary")))
+                        .child(div().text_xs().text_color(rgb(pal().muted)).child(t("names-as-they-should-be")))
                         .child(div().pt_1().child(Input::new(&self.form.glossary).small()))
                         .into_any_element(),
                 );
                 div()
                     .flex()
                     .flex_col()
-                    .child(intro(tr("What is heard, and how it is written down.", "听什么，以及怎么写下来。")))
-                    .child(section(Some(tr("listen to", "收音来源")), vec![input_list.into_any_element()]))
+                    .child(intro(t("what-is-heard-and-how")))
+                    .child(section(Some(t("listen-to-2")), vec![input_list.into_any_element()]))
                     .when(cfg!(target_os = "linux"), |d| {
                         d.child(footnote(
-                            tr("For the other side of an online meeting, choose the \"Monitor of\" input for the speakers it plays through.", "要收线上会议里对方的声音，选播放它的扬声器对应的 “Monitor of” 输入。").into(),
+                            t("for-the-other-side-of").into(),
                             pal().muted,
                         ))
                     })
-                    .child(section(Some(tr("recognition", "识别")), recognition))
+                    .child(section(Some(t("recognition")), recognition))
                     .child(section(
-                        Some(tr("during the meeting", "开会时")),
+                        Some(t("during-the-meeting")),
                         vec![
-                            row(tr("Tell speakers apart by voice", "按声音区分说话人"), Some(tr("New voices are named A, B, C. Voice data stays in the meeting file on this computer.", "新的声音按 A、B、C 命名，声纹只保存在本机的会议文件里。")))
-                                .child(Switch::new("diarize").checked(self.form.saved.diarize).accessibility_label(tr("Tell speakers apart by voice", "按声音区分说话人")).on_click(cx.listener(move |this, checked: &bool, _, cx| {
+                            row(t("tell-speakers-apart-by-voice"), Some(t("new-voices-are-named-a")))
+                                .child(Switch::new("diarize").checked(self.form.saved.diarize).accessibility_label(t("tell-speakers-apart-by-voice")).on_click(cx.listener(move |this, checked: &bool, _, cx| {
                                     this.form.saved.diarize = *checked;
                                     save_setting(this, cx);
                                 })))
                                 .into_any_element(),
-                            row(tr("Turn to the page being talked about", "讲到别的页时自动翻过去"), Some(tr("Otherwise the board's corner offers the page.", "关闭时只在画布角落给出建议。")))
-                                .child(Switch::new("turn-pages").checked(self.form.saved.turn_pages).accessibility_label(tr("Turn to the page being talked about", "讲到别的页时自动翻过去")).on_click(cx.listener(move |this, checked: &bool, _, cx| {
+                            row(t("turn-to-the-page-being"), Some(t("otherwise-the-board-s-corner")))
+                                .child(Switch::new("turn-pages").checked(self.form.saved.turn_pages).accessibility_label(t("turn-to-the-page-being")).on_click(cx.listener(move |this, checked: &bool, _, cx| {
                                     this.form.saved.turn_pages = *checked;
                                     save_setting(this, cx);
                                 })))
                                 .into_any_element(),
                         ],
                     ))
-                    .when_some(self.hearing.clone(), |d, with| d.child(footnote(format!("{} {with}", tr("Hearing with", "当前识别：")).into(), pal().faint)))
+                    .when_some(self.hearing.clone(), |d, with| d.child(footnote(ta!("hearing-with-models", models = with.to_string()).into(), pal().faint)))
                     .into_any_element()
             }
             SettingsTab::General => {
                 let (sample_strokes, sample_w, sample_h, sample_started) = self.hand_sample();
                 let proxy = self.form.saved.proxy.clone();
                 let language = self.form.saved.interface_language.clone();
+                // The interface's language: each named in itself, so it can be found whatever is shown now,
+                // or the system's. Earlier versions kept Simplified Chinese as "zh".
+                let chosen = if language == "zh" { "zh-Hans" } else { language.as_str() };
+                let shown = crate::i18n::LANGUAGES.iter().find(|(code, _)| *code == chosen).map_or(t("system"), |(_, name)| *name);
+                let workbench = cx.entity().downgrade();
+                let chosen = chosen.to_string();
+                let language_menu = Button::new("interface-language")
+                    .small()
+                    .outline()
+                    .min_w(px(150.))
+                    .label(shown)
+                    .dropdown_caret(true)
+                    .dropdown_menu(move |menu, _, _| {
+                        let choices = std::iter::once(("auto", t("system"))).chain(crate::i18n::LANGUAGES.iter().copied());
+                        choices.enumerate().fold(menu.min_w(px(180.)).max_h(px(420.)).scrollable(true), |menu, (i, (code, name))| {
+                            let workbench = workbench.clone();
+                            let menu = menu.item(PopupMenuItem::new(name).checked(chosen == code).on_click(move |_, _, cx| {
+                                let _ = workbench.update(cx, |this, cx| this.choose_language(code, cx));
+                            }));
+                            // The system's choice stands apart from the languages.
+                            if i == 0 { menu.separator() } else { menu }
+                        })
+                    });
                 let look = self.form.saved.appearance.clone();
                 let search = row(
-                    tr("Search meetings by meaning", "按意思搜索会议"),
-                    Some(tr("Finds what was said in any meeting from a question in your own words. Its model comes with the app and runs on this computer.", "用自己的话提问，就能在所有会议里找到相关的那段。模型随应用附带，在本机运行。")),
+                    t("search-meetings-by-meaning"),
+                    Some(t("finds-what-was-said-in")),
                 )
-                .child(Switch::new("meeting-search").checked(self.form.saved.meeting_search).accessibility_label(tr("Search meetings by meaning", "按意思搜索会议")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_meeting_search(*on, cx))));
+                .child(Switch::new("meeting-search").checked(self.form.saved.meeting_search).accessibility_label(t("search-meetings-by-meaning")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_meeting_search(*on, cx))));
                 // How the search's model is doing belongs to its row.
                 let search = div().child(search).when_some(self.search_status(), |d, (text, failed)| {
                     d.child(div().px_4().pb_3().mt(px(-4.)).text_xs().text_color(rgb(if failed { pal().danger } else { pal().accent })).child(text))
                 });
                 let proxy_row = div()
                     .child(
-                        row(tr("Network proxy", "网络代理"), Some(tr("For downloading models and for a remote model. The model on this computer is always reached directly.", "用于下载模型和远程模型。本机运行的模型始终直连。"))).child(segmented(
-                            [("system", tr("System", "跟随系统")), ("custom", tr("Custom", "自定义")), ("off", tr("None", "不使用"))]
+                        row(t("network-proxy"), Some(t("for-downloading-models-and-for"))).child(segmented(
+                            [("system", t("system")), ("custom", t("custom")), ("off", t("none-2"))]
                                 .into_iter()
                                 .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("proxy-{id}").into()), label, proxy == id).on_click(cx.listener(move |this, _, _, cx| this.choose_proxy(id, cx))))
                                 .collect(),
@@ -7427,9 +7446,9 @@ impl Render for Workbench {
                                 .px_4()
                                 .pb_4()
                                 .child(Input::new(&self.form.proxy_url))
-                                .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("http://host:port or socks5://host:port", "http://主机:端口 或 socks5://主机:端口")))
+                                .child(div().text_xs().text_color(rgb(pal().muted)).child(t("http-host-port-or-socks5")))
                                 .child(div().flex().gap_2().pt_1().child(div().flex_1().child(Input::new(&self.form.proxy_user))).child(div().flex_1().child(Input::new(&self.form.proxy_password).mask_toggle())))
-                                .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Only if the proxy asks for a login.", "仅在代理需要登录时填写。")))
+                                .child(div().text_xs().text_color(rgb(pal().muted)).child(t("only-if-the-proxy-asks")))
                                 .when_some(self.form.proxy_note.clone(), |d, note| d.child(div().text_xs().text_color(rgb(pal().danger)).child(note))),
                         )
                     });
@@ -7437,27 +7456,20 @@ impl Render for Workbench {
                     .flex()
                     .flex_col()
                     .child(section(
-                        Some(tr("look", "外观")),
+                        Some(t("look")),
                         vec![
-                            row(tr("Language", "界面语言"), Some(tr("The board and summary follow the meeting's own language.", "板书和摘要跟随会议本身的语言。")))
+                            row(t("language"), Some(t("the-board-and-summary-follow"))).child(language_menu).into_any_element(),
+                            row(t("appearance"), None)
                                 .child(segmented(
-                                    [("auto", tr("System", "跟随系统")), ("en", "English"), ("zh", "中文")]
-                                        .into_iter()
-                                        .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("interface-language-{id}").into()), label, language == id).on_click(cx.listener(move |this, _, _, cx| this.choose_language(id, cx))))
-                                        .collect(),
-                                ))
-                                .into_any_element(),
-                            row(tr("Appearance", "外观"), None)
-                                .child(segmented(
-                                    [("auto", tr("System", "跟随系统")), ("light", tr("Light", "浅色")), ("dark", tr("Dark", "深色"))]
+                                    [("auto", t("system")), ("light", t("light")), ("dark", t("dark"))]
                                         .into_iter()
                                         .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("appearance-{id}").into()), label, look == id).on_click(cx.listener(move |this, _, _, cx| this.choose_appearance(id, cx))))
                                         .collect(),
                                 ))
                                 .into_any_element(),
                             row(
-                                tr("Handwriting", "字迹"),
-                                Some(tr("A messier hand leans and rounds its corners; further on it joins its strokes, and writes small English letters joined up.", "越潦草，字越歪、转角越圆；再往后笔画相连，英文小写也连起来写。")),
+                                t("handwriting"),
+                                Some(t("a-messier-hand-leans-and")),
                             )
                             .child(
                                 div()
@@ -7466,9 +7478,9 @@ impl Render for Workbench {
                                     .items_center()
                                     .gap_2()
                                     .w(px(240.))
-                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Neat", "工整")))
-                                    .child(Slider::new(&self.form.messy).accessibility_label(tr("How messy the handwriting is", "字迹潦草程度")).flex_1().min_w_0())
-                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Messy", "潦草"))),
+                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(t("neat")))
+                                    .child(Slider::new(&self.form.messy).accessibility_label(t("how-messy-the-handwriting-is")).flex_1().min_w_0())
+                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(t("messy"))),
                             )
                             .into_any_element(),
                             // The hand itself, on a strip of the board's paper, written out again as it changes.
@@ -7481,31 +7493,28 @@ impl Render for Workbench {
                         ],
                     ))
                     .child(section(
-                        Some(tr("meetings", "会议")),
+                        Some(t("meetings-2")),
                         vec![
                             search.into_any_element(),
                             row(
-                                tr("Keep the meeting's audio", "保存会议录音"),
-                                Some(tr(
-                                    "Saves what is heard beside each meeting on this computer, about 10 MB an hour, so its replay and its export can have the sound. It is never uploaded.",
-                                    "把听到的声音保存在本机的会议旁边，大约每小时 10 MB，回放和导出就能带上声音。不会上传。",
-                                )),
+                                t("keep-the-meeting-s-audio"),
+                                Some(t("saves-what-is-heard-beside")),
                             )
-                            .child(Switch::new("keep-audio").checked(self.form.saved.keep_audio).accessibility_label(tr("Keep the meeting's audio", "保存会议录音")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_keep_audio(*on, cx))))
+                            .child(Switch::new("keep-audio").checked(self.form.saved.keep_audio).accessibility_label(t("keep-the-meeting-s-audio")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_keep_audio(*on, cx))))
                             .into_any_element(),
                         ],
                     ))
-                    .child(section(Some(tr("network", "网络")), vec![proxy_row.into_any_element()]))
+                    .child(section(Some(t("network")), vec![proxy_row.into_any_element()]))
                     .into_any_element()
             }
             SettingsTab::Shortcuts => {
-                let mut list = div().flex().flex_col().child(intro(tr("Click a shortcut, then press the keys for it. Esc leaves it as it was.", "点一个快捷键，再按下新的组合键；按 Esc 保持不变。")));
+                let mut list = div().flex().flex_col().child(intro(t("click-a-shortcut-then-press")));
                 for group in [Group::Meeting, Group::Board, Group::App] {
                     let mut rows: Vec<gpui_kit::AnyElement> = vec![];
-                    for (i, (action, ..)) in ACTIONS.iter().enumerate().filter(|(_, a)| a.4 == group) {
+                    for (i, (action, ..)) in ACTIONS.iter().enumerate().filter(|(_, a)| a.2 == group) {
                         let action = *action;
                         let waiting = self.recording_keys == Some(action);
-                        let shown = if waiting { tr("Press keys…", "请按下组合键…").to_string() } else { self.keys.label(action).unwrap_or_else(|| tr("None", "无").to_string()) };
+                        let shown = if waiting { t("press-keys").to_string() } else { self.keys.label(action).unwrap_or_else(|| t("none-2").to_string()) };
                         let note = self.keys_note.clone().filter(|_| waiting);
                         rows.push(
                             div()
@@ -7517,7 +7526,7 @@ impl Render for Workbench {
                                             .items_center()
                                             .gap_2()
                                             .when(self.keys.changed(action) && !waiting, |d| {
-                                                d.child(Button::new(("shortcut-reset", i)).small().ghost().label(tr("Reset", "恢复默认")).on_click(cx.listener(move |this, _, _, cx| {
+                                                d.child(Button::new(("shortcut-reset", i)).small().ghost().label(t("reset")).on_click(cx.listener(move |this, _, _, cx| {
                                                     this.keys.reset(action);
                                                     this.save_shortcuts();
                                                     cx.notify();
@@ -7545,10 +7554,10 @@ impl Render for Workbench {
                     }
                     list = list.child(section(Some(group.name()), rows));
                 }
-                let fixed: Vec<String> = FIXED.iter().map(|(k, en, zh)| format!("{} · {}", Keys::parse(k).map(|k| k.label()).unwrap_or_default(), tr(en, zh))).collect();
-                list.child(footnote(format!("{} {}", tr("Always the same:", "固定不变："), fixed.join("；")).into(), pal().muted).pt_3())
+                let fixed: Vec<String> = FIXED.iter().map(|(k, id)| format!("{} · {}", Keys::parse(k).map(|k| k.label()).unwrap_or_default(), t(id))).collect();
+                list.child(footnote(ta!("always-the-same-keys", keys = fixed.join(t("list-separator"))).into(), pal().muted).pt_3())
                     .when(!self.keys.custom().is_empty(), |d| {
-                        d.child(div().pt_4().child(button("shortcuts-reset-all", tr("Reset all shortcuts", "全部恢复默认")).on_click(cx.listener(|this, _, _, cx| {
+                        d.child(div().pt_4().child(button("shortcuts-reset-all", t("reset-all-shortcuts")).on_click(cx.listener(|this, _, _, cx| {
                             this.keys.reset_all();
                             this.recording_keys = None;
                             this.keys_note = None;
@@ -7560,14 +7569,14 @@ impl Render for Workbench {
             }
             SettingsTab::About => {
                 let update: gpui_kit::AnyElement = match &self.update {
-                    _ if self.prefix.is_none() => div().text_xs().text_color(rgb(pal().muted)).child(tr("Installed copies update.", "只有安装版可以更新。")).into_any_element(),
-                    UpdateState::Idle => button("check-update", tr("Check for updates", "检查更新")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
-                    UpdateState::Checking => div().text_sm().text_color(rgb(pal().muted)).child(tr("Checking…", "正在检查…")).into_any_element(),
-                    UpdateState::UpToDate => div().flex().items_center().gap_2().child(div().text_sm().text_color(rgb(pal().muted)).child(tr("Up to date", "已是最新"))).child(button("check-update", tr("Check again", "再次检查")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); }))).into_any_element(),
-                    UpdateState::Available(release) => Button::new("install-update").small().primary().label(format!("{} {} · {}", tr("Install", "安装"), release.version, gigabytes(release.size))).on_click(cx.listener(|this, _, _, cx| this.install_update(cx))).into_any_element(),
+                    _ if self.prefix.is_none() => div().text_xs().text_color(rgb(pal().muted)).child(t("installed-copies-update")).into_any_element(),
+                    UpdateState::Idle => button("check-update", t("check-for-updates")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
+                    UpdateState::Checking => div().text_sm().text_color(rgb(pal().muted)).child(t("checking")).into_any_element(),
+                    UpdateState::UpToDate => div().flex().items_center().gap_2().child(div().text_sm().text_color(rgb(pal().muted)).child(t("up-to-date"))).child(button("check-update", t("check-again")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); }))).into_any_element(),
+                    UpdateState::Available(release) => Button::new("install-update").small().primary().label(format!("{} {} · {}", t("install"), release.version, gigabytes(release.size))).on_click(cx.listener(|this, _, _, cx| this.install_update(cx))).into_any_element(),
                     UpdateState::Installing { release, progress } => {
-                        let text = progress.as_ref().map_or(tr("Starting…", "正在开始…").to_string(), |p| {
-                            if p.done >= p.total { tr("Verifying and installing…", "正在校验并安装…").to_string() } else { format!("{} / {}", gigabytes(p.done), gigabytes(p.total)) }
+                        let text = progress.as_ref().map_or(t("starting").to_string(), |p| {
+                            if p.done >= p.total { t("verifying-and-installing").to_string() } else { format!("{} / {}", gigabytes(p.done), gigabytes(p.total)) }
                         });
                         let fraction = progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
                         div().w(px(200.)).flex().flex_col().gap_1()
@@ -7575,12 +7584,12 @@ impl Render for Workbench {
                             .child(div().h(px(4.)).w_full().rounded(px(2.)).bg(rgb(pal().track)).child(div().h_full().rounded(px(2.)).w(gpui_kit::relative(fraction)).bg(rgb(pal().strong))))
                             .into_any_element()
                     }
-                    UpdateState::ReadyToRestart(_) => Button::new("restart-update").small().primary().label(tr("Save and restart", "保存并重启")).on_click(cx.listener(|this, _, _, cx| this.restart(cx))).into_any_element(),
-                    UpdateState::Failed(_) => button("check-update", tr("Try again", "重试")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
+                    UpdateState::ReadyToRestart(_) => Button::new("restart-update").small().primary().label(t("save-and-restart")).on_click(cx.listener(|this, _, _, cx| this.restart(cx))).into_any_element(),
+                    UpdateState::Failed(_) => button("check-update", t("try-again")).on_click(cx.listener(|this, _, _, cx| { this.check_for_update(); cx.notify(); })).into_any_element(),
                 };
                 let update_hint: Option<String> = match &self.update {
                     UpdateState::Available(release) if !release.notes.is_empty() => Some(release.notes.clone()),
-                    UpdateState::ReadyToRestart(release) => Some(format!("{} {}", release.version, tr("is installed. Your meeting keeps running until you restart.", "已安装。重启之前，当前会议不受影响。"))),
+                    UpdateState::ReadyToRestart(release) => Some(ta!("version-installed-restart", version = release.version.to_string())),
                     UpdateState::Failed(error) => Some(error.clone()),
                     _ => None,
                 };
@@ -7601,7 +7610,7 @@ impl Render for Workbench {
                             .flex_col()
                             .gap(px(2.))
                             .child(div().text_base().font_weight(gpui_kit::FontWeight::SEMIBOLD).child("boardcast"))
-                            .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().muted)).child(format!("{} {}", tr("version", "版本"), boardcast_update::VERSION)))
+                            .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().muted)).child(ta!("version-number", version = boardcast_update::VERSION)))
                             .when_some(update_hint, |d, hint| d.child(div().pt_1().text_xs().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(hint))),
                     )
                     .child(update);
@@ -7624,10 +7633,10 @@ impl Render for Workbench {
                                     .flex()
                                     .flex_col()
                                     .gap(px(2.))
-                                    .child(div().text_sm().child(tr("Meetings", "会议")))
+                                    .child(div().text_sm().child(t("meetings")))
                                     .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().muted)).overflow_hidden().text_ellipsis().whitespace_nowrap().child(shown)),
                             )
-                            .child(button("open-data", tr("Open folder", "打开文件夹")).on_click(cx.listener(move |_, _, _, cx| {
+                            .child(button("open-data", t("open-folder")).on_click(cx.listener(move |_, _, _, cx| {
                                 let _ = std::fs::create_dir_all(&folder);
                                 cx.open_with_system(&folder);
                             })))
@@ -7638,14 +7647,14 @@ impl Render for Workbench {
                 if cfg!(not(target_os = "macos")) {
                     let size = dir_size(&shader_dir(&self.models));
                     storage.push(
-                        row(tr("Graphics cache", "显卡缓存"), Some(tr("Safe to delete; the model compiles it again in about half a minute.", "可以放心删除，下次启动模型时约半分钟重新编译。")))
+                        row(t("graphics-cache"), Some(t("safe-to-delete-the-model")))
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
                                     .gap_3()
                                     .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().muted)).child(format!("{:.1} MB", size as f64 / 1e6)))
-                                    .child(button("clear-shaders", tr("Delete", "删除")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
+                                    .child(button("clear-shaders", t("delete")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
                                         if let Err(e) = std::fs::remove_dir_all(shader_dir(&this.models)) {
                                             this.form.note = Some(format!("{e:#}"));
                                         }
@@ -7659,17 +7668,17 @@ impl Render for Workbench {
                     .flex()
                     .flex_col()
                     .child(section(None, vec![app.into_any_element()]))
-                    .when(!storage.is_empty(), |d| d.child(section(Some(tr("on this computer", "本机")), storage)))
+                    .when(!storage.is_empty(), |d| d.child(section(Some(t("on-this-computer-2")), storage)))
                     .into_any_element()
             }
         };
         // Before there is a model, choosing one is the only thing to do here.
         let tabs: Vec<(SettingsTab, &'static str, &'static str)> = [
-            (SettingsTab::Model, "chip", tr("Board model", "板书模型")),
-            (SettingsTab::Speech, "mic", tr("Speech", "语音")),
-            (SettingsTab::General, "settings", tr("General", "通用")),
-            (SettingsTab::Shortcuts, "keyboard", tr("Shortcuts", "快捷键")),
-            (SettingsTab::About, "info", tr("About", "关于")),
+            (SettingsTab::Model, "chip", t("board-model")),
+            (SettingsTab::Speech, "mic", t("speech")),
+            (SettingsTab::General, "settings", t("general")),
+            (SettingsTab::Shortcuts, "keyboard", t("shortcuts")),
+            (SettingsTab::About, "info", t("about")),
         ]
         .into_iter()
         .filter(|(t, ..)| !self.needs_model || matches!(t, SettingsTab::Model | SettingsTab::General))
@@ -7691,7 +7700,7 @@ impl Render for Workbench {
                     .flex()
                     .flex_col()
                     .pt_8()
-                    .child(div().px_8().pb_4().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Settings", "设置")))
+                    .child(div().px_8().pb_4().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(t("settings")))
                     .child(div().mx_8().flex().items_center().gap_1().h(px(40.)).flex_none().border_b_1().border_color(rgb(pal().line)).children(tabs.into_iter().map(|(t, glyph, label)| {
                         let on = t == tab;
                         div()
@@ -7743,7 +7752,7 @@ impl Render for Workbench {
                     .flex_none()
                     .border_b_1()
                     .border_color(rgb(pal().line))
-                    .children([(Panel::Transcript, "tab-transcript", "transcript", tr("Transcript", "转写"), 0), (Panel::Summary, "tab-summary", "summary", tr("Summary", "摘要"), 0), (Panel::Speakers, "tab-speakers", "users", tr("Speakers", "说话人"), speakers.len())].map(|(panel, id, glyph, label, count)| {
+                    .children([(Panel::Transcript, "tab-transcript", "transcript", t("transcript-2"), 0), (Panel::Summary, "tab-summary", "summary", t("summary-2"), 0), (Panel::Speakers, "tab-speakers", "users", t("speakers"), speakers.len())].map(|(panel, id, glyph, label, count)| {
                         let on = side_panel == panel;
                         div()
                             .id(id)
@@ -7790,7 +7799,7 @@ impl Render for Workbench {
                                         .text_xs()
                                         .text_color(rgb(pal().muted))
                                         .child(speaker_badge(&speakers, &name))
-                                        .child(format!("{}{name}", tr("Typing as ", "输入身份：")))
+                                        .child(ta!("typing-as", name = format!("{name}")))
                                         .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx))),
                                 )
                             })
@@ -7841,7 +7850,7 @@ impl Render for Workbench {
                                 .pt_3()
                                 .pb_1()
                                 .child(div().text_lg().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(title))
-                                .child(icon_button("close-dialog", "x", tr("Close (Esc)", "关闭（Esc）")).on_click(cx.listener(|this, _, _, cx| {
+                                .child(icon_button("close-dialog", "x", t("close-esc")).on_click(cx.listener(|this, _, _, cx| {
                                     this.panel = Panel::Transcript;
                                     cx.notify();
                                 }))),
@@ -7851,8 +7860,8 @@ impl Render for Workbench {
         };
         let in_dialog = matches!(self.panel, Panel::Export | Panel::Import);
         let mut overlay: Option<gpui_kit::AnyElement> = match self.panel {
-            Panel::Export => export_panel.map(|body| dialog(tr("Export", "导出"), body, cx).into_any_element()),
-            Panel::Import => import_panel.map(|body| dialog(tr("Import", "导入"), body, cx).into_any_element()),
+            Panel::Export => export_panel.map(|body| dialog(t("export"), body, cx).into_any_element()),
+            Panel::Import => import_panel.map(|body| dialog(t("import"), body, cx).into_any_element()),
             Panel::Library => Some(
                 div()
                     .id("library-page")
@@ -7877,7 +7886,7 @@ impl Render for Workbench {
                                     .items_center()
                                     .justify_between()
                                     .pb_3()
-                                    .child(div().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(tr("Meetings", "会议")))
+                                    .child(div().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(t("meetings")))
                                     .child(
                                         div()
                                             .flex()
@@ -7888,12 +7897,12 @@ impl Render for Workbench {
                                                     Button::new("library-folder")
                                                         .small()
                                                         .ghost()
-                                                        .child(div().flex().items_center().gap(px(6.)).child(icon("folder").size(px(13.))).child(div().text_sm().child(tr("Open folder", "打开文件夹"))))
-                                                        .tooltip(tr("Where every meeting is kept on this computer", "所有会议在本机保存的位置"))
+                                                        .child(div().flex().items_center().gap(px(6.)).child(icon("folder").size(px(13.))).child(div().text_sm().child(t("open-folder"))))
+                                                        .tooltip(t("where-every-meeting-is-kept"))
                                                         .on_click(cx.listener(move |_, _, _, cx| cx.open_with_system(&folder))),
                                                 )
                                             })
-                                            .when(self.store.is_some() && !sidebar_shown, |d| d.child(Button::new("library-page-new").small().primary().label(tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))))),
+                                            .when(self.store.is_some() && !sidebar_shown, |d| d.child(Button::new("library-page-new").small().primary().label(t("new-meeting")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))))),
                                     ),
                             )
                             .child(library),
@@ -7906,20 +7915,20 @@ impl Render for Workbench {
             let fraction = p.fraction();
             let (title, detail) = if p.first_time {
                 (
-                    tr("Getting ready for the first time", "第一次使用，正在做准备"),
-                    tr("The model is compiling for this computer's graphics card. This takes about half a minute, once. Next time it opens right away.", "正在为这台电脑的显卡编译着色器，大约需要半分钟，只需这一次，之后打开就不用等了。"),
+                    t("getting-ready-for-the-first"),
+                    t("the-model-is-compiling-for"),
                 )
             } else {
-                (tr("Getting the model ready", "正在准备板书模型"), tr("This is taking longer than usual, but it is still working.", "比平时慢一些，但仍在进行中。"))
+                (t("getting-the-model-ready"), t("this-is-taking-longer-than"))
             };
             let stage = if p.done > 0 {
-                tr("Almost done", "马上就好")
+                t("almost-done")
             } else if p.total > 0 && p.first_time {
-                tr("Compiling shaders", "正在编译着色器")
+                t("compiling-shaders")
             } else if p.total > 0 {
-                tr("Preparing", "正在准备")
+                t("preparing")
             } else {
-                tr("Loading the model", "正在加载模型")
+                t("loading-the-model")
             };
             div().id("preparing").occlude().absolute().size_full().flex().items_center().justify_center().bg(rgb(pal().paper)).child(
                 div()
@@ -7930,9 +7939,9 @@ impl Render for Workbench {
                     .child(div().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(title))
                     .child(div().text_sm().text_color(rgb(pal().muted)).child(detail))
                     .child(ProgressBar::new("preparing-progress").value(fraction * 100.0))
-                    .child(div().flex().justify_between().text_xs().text_color(rgb(pal().faint)).child(stage).child(format!("{} {:.0}%", tr("about", "约"), fraction * 100.0)))
-                    .child(div().text_xs().text_color(rgb(pal().faint)).child(tr("You can carry on meanwhile. What is said is kept and goes on the board once the model is ready.", "你可以先继续。这期间说的话会先记下，模型好了就上板。")))
-                    .child(div().flex().child(button("preparing-dismiss", tr("Carry on", "先继续")).on_click(cx.listener(|this, _, _, cx| {
+                    .child(div().flex().justify_between().text_xs().text_color(rgb(pal().faint)).child(stage).child(ta!("about-percent", percent = (fraction * 100.0).round())))
+                    .child(div().text_xs().text_color(rgb(pal().faint)).child(t("you-can-carry-on-meanwhile")))
+                    .child(div().flex().child(button("preparing-dismiss", t("carry-on")).on_click(cx.listener(|this, _, _, cx| {
                         if let Some(preparing) = &mut this.preparing {
                             preparing.dismissed = true;
                         }
@@ -7967,7 +7976,7 @@ impl Render for Workbench {
                             .child(div().flex_1().min_w_0().py(px(2.)).child(text))
                             // What went wrong once can be put away; a meeting still unsaved stays said.
                             .when(dismissable, |d| {
-                                d.child(icon_button("dismiss-notice", "x", tr("Dismiss", "知道了")).on_click(cx.listener(|this, _, _, cx| {
+                                d.child(icon_button("dismiss-notice", "x", t("dismiss")).on_click(cx.listener(|this, _, _, cx| {
                                     this.notice = None;
                                     cx.notify();
                                 })))
@@ -7980,7 +7989,7 @@ impl Render for Workbench {
         let blank = editable && pages <= 1 && self.live.lines.is_empty() && self.live.graph.nodes.is_empty() && self.live.graph.underlay().is_none();
         // An empty board says what it is for: its headline written by the board's own pen, the keys to begin
         // with, the templates to start from, and that a file can be dropped on it.
-        let headline = tr("Talk, and the board draws itself.", "说话，板书自己长出来。");
+        let headline = t("talk-and-the-board-draws");
         if blank && self.welcome_line.as_ref().is_none_or(|(text, ..)| text != headline) {
             let (strokes, w, h) = crate::splash::written_line(&mut self.ink.borrow_mut().glyphs, headline, WELCOME_SIZE);
             self.welcome_line = Some((headline.to_string(), strokes, w, h, Instant::now()));
@@ -8009,10 +8018,7 @@ impl Render for Workbench {
                         Some(line) => d.child(line),
                         None => d.child(div().text_2xl().child(headline)),
                     })
-                    .child(div().mt(px(10.)).max_w(px(400.)).text_sm().line_height(px(21.)).text_color(rgb(pal().muted)).child(tr(
-                        "Flows, notes, decisions and to-dos are written and connected as the conversation goes.",
-                        "流程、要点、决定和待办，会随着讨论写上去、连起来。",
-                    )))
+                    .child(div().mt(px(10.)).max_w(px(400.)).text_sm().line_height(px(21.)).text_color(rgb(pal().muted)).child(t("flows-notes-decisions-and-to")))
                     .child(
                         div()
                             .mt(px(20.))
@@ -8021,11 +8027,11 @@ impl Render for Workbench {
                             .justify_center()
                             .items_center()
                             .gap(px(12.))
-                            .when_some(hint(self.keys.label(Action::Listen), tr("listen", "收音")), |d, h| d.child(h))
+                            .when_some(hint(self.keys.label(Action::Listen), t("listen")), |d, h| d.child(h))
                             .child(dot())
-                            .when_some(hint(self.keys.label(Action::TypeLine), tr("type a line", "打字输入")), |d, h| d.child(h))
+                            .when_some(hint(self.keys.label(Action::TypeLine), t("type-a-line")), |d, h| d.child(h))
                             .child(dot())
-                            .when_some(hint(self.keys.label(Action::Shortcuts), tr("all shortcuts", "所有快捷键")), |d, h| d.child(h)),
+                            .when_some(hint(self.keys.label(Action::Shortcuts), t("all-shortcuts")), |d, h| d.child(h)),
                     )
                     .when(self.store.is_some() && !starts.is_empty(), |d| {
                         d.child(
@@ -8036,7 +8042,7 @@ impl Render for Workbench {
                                 .items_center()
                                 .gap_3()
                                 .child(rule())
-                                .child(div().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(tr("or start from a template", "或者从模板开始")))
+                                .child(div().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(t("or-start-from-a-template")))
                                 .child(rule()),
                         )
                         .child(
@@ -8057,7 +8063,7 @@ impl Render for Workbench {
                             .text_xs()
                             .text_color(rgb(pal().faint))
                             .child(icon("import").size(px(12.)))
-                            .child(tr("Drop a PDF or an image anywhere to discuss it.", "把 PDF 或图片拖进窗口，就能对着它讨论。")),
+                            .child(t("drop-a-pdf-or-an")),
                     ),
             )
         });
@@ -8093,7 +8099,7 @@ impl Render for Workbench {
                     cx.stop_propagation();
                     cx.new(|_| held.clone())
                 })
-                .tooltip(|window, cx| Tooltip::new(tr("Drag to move the map", "拖动可以移动小地图")).build(window, cx))
+                .tooltip(|window, cx| Tooltip::new(t("drag-to-move-the-map")).build(window, cx))
                 .child(div().w(px(28.)).h(px(3.)).rounded_full().bg(rgb(pal().line)).group_hover("map-grip", |s| s.bg(rgb(pal().faint))))
                 // Closing it is offered on the map itself, once the pointer is over it.
                 .child(
@@ -8113,7 +8119,7 @@ impl Render for Workbench {
                         .group_hover("minimap", |s| s.opacity(1.))
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .tooltip({
-                            let tip = self.keys.tip(Action::Map, tr("Close the map", "收起小地图"));
+                            let tip = self.keys.tip(Action::Map, t("close-the-map"));
                             move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
                         })
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_map(cx)))
@@ -8266,7 +8272,7 @@ impl Render for Workbench {
                                 .group_hover("tray-card", |s| s.visible())
                                 .cursor_pointer()
                                 .child(icon("x").size(px(9.)))
-                                .tooltip(|window, cx| Tooltip::new(tr("Take out of the inbox", "从收纳栏拿走")).build(window, cx))
+                                .tooltip(|window, cx| Tooltip::new(t("take-out-of-the-inbox")).build(window, cx))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     cx.stop_propagation();
                                     this.discard(&gone, cx);
@@ -8417,7 +8423,7 @@ gpui_kit::actions!(boardcast, [Quit]);
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn app_menu(cx: &mut App) {
     cx.bind_keys([gpui_kit::KeyBinding::new("cmd-q", Quit, None)]);
-    cx.set_menus(vec![gpui_kit::Menu { name: "boardcast".into(), items: vec![gpui_kit::MenuItem::action(tr("Quit boardcast", "退出 boardcast"), Quit)], disabled: false }]);
+    cx.set_menus(vec![gpui_kit::Menu { name: "boardcast".into(), items: vec![gpui_kit::MenuItem::action(t("quit-boardcast"), Quit)], disabled: false }]);
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
@@ -8653,22 +8659,22 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             pipeline.session().open(live.graph.clone(), history);
             pipeline.start_script();
             let ink = Rc::new(RefCell::new(state));
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Type a line, Enter puts it on the board", "输入一句话，回车上板")));
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(t("type-a-line-enter-puts")));
             let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
             let messy = cx.new(|_| SliderState::new().min(0.0).max(1.0).step(0.1).default_value(settings.messy));
             let glossary = cx.new(|cx| InputState::new(window, cx).placeholder("鉴权; OpenAI; API = A P I, エーピーアイ").default_value(settings.glossary.clone()));
             let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
             let proxy_url = cx.new(|cx| InputState::new(window, cx).placeholder("http://127.0.0.1:7890").default_value(settings.proxy_url.clone()));
-            let proxy_user = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Username (optional)", "用户名（可选）")).default_value(settings.proxy_user.clone()));
-            let proxy_password = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Password (optional)", "密码（可选）")).masked(true).default_value(settings.proxy_password.clone()));
+            let proxy_user = cx.new(|cx| InputState::new(window, cx).placeholder(t("username-optional")).default_value(settings.proxy_user.clone()));
+            let proxy_password = cx.new(|cx| InputState::new(window, cx).placeholder(t("password-optional")).masked(true).default_value(settings.proxy_password.clone()));
             let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
             let editor = cx.new(|cx| TextareaState::new(window, cx));
             let arxiv_input = cx.new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
-            let import_pages = cx.new(|cx| InputState::new(window, cx).placeholder(tr("All pages, or e.g. 1-5, 8", "全部页，或如 1-5, 8")));
+            let import_pages = cx.new(|cx| InputState::new(window, cx).placeholder(t("all-pages-or-e-g")));
             let speaker_name = cx.new(|cx| InputState::new(window, cx));
-            let title_input = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Meeting name", "会议名称")));
+            let title_input = cx.new(|cx| InputState::new(window, cx).placeholder(t("meeting-name")));
             let label_input = cx.new(|cx| InputState::new(window, cx));
-            let library_query = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Search meetings", "搜索会议")));
+            let library_query = cx.new(|cx| InputState::new(window, cx).placeholder(t("search-meetings")));
             let view = cx.new(|cx| {
                 cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {

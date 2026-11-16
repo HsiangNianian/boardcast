@@ -964,6 +964,13 @@ impl Session {
         (graph.clone(), id)
     }
 
+    /// Take away hand annotations, by their places in the board's list.
+    pub fn erase(&self, which: &[usize]) -> Graph {
+        let mut graph = self.graph.lock().expect("graph lock");
+        graph.erase(which);
+        graph.clone()
+    }
+
     /// Draw by hand over a page or a clip.
     pub fn annotate(&self, annotation: boardcast_board::graph::Annotation) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");

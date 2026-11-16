@@ -1526,6 +1526,30 @@ fn page_render_image(bytes: &[u8]) -> Result<(Arc<RenderImage>, Arc<RenderImage>
     Ok((Arc::new(RenderImage::new([image::Frame::new(picture)])), Arc::new(RenderImage::new([image::Frame::new(small)]))))
 }
 
+/// The eraser among the marking tools, and how wide it rubs, in board units.
+const ERASER: &str = "eraser";
+const ERASER_W: f32 = 20.0;
+
+/// Whether an eraser dragged along `rub` passes within `reach` of a mark's line.
+fn erased(mark: &[[f64; 2]], rub: &[[f32; 2]], reach: f64) -> bool {
+    let near = |p: [f64; 2], a: [f64; 2], b: [f64; 2]| {
+        let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+        let t = if dx == 0.0 && dy == 0.0 { 0.0 } else { (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0) };
+        (p[0] - a[0] - t * dx).hypot(p[1] - a[1] - t * dy) <= reach
+    };
+    let segments = |line: &[[f64; 2]]| -> Vec<([f64; 2], [f64; 2])> { if line.len() == 1 { vec![(line[0], line[0])] } else { line.windows(2).map(|w| (w[0], w[1])).collect() } };
+    let rub: Vec<[f64; 2]> = rub.iter().map(|p| [f64::from(p[0]), f64::from(p[1])]).collect();
+    let cross = |(a, b): ([f64; 2], [f64; 2]), (c, d): ([f64; 2], [f64; 2])| {
+        let side = |p: [f64; 2], q: [f64; 2], r: [f64; 2]| (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+        side(a, b, c) * side(a, b, d) < 0.0 && side(c, d, a) * side(c, d, b) < 0.0
+    };
+    let (ours, theirs) = (segments(mark), segments(&rub));
+    // Close to the line somewhere, or right across it.
+    rub.iter().any(|&p| ours.iter().any(|&(a, b)| near(p, a, b)))
+        || mark.iter().any(|&p| theirs.iter().any(|&(a, b)| near(p, a, b)))
+        || ours.iter().any(|&m| theirs.iter().any(|&r| cross(m, r)))
+}
+
 fn mark_tool_name(tool: &str) -> &'static str {
     match tool {
         "pen" => tr("Red pen", "红笔"),
@@ -3328,6 +3352,10 @@ impl Workbench {
         if !self.editable() || line.len() < 2 {
             return;
         }
+        if self.ink.borrow().mark_tool == ERASER {
+            self.erase(line, cx);
+            return;
+        }
         let (tool, card) = {
             let ink = self.ink.borrow();
             let [x, y] = line[0];
@@ -3445,6 +3473,40 @@ impl Workbench {
             }
             self.tray.retain(|(c, _)| c.id != id);
         }
+        cx.notify();
+    }
+
+    /// Take away every hand mark the eraser was dragged across, as one change.
+    fn erase(&mut self, line: &[[f32; 2]], cx: &mut Context<Self>) {
+        let hit: Vec<usize> = {
+            let ink = self.ink.borrow();
+            let cards: HashMap<&str, &Rect> = ink.clips.iter().map(|(r, _)| (r.id.as_str(), r)).collect();
+            self.live
+                .graph
+                .annotations()
+                .iter()
+                .enumerate()
+                .filter_map(|(i, a)| {
+                    let card = match &a.on {
+                        Some(id) => Some(*cards.get(id.as_str())?),
+                        None => None,
+                    };
+                    let points: Vec<[f64; 2]> = a.points.iter().map(|p| card.map_or(*p, |c| [c.x + p[0] * c.w, c.y + p[1] * c.h])).collect();
+                    let reach = f64::from(ERASER_W + annotation_look(&a.tool).2) / 2.0;
+                    erased(&points, line, reach).then_some(i)
+                })
+                .collect()
+        };
+        if hit.is_empty() {
+            return;
+        }
+        let graph = self.session().erase(&hit);
+        self.next_batch += 1;
+        let mut ink = self.ink.borrow_mut();
+        ink.update(&graph, self.next_batch);
+        let memory = ink.board.snapshot();
+        drop(ink);
+        self.live.change_board(graph, memory);
         cx.notify();
     }
 
@@ -5424,7 +5486,7 @@ impl Render for Workbench {
                             }
                             // The line being drawn, in its tool's colour, until it joins the board.
                             if let Some(line) = b.scribble.as_ref().filter(|l| l.len() > 1) {
-                                let (color, alpha, width) = annotation_look(b.mark_tool);
+                                let (color, alpha, width) = if b.mark_tool == ERASER { (0x8a_8a_8a, 0.3, ERASER_W) } else { annotation_look(b.mark_tool) };
                                 let mut pb = PathBuilder::stroke(px(width * v.k));
                                 let at = |p: &[f32; 2]| origin + point(px(p[0] * v.k), px(p[1] * v.k));
                                 pb.move_to(at(&line[0]));
@@ -5778,6 +5840,25 @@ impl Render for Workbench {
                         cx.notify();
                     }))
                         }))
+            .child(div().w(px(1.)).h(px(18.)).mx(px(2.)).bg(rgb(pal().line)))
+            // The eraser takes away whatever hand marks it is dragged across.
+            .child(
+                div()
+                    .id("mark-eraser")
+                    .size(px(22.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_full()
+                    .cursor_pointer()
+                    .when(mark_tool == ERASER, |d| d.border_2().border_color(rgb(pal().text)))
+                    .child(icon("eraser").size(px(13.)))
+                    .tooltip(|window, cx| Tooltip::new(tr("Eraser: drag across hand marks to take them away", "橡皮：拖过手画的标注就擦掉")).build(window, cx))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.ink.borrow_mut().mark_tool = ERASER;
+                        cx.notify();
+                    })),
+            )
         });
         let tool_bar = editable.then(|| {
             float()
@@ -8036,7 +8117,16 @@ fn page_number(graph: &Graph) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{encloses, page_ranges};
+    use super::{encloses, erased, page_ranges};
+
+    #[test]
+    fn the_eraser_takes_what_it_touches_and_leaves_what_it_misses() {
+        let mark = [[0.0, 100.0], [200.0, 100.0]];
+        assert!(erased(&mark, &[[100.0, 50.0], [100.0, 150.0]], 18.0), "dragged across the middle");
+        assert!(erased(&mark, &[[205.0, 108.0]], 18.0), "a dab at its end");
+        assert!(!erased(&mark, &[[100.0, 130.0], [180.0, 130.0]], 18.0), "alongside, out of reach");
+        assert!(!erased(&mark, &[], 18.0));
+    }
 
     #[test]
     fn pages_to_import_are_read_from_numbers_and_ranges() {

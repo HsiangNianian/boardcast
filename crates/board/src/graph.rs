@@ -322,6 +322,12 @@ impl Graph {
         id
     }
 
+    /// Take away the hand annotations at these places in [`Graph::annotations`], as an eraser does.
+    pub fn erase(&mut self, which: &[usize]) {
+        let kept: Vec<Annotation> = self.annotations().into_iter().enumerate().filter(|(i, _)| !which.contains(i)).map(|(_, a)| a).collect();
+        self.keep_annotations(kept);
+    }
+
     /// What was drawn by hand on one clip, as it would go with the card elsewhere.
     pub fn drawn_on(&self, id: &str) -> Vec<Annotation> {
         self.annotations().into_iter().filter(|a| a.on.as_deref() == Some(id)).collect()

@@ -233,12 +233,10 @@ delete-this-pinned-meeting = ¿Eliminar esta reunión fijada?
 unpin = Desfijar
 pin-to-the-top = Fijar arriba
 open-its-folder-the-meeting = Abrir su carpeta: la reunión, sus imágenes y su audio
-recommended = recomendado
 in-use = En uso
 use = Usar
 board-model = Modelo de pizarra
 to-draw-the-board-download = Para dibujar la pizarra, descarga un modelo que se ejecute en este equipo o configura uno remoto. El reconocimiento de voz ya está incluido.
-what-turns-what-is-said = Lo que convierte lo dicho en la pizarra.
 on-this-computer = En este equipo
 remote = Remoto
 pause = Pausar
@@ -254,7 +252,6 @@ the-system-s-default-input = La entrada predeterminada del sistema
 the-chosen-input-not-connected = La entrada elegida, no conectada ahora
 speech = Voz
 what-is-heard-and-how = Qué se escucha y cómo se transcribe.
-listen-to = Escuchar
 for-the-other-side-of = Para oír al otro lado de una reunión en línea, elige la entrada «Monitor of» de los altavoces por los que suena.
 tell-speakers-apart-by-voice = Distinguir oradores por la voz
 new-voices-are-named-a = Las voces nuevas se llaman A, B, C. Los datos de voz permanecen en el archivo de la reunión en este equipo.
@@ -386,3 +383,78 @@ topic-options = Opciones
 topic-decision = Decisión
 api-key = Clave de API
 list-separator = {"; "}
+heard-in-ms = Reconocido en { $ms } ms
+drawn-in-ms = dibujado en { $ms } ms
+connected-in-ms = Conectado en { $ms } ms
+name-is-ready = { $name } está listo.
+downloading-the-model-percent = Descargando el modelo { $percent }%
+reading-meetings-of = Leyendo reuniones { $done } / { $total }
+line-count =
+    { $n ->
+        [one] { $n } frase
+       *[other] { $n } frases
+    }
+more-in-all-meetings-count =
+    { $n ->
+        [one] { $n } más en Todas las reuniones →
+       *[other] { $n } más en Todas las reuniones →
+    }
+board-count =
+    { $n ->
+        [one] { $n } pizarra
+       *[other] { $n } pizarras
+    }
+saved-to-path = Guardado en { $path }
+writing-part-of = Redactando la parte { $part }/{ $parts }…
+uses-cloud-model-sent-to = Usa el modelo en la nube { $model }; toda la transcripción se envía a { $host }
+topic-count =
+    { $n ->
+        [one] { $n } tema
+       *[other] { $n } temas
+    }
+not-drawn-count-show =
+    { $n ->
+        [one] { $n } sin dibujar: ver
+       *[other] { $n } sin dibujar: ver
+    }
+count-waiting-for-the-model =
+    { $n ->
+        [one] { $n } esperando al modelo
+       *[other] { $n } esperando al modelo
+    }
+drawing-count-waiting =
+    { $n ->
+        [one] Dibujando · { $n } en espera
+       *[other] Dibujando · { $n } en espera
+    }
+started-at-time = Empezó a las { $time }
+board-number = Pizarra { $n }
+update-to-version = Actualizar a { $version }
+deleted-title = Se eliminó «{ $title }»
+name-checking-what-was-downloaded = { $name } está comprobando lo que ya se descargó…
+name-starting = { $name } se está iniciando…
+saved-key-leave-empty = Clave guardada: { $hint }. Déjalo vacío para conservarla.
+hearing-with-models = Escuchando con { $models }
+always-the-same-keys = Siempre igual: { $keys }
+version-installed-restart = { $version } está instalada. Tu reunión sigue en marcha hasta que reinicies.
+about-percent = aprox. { $percent }%
+keys-kept-for-closing = { $keys } se reserva para cerrar y moverse.
+keys-already-used-by = { $keys } ya lo usa «{ $action }».
+board-forked = Pizarra { $to } bifurcada de la pizarra { $from } tal como estaba a las { $when }
+recommended-2 = Recomendado
+runs = Se ejecuta
+on-this-computer-nothing-leaves = En este equipo nada sale de él; a un modelo remoto se accede por la red.
+the-model-turns-what-is = El modelo convierte lo que se dice en la pizarra.
+models = modelos
+remote-model = modelo remoto
+listen-to-2 = escuchar
+recognition = reconocimiento
+during-the-meeting = durante la reunión
+look = aspecto
+meetings-2 = reuniones
+network = red
+on-this-computer-2 = en este equipo
+version-number = versión { $version }
+sample-title = Reunión semanal
+sample-first-point = publicar la beta el viernes
+sample-second-point = preguntar a Mia por la documentación

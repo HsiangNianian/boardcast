@@ -233,12 +233,10 @@ delete-this-pinned-meeting = Excluir esta reunião fixada?
 unpin = Desafixar
 pin-to-the-top = Fixar no topo
 open-its-folder-the-meeting = Abrir a pasta: a reunião, suas imagens e seu áudio
-recommended = recomendado
 in-use = Em uso
 use = Usar
 board-model = Modelo do quadro
 to-draw-the-board-download = Para desenhar o quadro, baixe um modelo que roda neste computador ou configure um remoto. O reconhecimento de fala já está incluído.
-what-turns-what-is-said = O que transforma o que é dito em quadro.
 on-this-computer = Neste computador
 remote = Remoto
 pause = Pausar
@@ -254,7 +252,6 @@ the-system-s-default-input = A entrada padrão do sistema
 the-chosen-input-not-connected = A entrada escolhida, não conectada agora
 speech = Fala
 what-is-heard-and-how = O que é ouvido e como é registrado.
-listen-to = Ouvir
 for-the-other-side-of = Para o outro lado de uma reunião online, escolha a entrada "Monitor de" correspondente aos alto-falantes por onde ela toca.
 tell-speakers-apart-by-voice = Distinguir falantes pela voz
 new-voices-are-named-a = Novas vozes recebem os nomes A, B, C. Os dados de voz ficam no arquivo da reunião neste computador.
@@ -386,3 +383,70 @@ topic-options = Opções
 topic-decision = Decisão
 api-key = Chave de API
 list-separator = {"; "}
+heard-in-ms = Ouvido em { $ms } ms
+drawn-in-ms = desenhado em { $ms } ms
+connected-in-ms = Conectado em { $ms } ms
+name-is-ready = { $name } está pronto.
+downloading-the-model-percent = Baixando o modelo: { $percent }%
+reading-meetings-of = Lendo reuniões: { $done } / { $total }
+line-count =
+    { $n ->
+        [one] { $n } linha
+       *[other] { $n } linhas
+    }
+more-in-all-meetings-count = mais { $n } em Todas as reuniões →
+board-count =
+    { $n ->
+        [one] { $n } quadro
+       *[other] { $n } quadros
+    }
+saved-to-path = Salvo em { $path }
+writing-part-of = Escrevendo a parte { $part }/{ $parts }…
+uses-cloud-model-sent-to = Usa o modelo na nuvem { $model }; toda a transcrição é enviada para { $host }
+topic-count =
+    { $n ->
+        [one] { $n } tópico
+       *[other] { $n } tópicos
+    }
+not-drawn-count-show =
+    { $n ->
+        [one] { $n } não desenhado: mostrar
+       *[other] { $n } não desenhados: mostrar
+    }
+count-waiting-for-the-model =
+    { $n ->
+        [one] { $n } aguardando o modelo
+       *[other] { $n } aguardando o modelo
+    }
+drawing-count-waiting = Desenhando · { $n } aguardando
+started-at-time = Iniciada às { $time }
+board-number = Quadro { $n }
+update-to-version = Atualizar para { $version }
+deleted-title = “{ $title }” excluído
+name-checking-what-was-downloaded = { $name } verificando o que já foi baixado…
+name-starting = { $name } iniciando…
+saved-key-leave-empty = Chave salva: { $hint }. Deixe em branco para mantê-la.
+hearing-with-models = Ouvindo com { $models }
+always-the-same-keys = Sempre igual: { $keys }
+version-installed-restart = { $version } está instalada. Sua reunião continua até você reiniciar.
+about-percent = cerca de { $percent }%
+keys-kept-for-closing = { $keys } é reservado para fechar e navegar.
+keys-already-used-by = { $keys } já é usado por “{ $action }”.
+board-forked = O quadro { $to } foi derivado do quadro { $from } como ele estava às { $when }
+recommended-2 = Recomendado
+runs = Executa
+on-this-computer-nothing-leaves = Neste computador nada sai dele; um modelo remoto é acessado pela rede.
+the-model-turns-what-is = O modelo transforma o que é dito no quadro.
+models = modelos
+remote-model = modelo remoto
+listen-to-2 = ouvir
+recognition = reconhecimento
+during-the-meeting = durante a reunião
+look = aparência
+meetings-2 = reuniões
+network = rede
+on-this-computer-2 = neste computador
+version-number = versão { $version }
+sample-title = Reunião semanal
+sample-first-point = lançar a beta na sexta
+sample-second-point = perguntar à Mia sobre a documentação

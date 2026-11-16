@@ -243,6 +243,38 @@ mod tests {
     }
 
     #[test]
+    fn every_message_formats_in_every_language() {
+        let english = messages(SOURCES[ENGLISH]);
+        for (language, (code, _)) in LANGUAGES.iter().enumerate() {
+            let bundle = &bundles()[language];
+            for (id, names) in &english {
+                let Some(pattern) = bundle.get_message(id).and_then(|m| m.value()) else { continue };
+                let mut args = FluentArgs::new();
+                for name in names {
+                    args.set(name.as_str(), 3);
+                }
+                let mut errors = vec![];
+                let text = bundle.format_pattern(pattern, Some(&args), &mut errors);
+                assert!(errors.is_empty(), "{code}: {id}: {errors:?}");
+                assert!(!text.trim().is_empty(), "{code}: {id} is empty");
+            }
+        }
+    }
+
+    #[test]
+    fn counts_take_their_languages_plural() {
+        let count = |language: usize, n: usize| {
+            let mut args = FluentArgs::new();
+            args.set("n", n);
+            format(language, "line-count", Some(&args)).unwrap()
+        };
+        let russian = LANGUAGES.iter().position(|(c, _)| *c == "ru").unwrap();
+        assert_eq!(count(ENGLISH, 1), "1 line");
+        assert_eq!(count(ENGLISH, 4), "4 lines");
+        assert_eq!([count(russian, 1), count(russian, 3), count(russian, 5)], ["1 строка", "3 строки", "5 строк"]);
+    }
+
+    #[test]
     fn a_system_locale_finds_its_language() {
         assert_eq!(LANGUAGES[best("zh-CN")].0, "zh-Hans");
         assert_eq!(LANGUAGES[best("zh_TW.UTF-8")].0, "zh-Hant");

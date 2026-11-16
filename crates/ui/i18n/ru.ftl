@@ -233,12 +233,10 @@ delete-this-pinned-meeting = Удалить эту закреплённую вс
 unpin = Открепить
 pin-to-the-top = Закрепить вверху
 open-its-folder-the-meeting = Открыть её папку: встреча, изображения и аудио
-recommended = рекомендуется
 in-use = Используется
 use = Использовать
 board-model = Модель доски
 to-draw-the-board-download = Чтобы рисовать доску, скачайте модель, работающую на этом компьютере, или настройте удалённую. Распознавание речи уже встроено.
-what-turns-what-is-said = То, что превращает сказанное в доску.
 on-this-computer = На этом компьютере
 remote = Удалённая
 pause = Пауза
@@ -254,7 +252,6 @@ the-system-s-default-input = Системный вход по умолчанию
 the-chosen-input-not-connected = Выбранный вход, сейчас не подключён
 speech = Речь
 what-is-heard-and-how = Что слушать и как это записывать.
-listen-to = Источник звука
 for-the-other-side-of = Чтобы слушать собеседников онлайн-встречи, выберите вход "Monitor of" для динамиков, через которые она воспроизводится.
 tell-speakers-apart-by-voice = Различать говорящих по голосу
 new-voices-are-named-a = Новые голоса называются A, B, C. Данные голоса хранятся в файле встречи на этом компьютере.
@@ -386,3 +383,72 @@ topic-options = Варианты
 topic-decision = Решение
 api-key = API-ключ
 list-separator = {"; "}
+heard-in-ms = Услышано за { $ms } мс
+drawn-in-ms = нарисовано за { $ms } мс
+connected-in-ms = Подключено за { $ms } мс
+name-is-ready = { $name } готов.
+downloading-the-model-percent = Загрузка модели: { $percent }%
+reading-meetings-of = Чтение встреч: { $done } / { $total }
+line-count =
+    { $n ->
+        [one] { $n } строка
+        [few] { $n } строки
+        [many] { $n } строк
+       *[other] { $n } строки
+    }
+more-in-all-meetings-count = ещё { $n } во всех встречах →
+board-count =
+    { $n ->
+        [one] { $n } доска
+        [few] { $n } доски
+        [many] { $n } досок
+       *[other] { $n } доски
+    }
+saved-to-path = Сохранено в { $path }
+writing-part-of = Пишу часть { $part }/{ $parts }…
+uses-cloud-model-sent-to = Использует облачную модель { $model }; вся запись передаётся на { $host }
+topic-count =
+    { $n ->
+        [one] { $n } тема
+        [few] { $n } темы
+        [many] { $n } тем
+       *[other] { $n } темы
+    }
+not-drawn-count-show = не нарисовано: { $n } — показать
+count-waiting-for-the-model =
+    { $n ->
+        [one] { $n } ждёт модель
+       *[other] { $n } ждут модель
+    }
+drawing-count-waiting = Рисую · ждут: { $n }
+started-at-time = Начало в { $time }
+board-number = Доска { $n }
+update-to-version = Обновить до { $version }
+deleted-title = «{ $title }» удалено
+name-checking-what-was-downloaded = { $name } проверяет, что уже скачано…
+name-starting = { $name } запускается…
+saved-key-leave-empty = Сохранённый ключ: { $hint }. Оставьте пустым, чтобы сохранить его.
+hearing-with-models = Распознавание с помощью { $models }
+always-the-same-keys = Всегда одинаково: { $keys }
+version-installed-restart = { $version } установлена. Ваша встреча продолжится, пока вы не перезапустите.
+about-percent = около { $percent }%
+keys-kept-for-closing = { $keys } зарезервировано для закрытия и навигации.
+keys-already-used-by = { $keys } уже используется для «{ $action }».
+board-forked = Доска { $to } ответвлена от доски { $from } в состоянии на { $when }
+recommended-2 = Рекомендуется
+runs = Где работает
+on-this-computer-nothing-leaves = На этом компьютере ничего не покидает его; к удалённой модели обращаются по сети.
+the-model-turns-what-is = Модель превращает сказанное в доску.
+models = модели
+remote-model = удалённая модель
+listen-to-2 = источник звука
+recognition = распознавание
+during-the-meeting = во время встречи
+look = вид
+meetings-2 = встречи
+network = сеть
+on-this-computer-2 = на этом компьютере
+version-number = версия { $version }
+sample-title = Еженедельная встреча
+sample-first-point = выпустить бету в пятницу
+sample-second-point = спросить Мию о документации

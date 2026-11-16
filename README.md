@@ -56,7 +56,7 @@ An installed copy looks for a new version shortly after starting. It installs in
 | **Correct the board**: select something to strike, circle, underline, star or highlight it, change its words or remove it. Undo and redo cover all of it. | **Trace who said what**: hover a speaker to see their part of the board; jump from an item to the line behind it. |
 | **Tell speakers apart** by voice and give them real names; the same voice keeps its name. | **Find a meeting** again in the sidebar, or search all of them, and carry on where it stopped. |
 
-Boards are drawn stroke by stroke in Chinese, Japanese and English. Light mode uses whiteboard markers; when the system is dark, the board becomes a chalkboard. The interface is in English or Chinese, following the system or your choice in Settings; board labels and summaries follow the meeting's language.
+Boards are drawn stroke by stroke in Chinese, Japanese and English. Light mode uses whiteboard markers; when the system is dark, the board becomes a chalkboard. The interface speaks English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français, Deutsch, Português, Русский and Italiano: English unless you choose another in Settings, where it can also follow the system. Board labels and summaries follow the meeting's language. Translations live in [`crates/ui/i18n`](crates/ui/i18n), one Fluent file per language.
 
 ### Circle and refer
 

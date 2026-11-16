@@ -233,12 +233,10 @@ delete-this-pinned-meeting = Diese angeheftete Besprechung löschen?
 unpin = Lösen
 pin-to-the-top = Oben anheften
 open-its-folder-the-meeting = Ordner öffnen: die Besprechung, ihre Bilder und ihr Audio
-recommended = empfohlen
 in-use = In Verwendung
 use = Verwenden
 board-model = Tafelmodell
 to-draw-the-board-download = Zum Zeichnen der Tafel ein Modell herunterladen, das auf diesem Computer läuft, oder ein entferntes einrichten. Spracherkennung ist bereits enthalten.
-what-turns-what-is-said = Was das Gesagte in die Tafel verwandelt.
 on-this-computer = Auf diesem Computer
 remote = Entfernt
 pause = Pause
@@ -254,7 +252,6 @@ the-system-s-default-input = Der Standardeingang des Systems
 the-chosen-input-not-connected = Der gewählte Eingang, derzeit nicht verbunden
 speech = Spracheingabe
 what-is-heard-and-how = Was gehört wird und wie es aufgeschrieben wird.
-listen-to = Zuhören bei
 for-the-other-side-of = Für die Gegenseite einer Online-Besprechung den Eingang "Monitor of" für die Lautsprecher wählen, über die sie abgespielt wird.
 tell-speakers-apart-by-voice = Sprecher an der Stimme unterscheiden
 new-voices-are-named-a = Neue Stimmen heißen A, B, C. Stimmdaten bleiben in der Besprechungsdatei auf diesem Computer.
@@ -386,3 +383,74 @@ topic-options = Optionen
 topic-decision = Entscheidung
 api-key = API-Schlüssel
 list-separator = {"; "}
+heard-in-ms = In { $ms } ms gehört
+drawn-in-ms = In { $ms } ms gezeichnet
+connected-in-ms = In { $ms } ms verbunden
+name-is-ready = { $name } ist bereit.
+downloading-the-model-percent = Modell wird heruntergeladen: { $percent }%
+reading-meetings-of = Besprechungen werden gelesen: { $done } / { $total }
+line-count =
+    { $n ->
+        [one] { $n } Zeile
+       *[other] { $n } Zeilen
+    }
+more-in-all-meetings-count = { $n } weitere unter „Alle Besprechungen“ →
+board-count =
+    { $n ->
+        [one] { $n } Tafel
+       *[other] { $n } Tafeln
+    }
+saved-to-path = Gespeichert unter { $path }
+writing-part-of = Teil { $part }/{ $parts } wird geschrieben…
+uses-cloud-model-sent-to = Nutzt das Cloud-Modell { $model }; die gesamte Mitschrift wird an { $host } gesendet
+topic-count =
+    { $n ->
+        [one] { $n } Thema
+       *[other] { $n } Themen
+    }
+not-drawn-count-show =
+    { $n ->
+        [one] { $n } nicht gezeichnet: anzeigen
+       *[other] { $n } nicht gezeichnet: anzeigen
+    }
+count-waiting-for-the-model =
+    { $n ->
+        [one] { $n } wartet auf das Modell
+       *[other] { $n } warten auf das Modell
+    }
+drawing-count-waiting =
+    { $n ->
+        [one] Zeichnen · { $n } wartet
+       *[other] Zeichnen · { $n } warten
+    }
+started-at-time = Gestartet um { $time }
+board-number = Tafel { $n }
+update-to-version = Auf { $version } aktualisieren
+deleted-title = „{ $title }“ gelöscht
+name-checking-what-was-downloaded = { $name } prüft, was bereits heruntergeladen wurde…
+name-starting = { $name } startet…
+saved-key-leave-empty = Gespeicherter Schlüssel: { $hint }. Leer lassen, um ihn zu behalten.
+hearing-with-models = Hören mit { $models }
+always-the-same-keys = Immer gleich: { $keys }
+version-installed-restart = { $version } ist installiert. Deine Besprechung läuft weiter, bis du neu startest.
+about-percent = etwa { $percent }%
+keys-kept-for-closing = { $keys } ist zum Schließen und Navigieren reserviert.
+keys-already-used-by = { $keys } wird bereits von „{ $action }“ verwendet.
+board-forked = Tafel { $to } wurde von Tafel { $from } abgezweigt, so wie sie um { $when } war
+recommended-2 = Empfohlen
+runs = Läuft
+on-this-computer-nothing-leaves = Auf diesem Computer verlässt nichts das Gerät; ein entferntes Modell wird über das Netzwerk erreicht.
+the-model-turns-what-is = Das Modell macht aus dem Gesagten die Tafel.
+models = Modelle
+remote-model = entferntes Modell
+listen-to-2 = Eingang
+recognition = Erkennung
+during-the-meeting = während der Besprechung
+look = Aussehen
+meetings-2 = Besprechungen
+network = Netzwerk
+on-this-computer-2 = auf diesem Computer
+version-number = Version { $version }
+sample-title = Wochentermin
+sample-first-point = Beta am Freitag veröffentlichen
+sample-second-point = Mia nach den Dokumenten fragen

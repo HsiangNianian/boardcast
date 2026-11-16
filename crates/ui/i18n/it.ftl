@@ -233,12 +233,10 @@ delete-this-pinned-meeting = Eliminare questa riunione fissata?
 unpin = Sblocca
 pin-to-the-top = Fissa in alto
 open-its-folder-the-meeting = Apri la sua cartella: la riunione, le immagini e l'audio
-recommended = consigliato
 in-use = In uso
 use = Usa
 board-model = Modello della lavagna
 to-draw-the-board-download = Per disegnare la lavagna, scarica un modello che gira su questo computer o configurane uno remoto. Il riconoscimento vocale è già incluso.
-what-turns-what-is-said = Ciò che trasforma quello che si dice nella lavagna.
 on-this-computer = Su questo computer
 remote = Remoto
 pause = Pausa
@@ -254,7 +252,6 @@ the-system-s-default-input = L'ingresso predefinito del sistema
 the-chosen-input-not-connected = L'ingresso scelto, ora non collegato
 speech = Voce
 what-is-heard-and-how = Cosa si ascolta e come viene trascritto.
-listen-to = Ascolta
 for-the-other-side-of = Per l'altra parte di una riunione online, scegli l'ingresso "Monitor of" degli altoparlanti da cui esce l'audio.
 tell-speakers-apart-by-voice = Distingui gli interlocutori dalla voce
 new-voices-are-named-a = Le nuove voci si chiamano A, B, C. I dati vocali restano nel file della riunione su questo computer.
@@ -386,3 +383,78 @@ topic-options = Opzioni
 topic-decision = Decisione
 api-key = Chiave API
 list-separator = {"; "}
+heard-in-ms = Ascoltato in { $ms } ms
+drawn-in-ms = disegnato in { $ms } ms
+connected-in-ms = Connesso in { $ms } ms
+name-is-ready = { $name } è pronto.
+downloading-the-model-percent = Download del modello { $percent }%
+reading-meetings-of = Lettura delle riunioni { $done } / { $total }
+line-count =
+    { $n ->
+        [one] { $n } frase
+       *[other] { $n } frasi
+    }
+more-in-all-meetings-count =
+    { $n ->
+        [one] { $n } altra in Tutte le riunioni →
+       *[other] { $n } altre in Tutte le riunioni →
+    }
+board-count =
+    { $n ->
+        [one] { $n } lavagna
+       *[other] { $n } lavagne
+    }
+saved-to-path = Salvato in { $path }
+writing-part-of = Scrittura della parte { $part }/{ $parts }…
+uses-cloud-model-sent-to = Usa il modello cloud { $model }; l’intera trascrizione viene inviata a { $host }
+topic-count =
+    { $n ->
+        [one] { $n } argomento
+       *[other] { $n } argomenti
+    }
+not-drawn-count-show =
+    { $n ->
+        [one] { $n } non disegnata: mostra
+       *[other] { $n } non disegnate: mostra
+    }
+count-waiting-for-the-model =
+    { $n ->
+        [one] { $n } in attesa del modello
+       *[other] { $n } in attesa del modello
+    }
+drawing-count-waiting =
+    { $n ->
+        [one] Disegno in corso · { $n } in attesa
+       *[other] Disegno in corso · { $n } in attesa
+    }
+started-at-time = Iniziata alle { $time }
+board-number = Lavagna { $n }
+update-to-version = Aggiorna a { $version }
+deleted-title = “{ $title }” eliminato
+name-checking-what-was-downloaded = { $name } sta controllando ciò che è già stato scaricato…
+name-starting = { $name } si sta avviando…
+saved-key-leave-empty = Chiave salvata: { $hint }. Lascia vuoto per mantenerla.
+hearing-with-models = In ascolto con { $models }
+always-the-same-keys = Sempre uguale: { $keys }
+version-installed-restart = { $version } è installata. La tua riunione continua finché non riavvii.
+about-percent = circa { $percent }%
+keys-kept-for-closing = { $keys } è riservato per chiudere e spostarsi.
+keys-already-used-by = { $keys } è già usato da “{ $action }”.
+board-forked = Lavagna { $to } derivata dalla lavagna { $from } com’era alle { $when }
+recommended-2 = Consigliato
+runs = Esecuzione
+on-this-computer-nothing-leaves = Su questo computer non esce nulla; un modello remoto si raggiunge via rete.
+the-model-turns-what-is = Il modello trasforma ciò che viene detto nella lavagna.
+models = modelli
+remote-model = modello remoto
+listen-to-2 = ascolta
+recognition = riconoscimento
+during-the-meeting = durante la riunione
+look = aspetto
+meetings-2 = riunioni
+network = rete
+on-this-computer-2 = su questo computer
+version-number = versione { $version }
+sample-title = Riunione settimanale
+sample-first-point = rilasciare la beta venerdì
+sample-second-point = chiedere a Mia della documentazione

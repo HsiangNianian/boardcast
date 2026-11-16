@@ -31,6 +31,7 @@ use boardcast_board::speakers::{by_of_edge, by_of_node, first_seen, initial, sai
 use boardcast_board::steps::{clock, replay_to, sound_times, steps_heard, Player};
 use gpui_kit::base::input::{Textarea, TextareaState};
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::progress::Progress as ProgressBar;
 use gpui_kit::component::separator::Separator;
@@ -1322,6 +1323,46 @@ impl Sound {
     }
 }
 
+/// How long the Settings sample of the hand takes to write.
+const HAND_SAMPLE_WRITING: Duration = Duration::from_millis(1400);
+
+/// A topic and a point under it, laid out and written as the board writes them, moved to start at (0, 0);
+/// with how wide and tall they are.
+fn hand_sample(glyphs: &mut Glyphs) -> (Vec<Inked>, f32, f32) {
+    let mut g = Graph::default();
+    // The words come from the interface's language; the board's own marks around them stay as they are.
+    let (mut title, mut first, mut second) = (t("sample-title"), t("sample-first-point"), t("sample-second-point"));
+    // The pen does not write every script yet; then the hand is shown in English.
+    if [title, first, second].iter().flat_map(|s| s.chars()).any(|c| !c.is_whitespace() && glyphs.get(c).is_none()) {
+        (title, first, second) = ("Weekly sync", "ship the beta on Friday", "ask Mia about the docs");
+    }
+    g.apply(&parse_ops(&format!("T 「{title}」\nL 「{title}」 「{first}」\nL 「{title}」 「{second}」")));
+    let laid = StableLayout::default().layout(&g, &mut first_diagram);
+    let (pieces, _) = compose(&g, &laid, glyphs);
+    let mut strokes: Vec<Inked> = pieces
+        .iter()
+        .flat_map(|piece| {
+            let mut r = Rng::new(&piece.seed);
+            piece.lines.iter().map(move |line| line.inked(&mut r)).collect::<Vec<_>>()
+        })
+        .collect();
+    let pad = 6.0;
+    let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for p in strokes.iter().flat_map(|s| s.center.iter()) {
+        (x0, y0, x1, y1) = (x0.min(p[0]), y0.min(p[1]), x1.max(p[0]), y1.max(p[1]));
+    }
+    if x0 > x1 {
+        return (strokes, 1.0, 1.0);
+    }
+    for s in &mut strokes {
+        for p in &mut s.center {
+            p[0] += pad - x0;
+            p[1] += pad - y0;
+        }
+    }
+    (strokes, x1 - x0 + 2.0 * pad, y1 - y0 + 2.0 * pad)
+}
+
 /// A meeting's sound: its samples, its pieces' starts and lengths in ms, and its loudness along it.
 type ReadSound = (Vec<f32>, Vec<(f64, f64)>, Vec<f32>);
 
@@ -1472,6 +1513,9 @@ struct Workbench {
     /// The empty board's headline in the board's pen, for the words it was written for: its strokes, size and
     /// when the pen began.
     welcome_line: Option<(String, Vec<Inked>, f32, f32, Instant)>,
+    /// A few words in the board's hand for Settings: the hand they were written in, their strokes, how wide
+    /// and tall they are, and when the writing began, so a new hand writes them out again.
+    hand_sample: Option<((f32, &'static str), Vec<Inked>, f32, f32, Instant)>,
     /// The file the audio is being kept in while listening, and when it began.
     keeping: Option<(String, f64)>,
     /// The board a document was opened from, and which document, for the way back.
@@ -4431,6 +4475,19 @@ impl Workbench {
 
     /// Write in a neater or messier hand from now on. What is on the board is written again in it at once,
     /// where it was, and the view stays where it is.
+    /// The Settings sample in the board's hand as it is now, written again from the start when the hand changed.
+    fn hand_sample(&mut self) -> (Vec<Inked>, f32, f32, Instant) {
+        // Written again in a new hand, or in the words of a new language.
+        let made = (self.form.saved.messy, crate::i18n::code());
+        let fresh = self.hand_sample.as_ref().is_some_and(|((m, code), ..)| (*m - made.0).abs() < 0.001 && *code == made.1);
+        if !fresh {
+            let (strokes, w, h) = hand_sample(&mut self.ink.borrow_mut().glyphs);
+            self.hand_sample = Some((made, strokes, w, h, Instant::now()));
+        }
+        let (_, strokes, w, h, started) = self.hand_sample.clone().expect("made above");
+        (strokes, w, h, started)
+    }
+
     fn choose_messy(&mut self, messy: f32, cx: &mut Context<Self>) {
         let messy = (messy.clamp(0.0, 1.0) * 10.0).round() / 10.0;
         if (self.form.saved.messy - messy).abs() < 0.001 {
@@ -7040,9 +7097,8 @@ impl Render for Workbench {
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .px_3()
-                .py_2()
-                .when(i > 0, |d| d.border_t_1().border_color(rgb(pal().line)))
+                .px_4()
+                .py_3()
                 // The name gives way, so a long one can never push its button out of reach.
                 .child(
                     div()
@@ -7055,11 +7111,11 @@ impl Render for Workbench {
                                 .gap_2()
                                 .child(div().text_sm().child(name))
                                 .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().faint)).child(size))
-                                .when(recommended, |d| d.child(div().px_1().text_xs().border_1().border_color(rgb(pal().recording)).text_color(rgb(pal().recording)).child(t("recommended")))),
+                                .when(recommended, |d| d.child(div().px(px(6.)).rounded(px(3.)).bg(rgb(pal().selected)).text_xs().text_color(rgb(pal().accent)).child(t("recommended-2")))),
                         )
                         .when_some(model.note, |d, (en, zh)| d.child(div().text_xs().text_color(rgb(pal().muted)).child(if crate::i18n::chinese() { zh } else { en }))),
                 )
-                .when(active, |d| d.child(div().flex().items_center().gap_1().text_xs().child(div().size(px(6.)).rounded_full().bg(rgb(pal().recording))).child(t("in-use"))))
+                .when(active, |d| d.child(div().flex().items_center().gap(px(6.)).text_xs().text_color(rgb(pal().muted)).child(div().size(px(7.)).rounded_full().bg(rgb(pal().accent))).child(t("in-use"))))
                 .when(installed && !active, |d| {
                     d.child(button(("use-model", i), t("use")).on_click(cx.listener(move |this, _, _, cx| this.use_model(&action, cx))))
                 })
@@ -7077,9 +7133,8 @@ impl Render for Workbench {
                 .items_center()
                 .justify_between()
                 .gap_6()
+                .px_4()
                 .py_3()
-                .border_b_1()
-                .border_color(rgb(pal().line))
                 .child(
                     div()
                         .flex_1()
@@ -7091,32 +7146,42 @@ impl Render for Workbench {
                         .when_some(hint, |d, hint| d.child(div().text_xs().text_color(rgb(pal().muted)).child(hint))),
                 )
         };
-        // A few choices side by side, the chosen one filled.
-        let segmented = |buttons: Vec<Button>| div().flex().flex_none().p(px(2.)).gap(px(2.)).border_1().border_color(rgb(pal().line)).rounded(px(3.)).children(buttons);
-        let choice = |id: gpui_kit::ElementId, label: &'static str, on: bool| Button::new(id).small().label(label).map(|b| if on { b.primary() } else { b.ghost() });
-        // Each page is named by its tab; under it, a line on what the page is for.
-        let heading = |_title: &'static str, intro: Option<&'static str>| {
+        // Settings that go together: a small caption, then one card with a line between its rows.
+        let section = |caption: Option<&'static str>, rows: Vec<gpui_kit::AnyElement>| {
             div()
                 .flex()
                 .flex_col()
-                .gap_1()
-                .pb_2()
-                .when_some(intro, |d, intro| d.child(div().text_sm().text_color(rgb(pal().muted)).child(intro)))
+                .gap(px(6.))
+                .pt_6()
+                .when_some(caption, |d, caption| d.child(div().px_1().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(caption)))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .border_1()
+                        .border_color(rgb(pal().line))
+                        .rounded(px(8.))
+                        .bg(rgb(pal().surface))
+                        .overflow_hidden()
+                        .children(rows.into_iter().enumerate().map(|(i, r)| div().when(i > 0, |d| d.border_t_1().border_color(rgb(pal().line))).child(r))),
+                )
+        };
+        // A line under a card, for what is worth knowing but is not a setting.
+        let footnote = |text: gpui_kit::SharedString, color: u32| div().px_1().pt_2().text_xs().text_color(rgb(color)).child(text);
+        // A few choices side by side, the chosen one filled.
+        let segmented = |buttons: Vec<Button>| div().flex().flex_none().p(px(2.)).gap(px(2.)).border_1().border_color(rgb(pal().line)).rounded(px(5.)).bg(rgb(pal().paper)).children(buttons);
+        let choice = |id: gpui_kit::ElementId, label: &'static str, on: bool| Button::new(id).small().label(label).map(|b| if on { b.primary() } else { b.ghost() });
+        // What a page is for, in a line above its first card.
+        let intro = |text: &'static str| div().pt_5().text_sm().text_color(rgb(pal().muted)).child(text);
+        let save_setting = |this: &mut Self, cx: &mut Context<Self>| {
+            if let Err(e) = this.form.saved.save() {
+                this.form.note = Some(format!("{e:#}"));
+            }
+            cx.notify();
         };
         let page: gpui_kit::AnyElement = match tab {
-            SettingsTab::Model => div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(heading(
-                    t("board-model"),
-                    Some(if self.needs_model {
-                        t("to-draw-the-board-download")
-                    } else {
-                        t("what-turns-what-is-said")
-                    }),
-                ))
-                .child(div().flex().child(segmented(vec![
+            SettingsTab::Model => {
+                let place = row(t("runs"), Some(t("on-this-computer-nothing-leaves"))).child(segmented(vec![
                     choice("use-local".into(), t("on-this-computer"), !self.form.remote).on_click(cx.listener(|this, _, _, cx| {
                         this.form.remote = false;
                         cx.notify();
@@ -7125,36 +7190,32 @@ impl Render for Workbench {
                         this.form.remote = true;
                         cx.notify();
                     })),
-                ])))
-                .when(!self.form.remote, |d| {
-                    d.child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .border_1()
-                            .border_color(rgb(pal().line))
-                            .rounded(px(3.))
-                            .bg(rgb(pal().surface))
-                            .children(local_models),
-                    )
-                })
-                .when_some(progress_row, |d, (text, fraction)| {
-                    d.child(
+                ]));
+                let mut models: Vec<gpui_kit::AnyElement> = local_models.into_iter().map(IntoElement::into_any_element).collect();
+                if let Some((text, fraction)) = progress_row {
+                    models.push(
                         div()
                             .flex()
                             .items_center()
                             .gap_3()
-                            .child(div().flex_1().flex().flex_col().gap_1().child(div().text_xs().child(text)).child(div().h(px(4.)).w_full().bg(rgb(pal().track)).child(div().h_full().w(gpui_kit::relative(fraction)).bg(rgb(pal().strong)))))
+                            .px_4()
+                            .py_3()
+                            .child(div().flex_1().flex().flex_col().gap_1().child(div().text_xs().child(text)).child(div().h(px(4.)).w_full().rounded(px(2.)).bg(rgb(pal().track)).child(div().h_full().rounded(px(2.)).w(gpui_kit::relative(fraction)).bg(rgb(pal().strong)))))
                             .child(button("stop-download", t("pause")).on_click(cx.listener(|this, _, _, cx| {
                                 if let Some(download) = &this.download {
                                     download.cancel.store(true, Ordering::Relaxed);
                                 }
                                 cx.notify();
-                            }))),
-                    )
-                })
-                .when(self.form.remote, |d| {
-                    d.child(
+                            })))
+                            .into_any_element(),
+                    );
+                }
+                let remote = div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .p_4()
+                    .child(
                         div()
                             .flex()
                             .items_center()
@@ -7182,232 +7243,309 @@ impl Render for Workbench {
                             .gap_2()
                             .child(Button::new("save-settings").small().primary().label(t("save")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx))))
                             .child(button("test-settings", t("test")).on_click(cx.listener(|this, _, _, cx| this.test_settings(cx)))),
-                    )
-                })
-                // Leaving the remote model takes effect on saving, like choosing it does.
-                .when(!self.form.remote && self.form.saved.enabled, |d| {
-                    d.child(div().flex().child(Button::new("save-local").small().primary().label(t("save")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx)))))
-                })
-                .when_some(self.form.note.clone(), |d, note| d.child(div().text_sm().child(note)))
-                .when(forced, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(t("the-command-line-chose-the"))))
-                .when(local_only, |d| d.child(div().text_xs().text_color(rgb(pal().warning)).child(t("this-meeting-is-local-only"))))
-                .into_any_element(),
+                    );
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(intro(if self.needs_model {
+                        t("to-draw-the-board-download")
+                    } else {
+                        t("the-model-turns-what-is")
+                    }))
+                    .child(section(None, vec![place.into_any_element()]))
+                    .when(!self.form.remote, |d| d.child(section(Some(t("models")), models)))
+                    .when(self.form.remote, |d| d.child(section(Some(t("remote-model")), vec![remote.into_any_element()])))
+                    // Leaving the remote model takes effect on saving, like choosing it does.
+                    .when(!self.form.remote && self.form.saved.enabled, |d| {
+                        d.child(div().flex().pt_3().child(Button::new("save-local").small().primary().label(t("save")).on_click(cx.listener(|this, _, window, cx| this.save_settings(window, cx)))))
+                    })
+                    .when_some(self.form.note.clone(), |d, note| d.child(footnote(note.into(), pal().text)))
+                    .when(forced, |d| d.child(footnote(t("the-command-line-chose-the").into(), pal().warning)))
+                    .when(local_only, |d| d.child(footnote(t("this-meeting-is-local-only").into(), pal().warning)))
+                    .into_any_element()
+            }
             SettingsTab::Speech => {
                 let chosen = self.form.saved.input.clone();
                 let inputs = std::iter::once((String::new(), t("the-system-s-default-input").to_string()))
                     .chain(self.inputs.iter().map(|i| (i.id.clone(), i.name.clone())))
                     .chain((!chosen.is_empty() && !self.inputs.iter().any(|i| i.id == chosen)).then(|| (chosen.clone(), t("the-chosen-input-not-connected").to_string())));
+                // A long list of inputs scrolls in its card rather than pushing everything else down.
+                let input_list = div().id("inputs").flex().flex_col().max_h(px(236.)).overflow_y_scroll().children(inputs.enumerate().map(|(i, (id, name))| {
+                    let on = id == chosen;
+                    div()
+                        .id(("input", i))
+                        .flex()
+                        .items_center()
+                        .gap_3()
+                        .px_4()
+                        .py(px(9.))
+                        .when(i > 0, |d| d.border_t_1().border_color(rgb(pal().line)))
+                        .cursor_pointer()
+                        .text_sm()
+                        .hover(|d| d.bg(rgb(pal().selected)))
+                        // A radio: a ring, filled when chosen.
+                        .child(
+                            div()
+                                .size(px(14.))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded_full()
+                                .border_1()
+                                .border_color(rgb(if on { pal().text } else { pal().faint }))
+                                .when(on, |d| d.child(div().size(px(6.)).rounded_full().bg(rgb(pal().text)))),
+                        )
+                        .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(name))
+                        .on_click(cx.listener(move |this, _, _, cx| this.choose_input(id.clone(), cx)))
+                }));
+                let system = self.speech_helper.is_some() && self.form.saved.system_speech;
+                let language = self.form.saved.speech_language.clone();
+                // Telling the language sentence by sentence is still an experiment; Apple's Automatic only
+                // follows the Mac's language.
+                let auto = if system { t("automatic") } else { t("automatic-experimental") };
+                let languages = [("auto", auto), ("zh-CN", "中文"), ("en-US", "English"), ("ja-JP", "日本語")];
+                let hint = if system {
+                    t("apple-hears-one-language-at")
+                } else {
+                    t("automatic-tells-each-sentence-s")
+                };
+                let mut recognition: Vec<gpui_kit::AnyElement> = vec![];
+                if self.speech_helper.is_some() {
+                    let system = self.form.saved.system_speech;
+                    recognition.push(
+                        row(t("recognize-speech-with"), None)
+                            .child(segmented(vec![
+                                choice("speech-models".into(), t("speech-models"), !system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, cx))),
+                                choice("speech-apple".into(), "Apple", system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, cx))),
+                            ]))
+                            .into_any_element(),
+                    );
+                }
+                // The language's choices sit under its explanation, which is too long to share a line with them.
+                recognition.push(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .px_4()
+                        .py_3()
+                        .child(div().text_sm().child(t("language-heard")))
+                        .child(div().text_xs().text_color(rgb(pal().muted)).child(hint))
+                        .child(div().flex().pt_1().child(segmented(
+                            languages.into_iter().map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("speech-language-{id}").into()), label, language == id).on_click(cx.listener(move |this, _, _, cx| this.choose_speech(this.form.saved.system_speech, Some(id), cx)))).collect(),
+                        )))
+                        .into_any_element(),
+                );
+                recognition.push(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .px_4()
+                        .py_3()
+                        .child(div().text_sm().child(t("glossary")))
+                        .child(div().text_xs().text_color(rgb(pal().muted)).child(t("names-as-they-should-be")))
+                        .child(div().pt_1().child(Input::new(&self.form.glossary).small()))
+                        .into_any_element(),
+                );
                 div()
                     .flex()
                     .flex_col()
-                    .child(heading(t("speech"), Some(t("what-is-heard-and-how"))))
-                    .child(div().pt_3().pb_1().text_sm().child(t("listen-to")))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .border_1()
-                            .border_color(rgb(pal().line))
-                            .rounded(px(3.))
-                            .bg(rgb(pal().surface))
-                            .children(inputs.enumerate().map(|(i, (id, name))| {
-                                let on = id == chosen;
-                                div()
-                                    .id(("input", i))
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .px_3()
-                                    .py_2()
-                                    .when(i > 0, |d| d.border_t_1().border_color(rgb(pal().line)))
-                                    .cursor_pointer()
-                                    .text_sm()
-                                    .hover(|d| d.bg(rgb(pal().selected)))
-                                    .child(div().size(px(8.)).flex_none().rounded_full().when(on, |d| d.bg(rgb(pal().recording))).when(!on, |d| d.border_1().border_color(rgb(pal().faint))))
-                                    .child(div().min_w_0().overflow_hidden().whitespace_nowrap().child(name))
-                                    .on_click(cx.listener(move |this, _, _, cx| this.choose_input(id.clone(), cx)))
-                            })),
-                    )
+                    .child(intro(t("what-is-heard-and-how")))
+                    .child(section(Some(t("listen-to-2")), vec![input_list.into_any_element()]))
                     .when(cfg!(target_os = "linux"), |d| {
-                        d.child(div().pt_1().text_xs().text_color(rgb(pal().muted)).child(t("for-the-other-side-of")))
-                    })
-                    .child(row(t("tell-speakers-apart-by-voice"), Some(t("new-voices-are-named-a"))).child(
-                        Switch::new("diarize").checked(self.form.saved.diarize).accessibility_label(t("tell-speakers-apart-by-voice")).on_click(cx.listener(|this, checked: &bool, _, cx| {
-                            this.form.saved.diarize = *checked;
-                            if let Err(e) = this.form.saved.save() {
-                                this.form.note = Some(format!("{e:#}"));
-                            }
-                            cx.notify();
-                        })),
-                    ))
-                    .child(row(t("turn-to-the-page-being"), Some(t("otherwise-the-board-s-corner"))).child(
-                        Switch::new("turn-pages").checked(self.form.saved.turn_pages).accessibility_label(t("turn-to-the-page-being")).on_click(cx.listener(|this, checked: &bool, _, cx| {
-                            this.form.saved.turn_pages = *checked;
-                            if let Err(e) = this.form.saved.save() {
-                                this.form.note = Some(format!("{e:#}"));
-                            }
-                            cx.notify();
-                        })),
-                    ))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .py_3()
-                            .border_b_1()
-                            .border_color(rgb(pal().line))
-                            .child(div().text_sm().child(t("glossary")))
-                            .child(div().text_xs().text_color(rgb(pal().muted)).child(t("names-as-they-should-be")))
-                            .child(div().pt_1().child(Input::new(&self.form.glossary).small())),
-                    )
-                    .when(self.speech_helper.is_some(), |d| {
-                        let system = self.form.saved.system_speech;
-                        d.child(row(t("recognize-speech-with"), None).child(segmented(vec![
-                            choice("speech-models".into(), t("speech-models"), !system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(false, None, cx))),
-                            choice("speech-apple".into(), "Apple", system).on_click(cx.listener(|this, _, _, cx| this.choose_speech(true, None, cx))),
-                        ])))
-                    })
-                    .child({
-                        let system = self.speech_helper.is_some() && self.form.saved.system_speech;
-                        let language = self.form.saved.speech_language.clone();
-                        // Telling the language sentence by sentence is still an experiment; Apple's Automatic only
-                        // follows the Mac's language.
-                        let auto = if system { t("automatic") } else { t("automatic-experimental") };
-                        let languages = [("auto", auto), ("zh-CN", "中文"), ("en-US", "English"), ("ja-JP", "日本語")];
-                        let hint = if system {
-                            t("apple-hears-one-language-at")
-                        } else {
-                            t("automatic-tells-each-sentence-s")
-                        };
-                        row(t("language-heard"), Some(hint)).child(segmented(
-                            languages.into_iter().map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("speech-language-{id}").into()), label, language == id).on_click(cx.listener(move |this, _, _, cx| this.choose_speech(this.form.saved.system_speech, Some(id), cx)))).collect(),
+                        d.child(footnote(
+                            t("for-the-other-side-of").into(),
+                            pal().muted,
                         ))
                     })
-                    .when_some(self.hearing.clone(), |d, with| d.child(div().pt_2().text_xs().text_color(rgb(pal().faint)).child(ta!("hearing-with-models", models = with.to_string()))))
+                    .child(section(Some(t("recognition")), recognition))
+                    .child(section(
+                        Some(t("during-the-meeting")),
+                        vec![
+                            row(t("tell-speakers-apart-by-voice"), Some(t("new-voices-are-named-a")))
+                                .child(Switch::new("diarize").checked(self.form.saved.diarize).accessibility_label(t("tell-speakers-apart-by-voice")).on_click(cx.listener(move |this, checked: &bool, _, cx| {
+                                    this.form.saved.diarize = *checked;
+                                    save_setting(this, cx);
+                                })))
+                                .into_any_element(),
+                            row(t("turn-to-the-page-being"), Some(t("otherwise-the-board-s-corner")))
+                                .child(Switch::new("turn-pages").checked(self.form.saved.turn_pages).accessibility_label(t("turn-to-the-page-being")).on_click(cx.listener(move |this, checked: &bool, _, cx| {
+                                    this.form.saved.turn_pages = *checked;
+                                    save_setting(this, cx);
+                                })))
+                                .into_any_element(),
+                        ],
+                    ))
+                    .when_some(self.hearing.clone(), |d, with| d.child(footnote(ta!("hearing-with-models", models = with.to_string()).into(), pal().faint)))
                     .into_any_element()
             }
             SettingsTab::General => {
+                let (sample_strokes, sample_w, sample_h, sample_started) = self.hand_sample();
                 let proxy = self.form.saved.proxy.clone();
                 let language = self.form.saved.interface_language.clone();
+                // The interface's language: each named in itself, so it can be found whatever is shown now,
+                // or the system's. Earlier versions kept Simplified Chinese as "zh".
+                let chosen = if language == "zh" { "zh-Hans" } else { language.as_str() };
+                let shown = crate::i18n::LANGUAGES.iter().find(|(code, _)| *code == chosen).map_or(t("system"), |(_, name)| *name);
+                let workbench = cx.entity().downgrade();
+                let chosen = chosen.to_string();
+                let language_menu = Button::new("interface-language")
+                    .small()
+                    .outline()
+                    .min_w(px(150.))
+                    .label(shown)
+                    .dropdown_caret(true)
+                    .dropdown_menu(move |menu, _, _| {
+                        let choices = std::iter::once(("auto", t("system"))).chain(crate::i18n::LANGUAGES.iter().copied());
+                        choices.enumerate().fold(menu.min_w(px(180.)).max_h(px(420.)).scrollable(true), |menu, (i, (code, name))| {
+                            let workbench = workbench.clone();
+                            let menu = menu.item(PopupMenuItem::new(name).checked(chosen == code).on_click(move |_, _, cx| {
+                                let _ = workbench.update(cx, |this, cx| this.choose_language(code, cx));
+                            }));
+                            // The system's choice stands apart from the languages.
+                            if i == 0 { menu.separator() } else { menu }
+                        })
+                    });
                 let look = self.form.saved.appearance.clone();
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(heading(t("general"), None))
-                    .child(row(t("language"), Some(t("the-board-and-summary-follow"))).child(segmented(
-                        [("auto", t("system")), ("en", "English"), ("zh", "中文")]
-                            .into_iter()
-                            .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("interface-language-{id}").into()), label, language == id).on_click(cx.listener(move |this, _, _, cx| this.choose_language(id, cx))))
-                            .collect(),
-                    )))
-                    .child(row(t("appearance"), None).child(segmented(
-                        [("auto", t("system")), ("light", t("light")), ("dark", t("dark"))]
-                            .into_iter()
-                            .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("appearance-{id}").into()), label, look == id).on_click(cx.listener(move |this, _, _, cx| this.choose_appearance(id, cx))))
-                            .collect(),
-                    )))
-                    .child(row(
-                        t("handwriting"),
-                        Some(t("a-messier-hand-leans-and")),
-                    ).child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .items_center()
-                            .gap_2()
-                            .w(px(240.))
-                            .child(div().text_xs().text_color(rgb(pal().muted)).child(t("neat")))
-                            .child(Slider::new(&self.form.messy).accessibility_label(t("how-messy-the-handwriting-is")).flex_1().min_w_0())
-                            .child(div().text_xs().text_color(rgb(pal().muted)).child(t("messy"))),
-                    ))
-                    .child(row(
-                        t("search-meetings-by-meaning"),
-                        Some(t("finds-what-was-said-in")),
-                    ).child(
-                        Switch::new("meeting-search").checked(self.form.saved.meeting_search).accessibility_label(t("search-meetings-by-meaning")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_meeting_search(*on, cx))),
-                    ))
-                    .when_some(self.search_status(), |d, (text, failed)| d.child(div().pt_1().text_xs().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(text)))
-                    .child(row(
-                        t("keep-the-meeting-s-audio"),
-                        Some(t("saves-what-is-heard-beside")),
-                    ).child(
-                        Switch::new("keep-audio").checked(self.form.saved.keep_audio).accessibility_label(t("keep-the-meeting-s-audio")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_keep_audio(*on, cx))),
-                    ))
-                    .child(row(
-                        t("network-proxy"),
-                        Some(t("for-downloading-models-and-for")),
-                    ).child(segmented(
-                        [("system", t("system")), ("custom", t("custom")), ("off", t("none-2"))]
-                            .into_iter()
-                            .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("proxy-{id}").into()), label, proxy == id).on_click(cx.listener(move |this, _, _, cx| this.choose_proxy(id, cx))))
-                            .collect(),
-                    )))
+                let search = row(
+                    t("search-meetings-by-meaning"),
+                    Some(t("finds-what-was-said-in")),
+                )
+                .child(Switch::new("meeting-search").checked(self.form.saved.meeting_search).accessibility_label(t("search-meetings-by-meaning")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_meeting_search(*on, cx))));
+                // How the search's model is doing belongs to its row.
+                let search = div().child(search).when_some(self.search_status(), |d, (text, failed)| {
+                    d.child(div().px_4().pb_3().mt(px(-4.)).text_xs().text_color(rgb(if failed { pal().danger } else { pal().accent })).child(text))
+                });
+                let proxy_row = div()
+                    .child(
+                        row(t("network-proxy"), Some(t("for-downloading-models-and-for"))).child(segmented(
+                            [("system", t("system")), ("custom", t("custom")), ("off", t("none-2"))]
+                                .into_iter()
+                                .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("proxy-{id}").into()), label, proxy == id).on_click(cx.listener(move |this, _, _, cx| this.choose_proxy(id, cx))))
+                                .collect(),
+                        )),
+                    )
                     .when(proxy == "custom", |d| {
                         d.child(
                             div()
                                 .flex()
                                 .flex_col()
                                 .gap_1()
-                                .pt_2()
+                                .px_4()
+                                .pb_4()
                                 .child(Input::new(&self.form.proxy_url))
                                 .child(div().text_xs().text_color(rgb(pal().muted)).child(t("http-host-port-or-socks5")))
                                 .child(div().flex().gap_2().pt_1().child(div().flex_1().child(Input::new(&self.form.proxy_user))).child(div().flex_1().child(Input::new(&self.form.proxy_password).mask_toggle())))
                                 .child(div().text_xs().text_color(rgb(pal().muted)).child(t("only-if-the-proxy-asks")))
                                 .when_some(self.form.proxy_note.clone(), |d, note| d.child(div().text_xs().text_color(rgb(pal().danger)).child(note))),
                         )
-                    })
-                    .into_any_element()
-            }
-            SettingsTab::Shortcuts => {
-                let mut list = div().flex().flex_col().child(heading(
-                    t("shortcuts"),
-                    Some(t("click-a-shortcut-then-press")),
-                ));
-                for group in [Group::Meeting, Group::Board, Group::App] {
-                    list = list.child(div().pt_4().pb_1().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(group.name()));
-                    for (i, (action, ..)) in ACTIONS.iter().enumerate().filter(|(_, a)| a.2 == group) {
-                        let action = *action;
-                        let waiting = self.recording_keys == Some(action);
-                        let shown = if waiting { t("press-keys").to_string() } else { self.keys.label(action).unwrap_or_else(|| t("none-2").to_string()) };
-                        let note = self.keys_note.clone().filter(|_| waiting);
-                        list = list.child(
-                            row(action.name(), None).child(
+                    });
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(section(
+                        Some(t("look")),
+                        vec![
+                            row(t("language"), Some(t("the-board-and-summary-follow"))).child(language_menu).into_any_element(),
+                            row(t("appearance"), None)
+                                .child(segmented(
+                                    [("auto", t("system")), ("light", t("light")), ("dark", t("dark"))]
+                                        .into_iter()
+                                        .map(|(id, label)| choice(gpui_kit::ElementId::Name(format!("appearance-{id}").into()), label, look == id).on_click(cx.listener(move |this, _, _, cx| this.choose_appearance(id, cx))))
+                                        .collect(),
+                                ))
+                                .into_any_element(),
+                            row(
+                                t("handwriting"),
+                                Some(t("a-messier-hand-leans-and")),
+                            )
+                            .child(
                                 div()
                                     .flex()
                                     .flex_none()
                                     .items_center()
                                     .gap_2()
-                                    .when(self.keys.changed(action) && !waiting, |d| {
-                                        d.child(Button::new(("shortcut-reset", i)).small().ghost().label(t("reset")).on_click(cx.listener(move |this, _, _, cx| {
-                                            this.keys.reset(action);
-                                            this.save_shortcuts();
-                                            cx.notify();
-                                        })))
-                                    })
-                                    .child(
-                                        Button::new(("shortcut", i))
-                                            .small()
-                                            .map(|b| if waiting { b.primary() } else { b.outline() })
-                                            .min_w(px(120.))
-                                            .label(shown)
-                                            .on_click(cx.listener(move |this, _, window, cx| {
-                                                this.recording_keys = Some(action);
-                                                this.keys_note = None;
-                                                // The keys go to the board's handler, which takes them while a shortcut waits.
-                                                window.focus(&this.focus, cx);
-                                                cx.notify();
-                                            })),
+                                    .w(px(240.))
+                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(t("neat")))
+                                    .child(Slider::new(&self.form.messy).accessibility_label(t("how-messy-the-handwriting-is")).flex_1().min_w_0())
+                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(t("messy"))),
+                            )
+                            .into_any_element(),
+                            // The hand itself, on a strip of the board's paper, written out again as it changes.
+                            div()
+                                .px_4()
+                                .py_3()
+                                .bg(rgb(pal().paper))
+                                .child(crate::splash::written(sample_strokes, sample_w, sample_h, sample_started, HAND_SAMPLE_WRITING, window))
+                                .into_any_element(),
+                        ],
+                    ))
+                    .child(section(
+                        Some(t("meetings-2")),
+                        vec![
+                            search.into_any_element(),
+                            row(
+                                t("keep-the-meeting-s-audio"),
+                                Some(t("saves-what-is-heard-beside")),
+                            )
+                            .child(Switch::new("keep-audio").checked(self.form.saved.keep_audio).accessibility_label(t("keep-the-meeting-s-audio")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_keep_audio(*on, cx))))
+                            .into_any_element(),
+                        ],
+                    ))
+                    .child(section(Some(t("network")), vec![proxy_row.into_any_element()]))
+                    .into_any_element()
+            }
+            SettingsTab::Shortcuts => {
+                let mut list = div().flex().flex_col().child(intro(t("click-a-shortcut-then-press")));
+                for group in [Group::Meeting, Group::Board, Group::App] {
+                    let mut rows: Vec<gpui_kit::AnyElement> = vec![];
+                    for (i, (action, ..)) in ACTIONS.iter().enumerate().filter(|(_, a)| a.2 == group) {
+                        let action = *action;
+                        let waiting = self.recording_keys == Some(action);
+                        let shown = if waiting { t("press-keys").to_string() } else { self.keys.label(action).unwrap_or_else(|| t("none-2").to_string()) };
+                        let note = self.keys_note.clone().filter(|_| waiting);
+                        rows.push(
+                            div()
+                                .child(
+                                    row(action.name(), None).py(px(9.)).child(
+                                        div()
+                                            .flex()
+                                            .flex_none()
+                                            .items_center()
+                                            .gap_2()
+                                            .when(self.keys.changed(action) && !waiting, |d| {
+                                                d.child(Button::new(("shortcut-reset", i)).small().ghost().label(t("reset")).on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.keys.reset(action);
+                                                    this.save_shortcuts();
+                                                    cx.notify();
+                                                })))
+                                            })
+                                            .child(
+                                                Button::new(("shortcut", i))
+                                                    .small()
+                                                    .map(|b| if waiting { b.primary() } else { b.outline() })
+                                                    .min_w(px(120.))
+                                                    .label(shown)
+                                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                                        this.recording_keys = Some(action);
+                                                        this.keys_note = None;
+                                                        // The keys go to the board's handler, which takes them while a shortcut waits.
+                                                        window.focus(&this.focus, cx);
+                                                        cx.notify();
+                                                    })),
+                                            ),
                                     ),
-                            ),
+                                )
+                                .when_some(note, |d, note| d.child(div().px_4().pb_3().text_xs().text_color(rgb(pal().danger)).child(note)))
+                                .into_any_element(),
                         );
-                        if let Some(note) = note {
-                            list = list.child(div().pt_1().pb_2().text_xs().text_color(rgb(pal().danger)).child(note));
-                        }
                     }
+                    list = list.child(section(Some(group.name()), rows));
                 }
                 let fixed: Vec<String> = FIXED.iter().map(|(k, id)| format!("{} · {}", Keys::parse(k).map(|k| k.label()).unwrap_or_default(), t(id))).collect();
-                list.child(div().pt_4().text_xs().text_color(rgb(pal().muted)).child(ta!("always-the-same-keys", keys = fixed.join(t("list-separator")))))
+                list.child(footnote(ta!("always-the-same-keys", keys = fixed.join(t("list-separator"))).into(), pal().muted).pt_3())
                     .when(!self.keys.custom().is_empty(), |d| {
                         d.child(div().pt_4().child(button("shortcuts-reset-all", t("reset-all-shortcuts")).on_click(cx.listener(|this, _, _, cx| {
                             this.keys.reset_all();
@@ -7433,7 +7571,7 @@ impl Render for Workbench {
                         let fraction = progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
                         div().w(px(200.)).flex().flex_col().gap_1()
                             .child(div().text_xs().child(format!("{} {text}", release.version)))
-                            .child(div().h(px(4.)).w_full().bg(rgb(pal().track)).child(div().h_full().w(gpui_kit::relative(fraction)).bg(rgb(pal().strong))))
+                            .child(div().h(px(4.)).w_full().rounded(px(2.)).bg(rgb(pal().track)).child(div().h_full().rounded(px(2.)).w(gpui_kit::relative(fraction)).bg(rgb(pal().strong))))
                             .into_any_element()
                     }
                     UpdateState::ReadyToRestart(_) => Button::new("restart-update").small().primary().label(t("save-and-restart")).on_click(cx.listener(|this, _, _, cx| this.restart(cx))).into_any_element(),
@@ -7446,19 +7584,38 @@ impl Render for Workbench {
                     _ => None,
                 };
                 let failed = matches!(self.update, UpdateState::Failed(_));
-                div()
+                // The app itself: its mark, its name and version, and its update.
+                let app = div()
                     .flex()
-                    .flex_col()
-                    .child(heading(t("about"), None))
+                    .items_center()
+                    .gap_4()
+                    .px_4()
+                    .py_4()
+                    .child(div().size(px(44.)).flex_none().flex().items_center().justify_center().rounded(px(10.)).bg(rgb(pal().strong)).child(icon("pencil").size(px(20.)).text_color(rgb(pal().on_strong))))
                     .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(div().text_base().font_weight(gpui_kit::FontWeight::SEMIBOLD).child("boardcast"))
+                            .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().muted)).child(ta!("version-number", version = boardcast_update::VERSION)))
+                            .when_some(update_hint, |d, hint| d.child(div().pt_1().text_xs().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(hint))),
+                    )
+                    .child(update);
+                let folder = self.store.as_ref().map(|store| store.folder());
+                let mut storage: Vec<gpui_kit::AnyElement> = vec![];
+                if let Some(folder) = folder {
+                    let shown = folder.display().to_string();
+                    storage.push(
                         div()
                             .flex()
                             .items_center()
                             .justify_between()
                             .gap_6()
+                            .px_4()
                             .py_3()
-                            .border_b_1()
-                            .border_color(rgb(pal().line))
                             .child(
                                 div()
                                     .flex_1()
@@ -7466,42 +7623,57 @@ impl Render for Workbench {
                                     .flex()
                                     .flex_col()
                                     .gap(px(2.))
-                                    .child(div().text_sm().child(format!("boardcast {}", boardcast_update::VERSION)))
-                                    .when_some(update_hint, |d, hint| d.child(div().text_xs().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(hint))),
+                                    .child(div().text_sm().child(t("meetings")))
+                                    .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().muted)).overflow_hidden().text_ellipsis().whitespace_nowrap().child(shown)),
                             )
-                            .child(update),
-                    )
-                    // Metal keeps its own shaders, so there is nothing here for a Mac to manage.
-                    .when(cfg!(not(target_os = "macos")), |d| {
-                        let size = dir_size(&shader_dir(&self.models));
-                        d.child(row(t("graphics-cache"), Some(t("safe-to-delete-the-model"))).child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_3()
-                                .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().muted)).child(format!("{:.1} MB", size as f64 / 1e6)))
-                                .child(button("clear-shaders", t("delete")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
-                                    if let Err(e) = std::fs::remove_dir_all(shader_dir(&this.models)) {
-                                        this.form.note = Some(format!("{e:#}"));
-                                    }
-                                    cx.notify();
-                                }))),
-                        ))
-                    })
+                            .child(button("open-data", t("open-folder")).on_click(cx.listener(move |_, _, _, cx| {
+                                let _ = std::fs::create_dir_all(&folder);
+                                cx.open_with_system(&folder);
+                            })))
+                            .into_any_element(),
+                    );
+                }
+                // Metal keeps its own shaders, so there is nothing here for a Mac to manage.
+                if cfg!(not(target_os = "macos")) {
+                    let size = dir_size(&shader_dir(&self.models));
+                    storage.push(
+                        row(t("graphics-cache"), Some(t("safe-to-delete-the-model")))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(div().font_family(theme::MONO).text_xs().text_color(rgb(pal().muted)).child(format!("{:.1} MB", size as f64 / 1e6)))
+                                    .child(button("clear-shaders", t("delete")).disabled(size == 0).on_click(cx.listener(|this, _, _, cx| {
+                                        if let Err(e) = std::fs::remove_dir_all(shader_dir(&this.models)) {
+                                            this.form.note = Some(format!("{e:#}"));
+                                        }
+                                        cx.notify();
+                                    }))),
+                            )
+                            .into_any_element(),
+                    );
+                }
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(section(None, vec![app.into_any_element()]))
+                    .when(!storage.is_empty(), |d| d.child(section(Some(t("on-this-computer-2")), storage)))
                     .into_any_element()
             }
         };
         // Before there is a model, choosing one is the only thing to do here.
-        let tabs: Vec<(SettingsTab, &'static str)> = [
-            (SettingsTab::Model, t("board-model")),
-            (SettingsTab::Speech, t("speech")),
-            (SettingsTab::General, t("general")),
-            (SettingsTab::Shortcuts, t("shortcuts")),
-            (SettingsTab::About, t("about")),
+        let tabs: Vec<(SettingsTab, &'static str, &'static str)> = [
+            (SettingsTab::Model, "chip", t("board-model")),
+            (SettingsTab::Speech, "mic", t("speech")),
+            (SettingsTab::General, "settings", t("general")),
+            (SettingsTab::Shortcuts, "keyboard", t("shortcuts")),
+            (SettingsTab::About, "info", t("about")),
         ]
         .into_iter()
-        .filter(|(t, _)| !self.needs_model || matches!(t, SettingsTab::Model | SettingsTab::General))
+        .filter(|(t, ..)| !self.needs_model || matches!(t, SettingsTab::Model | SettingsTab::General))
         .collect();
+        // The title, the tabs and the page share one column, so their edges line up.
         let settings = div()
             .id("settings-page")
             .occlude()
@@ -7513,31 +7685,26 @@ impl Render for Workbench {
             .child(
                 div()
                     .w_full()
-                    .max_w(px(760.))
+                    .max_w(px(720.))
                     .h_full()
                     .flex()
                     .flex_col()
-                    .px_10()
                     .pt_8()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .pb_4()
-                            .child(div().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(t("settings"))),
-                    )
-                    .child(div().flex().items_center().gap_6().h(px(36.)).flex_none().border_b_1().border_color(rgb(pal().line)).children(tabs.into_iter().map(|(t, label)| {
+                    .child(div().px_8().pb_4().text_xl().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(t("settings")))
+                    .child(div().mx_8().flex().items_center().gap_1().h(px(40.)).flex_none().border_b_1().border_color(rgb(pal().line)).children(tabs.into_iter().map(|(t, glyph, label)| {
                         let on = t == tab;
                         div()
                             .id(label)
                             .h_full()
                             .flex()
                             .items_center()
+                            .gap(px(7.))
+                            .px_3()
                             .border_b_2()
                             .border_color(rgb(if on { pal().text } else { pal().paper }))
                             .cursor_pointer()
                             .text_sm()
+                            .child(icon(glyph).size(px(13.)).text_color(rgb(if on { pal().text } else { pal().faint })))
                             .map(|d| if on { d.font_weight(gpui_kit::FontWeight::MEDIUM) } else { d.text_color(rgb(pal().muted)).hover(|d| d.text_color(rgb(pal().text))) })
                             .child(label)
                             .on_click(cx.listener(move |this, _, _, cx| {
@@ -7545,7 +7712,7 @@ impl Render for Workbench {
                                 cx.notify();
                             }))
                     })))
-                    .child(div().id("settings-page-body").flex_1().min_h_0().overflow_y_scroll().child(div().max_w(px(640.)).pt_5().pb_10().child(page))),
+                    .child(div().id("settings-page-body").flex_1().min_h_0().overflow_y_scroll().child(div().px_8().pb_12().child(page))),
             );
         let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
@@ -8608,6 +8775,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     trail: None,
                     keeping: None,
                     welcome_line: None,
+                    hand_sample: None,
                     inbox,
                     save: SaveState::Idle,
                     saving: None,

@@ -233,12 +233,10 @@ delete-this-pinned-meeting = Supprimer cette réunion épinglée ?
 unpin = Désépingler
 pin-to-the-top = Épingler en haut
 open-its-folder-the-meeting = Ouvrir son dossier : la réunion, ses images et son audio
-recommended = recommandé
 in-use = Utilisé
 use = Utiliser
 board-model = Modèle de tableau
 to-draw-the-board-download = Pour dessiner le tableau, téléchargez un modèle qui s’exécute sur cet ordinateur, ou configurez un modèle distant. La reconnaissance vocale est déjà incluse.
-what-turns-what-is-said = Ce qui transforme ce qui est dit en tableau.
 on-this-computer = Sur cet ordinateur
 remote = Distant
 pause = Pause
@@ -254,7 +252,6 @@ the-system-s-default-input = L’entrée par défaut du système
 the-chosen-input-not-connected = L’entrée choisie, actuellement non connectée
 speech = Voix
 what-is-heard-and-how = Ce qui est entendu, et comment c’est transcrit.
-listen-to = Écouter
 for-the-other-side-of = Pour entendre l’autre côté d’une réunion en ligne, choisissez l’entrée "Monitor of" correspondant aux haut-parleurs qui la diffusent.
 tell-speakers-apart-by-voice = Distinguer les intervenants par la voix
 new-voices-are-named-a = Les nouvelles voix sont nommées A, B, C. Les données vocales restent dans le fichier de la réunion sur cet ordinateur.
@@ -386,3 +383,78 @@ topic-options = Options
 topic-decision = Décision
 api-key = Clé d'API
 list-separator = {" ; "}
+heard-in-ms = Entendu en { $ms } ms
+drawn-in-ms = dessiné en { $ms } ms
+connected-in-ms = Connecté en { $ms } ms
+name-is-ready = { $name } est prêt.
+downloading-the-model-percent = Téléchargement du modèle { $percent } %
+reading-meetings-of = Lecture des réunions { $done } / { $total }
+line-count =
+    { $n ->
+        [one] { $n } phrase
+       *[other] { $n } phrases
+    }
+more-in-all-meetings-count =
+    { $n ->
+        [one] { $n } de plus dans Toutes les réunions →
+       *[other] { $n } de plus dans Toutes les réunions →
+    }
+board-count =
+    { $n ->
+        [one] { $n } tableau
+       *[other] { $n } tableaux
+    }
+saved-to-path = Enregistré dans { $path }
+writing-part-of = Rédaction de la partie { $part }/{ $parts }…
+uses-cloud-model-sent-to = Utilise le modèle cloud { $model } ; toute la transcription est envoyée à { $host }
+topic-count =
+    { $n ->
+        [one] { $n } sujet
+       *[other] { $n } sujets
+    }
+not-drawn-count-show =
+    { $n ->
+        [one] { $n } non dessinée : afficher
+       *[other] { $n } non dessinées : afficher
+    }
+count-waiting-for-the-model =
+    { $n ->
+        [one] { $n } en attente du modèle
+       *[other] { $n } en attente du modèle
+    }
+drawing-count-waiting =
+    { $n ->
+        [one] Dessin en cours · { $n } en attente
+       *[other] Dessin en cours · { $n } en attente
+    }
+started-at-time = Commencée à { $time }
+board-number = Tableau { $n }
+update-to-version = Mettre à jour vers { $version }
+deleted-title = « { $title } » supprimé
+name-checking-what-was-downloaded = { $name } vérifie ce qui a déjà été téléchargé…
+name-starting = { $name } démarre…
+saved-key-leave-empty = Clé enregistrée : { $hint }. Laissez vide pour la conserver.
+hearing-with-models = Écoute avec { $models }
+always-the-same-keys = Toujours identique : { $keys }
+version-installed-restart = { $version } est installée. Votre réunion continue jusqu’à ce que vous redémarriez.
+about-percent = environ { $percent } %
+keys-kept-for-closing = { $keys } est réservé à la fermeture et à la navigation.
+keys-already-used-by = { $keys } est déjà utilisé par « { $action } ».
+board-forked = Tableau { $to } dérivé du tableau { $from } tel qu’il était à { $when }
+recommended-2 = Recommandé
+runs = S’exécute
+on-this-computer-nothing-leaves = Sur cet ordinateur, rien n’en sort ; un modèle distant est joint par le réseau.
+the-model-turns-what-is = Le modèle transforme ce qui est dit en tableau.
+models = modèles
+remote-model = modèle distant
+listen-to-2 = écouter
+recognition = reconnaissance
+during-the-meeting = pendant la réunion
+look = apparence
+meetings-2 = réunions
+network = réseau
+on-this-computer-2 = sur cet ordinateur
+version-number = version { $version }
+sample-title = Point hebdo
+sample-first-point = sortir la bêta vendredi
+sample-second-point = demander à Mia pour la doc

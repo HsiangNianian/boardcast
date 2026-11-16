@@ -1009,6 +1009,19 @@ mod clip_tests {
     }
 
     #[test]
+    fn erasing_takes_only_the_marks_named() {
+        use crate::graph::Annotation;
+        let mut g = Graph::default();
+        for tool in ["yellow", "pen", "green"] {
+            g.annotate(Annotation { tool: tool.into(), on: None, points: vec![[0.0, 0.0], [10.0, 0.0]] });
+        }
+        g.erase(&[0, 2]);
+        assert_eq!(g.annotations().iter().map(|a| a.tool.as_str()).collect::<Vec<_>>(), ["pen"]);
+        g.erase(&[0]);
+        assert!(g.annotations().is_empty() && !g.extra.contains_key("annotations"), "nothing left, nothing kept");
+    }
+
+    #[test]
     fn a_small_clip_is_enlarged_at_most_twice() {
         let clip = Clip { src: String::new(), pw: 800.0, ph: 1000.0, x: 0.0, y: 0.0, w: 40.0, h: 20.0 };
         assert_eq!(clip.card_size(), (80.0, 40.0));

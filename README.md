@@ -68,7 +68,7 @@ On an imported page, click **Crop** in the same tool bar and drag a box over the
 
 **Inbox.** Drag a clip card to the left edge of the board and a copy goes into the inbox, a tray along that edge where each card peeks out; hold Alt as you let go to move the card instead. The inbox belongs to the app, not to a meeting: open another meeting and the cards are still there. Point at the tray to bring the cards out, then drag one onto any board; it lands where you drop it with its words, marks and drawing, and stays in the inbox for other boards. The cross on a card takes it out.
 
-**Mark** draws by hand on an imported page or on a clip: a yellow, green or pink highlighter, or a red pen, picked from the colours above the tool bar. Marks on a clip stay on the card wherever it goes and go with it when it is deleted; marks on a page stay where you drew them. They are part of the board: undo, replay and exports include them. On a narrow board the tools show as icons, named in their tooltips.
+**Mark** draws by hand on an imported page or on a clip: a yellow, green or pink highlighter, or a red pen, picked from the colours above the tool bar; the eraser beside them takes away whatever hand marks it is dragged across. Marks on a clip stay on the card wherever it goes and go with it when it is deleted; marks on a page stay where you drew them. They are part of the board: undo, replay and exports include them. On a narrow board the tools show as icons, named in their tooltips.
 
 ### Discuss your source material
 

@@ -9,5 +9,6 @@ publish.workspace = true
 anyhow.workspace = true
 base64 = "0.22"
 boardcast-board.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"

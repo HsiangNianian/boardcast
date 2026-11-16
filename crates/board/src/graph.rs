@@ -309,6 +309,24 @@ impl Graph {
         self.add_clip(&label, &text, &clip);
     }
 
+    /// Put a card brought from elsewhere (the inbox) on the board where it was dropped, with its marks and
+    /// what was drawn on it, and give back its id.
+    pub fn add_card(&mut self, label: &str, text: &str, clip: &Clip, marks: &[String], drawn: &[Annotation], at: [f64; 2]) -> String {
+        let id = self.add_clip(label, text, clip);
+        let i = self.index(&id).expect("just added");
+        self.nodes[i].marks = marks.to_vec();
+        self.place(&id, at[0], at[1]);
+        let mut all = self.annotations();
+        all.extend(drawn.iter().map(|a| Annotation { on: Some(id.clone()), ..a.clone() }));
+        self.keep_annotations(all);
+        id
+    }
+
+    /// What was drawn by hand on one clip, as it would go with the card elsewhere.
+    pub fn drawn_on(&self, id: &str) -> Vec<Annotation> {
+        self.annotations().into_iter().filter(|a| a.on.as_deref() == Some(id)).collect()
+    }
+
     /// Put a clip of an imported page on the board, as a card of its own, and give back its id.
     /// `text` is what the clip's part of the page says, which the model is shown in place of the label.
     pub fn add_clip(&mut self, label: &str, text: &str, clip: &Clip) -> String {

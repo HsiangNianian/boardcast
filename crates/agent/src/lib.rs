@@ -957,6 +957,13 @@ impl Session {
         graph.clone()
     }
 
+    /// Put a card from the inbox on the board where it was dropped, and give back the board and its id.
+    pub fn add_card(&self, label: &str, text: &str, clip: &boardcast_board::graph::Clip, marks: &[String], drawn: &[boardcast_board::graph::Annotation], at: [f64; 2]) -> (Graph, String) {
+        let mut graph = self.graph.lock().expect("graph lock");
+        let id = graph.add_card(label, text, clip, marks, drawn, at);
+        (graph.clone(), id)
+    }
+
     /// Leave a clip card where it was dragged to.
     pub fn place(&self, id: &str, x: f64, y: f64) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");

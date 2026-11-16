@@ -10,7 +10,7 @@ use boardcast_board::follow;
 use boardcast_board::sugiyama::first_diagram;
 use boardcast_agent::settings::Settings;
 use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
-use boardcast_meetings::{default_dir, Info, Live, Store, ViewOnly};
+use boardcast_meetings::{Inbox, Tucked, default_dir, Info, Live, Store, ViewOnly};
 use boardcast_board::pen::{marker, outline, Inked, Rng};
 use crate::i18n::tr;
 use crate::theme::{self, icon, pal};
@@ -330,6 +330,8 @@ struct Ink {
     clip_images: HashMap<String, Option<Arc<RenderImage>>>,
     /// A clip card being dragged: which, where it was taken hold of and where the pointer is now, on the board.
     card_drag: Option<(String, [f32; 2], [f32; 2])>,
+    /// There is an inbox to drop a card into.
+    inbox_ready: bool,
     /// The next update moves ink straight to its new place instead of sliding it there, as when a card is
     /// put down: its picture is already there, and its frame must not trail behind.
     jump: bool,
@@ -1328,6 +1330,10 @@ struct Workbench {
     live: Live,
     /// None for a sample or a measurement, which must not touch real meetings.
     store: Option<Store>,
+    /// Cards tucked away at the board's left edge, kept by the app so they follow from meeting to meeting.
+    inbox: Option<Inbox>,
+    /// What is in it, each with its picture as the window paints it.
+    tray: Vec<(Tucked, Option<Arc<RenderImage>>)>,
     save: SaveState,
     saving: Option<(Receiver<Result<u64, String>>, u64)>,
     saved_changes: u64,
@@ -1527,6 +1533,59 @@ fn mark_tool_name(tool: &str) -> &'static str {
         "pink" => tr("Pink highlighter", "粉色荧光笔"),
         _ => tr("Yellow highlighter", "黄色荧光笔"),
     }
+}
+
+/// How wide the strip along the board's left edge is where a card is let go to go into the inbox, and how
+/// much of each card in the inbox shows there.
+const TRAY_ZONE: f32 = 56.0;
+const TRAY_PEEK: f32 = 22.0;
+const TRAY_CARD_W: f32 = 132.0;
+
+/// The inbox's cards with their pictures read, for the tray.
+fn tray_of(inbox: &Inbox, cards: Vec<Tucked>) -> Vec<(Tucked, Option<Arc<RenderImage>>)> {
+    cards
+        .into_iter()
+        .map(|card| {
+            let picture = inbox.image(&card).map_err(|e| format!("{e:#}")).and_then(|i| page_render_image(&i.bytes)).map(|(picture, _)| picture).ok();
+            (card, picture)
+        })
+        .collect()
+}
+
+/// A card being dragged out of the inbox.
+#[derive(Clone)]
+struct TrayCard {
+    id: String,
+    picture: Option<Arc<RenderImage>>,
+    w: f32,
+    h: f32,
+}
+
+impl Render for TrayCard {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let k = (TRAY_CARD_W / self.w).min(1.0);
+        div()
+            .w(px(self.w * k))
+            .h(px(self.h * k))
+            .border_1()
+            .border_color(rgb(pal().accent))
+            .bg(rgb(pal().paper))
+            .opacity(0.9)
+            .when_some(self.picture.clone(), |d, picture| d.child(gpui_kit::img(picture).size_full()))
+    }
+}
+
+/// A clip's part of the page picture as a PNG of its own, for the inbox to keep.
+fn clip_png(bytes: &[u8], clip: &Clip) -> anyhow::Result<Vec<u8>> {
+    let page = image::load_from_memory(bytes).context("reading the page picture")?;
+    let (sx, sy) = (f64::from(page.width()) / clip.pw, f64::from(page.height()) / clip.ph);
+    let x = (clip.x * sx).floor().max(0.0) as u32;
+    let y = (clip.y * sy).floor().max(0.0) as u32;
+    let w = ((clip.w * sx).ceil() as u32).clamp(1, page.width().saturating_sub(x).max(1));
+    let h = ((clip.h * sy).ceil() as u32).clamp(1, page.height().saturating_sub(y).max(1));
+    let mut png = std::io::Cursor::new(vec![]);
+    page.crop_imm(x, y, w, h).write_to(&mut png, image::ImageFormat::Png).context("keeping the card's picture")?;
+    Ok(png.into_inner())
 }
 
 /// The smallest box, in board units, taken as a clip rather than a slip of the pointer.
@@ -3314,6 +3373,81 @@ impl Workbench {
         self.live.change_board(graph, memory);
     }
 
+    /// Put a clip card into the inbox: its part of the page as a picture of its own, its words, its marks and
+    /// what was drawn on it. With `take` the card leaves the board; otherwise it stays and a copy goes.
+    fn tuck(&mut self, id: &str, take: bool, cx: &mut Context<Self>) {
+        cx.notify();
+        let (Some(inbox), Some(store)) = (&self.inbox, &self.store) else { return };
+        let Some(node) = self.live.graph.nodes.iter().find(|n| n.id == id).cloned() else { return };
+        let Some(clip) = node.clip() else { return };
+        let src = if clip.src.is_empty() { self.live.board_images().into_iter().nth(self.live.page()).flatten() } else { Some(clip.src.clone()) };
+        let picture = src.context("the page under this board has no picture").and_then(|src| store.page_image(self.live.id(), &src)).and_then(|image| clip_png(&image.bytes, &clip));
+        let png = match picture {
+            Ok(png) => png,
+            Err(e) => {
+                self.notice = Some(format!("{}{e:#}", tr("This card could not go into the inbox: ", "这张卡片没能放进收纳栏：")));
+                return;
+            }
+        };
+        let text = node.extra.get("text").and_then(serde_json::Value::as_str).unwrap_or_default().to_string();
+        let card = Tucked { id: String::new(), label: node.label.clone(), text, w: clip.w, h: clip.h, image: String::new(), marks: node.marks.clone(), annotations: self.live.graph.drawn_on(id), from: self.live.title().to_string() };
+        match inbox.tuck(card, "image/png", &png) {
+            Ok(card) => {
+                let picture = page_render_image(&png).ok().map(|(picture, _)| picture);
+                self.tray.push((card, picture));
+            }
+            Err(e) => {
+                self.notice = Some(format!("{}{e:#}", tr("This card could not go into the inbox: ", "这张卡片没能放进收纳栏：")));
+                return;
+            }
+        }
+        if take {
+            self.edit_board(&[Op::D(Ref::Id(id.to_string()))], cx);
+        }
+    }
+
+    /// Put a card from the inbox on this board where it was dropped. The card stays in the inbox, for other
+    /// boards too; its picture is kept with this meeting.
+    fn bring(&mut self, id: &str, at: Point<Pixels>, cx: &mut Context<Self>) {
+        cx.notify();
+        if !self.editable() {
+            return;
+        }
+        let (Some(inbox), Some(store)) = (&self.inbox, &self.store) else { return };
+        let Some((card, _)) = self.tray.iter().find(|(c, _)| c.id == id).cloned() else { return };
+        let src = inbox.image(&card).and_then(|image| store.put_image(self.live.id(), &image.mime, &image.bytes));
+        let src = match src {
+            Ok(src) => src,
+            Err(e) => {
+                self.notice = Some(format!("{}{e:#}", tr("This card could not be put on the board: ", "这张卡片没能放到板上：")));
+                return;
+            }
+        };
+        let clip = Clip { src, pw: card.w, ph: card.h, x: 0.0, y: 0.0, w: card.w, h: card.h };
+        let (w, h) = clip.card_size();
+        let point = self.ink.borrow().on_board(at);
+        let corner = [f64::from(point[0]) - w / 2.0, f64::from(point[1]) - h / 2.0];
+        let (graph, new) = self.session().add_card(&card.label, &card.text, &clip, &card.marks, &card.annotations, corner);
+        self.next_batch += 1;
+        let mut ink = self.ink.borrow_mut();
+        ink.update(&graph, self.next_batch);
+        ink.selected = Some(new);
+        let memory = ink.board.snapshot();
+        drop(ink);
+        self.live.change_board(graph, memory);
+    }
+
+    /// Take a card out of the inbox for good.
+    fn discard(&mut self, id: &str, cx: &mut Context<Self>) {
+        if let Some(inbox) = &self.inbox {
+            if let Err(e) = inbox.remove(id) {
+                self.notice = Some(format!("{e:#}"));
+            }
+            self.tray.retain(|(c, _)| c.id != id);
+        }
+        cx.notify();
+    }
+
     /// Read the page pictures that clips on the board are cut from and are not read yet.
     fn load_clip_images(&mut self) {
         let wanted: Vec<String> = {
@@ -4972,6 +5106,7 @@ fn rss_mb() -> u64 {
 impl Render for Workbench {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.load_clip_images();
+        self.ink.borrow_mut().inbox_ready = self.inbox.is_some() && self.editable();
         // Only animate while there is ink to write, the view is moving or a line is being typed; an idle board
         // costs no frames.
         {
@@ -4996,6 +5131,7 @@ impl Render for Workbench {
             .size_full()
             .overflow_hidden()
             .bg(rgb(pal().paper))
+            .on_drop(cx.listener(|this, card: &TrayCard, window, cx| this.bring(&card.id, window.mouse_position(), cx)))
             .on_scroll(cx.listener(move |_, e: &ScrollEvent, window, cx| {
                 let dy = f32::from(e.delta.pixel_delta(window.line_height()).y);
                 // Same response as the current app's wheel: exponential in the scrolled distance.
@@ -5083,7 +5219,15 @@ impl Render for Workbench {
             .on_mouse_up(MouseButton::Left, cx.listener(move |this, e: &MouseUpEvent, _, cx| {
                 let held = release.borrow_mut().card_drag.take();
                 if let Some((id, from, to)) = held {
-                    let k = release.borrow().shown().k;
+                    let (k, left) = {
+                        let b = release.borrow();
+                        (b.shown().k, f32::from(b.canvas.origin.x))
+                    };
+                    // Let go at the left edge, the card goes into the inbox: a copy, or itself with Alt held.
+                    if this.inbox.is_some() && f32::from(e.position.x) - left < TRAY_ZONE {
+                        this.tuck(&id, e.modifiers.alt, cx);
+                        return;
+                    }
                     if (to[0] - from[0]).hypot(to[1] - from[1]) * k < CLICK_SLOP {
                         release.borrow_mut().click(e.position);
                         cx.notify();
@@ -5192,6 +5336,14 @@ impl Render for Workbench {
                                 let mut veil: Hsla = rgb(pal().paper).into();
                                 veil.a = 0.8;
                                 window.paint_quad(gpui_kit::fill(Bounds::new(at, size(px((card.w + 2.0 * room) as f32 * v.k), px((card.h + 2.0 * room) as f32 * v.k))), veil));
+                            }
+                            // Near the left edge, the strip that takes the card into the inbox lights up.
+                            if let Some((_, _, to)) = state.card_drag.as_ref().filter(|_| state.inbox_ready) {
+                                let x = f32::from(origin.x) + to[0] * v.k;
+                                let near = x - f32::from(bounds.origin.x) < TRAY_ZONE;
+                                let mut tint: Hsla = rgb(pal().accent).into();
+                                tint.a = if near { 0.22 } else { 0.08 };
+                                window.paint_quad(gpui_kit::fill(Bounds::new(bounds.origin, size(px(TRAY_ZONE), bounds.size.height)), tint));
                             }
                             if let Some((card, clip, dx, dy)) = state.card_drag.as_ref().and_then(|(id, from, to)| state.clips.iter().find(|(r, _)| &r.id == id).map(|(r, c)| (r, c, f64::from(to[0] - from[0]), f64::from(to[1] - from[1])))) {
                                 let at = |x: f64, y: f64| origin + point(px(x as f32 * v.k), px(y as f32 * v.k));
@@ -7170,6 +7322,71 @@ impl Render for Workbench {
             div().absolute().map(|d| if right { d.right(px(x)) } else { d.left(px(x)) }).map(|d| if bottom { d.bottom(px(y)) } else { d.top(px(y)) }).child(map)
         });
         let replaying = replay_bar.is_some();
+        // The inbox along the left edge: each card peeks out, and they all come out while the pointer is over
+        // them. A card is dragged out onto a board, or let go of with its cross.
+        let tray = (!self.tray.is_empty() && !replaying).then(|| {
+            div()
+                .id("tray")
+                .group("tray")
+                .absolute()
+                .top(px(64.))
+                .left_0()
+                .max_h(px((canvas_height - 140.0).max(120.0)))
+                .flex()
+                .flex_col()
+                .gap(px(8.))
+                .occlude()
+                .children(self.tray.iter().map(|(card, picture)| {
+                    let k = (TRAY_CARD_W / card.w as f32).min(2.0);
+                    let (w, h) = (card.w as f32 * k, (card.h as f32 * k).min(TRAY_CARD_W * 1.4));
+                    let held = TrayCard { id: card.id.clone(), picture: picture.clone(), w: card.w as f32, h: card.h as f32 };
+                    let gone = card.id.clone();
+                    let tip = if card.from.is_empty() { card.label.clone() } else { format!("{} · {}", card.label, card.from) };
+                    div()
+                        .id(gpui_kit::ElementId::Name(format!("tray-{}", card.id).into()))
+                        .group("tray-card")
+                        .relative()
+                        .flex_none()
+                        .w(px(w))
+                        .h(px(h))
+                        .ml(px(TRAY_PEEK - w))
+                        .group_hover("tray", |s| s.ml(px(10.)))
+                        .bg(rgb(pal().paper))
+                        .border_1()
+                        .border_color(rgb(pal().line))
+                        .shadow_md()
+                        .overflow_hidden()
+                        .cursor_grab()
+                        .when_some(picture.clone(), |d, picture| d.child(gpui_kit::img(picture).size_full()))
+                        .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                        .on_drag(held, |held: &TrayCard, _, _, cx| {
+                            cx.stop_propagation();
+                            cx.new(|_| held.clone())
+                        })
+                        .child(
+                            div()
+                                .id(gpui_kit::ElementId::Name(format!("tray-x-{}", card.id).into()))
+                                .absolute()
+                                .top(px(2.))
+                                .right(px(2.))
+                                .size(px(18.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded_full()
+                                .bg(rgb(pal().surface))
+                                .invisible()
+                                .group_hover("tray-card", |s| s.visible())
+                                .cursor_pointer()
+                                .child(icon("x").size(px(9.)))
+                                .tooltip(|window, cx| Tooltip::new(tr("Take out of the inbox", "从收纳栏拿走")).build(window, cx))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.discard(&gone, cx);
+                                })),
+                        )
+                }))
+        });
         let lower = replay_bar.map(|bar| float().id("replay-tools").w(px(620.)).max_w(gpui_kit::relative(0.94)).h(px(TOOLS_H)).child(bar)).or(tool_bar);
         let canvas_area = div()
             .relative()
@@ -7179,6 +7396,7 @@ impl Render for Workbench {
             .on_drag_move(cx.listener(|this, event: &DragMoveEvent<MapGrab>, _, cx| this.move_map(event, cx)))
             .child(board)
             .when_some(welcome, |d, welcome| d.child(welcome))
+            .when_some(tray, |d, tray| d.child(tray))
             .when_some(minimap, |d, map| d.child(map))
             .child(div().absolute().top(px(12.)).left(px(12.)).child(offers))
             .when_some(caption, |d, text| {
@@ -7382,6 +7600,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     };
     // A sample or measurement never reads or writes real meetings, and a script starts a new one.
     let store = start_board.is_none().then(|| Store::new(data.clone()));
+    let inbox = store.as_ref().map(|_| Inbox::new(data.clone()));
     let reopen = if turns.is_empty() && wav.is_none() { open.or_else(|| store.as_ref().and_then(Store::last_opened)) } else { None };
     let reads_meetings = store.is_some();
     let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone() };
@@ -7455,6 +7674,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 cropping: false,
                 crop: None,
                 card_drag: None,
+                inbox_ready: false,
                 jump: false,
                 marking: false,
                 mark_tool: "yellow",
@@ -7640,6 +7860,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     focus,
                     live,
                     store,
+                    tray: inbox.as_ref().map(|i| tray_of(i, i.cards())).unwrap_or_default(),
+                    inbox,
                     save: SaveState::Idle,
                     saving: None,
                     saved_changes,

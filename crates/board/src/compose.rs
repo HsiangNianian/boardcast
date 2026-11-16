@@ -1040,6 +1040,17 @@ pub fn ink_boxes(pieces: &[Piece]) -> Vec<InkBox> {
     out
 }
 
+/// How a hand annotation tool draws: colour, opacity and width in board units. Highlighters run under the
+/// ink, the pen over it.
+pub fn annotation_look(tool: &str) -> (u32, f32, f32) {
+    match tool {
+        "pen" => (RED, 1.0, 2.6),
+        "green" => (0x8c_e9_9a, MARKER_ALPHA, 16.0),
+        "pink" => (0xff_a8_c5, MARKER_ALPHA, 16.0),
+        _ => (HIGHLIGHT, MARKER_ALPHA, 16.0),
+    }
+}
+
 pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<String>) {
     let mut c = Canvas {
         glyphs,
@@ -1094,6 +1105,37 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
         let a = area(b);
         let mut r = Rng::new(&b.id);
         c.add(format!("{}|box", b.id), color_of(n, INK), alpha(n), false, plain(rough_box(a.x - 3.0, a.y - 3.0, a.w + 6.0, a.h + 6.0, &mut r)), pen_for(font) * 0.7);
+    }
+
+    // What was drawn by hand: highlighters under the ink, the pen over it.
+    for (i, a) in g.annotations().iter().enumerate() {
+        let card = match &a.on {
+            Some(id) => match l.clips.iter().find(|c| &c.id == id) {
+                Some(card) => Some(card),
+                None => continue,
+            },
+            None => None,
+        };
+        let points: Vec<Pt> = a
+            .points
+            .iter()
+            .map(|p| match card {
+                Some(c) => [(c.x + p[0] * c.w) as f32, (c.y + p[1] * c.h) as f32],
+                None => [p[0] as f32, p[1] as f32],
+            })
+            .collect();
+        if points.len() < 2 {
+            continue;
+        }
+        let (rgb, alpha, width) = annotation_look(&a.tool);
+        let flat = a.tool != "pen";
+        let key = format!("a{i}|{}", a.tool);
+        let at = points[0];
+        c.pieces.push(Piece {
+            key: format!("{key}@{:.0},{:.0}", at[0], at[1]),
+            seed: key,
+            lines: vec![Line { points, width, wobble: if flat { 0.2 } else { 0.3 }, style: Style { rgb, alpha, under: flat }, flat }],
+        });
     }
 
     let mut lines: Vec<Vec<Pt>> = vec![];

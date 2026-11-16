@@ -950,6 +950,13 @@ impl Session {
         (graph.clone(), id)
     }
 
+    /// Draw by hand over a page or a clip.
+    pub fn annotate(&self, annotation: boardcast_board::graph::Annotation) -> Graph {
+        let mut graph = self.graph.lock().expect("graph lock");
+        graph.annotate(annotation);
+        graph.clone()
+    }
+
     /// Mark a word or sentence of imported text by hand, or take the mark off.
     pub fn toggle_span(&self, id: &str, span: boardcast_board::spans::Span) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");

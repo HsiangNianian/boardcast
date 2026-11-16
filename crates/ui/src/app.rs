@@ -1562,8 +1562,10 @@ fn mark_tool_name(tool: &str) -> &'static str {
 /// How wide the strip along the board's left edge is where a card is let go to go into the inbox, and how
 /// much of each card in the inbox shows there.
 const TRAY_ZONE: f32 = 56.0;
-const TRAY_PEEK: f32 = 22.0;
-const TRAY_CARD_W: f32 = 132.0;
+const TRAY_PEEK: f32 = 14.0;
+/// Every card in the tray is the same small size, its picture filling it.
+const TRAY_CARD_W: f32 = 116.0;
+const TRAY_CARD_H: f32 = 76.0;
 
 /// The inbox's cards with their pictures read, for the tray.
 fn tray_of(inbox: &Inbox, cards: Vec<Tucked>) -> Vec<(Tucked, Option<Arc<RenderImage>>)> {
@@ -5409,8 +5411,13 @@ impl Render for Workbench {
                                 let x = f32::from(origin.x) + to[0] * v.k;
                                 let near = x - f32::from(bounds.origin.x) < TRAY_ZONE;
                                 let mut tint: Hsla = rgb(pal().accent).into();
-                                tint.a = if near { 0.22 } else { 0.08 };
+                                tint.a = if near { 0.12 } else { 0.04 };
                                 window.paint_quad(gpui_kit::fill(Bounds::new(bounds.origin, size(px(TRAY_ZONE), bounds.size.height)), tint));
+                                if near {
+                                    let mut edge: Hsla = rgb(pal().accent).into();
+                                    edge.a = 0.7;
+                                    window.paint_quad(gpui_kit::fill(Bounds::new(bounds.origin + point(px(TRAY_ZONE - 2.0), px(0.)), size(px(2.), bounds.size.height)), edge));
+                                }
                             }
                             if let Some((card, clip, dx, dy)) = state.card_drag.as_ref().and_then(|(id, from, to)| state.clips.iter().find(|(r, _)| &r.id == id).map(|(r, c)| (r, c, f64::from(to[0] - from[0]), f64::from(to[1] - from[1])))) {
                                 let at = |x: f64, y: f64| origin + point(px(x as f32 * v.k), px(y as f32 * v.k));
@@ -7411,7 +7418,7 @@ impl Render for Workbench {
         // The inbox along the left edge: each card peeks out, and they all come out while the pointer is over
         // them. A card is dragged out onto a board, or let go of with its cross.
         let tray = (!self.tray.is_empty() && !replaying).then(|| {
-            div()
+            let cards = div()
                 .id("tray")
                 .group("tray")
                 .absolute()
@@ -7420,11 +7427,10 @@ impl Render for Workbench {
                 .max_h(px((canvas_height - 140.0).max(120.0)))
                 .flex()
                 .flex_col()
-                .gap(px(8.))
+                .gap(px(6.))
                 .occlude()
                 .children(self.tray.iter().map(|(card, picture)| {
-                    let k = (TRAY_CARD_W / card.w as f32).min(2.0);
-                    let (w, h) = (card.w as f32 * k, (card.h as f32 * k).min(TRAY_CARD_W * 1.4));
+                    let (w, h) = (TRAY_CARD_W, TRAY_CARD_H);
                     let held = TrayCard { id: card.id.clone(), picture: picture.clone(), w: card.w as f32, h: card.h as f32 };
                     let gone = card.id.clone();
                     let tip = if card.from.is_empty() { card.label.clone() } else { format!("{} · {}", card.label, card.from) };
@@ -7436,14 +7442,15 @@ impl Render for Workbench {
                         .w(px(w))
                         .h(px(h))
                         .ml(px(TRAY_PEEK - w))
-                        .group_hover("tray", |s| s.ml(px(10.)))
-                        .bg(rgb(pal().paper))
+                        .group_hover("tray", |s| s.ml(px(12.)))
+                        .bg(rgb(pal().surface))
+                        .rounded(px(6.))
                         .border_1()
                         .border_color(rgb(pal().line))
-                        .shadow_md()
+                        .shadow_sm()
                         .overflow_hidden()
                         .cursor_grab()
-                        .when_some(picture.clone(), |d, picture| d.child(gpui_kit::img(picture).size_full()))
+                        .when_some(picture.clone(), |d, picture| d.child(gpui_kit::img(picture).size_full().object_fit(gpui_kit::ObjectFit::Cover)))
                         .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
                         .on_drag(held, |held: &TrayCard, _, _, cx| {
                             cx.stop_propagation();
@@ -7471,7 +7478,9 @@ impl Render for Workbench {
                                     this.discard(&gone, cx);
                                 })),
                         )
-                }))
+                }));
+            // Kept to the board: the part of each card tucked past its edge is not drawn over the sidebar.
+            div().absolute().top_0().bottom_0().left_0().w(px(TRAY_CARD_W + 24.0)).overflow_hidden().child(cards)
         });
         let lower = replay_bar.map(|bar| float().id("replay-tools").w(px(620.)).max_w(gpui_kit::relative(0.94)).h(px(TOOLS_H)).child(bar)).or(tool_bar);
         let canvas_area = div()

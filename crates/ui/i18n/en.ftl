@@ -497,3 +497,26 @@ import-scans-not-read = { $n ->
     }
 import-paper-ready = { $name } is ready: split by sections, figures and equations. Try “here in figure 3” or “equation 5 is wrong”
 import-pages-ready = { $name } is ready: one board per page. Try “circle this paragraph”
+share = Share
+share-tip = Let others on this network watch the meeting
+share-on = Sharing on the network
+share-intro = Others on the same network can watch this meeting in a browser: the board as it grows and the transcript as it is said. They can look back, but cannot change anything.
+share-privacy = Anyone on this network who has the access code can see this meeting while sharing is on. Stop sharing when the meeting is over.
+share-start = Start sharing
+share-stop = Stop sharing
+share-open = Open on a phone or computer on the same network
+share-code = Access code
+share-scan = Scan to open, code included
+share-watching = { $n ->
+        [one] { $n } watching
+       *[other] { $n } watching
+    }
+share-none-watching = No one is watching yet
+share-copy-link = Copy link
+share-failed = Sharing could not start: { $error }
+share-stopped-other-meeting = Sharing stopped: another meeting was opened, and viewers were let in to the last one only.
+share-unencrypted = Not encrypted: anyone who can watch this network’s traffic could see the code and the meeting. Share only on a network you trust.
+share-network-wifi = Wi-Fi
+share-network-wired = Ethernet
+share-scan-on = Scan with a phone on { $network }, code included
+share-retired = Sharing stopped: too many wrong access codes were tried. Start again for a new code.

@@ -516,3 +516,26 @@ import-scans-not-read = { $n ->
     }
 import-paper-ready = { $name } está listo: dividido por secciones, figuras y ecuaciones. Prueba «aquí en la figura 3» o «la ecuación 5 está mal»
 import-pages-ready = { $name } está listo: una pizarra por página. Prueba «rodea este párrafo»
+share = Compartir
+share-tip = Que otros en esta red vean la reunión
+share-on = Compartiendo en la red
+share-intro = Otras personas en la misma red pueden ver esta reunión en un navegador: la pizarra mientras crece y la transcripción mientras se habla. Pueden volver atrás, pero no cambiar nada.
+share-privacy = Mientras se comparte, cualquiera en esta red que tenga el código de acceso puede ver esta reunión. Deja de compartir cuando termine.
+share-start = Empezar a compartir
+share-stop = Dejar de compartir
+share-open = Abre en un teléfono o un ordenador de la misma red
+share-code = Código de acceso
+share-scan = Escanea para abrir, con el código
+share-watching = { $n ->
+        [one] { $n } persona mirando
+       *[other] { $n } personas mirando
+    }
+share-none-watching = Nadie está mirando todavía
+share-copy-link = Copiar enlace
+share-failed = No se pudo empezar a compartir: { $error }
+share-stopped-other-meeting = Se dejó de compartir: se abrió otra reunión, y los espectadores solo tenían acceso a la anterior.
+share-unencrypted = Sin cifrar: quien pueda ver el tráfico de esta red podría ver el código y la reunión. Comparte solo en una red de confianza.
+share-network-wifi = Wi-Fi
+share-network-wired = Cable
+share-scan-on = Escanea con un teléfono en { $network }, con el código
+share-retired = Se dejó de compartir: se probaron demasiados códigos incorrectos. Vuelve a empezar para obtener un código nuevo.

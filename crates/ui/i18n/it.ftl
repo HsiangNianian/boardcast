@@ -516,3 +516,26 @@ import-scans-not-read = { $n ->
     }
 import-paper-ready = { $name } è pronto: diviso per sezioni, figure ed equazioni. Prova “qui nella figura 3” o “l’equazione 5 è sbagliata”
 import-pages-ready = { $name } è pronto: una lavagna per pagina. Prova “cerchia questo paragrafo”
+share = Condividi
+share-tip = Fai seguire la riunione ad altri su questa rete
+share-on = Condivisione in rete attiva
+share-intro = Altri sulla stessa rete possono seguire questa riunione nel browser: la lavagna mentre cresce e la trascrizione mentre si parla. Possono tornare indietro, ma non modificare nulla.
+share-privacy = Finché la condivisione è attiva, chiunque su questa rete abbia il codice di accesso può vedere questa riunione. Interrompi la condivisione a riunione finita.
+share-start = Avvia condivisione
+share-stop = Interrompi condivisione
+share-open = Apri su un telefono o un computer della stessa rete
+share-code = Codice di accesso
+share-scan = Inquadra per aprire, codice incluso
+share-watching = { $n ->
+        [one] { $n } persona guarda
+       *[other] { $n } persone guardano
+    }
+share-none-watching = Nessuno sta ancora guardando
+share-copy-link = Copia link
+share-failed = Impossibile avviare la condivisione: { $error }
+share-stopped-other-meeting = Condivisione interrotta: è stata aperta un’altra riunione, e gli spettatori avevano accesso solo alla precedente.
+share-unencrypted = Non cifrato: chi può osservare il traffico di questa rete potrebbe vedere il codice e la riunione. Condividi solo su una rete di cui ti fidi.
+share-network-wifi = Wi-Fi
+share-network-wired = Cavo
+share-scan-on = Inquadra con un telefono su { $network }, codice incluso
+share-retired = Condivisione interrotta: troppi codici di accesso errati. Ricomincia per avere un nuovo codice.

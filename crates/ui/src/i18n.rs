@@ -131,7 +131,10 @@ fn format(language: usize, id: &str, args: Option<&FluentArgs>) -> Option<String
 
 /// A message in the language shown, or in English, or its ID if neither has it.
 fn message(id: &str, args: Option<&FluentArgs>) -> String {
-    let language = current();
+    message_in(current(), id, args)
+}
+
+fn message_in(language: usize, id: &str, args: Option<&FluentArgs>) -> String {
     format(language, id, args).or_else(|| (language != ENGLISH).then(|| format(ENGLISH, id, args)).flatten()).unwrap_or_else(|| id.to_string())
 }
 
@@ -202,6 +205,10 @@ macro_rules! note {
 /// A transcript line as the interface shows it: a note in the language shown now, whatever language it was
 /// written in, or what was said, as it was said.
 pub fn line_text(line: &serde_json::Value) -> String {
+    line_text_in(current(), line)
+}
+
+fn line_text_in(language: usize, line: &serde_json::Value) -> String {
     let text = line["text"].as_str().unwrap_or_default();
     if !line["manual"].as_bool().unwrap_or(false) {
         return text.to_string();
@@ -213,7 +220,6 @@ pub fn line_text(line: &serde_json::Value) -> String {
             None => return text.to_string(),
         },
     };
-    let language = current();
     format(language, &id, Some(&fluent_args(&args))).or_else(|| format(ENGLISH, &id, Some(&fluent_args(&args)))).unwrap_or_else(|| text.to_string())
 }
 
@@ -403,16 +409,16 @@ mod tests {
         let kept = crate::note!("note-moved-to-new-board", t = "Pricing");
         assert_eq!(kept.text, "Moved “Pricing” to a new board");
         let line = serde_json::json!({ "text": kept.text, "manual": true, "note": kept.message });
-        choose("zh-Hans");
-        assert_eq!(line_text(&line), "把「Pricing」移到了新的一张板");
+        // Each language asked for directly: the language shown is shared by every test running at once.
+        let chinese = LANGUAGES.iter().position(|(c, _)| *c == "zh-Hans").unwrap();
+        assert_eq!(line_text_in(chinese, &line), "把「Pricing」移到了新的一张板");
         // Written as plain text by earlier versions, in either language.
-        assert_eq!(line_text(&serde_json::json!({ "text": "Moved “Pricing” to a new board", "manual": true })), "把「Pricing」移到了新的一张板");
-        assert_eq!(line_text(&serde_json::json!({ "text": "加上了「One printer for fifteen people?」的下划线", "manual": true })), "加上了「One printer for fifteen people?」的下划线");
-        choose("en");
-        assert_eq!(line_text(&serde_json::json!({ "text": "加上了「One printer for fifteen people?」的下划线", "manual": true })), "Underlined “One printer for fifteen people?”");
-        assert_eq!(line_text(&serde_json::json!({ "text": "Removed Highlight on \"a word\"", "manual": true })), "Removed the highlight from “a word”");
-        assert_eq!(line_text(&serde_json::json!({ "text": "said as it was", "manual": false })), "said as it was");
-        assert_eq!(line_text(&serde_json::json!({ "text": "a note nobody knows", "manual": true })), "a note nobody knows");
+        assert_eq!(line_text_in(chinese, &serde_json::json!({ "text": "Moved “Pricing” to a new board", "manual": true })), "把「Pricing」移到了新的一张板");
+        assert_eq!(line_text_in(chinese, &serde_json::json!({ "text": "加上了「One printer for fifteen people?」的下划线", "manual": true })), "加上了「One printer for fifteen people?」的下划线");
+        assert_eq!(line_text_in(ENGLISH, &serde_json::json!({ "text": "加上了「One printer for fifteen people?」的下划线", "manual": true })), "Underlined “One printer for fifteen people?”");
+        assert_eq!(line_text_in(ENGLISH, &serde_json::json!({ "text": "Removed Highlight on \"a word\"", "manual": true })), "Removed the highlight from “a word”");
+        assert_eq!(line_text_in(ENGLISH, &serde_json::json!({ "text": "said as it was", "manual": false })), "said as it was");
+        assert_eq!(line_text_in(ENGLISH, &serde_json::json!({ "text": "a note nobody knows", "manual": true })), "a note nobody knows");
     }
 
     #[test]
@@ -445,8 +451,7 @@ mod tests {
         let mut args = FluentArgs::new();
         args.set("n", 2);
         assert_eq!(format(ENGLISH, "no-such-message", Some(&args)), None);
-        choose("ja");
-        assert_eq!(message("no-such-message", None), "no-such-message");
-        choose("en");
+        let japanese = LANGUAGES.iter().position(|(c, _)| *c == "ja").unwrap();
+        assert_eq!(message_in(japanese, "no-such-message", None), "no-such-message");
     }
 }

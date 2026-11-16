@@ -16,6 +16,7 @@ serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 boardcast-board = { path = "crates/board" }
 boardcast-audio = { path = "crates/audio" }
 boardcast-keep = { path = "crates/keep" }
+boardcast-share = { path = "crates/share" }
 boardcast-agent = { path = "crates/agent" }
 boardcast-meetings = { path = "crates/meetings" }
 boardcast-models = { path = "crates/models" }

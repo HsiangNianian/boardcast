@@ -610,7 +610,8 @@ impl StableLayout {
         let loose: Vec<&Node> = g
             .nodes
             .iter()
-            .filter(|n| is_attach(n) && (!has_parent(g, n) || n.parent.as_ref().is_some_and(|p| ids.contains(p))))
+            // A note on a clip goes with the loose notes, naming the clip, as a card has no margin of its own.
+            .filter(|n| is_attach(n) && (!has_parent(g, n) || n.parent.as_ref().is_some_and(|p| ids.contains(p) || g.nodes.iter().any(|o| &o.id == p && o.kind == Kind::Clip))))
             .collect();
         // An imported page holds the top left, its text stays where it is printed, and notes on that
         // text go in a margin to its right.
@@ -895,6 +896,60 @@ mod clip_tests {
         g.apply(&crate::graph::parse_ops(&format!("D {id}")));
         assert_eq!(g.annotations().len(), 1, "the clip's mark went with it, the page's stays");
         assert_eq!(g.annotations()[0].tool, "pen");
+    }
+
+    fn paper() -> Graph {
+        serde_json::from_value(json!({ "underlay": { "w": 800.0, "h": 1000.0 }, "nextNode": 3, "nodes": [
+            { "id": "n1", "label": "Table 2: Ablation", "kind": "region", "at": { "x": 100, "y": 100, "w": 400, "h": 60 }, "rows": [
+                { "y": 100, "h": 16, "segs": [{ "t": "Table", "x": 100, "w": 50 }, { "t": "2", "x": 160, "w": 10 }] },
+                { "y": 120, "h": 16, "segs": [{ "t": "residual", "x": 100, "w": 80 }, { "t": "76.1", "x": 300, "w": 40 }] },
+                { "y": 140, "h": 16, "segs": [{ "t": "plain", "x": 100, "w": 60 }, { "t": "72.0", "x": 300, "w": 40 }] }
+            ] },
+            { "id": "n2", "label": "Removing the residual path", "kind": "region", "at": { "x": 100, "y": 300, "w": 400, "h": 20 } }
+        ] }))
+        .unwrap()
+    }
+
+    #[test]
+    fn the_model_cuts_a_block_or_the_lines_it_quotes() {
+        let mut g = paper();
+        g.apply(&crate::graph::parse_ops("C n1\nC n1 「residual」\nC n1\nC n2 「anything」"));
+        let clips: Vec<(String, Clip)> = g.nodes.iter().filter_map(|n| Some((n.label.clone(), n.clip()?))).collect();
+        assert_eq!(clips.len(), 3, "the same cut twice is one clip: {clips:?}");
+        let (whole, line, old) = (&clips[0].1, &clips[1].1, &clips[2].1);
+        assert!(whole.src.is_empty() && (whole.pw, whole.ph) == (800.0, 1000.0), "the page under the board");
+        assert_eq!((whole.x, whole.y, whole.w, whole.h), (96.0, 96.0, 408.0, 68.0), "the block and a little room");
+        assert_eq!((line.y, line.h), (116.0, 24.0), "only the quoted line: {line:?}");
+        assert_eq!(clips[1].0, "residual");
+        assert_eq!(g.nodes.iter().find(|n| n.label == "residual").unwrap().extra["text"], "residual 76.1");
+        assert_eq!((old.y, old.h), (296.0, 28.0), "a block without its lines is cut whole");
+        let mut flat = paper();
+        flat.apply(&crate::graph::parse_ops("T 「Ablation」\nC 「Ablation」"));
+        assert!(flat.nodes.iter().all(|n| n.kind != Kind::Clip), "only imported text is cut");
+    }
+
+    #[test]
+    fn a_local_model_may_cut_only_where_there_is_imported_text() {
+        let with = crate::graph::grammar(&paper(), 8, true);
+        assert!(with.contains("| d | c\n") && with.contains("c ::= \"C \" ref (\" \" quote)?"), "{with}");
+        let without = crate::graph::grammar(&Graph::default(), 8, true);
+        assert!(!without.contains("c ::="), "{without}");
+    }
+
+    #[test]
+    fn the_model_is_told_what_was_drawn_by_hand_and_notes_on_a_clip_are_shown() {
+        use crate::graph::Annotation;
+        let mut g = paper();
+        g.annotate(Annotation { tool: "green".into(), on: None, points: vec![[110.0, 128.0], [200.0, 128.0]] });
+        g.apply(&crate::graph::parse_ops("C n2\nK n3 「worth a rerun」"));
+        g.annotate(Annotation { tool: "pen".into(), on: Some("n3".into()), points: vec![[0.1, 0.5], [0.9, 0.5]] });
+        let told = g.describe();
+        assert!(told.contains("n1 [原文] Table 2: Ablation（手动绿色高亮）"), "{told}");
+        assert!(told.contains("n3 [摘录] Removing the residual path（手写红笔）"), "{told}");
+        assert!(!told.contains("n2 [原文] Removing the residual path（"), "the page's mark is not on the other block: {told}");
+        let l = StableLayout::default().layout(&g, &mut crate::sugiyama::first_diagram);
+        let note = g.nodes.iter().find(|n| n.label == "worth a rerun").unwrap();
+        assert!(l.regions.iter().any(|r| r.rows.iter().any(|row| row.id == note.id)), "a note on a clip is written somewhere");
     }
 
     #[test]

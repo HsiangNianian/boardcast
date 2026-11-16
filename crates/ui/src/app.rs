@@ -568,6 +568,15 @@ impl Ink {
         self.crop = None;
     }
 
+    /// The stored page picture a clip is cut from. One the model cut names none: it is the page under the board.
+    fn clip_source(&self, clip: &Clip) -> Option<String> {
+        if clip.src.is_empty() {
+            self.page_src.clone()
+        } else {
+            Some(clip.src.clone())
+        }
+    }
+
     fn stop_marking(&mut self) {
         self.marking = false;
         self.scribble = None;
@@ -3285,7 +3294,7 @@ impl Workbench {
     fn load_clip_images(&mut self) {
         let wanted: Vec<String> = {
             let ink = self.ink.borrow();
-            ink.clips.iter().map(|(_, c)| c.src.clone()).filter(|src| !ink.clip_images.contains_key(src)).collect()
+            ink.clips.iter().filter_map(|(_, c)| ink.clip_source(c)).filter(|src| !ink.clip_images.contains_key(src)).collect()
         };
         for src in wanted {
             let read = match &self.store {
@@ -5107,7 +5116,8 @@ impl Render for Workbench {
                             // Each clip shows its part of the page: the whole picture placed so that part fills the card,
                             // and the rest masked away.
                             for (card, clip) in &state.clips {
-                                let Some(Some(image)) = state.clip_images.get(&clip.src).cloned() else { continue };
+                                let src = if clip.src.is_empty() { state.page_src.as_ref() } else { Some(&clip.src) };
+                                let Some(Some(image)) = src.and_then(|src| state.clip_images.get(src).cloned()) else { continue };
                                 let at = |x: f64, y: f64| origin + point(px(x as f32 * v.k), px(y as f32 * v.k));
                                 let card_area = Bounds::new(at(card.x, card.y), size(px(card.w as f32 * v.k), px(card.h as f32 * v.k)));
                                 let k = card.w / clip.w;
@@ -5170,7 +5180,7 @@ impl Render for Workbench {
                                 }
                             }
                             // The box being cut, and where the selected clip was cut from when its page is under the board.
-                            let source = b.selected.as_ref().and_then(|id| b.clips.iter().find(|(r, _)| &r.id == id)).map(|(_, c)| c).filter(|c| b.page_src.as_ref() == Some(&c.src)).map(|c| ([c.x as f32, c.y as f32], [(c.x + c.w) as f32, (c.y + c.h) as f32]));
+                            let source = b.selected.as_ref().and_then(|id| b.clips.iter().find(|(r, _)| &r.id == id)).map(|(_, c)| c).filter(|c| c.src.is_empty() || b.page_src.as_ref() == Some(&c.src)).map(|c| ([c.x as f32, c.y as f32], [(c.x + c.w) as f32, (c.y + c.h) as f32]));
                             for (from, to) in b.crop.iter().chain(source.iter()) {
                                 let (x0, y0) = (from[0].min(to[0]), from[1].min(to[1]));
                                 let (x1, y1) = (from[0].max(to[0]), from[1].max(to[1]));

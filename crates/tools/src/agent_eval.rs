@@ -63,18 +63,19 @@ struct Options {
     provider: Provider,
 }
 
-const SETS: [(&str, &[&str]); 4] = [
+const SETS: [(&str, &[&str]); 5] = [
     ("dev", &["cases.json"]),
     ("holdout", &["holdout.json"]),
     ("pointing", &["pointing.json"]),
-    ("all", &["cases.json", "holdout.json", "pointing.json"]),
+    ("pages", &["pages.json"]),
+    ("all", &["cases.json", "holdout.json", "pointing.json", "pages.json"]),
 ];
 
-const METRICS: [&str; 7] = ["node", "edge", "topic", "item", "strike", "mark", "group"];
+const METRICS: [&str; 8] = ["node", "edge", "topic", "item", "strike", "mark", "group", "crop"];
 
 /// One case, once: its metrics, what was off, and the model's work.
 struct Run {
-    metrics: [Option<f64>; 7],
+    metrics: [Option<f64>; 8],
     violations: usize,
     detail: String,
     latencies: Vec<u128>,
@@ -143,6 +144,7 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
         s.strike_p.zip(s.strike_r).map(|(p, r)| f1(p, r)),
         s.mark_acc,
         s.group_acc,
+        s.crop_p.zip(s.crop_r).map(|(p, r)| f1(p, r)),
     ];
     let mut off: Vec<String> = vec![];
     if !s.missing.is_empty() {
@@ -251,6 +253,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "cases.json" => "dev",
             "holdout.json" => "holdout",
             "pointing.json" => "pointing",
+            "pages.json" => "pages",
             other => other,
         };
         read.iter_mut().for_each(|c| c.set = from.to_string());
@@ -419,6 +422,7 @@ fn report(cases: &[Case], passes: &[Vec<Run>], label: &str, set: &str) -> String
     }
     let _ = writeln!(out, "| Failed requests (the scores do not count while this is not zero) | {errors} |");
     let _ = writeln!(out, "| Groups right | {} |", overall(6));
+    let _ = writeln!(out, "| Crop F1 (cutting the right part of a page, counting cuts by mistake) | {} |", overall(7));
     let _ = writeln!(out, "| Violations (left in, or a correction not made), per pass | {:.1} |", mean(&violations));
     let _ = writeln!(out, "| Latency per line p50 / p95 | {} / {} ms |", ms(50), ms(95));
     let _ = writeln!(out, "| Output tokens per line p50 | {} |", percentile(&tokens_out, 50).map_or_else(|| "-".into(), |v| v.to_string()));
@@ -427,7 +431,7 @@ fn report(cases: &[Case], passes: &[Vec<Run>], label: &str, set: &str) -> String
     if repeat > 1 {
         let _ = writeln!(out, "| Unstable cases (a score varies by 0.3 or more between passes) | {} |", if shaky.is_empty() { "none".into() } else { shaky.join(", ") });
     }
-    let _ = writeln!(out, "\n| Case | Node | Edge | Topic | Item | Strike F1 | Marks | Groups | p50 ms |\n|---|---|---|---|---|---|---|---|---|");
+    let _ = writeln!(out, "\n| Case | Node | Edge | Topic | Item | Strike F1 | Marks | Groups | Crop F1 | p50 ms |\n|---|---|---|---|---|---|---|---|---|---|");
     for (i, c) in cases.iter().enumerate() {
         let cells: Vec<String> = (0..METRICS.len()).map(|k| cell(per_case(i, k).map(|(m, _)| m))).collect();
         let case_ms: Vec<u128> = passes.iter().flat_map(|p| p[i].latencies.iter().copied()).collect();

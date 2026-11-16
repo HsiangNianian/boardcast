@@ -3,6 +3,7 @@
 //! stroke by stroke. A sample with a recording plays along with it, each line said when it was said.
 //! Only the window around it is drawn here. landing/demo/index.html is the page.
 
+mod waves;
 use boardcast_board::board_layout::{Bounds, StableLayout};
 use boardcast_board::compose::{compose, Style};
 use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
@@ -358,6 +359,8 @@ struct Ui {
     sound: Element,
     credit: Element,
     audio: HtmlAudioElement,
+    /// The recording as a timeline under the window.
+    waves: waves::Waves,
 }
 
 impl Ui {
@@ -382,6 +385,9 @@ struct Control {
     hidden: Cell<bool>,
     /// Whether the recording is never loaded, so the meeting plays by its own clock.
     silent: bool,
+    /// Where in the recording the next start of a sample begins, when the reader picked a moment on the
+    /// timeline; otherwise it begins at the start.
+    start_at: Cell<Option<f64>>,
 }
 
 impl Control {
@@ -507,13 +513,28 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
     let audio = &ui.audio;
     if !control.silent {
         audio.set_src(&format!("../media/{audio_name}"));
+        // Each line's stretch, coloured as its speaker is in the transcript: by the order they first speak.
+        let mut order: Vec<&str> = vec![];
+        let spans = sample
+            .lines
+            .iter()
+            .filter_map(|l| {
+                let n = order.iter().position(|s| *s == l.speaker).unwrap_or_else(|| {
+                    order.push(&l.speaker);
+                    order.len() - 1
+                });
+                Some((l.start?, l.end?, n))
+            })
+            .collect();
+        ui.waves.load(&format!("../media/{audio_name}"), spans);
         audio.set_muted(!control.sound.get());
-        audio.set_current_time(0.0);
+        audio.set_current_time(control.start_at.get().unwrap_or(0.0));
         if !control.paused.get() && !control.away() {
             let _ = audio.play();
         }
     }
-    let clock = Clock { at: Cell::new(0.0), last: Cell::new(frame().await) };
+    let start = control.start_at.take().unwrap_or(0.0);
+    let clock = Clock { at: Cell::new(start), last: Cell::new(frame().await) };
     // Replies wait here for the board, which writes them in order while the transcript runs on.
     let queue: Rc<RefCell<VecDeque<(String, Element)>>> = Rc::new(RefCell::new(VecDeque::new()));
     let idle = Rc::new(Cell::new(true));
@@ -552,6 +573,36 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
     let end = sample.lines.iter().filter_map(|l| l.end).fold(0.0, f64::max);
     let mut said: Vec<(Element, Element, usize)> = vec![];
     let mut sent = 0;
+    // Starting part way through, the board is as it was by then, written at once: every reply due before
+    // that moment, in order. The lines said by then come in with it; the loop below writes out their words.
+    if start > 0.0 {
+        let mut whole = None;
+        for line in &sample.lines {
+            if line.start.unwrap_or(0.0) > start {
+                break;
+            }
+            let (li, p) = line_item(ui, &line.speaker);
+            said.push((li.clone(), p, 0));
+            if sent + 1 < said.len() || line.end.unwrap_or(0.0) + line.ms.clamp(300.0, 1500.0) / 1000.0 > start {
+                continue;
+            }
+            if let Some(ops) = &line.ops {
+                let (fresh, bounds) = board.borrow_mut().apply(ops);
+                for s in &fresh {
+                    let _ = s.node.set_attribute("d", &path_of(&outline(&s.inked, 1.0)));
+                }
+                whole = Some(bounds);
+            }
+            let _ = li.class_list().add_1("drawn");
+            sent += 1;
+        }
+        if let Some(head) = board.borrow().graph.nodes.iter().find(|n| matches!(n.kind, Kind::Topic)) {
+            ui.title.set_text_content(Some(&head.label));
+        }
+        if let Some(bounds) = whole {
+            board.borrow_mut().set_view(frame_for(&bounds));
+        }
+    }
     loop {
         let now = frame().await;
         if !live() {
@@ -571,6 +622,7 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
         }
         audio.set_muted(!control.sound.get());
         let t = clock.tick(now, audio, paused);
+        ui.waves.draw(t);
         // Lines come in as they are said, and are typed out over the time they take.
         while said.len() < sample.lines.len() && sample.lines[said.len()].start.unwrap_or(0.0) <= t {
             let (li, p) = line_item(ui, &sample.lines[said.len()].speaker);
@@ -734,8 +786,8 @@ pub fn start() {
     }
     let audio = HtmlAudioElement::new().expect("an audio element");
     audio.set_preload("auto");
-    let ui = Rc::new(Ui { title: q("#title"), state: q("#state"), lines: q("#lines"), tabs: tabs.clone(), speakers: RefCell::new(vec![]), listen: q("#listen"), sound: q("#sound"), credit: q("#credit"), audio });
-    let control = Rc::new(Control { wanted: Cell::new(None), paused: Cell::new(false), run: Cell::new(0), sound: Cell::new(false), off_screen: Cell::new(false), hidden: Cell::new(false), silent: background });
+    let ui = Rc::new(Ui { title: q("#title"), state: q("#state"), lines: q("#lines"), tabs: tabs.clone(), speakers: RefCell::new(vec![]), listen: q("#listen"), sound: q("#sound"), credit: q("#credit"), audio, waves: waves::Waves::find(&doc()) });
+    let control = Rc::new(Control { wanted: Cell::new(None), paused: Cell::new(false), run: Cell::new(0), sound: Cell::new(false), off_screen: Cell::new(false), hidden: Cell::new(false), silent: background, start_at: Cell::new(None) });
     // A recording stops when the demo leaves the screen: scrolled past on the site's first page, where it is
     // embedded (an observer in a frame watches the top window's viewport), or in a tab put aside.
     {
@@ -906,6 +958,59 @@ pub fn start() {
                 b.set_reading(true);
                 b.touched = now();
                 b.set_view([cx - v[2] * k / 2.0, cy - v[3] * k / 2.0, v[2] * k, v[3] * k]);
+            });
+        }
+    }
+    // Pressing on the timeline holds a moment, dragging moves it, and letting go starts the meeting again from
+    // there: its board as it was by then, its transcript up to it, and its recording from it.
+    if let Some(line) = doc().get_element_by_id("timeline") {
+        let held = Rc::new(Cell::new(false));
+        let moment = {
+            let (line, ui) = (line.clone(), ui.clone());
+            move |e: &web_sys::Event| -> Option<f64> {
+                let e = e.dyn_ref::<web_sys::MouseEvent>()?;
+                let r = line.get_bounding_client_rect();
+                let k = ((f64::from(e.client_x()) - r.left()) / r.width().max(1.0)).clamp(0.0, 1.0);
+                ui.waves.seconds().map(|s| k * s)
+            }
+        };
+        {
+            let (held, ui, moment, line) = (held.clone(), ui.clone(), moment.clone(), line.clone());
+            on(&line.clone(), "pointerdown", move |e| {
+                let Some(at) = moment(&e) else { return };
+                if let Some(p) = e.dyn_ref::<web_sys::PointerEvent>() {
+                    let _ = line.set_pointer_capture(p.pointer_id());
+                }
+                held.set(true);
+                ui.waves.hold(Some(at));
+            });
+        }
+        {
+            let (held, ui, moment) = (held.clone(), ui.clone(), moment.clone());
+            on(&line, "pointermove", move |e| {
+                if held.get() {
+                    ui.waves.hold(moment(&e));
+                }
+            });
+        }
+        {
+            let (held, ui, control) = (held.clone(), ui.clone(), control.clone());
+            on(&line, "pointerup", move |e| {
+                if !held.replace(false) {
+                    return;
+                }
+                ui.waves.hold(None);
+                if let Some(at) = moment(&e) {
+                    control.start_at.set(Some(at));
+                    control.run.set(control.run.get() + 1);
+                }
+            });
+        }
+        {
+            let (held, ui) = (held.clone(), ui.clone());
+            on(&line, "pointercancel", move |_| {
+                held.set(false);
+                ui.waves.hold(None);
             });
         }
     }

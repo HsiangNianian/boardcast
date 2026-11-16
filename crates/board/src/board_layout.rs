@@ -874,6 +874,30 @@ mod clip_tests {
     }
 
     #[test]
+    fn hand_marks_stay_on_their_clip_and_go_with_it() {
+        use crate::graph::Annotation;
+        let mut g = Graph::default();
+        g.extra.insert("underlay".into(), json!({ "w": 800.0, "h": 1000.0 }));
+        let clip = Clip { src: "p.jpg".into(), pw: 800.0, ph: 1000.0, x: 0.0, y: 0.0, w: 400.0, h: 200.0 };
+        let id = g.add_clip("Fig. 3", "", &clip);
+        g.annotate(Annotation { tool: "green".into(), on: Some(id.clone()), points: vec![[0.1, 0.5], [0.9, 0.5]] });
+        g.annotate(Annotation { tool: "pen".into(), on: None, points: vec![[100.0, 100.0], [200.0, 120.0]] });
+        let l = StableLayout::default().layout(&g, &mut crate::sugiyama::first_diagram);
+        let card = l.clips[0].clone();
+        let mut glyphs = crate::glyphs::Glyphs::from_checkout(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))).unwrap();
+        let (pieces, _) = crate::compose::compose(&g, &l, &mut glyphs);
+        let green = pieces.iter().find(|p| p.seed == "a0|green").expect("the highlighter is drawn");
+        let first = green.lines[0].points[0];
+        assert!((f64::from(first[0]) - (card.x + 0.1 * card.w)).abs() < 0.01 && (f64::from(first[1]) - (card.y + 0.5 * card.h)).abs() < 0.01, "on the card wherever it is: {first:?} {card:?}");
+        assert!(green.lines[0].flat && green.lines[0].style.under, "a highlighter, under the ink");
+        let pen = pieces.iter().find(|p| p.seed == "a1|pen").expect("the pen is drawn");
+        assert!(!pen.lines[0].flat && pen.lines[0].points[0] == [100.0, 100.0], "the pen stays where it was drawn on the page");
+        g.apply(&crate::graph::parse_ops(&format!("D {id}")));
+        assert_eq!(g.annotations().len(), 1, "the clip's mark went with it, the page's stays");
+        assert_eq!(g.annotations()[0].tool, "pen");
+    }
+
+    #[test]
     fn a_small_clip_is_enlarged_at_most_twice() {
         let clip = Clip { src: String::new(), pw: 800.0, ph: 1000.0, x: 0.0, y: 0.0, w: 40.0, h: 20.0 };
         assert_eq!(clip.card_size(), (80.0, 40.0));

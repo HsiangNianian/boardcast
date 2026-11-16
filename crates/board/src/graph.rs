@@ -227,6 +227,27 @@ impl Graph {
         lines.into_iter().map(|(_, _, l)| l).collect::<Vec<_>>().join("\n").trim().to_string()
     }
 
+    /// What has been drawn by hand on the board, oldest first.
+    pub fn annotations(&self) -> Vec<Annotation> {
+        self.extra.get("annotations").and_then(|a| serde_json::from_value(a.clone()).ok()).unwrap_or_default()
+    }
+
+    /// Draw by hand on the board. Annotations on a clip go when the clip does.
+    pub fn annotate(&mut self, annotation: Annotation) {
+        let mut all = self.annotations();
+        all.push(annotation);
+        self.keep_annotations(all);
+    }
+
+    fn keep_annotations(&mut self, all: Vec<Annotation>) {
+        let all: Vec<Annotation> = all.into_iter().filter(|a| a.on.as_ref().is_none_or(|id| self.nodes.iter().any(|n| &n.id == id))).collect();
+        if all.is_empty() {
+            self.extra.remove("annotations");
+        } else {
+            self.extra.insert("annotations".into(), serde_json::to_value(all).expect("annotations serialize"));
+        }
+    }
+
     /// Put a clip of an imported page on the board, as a card of its own, and give back its id.
     /// `text` is what the clip's part of the page says, which the model is shown in place of the label.
     pub fn add_clip(&mut self, label: &str, text: &str, clip: &Clip) -> String {
@@ -565,6 +586,9 @@ impl Graph {
             }
         }
         self.restore_pinned(pinned);
+        if self.extra.contains_key("annotations") {
+            self.keep_annotations(self.annotations());
+        }
         let used: HashSet<String> = self.nodes.iter().filter_map(|n| n.group.clone()).collect();
         self.groups.retain(|x| used.contains(&x.id));
     }
@@ -630,6 +654,21 @@ impl Clip {
         (self.w * k, self.h * k)
     }
 }
+
+/// A highlighter pass or a pen line drawn by hand over a page or a clip.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Annotation {
+    /// One of [`ANNOTATION_TOOLS`]: a highlighter's colour, or the pen.
+    pub tool: String,
+    /// On a clip, the clip's id, and the points are shares of its card's width and height, so they stay on it
+    /// wherever the card is laid out. Otherwise the points are board positions, as the page never moves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on: Option<String>,
+    pub points: Vec<[f64; 2]>,
+}
+
+/// The highlighters and the pen a hand annotation is drawn with.
+pub const ANNOTATION_TOOLS: [&str; 4] = ["yellow", "green", "pink", "pen"];
 
 pub const CLIP_MAX_W: f64 = 360.0;
 pub const CLIP_MAX_H: f64 = 300.0;

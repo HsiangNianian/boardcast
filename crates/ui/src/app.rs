@@ -3,8 +3,8 @@
 use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
 use boardcast_board::board_layout::{target_at, Bounds as BoardBounds, Rect, StableLayout};
 use boardcast_board::check::check;
-use boardcast_board::compose::{compose, ink_boxes, InkBox, Owner, Style};
-use boardcast_board::graph::{parse_ops, Clip, Graph, Kind, Op, Ref, Utterance};
+use boardcast_board::compose::{annotation_look, compose, ink_boxes, InkBox, Owner, Style};
+use boardcast_board::graph::{parse_ops, Annotation, Clip, Graph, Kind, Op, Ref, Utterance, ANNOTATION_TOOLS};
 use boardcast_agent::sound::Glossary;
 use boardcast_board::follow;
 use boardcast_board::sugiyama::first_diagram;
@@ -71,6 +71,9 @@ const SIDEBAR_W: f32 = 236.0;
 const SIDEBAR_FROM: f32 = 900.0;
 /// The board is at least this wide before the zoom control floats beside the tool bar.
 const ZOOM_TOOLS_FROM: f32 = 640.0;
+/// The board is at least this wide before the tools under it are named beside their icons; narrower, the
+/// tooltips name them, so the bar keeps clear of the zoom control.
+const TOOL_LABELS_FROM: f32 = 920.0;
 /// The map of the board: the room it has for the board, the edge around that, the grip above it that it is
 /// moved by, and how much of the board around its content it shows.
 const MAP_W: f32 = 176.0;
@@ -325,6 +328,12 @@ struct Ink {
     clips: Vec<(Rect, Clip)>,
     /// The page pictures clips are cut from, by the name the meeting stores them under; None if one could not be read.
     clip_images: HashMap<String, Option<Arc<RenderImage>>>,
+    /// Dragging draws with a highlighter or the pen rather than moving the board.
+    marking: bool,
+    /// Which of them: one of the board's annotation tools.
+    mark_tool: &'static str,
+    /// The line being drawn, in board coordinates.
+    scribble: Option<Vec<[f32; 2]>>,
     /// The name the page under the board is stored under, to show where a clip of it came from.
     page_src: Option<String>,
     zoom_test: Option<ZoomTest>,
@@ -557,6 +566,19 @@ impl Ink {
     fn stop_cropping(&mut self) {
         self.cropping = false;
         self.crop = None;
+    }
+
+    fn stop_marking(&mut self) {
+        self.marking = false;
+        self.scribble = None;
+    }
+
+    /// One tool at a time: taking up crop, circle or a marker puts the others down.
+    fn put_tools_down(&mut self) {
+        self.clear_circles();
+        self.stop_cropping();
+        self.stop_marking();
+        self.selected = None;
     }
 
     fn clear_circles(&mut self) {
@@ -1481,6 +1503,15 @@ fn page_render_image(bytes: &[u8]) -> Result<(Arc<RenderImage>, Arc<RenderImage>
     let shrink = (2.0 * MAP_W / picture.width().max(1) as f32).min(2.0 * MAP_H / picture.height().max(1) as f32).min(1.0);
     let small = image::imageops::thumbnail(&picture, ((picture.width() as f32 * shrink) as u32).max(1), ((picture.height() as f32 * shrink) as u32).max(1));
     Ok((Arc::new(RenderImage::new([image::Frame::new(picture)])), Arc::new(RenderImage::new([image::Frame::new(small)]))))
+}
+
+fn mark_tool_name(tool: &str) -> &'static str {
+    match tool {
+        "pen" => tr("Red pen", "红笔"),
+        "green" => tr("Green highlighter", "绿色荧光笔"),
+        "pink" => tr("Pink highlighter", "粉色荧光笔"),
+        _ => tr("Yellow highlighter", "黄色荧光笔"),
+    }
 }
 
 /// The smallest box, in board units, taken as a clip rather than a slip of the pointer.
@@ -3216,6 +3247,40 @@ impl Workbench {
         self.live.change_board(graph, memory);
     }
 
+    /// Put a line drawn by hand on the board. On a clip it is kept on the clip; on the page it stays where it
+    /// was drawn. Elsewhere the layout moves things about, so it is not kept.
+    fn annotate(&mut self, line: &[[f32; 2]], cx: &mut Context<Self>) {
+        cx.notify();
+        if !self.editable() || line.len() < 2 {
+            return;
+        }
+        let (tool, card) = {
+            let ink = self.ink.borrow();
+            let [x, y] = line[0];
+            let card = ink.clips.iter().map(|(r, _)| r.clone()).find(|r| f64::from(x) >= r.x && f64::from(x) <= r.x + r.w && f64::from(y) >= r.y && f64::from(y) <= r.y + r.h);
+            (ink.mark_tool, card)
+        };
+        let annotation = match card {
+            Some(c) => Annotation { tool: tool.to_string(), on: Some(c.id.clone()), points: line.iter().map(|p| [(f64::from(p[0]) - c.x) / c.w, (f64::from(p[1]) - c.y) / c.h]).collect() },
+            None => match self.live.graph.underlay() {
+                Some((w, h)) if f64::from(line[0][0]) <= w && f64::from(line[0][1]) <= h && line[0][0] >= 0.0 && line[0][1] >= 0.0 => {
+                    Annotation { tool: tool.to_string(), on: None, points: line.iter().map(|p| [f64::from(p[0]), f64::from(p[1])]).collect() }
+                }
+                _ => {
+                    self.notice = Some(tr("Marks go on an imported page or a clip.", "标注要画在导入的页面或摘录上。").to_string());
+                    return;
+                }
+            },
+        };
+        let graph = self.session().annotate(annotation);
+        self.next_batch += 1;
+        let mut ink = self.ink.borrow_mut();
+        ink.update(&graph, self.next_batch);
+        let memory = ink.board.snapshot();
+        drop(ink);
+        self.live.change_board(graph, memory);
+    }
+
     /// Read the page pictures that clips on the board are cut from and are not read yet.
     fn load_clip_images(&mut self) {
         let wanted: Vec<String> = {
@@ -3385,6 +3450,10 @@ impl Workbench {
             // Closes the nearest thing first: the selection, then a page or a dialog.
             "escape" if self.ink.borrow().circling => {
                 self.ink.borrow_mut().clear_circles();
+                cx.notify();
+            }
+            "escape" if self.ink.borrow().marking => {
+                self.ink.borrow_mut().stop_marking();
                 cx.notify();
             }
             "escape" if self.ink.borrow().cropping => {
@@ -4903,6 +4972,11 @@ impl Render for Workbench {
             .on_mouse_down(MouseButton::Left, cx.listener(move |this, e: &MouseDownEvent, window, cx| {
                 window.focus(&this.focus, cx);
                 let mut b = press.borrow_mut();
+                if b.marking {
+                    let start = b.on_board(e.position);
+                    b.scribble = Some(vec![start]);
+                    return;
+                }
                 if b.cropping {
                     let start = b.on_board(e.position);
                     b.crop = Some((start, start));
@@ -4918,6 +4992,17 @@ impl Render for Workbench {
             }))
             .on_mouse_move(cx.listener(move |_, e: &MouseMoveEvent, _, cx| {
                 let mut b = moved.borrow_mut();
+                if b.scribble.is_some() && e.pressed_button == Some(MouseButton::Left) {
+                    let at = b.on_board(e.position);
+                    let k = b.shown().k;
+                    let line = b.scribble.as_mut().expect("scribbling");
+                    // A point every couple of screen pixels is plenty, and keeps a long line light.
+                    if line.last().is_none_or(|p| (p[0] - at[0]).hypot(p[1] - at[1]) * k >= 2.0) {
+                        line.push(at);
+                    }
+                    cx.notify();
+                    return;
+                }
                 if b.crop.is_some() && e.pressed_button == Some(MouseButton::Left) {
                     let at = b.on_board(e.position);
                     if let Some((_, end)) = b.crop.as_mut() {
@@ -4943,6 +5028,11 @@ impl Render for Workbench {
                 }
             }))
             .on_mouse_up(MouseButton::Left, cx.listener(move |this, e: &MouseUpEvent, _, cx| {
+                let line = release.borrow_mut().scribble.take();
+                if let Some(line) = line {
+                    this.annotate(&line, cx);
+                    return;
+                }
                 let cut = release.borrow_mut().crop.take();
                 if let Some((from, to)) = cut {
                     this.cut_clip(from, to, cx);
@@ -5090,6 +5180,19 @@ impl Render for Workbench {
                                 let mut edge: Hsla = rgb(pal().accent).into();
                                 edge.a = 0.9;
                                 window.paint_quad(gpui_kit::fill(area, tint).border_widths(px(2.)).border_color(edge));
+                            }
+                            // The line being drawn, in its tool's colour, until it joins the board.
+                            if let Some(line) = b.scribble.as_ref().filter(|l| l.len() > 1) {
+                                let (color, alpha, width) = annotation_look(b.mark_tool);
+                                let mut pb = PathBuilder::stroke(px(width * v.k));
+                                let at = |p: &[f32; 2]| origin + point(px(p[0] * v.k), px(p[1] * v.k));
+                                pb.move_to(at(&line[0]));
+                                line[1..].iter().for_each(|p| pb.line_to(at(p)));
+                                if let Ok(path) = pb.build() {
+                                    let mut ink: Hsla = rgb(pal().ink(color)).into();
+                                    ink.a = alpha;
+                                    window.paint_path(path, Background::from(ink));
+                                }
                             }
                             // Ink making room for a new line, on its way to where it now belongs.
                             if let Some(left) = b.slide_left() {
@@ -5400,15 +5503,41 @@ impl Render for Workbench {
         let window_bar = title_bar().child(meeting_side).child(open_side);
 
         // The tools that work on the board float over its lower edge: listening first, then pointing and putting right.
-        let (circling, circled, cropping) = {
+        let (circling, circled, cropping, marking, mark_tool) = {
             let ink = self.ink.borrow();
-            (ink.circling, ink.pointed.len(), ink.cropping)
+            (ink.circling, ink.pointed.len(), ink.cropping, ink.marking, ink.mark_tool)
         };
         let on_page = self.live.graph.underlay().is_some();
+        let has_clips = self.live.graph.nodes.iter().any(|n| n.kind == Kind::Clip);
+        let named = f32::from(self.ink.borrow().canvas.size.width) >= TOOL_LABELS_FROM;
         let tool_h = px(TOOLS_H - 10.0);
         let tool_icon = |id: &'static str, name: &'static str, tooltip: String| Button::new(id).ghost().h(tool_h).w(tool_h).icon(icon(name)).tooltip(tooltip);
         // A key as it is printed on the keyboard.
         let keycap = |text: String| div().flex().items_center().h(px(18.)).px(px(5.)).border_1().rounded(px(2.)).font_family(theme::MONO).text_size(px(10.)).child(text);
+        // The colours of the marker, in a small bar of their own just above the tools while marking.
+        let swatches = (editable && marking).then(|| {
+            float().id("mark-colours").h(px(32.)).px(px(6.)).gap(px(4.)).children(ANNOTATION_TOOLS.iter().map(|&tool| {
+                let (color, alpha, _) = annotation_look(tool);
+                let mut fill: Hsla = rgb(pal().ink(color)).into();
+                fill.a = if tool == "pen" { 1.0 } else { (alpha * 1.6).min(1.0) };
+                let on = tool == mark_tool;
+                div()
+                    .id(gpui_kit::ElementId::Name(format!("mark-{tool}").into()))
+                    .size(px(22.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_full()
+                    .cursor_pointer()
+                    .when(on, |d| d.border_2().border_color(rgb(pal().text)))
+                    .child(div().size(px(if tool == "pen" { 8. } else { 14. })).rounded_full().bg(fill))
+                    .tooltip(move |window, cx| Tooltip::new(mark_tool_name(tool)).build(window, cx))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.ink.borrow_mut().mark_tool = tool;
+                        cx.notify();
+                    }))
+                        }))
+        });
         let tool_bar = editable.then(|| {
             float()
                 .id("tools")
@@ -5460,16 +5589,17 @@ impl Render for Workbench {
                             if ink.circling {
                                 ink.clear_circles();
                             } else {
-                                ink.stop_cropping();
+                                ink.put_tools_down();
                                 ink.circling = true;
-                                ink.selected = None;
                             }
                             cx.notify();
                         }))
-                        .child(div().flex().items_center().gap_2().child(icon("lasso").size(px(16.))).child(div().text_sm().child(match circled {
-                            n if circling && n > 0 => format!("{} · {n}", tr("Circle", "圈选")),
-                            _ => tr("Circle", "圈选").to_string(),
-                        }))),
+                        .child(div().flex().items_center().gap_2().child(icon("lasso").size(px(16.))).map(|d| match circled {
+                            n if circling && n > 0 && named => d.child(div().text_sm().child(format!("{} · {n}", tr("Circle", "圈选")))),
+                            n if circling && n > 0 => d.child(div().text_sm().child(n.to_string())),
+                            _ if named => d.child(div().text_sm().child(tr("Circle", "圈选"))),
+                            _ => d,
+                        })),
                 )
                 .when(on_page, |d| {
                     d.child(
@@ -5484,13 +5614,37 @@ impl Render for Workbench {
                                 if ink.cropping {
                                     ink.stop_cropping();
                                 } else {
-                                    ink.clear_circles();
+                                    ink.put_tools_down();
                                     ink.cropping = true;
-                                    ink.selected = None;
                                 }
                                 cx.notify();
                             }))
-                            .child(div().flex().items_center().gap_2().child(icon("crop").size(px(16.))).child(div().text_sm().child(tr("Crop", "裁剪")))),
+                            .child(div().flex().items_center().gap_2().child(icon("crop").size(px(16.))).when(named, |d| d.child(div().text_sm().child(tr("Crop", "裁剪"))))),
+                    )
+                })
+                .when(on_page || has_clips, |d| {
+                    d.child(
+                        Button::new("mark-tool")
+                            .ghost()
+                            .h(tool_h)
+                            .px_3()
+                            .selected(marking)
+                            .tooltip(if marking {
+                                tr("Draw over the page or a clip. Esc stops", "在页面或摘录上画，Esc 取消")
+                            } else {
+                                tr("Highlight or draw by hand on the page and on clips", "在页面和摘录上手动高亮或书写")
+                            })
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                let mut ink = this.ink.borrow_mut();
+                                if ink.marking {
+                                    ink.stop_marking();
+                                } else {
+                                    ink.put_tools_down();
+                                    ink.marking = true;
+                                }
+                                cx.notify();
+                            }))
+                            .child(div().flex().items_center().gap_2().child(icon("highlighter").size(px(16.))).when(named, |d| d.child(div().text_sm().child(tr("Mark", "标注"))))),
                     )
                 })
                 .child(Separator::vertical().h(px(20.)).mx_1())
@@ -6937,6 +7091,7 @@ impl Render for Workbench {
             // A replay takes the width, so the zoom control waits for it to end.
             .when(canvas_width >= ZOOM_TOOLS_FROM && !replaying, |d| d.child(div().absolute().bottom(px(TOOLS_GAP + (TOOLS_H - 32.0) / 2.0)).left(px(12.)).child(zoom_tools)))
             .when_some(page_tools.filter(|_| !replaying), |d, tools| d.child(div().absolute().bottom(px(TOOLS_GAP + (TOOLS_H - 32.0) / 2.0)).right(px(12.)).child(tools)))
+            .when_some(swatches.filter(|_| !replaying), |d, bar| d.child(div().absolute().bottom(px(TOOLS_GAP + TOOLS_H + 8.0)).left_0().right_0().flex().justify_center().child(bar)))
             .when_some(lower, |d, bar| d.child(div().absolute().bottom(px(TOOLS_GAP)).left_0().right_0().flex().justify_center().child(bar)));
         let main = div().relative().flex_1().min_w_0().h_full().flex().flex_col().child(canvas_area);
         // The meeting: the board and the panel beside it, under whatever page is open over them.
@@ -7198,6 +7353,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 pointed: vec![],
                 cropping: false,
                 crop: None,
+                marking: false,
+                mark_tool: "yellow",
+                scribble: None,
                 clips: vec![],
                 clip_images: HashMap::new(),
                 page_src: None,

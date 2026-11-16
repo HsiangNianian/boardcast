@@ -6,7 +6,8 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
 
-use crate::SAMPLE_RATE;
+/// Speech is kept at this rate, mono.
+pub const SAMPLE_RATE: i32 = 16_000;
 
 /// 20 ms frames, as Opus likes for speech.
 const FRAME: usize = SAMPLE_RATE as usize / 50;

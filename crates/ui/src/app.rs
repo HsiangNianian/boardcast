@@ -985,7 +985,8 @@ impl Ink {
 
     /// During a zoom test, says what each slow frame was doing, so a stall can be attributed.
     fn note_frame(&mut self, paint: Duration, uploads_before: usize) {
-        let uploads = self.base.uploads() + self.detail.as_ref().map_or(0, |(t, _)| t.uploads()) - uploads_before;
+        // A seek or a new board can replace the textures in the middle of a frame, starting their count again.
+        let uploads = (self.base.uploads() + self.detail.as_ref().map_or(0, |(t, _)| t.uploads())).saturating_sub(uploads_before);
         let k = self.shown().k;
         let detail = self.detail.is_some();
         let rebuilding = self.rebuilding.is_some();
@@ -1286,8 +1287,10 @@ struct Replaying {
     memory: serde_json::Value,
     view: (Option<View>, bool),
     next_at: Instant,
-    slider: Entity<SliderState>,
-    _slider_moved: gpui_kit::Subscription,
+    /// Where the progress track was last drawn, to turn a press on it into a step.
+    track: Rc<std::cell::Cell<Bounds<Pixels>>>,
+    /// The track is held, and the replay follows the pointer along it.
+    held: bool,
 }
 
 enum Exported {
@@ -2288,12 +2291,6 @@ impl Workbench {
             cx.notify();
             return;
         }
-        let slider = cx.new(|_| SliderState::new().min(0.0).max(total as f32).step(1.0).default_value(0.0));
-        let slider_moved = cx.subscribe(&slider, |this: &mut Self, _, event: &SliderEvent, cx| {
-            if let SliderEvent::Change(value) = event {
-                this.seek_replay(value.end().round() as usize, cx);
-            }
-        });
         let mut ink = self.ink.borrow_mut();
         let (memory, view) = (ink.board.snapshot(), (ink.view, ink.reading));
         ink.open(&Graph::default(), &serde_json::Value::Null);
@@ -2301,7 +2298,7 @@ impl Workbench {
         self.notice = None;
         self.panel = Panel::Transcript;
         let shown = timeline.first().map_or(self.live.page(), |(b, _)| *b);
-        self.replay = Some(Replaying { player: Player::new(total), timeline, steps, shown, memory, view, next_at: Instant::now(), slider, _slider_moved: slider_moved });
+        self.replay = Some(Replaying { player: Player::new(total), timeline, steps, shown, memory, view, next_at: Instant::now(), track: Rc::default(), held: false });
         self.show_board_image(shown);
         self.wait_for_next_step();
         window.focus(&self.focus, cx);
@@ -4546,9 +4543,6 @@ impl Workbench {
     }
 }
 
-fn replay_slider(state: &Entity<SliderState>) -> impl IntoElement {
-    Slider::new(state).accessibility_label(tr("Replay progress", "回放进度")).flex_1().min_w_0()
-}
 
 /// A summary as it reads on screen. To-dos can be ticked when `tick` is given, with a target big
 /// enough for a finger.
@@ -4619,38 +4613,102 @@ fn summary_blocks(text: &str, group: &'static str, tick: Option<&Context<Workben
 }
 
 impl Workbench {
-    fn replay_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<gpui_kit::Div> {
+    fn replay_bar(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> Option<gpui_kit::Div> {
         let replay = self.replay.as_ref()?;
         let player = replay.player.clone();
-        // Steps move on their own, and the slider has to follow.
-        if replay.slider.read(cx).value().end() != player.at as f32 {
-            let value = player.at as f32;
-            replay.slider.update(cx, |state, cx| state.set_value(value, window, cx));
-        }
         let steps = &replay.steps;
-        let time = format!("{} / {}", clock(player.elapsed_ms(steps)), clock(Player::duration_ms(steps)));
+        let (now, whole) = (clock(player.elapsed_ms(steps)), clock(Player::duration_ms(steps)));
         let can_fork = player.at > 0 && self.live.read_only.is_none();
+        let done = if player.total == 0 { 0.0 } else { player.at as f32 / player.total as f32 };
+        let area = replay.track.clone();
+        // The step under a point on the track.
+        let step_at = |this: &Self, x: Pixels| {
+            let replay = this.replay.as_ref()?;
+            let b = replay.track.get();
+            let k = (f32::from(x - b.origin.x) / f32::from(b.size.width).max(1.0)).clamp(0.0, 1.0);
+            Some((k * replay.player.total as f32).round() as usize)
+        };
+        // A thin line, the part played in ink and the rest faint, and a small round knob at where it is.
+        let track = div()
+            .id("replay-track")
+            .flex_1()
+            .min_w_0()
+            .h(px(28.))
+            .cursor_pointer()
+            .child(
+                canvas(
+                    |_, _, _| (),
+                    move |bounds: Bounds<Pixels>, (), window: &mut Window, _: &mut App| {
+                        area.set(bounds);
+                        let middle = bounds.origin.y + bounds.size.height / 2.0;
+                        let (left, width) = (bounds.origin.x + px(6.), bounds.size.width - px(12.));
+                        let line = |from: f32, to: f32, color: u32, alpha: f32| {
+                            let mut c: Hsla = rgb(color).into();
+                            c.a = alpha;
+                            gpui_kit::fill(Bounds::new(point(left + width * from, middle - px(1.5)), size(width * (to - from), px(3.))), c).corner_radii(px(1.5))
+                        };
+                        window.paint_quad(line(0.0, 1.0, pal().line, 1.0));
+                        window.paint_quad(line(0.0, done, pal().text, 1.0));
+                        let knob = Bounds::new(point(left + width * done - px(6.), middle - px(6.)), size(px(12.), px(12.)));
+                        window.paint_quad(gpui_kit::fill(knob, rgb(pal().surface)).corner_radii(px(6.)).border_widths(px(2.)).border_color(rgb(pal().text)));
+                    },
+                )
+                .size_full(),
+            )
+            .on_mouse_down(MouseButton::Left, cx.listener(move |this, e: &MouseDownEvent, _, cx| {
+                if let Some(at) = step_at(this, e.position.x) {
+                    if let Some(replay) = &mut this.replay {
+                        replay.held = true;
+                    }
+                    this.seek_replay(at, cx);
+                }
+            }))
+            .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
+                let held = this.replay.as_ref().is_some_and(|r| r.held);
+                if !held {
+                    return;
+                }
+                if e.pressed_button != Some(MouseButton::Left) {
+                    if let Some(replay) = &mut this.replay {
+                        replay.held = false;
+                    }
+                    return;
+                }
+                if let Some(at) = step_at(this, e.position.x) {
+                    this.seek_replay(at, cx);
+                }
+            }))
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| {
+                if let Some(replay) = &mut this.replay {
+                    replay.held = false;
+                }
+            }));
         Some(
             div()
                 .flex()
                 .items_center()
                 .gap_2()
-                .px(px(4.))
+                .pl(px(4.))
+                .pr(px(4.))
                 .w_full()
                 .h_full()
+                // Play and pause: a round button, the one solid thing on the bar.
                 .child(
                     Button::new("replay-toggle")
                         .primary()
-                        .h(px(TOOLS_H - 10.0))
-                        .w(px(TOOLS_H - 10.0))
+                        .h(px(30.))
+                        .w(px(30.))
+                        .rounded(px(15.))
                         .icon(icon(if player.playing { "pause" } else { "play" }))
                         .tooltip(if player.playing { tr("Pause (Space)", "暂停（空格）") } else { tr("Play (Space)", "播放（空格）") })
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_replay(cx))),
                 )
-                .child(div().w(px(4.)))
-                .child(replay_slider(&replay.slider))
-                .child(div().px_1().font_family(theme::MONO).text_xs().whitespace_nowrap().text_color(rgb(pal().muted)).child(time))
-                .child(button("replay-speed", format!("{}×", player.speed)).tooltip(tr("Speed", "速度")).on_click(cx.listener(|this, _, _, cx| {
+                .child(div().w(px(2.)))
+                .child(div().font_family(theme::MONO).text_size(px(11.)).whitespace_nowrap().text_color(rgb(pal().text)).child(now))
+                .child(track)
+                .child(div().font_family(theme::MONO).text_size(px(11.)).whitespace_nowrap().text_color(rgb(pal().faint)).child(whole))
+                .child(Separator::vertical().h(px(18.)).mx_1())
+                .child(Button::new("replay-speed").ghost().small().label(format!("{}×", player.speed)).tooltip(tr("Speed", "速度")).on_click(cx.listener(|this, _, _, cx| {
                     if let Some(replay) = &mut this.replay {
                         replay.player.next_speed();
                     }
@@ -4658,9 +4716,8 @@ impl Workbench {
                     cx.notify();
                 })))
                 .when(self.live.read_only.is_none(), |d| {
-                    d.child(button("replay-fork", tr("Fork a board", "另起一板")).whitespace_nowrap().tooltip(tr("Start a new board from this moment", "从这一刻另起一张板")).disabled(!can_fork).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
+                    d.child(Button::new("replay-fork").ghost().small().label(tr("Fork a board", "另起一板")).tooltip(tr("Start a new board from this moment", "从这一刻另起一张板")).disabled(!can_fork).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
                 })
-                .child(Separator::vertical().h(px(20.)))
                 .child(icon_button("replay-exit", "x", tr("Exit replay (Esc)", "退出回放（Esc）")).on_click(cx.listener(|this, _, _, cx| this.exit_replay(cx)))),
         )
     }

@@ -171,6 +171,15 @@ fn time_of(step: &Value) -> f64 {
     step["t"].as_f64().unwrap_or(0.0)
 }
 
+/// The time from step `i - 1` to step `i` as a replay plays it: the meeting's own, cut to 0.9–3 seconds.
+fn gap_ms(steps: &[Value], i: usize) -> f64 {
+    let gap = match (i.checked_sub(1).and_then(|p| steps.get(p)), steps.get(i)) {
+        (Some(a), Some(b)) => time_of(b) - time_of(a),
+        _ => 0.0,
+    };
+    gap.clamp(900.0, 3000.0)
+}
+
 impl Player {
     pub fn new(total: usize) -> Self {
         Self { at: 0, total, playing: true, speed: SPEEDS[0] }
@@ -213,26 +222,18 @@ impl Player {
         if self.at == 0 {
             return 300.0;
         }
-        let gap = match (steps.get(self.at - 1), steps.get(self.at)) {
-            (Some(a), Some(b)) => time_of(b) - time_of(a),
-            _ => 0.0,
-        };
-        gap.max(900.0).min(3000.0) / self.speed
+        gap_ms(steps, self.at) / self.speed
     }
 
-    /// How far into the meeting this step was, in milliseconds.
+    /// How far into the replay this step is, in milliseconds at 1×: the meeting's pace as the replay plays
+    /// it, so a meeting taken up again days later is not days long.
     pub fn elapsed_ms(&self, steps: &[Value]) -> f64 {
-        match (steps.first(), self.at.checked_sub(1).and_then(|i| steps.get(i))) {
-            (Some(first), Some(now)) => time_of(now) - time_of(first),
-            _ => 0.0,
-        }
+        (1..self.at.min(steps.len())).map(|i| gap_ms(steps, i)).sum()
     }
 
+    /// How long the whole replay takes at 1×.
     pub fn duration_ms(steps: &[Value]) -> f64 {
-        match (steps.first(), steps.last()) {
-            (Some(first), Some(last)) => time_of(last) - time_of(first),
-            _ => 0.0,
-        }
+        (1..steps.len()).map(|i| gap_ms(steps, i)).sum()
     }
 
     /// How many transcript lines had been said by this step.
@@ -344,8 +345,9 @@ mod tests {
         let mut p = Player::new(3);
         assert_eq!((p.elapsed_ms(&steps), p.lines_said(&steps)), (0.0, 0));
         p.seek(3);
-        assert_eq!((p.elapsed_ms(&steps), p.lines_said(&steps)), (60000.0, 3));
-        assert_eq!(Player::duration_ms(&steps), 60000.0);
+        // 0.2 s between the first two steps plays as 0.9; a minute's silence before the third as 3.
+        assert_eq!((p.elapsed_ms(&steps), p.lines_said(&steps)), (3900.0, 3));
+        assert_eq!(Player::duration_ms(&steps), 3900.0);
         assert_eq!(Player::duration_ms(&[]), 0.0);
     }
 

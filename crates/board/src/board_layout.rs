@@ -2,7 +2,7 @@
 //! incremental: once placed, regions and flow nodes stay put as a meeting grows.
 //! Only the first flow layout differs, as ELK is replaced by the injected `first` function.
 
-use crate::graph::{Graph, Kind, Node};
+use crate::graph::{Graph, Kind, Node, CLIP_MAX_H, CLIP_MAX_W};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -116,6 +116,8 @@ pub struct Layout {
     pub bounds: Bounds,
     /// Imported blocks, fixed where the page prints them.
     pub pins: Vec<Rect>,
+    /// Clips cut from pages, each a card placed like a region.
+    pub clips: Vec<Rect>,
 }
 
 impl Layout {
@@ -134,6 +136,7 @@ impl Layout {
                 out.push(Rect { id: row.id.clone(), x: r.rect.x + row.x, y: r.rect.y + row.y, w: row.w + pre, h: row.size + 8.0 + row.extra() });
             }
         }
+        out.extend(self.clips.iter().cloned());
         // Last, as something written over a page should be what a click finds.
         out.extend(self.pins.iter().cloned());
         out
@@ -621,6 +624,10 @@ impl StableLayout {
                 slots.push(Slot { key: r.rect.id.clone(), at: order(&n.id), x0: 0.0, y0: 0.0, w: r.rect.w, h: r.rect.h, region: Some(r) });
             }
         }
+        for n in g.nodes.iter().filter(|n| n.kind == Kind::Clip) {
+            let (w, h) = n.clip().map_or((CLIP_MAX_W, CLIP_MAX_H), |c| c.card_size());
+            slots.push(Slot { key: n.id.clone(), at: order(&n.id), x0: 0.0, y0: 0.0, w, h, region: None });
+        }
         let mut dia = None;
         if ids.is_empty() {
             self.node_at.clear();
@@ -680,6 +687,10 @@ impl StableLayout {
                     out.anchors.insert(row.id.clone(), Rect { id: row.id.clone(), x: px + row.x, y: py + row.y, w: row.w + pre, h: row.size + 8.0 });
                 }
                 out.regions.push(r);
+            } else if s.key != DIAGRAM {
+                let card = Rect { id: s.key.clone(), x: px, y: py, w: s.w, h: s.h };
+                out.anchors.insert(s.key.clone(), card.clone());
+                out.clips.push(card);
             } else if let Some(mut d) = dia.take() {
                 let frame = Rect { id: DIAGRAM.into(), x: px + d.x0, y: py + d.y0, w: d.w, h: d.h };
                 for b in &mut d.nodes {
@@ -819,5 +830,52 @@ mod tests {
         }
         let column = l.regions.iter().find(|r| r.head.is_some()).unwrap();
         assert!(target_at(&targets, column.rect.x + column.rect.w - 1.0, column.rect.y + column.rect.h - 1.0).is_none());
+    }
+}
+
+#[cfg(test)]
+mod clip_tests {
+    use super::*;
+    use crate::graph::Clip;
+
+    #[test]
+    fn a_clip_is_a_card_of_its_own_beside_the_page_and_the_model_reads_its_text() {
+        let mut g = Graph::default();
+        g.extra.insert("underlay".into(), json!({ "w": 800.0, "h": 1000.0, "no": 3 }));
+        let clip = Clip { src: "p3.jpg".into(), pw: 800.0, ph: 1000.0, x: 100.0, y: 200.0, w: 400.0, h: 100.0 };
+        let id = g.add_clip("Table 1", "Table 1 Beak length 13.67", &clip);
+        g.apply(&crate::graph::parse_ops(&format!("T 「喙的大小」\nE {id} 「喙的大小」")));
+        let l = StableLayout::default().layout(&g, &mut crate::sugiyama::first_diagram);
+        let card = l.clips.iter().find(|c| c.id == id).expect("the clip is laid out");
+        assert_eq!((card.w, card.h), clip.card_size());
+        assert!((card.w - 360.0).abs() < 1e-9 && (card.h - 90.0).abs() < 1e-9, "scaled to the card's width, keeping its shape");
+        let page = Rect { id: String::new(), x: 0.0, y: 0.0, w: 800.0 + PAGE_MARGIN, h: 1000.0 };
+        assert!(!overlaps(card, &page, 0.0), "the card stays off the page: {card:?}");
+        assert!(l.targets().iter().any(|t| t.id == id), "a click finds it");
+        assert!(l.links.iter().any(|(a, b, _)| a == &id || b == &id), "a line can reach it");
+        let told = g.describe();
+        assert!(told.contains(&format!("{id} [摘录] Table 1 Beak length 13.67")), "{told}");
+    }
+
+    #[test]
+    fn a_clip_takes_the_words_printed_inside_its_box() {
+        let g: Graph = serde_json::from_value(json!({ "nodes": [
+            { "id": "n1", "label": "Beak length …", "kind": "region", "at": { "x": 0, "y": 0, "w": 400, "h": 40 }, "rows": [
+                { "y": 0, "h": 16, "segs": [{ "t": "Beak", "x": 0, "w": 40 }, { "t": "length", "x": 50, "w": 60 }, { "t": "13.67", "x": 300, "w": 50 }] },
+                { "y": 20, "h": 16, "segs": [{ "t": "Beak", "x": 0, "w": 40 }, { "t": "depth", "x": 50, "w": 50 }] }
+            ] },
+            { "id": "n2", "label": "Table entries are means", "kind": "region", "at": { "x": 0, "y": 100, "w": 300, "h": 16 } },
+            { "id": "n3", "label": "Elsewhere", "kind": "region", "at": { "x": 0, "y": 500, "w": 300, "h": 16 } }
+        ] })).unwrap();
+        let clip = |x, y, w, h| Clip { src: String::new(), pw: 800.0, ph: 1000.0, x, y, w, h };
+        assert_eq!(g.text_in(&clip(0.0, 0.0, 120.0, 40.0)), "Beak length\nBeak depth", "only the words inside, line by line");
+        assert_eq!(g.text_in(&clip(0.0, 10.0, 400.0, 120.0)), "Beak depth\nTable entries are means", "a block without lines comes whole");
+        assert_eq!(g.text_in(&clip(600.0, 600.0, 50.0, 50.0)), "");
+    }
+
+    #[test]
+    fn a_small_clip_is_enlarged_at_most_twice() {
+        let clip = Clip { src: String::new(), pw: 800.0, ph: 1000.0, x: 0.0, y: 0.0, w: 40.0, h: 20.0 };
+        assert_eq!(clip.card_size(), (80.0, 40.0));
     }
 }

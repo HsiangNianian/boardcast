@@ -24,6 +24,8 @@ pub enum Kind {
     Note,
     /// A block of an imported page, fixed in place. The page image shows it, so only marks are drawn.
     Region,
+    /// Part of an imported page cut out by hand: a card showing that part of the picture, with the text in it.
+    Clip,
 }
 
 impl Kind {
@@ -35,6 +37,7 @@ impl Kind {
             Self::Formula => "[公式] ",
             Self::Note => "[备注] ",
             Self::Region => "[原文] ",
+            Self::Clip => "[摘录] ",
         }
     }
 }
@@ -195,6 +198,45 @@ impl Graph {
 
     fn index(&self, id: &str) -> Option<usize> {
         self.nodes.iter().position(|n| n.id == id)
+    }
+
+    /// The imported text printed inside a clip's box: each word of the imported text whose middle is inside, line by line.
+    pub fn text_in(&self, clip: &Clip) -> String {
+        let inside = |x: f64, y: f64| x >= clip.x && x <= clip.x + clip.w && y >= clip.y && y <= clip.y + clip.h;
+        let english = is_english(self.nodes.iter().map(|n| n.label.as_str()));
+        let mut lines: Vec<(f64, f64, String)> = vec![];
+        for n in self.nodes.iter().filter(|n| n.kind == Kind::Region) {
+            let rows = n.rows();
+            // A block imported before text kept its lines comes whole, if its middle is inside.
+            if rows.is_empty() {
+                if let Some([x, y, _, h]) = n.at().filter(|[x, y, w, h]| inside(x + w / 2.0, y + h / 2.0)) {
+                    let text = n.extra.get("text").and_then(Value::as_str).unwrap_or(&n.label);
+                    lines.push((y + h / 2.0, x, text.to_string()));
+                }
+                continue;
+            }
+            for row in rows.iter().filter(|r| r.angle.is_none()) {
+                let words: Vec<&str> = row.segs.iter().filter(|s| inside(s.x + s.w / 2.0, row.y + row.h / 2.0)).map(|s| s.t.as_str()).collect();
+                if !words.is_empty() {
+                    let x = row.segs.iter().find(|s| inside(s.x + s.w / 2.0, row.y + row.h / 2.0)).map_or(0.0, |s| s.x);
+                    lines.push((row.y, x, words.join(if english { " " } else { "" })));
+                }
+            }
+        }
+        lines.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        lines.into_iter().map(|(_, _, l)| l).collect::<Vec<_>>().join("\n").trim().to_string()
+    }
+
+    /// Put a clip of an imported page on the board, as a card of its own, and give back its id.
+    /// `text` is what the clip's part of the page says, which the model is shown in place of the label.
+    pub fn add_clip(&mut self, label: &str, text: &str, clip: &Clip) -> String {
+        let id = self.add(label, Kind::Clip, None);
+        let i = self.index(&id).expect("just added");
+        self.nodes[i].extra.insert("clip".into(), serde_json::to_value(clip).expect("a clip serializes"));
+        if !text.is_empty() {
+            self.nodes[i].extra.insert("text".into(), Value::String(text.to_string()));
+        }
+        id
     }
 
     fn add(&mut self, label: &str, kind: Kind, parent: Option<String>) -> String {
@@ -540,6 +582,11 @@ impl NodeData {
         Some([at["x"].as_f64()?, at["y"].as_f64()?, at["w"].as_f64()?, at["h"].as_f64()?])
     }
 
+    /// Where a clip was cut from, if this is one.
+    pub fn clip(&self) -> Option<Clip> {
+        self.extra.get("clip").and_then(|c| serde_json::from_value(c.clone()).ok())
+    }
+
     /// The text layer of an imported block.
     pub fn rows(&self) -> Vec<RegionRow> {
         self.extra.get("rows").and_then(|r| serde_json::from_value(r.clone()).ok()).unwrap_or_default()
@@ -562,6 +609,30 @@ fn looks_like_id(s: &str) -> bool {
     let mut chars = s.chars();
     matches!(chars.next(), Some('n' | 'g')) && !s[1..].is_empty() && chars.all(|c| c.is_ascii_digit())
 }
+
+/// Where a clip was cut from: the page picture (as the meeting stores it), the page's size on its board, and
+/// the box cut out of it, in the same units.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Clip {
+    pub src: String,
+    pub pw: f64,
+    pub ph: f64,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+impl Clip {
+    /// The size the card is drawn at: the box scaled to fit within a card, never enlarged past twice its size.
+    pub fn card_size(&self) -> (f64, f64) {
+        let k = (CLIP_MAX_W / self.w).min(CLIP_MAX_H / self.h).min(2.0);
+        (self.w * k, self.h * k)
+    }
+}
+
+pub const CLIP_MAX_W: f64 = 360.0;
+pub const CLIP_MAX_H: f64 = 300.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Ref {

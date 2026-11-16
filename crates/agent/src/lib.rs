@@ -943,6 +943,13 @@ impl Session {
         graph.clone()
     }
 
+    /// Put a clip cut from the imported page on the board, and give back the board and the clip's id.
+    pub fn add_clip(&self, label: &str, text: &str, clip: &boardcast_board::graph::Clip) -> (Graph, String) {
+        let mut graph = self.graph.lock().expect("graph lock");
+        let id = graph.add_clip(label, text, clip);
+        (graph.clone(), id)
+    }
+
     /// Mark a word or sentence of imported text by hand, or take the mark off.
     pub fn toggle_span(&self, id: &str, span: boardcast_board::spans::Span) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");

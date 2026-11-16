@@ -62,6 +62,10 @@ Boards are drawn stroke by stroke in Chinese, Japanese and English. Light mode u
 
 Click **Circle** in the tool bar under the board, then drag around things on the board. Draw as many loops as you like; everything with its middle inside a loop is taken in, up to eight. The next line, spoken or typed, carries those targets to the model, and the circles go away. `Esc` or the same button cancels. Circles never become part of the board or its exports.
 
+### Crop a page
+
+On an imported page, click **Crop** in the same tool bar and drag a box over the part you want: a figure, a few table rows, a paragraph. It becomes a card beside the page, showing that part of the picture and carrying the text printed in it, so the model can read it and draw lines to it. Select the card to see where it was cut from. Undo removes it; `Esc` or the same button stops cropping.
+
 ### Discuss your source material
 
 Use **Import** in the sidebar, or drop a file on the board:

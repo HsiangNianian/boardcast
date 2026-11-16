@@ -4,7 +4,7 @@ use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
 use boardcast_board::board_layout::{target_at, Bounds as BoardBounds, Rect, StableLayout};
 use boardcast_board::check::check;
 use boardcast_board::compose::{compose, ink_boxes, InkBox, Owner, Style};
-use boardcast_board::graph::{parse_ops, Graph, Kind, Op, Ref, Utterance};
+use boardcast_board::graph::{parse_ops, Clip, Graph, Kind, Op, Ref, Utterance};
 use boardcast_agent::sound::Glossary;
 use boardcast_board::follow;
 use boardcast_board::sugiyama::first_diagram;
@@ -317,6 +317,16 @@ struct Ink {
     drawing: Option<Vec<[f32; 2]>>,
     /// What the circles took in, first circled first; the next line carries it to the model.
     pointed: Vec<String>,
+    /// Dragging cuts a box out of the imported page rather than moving the board.
+    cropping: bool,
+    /// The box being dragged out, from where it started to where the pointer is, in board coordinates.
+    crop: Option<([f32; 2], [f32; 2])>,
+    /// The clips on the board: each card where the layout put it, and what it was cut from.
+    clips: Vec<(Rect, Clip)>,
+    /// The page pictures clips are cut from, by the name the meeting stores them under; None if one could not be read.
+    clip_images: HashMap<String, Option<Arc<RenderImage>>>,
+    /// The name the page under the board is stored under, to show where a clip of it came from.
+    page_src: Option<String>,
     zoom_test: Option<ZoomTest>,
     instant: bool,
 }
@@ -396,6 +406,7 @@ impl Ink {
         }
         self.hints = report.hint();
         self.targets = layout.targets();
+        self.clips = layout.clips.iter().filter_map(|r| Some((r.clone(), graph.nodes.iter().find(|n| n.id == r.id)?.clip()?))).collect();
         self.ink_boxes = ink_boxes(&pieces);
         if let Some(id) = &self.selected {
             if !graph.nodes.iter().any(|n| &n.id == id) {
@@ -541,6 +552,11 @@ impl Ink {
         let over = self.pointed.len().saturating_sub(boardcast_board::graph::MAX_POINTED);
         self.pointed.drain(..over);
         self.loops.push(shape);
+    }
+
+    fn stop_cropping(&mut self) {
+        self.cropping = false;
+        self.crop = None;
     }
 
     fn clear_circles(&mut self) {
@@ -1463,6 +1479,11 @@ fn page_render_image(bytes: &[u8]) -> Result<(Arc<RenderImage>, Arc<RenderImage>
     let small = image::imageops::thumbnail(&picture, ((picture.width() as f32 * shrink) as u32).max(1), ((picture.height() as f32 * shrink) as u32).max(1));
     Ok((Arc::new(RenderImage::new([image::Frame::new(picture)])), Arc::new(RenderImage::new([image::Frame::new(small)]))))
 }
+
+/// The smallest box, in board units, taken as a clip rather than a slip of the pointer.
+const CLIP_MIN: f64 = 12.0;
+/// How many characters of a clip's text name it.
+const CLIP_LABEL: usize = 40;
 
 const IMAGE_TYPES: [&str; 5] = ["png", "jpg", "jpeg", "webp", "gif"];
 
@@ -3099,6 +3120,7 @@ impl Workbench {
     /// The imported page's picture under a board, or none.
     fn show_board_image(&mut self, board: usize) {
         let reference = self.live.board_images().into_iter().nth(board).flatten();
+        self.ink.borrow_mut().page_src.clone_from(&reference);
         let read = reference.map(|r| match &self.store {
             Some(store) => store.page_image(self.live.id(), &r),
             None => boardcast_meetings::decode_data_url(&r),
@@ -3147,6 +3169,67 @@ impl Workbench {
         drop(ink);
         self.live.change_board(graph, memory);
         cx.notify();
+    }
+
+    /// Cut the box between two board points out of the imported page, and put it on the board as a clip card
+    /// carrying the text printed inside it. Too small a box is taken as a slip and ignored.
+    fn cut_clip(&mut self, from: [f32; 2], to: [f32; 2], cx: &mut Context<Self>) {
+        self.ink.borrow_mut().stop_cropping();
+        cx.notify();
+        if !self.editable() {
+            return;
+        }
+        let Some((pw, ph)) = self.live.graph.underlay() else { return };
+        let Some(src) = self.live.board_images().into_iter().nth(self.live.page()).flatten() else { return };
+        let (x0, y0) = (f64::from(from[0].min(to[0])).max(0.0), f64::from(from[1].min(to[1])).max(0.0));
+        let (x1, y1) = (f64::from(from[0].max(to[0])).min(pw), f64::from(from[1].max(to[1])).min(ph));
+        if x1 - x0 < CLIP_MIN || y1 - y0 < CLIP_MIN {
+            return;
+        }
+        let clip = Clip { src, pw, ph, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+        let text = self.live.graph.text_in(&clip);
+        let english = boardcast_board::graph::is_english(self.live.graph.nodes.iter().map(|n| n.label.as_str()));
+        let label = match text.chars().count() {
+            0 => {
+                let page = self.live.graph.extra.get("underlay").and_then(|u| u.get("no")).and_then(serde_json::Value::as_u64);
+                match (page, english) {
+                    (Some(n), true) => format!("Clip of page {n}"),
+                    (Some(n), false) => format!("第 {n} 页的摘录"),
+                    (None, true) => "Clip".to_string(),
+                    (None, false) => "摘录".to_string(),
+                }
+            }
+            n if n > CLIP_LABEL => format!("{}…", text.chars().take(CLIP_LABEL).collect::<String>()),
+            _ => text.clone(),
+        };
+        let (graph, id) = self.session().add_clip(&label, &text, &clip);
+        self.next_batch += 1;
+        let mut ink = self.ink.borrow_mut();
+        ink.update(&graph, self.next_batch);
+        ink.selected = Some(id);
+        ink.selected_at = None;
+        let memory = ink.board.snapshot();
+        drop(ink);
+        self.live.change_board(graph, memory);
+    }
+
+    /// Read the page pictures that clips on the board are cut from and are not read yet.
+    fn load_clip_images(&mut self) {
+        let wanted: Vec<String> = {
+            let ink = self.ink.borrow();
+            ink.clips.iter().map(|(_, c)| c.src.clone()).filter(|src| !ink.clip_images.contains_key(src)).collect()
+        };
+        for src in wanted {
+            let read = match &self.store {
+                Some(store) => store.page_image(self.live.id(), &src),
+                None => boardcast_meetings::decode_data_url(&src),
+            };
+            let picture = read.map_err(|e| format!("{e:#}")).and_then(|i| page_render_image(&i.bytes)).map(|(picture, _)| picture);
+            if let Err(error) = &picture {
+                eprintln!("clip picture: {error}");
+            }
+            self.ink.borrow_mut().clip_images.insert(src, picture.ok());
+        }
     }
 
     /// Apply a change made by hand, as a mark is: at once, undoable and in the replay.
@@ -3299,6 +3382,10 @@ impl Workbench {
             // Closes the nearest thing first: the selection, then a page or a dialog.
             "escape" if self.ink.borrow().circling => {
                 self.ink.borrow_mut().clear_circles();
+                cx.notify();
+            }
+            "escape" if self.ink.borrow().cropping => {
+                self.ink.borrow_mut().stop_cropping();
                 cx.notify();
             }
             "escape" => {
@@ -4769,6 +4856,7 @@ fn rss_mb() -> u64 {
 
 impl Render for Workbench {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.load_clip_images();
         // Only animate while there is ink to write, the view is moving or a line is being typed; an idle board
         // costs no frames.
         {
@@ -4802,6 +4890,11 @@ impl Render for Workbench {
             .on_mouse_down(MouseButton::Left, cx.listener(move |this, e: &MouseDownEvent, window, cx| {
                 window.focus(&this.focus, cx);
                 let mut b = press.borrow_mut();
+                if b.cropping {
+                    let start = b.on_board(e.position);
+                    b.crop = Some((start, start));
+                    return;
+                }
                 if b.circling {
                     let start = b.on_board(e.position);
                     b.drawing = Some(vec![start]);
@@ -4812,6 +4905,14 @@ impl Render for Workbench {
             }))
             .on_mouse_move(cx.listener(move |_, e: &MouseMoveEvent, _, cx| {
                 let mut b = moved.borrow_mut();
+                if b.crop.is_some() && e.pressed_button == Some(MouseButton::Left) {
+                    let at = b.on_board(e.position);
+                    if let Some((_, end)) = b.crop.as_mut() {
+                        *end = at;
+                    }
+                    cx.notify();
+                    return;
+                }
                 if b.drawing.is_some() && e.pressed_button == Some(MouseButton::Left) {
                     let at = b.on_board(e.position);
                     b.drawing.as_mut().expect("drawing").push(at);
@@ -4828,7 +4929,12 @@ impl Render for Workbench {
                     cx.notify();
                 }
             }))
-            .on_mouse_up(MouseButton::Left, cx.listener(move |_, e: &MouseUpEvent, _, cx| {
+            .on_mouse_up(MouseButton::Left, cx.listener(move |this, e: &MouseUpEvent, _, cx| {
+                let cut = release.borrow_mut().crop.take();
+                if let Some((from, to)) = cut {
+                    this.cut_clip(from, to, cx);
+                    return;
+                }
                 let mut b = release.borrow_mut();
                 if b.drawing.is_some() {
                     b.close_loop();
@@ -4895,6 +5001,19 @@ impl Render for Workbench {
                                 let area = Bounds::new(origin, size(px(w * v.k), px(h * v.k)));
                                 let _ = window.paint_image(area, area, gpui_kit::Corners::default(), image, 0, false);
                             }
+                            // Each clip shows its part of the page: the whole picture placed so that part fills the card,
+                            // and the rest masked away.
+                            for (card, clip) in &state.clips {
+                                let Some(Some(image)) = state.clip_images.get(&clip.src).cloned() else { continue };
+                                let at = |x: f64, y: f64| origin + point(px(x as f32 * v.k), px(y as f32 * v.k));
+                                let card_area = Bounds::new(at(card.x, card.y), size(px(card.w as f32 * v.k), px(card.h as f32 * v.k)));
+                                let k = card.w / clip.w;
+                                let whole = Bounds::new(at(card.x - clip.x * k, card.y - clip.y * k), size(px((clip.pw * k) as f32 * v.k), px((clip.ph * k) as f32 * v.k)));
+                                let mask = card_area.intersect(&bounds);
+                                window.with_content_mask(Some(gpui_kit::ContentMask { bounds: mask }), |window| {
+                                    let _ = window.paint_image(whole, whole, gpui_kit::Corners::default(), image, 0, false);
+                                });
+                            }
                             tier.under.paint(window, origin, v.k, Some(bounds));
                             tier.layer.paint(window, origin, v.k, Some(bounds));
                             // Ink is already on textures, so tracing someone veils the board and paints
@@ -4946,6 +5065,18 @@ impl Render for Workbench {
                                     ink.a = 0.8;
                                     window.paint_path(path, Background::from(ink));
                                 }
+                            }
+                            // The box being cut, and where the selected clip was cut from when its page is under the board.
+                            let source = b.selected.as_ref().and_then(|id| b.clips.iter().find(|(r, _)| &r.id == id)).map(|(_, c)| c).filter(|c| b.page_src.as_ref() == Some(&c.src)).map(|c| ([c.x as f32, c.y as f32], [(c.x + c.w) as f32, (c.y + c.h) as f32]));
+                            for (from, to) in b.crop.iter().chain(source.iter()) {
+                                let (x0, y0) = (from[0].min(to[0]), from[1].min(to[1]));
+                                let (x1, y1) = (from[0].max(to[0]), from[1].max(to[1]));
+                                let area = Bounds::new(origin + point(px(x0 * v.k), px(y0 * v.k)), size(px((x1 - x0) * v.k), px((y1 - y0) * v.k)));
+                                let mut tint: Hsla = rgb(pal().accent).into();
+                                tint.a = 0.12;
+                                let mut edge: Hsla = rgb(pal().accent).into();
+                                edge.a = 0.9;
+                                window.paint_quad(gpui_kit::fill(area, tint).border_widths(px(2.)).border_color(edge));
                             }
                             // Ink making room for a new line, on its way to where it now belongs.
                             if let Some(left) = b.slide_left() {
@@ -5256,10 +5387,11 @@ impl Render for Workbench {
         let window_bar = title_bar().child(meeting_side).child(open_side);
 
         // The tools that work on the board float over its lower edge: listening first, then pointing and putting right.
-        let (circling, circled) = {
+        let (circling, circled, cropping) = {
             let ink = self.ink.borrow();
-            (ink.circling, ink.pointed.len())
+            (ink.circling, ink.pointed.len(), ink.cropping)
         };
+        let on_page = self.live.graph.underlay().is_some();
         let tool_h = px(TOOLS_H - 10.0);
         let tool_icon = |id: &'static str, name: &'static str, tooltip: String| Button::new(id).ghost().h(tool_h).w(tool_h).icon(icon(name)).tooltip(tooltip);
         // A key as it is printed on the keyboard.
@@ -5315,6 +5447,7 @@ impl Render for Workbench {
                             if ink.circling {
                                 ink.clear_circles();
                             } else {
+                                ink.stop_cropping();
                                 ink.circling = true;
                                 ink.selected = None;
                             }
@@ -5325,6 +5458,28 @@ impl Render for Workbench {
                             _ => tr("Circle", "圈选").to_string(),
                         }))),
                 )
+                .when(on_page, |d| {
+                    d.child(
+                        Button::new("crop")
+                            .ghost()
+                            .h(tool_h)
+                            .px_3()
+                            .selected(cropping)
+                            .tooltip(if cropping { tr("Drag a box over the page. Esc stops", "在页面上拖出一个框，Esc 取消") } else { tr("Cut a part of the page out as a card", "把页面的一部分剪成一张卡片") })
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                let mut ink = this.ink.borrow_mut();
+                                if ink.cropping {
+                                    ink.stop_cropping();
+                                } else {
+                                    ink.clear_circles();
+                                    ink.cropping = true;
+                                    ink.selected = None;
+                                }
+                                cx.notify();
+                            }))
+                            .child(div().flex().items_center().gap_2().child(icon("crop").size(px(16.))).child(div().text_sm().child(tr("Crop", "裁剪")))),
+                    )
+                })
                 .child(Separator::vertical().h(px(20.)).mx_1())
                 .child(tool_icon("undo", "undo-2", self.keys.tip(Action::Undo, tr("Undo", "撤销"))).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
                 .child(tool_icon("redo", "redo-2", self.keys.tip(Action::Redo, tr("Redo", "重做"))).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
@@ -7023,6 +7178,11 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 loops: vec![],
                 drawing: None,
                 pointed: vec![],
+                cropping: false,
+                crop: None,
+                clips: vec![],
+                clip_images: HashMap::new(),
+                page_src: None,
                 zoom_test: zoom_test.then_some(ZoomTest { started: None, frames: vec![], last: None, base: 0.0, rebuilds: vec![], peak_rss: 0 }),
                 instant: start_board.is_some(),
             };

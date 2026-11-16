@@ -1088,6 +1088,14 @@ pub fn compose(g: &Graph, l: &Layout, glyphs: &mut Glyphs) -> (Vec<Piece>, Vec<S
         }
     }
 
+    // A clip's picture is painted by whoever shows the board; the pen draws the card's edge around it.
+    for b in &l.clips {
+        let n = g.nodes.iter().find(|n| n.id == b.id);
+        let a = area(b);
+        let mut r = Rng::new(&b.id);
+        c.add(format!("{}|box", b.id), color_of(n, INK), alpha(n), false, plain(rough_box(a.x - 3.0, a.y - 3.0, a.w + 6.0, a.h + 6.0, &mut r)), pen_for(font) * 0.7);
+    }
+
     let mut lines: Vec<Vec<Pt>> = vec![];
     let mut labels: Vec<Label> = vec![];
     if let Some((_, d)) = &l.diagram {

@@ -330,6 +330,9 @@ struct Ink {
     clip_images: HashMap<String, Option<Arc<RenderImage>>>,
     /// A clip card being dragged: which, where it was taken hold of and where the pointer is now, on the board.
     card_drag: Option<(String, [f32; 2], [f32; 2])>,
+    /// The next update moves ink straight to its new place instead of sliding it there, as when a card is
+    /// put down: its picture is already there, and its frame must not trail behind.
+    jump: bool,
     /// Dragging draws with a highlighter or the pen rather than moving the board.
     marking: bool,
     /// Which of them: one of the board's annotation tools.
@@ -480,7 +483,7 @@ impl Ink {
                 for (line, old) in piece.lines.iter().zip(before) {
                     let shape = outline(&line.inked(&mut r), 1.0);
                     let from = match (old.shape.first(), shape.first()) {
-                        (Some(a), Some(b)) => [a[0] - b[0], a[1] - b[1]],
+                        (Some(a), Some(b)) if !self.jump => [a[0] - b[0], a[1] - b[1]],
                         _ => [0.0, 0.0],
                     };
                     moved.push((Arc::new(Stroke { key: piece.key.clone(), area: area_of(&shape), shape, style: line.style }), from));
@@ -505,6 +508,7 @@ impl Ink {
             self.sliding = moved;
             self.slide_started = Instant::now();
         }
+        self.jump = false;
         added
     }
 
@@ -3302,6 +3306,7 @@ impl Workbench {
         let graph = self.session().place(id, card.x + f64::from(by[0]), card.y + f64::from(by[1]));
         self.next_batch += 1;
         let mut ink = self.ink.borrow_mut();
+        ink.jump = true;
         ink.update(&graph, self.next_batch);
         ink.selected = Some(id.to_string());
         let memory = ink.board.snapshot();
@@ -5179,7 +5184,15 @@ impl Render for Workbench {
                             }
                             tier.under.paint(window, origin, v.k, Some(bounds));
                             tier.layer.paint(window, origin, v.k, Some(bounds));
-                            // A card on its way somewhere: its picture where it would land, edged in the accent.
+                            // A card on its way somewhere: where it was is veiled, so one card is seen moving, and its
+                            // picture is where it would land, edged in the accent.
+                            if let Some(card) = state.card_drag.as_ref().filter(|(_, from, to)| from != to).and_then(|(id, _, _)| state.clips.iter().find(|(r, _)| &r.id == id)).map(|(r, _)| r.clone()) {
+                                let room = 8.0;
+                                let at = origin + point(px((card.x - room) as f32 * v.k), px((card.y - room) as f32 * v.k));
+                                let mut veil: Hsla = rgb(pal().paper).into();
+                                veil.a = 0.8;
+                                window.paint_quad(gpui_kit::fill(Bounds::new(at, size(px((card.w + 2.0 * room) as f32 * v.k), px((card.h + 2.0 * room) as f32 * v.k))), veil));
+                            }
                             if let Some((card, clip, dx, dy)) = state.card_drag.as_ref().and_then(|(id, from, to)| state.clips.iter().find(|(r, _)| &r.id == id).map(|(r, c)| (r, c, f64::from(to[0] - from[0]), f64::from(to[1] - from[1])))) {
                                 let at = |x: f64, y: f64| origin + point(px(x as f32 * v.k), px(y as f32 * v.k));
                                 let area = Bounds::new(at(card.x + dx, card.y + dy), size(px(card.w as f32 * v.k), px(card.h as f32 * v.k)));
@@ -7120,6 +7133,18 @@ impl Render for Workbench {
                                     let area = Bounds::new(origin, size(px(page_w * k), px(page_h * k)));
                                     let _ = window.paint_image(area, area, gpui_kit::Corners::default(), image, 0, false);
                                 }
+                                // Clip cards show their pictures here too, as on the board.
+                                for (card, clip) in &state.clips {
+                                    let src = if clip.src.is_empty() { state.page_src.as_ref() } else { Some(&clip.src) };
+                                    let Some(Some(image)) = src.and_then(|src| state.clip_images.get(src).cloned()) else { continue };
+                                    let at = |x: f64, y: f64| origin + point(px(x as f32 * k), px(y as f32 * k));
+                                    let card_area = Bounds::new(at(card.x, card.y), size(px(card.w as f32 * k), px(card.h as f32 * k)));
+                                    let scale = card.w / clip.w;
+                                    let whole = Bounds::new(at(card.x - clip.x * scale, card.y - clip.y * scale), size(px((clip.pw * scale) as f32 * k), px((clip.ph * scale) as f32 * k)));
+                                    window.with_content_mask(Some(gpui_kit::ContentMask { bounds: card_area.intersect(&bounds) }), |window| {
+                                        let _ = window.paint_image(whole, whole, gpui_kit::Corners::default(), image, 0, false);
+                                    });
+                                }
                                 if let Some(mini) = &mut state.mini {
                                     mini.under.paint(window, origin, k, Some(bounds));
                                     mini.layer.paint(window, origin, k, Some(bounds));
@@ -7430,6 +7455,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 cropping: false,
                 crop: None,
                 card_drag: None,
+                jump: false,
                 marking: false,
                 mark_tool: "yellow",
                 scribble: None,

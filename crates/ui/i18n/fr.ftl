@@ -458,3 +458,61 @@ sample-second-point = demander à Mia pour la doc
 one-html-file-for-someone-2 = Un seul fichier .html pour qui a manqué la réunion, avec son audio. Rien à installer.
 video-with-sound = Vidéo avec son
 the-whole-meeting-in-real = Toute la réunion en temps réel avec son enregistrement, chaque tableau tel qu’il a été dessiné.
+note-board-forked = Tableau { $to } créé à partir du tableau { $from } tel qu’il était à { $when }
+note-new-board = Nouveau tableau démarré
+note-moved-to-new-board = « { $t } » déplacé vers un nouveau tableau
+note-imported-image = { $read ->
+        [one] { $name } importé (1 bloc de texte lu)
+       *[other] { $name } importé ({ $read } blocs de texte lus)
+    }
+note-imported-image-capped = { $name } importé ({ $read } blocs de texte lus ; il y en avait trop, seuls certains ont été lus)
+note-imported-pdf = { $name } importé ({ $pages ->
+        [one] 1 page
+       *[other] { $pages } pages
+    }, { $boards ->
+        [one] 1 tableau
+       *[other] { $boards } tableaux
+    })
+note-mark-added = { $mark ->
+        [strike] « { $what } » barré
+        [circle] « { $what } » entouré
+        [underline] « { $what } » souligné
+        [star] « { $what } » marqué d’une étoile
+       *[highlight] « { $what } » surligné
+    }
+note-mark-removed = { $mark ->
+        [strike] Trait supprimé sur « { $what } »
+        [circle] Cercle supprimé autour de « { $what } »
+        [underline] Soulignement supprimé sous « { $what } »
+        [star] Étoile supprimée sur « { $what } »
+       *[highlight] Surlignage supprimé sur « { $what } »
+    }
+import-starting-vision-image = Démarrage du modèle local pour lire l’image…
+import-reading-image-block = Lecture de { $name } : bloc { $done }/{ $total }
+import-regions-found = { $found } régions trouvées ; du texte reconnu dans { $read }.
+import-regions-capped = Seules les { $limit } premières régions ont été lues ; l’image complète est conservée.
+import-no-text-recognized = Aucun texte reconnu. L’image d’origine restera sur le tableau.
+import-image-ready = { $name } est prêt. Essayez « entoure ça » pendant la réunion
+import-image-no-text = Aucun texte trouvé dans { $name } ; il ne peut servir que d’arrière-plan
+import-downloading-arxiv = Téléchargement de { $id } depuis arXiv…
+import-reading-page = Lecture de { $name } : page { $done }/{ $total }
+import-starting-vision-scans = Démarrage du modèle local pour lire les pages numérisées…
+import-reading-scan-block = Lecture de la page numérisée { $page }/{ $pages } : bloc { $done }/{ $total }
+import-references-skipped = { $n ->
+        [one] 1 page de références ignorée
+       *[other] { $n } pages de références ignorées
+    }
+import-board-limit-reached = { $n ->
+        [one] limite de tableaux atteinte, la dernière page n’a pas été importée
+       *[other] limite de tableaux atteinte, les { $n } dernières pages n’ont pas été importées
+    }
+import-scans-read = { $n ->
+        [one] 1 page sans couche de texte a été lue par le modèle local
+       *[other] { $n } pages sans couche de texte ont été lues par le modèle local
+    }
+import-scans-not-read = { $n ->
+        [one] 1 page n’a pas de couche de texte : elle est importée comme image et on ne peut y accéder que par son numéro ; un modèle local avec son module de vision peut la lire
+       *[other] { $n } pages n’ont pas de couche de texte : elles sont importées comme images et on ne peut y accéder que par leur numéro ; un modèle local avec son module de vision peut les lire
+    }
+import-paper-ready = { $name } est prêt : découpé par sections, figures et équations. Essayez « ici dans la figure 3 » ou « l’équation 5 est fausse »
+import-pages-ready = { $name } est prêt : un tableau par page. Essayez « entoure ce paragraphe »

@@ -450,3 +450,68 @@ sample-second-point = perguntar à Mia sobre a documentação
 one-html-file-for-someone-2 = Um único arquivo .html para quem perdeu a reunião, com o áudio. Nada para instalar.
 video-with-sound = Vídeo com áudio
 the-whole-meeting-in-real = A reunião inteira em tempo real com a gravação, cada quadro como foi desenhado.
+note-board-forked = Quadro { $to } criado a partir do quadro { $from } como estava em { $when }
+note-new-board = Novo quadro iniciado
+note-moved-to-new-board = “{ $t }” movido para um novo quadro
+note-imported-image =
+    { $read ->
+        [one] Importação de { $name } concluída (1 bloco de texto lido)
+       *[other] Importação de { $name } concluída ({ $read } blocos de texto lidos)
+    }
+note-imported-image-capped = Importação de { $name } concluída ({ $read } blocos de texto lidos; havia blocos demais, então só parte foi lida)
+note-imported-pdf = Importação de { $name } concluída ({ $pages ->
+        [one] 1 página
+       *[other] { $pages } páginas
+    }, { $boards ->
+        [one] 1 quadro
+       *[other] { $boards } quadros
+    })
+note-mark-added =
+    { $mark ->
+        [strike] “{ $what }” riscado
+        [circle] “{ $what }” circulado
+        [underline] “{ $what }” sublinhado
+        [star] “{ $what }” marcado com uma estrela
+       *[highlight] “{ $what }” destacado
+    }
+note-mark-removed =
+    { $mark ->
+        [strike] Risco removido de “{ $what }”
+        [circle] Círculo removido de “{ $what }”
+        [underline] Sublinhado removido de “{ $what }”
+        [star] Estrela removida de “{ $what }”
+       *[highlight] Destaque removido de “{ $what }”
+    }
+import-starting-vision-image = Iniciando o modelo local para ler a imagem…
+import-reading-image-block = Lendo { $name }: bloco { $done }/{ $total }
+import-regions-found = { $found } regiões encontradas; texto reconhecido em { $read }.
+import-regions-capped = Apenas as primeiras { $limit } regiões foram lidas; a imagem completa foi mantida.
+import-no-text-recognized = Nenhum texto foi reconhecido. A imagem original continuará no quadro.
+import-image-ready = { $name } está pronto. Experimente “circule isto” durante a reunião
+import-image-no-text = Nenhum texto encontrado em { $name }; ele só pode ser usado como plano de fundo
+import-downloading-arxiv = Baixando { $id } do arXiv…
+import-reading-page = Lendo { $name }: página { $done }/{ $total }
+import-starting-vision-scans = Iniciando o modelo local para ler as páginas digitalizadas…
+import-reading-scan-block = Lendo a página digitalizada { $page }/{ $pages }: bloco { $done }/{ $total }
+import-references-skipped =
+    { $n ->
+        [one] 1 página de referências ignorada
+       *[other] { $n } páginas de referências ignoradas
+    }
+import-board-limit-reached =
+    { $n ->
+        [one] limite de quadros atingido, a última página não foi importada
+       *[other] limite de quadros atingido, as últimas { $n } páginas não foram importadas
+    }
+import-scans-read =
+    { $n ->
+        [one] 1 página sem camada de texto foi lida pelo modelo local
+       *[other] { $n } páginas sem camada de texto foram lidas pelo modelo local
+    }
+import-scans-not-read =
+    { $n ->
+        [one] 1 página não tem camada de texto: ela é importada como imagem e só pode ser acessada pelo número; um modelo local com o complemento de visão consegue lê-la
+       *[other] { $n } páginas não têm camada de texto: elas são importadas como imagens e só podem ser acessadas pelo número; um modelo local com o complemento de visão consegue lê-las
+    }
+import-paper-ready = { $name } está pronto: dividido por seções, figuras e equações. Experimente “aqui na figura 3” ou “a equação 5 está errada”
+import-pages-ready = { $name } está pronto: um quadro por página. Experimente “circule este parágrafo”

@@ -458,3 +458,61 @@ sample-second-point = chiedere a Mia della documentazione
 one-html-file-for-someone-2 = Un solo file .html per chi ha perso la riunione, con l’audio. Niente da installare.
 video-with-sound = Video con audio
 the-whole-meeting-in-real = L’intera riunione in tempo reale con la registrazione, ogni lavagna come è stata disegnata.
+note-board-forked = Lavagna { $to } creata dalla lavagna { $from } così com’era alle { $when }
+note-new-board = Nuova lavagna avviata
+note-moved-to-new-board = “{ $t }” spostato su una nuova lavagna
+note-imported-image = { $read ->
+        [one] Importato { $name } (1 blocco di testo letto)
+       *[other] Importato { $name } ({ $read } blocchi di testo letti)
+    }
+note-imported-image-capped = Importato { $name } ({ $read } blocchi di testo letti; erano troppi, quindi ne sono stati letti solo alcuni)
+note-imported-pdf = Importato { $name } ({ $pages ->
+        [one] 1 pagina
+       *[other] { $pages } pagine
+    }, { $boards ->
+        [one] 1 lavagna
+       *[other] { $boards } lavagne
+    })
+note-mark-added = { $mark ->
+        [strike] Barrato “{ $what }”
+        [circle] Cerchiato “{ $what }”
+        [underline] Sottolineato “{ $what }”
+        [star] Contrassegnato con una stella “{ $what }”
+       *[highlight] Evidenziato “{ $what }”
+    }
+note-mark-removed = { $mark ->
+        [strike] Rimossa la barratura da “{ $what }”
+        [circle] Rimosso il cerchio attorno a “{ $what }”
+        [underline] Rimossa la sottolineatura da “{ $what }”
+        [star] Rimossa la stella da “{ $what }”
+       *[highlight] Rimosso l’evidenziato da “{ $what }”
+    }
+import-starting-vision-image = Avvio del modello locale per leggere l’immagine…
+import-reading-image-block = Lettura di { $name }: blocco { $done }/{ $total }
+import-regions-found = Trovate { $found } regioni; testo riconosciuto in { $read }.
+import-regions-capped = Sono state lette solo le prime { $limit } regioni; l’immagine completa viene conservata.
+import-no-text-recognized = Nessun testo riconosciuto. L’immagine originale resterà sulla lavagna.
+import-image-ready = { $name } è pronta. Prova a dire “cerchia questo” durante la riunione
+import-image-no-text = Nessun testo trovato in { $name }; può essere usata solo come sfondo
+import-downloading-arxiv = Download di { $id } da arXiv…
+import-reading-page = Lettura di { $name }: pagina { $done }/{ $total }
+import-starting-vision-scans = Avvio del modello locale per leggere le pagine scansionate…
+import-reading-scan-block = Lettura della pagina scansionata { $page }/{ $pages }: blocco { $done }/{ $total }
+import-references-skipped = { $n ->
+        [one] 1 pagina di riferimenti saltata
+       *[other] { $n } pagine di riferimenti saltate
+    }
+import-board-limit-reached = { $n ->
+        [one] limite di lavagne raggiunto, l’ultima pagina non è stata importata
+       *[other] limite di lavagne raggiunto, le ultime { $n } pagine non sono state importate
+    }
+import-scans-read = { $n ->
+        [one] 1 pagina senza livello di testo è stata letta dal modello locale
+       *[other] { $n } pagine senza livello di testo sono state lette dal modello locale
+    }
+import-scans-not-read = { $n ->
+        [one] 1 pagina non ha un livello di testo: viene importata come immagine e ci si arriva solo per numero; un modello locale con il suo componente di visione può leggerla
+       *[other] { $n } pagine non hanno un livello di testo: vengono importate come immagini e ci si arriva solo per numero; un modello locale con il suo componente di visione può leggerle
+    }
+import-paper-ready = { $name } è pronto: diviso per sezioni, figure ed equazioni. Prova “qui nella figura 3” o “l’equazione 5 è sbagliata”
+import-pages-ready = { $name } è pronto: una lavagna per pagina. Prova “cerchia questo paragrafo”

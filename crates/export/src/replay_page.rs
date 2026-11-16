@@ -115,15 +115,24 @@ fn html_text(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
-/// With `sound`, the page carries the meeting's sound and plays the board in real time beside it.
-pub fn replay_page(doc: &Doc, pages: &[Page], glyphs: &mut Glyphs, sound: Option<&crate::Sound>) -> String {
-    let words = if doc.english {
-        json!({ "play": "Play", "pause": "Pause", "end": "Skip to end", "replay": "boardcast replay", "summary": "Summary", "transcript": "Transcript", "count": "{} lines", "board": "Board", "boardN": "Board {}" })
+/// The page's own words, in the meeting's interface language.
+fn words(english: bool) -> Value {
+    if english {
+        json!({ "play": "Play", "pause": "Pause", "end": "Skip to end", "replay": "boardcast replay", "summary": "Summary", "transcript": "Transcript", "count": "{} lines", "board": "Board", "boardN": "Board {}", "live": "Live", "lost": "Reconnecting…", "ended": "Sharing has stopped" })
     } else {
-        json!({ "play": "播放", "pause": "暂停", "end": "跳到结尾", "replay": "boardcast 回放", "summary": "摘要", "transcript": "会议记录", "count": "{} 句", "board": "板书", "boardN": "第 {} 张板" })
-    };
+        json!({ "play": "播放", "pause": "暂停", "end": "跳到结尾", "replay": "boardcast 回放", "summary": "摘要", "transcript": "会议记录", "count": "{} 句", "board": "板书", "boardN": "第 {} 张板", "live": "直播中", "lost": "正在重新连接…", "ended": "已停止共享" })
+    }
+}
+
+/// The meeting's words for the page: everything but its boards.
+fn meeting_data(doc: &Doc) -> Value {
     let note = doc.omits_visuals.then(|| if doc.english { "Imported pages and free-edit content are not included." } else { "导入页和自由编辑内容没有包含在内。" });
     let lines: Vec<Value> = doc.lines.iter().map(|l| json!({ "s": l.speaker, "t": l.text, "m": l.manual })).collect();
+    json!({ "title": doc.title, "began": doc.began, "summary": doc.summary.trim(), "words": words(doc.english), "note": note, "lines": lines })
+}
+
+/// With `sound`, the page carries the meeting's sound and plays the board in real time beside it.
+pub fn replay_page(doc: &Doc, pages: &[Page], glyphs: &mut Glyphs, sound: Option<&crate::Sound>) -> String {
     let boards: Vec<Value> = pages
         .iter()
         .map(|page| {
@@ -131,11 +140,71 @@ pub fn replay_page(doc: &Doc, pages: &[Page], glyphs: &mut Glyphs, sound: Option
             board_data(page, glyphs, heard.as_deref())
         })
         .collect();
-    let mut data = json!({ "title": doc.title, "began": doc.began, "summary": doc.summary.trim(), "words": words, "note": note, "lines": lines, "boards": boards });
+    let mut data = meeting_data(doc);
+    data["boards"] = json!(boards);
     if let Some(sound) = sound {
         use base64::Engine;
         data["sound"] = json!(format!("data:audio/webm;base64,{}", base64::engine::general_purpose::STANDARD.encode(sound.webm())));
     }
+    page_html(doc, &data)
+}
+
+/// A meeting shown live on the network, as it goes on. Each board is laid out again only when it changed,
+/// so a long meeting costs little on each step.
+#[derive(Default)]
+pub struct Live {
+    /// Each board's data without its page image, and what it was made from.
+    boards: Vec<Option<(u64, Value)>>,
+}
+
+impl Live {
+    /// The meeting now, for the stream: its words and its boards, the board it is on, and each board's page
+    /// image apart as a data URL, since an image is sent to each viewer only once.
+    pub fn data(&mut self, doc: &Doc, pages: &[Page], current: usize, glyphs: &mut Glyphs) -> (Value, Vec<Option<String>>) {
+        self.boards.resize(pages.len(), None);
+        self.boards.truncate(pages.len());
+        let mut images = vec![];
+        let mut boards = vec![];
+        for (page, kept) in pages.iter().zip(&mut self.boards) {
+            let made_from = fingerprint(page);
+            if kept.as_ref().is_none_or(|(from, _)| *from != made_from) {
+                let mut board = board_data(page, glyphs, None);
+                if let Some(page) = board.get_mut("page").filter(|p| p.is_object()) {
+                    page.as_object_mut().expect("checked").remove("href");
+                }
+                *kept = Some((made_from, board));
+            }
+            boards.push(kept.as_ref().expect("made above").1.clone());
+            images.push(page.image.as_ref().filter(|_| page.graph.underlay().is_some()).map(PageImage::data_url));
+        }
+        let mut data = meeting_data(doc);
+        data["boards"] = json!(boards);
+        data["current"] = json!(current.min(pages.len().saturating_sub(1)));
+        data["live"] = json!(true);
+        (data, images)
+    }
+}
+
+/// What a board's data is made from, so it is made again only when that changes.
+fn fingerprint(page: &Page) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    page.steps.len().hash(&mut h);
+    serde_json::to_string(&page.graph).unwrap_or_default().hash(&mut h);
+    page.memory.to_string().hash(&mut h);
+    page.image.as_ref().map(|i| i.bytes.len()).hash(&mut h);
+    let mut sources: Vec<_> = page.sources.keys().collect();
+    sources.sort();
+    sources.hash(&mut h);
+    h.finish()
+}
+
+/// The live page, with the meeting as it is now inside it; a viewer's browser follows it from there.
+pub fn live_page(doc: &Doc, data: &Value) -> String {
+    page_html(doc, data)
+}
+
+fn page_html(doc: &Doc, data: &Value) -> String {
     let licenses = format!(
         "Japanese stroke data: KanjiVG, Copyright (C) 2009/2010/2011 Ulrich Apel. https://kanjivg.tagaini.net/ adapted centerlines, CC BY-SA 3.0 https://creativecommons.org/licenses/by-sa/3.0/\n{}\n{}",
         include_str!("../../../assets/licenses/handwritten-OFL.txt"),
@@ -144,12 +213,14 @@ pub fn replay_page(doc: &Doc, pages: &[Page], glyphs: &mut Glyphs, sound: Option
     let suffix = if doc.english { "Replay" } else { "回放" };
     // The meeting's own words go in last and apart, so they can never be taken for a marker.
     let (head, tail) = TEMPLATE.split_once("__DATA__").expect("the template has a place for the data");
+    // A live page reaches back to where it came from for the meeting as it changes, and nowhere else.
+    let head = if data["live"] == json!(true) { head.replacen("default-src 'none';", "default-src 'none'; connect-src 'self';", 1) } else { head.to_string() };
     let head = head
         .replacen("__LANG__", if doc.english { "en" } else { "zh-CN" }, 1)
         .replacen("__PAPER__", &format!("#{PAPER:06x}"), 1)
         .replacen("__LICENSES__", &licenses.replace("-->", "- ->"), 1)
         .replacen("__TITLE__", &html_text(&format!("{} · {suffix}", doc.title)), 1);
-    format!("{head}{}{tail}", script_safe(&data))
+    format!("{head}{}{tail}", script_safe(data))
 }
 
 #[cfg(test)]
@@ -162,6 +233,12 @@ mod tests {
 
     fn glyphs() -> Glyphs {
         Glyphs::from_checkout(Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))).unwrap()
+    }
+
+    impl Page {
+        fn clone_page(&self) -> Page {
+            Page { graph: self.graph.clone(), memory: self.memory.clone(), steps: self.steps.clone(), image: self.image.clone(), sources: self.sources.clone() }
+        }
     }
 
     fn page(rounds: &[&str]) -> Page {
@@ -188,9 +265,33 @@ mod tests {
     }
 
     fn embedded(html: &str) -> Value {
-        let start = html.find("const DATA=").unwrap() + "const DATA=".len();
+        let start = html.find("let DATA=").unwrap() + "let DATA=".len();
         let end = start + html[start..].find(";</script>").unwrap();
         serde_json::from_str(&html[start..end]).unwrap()
+    }
+
+    #[test]
+    fn a_live_meeting_keeps_its_images_apart_and_lays_out_only_what_changed() {
+        let mut glyphs = glyphs();
+        let mut live = Live::default();
+        let mut first = page(&["T 「甲」"]);
+        first.image = None;
+        let pages = vec![first, page(&["T 「乙」", "L 「乙」 「丙」"])];
+        let (data, images) = live.data(&doc("t", "x"), &pages, 1, &mut glyphs);
+        assert_eq!(data["current"], 1);
+        assert_eq!(data["live"], true);
+        assert_eq!(images, [None, None]);
+        assert_eq!(data["boards"].as_array().unwrap().len(), 2);
+        let made = live.boards.iter().map(|b| b.as_ref().unwrap().0).collect::<Vec<_>>();
+        // A step on the second board leaves the first as it was made.
+        let pages = vec![pages[0].clone_page(), page(&["T 「乙」", "L 「乙」 「丙」", "L 「乙」 「丁」"])];
+        let (data, _) = live.data(&doc("t", "x"), &pages, 1, &mut glyphs);
+        assert_eq!(live.boards[0].as_ref().unwrap().0, made[0]);
+        assert_ne!(live.boards[1].as_ref().unwrap().0, made[1]);
+        assert_eq!(data["boards"][1]["frames"].as_array().unwrap().len(), 4);
+        let html = live_page(&doc("t", "x"), &data);
+        assert!(html.contains("connect-src 'self'"), "a live page may reach its own stream");
+        assert!(!replay_page(&doc("t", "x"), &pages, &mut glyphs, None).contains("connect-src"), "a saved page reaches nowhere");
     }
 
     #[test]

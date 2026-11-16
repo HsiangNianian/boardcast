@@ -461,3 +461,26 @@ sample-second-point = demander à Mia pour la doc
 one-html-file-for-someone-2 = Un seul fichier .html pour qui a manqué la réunion, avec son audio. Rien à installer.
 video-with-sound = Vidéo avec son
 the-whole-meeting-in-real = Toute la réunion en temps réel avec son enregistrement, chaque tableau tel qu’il a été dessiné.
+share = Partager
+share-tip = Laisser d’autres personnes sur ce réseau suivre la réunion
+share-on = Partage sur le réseau
+share-intro = D’autres personnes sur le même réseau peuvent suivre cette réunion dans un navigateur : le tableau qui se construit et la transcription au fil de la parole. Elles peuvent revenir en arrière, mais rien modifier.
+share-privacy = Pendant le partage, toute personne sur ce réseau qui a le code d’accès peut voir cette réunion. Arrêtez le partage à la fin de la réunion.
+share-start = Commencer le partage
+share-stop = Arrêter le partage
+share-open = Ouvrez sur un téléphone ou un ordinateur du même réseau
+share-code = Code d’accès
+share-scan = Scannez pour ouvrir, code inclus
+share-watching = { $n ->
+        [one] { $n } personne regarde
+       *[other] { $n } personnes regardent
+    }
+share-none-watching = Personne ne regarde encore
+share-copy-link = Copier le lien
+share-failed = Le partage n’a pas pu démarrer : { $error }
+share-stopped-other-meeting = Partage arrêté : une autre réunion a été ouverte, et les spectateurs n’avaient accès qu’à la précédente.
+share-unencrypted = Non chiffré : quiconque peut observer le trafic de ce réseau pourrait voir le code et la réunion. Ne partagez que sur un réseau de confiance.
+share-network-wifi = Wi-Fi
+share-network-wired = Ethernet
+share-scan-on = Scannez avec un téléphone sur { $network }, code inclus
+share-retired = Partage arrêté : trop de codes d’accès erronés ont été essayés. Recommencez pour obtenir un nouveau code.

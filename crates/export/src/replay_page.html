@@ -16,6 +16,7 @@ body{font:14px/1.5 system-ui,-apple-system,"PingFang SC","Noto Sans CJK SC","Mic
 header{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);min-width:0}
 #title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 #meta{color:var(--muted);font-size:12px;white-space:nowrap}
+#status{font-size:12px;white-space:nowrap;color:var(--muted)}#status.on{color:#b3261e}#status.on::before{content:"● "}
 #pages{margin-left:auto;display:flex;gap:4px;overflow-x:auto;flex-shrink:0;max-width:50%}
 main{display:flex;flex-direction:column;min-width:0;min-height:0}
 #board{flex:1;min-height:0;width:100%;display:block;background:var(--paper);touch-action:none;cursor:grab}
@@ -45,14 +46,14 @@ aside p{margin:2px 0}
 </head>
 <body>
 <div id="app">
-<header><span id="title"></span><span id="meta"></span><nav id="pages"></nav></header>
+<header><span id="title"></span><span id="meta"></span><span id="status" hidden></span><nav id="pages"></nav></header>
 <main>
 <svg id="board" xmlns="http://www.w3.org/2000/svg" role="img"><g id="sheet"></g><g id="under" style="mix-blend-mode:multiply"></g><g id="ink"></g></svg>
 <div id="bar"><button id="toggle" type="button"></button><input id="seek" type="range" min="0" step="1"><span id="time"></span><button id="speed" type="button"></button><button id="end" type="button"></button></div>
 </main>
 <aside><p id="note" hidden></p><h2 id="summary-title" hidden></h2><div id="summary"></div><div id="lines-head"><h2 id="lines-title"></h2><span id="count"></span></div><div id="lines"></div></aside>
 </div>
-<script>const DATA=__DATA__;</script>
+<script>let DATA=__DATA__;</script>
 <script>
 (function () {
   'use strict'
@@ -63,6 +64,10 @@ aside p{margin:2px 0}
   const W = DATA.words
   let page = 0, at = 0, playing = false, speed = 1, timer = 0, view = null, mask = 0
   let shown = new Map(), pictures = new Map()
+  /* Shared live on the network: the meeting comes and changes over the stream, and each board's page image
+     comes on its own, once. */
+  const LIVE = !!DATA.live
+  const images = {}
   /* With the meeting's sound, the board plays beside it in real time, each step where it was heard. */
   const sound = DATA.sound ? new Audio(DATA.sound) : null
   let ticking = false
@@ -302,9 +307,9 @@ aside p{margin:2px 0}
   }
 
   function showSheet() {
-    const sheet = $('sheet'), page = board().page
+    const sheet = $('sheet'), under = board().page, href = under && (under.href || images[page])
     sheet.replaceChildren()
-    if (page) sheet.append(el('image', { href: page.href, x: 0, y: 0, width: page.w, height: page.h, preserveAspectRatio: 'none' }))
+    if (href) sheet.append(el('image', { href, x: 0, y: 0, width: under.w, height: under.h, preserveAspectRatio: 'none' }))
   }
 
   function showAll() {
@@ -322,6 +327,7 @@ aside p{margin:2px 0}
 
   function summary() {
     const box = $('summary')
+    box.replaceChildren()
     if (!DATA.summary) return
     $('summary-title').hidden = false
     $('summary-title').textContent = W.summary
@@ -399,13 +405,15 @@ aside p{margin:2px 0}
   })
 
   $('title').textContent = DATA.title
-  $('meta').textContent = DATA.began + ' · ' + W.replay
+  $('meta').textContent = DATA.live ? DATA.began : DATA.began + ' · ' + W.replay
   $('end').textContent = W.end
   $('lines-title').textContent = W.transcript
   $('count').textContent = W.count.replace('{}', DATA.lines.filter((l) => !l.m).length)
   svg.setAttribute('aria-label', W.board)
   if (DATA.note) { $('note').hidden = false; $('note').textContent = DATA.note }
-  if (DATA.boards.length > 1) {
+  function showPages() {
+    $('pages').replaceChildren()
+    if (DATA.boards.length < 2) return
     for (const i of DATA.boards.keys()) {
       const button = document.createElement('button')
       button.type = 'button'
@@ -414,9 +422,65 @@ aside p{margin:2px 0}
       $('pages').append(button)
     }
   }
+  showPages()
   summary()
+  if (LIVE) page = Math.min(DATA.current || 0, DATA.boards.length - 1)
   at = total()
   showAll()
+
+  /* Live: a viewer at the end of the board the meeting is on follows it, the new ink written as it comes;
+     one who went back or to another board stays there until they come back to the end. */
+  function receive(next) {
+    const following = at >= total() && page === DATA.current
+    const boards = DATA.boards.length, written = DATA.summary
+    DATA = next
+    if (DATA.boards.length !== boards) showPages()
+    if (DATA.summary !== written) summary()
+    if (!following) { showBar(); return }
+    if (DATA.current !== page) {
+      page = DATA.current
+      at = total()
+      view = null
+      showAll()
+      return
+    }
+    const end = total()
+    if (end === at + 1) seek(end, true)
+    else if (end !== at) { at = end; showBoard(false); showLines(true); showBar() }
+    else { showLines(true); showBar() }
+  }
+
+  function status(text, on) {
+    const node = $('status')
+    node.hidden = false
+    node.textContent = text
+    node.classList.toggle('on', on)
+  }
+
+  if (LIVE) {
+    const code = new URLSearchParams(location.search).get('c') || ''
+    /* The page holds the meeting as it was at its version; the stream sends each board and the transcript
+       only when they changed since, and then the meeting, which puts them together. */
+    const since = typeof DATA.live === 'number' ? DATA.live : 0
+    const parts = { boards: DATA.boards.slice(), lines: DATA.lines }
+    const stream = new EventSource('events?c=' + encodeURIComponent(code) + '&since=' + since)
+    status(W.live, true)
+    stream.addEventListener('image', (e) => {
+      const m = JSON.parse(e.data)
+      images[m.index] = m.href
+      if (m.index === page) showSheet()
+    })
+    stream.addEventListener('board', (e) => { const m = JSON.parse(e.data); parts.boards[m.index] = m.board })
+    stream.addEventListener('lines', (e) => { parts.lines = JSON.parse(e.data) })
+    stream.addEventListener('meeting', (e) => {
+      const m = JSON.parse(e.data)
+      parts.boards.length = m.boards
+      receive(Object.assign({}, m, { boards: parts.boards.slice(), lines: parts.lines }))
+    })
+    stream.addEventListener('stopped', () => { stream.close(); status(W.ended, false) })
+    stream.addEventListener('open', () => status(W.live, true))
+    stream.addEventListener('error', () => { if (stream.readyState !== EventSource.CLOSED) status(W.lost, false) })
+  }
 })()
 </script>
 </body>

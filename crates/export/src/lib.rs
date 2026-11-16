@@ -163,52 +163,48 @@ fn stamp(when: chrono::DateTime<chrono::Local>) -> String {
 /// `images` are each board's page image, in the order of `Live::board_images`; `asset` reads any other
 /// picture the meeting keeps, by its name, as clips brought from elsewhere are.
 pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSource, images: &[Option<PageImage>], asset: &dyn Fn(&str) -> Option<PageImage>) -> Frozen {
+    let (doc, replay_pages) = words_and_boards(live, english, images, asset);
+    let pages = replay_pages.iter().map(|p| ink::compose_board(&p.graph, &p.memory, p.image.as_ref(), &p.sources, glyphs)).collect();
+    Frozen { doc, pages, current: live.page(), replay_pages, hanzi, sound: None }
+}
+
+/// The meeting's words, and each board with its record, its page and the pictures its clips are cut from:
+/// what a replay or a live page needs, without laying anything out.
+pub fn words_and_boards(live: &Live, english: bool, images: &[Option<PageImage>], asset: &dyn Fn(&str) -> Option<PageImage>) -> (Doc, Vec<replay_page::Page>) {
     let boards = live.board_pages();
     let image_of = |i: usize| images.get(i).and_then(Option::as_ref);
-    // Each board's clip pictures come from its own page, or from a picture the meeting keeps.
-    let sources: Vec<ink::Sources> = boards
-        .iter()
-        .enumerate()
-        .map(|(i, (graph, _))| {
-            let mut found = ink::Sources::new();
-            if let Some(page) = image_of(i) {
-                found.insert(String::new(), page.clone());
-            }
-            for clip in graph.nodes.iter().filter_map(|n| n.clip()).filter(|c| !c.src.is_empty()) {
-                if !found.contains_key(&clip.src) {
-                    if let Some(image) = asset(&clip.src) {
-                        found.insert(clip.src.clone(), image);
-                    }
-                }
-            }
-            found
-        })
-        .collect();
     let began = live.created_at().and_then(|ms| chrono::Local.timestamp_millis_opt(ms as i64).single()).unwrap_or_else(chrono::Local::now);
-    let pages = boards.iter().enumerate().map(|(i, (graph, memory))| ink::compose_board(graph, memory, image_of(i), &sources[i], glyphs)).collect();
-    let replay_pages = boards
+    let pages = boards
         .iter()
         .zip(live.board_steps())
         .enumerate()
-        .map(|(i, ((graph, memory), steps))| replay_page::Page { graph: graph.clone(), memory: memory.clone(), steps, image: image_of(i).cloned(), sources: sources[i].clone() })
+        .map(|(i, ((graph, memory), steps))| {
+            // A board's clip pictures come from its own page, or from a picture the meeting keeps.
+            let mut sources = ink::Sources::new();
+            if let Some(page) = image_of(i) {
+                sources.insert(String::new(), page.clone());
+            }
+            for clip in graph.nodes.iter().filter_map(|n| n.clip()).filter(|c| !c.src.is_empty()) {
+                if !sources.contains_key(&clip.src) {
+                    if let Some(image) = asset(&clip.src) {
+                        sources.insert(clip.src.clone(), image);
+                    }
+                }
+            }
+            replay_page::Page { graph: graph.clone(), memory: memory.clone(), steps, image: image_of(i).cloned(), sources }
+        })
         .collect();
-    Frozen {
-        doc: Doc {
-            title: live.title().to_string(),
-            exported: stamp(chrono::Local::now()),
-            began: stamp(began),
-            summary: live.summary().to_string(),
-            boards: boards.into_iter().map(|(graph, _)| graph).collect(),
-            lines: Said::from_stored(&live.lines),
-            english,
-            omits_visuals: live.read_only == Some(ViewOnly::ImportedContent),
-        },
-        pages,
-        current: live.page(),
-        replay_pages,
-        hanzi,
-        sound: None,
-    }
+    let doc = Doc {
+        title: live.title().to_string(),
+        exported: stamp(chrono::Local::now()),
+        began: stamp(began),
+        summary: live.summary().to_string(),
+        boards: boards.into_iter().map(|(graph, _)| graph).collect(),
+        lines: Said::from_stored(&live.lines),
+        english,
+        omits_visuals: live.read_only == Some(ViewOnly::ImportedContent),
+    };
+    (doc, pages)
 }
 
 impl Frozen {

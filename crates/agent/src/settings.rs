@@ -62,7 +62,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), interface_language: "auto".into(), appearance: "auto".into(), input: String::new(), meeting_search: true, messy: 0.0, sidebar_hidden: false, minimap_hidden: false, minimap_at: None, folded_groups: vec![], shortcuts: vec![], proxy: "system".into(), proxy_url: String::new(), proxy_user: String::new(), proxy_password: String::new(), keep_audio: true }
+        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), interface_language: "en".into(), appearance: "auto".into(), input: String::new(), meeting_search: true, messy: 0.0, sidebar_hidden: false, minimap_hidden: false, minimap_at: None, folded_groups: vec![], shortcuts: vec![], proxy: "system".into(), proxy_url: String::new(), proxy_user: String::new(), proxy_password: String::new(), keep_audio: true }
     }
 }
 
@@ -109,7 +109,7 @@ impl Settings {
                 .unwrap_or_default(),
             system_speech: v["systemSpeech"].as_bool().unwrap_or(false),
             speech_language: v["speechLanguage"].as_str().filter(|l| !l.is_empty()).unwrap_or("auto").to_string(),
-            interface_language: v["interfaceLanguage"].as_str().filter(|l| !l.is_empty()).unwrap_or("auto").to_string(),
+            interface_language: v["interfaceLanguage"].as_str().filter(|l| !l.is_empty()).unwrap_or("en").to_string(),
             appearance: v["appearance"].as_str().filter(|l| !l.is_empty()).unwrap_or("auto").to_string(),
             input: text("input"),
             // 0.28 kept it as `meetingSearch`, off by default and saved either way, so a false there was rarely

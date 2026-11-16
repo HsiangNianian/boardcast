@@ -71,10 +71,7 @@ fn ear_for(models: &Path, speech: &Speech) -> Result<(Ear, String, Option<String
         if let Some(why) = note {
             bail!(
                 "{}{why}",
-                crate::i18n::tr(
-                    "Apple's speech recognition did not start, and this package has no speech models to hear instead. A package without \"-none\" in its name has them. ",
-                    "Apple 语音识别没能启动，而这个安装包里没有可替代的语音模型；名字里不带 \"-none\" 的安装包带有语音模型。",
-                )
+                crate::i18n::t("apple-s-speech-recognition-did-2")
             );
         }
     }
@@ -243,14 +240,14 @@ impl Pipeline {
                     let mut keeper = match boardcast_audio::keep::Keeper::create(&path) {
                         Ok(k) => Some(k),
                         Err(e) => {
-                            let _ = failed.send(Event::Failed(format!("{}{e:#}", crate::i18n::tr("The meeting's audio can't be kept: ", "会议录音无法保存："))));
+                            let _ = failed.send(Event::Failed(crate::ta!("the-meeting-s-audio-can", error = format!("{e:#}"))));
                             None
                         }
                     };
                     for chunk in heard {
                         if let Some(k) = keeper.as_mut() {
                             if let Err(e) = k.write(&chunk) {
-                                let _ = failed.send(Event::Failed(format!("{}{e:#}", crate::i18n::tr("The meeting's audio stopped being kept: ", "会议录音中断："))));
+                                let _ = failed.send(Event::Failed(crate::ta!("the-meeting-s-audio-stopped", error = format!("{e:#}"))));
                                 keeper = None;
                             }
                         }
@@ -258,7 +255,7 @@ impl Pipeline {
                     }
                     if let Some(k) = keeper {
                         if let Err(e) = k.finish() {
-                            let _ = failed.send(Event::Failed(format!("{}{e:#}", crate::i18n::tr("The meeting's audio could not be finished: ", "会议录音没能保存完整："))));
+                            let _ = failed.send(Event::Failed(crate::ta!("the-meeting-s-audio-could", error = format!("{e:#}"))));
                         }
                     }
                 });
@@ -268,7 +265,7 @@ impl Pipeline {
         thread::spawn(move || {
             let warn = tx.clone();
             let fell_back = move |_: &str| {
-                let _ = warn.send(Event::Failed(crate::i18n::tr("The chosen input isn't connected, so the default one is listening.", "选择的输入设备没有连接，正在用默认设备收音。").into()));
+                let _ = warn.send(Event::Failed(crate::i18n::t("the-chosen-input-isn-t").into()));
             };
             if let Err(e) = capture(&stop, &samples, input.as_deref(), fell_back) {
                 let _ = tx.send(Event::Failed(format!("{e:#}")));

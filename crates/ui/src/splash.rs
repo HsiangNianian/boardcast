@@ -1,7 +1,7 @@
 //! What shows from the moment the window opens: the name, written by the same pen as the board.
 //! Nothing in the toolkit writes by hand, so this is drawn here. The caller swaps it for the app.
 
-use crate::i18n::tr;
+use crate::i18n::t;
 use crate::theme::pal;
 use boardcast_board::glyphs::{Glyphs, Pt};
 use boardcast_board::pen::{ink, line, outline, place, Inked, Rng};
@@ -133,6 +133,6 @@ pub fn splash(strokes: &[Inked], started: Instant, window: &mut Window) -> impl 
         )
         // If this runs long, say it is still going.
         .when(elapsed > SAY_MORE_AFTER, |d| {
-            d.child(div().absolute().bottom(px(48.)).w_full().flex().justify_center().text_sm().text_color(rgb(pal().faint)).child(tr("Getting things ready…", "正在做准备…")))
+            d.child(div().absolute().bottom(px(48.)).w_full().flex().justify_center().text_sm().text_color(rgb(pal().faint)).child(t("getting-things-ready")))
         })
 }

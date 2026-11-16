@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="boardcast">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; media-src data:">
 <title>__TITLE__</title>
 <!--__LICENSES__-->
 <style>
@@ -63,6 +63,9 @@ aside p{margin:2px 0}
   const W = DATA.words
   let page = 0, at = 0, playing = false, speed = 1, timer = 0, view = null, mask = 0
   let shown = new Map(), pictures = new Map()
+  /* With the meeting's sound, the board plays beside it in real time, each step where it was heard. */
+  const sound = DATA.sound ? new Audio(DATA.sound) : null
+  let ticking = false
 
   const board = () => DATA.boards[page]
   const total = () => board().frames.length - 1
@@ -138,8 +141,9 @@ aside p{margin:2px 0}
   }
 
   function waitBefore(step) {
-    if (step <= 0) return 300
     const frames = board().frames
+    if (sound) return step < frames.length - 1 ? Math.max(300, (frames[step + 1].s - frames[step].s) * 1000) / speed : 3000
+    if (step <= 0) return 300
     const gap = step < frames.length - 1 ? frames[step + 1].t - frames[step].t : 0
     return Math.min(Math.max(gap, 900), 3000) / speed
   }
@@ -174,7 +178,23 @@ aside p{margin:2px 0}
     if (last && follow) last.scrollIntoView({ block: 'end' })
   }
 
+  /* The sound's length in seconds, from the file once known, or else its last step. */
+  function length() {
+    if (isFinite(sound.duration) && sound.duration > 0) return sound.duration
+    return Math.max(...DATA.boards.map((b) => b.frames[b.frames.length - 1].s || 0))
+  }
+
   function showBar() {
+    if (sound) {
+      const whole = length()
+      $('bar').hidden = false
+      seekBar.max = Math.round(whole * 10)
+      seekBar.value = Math.round(sound.currentTime * 10)
+      $('toggle').textContent = playing ? W.pause : W.play
+      $('speed').textContent = speed + '×'
+      $('time').textContent = clock(sound.currentTime * 1000) + ' / ' + clock(whole * 1000)
+      return
+    }
     const frames = board().frames, n = total()
     $('bar').hidden = n === 0
     seekBar.max = n
@@ -185,8 +205,51 @@ aside p{margin:2px 0}
     $('time').textContent = clock(at ? frames[at].t - first : 0) + ' / ' + clock(n ? frames[n].t - first : 0)
   }
 
+  /* The board in view at this moment of the sound: the one the last step heard was on, as far as it had got. */
+  function follow() {
+    const now = sound.currentTime
+    let on = -1, latest = -Infinity, first = Infinity, opening = page
+    for (const [i, b] of DATA.boards.entries()) {
+      const frames = b.frames
+      if (frames.length > 1 && frames[1].s < first) { first = frames[1].s; opening = i }
+      for (let f = frames.length - 1; f >= 1; f--) {
+        if (frames[f].s <= now) { if (frames[f].s >= latest) { latest = frames[f].s; on = i } break }
+      }
+    }
+    if (on < 0) on = opening
+    const frames = DATA.boards[on].frames
+    let reached = 0
+    while (reached + 1 < frames.length && frames[reached + 1].s <= now) reached++
+    if (on !== page) {
+      page = on
+      at = reached
+      view = null
+      showAll()
+    } else if (reached !== at) {
+      const step = reached === at + 1
+      at = reached
+      showBoard(step)
+      showLines(true)
+    }
+    showBar()
+  }
+
+  function tick() {
+    if (!playing) { ticking = false; return }
+    ticking = true
+    follow()
+    requestAnimationFrame(tick)
+  }
+
+  /* Go to a moment of the sound, in seconds. */
+  function hear(seconds) {
+    sound.currentTime = Math.max(0, Math.min(length(), seconds))
+    follow()
+  }
+
   function schedule() {
     clearTimeout(timer)
+    if (sound) { if (playing && !ticking) tick(); return }
     if (!playing) return
     if (at >= total()) { playing = false; showBar(); return }
     timer = setTimeout(() => seek(at + 1, true), waitBefore(at))
@@ -205,6 +268,18 @@ aside p{margin:2px 0}
   }
 
   function toggle() {
+    if (sound) {
+      if (playing) { sound.pause(); playing = false }
+      else {
+        if (sound.ended || sound.currentTime >= length()) sound.currentTime = 0
+        playing = true
+        sound.play().catch(() => { playing = false; showBar() })
+        follow()
+      }
+      showBar()
+      schedule()
+      return
+    }
     if (!total()) return
     if (playing) playing = false
     else {
@@ -217,6 +292,7 @@ aside p{margin:2px 0}
 
   function goToPage(i) {
     if (i === page) return
+    if (sound) { const frames = DATA.boards[i].frames; if (frames.length > 1) { hear(frames[1].s); return } }
     page = i
     at = total()
     playing = false
@@ -291,18 +367,33 @@ aside p{margin:2px 0}
   svg.addEventListener('pointerup', lift)
   svg.addEventListener('pointercancel', lift)
 
+  /* Without sound the controls move between steps; with it, through the sound. */
+  const toEnd = () => {
+    if (sound) { sound.pause(); playing = false; hear(length()); return }
+    playing = false; clearTimeout(timer); seek(total()); showBar()
+  }
+  const stepTo = (n) => {
+    if (!sound) return seek(n)
+    const frames = board().frames
+    n = Math.max(0, Math.min(frames.length - 1, n))
+    hear(n ? frames[n].s : 0)
+  }
+  if (sound) {
+    sound.addEventListener('ended', () => { playing = false; follow() })
+    sound.addEventListener('loadedmetadata', showBar)
+  }
   $('toggle').addEventListener('click', toggle)
-  $('end').addEventListener('click', () => { playing = false; clearTimeout(timer); seek(total()); showBar() })
-  $('speed').addEventListener('click', () => { speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; showBar(); schedule() })
-  seekBar.addEventListener('input', () => seek(Number(seekBar.value)))
+  $('end').addEventListener('click', toEnd)
+  $('speed').addEventListener('click', () => { speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; if (sound) sound.playbackRate = speed; showBar(); schedule() })
+  seekBar.addEventListener('input', () => (sound ? hear(Number(seekBar.value) / 10) : seek(Number(seekBar.value))))
   addEventListener('keydown', (e) => {
-    if (!total() || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+    if ((!total() && !sound) || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
     const onSlider = e.target === seekBar
-    if (e.key === 'Escape') { playing = false; clearTimeout(timer); seek(total()); showBar() }
+    if (e.key === 'Escape') toEnd()
     else if (onSlider) return
     else if (e.key === ' ') { if (e.target.closest && e.target.closest('button')) return; if (!e.repeat) toggle() }
-    else if (e.key === 'ArrowLeft') seek(at - 1)
-    else if (e.key === 'ArrowRight') seek(at + 1)
+    else if (e.key === 'ArrowLeft') stepTo(at - 1)
+    else if (e.key === 'ArrowRight') stepTo(at + 1)
     else return
     e.preventDefault()
   })

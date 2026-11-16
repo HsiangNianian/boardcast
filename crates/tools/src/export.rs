@@ -1,9 +1,10 @@
 //! Write a saved meeting out, as the app's Export panel does: `export <root> <meeting.json> <out>...`
-//! The format follows each file's extension.
+//! The format follows each file's extension; `.live.webm` is the whole meeting in real time with its sound,
+//! which a replay page (`.html`) carries too when the meeting kept some.
 
 use anyhow::{bail, Context, Result};
 use boardcast_board::glyphs::{Glyphs, HanziSource};
-use boardcast_export::{freeze, write_file, Kind};
+use boardcast_export::{freeze, write_file, Kind, Sound};
 use boardcast_meetings::{decode_data_url, Live, Loaded, Origin, PageImage, Store};
 use std::path::{Path, PathBuf};
 
@@ -23,10 +24,17 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         .collect();
     for out in args {
         let path = Path::new(&out);
-        let kind = Kind::from_path(path).with_context(|| format!("no format for {out}"))?;
+        let kind = if out.to_ascii_lowercase().ends_with(".live.webm") { Kind::LiveVideo } else { Kind::from_path(path).with_context(|| format!("no format for {out}"))? };
         let live = Live::from_loaded(Loaded { raw: raw.clone(), origin: Origin::Current, revision: 0 });
         let asset = |name: &str| store.as_ref().and_then(|s| s.page_image(&id, name).ok()).or_else(|| decode_data_url(name).ok());
-        let output = freeze(&live, false, &mut glyphs, HanziSource::Directory(root.join("assets/hanzi")), &images, &asset).render(kind)?;
+        let mut frozen = freeze(&live, false, &mut glyphs, HanziSource::Directory(root.join("assets/hanzi")), &images, &asset);
+        let files: Vec<(Option<PathBuf>, f64, f64)> = live.audio().into_iter().map(|(name, start, ms)| (meeting.parent().map(|dir| dir.join(&id).join(name)), start, ms)).collect();
+        if matches!(kind, Kind::LiveVideo | Kind::ReplayPage) && !files.is_empty() {
+            let (samples, pieces) = boardcast_audio::keep::read_pieces(&files);
+            let encoded = boardcast_audio::keep::encode(&samples)?;
+            frozen.sound = Some(Sound { pieces, head: encoded.head, pre_skip: encoded.pre_skip, packet_ms: boardcast_audio::keep::PACKET_MS, packets: encoded.packets });
+        }
+        let output = frozen.render(kind)?;
         write_file(path, &output.bytes)?;
         println!("{{\"file\":{},\"bytes\":{},\"text_left_out\":{}}}", serde_json::Value::from(out.as_str()), output.bytes.len(), output.text_left_out);
     }

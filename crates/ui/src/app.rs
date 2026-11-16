@@ -1324,23 +1324,10 @@ impl Sound {
 /// A meeting's sound: its samples, its pieces' starts and lengths in ms, and its loudness along it.
 type ReadSound = (Vec<f32>, Vec<(f64, f64)>, Vec<f32>);
 
-/// A meeting's kept sound read from its files and laid end to end, with each piece's start and length in ms.
-/// A file that is gone is heard as silence of its length, so the rest stays in step.
+/// A meeting's kept sound read from its files and laid end to end, with each piece's start and length in ms,
+/// and how loud it is along its length.
 fn read_sound(files: Vec<(Option<PathBuf>, f64, f64)>) -> Result<ReadSound> {
-    let per_ms = f64::from(boardcast_audio::SAMPLE_RATE) / 1000.0;
-    let (mut samples, mut pieces) = (Vec::new(), Vec::new());
-    for (path, start, ms) in files {
-        let piece = match path.map(|p| boardcast_audio::keep::read(&p)) {
-            Some(Ok(piece)) => piece,
-            Some(Err(e)) => {
-                eprintln!("a piece of the meeting's sound could not be read: {e:#}");
-                vec![0.0; (ms * per_ms) as usize]
-            }
-            None => vec![0.0; (ms * per_ms) as usize],
-        };
-        pieces.push((start, piece.len() as f64 / per_ms));
-        samples.extend(piece);
-    }
+    let (samples, pieces) = boardcast_audio::keep::read_pieces(&files);
     if samples.is_empty() {
         anyhow::bail!("the meeting's sound is empty");
     }
@@ -2421,7 +2408,7 @@ impl Workbench {
         self.show_board_image(shown);
         self.wait_for_next_step();
         if !audio.is_empty() {
-            self.hear_replay(audio, track, cx);
+            self.hear_replay(track, cx);
         }
         window.focus(&self.focus, cx);
         cx.notify();
@@ -2429,9 +2416,14 @@ impl Workbench {
 
     /// Read the meeting's kept sound on another thread, then play the replay on its clock. `track` tells
     /// this replay from one begun since.
-    fn hear_replay(&mut self, audio: Vec<(String, f64, f64)>, track: Rc<std::cell::Cell<Bounds<Pixels>>>, cx: &mut Context<Self>) {
-        let id = self.live.id().to_string();
-        let files: Vec<(Option<PathBuf>, f64, f64)> = audio.into_iter().map(|(name, start, ms)| (self.store.as_ref().and_then(|s| s.audio_path(&id, &name).ok()), start, ms)).collect();
+    /// The meeting's kept sound: each piece's file, when it began and how long it was.
+    fn sound_files(&self) -> Vec<(Option<PathBuf>, f64, f64)> {
+        let id = self.live.id();
+        self.live.audio().into_iter().map(|(name, start, ms)| (self.store.as_ref().and_then(|s| s.audio_path(id, &name).ok()), start, ms)).collect()
+    }
+
+    fn hear_replay(&mut self, track: Rc<std::cell::Cell<Bounds<Pixels>>>, cx: &mut Context<Self>) {
+        let files = self.sound_files();
         cx.spawn(async move |this, cx| {
             let read = cx.background_executor().spawn(async move { read_sound(files) }).await;
             let _ = this.update(cx, |this, cx| {
@@ -2589,7 +2581,9 @@ impl Workbench {
             Some(store) => store.page_image(&id, name).ok(),
             None => boardcast_meetings::decode_data_url(name).ok(),
         };
-        let frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
+        let mut frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
+        // The video with sound needs it, and a replay page carries it when there is some.
+        let sound = matches!(kind, ExportKind::LiveVideo | ExportKind::ReplayPage).then(|| self.sound_files()).filter(|f| !f.is_empty());
         let directory = self.export_dir.clone().unwrap_or_else(|| {
             let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map_or_else(|| self.data.clone(), PathBuf::from);
             Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
@@ -2615,6 +2609,11 @@ impl Workbench {
             let written = cx
                 .background_executor()
                 .spawn(async move {
+                    if let Some(files) = sound {
+                        let (samples, pieces) = boardcast_audio::keep::read_pieces(&files);
+                        let encoded = boardcast_audio::keep::encode(&samples)?;
+                        frozen.sound = Some(boardcast_export::Sound { pieces, head: encoded.head, pre_skip: encoded.pre_skip, packet_ms: boardcast_audio::keep::PACKET_MS, packets: encoded.packets });
+                    }
                     let output = frozen.render(kind)?;
                     boardcast_export::write_file(&target, &output.bytes)?;
                     anyhow::Ok(output.text_left_out)
@@ -5243,16 +5242,27 @@ impl Workbench {
     fn export_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
         let drawn = !self.live.graph.nodes.is_empty() || self.live.graph.underlay().is_some();
         let content = self.live.has_content();
-        let formats = [
+        let heard = !self.live.audio().is_empty();
+        let mut formats = vec![
             (ExportKind::Markdown, "Markdown", tr("Key points, a Mermaid flow chart and the transcript.", "要点、Mermaid 流程图和会议记录。"), content),
             (ExportKind::Png, tr("PNG image", "PNG 图片"), tr("This board, as it looks on screen.", "当前这张板，和画面上一样。"), drawn),
             (ExportKind::Svg, tr("SVG vector", "SVG 矢量图"), tr("This board. Stays sharp at any size.", "当前这张板，放大不糊。"), drawn),
             (ExportKind::AnimatedSvg, tr("Animated SVG", "动态 SVG"), tr("This board, written out stroke by stroke in the order of the meeting.", "当前这张板，按会议顺序逐笔写出。"), drawn),
             (ExportKind::Gif, "GIF", tr("This board, written out stroke by stroke, for chats and documents that don't play SVG.", "当前这张板，逐笔写出，可以直接贴进群聊和文档。"), drawn),
             (ExportKind::Webm, tr("Video (WebM)", "视频（WebM）"), tr("This board, written out stroke by stroke, as a small, sharp video for browsers, GitHub and web pages.", "当前这张板，逐笔写出，体积小、更清晰，适合浏览器、GitHub 和网页。"), drawn),
-            (ExportKind::ReplayPage, tr("Replay page", "回放网页"), tr("One .html file for someone who missed the meeting. Nothing to install.", "一个 .html 文件，发给没参会的人，双击就能看。"), content),
+            (
+                ExportKind::ReplayPage,
+                tr("Replay page", "回放网页"),
+                if heard { tr("One .html file for someone who missed the meeting, with its sound. Nothing to install.", "一个 .html 文件，带会议录音，发给没参会的人，双击就能看。") } else { tr("One .html file for someone who missed the meeting. Nothing to install.", "一个 .html 文件，发给没参会的人，双击就能看。") },
+                content,
+            ),
             (ExportKind::Pdf, tr("Whole meeting PDF", "整场会 PDF"), tr("A page per board, then the summary and transcript, with selectable text.", "每张板一页，后面是摘要和会议记录，文字可以选中复制。"), content),
         ];
+        // The whole meeting in real time, with what was said, once there is a recording.
+        if heard {
+            let at = formats.iter().position(|f| f.0 == ExportKind::Webm).map_or(formats.len(), |i| i + 1);
+            formats.insert(at, (ExportKind::LiveVideo, tr("Video with sound", "带声音的视频"), tr("The whole meeting in real time with its recording, every board as it was drawn.", "整场会按真实时间播放，带录音，每张板都按当时的样子画出。"), content));
+        }
         let busy = self.exporting;
         let rows = formats.into_iter().enumerate().map(|(i, (kind, name, hint, available))| {
             let enabled = available && busy.is_none();

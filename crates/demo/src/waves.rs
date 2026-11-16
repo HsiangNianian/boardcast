@@ -113,10 +113,9 @@ fn draw_strip(canvas: &HtmlCanvasElement, points: Option<&[(f32, f32)]>, t: f64)
         let reach = |y: f64, high: bool| {
             let first = ((t + (y - middle) * per_pixel) * PER_SECOND).floor();
             let last = ((t + (y + STEP - middle) * per_pixel) * PER_SECOND).ceil();
-            let mut peak = 0.0_f32;
-            for i in first.max(0.0) as usize..(last.max(0.0) as usize).min(points.len()) {
-                peak = if high { peak.max(points[i].1) } else { peak.min(points[i].0) };
-            }
+            let (from, to) = (first.max(0.0) as usize, (last.max(0.0) as usize).min(points.len()));
+            let stretch = points.get(from..to).unwrap_or_default();
+            let peak = stretch.iter().fold(0.0_f32, |peak, &(low, top)| if high { peak.max(top) } else { peak.min(low) });
             w / 2.0 + f64::from(peak) * amp
         };
         // What was said, then what is coming: one line each, the second faint.

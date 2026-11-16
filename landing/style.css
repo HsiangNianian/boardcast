@@ -320,8 +320,11 @@ section.block { padding-top: 140px; }
 .board .sel { fill: none; stroke: var(--link); stroke-width: 1; stroke-dasharray: 3 3; }
 .marks { position: absolute; z-index: 3; display: flex; border: 1px solid var(--hair); border-radius: 4px; background: var(--app-surface); box-shadow: var(--app-shadow); opacity: 0; transform: translateY(6px); transition: opacity .25s, transform .25s; font-size: 12px; }
 .marks.on { opacity: 1; transform: none; }
-.marks span { padding: 6px 10px; color: var(--grey); }
-.marks span.hit { background: var(--fg); color: var(--bg); }
+.marks span { display: flex; align-items: center; padding: 6px 10px; color: var(--grey); }
+.marks .m-ico { padding: 6px 7px; }
+.marks .m-ico:first-of-type { border-left: 1px solid var(--hair); }
+.marks svg { width: 12px; height: 12px; }
+.marks span.picked { background: var(--fg); color: var(--bg); }
 
 /* What floats over the board's lower edge: the zoom at its corner, the tools in the middle. */
 .app-float { position: absolute; z-index: 4; bottom: 12px; display: flex; align-items: center; border: 1px solid var(--hair); border-radius: 4px; background: var(--app-surface); box-shadow: var(--app-shadow); white-space: nowrap; }
@@ -363,9 +366,10 @@ section.block { padding-top: 140px; }
 
 /* The panel beside the board, on its transcript: each line under its speaker's badge, outlined until it is drawn. */
 .side { border-left: 1px solid var(--hair); display: flex; flex-direction: column; min-height: 0; background: var(--app-surface); }
-.app-tabs { display: flex; align-items: center; gap: 20px; height: 40px; flex: none; padding: 0 4px 0 16px; border-bottom: 1px solid var(--hair); }
-.app-tabs > span { display: flex; align-items: center; gap: 6px; height: 100%; border-bottom: 2px solid transparent; font-size: 14px; color: var(--grey); }
-.app-tabs > span.on { border-color: var(--fg); color: var(--fg); font-weight: 500; }
+.app-tabs { display: flex; align-items: center; gap: 12px; height: 40px; flex: none; padding: 0 4px 0 12px; border-bottom: 1px solid var(--hair); }
+.app-tabs > span { display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 4px; border-bottom: 2px solid transparent; color: var(--grey); }
+.app-tabs > span svg { width: 15px; height: 15px; }
+.app-tabs > span.on { border-color: var(--fg); color: var(--fg); }
 .app-tabs small { font: 400 10px var(--mono); color: var(--dim); }
 .app-tabs .app-ico { margin-left: auto; border: 0; }
 .transcript { list-style: none; padding: 16px; display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 0; overflow: hidden; }

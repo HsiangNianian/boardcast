@@ -141,7 +141,7 @@ fn render(board: &Board, ui: &Ui, p: f64) {
     let correcting = !replaying && q > 0.43 && q < 0.53;
     set_style(&ui.sel, "opacity", if correcting { "1" } else { "0" });
     toggle(&ui.marks, "on", correcting);
-    toggle(&ui.strike, "hit", q > 0.47);
+    toggle(&ui.strike, "picked", q > 0.47);
     let i3 = board.items["i3"];
     let r = board.svg.get_bounding_client_rect();
     let scale = (r.width() / 560.0).min(r.height() / 230.0);

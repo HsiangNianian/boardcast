@@ -73,13 +73,13 @@ body > .site-header { padding-top: 0; padding-bottom: 28px; }
 
 /* The sidebar: the app around the meeting. Its one live part is the list of samples, as meetings. */
 .sidebar { display: flex; flex-direction: column; min-height: 0; padding: 0 8px 8px; border-right: 1px solid var(--line); background: var(--chrome); }
-.wordmark { display: flex; align-items: center; height: 56px; padding: 0 8px; font: 400 30px/1 'Excalifont', var(--sans); letter-spacing: .01em; }
-.new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 32px; margin-bottom: 10px; border-radius: 2px; background: var(--text); color: var(--bg); font-size: 14px; font-weight: 400; opacity: .35; }
+.new { display: flex; align-items: center; justify-content: center; gap: 8px; height: 32px; margin: 12px 0 10px; border-radius: 2px; background: var(--text); color: var(--bg); font-size: 14px; font-weight: 400; opacity: .35; }
 .new svg { width: 11px; height: 11px; }
 .nav { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 2px; font-size: 14px; font-weight: 400; }
 .nav svg { width: 14px; height: 14px; color: var(--muted); }
 .nav small, .meetings button small { margin-left: auto; font: 400 10px var(--mono); color: var(--faint); }
-.group { padding: 16px 8px 4px; font: 400 10px var(--mono); color: var(--faint); }
+.group { display: flex; align-items: center; gap: 4px; padding: 16px 8px 4px; font: 400 10px var(--mono); color: var(--faint); }
+.group svg { width: 8px; height: 8px; }
 .meetings { display: flex; flex-direction: column; gap: 1px; }
 .meetings button { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 2px; font-size: 14px; font-weight: 400; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .meetings button:hover { background: var(--hover); }
@@ -103,6 +103,8 @@ body > .site-header { padding-top: 0; padding-bottom: 28px; }
 .zoom button:hover { background: var(--hover); }
 .zoom .pct { width: 44px; font: 400 11px var(--mono); color: var(--muted); }
 .zoom .pct:hover { color: var(--text); background: none; }
+.zoom .map { display: grid; place-items: center; width: 26px; height: 26px; color: var(--text); }
+.zoom .map svg { width: 13px; height: 13px; }
 /* On a narrower board the zoom gives way, as the tools need its width. */
 @container (max-width: 760px) { .zoom { display: none; } }
 
@@ -137,10 +139,10 @@ body > .site-header { padding-top: 0; padding-bottom: 28px; }
 
 /* The panel beside the board: transcript, summary and speakers, a tab each. */
 .side { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-left: 1px solid var(--line); background: var(--surface); }
-.tabs { display: flex; align-items: center; gap: 20px; height: 40px; flex: none; padding: 0 4px 0 16px; border-bottom: 1px solid var(--line); }
-.tab { display: flex; align-items: center; height: 100%; border-bottom: 2px solid transparent; font-size: 14px; color: var(--muted); }
-.tab.on { border-color: var(--text); color: var(--text); font-weight: 500; }
-.tabs .close { margin-left: auto; }
+.tabs { display: flex; align-items: center; gap: 12px; height: 40px; flex: none; padding: 0 4px 0 12px; border-bottom: 1px solid var(--line); }
+.tab { display: flex; align-items: center; height: 100%; padding: 0 4px; border-bottom: 2px solid transparent; color: var(--muted); }
+.tab svg { width: 15px; height: 15px; }
+.tab.on { border-color: var(--text); color: var(--text); }
 .lines { flex: 1; min-height: 0; overflow: hidden auto; list-style: none; padding: 16px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: none; }
 .lines li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 4px; row-gap: 4px; }
 .lines li > div { display: contents; }

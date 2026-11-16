@@ -14,7 +14,7 @@ const RATE: f32 = 8000.0;
 /// How much sound a strip shows at once, in seconds, ending now: a few cycles of a voice.
 const SPAN: f64 = 0.06;
 /// How far in from each end the wave fades out, as a share of the strip's width.
-const FADE: f64 = 0.12;
+const FADE: f64 = 0.08;
 
 /// One recording's samples per channel, scaled so its loud moments reach the strip's edges.
 struct Shape {
@@ -101,29 +101,45 @@ fn draw_strip(canvas: &HtmlCanvasElement, samples: Option<&[f32]>, t: f64, mirro
     // The page's text colour, set on the strip in CSS, so it follows light and dark.
     let ink = web_sys::window().and_then(|win| win.get_computed_style(canvas).ok().flatten()).and_then(|s| s.get_property_value("color").ok()).unwrap_or_else(|| "#888".into());
     ctx.set_stroke_style_str(&ink);
-    ctx.set_line_width(1.25);
+    ctx.set_line_width(1.1);
     ctx.set_line_join("round");
     let middle = h / 2.0;
-    let amp = h / 2.0 - 3.0;
+    let amp = h / 2.0 - 4.0;
     let start = (t - SPAN) * f64::from(RATE);
     let count = SPAN * f64::from(RATE);
-    // Between two samples the wave goes straight from one to the other, as a screen's many pixels ask.
     let sample = |i: f64| match samples {
         Some(s) if i >= 0.0 && (i as usize) < s.len() => f64::from(s[i as usize]),
         _ => 0.0,
     };
+    // Lightly smoothed, so the line has no single-sample teeth.
+    let smooth = |i: f64| (sample(i - 1.0) + 2.0 * sample(i) + sample(i + 1.0)) / 4.0;
     let at = |x: f64| {
         let along = if mirrored { w - x } else { x };
         let f = start + along / w * count;
         let k = f - f.floor();
-        sample(f.floor()) * (1.0 - k) + sample(f.floor() + 1.0) * k
+        let v = smooth(f.floor()) * (1.0 - k) + smooth(f.floor() + 1.0) * k;
+        // Loud sound is pressed gently rather than cut off at the edges, and the wave tapers to nothing at both
+        // ends, as a plucked string is still where it is held.
+        let pressed = (1.6 * v).tanh() / 1.6_f64.tanh() * 0.9;
+        let taper = (std::f64::consts::PI * x / w).sin().powf(1.4);
+        middle - pressed * taper * amp
     };
+    // A smooth curve through a point every few pixels, each corner rounded off at the midpoints.
+    const STEP: f64 = 3.0;
+    let points: Vec<(f64, f64)> = (0..=(w / STEP).ceil() as usize)
+        .map(|i| {
+            let x = (i as f64 * STEP).min(w);
+            (x, at(x))
+        })
+        .collect();
     ctx.begin_path();
-    ctx.move_to(0.0, middle - at(0.0) * amp);
-    let mut x = 0.0;
-    while x < w {
-        x += 1.0;
-        ctx.line_to(x, middle - at(x) * amp);
+    ctx.move_to(points[0].0, points[0].1);
+    for pair in points.windows(2) {
+        let ((x0, y0), (x1, y1)) = (pair[0], pair[1]);
+        ctx.quadratic_curve_to(x0, y0, (x0 + x1) / 2.0, (y0 + y1) / 2.0);
+    }
+    if let Some(&(x, y)) = points.last() {
+        ctx.line_to(x, y);
     }
     ctx.stroke();
     // Both ends fade into the page, so the wave seems to pass through rather than stop at an edge.

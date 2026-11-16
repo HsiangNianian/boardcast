@@ -23,8 +23,6 @@ ready-type-in-the-meetings = 已就緒。在會議頁的搜尋框裡輸入即可
 staying-on-this-meeting-because = 這場會議儲存失敗，先留在這裡：{ $error }
 that-meeting-no-longer-exists = 這場會議已經不存在了。
 could-not-open-the-meeting = 無法開啟這場會議：{ $error }
-started-a-new-board = 新開了一張板
-moved-t-to-a-new = 把「{ $t }」移到了新的一張板
 can-t-switch-boards-during = 回放時無法切換板，請先退出回放。
 this-document-s-pages-are = 這份文件的頁面已不在這場會議裡。
 you-can-import-pdfs-and = 可以匯入 PDF 和圖片（PNG、JPEG、WebP、GIF）。
@@ -412,7 +410,6 @@ version-installed-restart = { $version } 已安裝。重新啟動之前，目前
 about-percent = 約 { $percent }%
 keys-kept-for-closing = { $keys } 用於關閉和移動，不能設為快捷鍵。
 keys-already-used-by = { $keys } 已經用於「{ $action }」。
-board-forked = 從第 { $from } 張板回放到 { $when } 的那一刻，另開了第 { $to } 張板
 recommended-2 = 推薦
 runs = 執行於
 on-this-computer-nothing-leaves = 在本機執行時，什麼都不會離開電腦；遠端模型透過網路存取。
@@ -433,6 +430,43 @@ sample-second-point = 找 Mia 確認文件
 one-html-file-for-someone-2 = 一個 .html 檔案，附會議錄音，傳給沒參加會議的人，點兩下就能看。
 video-with-sound = 附聲音的影片
 the-whole-meeting-in-real = 整場會議按真實時間播放，附錄音，每張板都照當時的樣子畫出。
+note-board-forked = 從第 { $from } 張板回放到 { $when } 的那一刻，另起了第 { $to } 張板
+note-new-board = 開了一張新板
+note-moved-to-new-board = 把「{ $t }」移到了新的一張板
+note-imported-image = 匯入了 { $name }（讀出 { $read } 塊文字）
+note-imported-image-capped = 匯入了 { $name }（讀出 { $read } 塊文字，區塊太多只讀了一部分）
+note-imported-pdf = 匯入了 { $name }（共 { $pages } 頁，建了 { $boards } 張板）
+note-mark-added = { $mark ->
+        [strike] 劃掉了「{ $what }」
+        [circle] 圈出了「{ $what }」
+        [underline] 為「{ $what }」加上了底線
+        [star] 為「{ $what }」加了星號
+       *[highlight] 醒目標示了「{ $what }」
+    }
+note-mark-removed = { $mark ->
+        [strike] 移除了「{ $what }」的刪除線
+        [circle] 移除了「{ $what }」的圈選
+        [underline] 移除了「{ $what }」的底線
+        [star] 移除了「{ $what }」的星號
+       *[highlight] 移除了「{ $what }」的醒目標示
+    }
+import-starting-vision-image = 正在啟動本機模型來讀圖…
+import-reading-image-block = 正在讀 { $name }：{ $done }/{ $total } 塊
+import-regions-found = 找到 { $found } 個區域，其中 { $read } 個辨識到了文字。
+import-regions-capped = 只讀了前 { $limit } 個區域，完整圖片仍然保留。
+import-no-text-recognized = 沒有辨識到文字。原圖仍會顯示在板上。
+import-image-ready = { $name } 匯入好了，開會時可以說「把這裡圈出來」
+import-image-no-text = { $name } 裡沒有讀出文字，只能當背景用
+import-downloading-arxiv = 正在從 arXiv 下載 { $id }…
+import-reading-page = 正在讀 { $name }：{ $done }/{ $total } 頁
+import-starting-vision-scans = 正在啟動本機模型來讀掃描頁…
+import-reading-scan-block = 正在讀掃描頁 { $page }/{ $pages }：{ $done }/{ $total } 塊
+import-references-skipped = 參考文獻 { $n } 頁沒建板
+import-board-limit-reached = 板數已達上限，最後 { $n } 頁沒匯入
+import-scans-read = { $n } 頁沒有文字層的掃描頁由本機模型讀出了文字
+import-scans-not-read = { $n } 頁沒有文字層，整頁算一張圖，只能按頁碼翻到；有視覺元件的本機模型可以讀出其中的文字
+import-paper-ready = { $name } 匯入好了：依論文的章節、圖表、公式切好了，可以說「圖 3 這裡」「公式 5 有問題」
+import-pages-ready = { $name } 匯入好了：每頁一張板，開會時可以說「把這一段圈出來」
 share = 共享
 share-tip = 讓同一網路裡的人看這場會議
 share-on = 正在網路上共享

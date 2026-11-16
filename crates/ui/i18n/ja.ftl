@@ -23,8 +23,6 @@ ready-type-in-the-meetings = 準備完了。会議ページの検索ボックス
 staying-on-this-meeting-because = 保存できなかったため、この会議にとどまります：{ $error }
 that-meeting-no-longer-exists = その会議はもう存在しません。
 could-not-open-the-meeting = 会議を開けませんでした：{ $error }
-started-a-new-board = 新しいボードを開始しました
-moved-t-to-a-new = 「{ $t }」を新しいボードに移動しました
 can-t-switch-boards-during = リプレイ中はボードを切り替えられません。先にリプレイを終了してください。
 this-document-s-pages-are = このドキュメントのページは、もうこの会議にありません。
 you-can-import-pdfs-and = PDFと画像（PNG、JPEG、WebP、GIF）をインポートできます。
@@ -412,7 +410,6 @@ version-installed-restart = { $version } をインストールしました。再
 about-percent = 約 { $percent }%
 keys-kept-for-closing = { $keys } は閉じる操作と移動に使うため、ショートカットには設定できません。
 keys-already-used-by = { $keys } は「{ $action }」にすでに使われています。
-board-forked = ボード { $from } の { $when } 時点の状態から再生し、ボード { $to } を新しく作成しました
 recommended-2 = おすすめ
 runs = 実行場所
 on-this-computer-nothing-leaves = このコンピューターで動かす場合、外部には何も送られません。リモートモデルにはネットワーク経由で接続します。
@@ -433,6 +430,43 @@ sample-second-point = ドキュメントについて Mia に確認
 one-html-file-for-someone-2 = 会議に出られなかった人向けの .html ファイル 1 つ。音声付きで、インストールは不要です。
 video-with-sound = 音声付き動画
 the-whole-meeting-in-real = 会議全体を録音付きで実時間どおりに再生し、各ボードを描かれたとおりに見せます。
+note-board-forked = ボード { $from } の { $when } 時点からボード { $to } を分岐しました
+note-new-board = 新しいボードを始めました
+note-moved-to-new-board = 「{ $t }」を新しいボードに移しました
+note-imported-image = { $name } をインポートしました（テキスト { $read } ブロックを読み取り）
+note-imported-image-capped = { $name } をインポートしました（テキスト { $read } ブロックを読み取り。ブロックが多すぎたため一部のみ）
+note-imported-pdf = { $name } をインポートしました（{ $pages } ページ、ボード { $boards } 枚）
+note-mark-added = { $mark ->
+        [strike] 「{ $what }」に取り消し線を引きました
+        [circle] 「{ $what }」を丸で囲みました
+        [underline] 「{ $what }」に下線を引きました
+        [star] 「{ $what }」に星印を付けました
+       *[highlight] 「{ $what }」をハイライトしました
+    }
+note-mark-removed = { $mark ->
+        [strike] 「{ $what }」の取り消し線を外しました
+        [circle] 「{ $what }」の丸囲みを外しました
+        [underline] 「{ $what }」の下線を外しました
+        [star] 「{ $what }」の星印を外しました
+       *[highlight] 「{ $what }」のハイライトを外しました
+    }
+import-starting-vision-image = ローカルモデルを起動して画像を読み取っています…
+import-reading-image-block = { $name } を読み取り中：ブロック { $done }/{ $total }
+import-regions-found = { $found } か所の領域を検出し、そのうち { $read } か所で文字を認識しました。
+import-regions-capped = 最初の { $limit } か所の領域のみ読み取りました。画像全体はそのまま残ります。
+import-no-text-recognized = 文字は認識されませんでした。元の画像はボード上に残ります。
+import-image-ready = { $name } の準備ができました。会議中に「ここを丸で囲んで」と言ってみてください
+import-image-no-text = { $name } には文字が見つかりませんでした。背景としてのみ使えます
+import-downloading-arxiv = arXiv から { $id } をダウンロード中…
+import-reading-page = { $name } を読み取り中：{ $done }/{ $total } ページ
+import-starting-vision-scans = ローカルモデルを起動してスキャンページを読み取っています…
+import-reading-scan-block = スキャンページ { $page }/{ $pages } を読み取り中：ブロック { $done }/{ $total }
+import-references-skipped = 参考文献 { $n } ページはボードにしませんでした
+import-board-limit-reached = ボード数の上限に達したため、最後の { $n } ページはインポートしませんでした
+import-scans-read = テキストレイヤーのない { $n } ページをローカルモデルで読み取りました
+import-scans-not-read = テキストレイヤーのない { $n } ページは画像として取り込まれ、ページ番号でのみ開けます。ビジョン追加機能付きのローカルモデルなら文字を読み取れます
+import-paper-ready = { $name } の準備ができました。章・図表・数式ごとに分割済みです。「図3のここ」「式5が違う」などと言ってみてください
+import-pages-ready = { $name } の準備ができました。1ページにつき1枚のボードです。「この段落を丸で囲んで」と言ってみてください
 share = 共有
 share-tip = 同じネットワークの人に会議を見せる
 share-on = ネットワークで共有中

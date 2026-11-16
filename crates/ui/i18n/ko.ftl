@@ -23,8 +23,6 @@ ready-type-in-the-meetings = 준비되었습니다. 회의 페이지의 검색�
 staying-on-this-meeting-because = 저장하지 못해 이 회의에 그대로 머뭅니다: { $error }
 that-meeting-no-longer-exists = 이 회의는 더 이상 없습니다.
 could-not-open-the-meeting = 회의를 열지 못했습니다: { $error }
-started-a-new-board = 새 보드를 시작했습니다
-moved-t-to-a-new = “{ $t }”을(를) 새 보드로 옮겼습니다
 can-t-switch-boards-during = 다시 보기 중에는 보드를 전환할 수 없습니다. 먼저 다시 보기를 종료하세요.
 this-document-s-pages-are = 이 문서의 페이지가 더 이상 이 회의에 없습니다.
 you-can-import-pdfs-and = PDF와 이미지(PNG, JPEG, WebP, GIF)를 가져올 수 있습니다.
@@ -412,7 +410,6 @@ version-installed-restart = { $version }이(가) 설치되었습니다. 다시 �
 about-percent = 약 { $percent }%
 keys-kept-for-closing = { $keys }은(는) 닫기와 이동에 쓰이므로 단축키로 지정할 수 없습니다.
 keys-already-used-by = { $keys }은(는) 이미 “{ $action }”에 사용 중입니다.
-board-forked = 보드 { $from }의 { $when } 시점부터 재생하여 보드 { $to }을(를) 새로 만들었습니다
 recommended-2 = 추천
 runs = 실행 위치
 on-this-computer-nothing-leaves = 이 컴퓨터에서 실행하면 아무것도 밖으로 나가지 않습니다. 원격 모델은 네트워크로 연결합니다.
@@ -433,6 +430,43 @@ sample-second-point = 문서는 Mia에게 확인
 one-html-file-for-someone-2 = 회의에 참석하지 못한 사람을 위한 .html 파일 하나. 음성이 포함되며 설치할 것이 없습니다.
 video-with-sound = 음성 포함 동영상
 the-whole-meeting-in-real = 회의 전체를 녹음과 함께 실제 시간대로 재생하며, 모든 보드를 그려진 그대로 보여 줍니다.
+note-board-forked = 보드 { $from }의 { $when } 시점에서 보드 { $to }를 분기했습니다
+note-new-board = 새 보드를 시작했습니다
+note-moved-to-new-board = “{ $t }”을(를) 새 보드로 옮겼습니다
+note-imported-image = { $name }을(를) 가져왔습니다(텍스트 { $read }블록 읽음)
+note-imported-image-capped = { $name }을(를) 가져왔습니다(텍스트 { $read }블록 읽음, 블록이 너무 많아 일부만 읽음)
+note-imported-pdf = { $name }을(를) 가져왔습니다({ $pages }페이지, 보드 { $boards }개)
+note-mark-added = { $mark ->
+        [strike] “{ $what }”에 취소선을 그었습니다
+        [circle] “{ $what }”을(를) 동그라미로 표시했습니다
+        [underline] “{ $what }”에 밑줄을 그었습니다
+        [star] “{ $what }”에 별표를 달았습니다
+       *[highlight] “{ $what }”을(를) 강조했습니다
+    }
+note-mark-removed = { $mark ->
+        [strike] “{ $what }”의 취소선을 지웠습니다
+        [circle] “{ $what }”의 동그라미를 지웠습니다
+        [underline] “{ $what }”의 밑줄을 지웠습니다
+        [star] “{ $what }”의 별표를 지웠습니다
+       *[highlight] “{ $what }”의 강조를 해제했습니다
+    }
+import-starting-vision-image = 로컬 모델을 시작해 이미지를 읽는 중…
+import-reading-image-block = { $name } 읽는 중: 블록 { $done }/{ $total }
+import-regions-found = 영역 { $found }개를 찾았고, 그중 { $read }개에서 글자를 인식했습니다.
+import-regions-capped = 처음 { $limit }개 영역만 읽었습니다. 전체 이미지는 그대로 보관됩니다.
+import-no-text-recognized = 인식된 글자가 없습니다. 원본 이미지는 보드에 그대로 남습니다.
+import-image-ready = { $name } 준비가 끝났습니다. 회의 중에 “여기를 동그라미로 표시해 줘”라고 말해 보세요
+import-image-no-text = { $name }에서 글자를 찾지 못했습니다. 배경으로만 쓸 수 있습니다
+import-downloading-arxiv = arXiv에서 { $id } 다운로드 중…
+import-reading-page = { $name } 읽는 중: { $done }/{ $total }페이지
+import-starting-vision-scans = 로컬 모델을 시작해 스캔 페이지를 읽는 중…
+import-reading-scan-block = 스캔 페이지 { $page }/{ $pages } 읽는 중: 블록 { $done }/{ $total }
+import-references-skipped = 참고문헌 { $n }페이지는 보드로 만들지 않았습니다
+import-board-limit-reached = 보드 수 한도에 도달해 마지막 { $n }페이지는 가져오지 않았습니다
+import-scans-read = 텍스트 레이어가 없는 { $n }페이지를 로컬 모델이 읽었습니다
+import-scans-not-read = 텍스트 레이어가 없는 { $n }페이지는 이미지로 가져왔으며 페이지 번호로만 넘길 수 있습니다. 비전 추가 기능이 있는 로컬 모델은 글자를 읽을 수 있습니다
+import-paper-ready = { $name } 준비가 끝났습니다. 절, 그림, 수식별로 나누었습니다. “그림 3의 여기”, “수식 5가 틀렸어”라고 말해 보세요
+import-pages-ready = { $name } 준비가 끝났습니다. 페이지마다 보드 한 개입니다. “이 문단을 동그라미로 표시해 줘”라고 말해 보세요
 share = 공유
 share-tip = 같은 네트워크의 사람들에게 회의 보여 주기
 share-on = 네트워크에서 공유 중

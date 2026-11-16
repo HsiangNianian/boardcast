@@ -23,8 +23,6 @@ ready-type-in-the-meetings = Bereit. Im Suchfeld der Besprechungen tippen.
 staying-on-this-meeting-because = Bleibt bei dieser Besprechung, da sie nicht gespeichert werden konnte: { $error }
 that-meeting-no-longer-exists = Diese Besprechung gibt es nicht mehr.
 could-not-open-the-meeting = Besprechung konnte nicht geöffnet werden: { $error }
-started-a-new-board = Neue Tafel begonnen
-moved-t-to-a-new = „{ $t }“ auf eine neue Tafel verschoben
 can-t-switch-boards-during = Während der Wiedergabe ist kein Tafelwechsel möglich. Zuerst die Wiedergabe beenden.
 this-document-s-pages-are = Die Seiten dieses Dokuments sind nicht mehr in dieser Besprechung.
 you-can-import-pdfs-and = Sie können PDFs und Bilder (PNG, JPEG, WebP und GIF) importieren.
@@ -436,7 +434,6 @@ version-installed-restart = { $version } ist installiert. Deine Besprechung läu
 about-percent = etwa { $percent }%
 keys-kept-for-closing = { $keys } ist zum Schließen und Navigieren reserviert.
 keys-already-used-by = { $keys } wird bereits von „{ $action }“ verwendet.
-board-forked = Tafel { $to } wurde von Tafel { $from } abgezweigt, so wie sie um { $when } war
 recommended-2 = Empfohlen
 runs = Läuft
 on-this-computer-nothing-leaves = Auf diesem Computer verlässt nichts das Gerät; ein entferntes Modell wird über das Netzwerk erreicht.
@@ -457,6 +454,71 @@ sample-second-point = Mia nach den Dokumenten fragen
 one-html-file-for-someone-2 = Eine .html-Datei für alle, die die Besprechung verpasst haben, mit Ton. Nichts zu installieren.
 video-with-sound = Video mit Ton
 the-whole-meeting-in-real = Die ganze Besprechung in Echtzeit mit ihrer Aufnahme, jede Tafel so, wie sie gezeichnet wurde.
+note-board-forked = Tafel { $to } aus Tafel { $from } abgezweigt (Stand: { $when })
+note-new-board = Neue Tafel begonnen
+note-moved-to-new-board = „{ $t }“ auf eine neue Tafel verschoben
+note-imported-image =
+    { $read ->
+        [one] { $name } importiert (1 Textblock gelesen)
+       *[other] { $name } importiert ({ $read } Textblöcke gelesen)
+    }
+note-imported-image-capped = { $name } importiert ({ $read } Textblöcke gelesen; es waren zu viele, daher wurde nur ein Teil gelesen)
+note-imported-pdf = { $name } importiert ({ $pages ->
+        [one] 1 Seite
+       *[other] { $pages } Seiten
+    }, { $boards ->
+        [one] 1 Tafel
+       *[other] { $boards } Tafeln
+    })
+note-mark-added =
+    { $mark ->
+        [strike] „{ $what }“ durchgestrichen
+        [circle] „{ $what }“ eingekreist
+        [underline] „{ $what }“ unterstrichen
+        [star] „{ $what }“ mit einem Stern markiert
+       *[highlight] „{ $what }“ hervorgehoben
+    }
+note-mark-removed =
+    { $mark ->
+        [strike] Durchstreichung von „{ $what }“ entfernt
+        [circle] Kreis um „{ $what }“ entfernt
+        [underline] Unterstreichung von „{ $what }“ entfernt
+        [star] Stern bei „{ $what }“ entfernt
+       *[highlight] Hervorhebung von „{ $what }“ entfernt
+    }
+import-starting-vision-image = Lokales Modell wird gestartet, um das Bild zu lesen…
+import-reading-image-block = { $name } wird gelesen: Block { $done }/{ $total }
+import-regions-found = { $found } Bereiche gefunden; in { $read } davon wurde Text erkannt.
+import-regions-capped = Es wurden nur die ersten { $limit } Bereiche gelesen; das vollständige Bild bleibt erhalten.
+import-no-text-recognized = Es wurde kein Text erkannt. Das Originalbild bleibt trotzdem auf der Tafel.
+import-image-ready = { $name } ist bereit. Probieren Sie in der Besprechung „Das einkreisen“
+import-image-no-text = In { $name } wurde kein Text gefunden; es kann nur als Hintergrund verwendet werden
+import-downloading-arxiv = { $id } wird von arXiv heruntergeladen…
+import-reading-page = { $name } wird gelesen: Seite { $done }/{ $total }
+import-starting-vision-scans = Lokales Modell wird gestartet, um die gescannten Seiten zu lesen…
+import-reading-scan-block = Gescannte Seite { $page }/{ $pages } wird gelesen: Block { $done }/{ $total }
+import-references-skipped =
+    { $n ->
+        [one] 1 Literaturseite übersprungen
+       *[other] { $n } Literaturseiten übersprungen
+    }
+import-board-limit-reached =
+    { $n ->
+        [one] Tafellimit erreicht, die letzte Seite wurde nicht importiert
+       *[other] Tafellimit erreicht, die letzten { $n } Seiten wurden nicht importiert
+    }
+import-scans-read =
+    { $n ->
+        [one] 1 Seite ohne Textebene wurde vom lokalen Modell gelesen
+       *[other] { $n } Seiten ohne Textebene wurden vom lokalen Modell gelesen
+    }
+import-scans-not-read =
+    { $n ->
+        [one] 1 Seite hat keine Textebene: Sie wird als Bild importiert und lässt sich nur über die Nummer aufrufen; ein lokales Modell mit Vision-Erweiterung kann sie lesen
+       *[other] { $n } Seiten haben keine Textebene: Sie werden als Bilder importiert und lassen sich nur über die Nummer aufrufen; ein lokales Modell mit Vision-Erweiterung kann sie lesen
+    }
+import-paper-ready = { $name } ist bereit: nach Abschnitten, Abbildungen und Gleichungen aufgeteilt. Probieren Sie „Hier in Abbildung 3“ oder „Gleichung 5 ist falsch“
+import-pages-ready = { $name } ist bereit: eine Tafel pro Seite. Probieren Sie „Diesen Absatz einkreisen“
 share = Teilen
 share-tip = Andere im selben Netzwerk die Besprechung verfolgen lassen
 share-on = Wird im Netzwerk geteilt

@@ -89,7 +89,7 @@ impl Sharing {
             }
         }
         let images: Vec<Option<PageImage>> = refs.iter().map(|r| r.as_ref().and_then(|name| self.images.get(name).cloned().flatten())).collect();
-        let (doc, pages) = words_and_boards(live, english, &images, &|name| read(name));
+        let (doc, pages) = words_and_boards(live, english, &crate::i18n::line_text, &images, &|name| read(name));
         let _ = self.to_layout.send(Now { doc, pages, current: live.page() });
         self.sent = Some(now);
         self.sent_at = Instant::now();

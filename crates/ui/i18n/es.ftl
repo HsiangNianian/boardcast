@@ -23,8 +23,6 @@ ready-type-in-the-meetings = Listo. Escribe en el cuadro de búsqueda de reunion
 staying-on-this-meeting-because = Se permanece en esta reunión porque no se pudo guardar: { $error }
 that-meeting-no-longer-exists = Esa reunión ya no existe.
 could-not-open-the-meeting = No se pudo abrir la reunión: { $error }
-started-a-new-board = Nueva pizarra iniciada
-moved-t-to-a-new = «{ $t }» movido a una nueva pizarra
 can-t-switch-boards-during = No se puede cambiar de pizarra durante la repetición. Sal de la repetición primero.
 this-document-s-pages-are = Las páginas de este documento ya no están en esta reunión.
 you-can-import-pdfs-and = Se pueden importar PDF e imágenes (PNG, JPEG, WebP y GIF).
@@ -440,7 +438,6 @@ version-installed-restart = { $version } está instalada. Tu reunión sigue en m
 about-percent = aprox. { $percent }%
 keys-kept-for-closing = { $keys } se reserva para cerrar y moverse.
 keys-already-used-by = { $keys } ya lo usa «{ $action }».
-board-forked = Pizarra { $to } bifurcada de la pizarra { $from } tal como estaba a las { $when }
 recommended-2 = Recomendado
 runs = Se ejecuta
 on-this-computer-nothing-leaves = En este equipo nada sale de él; a un modelo remoto se accede por la red.
@@ -461,6 +458,64 @@ sample-second-point = preguntar a Mia por la documentación
 one-html-file-for-someone-2 = Un solo archivo .html para quien se perdió la reunión, con su sonido. No hay que instalar nada.
 video-with-sound = Vídeo con sonido
 the-whole-meeting-in-real = Toda la reunión en tiempo real con su grabación, cada pizarra tal como se dibujó.
+note-board-forked = Pizarra { $to } bifurcada de la pizarra { $from } tal como estaba a las { $when }
+note-new-board = Nueva pizarra iniciada
+note-moved-to-new-board = «{ $t }» movido a una nueva pizarra
+note-imported-image = { $read ->
+        [one] Importado { $name } (1 bloque de texto leído)
+       *[other] Importado { $name } ({ $read } bloques de texto leídos)
+    }
+note-imported-image-capped = Importado { $name } ({ $read } bloques de texto leídos; había demasiados, así que solo se leyeron algunos)
+note-imported-pdf = Importado { $name } ({ $pages ->
+        [one] 1 página
+       *[other] { $pages } páginas
+    }, { $boards ->
+        [one] 1 pizarra
+       *[other] { $boards } pizarras
+    })
+note-mark-added = { $mark ->
+        [strike] Tachado «{ $what }»
+        [circle] Rodeado «{ $what }»
+        [underline] Subrayado «{ $what }»
+        [star] Marcado con estrella «{ $what }»
+       *[highlight] Resaltado «{ $what }»
+    }
+note-mark-removed = { $mark ->
+        [strike] Quitado el tachado de «{ $what }»
+        [circle] Quitado el círculo de «{ $what }»
+        [underline] Quitado el subrayado de «{ $what }»
+        [star] Quitada la estrella de «{ $what }»
+       *[highlight] Quitado el resaltado de «{ $what }»
+    }
+import-starting-vision-image = Iniciando el modelo local para leer la imagen…
+import-reading-image-block = Leyendo { $name }: bloque { $done }/{ $total }
+import-regions-found = Se encontraron { $found } regiones; se reconoció texto en { $read }.
+import-regions-capped = Solo se leyeron las primeras { $limit } regiones; la imagen completa se conserva.
+import-no-text-recognized = No se reconoció ningún texto. La imagen original seguirá en la pizarra.
+import-image-ready = { $name } está lista. Prueba a decir «rodea esto» durante la reunión
+import-image-no-text = No se encontró texto en { $name }; solo puede usarse como fondo
+import-downloading-arxiv = Descargando { $id } de arXiv…
+import-reading-page = Leyendo { $name }: página { $done }/{ $total }
+import-starting-vision-scans = Iniciando el modelo local para leer las páginas escaneadas…
+import-reading-scan-block = Leyendo la página escaneada { $page }/{ $pages }: bloque { $done }/{ $total }
+import-references-skipped = { $n ->
+        [one] 1 página de referencias omitida
+       *[other] { $n } páginas de referencias omitidas
+    }
+import-board-limit-reached = { $n ->
+        [one] se alcanzó el límite de pizarras; la última página no se importó
+       *[other] se alcanzó el límite de pizarras; las últimas { $n } páginas no se importaron
+    }
+import-scans-read = { $n ->
+        [one] El modelo local leyó 1 página sin capa de texto
+       *[other] El modelo local leyó { $n } páginas sin capa de texto
+    }
+import-scans-not-read = { $n ->
+        [one] 1 página no tiene capa de texto: se importa como imagen y solo se puede ir a ella por número; un modelo local con su complemento de visión puede leerla
+       *[other] { $n } páginas no tienen capa de texto: se importan como imágenes y solo se puede ir a ellas por número; un modelo local con su complemento de visión puede leerlas
+    }
+import-paper-ready = { $name } está listo: dividido por secciones, figuras y ecuaciones. Prueba «aquí en la figura 3» o «la ecuación 5 está mal»
+import-pages-ready = { $name } está listo: una pizarra por página. Prueba «rodea este párrafo»
 share = Compartir
 share-tip = Que otros en esta red vean la reunión
 share-on = Compartiendo en la red

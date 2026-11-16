@@ -23,8 +23,6 @@ ready-type-in-the-meetings = 已就绪。在会议页的搜索框里输入即可
 staying-on-this-meeting-because = 这场会保存失败，先留在这里：{ $error }
 that-meeting-no-longer-exists = 这场会已经不存在了。
 could-not-open-the-meeting = 打不开这场会：{ $error }
-started-a-new-board = 新开了一张板
-moved-t-to-a-new = 把「{ $t }」移到了新的一张板
 can-t-switch-boards-during = 回放时不能切换板，请先退出回放。
 this-document-s-pages-are = 这份文档的页面已不在这场会议里。
 you-can-import-pdfs-and = 可以导入 PDF 和图片（PNG、JPEG、WebP、GIF）。
@@ -411,7 +409,6 @@ version-installed-restart = { $version } 已安装。重启之前，当前会议
 about-percent = 约 { $percent }%
 keys-kept-for-closing = { $keys } 用于关闭和移动，不能设为快捷键。
 keys-already-used-by = { $keys } 已经用于「{ $action }」。
-board-forked = 从第 { $from } 张板回放到 { $when } 的那一刻，另起了第 { $to } 张板
 list-separator = ；
 recommended-2 = 推荐
 runs = 运行在
@@ -433,6 +430,43 @@ sample-second-point = 找 Mia 确认文档
 one-html-file-for-someone-2 = 一个 .html 文件，带会议录音，发给没参会的人，双击就能看。
 video-with-sound = 带声音的视频
 the-whole-meeting-in-real = 整场会按真实时间播放，带录音，每张板都按当时的样子画出。
+note-board-forked = 从第 { $from } 张板回放到 { $when } 的那一刻，另起了第 { $to } 张板
+note-new-board = 开了一张新板
+note-moved-to-new-board = 把「{ $t }」移到了新的一张板
+note-imported-image = 导入了 { $name }（读出 { $read } 块文字）
+note-imported-image-capped = 导入了 { $name }（读出 { $read } 块文字，块太多只读了一部分）
+note-imported-pdf = 导入了 { $name }（共 { $pages } 页，建了 { $boards } 张板）
+note-mark-added = { $mark ->
+        [strike] 划掉了「{ $what }」
+        [circle] 圈出了「{ $what }」
+        [underline] 加上了「{ $what }」的下划线
+        [star] 给「{ $what }」加了星标
+       *[highlight] 高亮了「{ $what }」
+    }
+note-mark-removed = { $mark ->
+        [strike] 去掉了「{ $what }」的划线
+        [circle] 去掉了「{ $what }」的圈
+        [underline] 去掉了「{ $what }」的下划线
+        [star] 去掉了「{ $what }」的星标
+       *[highlight] 去掉了「{ $what }」的高亮
+    }
+import-starting-vision-image = 正在启动本地模型来读图…
+import-reading-image-block = 正在读 { $name }：{ $done }/{ $total } 块
+import-regions-found = 找到 { $found } 个区域，其中 { $read } 个识别到了文字。
+import-regions-capped = 只读了前 { $limit } 个区域，完整图片仍然保留。
+import-no-text-recognized = 没有识别到文字。原图仍会显示在板上。
+import-image-ready = { $name } 导入好了，开会时可以说「把这里圈出来」
+import-image-no-text = { $name } 里没有读出文字，只能当背景用
+import-downloading-arxiv = 正在从 arXiv 下载 { $id }…
+import-reading-page = 正在读 { $name }：{ $done }/{ $total } 页
+import-starting-vision-scans = 正在启动本地模型来读扫描页…
+import-reading-scan-block = 正在读扫描页 { $page }/{ $pages }：{ $done }/{ $total } 块
+import-references-skipped = 参考文献 { $n } 页没建板
+import-board-limit-reached = 板到上限了，最后 { $n } 页没导
+import-scans-read = { $n } 页没有文字层的扫描页由本地模型读出了文字
+import-scans-not-read = { $n } 页没有文字层，整页算一张图，只能按页码翻到；有看图组件的本地模型可以读出其中的文字
+import-paper-ready = { $name } 导入好了：按论文的章节、图表、公式切好了，可以说「图 3 这里」「公式 5 有问题」
+import-pages-ready = { $name } 导入好了：每页一张板，开会时可以说「把这一段圈出来」
 share = 共享
 share-tip = 让同一网络里的人看这场会
 share-on = 正在网络上共享

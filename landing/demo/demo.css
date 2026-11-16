@@ -36,7 +36,6 @@ button { all: unset; box-sizing: border-box; }
 svg { flex: none; }
 .mono { font: 400 12px var(--mono); color: var(--faint); }
 
-body > .site-header { padding-top: 0; padding-bottom: 28px; }
 .top { display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: start; padding-bottom: 28px; }
 .intro h1 { font-size: clamp(32px, 3.8vw, 56px); font-weight: 500; letter-spacing: -.015em; line-height: 1; text-transform: uppercase; }
 .intro p { margin-top: 14px; max-width: 46em; font-size: 15px; line-height: 1.65; color: var(--muted); }
@@ -47,10 +46,13 @@ body > .site-header { padding-top: 0; padding-bottom: 28px; }
 /* The window. */
 /* The recording under the window, as long as it is wide. */
 .timeline { position: relative; height: 40px; margin-top: 12px; }
-.timeline canvas { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--text); }
+.timeline canvas { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--text); cursor: pointer; touch-action: none; }
 @media (max-width: 760px) { .timeline { display: none; } }
 html.embed .stage, html.bg .stage { display: contents; }
-html.embed .timeline, html.bg .timeline { display: none; }
+html.bg .timeline { display: none; }
+/* Embedded in the site's first page, the timeline runs under the window, edge to edge. */
+html.embed .timeline { flex: none; height: 44px; margin: 0; border-top: 1px solid var(--line); background: var(--surface); }
+html.embed .timeline canvas { inset: auto; left: 14px; top: 6px; width: calc(100% - 28px); height: calc(100% - 12px); }
 .window { border: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; height: min(820px, calc(100vh - 80px)); min-height: 520px; overflow: hidden; }
 .ico { display: grid; place-items: center; width: 26px; height: 26px; color: var(--text); }
 .ico svg { width: 14px; height: 14px; }
@@ -166,14 +168,14 @@ html.embed .timeline, html.bg .timeline { display: none; }
 
 /* In the site's first page the demo is the same window, filling its frame. */
 html.embed body { display: flex; flex-direction: column; height: 100vh; padding: 0; max-width: none; }
-html.embed .site-header, html.embed .sitemap, html.embed .top { display: none; }
+html.embed .sitemap, html.embed .top { display: none; }
 html.embed .window { flex: 1; height: auto; min-height: 0; border: 0; }
 
 /* Behind the site's first page on a phone the demo is its board alone: no window around it, no paper under it, and
    nothing to press. The page above sets how strongly it shows. */
 html.bg, html.bg body { background: transparent; }
 html.bg body { height: 100vh; padding: 0; max-width: none; overflow: hidden; }
-html.bg .site-header, html.bg .sitemap, html.bg .top, html.bg .titlebar, html.bg .sidebar, html.bg .side,
+html.bg .sitemap, html.bg .top, html.bg .titlebar, html.bg .sidebar, html.bg .side,
 html.bg .zoom, html.bg .tools, html.bg .latest { display: none !important; }
 html.bg .window { height: 100vh; min-height: 0; border: 0; background: transparent; }
 html.bg .body { display: block; height: 100%; }

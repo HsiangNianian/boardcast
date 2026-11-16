@@ -199,10 +199,6 @@ fn navigation(page: &Page) -> String {
         return include_str!("../pages/home-nav.html")
             .replace("{{ guide-links }}", &links(page, DOCUMENT_LINKS));
     }
-    // The demo keeps only the name at the top; its footer maps the site.
-    if page.slug == "demo" {
-        return format!(r#"<header class="site-header"><a class="site-brand" href="{}">board<br>cast</a></header>"#, root(page));
-    }
     format!(
         r#"<header class="site-header wrap"><a class="site-brand" href="{}">board<br>cast</a><nav class="site-nav" aria-label="Main navigation">{}</nav></header>"#,
         root(page),
@@ -222,7 +218,7 @@ fn footer(page: &Page) -> String {
     let map = format!(
         r#"<footer class="sitemap">
   <a class="sitemap-brand" href="{home}">board<br>cast</a>
-  <div><b>product</b><a href="{home}#story">talk &amp; draw</a><a href="{home}#story">circle</a><a href="{home}#story">replay</a></div>
+  <div><b>product</b><a href="{home}#story">talk &amp; draw</a><a href="{home}#story">circle</a><a href="{home}#story">replay</a><a href="{home}demo/">web demo</a></div>
   <div><b>get</b><a href="{home}#get">macos</a><a href="{home}#get">windows</a><a href="{home}#get">linux</a></div>
   <div><b>latest</b><a href="{releases}">{}</a><a href="https://github.com/HsiangNianian/boardcast/blob/main/CHANGELOG.md">changelog</a></div>
   <div><b>guide</b><a href="https://github.com/HsiangNianian/boardcast#get-started">start</a>{}</div>

@@ -55,12 +55,24 @@ impl Track {
 pub struct Waves {
     track: Rc<RefCell<Option<Track>>>,
     canvas: Option<HtmlCanvasElement>,
+    /// Where the reader is holding the timeline, in seconds, while they choose a moment.
+    preview: Rc<std::cell::Cell<Option<f64>>>,
 }
 
 impl Waves {
     /// The timeline, if the page has it.
     pub fn find(doc: &web_sys::Document) -> Self {
-        Self { track: Rc::default(), canvas: doc.get_element_by_id("timeline").and_then(|c| c.dyn_into::<HtmlCanvasElement>().ok()) }
+        Self { track: Rc::default(), canvas: doc.get_element_by_id("timeline").and_then(|c| c.dyn_into::<HtmlCanvasElement>().ok()), preview: Rc::default() }
+    }
+
+    /// How long the recording is, once it is read.
+    pub fn seconds(&self) -> Option<f64> {
+        self.track.borrow().as_ref().map(Track::seconds)
+    }
+
+    /// Show where the reader is holding the timeline, or stop showing it.
+    pub fn hold(&self, at: Option<f64>) {
+        self.preview.set(at);
     }
 
     /// Read a recording and the lines said over it, unless it is the one already read. Until it is, the
@@ -82,7 +94,7 @@ impl Waves {
     /// Draw the timeline at second `t` of the recording.
     pub fn draw(&self, t: f64) {
         if let Some(canvas) = &self.canvas {
-            draw(canvas, self.track.borrow().as_ref(), t);
+            draw(canvas, self.track.borrow().as_ref(), t, self.preview.get());
         }
     }
 }
@@ -102,7 +114,7 @@ async fn decode(src: &str) -> Result<Vec<f32>, JsValue> {
     Ok(mixed)
 }
 
-fn draw(canvas: &HtmlCanvasElement, track: Option<&Track>, t: f64) {
+fn draw(canvas: &HtmlCanvasElement, track: Option<&Track>, t: f64, held: Option<f64>) {
     let (w, h) = (f64::from(canvas.client_width()), f64::from(canvas.client_height()));
     if w < 8.0 || h < 8.0 {
         return;
@@ -147,4 +159,12 @@ fn draw(canvas: &HtmlCanvasElement, track: Option<&Track>, t: f64) {
     ctx.set_global_alpha(1.0);
     ctx.set_fill_style_str(&ink);
     ctx.fill_rect(now_x.round() - 0.5, 0.0, 1.0, h);
+    // Where the reader is holding it: a firmer line with a knob, which the meeting jumps to when let go.
+    if let Some(at) = held {
+        let x = (at / seconds * w).clamp(0.0, w).round();
+        ctx.fill_rect(x - 1.0, 0.0, 2.0, h);
+        ctx.begin_path();
+        let _ = ctx.arc(x, 4.0, 4.0, 0.0, std::f64::consts::TAU);
+        ctx.fill();
+    }
 }

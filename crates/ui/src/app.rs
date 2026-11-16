@@ -1321,6 +1321,40 @@ impl Sound {
     }
 }
 
+/// How long the Settings sample of the hand takes to write.
+const HAND_SAMPLE_WRITING: Duration = Duration::from_millis(1400);
+
+/// A topic and a point under it, laid out and written as the board writes them, moved to start at (0, 0);
+/// with how wide and tall they are.
+fn hand_sample(glyphs: &mut Glyphs) -> (Vec<Inked>, f32, f32) {
+    let mut g = Graph::default();
+    g.apply(&parse_ops(tr("T 「Weekly sync」\nL 「Weekly sync」 「ship the beta on Friday」\nL 「Weekly sync」 「ask Mia about the docs」", "T 「周会」\nL 「周会」 「周五发布 beta 版」\nL 「周会」 「找 Mia 确认文档」")));
+    let laid = StableLayout::default().layout(&g, &mut first_diagram);
+    let (pieces, _) = compose(&g, &laid, glyphs);
+    let mut strokes: Vec<Inked> = pieces
+        .iter()
+        .flat_map(|piece| {
+            let mut r = Rng::new(&piece.seed);
+            piece.lines.iter().map(move |line| line.inked(&mut r)).collect::<Vec<_>>()
+        })
+        .collect();
+    let pad = 6.0;
+    let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for p in strokes.iter().flat_map(|s| s.center.iter()) {
+        (x0, y0, x1, y1) = (x0.min(p[0]), y0.min(p[1]), x1.max(p[0]), y1.max(p[1]));
+    }
+    if x0 > x1 {
+        return (strokes, 1.0, 1.0);
+    }
+    for s in &mut strokes {
+        for p in &mut s.center {
+            p[0] += pad - x0;
+            p[1] += pad - y0;
+        }
+    }
+    (strokes, x1 - x0 + 2.0 * pad, y1 - y0 + 2.0 * pad)
+}
+
 /// A meeting's sound: its samples, its pieces' starts and lengths in ms, and its loudness along it.
 type ReadSound = (Vec<f32>, Vec<(f64, f64)>, Vec<f32>);
 
@@ -1471,6 +1505,9 @@ struct Workbench {
     /// The empty board's headline in the board's pen, for the words it was written for: its strokes, size and
     /// when the pen began.
     welcome_line: Option<(String, Vec<Inked>, f32, f32, Instant)>,
+    /// A few words in the board's hand for Settings: the hand they were written in, their strokes, how wide
+    /// and tall they are, and when the writing began, so a new hand writes them out again.
+    hand_sample: Option<(f32, Vec<Inked>, f32, f32, Instant)>,
     /// The file the audio is being kept in while listening, and when it began.
     keeping: Option<(String, f64)>,
     /// The board a document was opened from, and which document, for the way back.
@@ -4430,6 +4467,18 @@ impl Workbench {
 
     /// Write in a neater or messier hand from now on. What is on the board is written again in it at once,
     /// where it was, and the view stays where it is.
+    /// The Settings sample in the board's hand as it is now, written again from the start when the hand changed.
+    fn hand_sample(&mut self) -> (Vec<Inked>, f32, f32, Instant) {
+        let messy = self.form.saved.messy;
+        let fresh = self.hand_sample.as_ref().is_some_and(|(m, ..)| (*m - messy).abs() < 0.001);
+        if !fresh {
+            let (strokes, w, h) = hand_sample(&mut self.ink.borrow_mut().glyphs);
+            self.hand_sample = Some((messy, strokes, w, h, Instant::now()));
+        }
+        let (_, strokes, w, h, started) = self.hand_sample.clone().expect("made above");
+        (strokes, w, h, started)
+    }
+
     fn choose_messy(&mut self, messy: f32, cx: &mut Context<Self>) {
         let messy = (messy.clamp(0.0, 1.0) * 10.0).round() / 10.0;
         if (self.form.saved.messy - messy).abs() < 0.001 {
@@ -7337,6 +7386,7 @@ impl Render for Workbench {
                     .into_any_element()
             }
             SettingsTab::General => {
+                let (sample_strokes, sample_w, sample_h, sample_started) = self.hand_sample();
                 let proxy = self.form.saved.proxy.clone();
                 let language = self.form.saved.interface_language.clone();
                 let look = self.form.saved.appearance.clone();
@@ -7411,6 +7461,13 @@ impl Render for Workbench {
                                     .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Messy", "潦草"))),
                             )
                             .into_any_element(),
+                            // The hand itself, on a strip of the board's paper, written out again as it changes.
+                            div()
+                                .px_4()
+                                .py_3()
+                                .bg(rgb(pal().paper))
+                                .child(crate::splash::written(sample_strokes, sample_w, sample_h, sample_started, HAND_SAMPLE_WRITING, window))
+                                .into_any_element(),
                         ],
                     ))
                     .child(section(
@@ -8712,6 +8769,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     trail: None,
                     keeping: None,
                     welcome_line: None,
+                    hand_sample: None,
                     inbox,
                     save: SaveState::Idle,
                     saving: None,

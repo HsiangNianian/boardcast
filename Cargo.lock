@@ -749,11 +749,9 @@ name = "boardcast-audio"
 version = "0.31.0"
 dependencies = [
  "anyhow",
- "audiopus_sys",
  "boardcast-board",
+ "boardcast-keep",
  "cpal",
- "ogg",
- "opus",
  "serde_json",
  "sherpa-onnx",
 ]
@@ -815,6 +813,16 @@ dependencies = [
  "serde",
  "serde_json",
  "ureq",
+]
+
+[[package]]
+name = "boardcast-keep"
+version = "0.31.0"
+dependencies = [
+ "anyhow",
+ "audiopus_sys",
+ "ogg",
+ "opus",
 ]
 
 [[package]]
@@ -880,10 +888,10 @@ dependencies = [
  "anyhow",
  "base64",
  "boardcast-agent",
- "boardcast-audio",
  "boardcast-board",
  "boardcast-export",
  "boardcast-import",
+ "boardcast-keep",
  "boardcast-meetings",
  "boardcast-models",
  "boardcast-search",

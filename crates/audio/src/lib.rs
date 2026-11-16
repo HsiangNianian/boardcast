@@ -2,7 +2,8 @@
 //! Any of the recognizers may be missing; SenseVoice, when there, decides which language a sentence is in.
 //! It knows nothing about boards; callers receive each sentence through a callback.
 
-pub mod keep;
+/// A meeting's audio kept as it is heard, and read back.
+pub use boardcast_keep as keep;
 pub mod play;
 use anyhow::{anyhow, Context, Result};
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, OfflineTransducerModelConfig, SileroVadModelConfig, SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, VadModelConfig, VoiceActivityDetector, Wave};
@@ -15,7 +16,7 @@ use std::time::{Duration, Instant};
 
 pub mod system;
 
-pub const SAMPLE_RATE: i32 = 16_000;
+pub const SAMPLE_RATE: i32 = boardcast_keep::SAMPLE_RATE;
 const VAD_WINDOW: usize = 512;
 /// Same pause as the desktop app: this long a silence ends a sentence.
 const MIN_SILENCE: f32 = 0.45;

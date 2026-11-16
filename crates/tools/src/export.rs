@@ -30,9 +30,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         let mut frozen = freeze(&live, false, &mut glyphs, HanziSource::Directory(root.join("assets/hanzi")), &images, &asset);
         let files: Vec<(Option<PathBuf>, f64, f64)> = live.audio().into_iter().map(|(name, start, ms)| (meeting.parent().map(|dir| dir.join(&id).join(name)), start, ms)).collect();
         if matches!(kind, Kind::LiveVideo | Kind::ReplayPage) && !files.is_empty() {
-            let (samples, pieces) = boardcast_audio::keep::read_pieces(&files);
-            let encoded = boardcast_audio::keep::encode(&samples)?;
-            frozen.sound = Some(Sound { pieces, head: encoded.head, pre_skip: encoded.pre_skip, packet_ms: boardcast_audio::keep::PACKET_MS, packets: encoded.packets });
+            let (samples, pieces) = boardcast_keep::read_pieces(&files);
+            let encoded = boardcast_keep::encode(&samples)?;
+            frozen.sound = Some(Sound { pieces, head: encoded.head, pre_skip: encoded.pre_skip, packet_ms: boardcast_keep::PACKET_MS, packets: encoded.packets });
         }
         let output = frozen.render(kind)?;
         write_file(path, &output.bytes)?;

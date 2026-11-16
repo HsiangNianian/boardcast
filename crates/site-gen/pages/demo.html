@@ -1,4 +1,3 @@
-{{ navigation }}
 <header class="top">
       <div class="intro">
         <h1>web demo</h1>
@@ -8,6 +7,7 @@
     </header>
     <!-- The app's window as it is: meetings on the left, the board in the middle with its tools floating over it,
          and the transcript on the right. The icons are the app's own pictograms. -->
+    <div class="stage">
     <div class="window" role="region" aria-label="The boardcast window replaying a sample meeting">
       <div class="titlebar">
         <!-- Puts the sidebar away or brings it back, as the app's does; a narrow window keeps it over the board. -->
@@ -60,4 +60,7 @@
           <div class="input"><span>Type a line, Enter puts it on the board</span></div>
         </aside>
       </div>
+    </div>
+    <!-- The whole recording under the window: each line's stretch in its speaker's colour, played and to come. -->
+    <div class="timeline" aria-hidden="true"><canvas id="timeline"></canvas></div>
     </div>

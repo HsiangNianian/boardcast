@@ -985,6 +985,30 @@ mod clip_tests {
     }
 
     #[test]
+    fn a_card_brought_from_the_inbox_lands_where_dropped_with_its_marks_and_drawing() {
+        use crate::graph::Annotation;
+        let mut from = Graph::default();
+        let clip = Clip { src: "p.jpg".into(), pw: 800.0, ph: 1000.0, x: 100.0, y: 100.0, w: 400.0, h: 100.0 };
+        let id = from.add_clip("Table 4", "Batch-8 41ms", &clip);
+        from.apply(&crate::graph::parse_ops(&format!("M {id} 星标")));
+        from.annotate(Annotation { tool: "pen".into(), on: Some(id.clone()), points: vec![[0.1, 0.5], [0.9, 0.5]] });
+        from.annotate(Annotation { tool: "yellow".into(), on: None, points: vec![[0.0, 0.0], [10.0, 0.0]] });
+        let drawn = from.drawn_on(&id);
+        assert_eq!(drawn.len(), 1, "only what is on the card goes with it");
+        let marks = from.nodes.iter().find(|n| n.id == id).unwrap().marks.clone();
+        let mut to = Graph::default();
+        to.apply(&crate::graph::parse_ops("T 「Plan」"));
+        let kept = Clip { src: "asset:card.png".into(), pw: 400.0, ph: 100.0, x: 0.0, y: 0.0, w: 400.0, h: 100.0 };
+        let new = to.add_card("Table 4", "Batch-8 41ms", &kept, &marks, &drawn, [500.0, 300.0]);
+        let node = to.nodes.iter().find(|n| n.id == new).unwrap();
+        assert_eq!((node.marks.clone(), node.placed()), (vec!["星标".to_string()], Some([500.0, 300.0])));
+        assert_eq!(to.drawn_on(&new).len(), 1, "the drawing is on the new card");
+        let l = StableLayout::default().layout(&to, &mut crate::sugiyama::first_diagram);
+        let card = l.clips.iter().find(|c| c.id == new).unwrap();
+        assert_eq!((card.x, card.y, card.w, card.h), (500.0, 300.0, 360.0, 90.0));
+    }
+
+    #[test]
     fn a_small_clip_is_enlarged_at_most_twice() {
         let clip = Clip { src: String::new(), pw: 800.0, ph: 1000.0, x: 0.0, y: 0.0, w: 40.0, h: 20.0 };
         assert_eq!(clip.card_size(), (80.0, 40.0));

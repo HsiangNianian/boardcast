@@ -120,7 +120,7 @@ impl PageImage {
 
 const ASSET: &str = "asset:";
 
-fn mime_of(key: &str) -> Option<&'static str> {
+pub(crate) fn mime_of(key: &str) -> Option<&'static str> {
     match key.rsplit_once('.')?.1 {
         "jpg" => Some("image/jpeg"),
         "png" => Some("image/png"),

@@ -275,15 +275,28 @@ pub fn propose(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &
 /// 0.50 / edge 0.00 to 0.90 / 0.61, but lowered DeepSeek from 0.93 / 0.80 to 0.85 / 0.63 over three
 /// passes each: a remote reply has room for the whole line and does better seeing all of it.
 const PIECE_UNITS: f32 = 90.0;
+/// A line of this many sentences or more is cut about a sentence at a time, however short it is.
+const MANY_SENTENCES: usize = 3;
+/// About one sentence: room for one of 20 Chinese characters, or two short ones together.
+const SENTENCE_UNITS: f32 = 24.0;
 
 fn units(text: &str) -> f32 {
     text.chars().filter(|c| !c.is_whitespace()).map(|c| if (c as u32) >= 0x2E80 { 1.0 } else { 0.3 }).sum()
 }
 
 /// A line cut into pieces the model can answer whole: at sentence ends, and at commas where one sentence
-/// alone is too long, each piece as many sentences as fit. A line short enough stays as it is.
+/// alone is too long, each piece as many sentences as fit. A line short enough stays as it is, unless it
+/// runs several sentences together, as lines heard while the model was busy do: then each piece is about a
+/// sentence ([`MANY_SENTENCES`]), which a small model answers step by step instead of folding the steps into
+/// a few nodes.
 pub fn pieces(text: &str) -> Vec<String> {
-    if units(text) <= PIECE_UNITS {
+    let ends = ['。', '！', '？', '；', '!', '?', ';', '.'];
+    // A full stop ends a sentence only before a space or the end, so "10.5" and "v0.29" are not counted.
+    let chars: Vec<char> = text.trim_end().chars().collect();
+    let is_end = |i: usize| ends.contains(&chars[i]) && (chars[i] != '.' || chars.get(i + 1).is_none_or(|n| n.is_whitespace()));
+    let sentences_in = (0..chars.len()).filter(|&i| is_end(i)).count() + usize::from(chars.last().is_some_and(|_| !is_end(chars.len() - 1)));
+    let limit = if sentences_in >= MANY_SENTENCES { SENTENCE_UNITS } else { PIECE_UNITS };
+    if units(text) <= limit {
         return vec![text.to_string()];
     }
     // Ends of sentences, and of clauses as a fallback; a full stop ends one only before a space or the end,
@@ -304,7 +317,8 @@ pub fn pieces(text: &str) -> Vec<String> {
         out.into_iter().filter(|s: &String| !s.trim().is_empty()).collect()
     };
     let mut sentences = vec![];
-    for sentence in cut(text, &['。', '！', '？', '；', '!', '?', ';', '.']) {
+    // A sentence is cut at its commas only when it is too long for a piece of its own.
+    for sentence in cut(text, &ends) {
         if units(&sentence) > PIECE_UNITS {
             sentences.extend(cut(&sentence, &['，', '、', ',']));
         } else {
@@ -314,7 +328,7 @@ pub fn pieces(text: &str) -> Vec<String> {
     let mut out: Vec<String> = vec![];
     for sentence in sentences {
         match out.last_mut() {
-            Some(last) if units(last) + units(&sentence) <= PIECE_UNITS => last.push_str(&sentence),
+            Some(last) if units(last) + units(&sentence) <= limit => last.push_str(&sentence),
             _ => out.push(sentence),
         }
     }
@@ -1149,6 +1163,11 @@ mod tests {
         // One sentence too long for a piece is cut at its commas.
         let run_on = format!("{}。", "订单服务调库存服务做预占，".repeat(12));
         assert!(pieces(&run_on).len() > 1);
+        // Several sentences run together, as lines heard while the model was busy are, go about one at a time,
+        // though the line is short; two sentences do not.
+        let merged = "用户填手机号，后端发验证码。验证码校验通过就建账号。建完账号跳到引导页。引导页里选兴趣，兴趣交给推荐服务。";
+        assert_eq!(pieces(merged), vec!["用户填手机号，后端发验证码。", "验证码校验通过就建账号。建完账号跳到引导页。", "引导页里选兴趣，兴趣交给推荐服务。"]);
+        assert_eq!(pieces("先说注册。用户填手机号。").len(), 1);
     }
 
     #[test]

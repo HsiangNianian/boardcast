@@ -4727,7 +4727,7 @@ impl Workbench {
                     cx.notify();
                 })))
                 .when(self.live.read_only.is_none(), |d| {
-                    d.child(Button::new("replay-fork").ghost().small().label(tr("Fork a board", "另起一板")).tooltip(tr("Start a new board from this moment", "从这一刻另起一张板")).disabled(!can_fork).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
+                    d.child(icon_button("replay-fork", "fork", tr("Fork a board: start a new board from this moment", "另起一板：从这一刻另起一张板")).disabled(!can_fork).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
                 })
                 .child(icon_button("replay-exit", "x", tr("Exit replay (Esc)", "退出回放（Esc）")).on_click(cx.listener(|this, _, _, cx| this.exit_replay(cx)))),
         )

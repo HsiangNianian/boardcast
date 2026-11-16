@@ -6736,7 +6736,7 @@ impl Render for Workbench {
                                 .cursor_pointer()
                                 .opacity(0.)
                                 .group_hover("meeting-row", |s| s.opacity(1.))
-                                .child(icon("folder-open").size_3().text_color(rgb(pal().faint)))
+                                .child(icon("folder").size_3().text_color(rgb(pal().faint)))
                                 .tooltip(|window, cx| Tooltip::new(tr("Open its folder: the meeting, its pictures and its audio", "打开它的文件夹：会议、图片和录音")).build(window, cx))
                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -7495,7 +7495,7 @@ impl Render for Workbench {
                                                     Button::new("library-folder")
                                                         .small()
                                                         .ghost()
-                                                        .child(div().flex().items_center().gap(px(6.)).child(icon("folder-open").size(px(13.))).child(div().text_sm().child(tr("Open folder", "打开文件夹"))))
+                                                        .child(div().flex().items_center().gap(px(6.)).child(icon("folder").size(px(13.))).child(div().text_sm().child(tr("Open folder", "打开文件夹"))))
                                                         .tooltip(tr("Where every meeting is kept on this computer", "所有会议在本机保存的位置"))
                                                         .on_click(cx.listener(move |_, _, _, cx| cx.open_with_system(&folder))),
                                                 )

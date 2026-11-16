@@ -340,7 +340,7 @@ mod tests {
                 began: String::new(),
                 summary: case["summary"].as_str().unwrap_or_default().into(),
                 boards: serde_json::from_value(case["boards"].clone()).unwrap(),
-                lines: Said::from_stored(case["lines"].as_array().unwrap()),
+                lines: Said::from_stored(case["lines"].as_array().unwrap(), &crate::kept_text),
                 english: case["lang"] == "en",
                 omits_visuals: false,
             };

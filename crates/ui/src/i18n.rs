@@ -166,6 +166,130 @@ macro_rules! ta {
     }};
 }
 
+/// A note about a change made by hand, kept in the transcript: its text in English, which is what the meeting
+/// keeps as its text and what a model reads, and the message that shows it in the language of whoever looks.
+/// Built with `note!`.
+pub fn note(id: &str, args: serde_json::Map<String, serde_json::Value>) -> boardcast_meetings::Note {
+    let text = format(ENGLISH, id, Some(&fluent_args(&args))).unwrap_or_else(|| id.to_string());
+    boardcast_meetings::Note { text, message: serde_json::json!({ "id": id, "args": args }) }
+}
+
+/// Values for a message from what a note keeps: numbers stay numbers, so a translation can choose its plural,
+/// and a mark stays its key, so each language words each mark its own way.
+fn fluent_args(args: &serde_json::Map<String, serde_json::Value>) -> FluentArgs<'static> {
+    let mut out = FluentArgs::new();
+    for (name, value) in args {
+        match value {
+            serde_json::Value::Number(n) => out.set(name.clone(), n.as_f64().unwrap_or_default()),
+            serde_json::Value::String(text) => out.set(name.clone(), text.clone()),
+            other => out.set(name.clone(), other.to_string()),
+        }
+    }
+    out
+}
+
+/// A note with values by name: `note!("note-board-forked", to = 3, when = "0:42")`.
+#[macro_export]
+macro_rules! note {
+    ($id:expr $(, $name:ident = $value:expr)* $(,)?) => {{
+        #[allow(unused_mut)]
+        let mut args = serde_json::Map::new();
+        $(args.insert(stringify!($name).to_string(), serde_json::json!($value));)*
+        $crate::i18n::note($id, args)
+    }};
+}
+
+/// A transcript line as the interface shows it: a note in the language shown now, whatever language it was
+/// written in, or what was said, as it was said.
+pub fn line_text(line: &serde_json::Value) -> String {
+    let text = line["text"].as_str().unwrap_or_default();
+    if !line["manual"].as_bool().unwrap_or(false) {
+        return text.to_string();
+    }
+    let (id, args) = match line["note"]["id"].as_str() {
+        Some(id) => (id.to_string(), line["note"]["args"].as_object().cloned().unwrap_or_default()),
+        None => match recognize(text) {
+            Some(found) => found,
+            None => return text.to_string(),
+        },
+    };
+    let language = current();
+    format(language, &id, Some(&fluent_args(&args))).or_else(|| format(ENGLISH, &id, Some(&fluent_args(&args)))).unwrap_or_else(|| text.to_string())
+}
+
+/// The notes a meeting can hold, so ones written as plain text by earlier versions are read again.
+const NOTES: [&str; 8] = ["note-board-forked", "note-new-board", "note-moved-to-new-board", "note-imported-image", "note-imported-image-capped", "note-imported-pdf", "note-mark-added", "note-mark-removed"];
+/// Each mark's key, by its name in the earlier app's English and Chinese.
+const MARK_NAMES: [(&str, &str, &str); 5] = [("strike", "Strike", "划掉"), ("circle", "Circle", "圈出"), ("underline", "Underline", "下划线"), ("star", "Star", "星标"), ("highlight", "Highlight", "高亮")];
+
+/// A note kept as plain text, in English or Chinese, by an earlier version: which note it is and its values.
+fn recognize(text: &str) -> Option<(String, serde_json::Map<String, serde_json::Value>)> {
+    // The earlier app's marks: 加上了「词」的下划线, Added Underline on "word".
+    let mark_key = |name: &str| MARK_NAMES.iter().find(|(_, en, zh)| *en == name || *zh == name).map(|(key, ..)| key.to_string());
+    for (removed, verb) in [(false, "加上了"), (true, "去掉了")] {
+        if let Some(rest) = text.strip_prefix(verb) {
+            let (what, mark) = rest.rsplit_once('的')?;
+            let what = what.strip_prefix('「').and_then(|w| w.strip_suffix('」')).unwrap_or(what);
+            return Some(mark_note(removed, what, &mark_key(mark)?));
+        }
+    }
+    for (removed, verb) in [(false, "Added "), (true, "Removed ")] {
+        if let Some(rest) = text.strip_prefix(verb) {
+            let (mark, what) = rest.split_once(" on ")?;
+            return Some(mark_note(removed, what.trim_matches('"'), &mark_key(mark)?));
+        }
+    }
+    // This app's own notes, as they read in English or Chinese before they were kept as messages.
+    for id in NOTES {
+        for language in [ENGLISH, 1] {
+            if let Some(args) = pattern(language, id).and_then(|p| match_pattern(&p, text)) {
+                return Some((id.to_string(), args));
+            }
+        }
+    }
+    None
+}
+
+fn mark_note(removed: bool, what: &str, mark: &str) -> (String, serde_json::Map<String, serde_json::Value>) {
+    let mut args = serde_json::Map::new();
+    args.insert("mark".into(), mark.into());
+    args.insert("what".into(), what.into());
+    (if removed { "note-mark-removed" } else { "note-mark-added" }.to_string(), args)
+}
+
+/// A message's text as written in a language's file, if it is a single line.
+fn pattern(language: usize, id: &str) -> Option<String> {
+    let prefix = format!("{id} = ");
+    SOURCES[language].lines().find_map(|l| l.strip_prefix(&prefix)).filter(|p| !p.trim().is_empty() && !p.contains("->")).map(str::to_string)
+}
+
+/// The values that make `text` from a pattern such as `Moved “{ $t }” to a new board`, if it does.
+fn match_pattern(pattern: &str, text: &str) -> Option<serde_json::Map<String, serde_json::Value>> {
+    // The pattern as literal pieces and the names between them.
+    let mut pieces = vec![];
+    let mut names = vec![];
+    let mut rest = pattern;
+    while let Some(open) = rest.find("{ $") {
+        pieces.push(rest[..open].to_string());
+        let close = rest[open..].find('}')? + open;
+        names.push(rest[open + 3..close].trim().to_string());
+        rest = &rest[close + 1..];
+    }
+    pieces.push(rest.to_string());
+    let mut at = text.strip_prefix(pieces[0].as_str())?;
+    let mut args = serde_json::Map::new();
+    for (name, next) in names.iter().zip(&pieces[1..]) {
+        let end = if next.is_empty() { at.len() } else { at.find(next.as_str())? };
+        let value = &at[..end];
+        if value.is_empty() {
+            return None;
+        }
+        args.insert(name.clone(), value.parse::<f64>().map_or_else(|_| value.into(), |n| serde_json::json!(n)));
+        at = &at[end + next.len()..];
+    }
+    at.is_empty().then_some(args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,6 +396,38 @@ mod tests {
         assert_eq!(count(ENGLISH, 1), "1 line");
         assert_eq!(count(ENGLISH, 4), "4 lines");
         assert_eq!([count(russian, 1), count(russian, 3), count(russian, 5)], ["1 строка", "3 строки", "5 строк"]);
+    }
+
+    #[test]
+    fn notes_read_in_the_language_shown_and_are_kept_in_english() {
+        let kept = crate::note!("note-moved-to-new-board", t = "Pricing");
+        assert_eq!(kept.text, "Moved “Pricing” to a new board");
+        let line = serde_json::json!({ "text": kept.text, "manual": true, "note": kept.message });
+        choose("zh-Hans");
+        assert_eq!(line_text(&line), "把「Pricing」移到了新的一张板");
+        // Written as plain text by earlier versions, in either language.
+        assert_eq!(line_text(&serde_json::json!({ "text": "Moved “Pricing” to a new board", "manual": true })), "把「Pricing」移到了新的一张板");
+        assert_eq!(line_text(&serde_json::json!({ "text": "加上了「One printer for fifteen people?」的下划线", "manual": true })), "加上了「One printer for fifteen people?」的下划线");
+        choose("en");
+        assert_eq!(line_text(&serde_json::json!({ "text": "加上了「One printer for fifteen people?」的下划线", "manual": true })), "Underlined “One printer for fifteen people?”");
+        assert_eq!(line_text(&serde_json::json!({ "text": "Removed Highlight on \"a word\"", "manual": true })), "Removed the highlight from “a word”");
+        assert_eq!(line_text(&serde_json::json!({ "text": "said as it was", "manual": false })), "said as it was");
+        assert_eq!(line_text(&serde_json::json!({ "text": "a note nobody knows", "manual": true })), "a note nobody knows");
+    }
+
+    #[test]
+    fn every_note_reads_in_every_language() {
+        for id in NOTES {
+            for (language, (code, _)) in LANGUAGES.iter().enumerate() {
+                let mut args = serde_json::Map::new();
+                for name in ["to", "from", "when", "t", "name", "read", "pages", "boards", "what"] {
+                    args.insert(name.into(), serde_json::json!(2));
+                }
+                args.insert("mark".into(), "underline".into());
+                let text = format(language, id, Some(&fluent_args(&args)));
+                assert!(text.is_some_and(|t| !t.is_empty()), "{code}: {id}");
+            }
+        }
     }
 
     #[test]

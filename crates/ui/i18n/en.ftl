@@ -23,8 +23,6 @@ ready-type-in-the-meetings = Ready. Type in the meetings' search box.
 staying-on-this-meeting-because = Staying on this meeting because it could not be saved: { $error }
 that-meeting-no-longer-exists = That meeting no longer exists.
 could-not-open-the-meeting = Could not open the meeting: { $error }
-started-a-new-board = Started a new board
-moved-t-to-a-new = Moved “{ $t }” to a new board
 can-t-switch-boards-during = Can't switch boards during replay. Exit replay first.
 this-document-s-pages-are = This document's pages are no longer in this meeting.
 you-can-import-pdfs-and = You can import PDFs and images (PNG, JPEG, WebP and GIF).
@@ -420,7 +418,6 @@ version-installed-restart = { $version } is installed. Your meeting keeps runnin
 about-percent = about { $percent }%
 keys-kept-for-closing = { $keys } is kept for closing things and moving around.
 keys-already-used-by = { $keys } is already used by “{ $action }”.
-board-forked = Board { $to } forked from board { $from } as it was at { $when }
 list-separator = {"; "}
 recommended-2 = Recommended
 runs = Runs
@@ -442,3 +439,61 @@ sample-second-point = ask Mia about the docs
 one-html-file-for-someone-2 = One .html file for someone who missed the meeting, with its sound. Nothing to install.
 video-with-sound = Video with sound
 the-whole-meeting-in-real = The whole meeting in real time with its recording, every board as it was drawn.
+note-board-forked = Board { $to } forked from board { $from } as it was at { $when }
+note-new-board = Started a new board
+note-moved-to-new-board = Moved “{ $t }” to a new board
+note-imported-image = { $read ->
+        [one] Imported { $name } (1 text block read)
+       *[other] Imported { $name } ({ $read } text blocks read)
+    }
+note-imported-image-capped = Imported { $name } ({ $read } text blocks read; there were too many, so only some were read)
+note-imported-pdf = Imported { $name } ({ $pages ->
+        [one] 1 page
+       *[other] { $pages } pages
+    }, { $boards ->
+        [one] 1 board
+       *[other] { $boards } boards
+    })
+note-mark-added = { $mark ->
+        [strike] Struck out “{ $what }”
+        [circle] Circled “{ $what }”
+        [underline] Underlined “{ $what }”
+        [star] Starred “{ $what }”
+       *[highlight] Highlighted “{ $what }”
+    }
+note-mark-removed = { $mark ->
+        [strike] Removed the strike-through from “{ $what }”
+        [circle] Removed the circle around “{ $what }”
+        [underline] Removed the underline from “{ $what }”
+        [star] Removed the star from “{ $what }”
+       *[highlight] Removed the highlight from “{ $what }”
+    }
+import-starting-vision-image = Starting the local model to read the image…
+import-reading-image-block = Reading { $name }: block { $done }/{ $total }
+import-regions-found = Found { $found } regions; recognized text in { $read }.
+import-regions-capped = Only the first { $limit } regions were read; the full image is kept.
+import-no-text-recognized = No text was recognized. The original image will still be on the board.
+import-image-ready = { $name } is ready. Try “circle this” during the meeting
+import-image-no-text = No text found in { $name }; it can only be used as a background
+import-downloading-arxiv = Downloading { $id } from arXiv…
+import-reading-page = Reading { $name }: page { $done }/{ $total }
+import-starting-vision-scans = Starting the local model to read the scanned pages…
+import-reading-scan-block = Reading scanned page { $page }/{ $pages }: block { $done }/{ $total }
+import-references-skipped = { $n ->
+        [one] 1 page of references skipped
+       *[other] { $n } pages of references skipped
+    }
+import-board-limit-reached = { $n ->
+        [one] board limit reached, the last page was not imported
+       *[other] board limit reached, the last { $n } pages were not imported
+    }
+import-scans-read = { $n ->
+        [one] 1 page without a text layer was read by the local model
+       *[other] { $n } pages without a text layer were read by the local model
+    }
+import-scans-not-read = { $n ->
+        [one] 1 page has no text layer: it is imported as an image and can be turned to only by number; a local model with its vision add-on can read it
+       *[other] { $n } pages have no text layer: they are imported as images and can be turned to only by number; a local model with its vision add-on can read them
+    }
+import-paper-ready = { $name } is ready: split by sections, figures and equations. Try “here in figure 3” or “equation 5 is wrong”
+import-pages-ready = { $name } is ready: one board per page. Try “circle this paragraph”

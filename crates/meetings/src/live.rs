@@ -81,6 +81,21 @@ pub struct Snap {
     pub memory: Value,
 }
 
+/// A note about a change made by hand: its text in English, which the meeting keeps as the line's text and a
+/// model reads, and the message that shows it in the interface's language (`{"id", "args"}`), or null.
+#[derive(Clone, Debug, Default)]
+pub struct Note {
+    pub text: String,
+    pub message: Value,
+}
+
+impl Note {
+    /// A note with no message: shown as written, in any language.
+    pub fn plain(text: &str) -> Self {
+        Self { text: text.to_string(), message: Value::Null }
+    }
+}
+
 pub struct Live {
     raw: Map<String, Value>,
     pub origin: Origin,
@@ -219,7 +234,7 @@ impl Live {
     }
 
     /// A new board from step `at` of this one, placed as `memory` says. The original stays as it was.
-    pub fn fork_page(&mut self, at: usize, memory: Value, note: &str) {
+    pub fn fork_page(&mut self, at: usize, memory: Value, note: &Note) {
         self.store_page();
         let at = at.min(self.steps.len());
         if self.raw.get("pages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
@@ -247,7 +262,7 @@ impl Live {
     }
 
     /// Start a blank board after the others and show it. The one being left is kept as it is.
-    pub fn add_board(&mut self, note: &str) {
+    pub fn add_board(&mut self, note: &Note) {
         self.store_page();
         if self.raw.get("pages").and_then(Value::as_array).is_none_or(Vec::is_empty) {
             self.raw.insert("pages".into(), json!([{ "graph": self.graph, "layout": self.memory, "steps": self.steps }]));
@@ -267,7 +282,7 @@ impl Live {
 
     /// Carry a topic, with everything under it, over to a new board and show that board: the talk moved on
     /// to it. On the board it leaves, its going can be undone and is replayed like any change.
-    pub fn split_topic(&mut self, topic: &str, note: &str) -> bool {
+    pub fn split_topic(&mut self, topic: &str, note: &Note) -> bool {
         let mut moved: HashSet<String> = [topic.to_string()].into();
         loop {
             let more: Vec<String> = self.graph.nodes.iter().filter(|n| n.parent.as_ref().is_some_and(|p| moved.contains(p)) && !moved.contains(&n.id)).map(|n| n.id.clone()).collect();
@@ -311,13 +326,13 @@ impl Live {
 
     /// Add imported pages, each a board and how to find its picture, and show the first. They take the
     /// place of a board with nothing on it, and otherwise go after the others.
-    pub fn add_pages(&mut self, added: Vec<(Graph, String)>, note: &str) {
+    pub fn add_pages(&mut self, added: Vec<(Graph, String)>, note: &Note) {
         self.add_document(added, note, None);
     }
 
     /// As [`Live::add_pages`], marking the pages as one document, `(id, name)`, which a card on another board
     /// can open.
-    pub fn add_document(&mut self, added: Vec<(Graph, String)>, note: &str, doc: Option<(&str, &str)>) {
+    pub fn add_document(&mut self, added: Vec<(Graph, String)>, note: &Note, doc: Option<(&str, &str)>) {
         if added.is_empty() {
             return;
         }
@@ -515,9 +530,14 @@ impl Live {
         Some((speaker, text))
     }
 
-    /// A note about a hand-made change. Marked manual, so it is never read as something said.
-    pub fn add_note(&mut self, text: &str) {
-        self.lines.push(json!({ "text": text, "manual": true, "ms": 0, "page": self.page() }));
+    /// A note about a hand-made change. Marked manual, so it is never read as something said; its text is in
+    /// English, and its message shows it in the language of whoever looks.
+    pub fn add_note(&mut self, note: &Note) {
+        let mut line = json!({ "text": note.text, "manual": true, "ms": 0, "page": self.page() });
+        if !note.message.is_null() {
+            line["note"] = note.message.clone();
+        }
+        self.lines.push(line);
     }
 
     fn settle(&mut self, text: &str, update: impl Fn(&mut Value)) {
@@ -800,7 +820,7 @@ mod tests {
         g.apply(&boardcast_board::graph::parse_ops("T 「登录」\nL 「登录」 「短信验证」\nT 「支付」\nL 「支付」 「微信支付」\nL 「微信支付」 「回调」\nE 「短信验证」 -> 「微信支付」"));
         live.change_board(g, Value::Null);
         let pay = live.graph.nodes.iter().find(|n| n.label == "支付").unwrap().id.clone();
-        assert!(live.split_topic(&pay, "新话题"));
+        assert!(live.split_topic(&pay, &Note::plain("新话题")));
         assert_eq!((live.pages(), live.page()), (2, 1));
         let labels = |g: &Graph| g.nodes.iter().map(|n| n.label.clone()).collect::<Vec<_>>();
         assert_eq!(labels(&live.graph), ["支付", "微信支付", "回调"]);
@@ -811,8 +831,8 @@ mod tests {
         assert!(live.graph.edges.is_empty());
         // Nothing to split off, or everything.
         let login = live.graph.nodes[0].id.clone();
-        assert!(!live.split_topic(&login, "x"));
-        assert!(!live.split_topic("n99", "x"));
+        assert!(!live.split_topic(&login, &Note::plain("x")));
+        assert!(!live.split_topic("n99", &Note::plain("x")));
     }
 
         #[test]
@@ -854,7 +874,7 @@ mod tests {
         let two = with(&one, "T 「二」");
         live.change_board(two.clone(), json!({ "n": 2 }));
         assert_eq!(live.steps.len(), 2);
-        live.fork_page(1, json!({ "n": 9 }), "另起一板");
+        live.fork_page(1, json!({ "n": 9 }), &Note::plain("另起一板"));
         assert_eq!((live.pages(), live.page()), (2, 1));
         assert_eq!(live.graph.nodes, one.nodes);
         assert_eq!(live.memory, json!({ "n": 9 }));
@@ -922,20 +942,20 @@ mod tests {
         let mut live = Live::new();
         live.change_board(page_board(1), Value::Null);
         let kept = live.graph.clone();
-        live.add_board("新开了一张板");
+        live.add_board(&Note::plain("新开了一张板"));
         assert_eq!((live.pages(), live.page()), (2, 1));
         assert!(live.graph.nodes.is_empty() && live.steps.is_empty() && !live.can_undo());
         assert_eq!(live.boards()[0], kept, "the board left behind keeps what it had");
         assert_eq!(live.lines.last().unwrap()["text"], "新开了一张板");
-        live.add_board("again");
+        live.add_board(&Note::plain("again"));
         assert_eq!((live.pages(), live.page()), (3, 2));
     }
 
     #[test]
     fn an_imported_document_knows_its_pages_and_name() {
         let mut live = Live::new();
-        live.add_pages(vec![(page_board(9), "asset:x.jpg".into())], "导入了");
-        live.add_document(vec![(page_board(1), "asset:a.jpg".into()), (page_board(2), "asset:b.jpg".into())], "导入了", Some(("d1", "Serving latency")));
+        live.add_pages(vec![(page_board(9), "asset:x.jpg".into())], &Note::plain("导入了"));
+        live.add_document(vec![(page_board(1), "asset:a.jpg".into()), (page_board(2), "asset:b.jpg".into())], &Note::plain("导入了"), Some(("d1", "Serving latency")));
         assert_eq!(live.document_pages("d1"), [1, 2]);
         assert_eq!(live.document_of(2), Some(("d1".to_string(), "Serving latency".to_string())));
         assert_eq!(live.document_of(0), None, "a page imported on its own belongs to no document");
@@ -945,7 +965,7 @@ mod tests {
     #[test]
     fn imported_pages_replace_an_empty_board() {
         let mut live = Live::new();
-        live.add_pages(vec![(page_board(1), "asset:a.jpg".into()), (page_board(2), "asset:b.jpg".into())], "导入了");
+        live.add_pages(vec![(page_board(1), "asset:a.jpg".into()), (page_board(2), "asset:b.jpg".into())], &Note::plain("导入了"));
         assert_eq!((live.pages(), live.page()), (2, 0));
         assert_eq!(live.graph.nodes[0].label, "第 1 页");
         assert_eq!(live.board_images(), [Some("asset:a.jpg".to_string()), Some("asset:b.jpg".to_string())]);
@@ -963,7 +983,7 @@ mod tests {
         let mut live = Live::new();
         let drawn = with(&live.graph, "T 「已有内容」");
         live.change_board(drawn.clone(), json!({ "n": 1 }));
-        live.add_pages(vec![(page_board(1), "asset:a.jpg".into())], "导入了");
+        live.add_pages(vec![(page_board(1), "asset:a.jpg".into())], &Note::plain("导入了"));
         assert_eq!((live.pages(), live.page()), (2, 1));
         assert_eq!(live.lines.last().unwrap()["page"], 1);
         assert!(!live.can_undo(), "an import is not undone with the board's edits");
@@ -1010,7 +1030,7 @@ mod tests {
         let name = live.identify_voice(&print, 3.0).unwrap();
         live.add_line(Some(&name), "网关", None);
         live.model_drew(&[(Some(name.clone()), "网关".into())], board_by(&name), Value::Null, "", 1);
-        live.add_pages(vec![(board_by("别人"), "asset:a.jpg".into())], "导入了");
+        live.add_pages(vec![(board_by("别人"), "asset:a.jpg".into())], &Note::plain("导入了"));
         // On this page the old name is only in the replay record and the undo stack.
         live.change_board(board_by(&name), Value::Null);
         live.change_board(board_by("别人"), Value::Null);
@@ -1089,7 +1109,7 @@ mod tests {
     fn a_given_title_stays() {
         let mut live = Live::new();
         live.set_title("论文");
-        live.add_pages(vec![(page_board(1), "asset:a.jpg".into())], "导入了");
+        live.add_pages(vec![(page_board(1), "asset:a.jpg".into())], &Note::plain("导入了"));
         assert_eq!(live.title(), "论文");
     }
 
@@ -1108,7 +1128,7 @@ mod tests {
         let mut live = loaded(json!({ "id": "m", "graph": page, "page": 0, "pages": [{ "graph": page, "underlay": "asset:abc.jpg" }] }), Origin::Current);
         let two = with(&page, "T 「二」");
         live.change_board(two, Value::Null);
-        live.fork_page(1, Value::Null, "另起");
+        live.fork_page(1, Value::Null, &Note::plain("另起"));
         assert_eq!(live.board_images(), [Some("asset:abc.jpg".to_string()), Some("asset:abc.jpg".to_string())]);
     }
 

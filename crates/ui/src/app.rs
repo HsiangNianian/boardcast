@@ -1262,7 +1262,7 @@ struct ImportPreview {
     pages: Vec<NewPage>,
     title: Option<String>,
     /// What goes in the transcript.
-    note: String,
+    note: boardcast_meetings::Note,
     /// What was left out or is worth knowing.
     details: Vec<String>,
     /// What the file is good for in the meeting, shown before choosing where it goes.
@@ -1794,38 +1794,27 @@ const CLIP_LABEL: usize = 40;
 
 const IMAGE_TYPES: [&str; 5] = ["png", "jpg", "jpeg", "webp", "gif"];
 
-/// Start a local model that can see, have it read the blocks of the image, and word what happened.
+/// Start a local model that can see, have it read the blocks of the image, and word what happened. `english` is
+/// for what is written on the board, which follows the meeting; what the app says follows the interface.
 fn read_image(path: &std::path::Path, binaries: &std::path::Path, model: &std::path::Path, projector: &std::path::Path, english: bool, cancel: &AtomicBool, tx: &std::sync::mpsc::Sender<ImportUpdate>) -> anyhow::Result<ImportPreview> {
     let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
     let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
-    let _ = tx.send(ImportUpdate::Progress(if english { "Starting the local model to read the image…".to_string() } else { "正在启动本地模型来读图…".to_string() }));
+    let _ = tx.send(ImportUpdate::Progress(t("import-starting-vision-image").to_string()));
     let shaders = model.parent().map(shader_dir);
     let server = VisionServer::start(binaries, model, projector, shaders.as_deref())?;
     let imported = boardcast_import::image::import_image(&bytes, english, cancel, &mut |png| server.read(png), &mut |done, total| {
-        let _ = tx.send(ImportUpdate::Progress(if english { format!("Reading {name}: block {done}/{total}") } else { format!("正在读 {name}：{done}/{total} 块") }));
+        let _ = tx.send(ImportUpdate::Progress(ta!("import-reading-image-block", name = name.clone(), done = done, total = total)));
     })?;
-    let limit = boardcast_import::image::MAX_AREAS;
-    let mut details = vec![if english { format!("Found {} regions; recognized text in {}.", imported.found, imported.read) } else { format!("找到 {} 个区域，其中 {} 个识别到了文字。", imported.found, imported.read) }];
+    let mut details = vec![ta!("import-regions-found", found = imported.found, read = imported.read)];
     if imported.capped {
-        details.push(if english { format!("Only the first {limit} regions were read; the full image is retained.") } else { format!("只读了前 {limit} 个区域，完整图片仍然保留。") });
+        details.push(ta!("import-regions-capped", limit = boardcast_import::image::MAX_AREAS));
     }
     if imported.read == 0 {
-        details.push(if english { "No text was recognized. The original image will still be available on the board.".to_string() } else { "没有识别到文字。原图仍会显示在板上。".to_string() });
+        details.push(t("import-no-text-recognized").to_string());
     }
     let read = imported.read;
-    let word = if read == 1 { "text block" } else { "text blocks" };
-    let note = match (english, imported.capped) {
-        (true, false) => format!("Imported {name} ({read} {word} read)"),
-        (true, true) => format!("Imported {name} ({read} {word} read, too many blocks, so only some were read)"),
-        (false, false) => format!("导入了 {name}（读出 {read} 块文字）"),
-        (false, true) => format!("导入了 {name}（读出 {read} 块文字，块太多只读了一部分）"),
-    };
-    let ready = match (english, read > 0) {
-        (true, true) => format!("{name} is ready. Try \"circle this\" during the meeting"),
-        (true, false) => format!("No text found in {name}; it can only be used as a background"),
-        (false, true) => format!("{name} 导入好了，开会时可以说「把这里圈出来」"),
-        (false, false) => format!("{name} 里没有读出文字，只能当背景用"),
-    };
+    let note = if imported.capped { crate::note!("note-imported-image-capped", name = name, read = read) } else { crate::note!("note-imported-image", name = name, read = read) };
+    let ready = if read > 0 { ta!("import-image-ready", name = name.clone()) } else { ta!("import-image-no-text", name = name.clone()) };
     Ok(ImportPreview { name, pages: vec![imported.page], title: None, note, details, ready })
 }
 
@@ -1838,18 +1827,18 @@ fn read_import(source: ImportSource, vision: Option<Vision>, library: &std::path
             (name, std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?)
         }
         ImportSource::Arxiv(id) => {
-            let _ = tx.send(ImportUpdate::Progress(if english { format!("Downloading {id} from arXiv…") } else { format!("正在从 arXiv 下载 {id}…") }));
+            let _ = tx.send(ImportUpdate::Progress(ta!("import-downloading-arxiv", id = id.clone())));
             (format!("arXiv {id}"), boardcast_import::arxiv::download(&id, cancel)?)
         }
     };
     let mut imported = boardcast_import::pdf::import_pdf(&bytes, library, english, cancel, &mut |done, total| {
-        let _ = tx.send(ImportUpdate::Progress(if english { format!("Reading {name}: page {done}/{total}") } else { format!("正在读 {name}：{done}/{total} 页") }));
+        let _ = tx.send(ImportUpdate::Progress(ta!("import-reading-page", name = name.clone(), done = done, total = total)));
     })?;
     // Pages with no text layer are pictures of text: where the local model can see, it reads them, so they
     // can be pointed at, marked and searched like the rest. Each keeps its page number.
     let mut read_scanned = 0;
     if let Some(vision) = vision.filter(|_| !imported.scanned_pages.is_empty()) {
-        let _ = tx.send(ImportUpdate::Progress(if english { "Starting the local model to read the scanned pages…".to_string() } else { "正在启动本地模型来读扫描页…".to_string() }));
+        let _ = tx.send(ImportUpdate::Progress(t("import-starting-vision-scans").to_string()));
         let shaders = vision.model.parent().map(shader_dir);
         let server = VisionServer::start(&vision.binaries, &vision.model, &vision.projector, shaders.as_deref())?;
         let count = imported.scanned_pages.len();
@@ -1860,7 +1849,7 @@ fn read_import(source: ImportSource, vision: Option<Vision>, library: &std::path
             let page = &mut imported.pages[i];
             let number = page.graph.extra.get("underlay").and_then(|u| u.get("no")).cloned();
             let read = boardcast_import::image::import_image(&page.jpeg, english, cancel, &mut |png| server.read(png), &mut |done, total| {
-                let _ = tx.send(ImportUpdate::Progress(if english { format!("Reading scanned page {}/{count}: block {done}/{total}", k + 1) } else { format!("正在读扫描页 {}/{count}：{done}/{total} 块", k + 1) }));
+                let _ = tx.send(ImportUpdate::Progress(ta!("import-reading-scan-block", page = k + 1, pages = count, done = done, total = total)));
             })?;
             if read.read > 0 {
                 *page = read.page;
@@ -1871,36 +1860,24 @@ fn read_import(source: ImportSource, vision: Option<Vision>, library: &std::path
             }
         }
     }
-    let plural = |n: usize, word: &str| if n == 1 { format!("1 {word}") } else { format!("{n} {word}s") };
     let mut details = vec![];
     if imported.refs_skipped > 0 {
-        details.push(if english { format!("{} of references skipped", plural(imported.refs_skipped, "page")) } else { format!("参考文献 {} 页没建板", imported.refs_skipped) });
+        details.push(ta!("import-references-skipped", n = imported.refs_skipped));
     }
     if imported.unread > 0 {
-        details.push(if english { format!("board limit reached, last {} not imported", plural(imported.unread, "page")) } else { format!("板到上限了，最后 {} 页没导", imported.unread) });
+        details.push(ta!("import-board-limit-reached", n = imported.unread));
     }
     if read_scanned > 0 {
-        details.push(if english { format!("{} without a text layer read by the local model", plural(read_scanned, "page")) } else { format!("{} 页没有文字层的扫描页由本地模型读出了文字", read_scanned) });
+        details.push(ta!("import-scans-read", n = read_scanned));
     }
     if imported.scanned > read_scanned {
         // Talk is matched against a page's words, so these can only be turned to by number.
-        let left = imported.scanned - read_scanned;
-        details.push(if english { format!("{} without a text layer, imported as images and turned to only by number; a local model with its vision add-on can read them", plural(left, "page")) } else { format!("{left} 页没有文字层，整页算一张图，只能按页码翻到；有看图组件的本地模型可以读出其中的文字") });
+        details.push(ta!("import-scans-not-read", n = imported.scanned - read_scanned));
     }
     let boards = imported.pages.len();
-    let note = if english {
-        let extra = if details.is_empty() { String::new() } else { format!("; {}", details.join("; ")) };
-        format!("Imported {name} ({}, {}{extra})", plural(imported.total, "page"), plural(boards, "board"))
-    } else {
-        let extra = if details.is_empty() { String::new() } else { format!("，{}", details.join("，")) };
-        format!("导入了 {name}（共 {} 页，建了 {boards} 张板{extra}）", imported.total)
-    };
-    let ready = match (imported.paper, english) {
-        (true, true) => format!("{name} is ready: split by sections, figures and equations. Try \"here in figure 3\" or \"equation 5 is wrong\""),
-        (true, false) => format!("{name} 导入好了：按论文的章节、图表、公式切好了，可以说「图 3 这里」「公式 5 有问题」"),
-        (false, true) => format!("{name} is ready: one board per page. Try \"circle this paragraph\""),
-        (false, false) => format!("{name} 导入好了：每页一张板，开会时可以说「把这一段圈出来」"),
-    };
+    // What was left out is shown when choosing where the file goes; the transcript keeps what came in.
+    let note = crate::note!("note-imported-pdf", name = name, pages = imported.total, boards = boards);
+    let ready = if imported.paper { ta!("import-paper-ready", name = name.clone()) } else { ta!("import-pages-ready", name = name.clone()) };
     Ok(ImportPreview { name, pages: imported.pages, title: imported.title, note, details, ready })
 }
 
@@ -2595,7 +2572,7 @@ impl Workbench {
         self.live.go_to_page(board);
         let memory = self.ink.borrow().board.snapshot();
         let (from, to) = (self.live.page() + 1, self.live.pages() + 1);
-        let note = ta!("board-forked", to = to, from = from, when = when);
+        let note = crate::note!("note-board-forked", to = to, from = from, when = when);
         self.replay = None;
         self.live.fork_page(at, memory, &note);
         let history: Vec<Utterance> = self.live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
@@ -2626,7 +2603,7 @@ impl Workbench {
             Some(store) => store.page_image(&id, name).ok(),
             None => boardcast_meetings::decode_data_url(name).ok(),
         };
-        let mut frozen = boardcast_export::freeze(&self.live, !crate::i18n::chinese(), &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
+        let mut frozen = boardcast_export::freeze(&self.live, !crate::i18n::chinese(), &crate::i18n::line_text, &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
         // The video with sound needs it, and a replay page carries it when there is some.
         let sound = matches!(kind, ExportKind::LiveVideo | ExportKind::ReplayPage).then(|| self.sound_files()).filter(|f| !f.is_empty());
         let directory = self.export_dir.clone().unwrap_or_else(|| {
@@ -3304,7 +3281,7 @@ impl Workbench {
             cx.notify();
             return;
         }
-        self.live.add_board(t("started-a-new-board"));
+        self.live.add_board(&crate::note!("note-new-board"));
         self.page_hint = None;
         self.topic_hint = None;
         self.page_quiet = QUIET_AFTER_TURNING;
@@ -3317,7 +3294,7 @@ impl Workbench {
 
     fn split_topic(&mut self, cx: &mut Context<Self>) {
         let Some((id, label)) = self.topic_hint.take() else { return };
-        if self.replay.is_some() || !self.live.split_topic(&id, &ta!("moved-t-to-a-new", t = label.to_string())) {
+        if self.replay.is_some() || !self.live.split_topic(&id, &crate::note!("note-moved-to-new-board", t = label)) {
             cx.notify();
             return;
         }
@@ -4508,9 +4485,20 @@ impl Workbench {
         cx.notify();
     }
 
-    fn choose_language(&mut self, language: &str, cx: &mut Context<Self>) {
+    fn choose_language(&mut self, language: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.form.saved.interface_language = language.to_string();
         crate::i18n::choose(language);
+        // A field keeps the hint it was made with, so each is given the new language's.
+        for (field, id) in [
+            (&self.input, "type-a-line-enter-puts"),
+            (&self.form.proxy_user, "username-optional"),
+            (&self.form.proxy_password, "password-optional"),
+            (&self.import_pages, "all-pages-or-e-g"),
+            (&self.title_input, "meeting-name"),
+            (&self.library_query, "search-meetings"),
+        ] {
+            field.update(cx, |field, cx| field.set_placeholder(t(id), window, cx));
+        }
         if let Err(e) = self.form.saved.save() {
             self.form.note = Some(format!("{e:#}"));
         }
@@ -6700,11 +6688,12 @@ impl Render for Workbench {
                 let manual = l["manual"].as_bool().unwrap_or(false);
                 // The badge is drawn in outline until the model has put the line on the board.
                 let drawn = !l["ms"].is_null() && !l["failed"].as_bool().unwrap_or(false);
-                let text = l["text"].as_str().unwrap_or_default();
+                // A note about a change made by hand is shown in the language shown now.
+                let text = crate::i18n::line_text(l);
                 let typing = self.typing.as_ref().filter(|t| t.line == i && t.animate).map(Typing::chars).filter(|&n| n < text.chars().count());
                 let text = match typing {
                     Some(n) => format!("{}▍", text.chars().take(n).collect::<String>()),
-                    None => text.to_string(),
+                    None => text,
                 };
                 let note = line_note(l, self.preparing.is_some());
                 let jumped = self.jumped_line.is_some_and(|(line, _)| line == i);
@@ -7411,8 +7400,8 @@ impl Render for Workbench {
                         let choices = std::iter::once(("auto", t("system"))).chain(crate::i18n::LANGUAGES.iter().copied());
                         choices.enumerate().fold(menu.min_w(px(180.)).max_h(px(420.)).scrollable(true), |menu, (i, (code, name))| {
                             let workbench = workbench.clone();
-                            let menu = menu.item(PopupMenuItem::new(name).checked(chosen == code).on_click(move |_, _, cx| {
-                                let _ = workbench.update(cx, |this, cx| this.choose_language(code, cx));
+                            let menu = menu.item(PopupMenuItem::new(name).checked(chosen == code).on_click(move |_, window, cx| {
+                                let _ = workbench.update(cx, |this, cx| this.choose_language(code, window, cx));
                             }));
                             // The system's choice stands apart from the languages.
                             if i == 0 { menu.separator() } else { menu }
@@ -8659,6 +8648,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             pipeline.session().open(live.graph.clone(), history);
             pipeline.start_script();
             let ink = Rc::new(RefCell::new(state));
+            // A hint in the interface's language is set again when the language changes: see `choose_language`.
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(t("type-a-line-enter-puts")));
             let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
             let messy = cx.new(|_| SliderState::new().min(0.0).max(1.0).step(0.1).default_value(settings.messy));

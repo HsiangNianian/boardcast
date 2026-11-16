@@ -7,5 +7,5 @@ mod live;
 mod store;
 
 pub use inbox::{Inbox, Tucked};
-pub use live::{History, Live, Snap, ViewOnly, UNTITLED};
+pub use live::{History, Live, Note, Snap, ViewOnly, UNTITLED};
 pub use store::{decode_data_url, default_dir, new_id, Info, Loaded, Origin, PageImage, Store};

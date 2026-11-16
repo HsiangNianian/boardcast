@@ -107,12 +107,14 @@ pub struct Said {
 }
 
 impl Said {
-    pub fn from_stored(lines: &[Value]) -> Vec<Self> {
+    /// The lines as kept, each line's text as `text_of` gives it: a note about a change made by hand can be
+    /// shown in the reader's language rather than as kept.
+    pub fn from_stored(lines: &[Value], text_of: &dyn Fn(&Value) -> String) -> Vec<Self> {
         lines
             .iter()
             .map(|l| Self {
                 speaker: l["speaker"].as_str().filter(|s| !s.is_empty()).map(str::to_string),
-                text: l["text"].as_str().unwrap_or_default().to_string(),
+                text: text_of(l),
                 page: l["page"].as_u64().unwrap_or(0),
                 manual: l["manual"].as_bool().unwrap_or(false),
             })
@@ -162,7 +164,13 @@ fn stamp(when: chrono::DateTime<chrono::Local>) -> String {
 /// Laying out needs the glyphs, which the caller keeps; the slow drawing waits for `render`.
 /// `images` are each board's page image, in the order of `Live::board_images`; `asset` reads any other
 /// picture the meeting keeps, by its name, as clips brought from elsewhere are.
-pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSource, images: &[Option<PageImage>], asset: &dyn Fn(&str) -> Option<PageImage>) -> Frozen {
+/// The text of a line as kept, for callers with nothing to show it in another language.
+pub fn kept_text(line: &Value) -> String {
+    line["text"].as_str().unwrap_or_default().to_string()
+}
+
+/// `text_of` gives each transcript line's text as it should read.
+pub fn freeze(live: &Live, english: bool, text_of: &dyn Fn(&Value) -> String, glyphs: &mut Glyphs, hanzi: HanziSource, images: &[Option<PageImage>], asset: &dyn Fn(&str) -> Option<PageImage>) -> Frozen {
     let boards = live.board_pages();
     let image_of = |i: usize| images.get(i).and_then(Option::as_ref);
     // Each board's clip pictures come from its own page, or from a picture the meeting keeps.
@@ -199,7 +207,7 @@ pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSourc
             began: stamp(began),
             summary: live.summary().to_string(),
             boards: boards.into_iter().map(|(graph, _)| graph).collect(),
-            lines: Said::from_stored(&live.lines),
+            lines: Said::from_stored(&live.lines, text_of),
             english,
             omits_visuals: live.read_only == Some(ViewOnly::ImportedContent),
         },
@@ -332,7 +340,7 @@ mod tests {
 
     #[test]
     fn stored_lines_keep_their_board_and_notes_stay_marked() {
-        let lines = Said::from_stored(&[serde_json::json!({ "text": "a", "speaker": "A", "page": 1 }), serde_json::json!({ "text": "b", "manual": true })]);
+        let lines = Said::from_stored(&[serde_json::json!({ "text": "a", "speaker": "A", "page": 1 }), serde_json::json!({ "text": "b", "manual": true })], &kept_text);
         assert_eq!(lines[0], Said { speaker: Some("A".into()), text: "a".into(), page: 1, manual: false });
         assert!(lines[1].manual);
     }

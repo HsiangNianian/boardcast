@@ -38,6 +38,25 @@ impl Proxy {
     }
 }
 
+/// The address with a username and password put in, as `scheme://user:password@host:port`, the form proxies
+/// take them in. Both are optional: with neither, the address is left as it is, so one typed with its login
+/// still works. A username cannot hold a colon, which would end it early.
+pub fn with_login(address: &str, user: &str, password: &str) -> Result<String, String> {
+    let (address, user) = (address.trim(), user.trim());
+    if user.is_empty() && password.is_empty() {
+        return Ok(address.to_string());
+    }
+    if user.contains(':') {
+        return Err("colon in username".into());
+    }
+    let (scheme, rest) = address.split_once("://").unwrap_or(("", address));
+    // A login already in the address gives way to the one in the fields.
+    let host = rest.rsplit_once('@').map_or(rest, |(_, host)| host);
+    // Always both halves, an empty one included: a login without its colon is not taken.
+    let login = format!("{user}:{password}");
+    Ok(if scheme.is_empty() { format!("{login}@{host}") } else { format!("{scheme}://{login}@{host}") })
+}
+
 static CHOSEN: RwLock<Option<Proxy>> = RwLock::new(None);
 
 /// Take the user's choice; every client made after this follows it.
@@ -99,5 +118,45 @@ mod tests {
         assert_eq!(Proxy::from_setting("custom", ""), Proxy::System, "no address, no custom proxy");
         assert_eq!(Proxy::from_setting("off", "http://p:1"), Proxy::Off);
         assert_eq!(Proxy::from_setting("", ""), Proxy::System);
+    }
+
+    #[test]
+    fn a_login_goes_into_the_address() {
+        assert_eq!(with_login("http://127.0.0.1:7890", "", "").unwrap(), "http://127.0.0.1:7890", "neither, no login");
+        assert_eq!(with_login("http://user:pw@127.0.0.1:7890", "", "").unwrap(), "http://user:pw@127.0.0.1:7890", "a login typed in the address stays");
+        assert_eq!(with_login("http://127.0.0.1:7890", "", "x").unwrap(), "http://:x@127.0.0.1:7890", "a password alone");
+        assert_eq!(with_login("http://127.0.0.1:7890", "me", "p@ss:w").unwrap(), "http://me:p@ss:w@127.0.0.1:7890");
+        assert_eq!(with_login("socks5://old:pw@proxy:1080", "me", "").unwrap(), "socks5://me:@proxy:1080", "the fields replace a login in the address");
+        for (user, password) in [("me", ""), ("", "x"), ("me", "p@ss:w")] {
+            assert!(ureq::Proxy::new(with_login("http://proxy.example:8080", user, password).unwrap()).is_ok(), "{user} {password}");
+        }
+        assert!(with_login("http://p:1", "a:b", "c").is_err());
+    }
+
+    #[test]
+    fn the_proxy_is_asked_with_the_login() {
+        use std::io::{BufRead, BufReader, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = format!("http://{}", listener.local_addr().unwrap());
+        let heard = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut lines = vec![];
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                    break;
+                }
+                lines.push(line.trim_end().to_string());
+            }
+            (&stream).write_all(b"HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 0\r\n\r\n").unwrap();
+            lines
+        });
+        let proxy = ureq::Proxy::new(with_login(&address, "me", "p@ss:w").unwrap()).unwrap();
+        let answer = ureq::AgentBuilder::new().proxy(proxy).build().get("https://models.example/x").call();
+        assert!(answer.is_err(), "the proxy refused");
+        let lines = heard.join().unwrap();
+        // base64 of "me:p@ss:w"
+        assert!(lines.iter().any(|l| l.eq_ignore_ascii_case("proxy-authorization: basic bWU6cEBzczp3")), "{lines:?}");
     }
 }

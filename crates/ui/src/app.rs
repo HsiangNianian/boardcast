@@ -2404,6 +2404,14 @@ impl Workbench {
     /// Send viewers the meeting as it changes, and notice when someone starts or stops watching.
     fn pump_share(&mut self, changed: &mut bool) {
         let Some(sharing) = &mut self.sharing else { return };
+        // Too many wrong codes: someone is guessing, so the code is given up.
+        if sharing.share().retired() {
+            self.sharing = None;
+            self.watching = 0;
+            self.notice = Some(t("share-retired").into());
+            *changed = true;
+            return;
+        }
         // Another meeting opened ends the share: viewers were let in to that one only.
         if !sharing.shows(&self.live) {
             self.sharing = None;
@@ -2440,7 +2448,8 @@ impl Workbench {
     }
 
     fn share_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
-        let privacy = div().w_full().p_3().rounded(px(6.)).bg(rgb(pal().danger_soft)).text_xs().text_color(rgb(pal().text)).child(t("share-privacy"));
+        // Who can see what, and that the network carries it in the clear.
+        let privacy = div().w_full().flex().flex_col().gap_1().p_3().rounded(px(6.)).bg(rgb(pal().danger_soft)).text_xs().text_color(rgb(pal().text)).child(t("share-privacy")).child(div().font_weight(gpui_kit::FontWeight::MEDIUM).child(t("share-unencrypted")));
         let Some(sharing) = &self.sharing else {
             return div()
                 .id("share-panel")
@@ -2454,20 +2463,38 @@ impl Workbench {
                 .child(div().flex().child(Button::new("share-start").primary().label(t("share-start")).on_click(cx.listener(|this, _, _, cx| this.start_sharing(cx)))));
         };
         let share = sharing.share();
-        let addresses = share.addresses();
-        let chosen = self.share_address.min(addresses.len().saturating_sub(1));
-        let (link, code) = (share.link(&addresses[chosen]), share.code().to_string());
-        // Every network this computer is on, the one the QR code shows marked; another is a click away.
-        let address_list = div().flex().flex_col().gap(px(2.)).children(addresses.iter().enumerate().map(|(i, address)| {
+        // Each network this computer is on, by the name people know it by, with its address.
+        let networks: Vec<(String, String)> = share
+            .networks()
+            .iter()
+            .map(|n| {
+                let name = match n.kind {
+                    boardcast_share::Kind::WiFi => t("share-network-wifi").to_string(),
+                    boardcast_share::Kind::Wired => t("share-network-wired").to_string(),
+                    boardcast_share::Kind::Unknown => n.interface.clone(),
+                };
+                (name, share.address(n))
+            })
+            .collect();
+        let chosen = self.share_address.min(networks.len().saturating_sub(1));
+        let (link, code) = (share.link(&networks[chosen].1), share.code().to_string());
+        let scan = if networks.len() > 1 { ta!("share-scan-on", network = networks[chosen].0.clone()) } else { t("share-scan").to_string() };
+        // The QR code is for one network; a phone on another chooses its own here.
+        let address_list = div().flex().flex_col().gap_1().children(networks.iter().enumerate().map(|(i, (name, address))| {
             let on = i == chosen;
             div()
                 .id(("share-address", i))
-                .font_family(theme::MONO)
-                .text_sm()
-                .whitespace_nowrap()
-                .when(!on, |d| d.text_color(rgb(pal().faint)).cursor_pointer().hover(|d| d.text_color(rgb(pal().text))))
-                .when(addresses.len() > 1 && on, |d| d.text_color(rgb(pal().text)))
-                .child(address.clone())
+                .flex()
+                .items_baseline()
+                .gap_2()
+                .px_2()
+                .py_1()
+                .rounded(px(5.))
+                .when(on && networks.len() > 1, |d| d.bg(rgb(pal().selected)))
+                .when(!on, |d| d.cursor_pointer().hover(|d| d.bg(rgb(pal().selected))))
+                .child(div().w(px(64.)).flex_none().text_xs().text_color(rgb(pal().muted)).overflow_hidden().text_ellipsis().whitespace_nowrap().child(name.clone()))
+                // A browser adds the scheme itself, and the address fits without it.
+                .child(div().font_family(theme::MONO).text_sm().whitespace_nowrap().text_color(rgb(if on { pal().text } else { pal().faint })).child(address.trim_start_matches("http://").to_string()))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.share_address = i;
                     cx.notify();
@@ -2508,7 +2535,7 @@ impl Workbench {
                 div()
                     .flex()
                     .gap_5()
-                    .child(div().flex().flex_col().items_center().gap_1().child(div().p_1().rounded(px(8.)).border_1().border_color(rgb(pal().line)).bg(rgb(0xffffff)).child(qr)).child(div().text_xs().text_color(rgb(pal().faint)).child(t("share-scan"))))
+                    .child(div().flex().flex_col().items_center().gap_1().child(div().p_1().rounded(px(8.)).border_1().border_color(rgb(pal().line)).bg(rgb(0xffffff)).child(qr)).child(div().max_w(px(184.)).text_center().text_xs().text_color(rgb(pal().faint)).child(scan)))
                     .child(
                         div()
                             .flex_1()

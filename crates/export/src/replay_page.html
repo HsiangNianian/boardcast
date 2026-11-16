@@ -459,14 +459,24 @@ aside p{margin:2px 0}
 
   if (LIVE) {
     const code = new URLSearchParams(location.search).get('c') || ''
-    const stream = new EventSource('events?c=' + encodeURIComponent(code))
+    /* The page holds the meeting as it was at its version; the stream sends each board and the transcript
+       only when they changed since, and then the meeting, which puts them together. */
+    const since = typeof DATA.live === 'number' ? DATA.live : 0
+    const parts = { boards: DATA.boards.slice(), lines: DATA.lines }
+    const stream = new EventSource('events?c=' + encodeURIComponent(code) + '&since=' + since)
     status(W.live, true)
     stream.addEventListener('image', (e) => {
       const m = JSON.parse(e.data)
       images[m.index] = m.href
       if (m.index === page) showSheet()
     })
-    stream.addEventListener('meeting', (e) => receive(JSON.parse(e.data)))
+    stream.addEventListener('board', (e) => { const m = JSON.parse(e.data); parts.boards[m.index] = m.board })
+    stream.addEventListener('lines', (e) => { parts.lines = JSON.parse(e.data) })
+    stream.addEventListener('meeting', (e) => {
+      const m = JSON.parse(e.data)
+      parts.boards.length = m.boards
+      receive(Object.assign({}, m, { boards: parts.boards.slice(), lines: parts.lines }))
+    })
     stream.addEventListener('stopped', () => { stream.close(); status(W.ended, false) })
     stream.addEventListener('open', () => status(W.live, true))
     stream.addEventListener('error', () => { if (stream.readyState !== EventSource.CLOSED) status(W.lost, false) })

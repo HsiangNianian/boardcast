@@ -957,6 +957,13 @@ impl Session {
         graph.clone()
     }
 
+    /// Leave a clip card where it was dragged to.
+    pub fn place(&self, id: &str, x: f64, y: f64) -> Graph {
+        let mut graph = self.graph.lock().expect("graph lock");
+        graph.place(id, x, y);
+        graph.clone()
+    }
+
     /// Mark a word or sentence of imported text by hand, or take the mark off.
     pub fn toggle_span(&self, id: &str, span: boardcast_board::spans::Span) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");

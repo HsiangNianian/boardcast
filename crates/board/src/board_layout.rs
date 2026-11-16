@@ -625,9 +625,14 @@ impl StableLayout {
                 slots.push(Slot { key: r.rect.id.clone(), at: order(&n.id), x0: 0.0, y0: 0.0, w: r.rect.w, h: r.rect.h, region: Some(r) });
             }
         }
+        // A card dragged somewhere stays there, as the page does; the others are placed like regions.
+        let mut held: Vec<Rect> = vec![];
         for n in g.nodes.iter().filter(|n| n.kind == Kind::Clip) {
             let (w, h) = n.clip().map_or((CLIP_MAX_W, CLIP_MAX_H), |c| c.card_size());
-            slots.push(Slot { key: n.id.clone(), at: order(&n.id), x0: 0.0, y0: 0.0, w, h, region: None });
+            match n.placed() {
+                Some([x, y]) => held.push(Rect { id: n.id.clone(), x, y, w, h }),
+                None => slots.push(Slot { key: n.id.clone(), at: order(&n.id), x0: 0.0, y0: 0.0, w, h, region: None }),
+            }
         }
         let mut dia = None;
         if ids.is_empty() {
@@ -648,7 +653,7 @@ impl StableLayout {
         self.box_at.retain(|k, _| slots.iter().any(|s| &s.key == k));
 
         // Remembered regions return to their place, pushed down if an earlier one has grown over them.
-        let mut placed: Vec<Rect> = page.iter().cloned().collect();
+        let mut placed: Vec<Rect> = page.iter().cloned().chain(held.iter().cloned()).collect();
         let mut origin: HashMap<String, (f64, f64)> = HashMap::new();
         for s in &slots {
             let mut bx = if let Some(&(x, y)) = self.region_at.get(&s.key) {
@@ -673,6 +678,10 @@ impl StableLayout {
         }
 
         let mut out = Layout::default();
+        for card in held {
+            out.anchors.insert(card.id.clone(), card.clone());
+            out.clips.push(card);
+        }
         for s in slots {
             let (px, py) = origin[&s.key];
             if let Some(mut r) = s.region {
@@ -950,6 +959,29 @@ mod clip_tests {
         let l = StableLayout::default().layout(&g, &mut crate::sugiyama::first_diagram);
         let note = g.nodes.iter().find(|n| n.label == "worth a rerun").unwrap();
         assert!(l.regions.iter().any(|r| r.rows.iter().any(|row| row.id == note.id)), "a note on a clip is written somewhere");
+    }
+
+    #[test]
+    fn a_dragged_card_stays_where_it_was_put_and_only_it_moves() {
+        let mut g = Graph::default();
+        g.extra.insert("underlay".into(), json!({ "w": 800.0, "h": 1000.0 }));
+        let clip = Clip { src: "p.jpg".into(), pw: 800.0, ph: 1000.0, x: 0.0, y: 0.0, w: 400.0, h: 100.0 };
+        let a = g.add_clip("a", "", &clip);
+        let b = g.add_clip("b", "", &clip);
+        let mut board = StableLayout::default();
+        let before = board.layout(&g, &mut crate::sugiyama::first_diagram);
+        let b_before = before.clips.iter().find(|c| c.id == b).unwrap().clone();
+        g.place(&a, 40.5, 1200.2);
+        let after = board.layout(&g, &mut crate::sugiyama::first_diagram);
+        let card = after.clips.iter().find(|c| c.id == a).unwrap();
+        assert_eq!((card.x, card.y), (41.0, 1200.0), "where it was dropped, rounded");
+        let other = after.clips.iter().find(|c| c.id == b).unwrap();
+        assert_eq!((other.x, other.y), (b_before.x, b_before.y), "the other card stays put");
+        assert_eq!(after.anchors[&a].y, 1200.0, "lines go to where it is now");
+        g.apply(&crate::graph::parse_ops("T 「Topic」"));
+        let again = board.layout(&g, &mut crate::sugiyama::first_diagram);
+        let topic = &again.regions[0].rect;
+        assert!(!overlaps(topic, card, 0.0), "new things go around it: {topic:?}");
     }
 
     #[test]

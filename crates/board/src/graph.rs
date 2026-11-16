@@ -271,6 +271,13 @@ impl Graph {
         }
     }
 
+    /// Put a clip card where it was dragged to; the layout keeps it there and places everything else around it.
+    pub fn place(&mut self, id: &str, x: f64, y: f64) {
+        if let Some(i) = self.index(id).filter(|&i| self.nodes[i].kind == Kind::Clip) {
+            self.nodes[i].extra.insert("placed".into(), json!({ "x": x.round(), "y": y.round() }));
+        }
+    }
+
     /// Cut an imported block out as a clip: the whole block, or just the lines that hold `quote`. The picture is
     /// the page under this board, which the clip names with an empty `src` until whoever shows it fills it in.
     /// A block already cut out the same way is not cut again.
@@ -663,6 +670,12 @@ impl NodeData {
     pub fn at(&self) -> Option<[f64; 4]> {
         let at = self.extra.get("at")?;
         Some([at["x"].as_f64()?, at["y"].as_f64()?, at["w"].as_f64()?, at["h"].as_f64()?])
+    }
+
+    /// Where a clip card was put by hand, its top left corner on the board, if it was.
+    pub fn placed(&self) -> Option<[f64; 2]> {
+        let at = self.extra.get("placed")?;
+        Some([at["x"].as_f64()?, at["y"].as_f64()?])
     }
 
     /// Where a clip was cut from, if this is one.

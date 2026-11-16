@@ -3,6 +3,7 @@
 //! stroke by stroke. A sample with a recording plays along with it, each line said when it was said.
 //! Only the window around it is drawn here. landing/demo/index.html is the page.
 
+mod waves;
 use boardcast_board::board_layout::{Bounds, StableLayout};
 use boardcast_board::compose::{compose, Style};
 use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
@@ -358,6 +359,8 @@ struct Ui {
     sound: Element,
     credit: Element,
     audio: HtmlAudioElement,
+    /// The recording's sound beside the window.
+    waves: waves::Waves,
 }
 
 impl Ui {
@@ -507,6 +510,7 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
     let audio = &ui.audio;
     if !control.silent {
         audio.set_src(&format!("../media/{audio_name}"));
+        ui.waves.load(&format!("../media/{audio_name}"));
         audio.set_muted(!control.sound.get());
         audio.set_current_time(0.0);
         if !control.paused.get() && !control.away() {
@@ -571,6 +575,7 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
         }
         audio.set_muted(!control.sound.get());
         let t = clock.tick(now, audio, paused);
+        ui.waves.draw(t);
         // Lines come in as they are said, and are typed out over the time they take.
         while said.len() < sample.lines.len() && sample.lines[said.len()].start.unwrap_or(0.0) <= t {
             let (li, p) = line_item(ui, &sample.lines[said.len()].speaker);
@@ -734,7 +739,7 @@ pub fn start() {
     }
     let audio = HtmlAudioElement::new().expect("an audio element");
     audio.set_preload("auto");
-    let ui = Rc::new(Ui { title: q("#title"), state: q("#state"), lines: q("#lines"), tabs: tabs.clone(), speakers: RefCell::new(vec![]), listen: q("#listen"), sound: q("#sound"), credit: q("#credit"), audio });
+    let ui = Rc::new(Ui { title: q("#title"), state: q("#state"), lines: q("#lines"), tabs: tabs.clone(), speakers: RefCell::new(vec![]), listen: q("#listen"), sound: q("#sound"), credit: q("#credit"), audio, waves: waves::Waves::find(&doc()) });
     let control = Rc::new(Control { wanted: Cell::new(None), paused: Cell::new(false), run: Cell::new(0), sound: Cell::new(false), off_screen: Cell::new(false), hidden: Cell::new(false), silent: background });
     // A recording stops when the demo leaves the screen: scrolled past on the site's first page, where it is
     // embedded (an observer in a frame watches the top window's viewport), or in a tab put aside.

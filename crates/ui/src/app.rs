@@ -1328,8 +1328,6 @@ struct Workbench {
     preparing: Option<Preparing>,
     /// Whether the side panel is out. Choosing the summary or the speakers brings it out too.
     transcript_open: bool,
-    /// The name in the board's own hand, for the top of the sidebar.
-    wordmark: Option<Rc<crate::splash::Wordmark>>,
     /// The sidebar brought out over a narrow window, where it otherwise gives its room to the board.
     sidebar_narrow: bool,
     /// Where on the map the pointer took hold of it, from the map's corner, so it does not jump under the pointer.
@@ -4246,16 +4244,13 @@ impl Workbench {
             .bg(rgb(pal().chrome))
             .border_r_1()
             .border_color(rgb(pal().line))
-            .child(div().flex().items_center().h(px(56.)).px_4().flex_none().map(|d| match &self.wordmark {
-                Some(mark) => d.child(crate::splash::wordmark_element(mark, 24.0)),
-                None => d.child(div().text_lg().child("boardcast")),
-            }))
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(2.))
                     .px_2()
+                    .pt_3()
                     .flex_none()
                     .child(
                         Button::new("side-new")
@@ -7079,7 +7074,6 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         .detach();
         let build = move |prepared: Prepared, window: &mut Window, cx: &mut App| -> Entity<Workbench> {
             let Prepared { mut state, live, vram_mib, library, pinned, .. } = prepared;
-            let wordmark = crate::splash::wordmark(&mut state.glyphs);
             state.set_map(!settings.minimap_hidden);
             let history: Vec<Utterance> = live.history.iter().filter_map(|h| serde_json::from_value(h.clone()).ok()).collect();
             pipeline.session().open(live.graph.clone(), history);
@@ -7225,7 +7219,6 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     clock_second: 0,
                     preparing: None,
                     transcript_open: true,
-                    wordmark,
                     sidebar_narrow: false,
                     map_grab: Point::default(),
                     map_moved: false,

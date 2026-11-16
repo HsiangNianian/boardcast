@@ -25,7 +25,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         let path = Path::new(&out);
         let kind = Kind::from_path(path).with_context(|| format!("no format for {out}"))?;
         let live = Live::from_loaded(Loaded { raw: raw.clone(), origin: Origin::Current, revision: 0 });
-        let output = freeze(&live, false, &mut glyphs, HanziSource::Directory(root.join("assets/hanzi")), &images).render(kind)?;
+        let asset = |name: &str| store.as_ref().and_then(|s| s.page_image(&id, name).ok()).or_else(|| decode_data_url(name).ok());
+        let output = freeze(&live, false, &mut glyphs, HanziSource::Directory(root.join("assets/hanzi")), &images, &asset).render(kind)?;
         write_file(path, &output.bytes)?;
         println!("{{\"file\":{},\"bytes\":{},\"text_left_out\":{}}}", serde_json::Value::from(out.as_str()), output.bytes.len(), output.text_left_out);
     }

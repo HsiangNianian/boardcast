@@ -62,7 +62,7 @@ aside p{margin:2px 0}
   const svg = $('board'), inkLayer = $('ink'), underLayer = $('under'), seekBar = $('seek')
   const W = DATA.words
   let page = 0, at = 0, playing = false, speed = 1, timer = 0, view = null, mask = 0
-  let shown = new Map()
+  let shown = new Map(), pictures = new Map()
 
   const board = () => DATA.boards[page]
   const total = () => board().frames.length - 1
@@ -77,10 +77,16 @@ aside p{margin:2px 0}
     return node
   }
 
-  /* A piece: colour, opacity, under, strokes of [outline, centre line, length, width]. */
+  /* A piece: colour, opacity, under, strokes of [outline, centre line, length, width], and for a clip's
+     frame the clip's picture, which goes under everything drawn on it. */
   function drawPiece(index, timing) {
     const piece = board().pieces[index], box = board().box
     const group = el('g', { fill: piece[0], opacity: piece[1] })
+    if (piece[4]) {
+      const p = piece[4], picture = el('image', { href: p.href, x: p.x, y: p.y, width: p.w, height: p.h, preserveAspectRatio: 'none' })
+      underLayer.prepend(picture)
+      pictures.set(index, picture)
+    }
     for (const [i, stroke] of piece[3].entries()) {
       const shape = el('path', { d: stroke[0] })
       const when = timing && timing[i]
@@ -123,10 +129,10 @@ aside p{margin:2px 0}
     const want = board().frames[at].p
     const keep = new Set(want)
     if (animate) {
-      for (const [index, group] of shown) if (!keep.has(index)) { group.remove(); shown.delete(index) }
+      for (const [index, group] of shown) if (!keep.has(index)) { group.remove(); shown.delete(index); pictures.get(index)?.remove(); pictures.delete(index) }
       writeNew(want.filter((i) => !shown.has(i)), waitBefore(at) * 0.9)
     } else {
-      inkLayer.replaceChildren(); underLayer.replaceChildren(); shown = new Map()
+      inkLayer.replaceChildren(); underLayer.replaceChildren(); shown = new Map(); pictures = new Map()
       for (const index of want) drawPiece(index)
     }
   }

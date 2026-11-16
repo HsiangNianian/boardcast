@@ -74,6 +74,9 @@ const WELCOME_W: f32 = 560.0;
 const WELCOME_SIZE: f32 = 34.0;
 const WELCOME_WRITING: Duration = Duration::from_millis(1100);
 
+/// The meetings page's content, at its widest.
+const LIBRARY_W: f32 = 680.0;
+
 /// The board is at least this wide before the zoom control floats beside the tool bar.
 const ZOOM_TOOLS_FROM: f32 = 640.0;
 /// The dock along the board's lower edge: how far it keeps from the sides, and between its parts.
@@ -5237,6 +5240,54 @@ fn local_time(ms: f64) -> String {
     chrono::Local.timestamp_millis_opt(ms as i64).single().map_or(String::new(), |t| t.format("%Y-%m-%d %H:%M").to_string())
 }
 
+/// A template as a card: its name and how many topics, over a small sketch of the board it starts, each topic
+/// a column with its heading underlined and two items under it. The caller makes it do something.
+fn template_card(id: impl Into<gpui_kit::ElementId>, name: String, topics: &[String], w: f32) -> gpui_kit::Stateful<gpui_kit::Div> {
+    let shown = topics.iter().take(3);
+    let more = topics.len().saturating_sub(3);
+    div()
+        .id(id)
+        .w(px(w))
+        .p_3()
+        .flex()
+        .flex_col()
+        .gap(px(10.))
+        .text_left()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(rgb(pal().line))
+        .bg(rgb(pal().surface))
+        .cursor_pointer()
+        .hover(|d| d.border_color(rgb(pal().muted)).shadow_sm())
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .child(div().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().text_sm().font_weight(gpui_kit::FontWeight::MEDIUM).child(name))
+                .child(div().flex_none().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(format!("{} {}", topics.len(), tr("topics", "个话题")))),
+        )
+        .child(
+            div()
+                .flex()
+                .gap(px(10.))
+                .children(shown.map(|topic| {
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .child(div().overflow_hidden().whitespace_nowrap().text_ellipsis().text_size(px(11.)).text_color(rgb(pal().muted)).child(topic.clone()))
+                        .child(div().w(gpui_kit::relative(0.7)).h(px(1.)).bg(rgb(pal().faint)))
+                        .child(div().mt(px(2.)).w(gpui_kit::relative(0.85)).h(px(3.)).rounded_full().bg(rgb(pal().line)))
+                        .child(div().w(gpui_kit::relative(0.55)).h(px(3.)).rounded_full().bg(rgb(pal().line)))
+                }))
+                .when(more > 0, |d| d.child(div().flex_none().self_start().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(format!("+{more}")))),
+        )
+}
+
 /// Meetings that keep to a shape, with the topics they start from.
 fn templates() -> Vec<(&'static str, Vec<String>)> {
     let topics = |list: [(&'static str, &'static str); 3]| list.iter().map(|(en, zh)| tr(en, zh).to_string()).collect::<Vec<_>>();
@@ -6351,6 +6402,7 @@ impl Render for Workbench {
         // Pinned meetings first, in the order they were pinned; the rest stay newest first.
         let pin_rank = |id: &str| self.pinned.iter().position(|p| p == id).unwrap_or(usize::MAX);
         found.sort_by_key(|(_, m)| pin_rank(&m.id));
+        let mut last_group: Option<usize> = None;
         let library = div()
             .id("library")
             .flex_1()
@@ -6394,64 +6446,82 @@ impl Render for Workbench {
                             .chain(self.form.saved.templates.iter().enumerate().map(|(i, (n, t))| (n.clone(), t.clone(), Some(i))))
                             .collect();
                         let has_topics = self.live.graph.nodes.iter().any(|n| n.kind == Kind::Topic);
-                        let section = |name: &'static str| div().pt_2().pb_2().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).text_color(rgb(pal().muted)).child(name);
-                        // Templates as cards in a row: what a new meeting starts with, at a glance.
-                        let card = || div().w(px(220.)).h(px(78.)).p_3().flex().flex_col().gap_1().border_1().border_color(rgb(pal().line)).rounded(px(3.)).cursor_pointer();
+                        let section = |name: &'static str| div().pt_2().pb_3().text_xs().font_weight(gpui_kit::FontWeight::SEMIBOLD).text_color(rgb(pal().muted)).child(name);
+                        // Templates as cards, rows of three, or two when that leaves none alone; the page is at most
+                        // LIBRARY_W wide.
+                        let count = own.len() + usize::from(has_topics);
+                        let per_row = if count % 3 != 1 || count < 3 { 3.0 } else { 2.0 };
+                        let card_w = (LIBRARY_W - (per_row - 1.0) * 8.0) / per_row;
                         d.child(section(tr("Start from a template", "从模板新建")))
                             .child(
                                 div()
                                     .flex()
                                     .flex_wrap()
                                     .gap_2()
-                                    .pb_5()
+                                    .pb_6()
                                     .children(own.into_iter().enumerate().map(|(i, (name, topics, saved))| {
-                                        let shown = topics.join(" · ");
-                                        card()
-                                            .id(("template", i))
-                                            .bg(rgb(pal().surface))
-                                            .hover(|d| d.border_color(rgb(pal().text)))
-                                            .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(topics.clone(), cx)))
+                                        let tip = topics.join(" · ");
+                                        let started = topics.clone();
+                                        div()
+                                            .relative()
+                                            .group("template")
                                             .child(
-                                                div()
-                                                    .flex()
-                                                    .justify_between()
-                                                    .child(div().text_sm().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(name))
-                                                    .when_some(saved, |d, index| {
-                                                        d.child(
-                                                            div()
-                                                                .id(("forget-template", index))
-                                                                .px_1()
-                                                                .text_xs()
-                                                                .text_color(rgb(pal().faint))
-                                                                .hover(|d| d.text_color(rgb(pal().text)))
-                                                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                                                .on_click(cx.listener(move |this, _, _, cx| {
-                                                                    cx.stop_propagation();
-                                                                    this.forget_template(index, cx)
-                                                                }))
-                                                                .child("×"),
-                                                        )
-                                                    }),
+                                                template_card(("template", i), name, &topics, card_w)
+                                                    .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                                                    .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(started.clone(), cx))),
                                             )
-                                            .child(div().text_xs().text_color(rgb(pal().muted)).overflow_hidden().whitespace_nowrap().text_ellipsis().child(shown))
+                                            // A template the user kept can be let go of, from its corner.
+                                            .when_some(saved, |d, index| {
+                                                d.child(
+                                                    div()
+                                                        .id(("forget-template", index))
+                                                        .absolute()
+                                                        .top(px(6.))
+                                                        .right(px(6.))
+                                                        .size(px(18.))
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .rounded_full()
+                                                        .bg(rgb(pal().surface))
+                                                        .opacity(0.)
+                                                        .group_hover("template", |s| s.opacity(1.))
+                                                        .cursor_pointer()
+                                                        .child(icon("x").size(px(9.)).text_color(rgb(pal().muted)))
+                                                        .tooltip(|window, cx| Tooltip::new(tr("Forget this template", "删除这个模板")).build(window, cx))
+                                                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                                            cx.stop_propagation();
+                                                            this.forget_template(index, cx)
+                                                        })),
+                                                )
+                                            })
                                     }))
                                     .when(has_topics, |d| {
                                         d.child(
-                                            card()
+                                            div()
                                                 .id("save-template")
-                                                .border_dashed()
-                                                .border_color(rgb(pal().faint))
+                                                .w(px(card_w))
+                                                .min_h(px(92.))
+                                                .flex()
                                                 .items_center()
                                                 .justify_center()
+                                                .gap_2()
+                                                .rounded(px(8.))
+                                                .border_1()
+                                                .border_dashed()
+                                                .border_color(rgb(pal().faint))
+                                                .cursor_pointer()
                                                 .text_xs()
                                                 .text_color(rgb(pal().muted))
                                                 .hover(|d| d.text_color(rgb(pal().text)).border_color(rgb(pal().text)))
                                                 .on_click(cx.listener(|this, _, _, cx| this.save_template(cx)))
-                                                .child(tr("+ Keep this board's topics as a template", "+ 把这张板的话题存成模板")),
+                                                .child(icon("plus").size(px(11.)))
+                                                .child(tr("Keep this board's topics as a template", "把这张板的话题存成模板")),
                                         )
                                     }),
                             )
-                            .child(section(tr("Meetings", "会议")).border_b_1().border_color(rgb(pal().line)))
+                            .child(section(tr("Meetings", "会议")))
                     })
                     .when(self.store.is_some() && self.library.is_empty(), |d| {
                         d.child(div().py_4().text_sm().text_color(rgb(pal().faint)).child(tr("No meetings yet. A meeting is saved here as soon as something is said or typed.", "还没有会议。开始说话或输入后，会议会自动保存在这里。")))
@@ -6516,38 +6586,54 @@ impl Render for Workbench {
                                 .child(button("restore-meeting", tr("Undo", "撤销")).on_click(cx.listener(|this, _, _, cx| this.restore_meeting(cx)))),
                         )
                     })
-                    .children(found.into_iter().map(|(i, m)| {
+                    .children(found.into_iter().flat_map(|(i, m)| {
+                        // A heading where the group changes: pinned, then today, yesterday and earlier, as the sidebar has them.
+                        let group = if self.pinned.iter().any(|p| *p == m.id) {
+                            0
+                        } else {
+                            use chrono::TimeZone;
+                            let today = chrono::Local::now().date_naive();
+                            1 + chrono::Local.timestamp_millis_opt(m.updated_at as i64).single().map_or(2, |t| (today - t.date_naive()).num_days().clamp(0, 2)) as usize
+                        };
+                        let heading = (last_group != Some(group)).then(|| {
+                            last_group = Some(group);
+                            let name = [tr("Pinned", "置顶"), tr("Today", "今天"), tr("Yesterday", "昨天"), tr("Earlier", "更早")][group];
+                            div().pt_4().pb_1().px_3().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(name.to_lowercase()).into_any_element()
+                        });
                         let id = m.id.clone();
                         let current = id == self.live.id();
                         let pinned = self.pinned.iter().any(|p| *p == id);
                         let confirming = self.confirm_delete.as_deref() == Some(id.as_str());
                         let (pin_id, delete_id, sure_id) = (id.clone(), id.clone(), id.clone());
+                        // When, as the group says it: the time today and yesterday, the date before; then how long.
+                        let when = if group == 1 || group == 2 { local_time(m.updated_at).split(' ').nth(1).unwrap_or_default().to_string() } else { local_time(m.updated_at).split(' ').next().unwrap_or_default().to_string() };
                         let detail = match &m.read_error {
                             Some(error) => format!("{}{error}", tr("Could not be read, and the file is left as it is: ", "无法读取，文件保持原样：")),
-                            None => format!("{} · {} {}", local_time(m.updated_at), m.lines, tr("lines", "句")),
+                            None if m.pages > 1 => format!("{when} · {} {} · {} {}", m.lines, if m.lines == 1 { tr("line", "句") } else { tr("lines", "句") }, m.pages, tr("boards", "张板")),
+                            None => format!("{when} · {} {}", m.lines, if m.lines == 1 { tr("line", "句") } else { tr("lines", "句") }),
                         };
-                        // A row of a list: the name, and when and how long on the right.
-                        div()
+                        // A row of a list: the name with when and how long under it, its actions on the right.
+                        let row = div()
                             .id(("meeting", i))
                             .group("meeting-row")
+                            .relative()
                             .flex()
                             .items_center()
                             .justify_between()
                             .gap_4()
                             .px_3()
-                            .py_3()
-                            .border_b_1()
-                            .border_color(rgb(pal().line))
+                            .py(px(9.))
+                            .rounded(px(6.))
                             .when(m.read_error.is_none(), |d| d.cursor_pointer().hover(|d| d.bg(rgb(pal().selected))))
-                            .when(current, |d| d.bg(rgb(pal().selected)))
+                            .when(current, |d| d.bg(rgb(pal().selected)).child(div().absolute().left_0().top(px(8.)).bottom(px(8.)).w(px(2.)).rounded_full().bg(rgb(pal().text))))
                             .child(
                                 div()
                                     .flex()
-                                    .items_center()
-                                    .gap_2()
+                                    .flex_col()
+                                    .gap(px(2.))
                                     .min_w_0()
-                                    .when(current, |d| d.child(div().size(px(6.)).flex_none().rounded_full().bg(rgb(pal().recording))))
-                                    .child(div().text_sm().overflow_hidden().whitespace_nowrap().when(m.read_error.is_some(), |d| d.text_color(rgb(pal().muted))).child(m.title.clone())),
+                                    .child(div().text_sm().overflow_hidden().whitespace_nowrap().text_ellipsis().when(m.read_error.is_some(), |d| d.text_color(rgb(pal().muted))).child(m.title.clone()))
+                                    .child(div().overflow_hidden().whitespace_nowrap().text_ellipsis().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(if m.read_error.is_some() { pal().danger } else { pal().faint })).child(detail)),
                             )
                             // A pinned meeting asks first, in its own row.
                             .when(confirming, |d| {
@@ -6576,7 +6662,6 @@ impl Render for Workbench {
                                     .items_center()
                                     .gap_2()
                                     .flex_none()
-                                    .child(div().max_w(px(360.)).overflow_hidden().whitespace_nowrap().font_family(theme::MONO).text_xs().text_color(rgb(if m.read_error.is_some() { pal().danger } else { pal().faint })).child(detail))
                                     // Shown on hover, and the pin stays once a meeting is pinned, in ink: red is for recording and
                                     // for what is marked on the board.
                                     .when(self.store.is_some(), |d| {
@@ -6619,7 +6704,8 @@ impl Render for Workbench {
                                         )
                                     }),
                             ))
-                            .when(m.read_error.is_none(), |d| d.on_click(cx.listener(move |this, _, _, cx| this.open_meeting(&id, cx))))
+                            .when(m.read_error.is_none(), |d| d.on_click(cx.listener(move |this, _, _, cx| this.open_meeting(&id, cx))));
+                        heading.into_iter().chain(std::iter::once(row.into_any_element())).collect::<Vec<_>>()
                     })),
             );
         let field = |label: &'static str, input: &Entity<InputState>| div().flex().flex_col().gap_1().child(div().text_xs().text_color(rgb(pal().muted)).child(label)).child(Input::new(input));
@@ -7312,7 +7398,7 @@ impl Render for Workbench {
                     .child(
                         div()
                             .w_full()
-                            .max_w(px(760.))
+                            .max_w(px(LIBRARY_W + 80.))
                             .h_full()
                             .flex()
                             .flex_col()
@@ -7479,27 +7565,9 @@ impl Render for Workbench {
                         .child(
                             div().mt(px(14.)).w_full().flex().flex_wrap().justify_center().gap(px(8.)).children(starts.into_iter().enumerate().map(|(i, (name, topics))| {
                                 let tip = topics.join(" · ");
-                                let preview = topics.iter().take(3).cloned().collect::<Vec<_>>().join(" · ");
-                                div()
-                                    .id(("start-from", i))
-                                    .w(px(card_w))
-                                    .px_3()
-                                    .py(px(9.))
-                                    .flex()
-                                    .flex_col()
-                                    .items_start()
-                                    .gap(px(3.))
-                                    .text_left()
-                                    .rounded(px(6.))
-                                    .border_1()
-                                    .border_color(rgb(pal().line))
-                                    .bg(rgb(pal().surface))
-                                    .cursor_pointer()
-                                    .hover(|d| d.border_color(rgb(pal().muted)))
+                                template_card(("start-from", i), name, &topics, card_w)
                                     .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
                                     .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(topics.clone(), cx)))
-                                    .child(div().text_sm().child(name))
-                                    .child(div().w_full().overflow_hidden().whitespace_nowrap().text_ellipsis().text_xs().text_color(rgb(pal().faint)).child(preview))
                             })),
                         )
                     })

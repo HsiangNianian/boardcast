@@ -69,6 +69,11 @@ const BAR_H: f32 = 40.0;
 /// The sidebar's width, and the window width under which it gives its room to the board.
 const SIDEBAR_W: f32 = 236.0;
 const SIDEBAR_FROM: f32 = 900.0;
+/// The welcome on an empty board: its width, its headline's size, and how long the pen takes over it.
+const WELCOME_W: f32 = 560.0;
+const WELCOME_SIZE: f32 = 34.0;
+const WELCOME_WRITING: Duration = Duration::from_millis(1100);
+
 /// The board is at least this wide before the zoom control floats beside the tool bar.
 const ZOOM_TOOLS_FROM: f32 = 640.0;
 /// The dock along the board's lower edge: how far it keeps from the sides, and between its parts.
@@ -1403,6 +1408,9 @@ struct Workbench {
     inbox: Option<Inbox>,
     /// What is in it, each with its picture as the window paints it.
     tray: Vec<(Tucked, Option<Arc<RenderImage>>)>,
+    /// The empty board's headline in the board's pen, for the words it was written for: its strokes, size and
+    /// when the pen began.
+    welcome_line: Option<(String, Vec<Inked>, f32, f32, Instant)>,
     /// The board a document was opened from, and which document, for the way back.
     trail: Option<(usize, String)>,
     save: SaveState,
@@ -7407,54 +7415,105 @@ impl Render for Workbench {
         });
         // An empty board says what to do with it, and offers the shapes a meeting can start from.
         let blank = editable && pages <= 1 && self.live.lines.is_empty() && self.live.graph.nodes.is_empty() && self.live.graph.underlay().is_none();
+        // An empty board says what it is for: its headline written by the board's own pen, the keys to begin
+        // with, the templates to start from, and that a file can be dropped on it.
+        let headline = tr("Talk, and the board draws itself.", "说话，板书自己长出来。");
+        if blank && self.welcome_line.as_ref().is_none_or(|(text, ..)| text != headline) {
+            let (strokes, w, h) = crate::splash::written_line(&mut self.ink.borrow_mut().glyphs, headline, WELCOME_SIZE);
+            self.welcome_line = Some((headline.to_string(), strokes, w, h, Instant::now()));
+        }
+        let written = self.welcome_line.clone().filter(|_| blank).map(|(_, strokes, w, h, started)| crate::splash::written(strokes, w, h, started, WELCOME_WRITING, window));
         let welcome = blank.then(|| {
             let starts: Vec<(String, Vec<String>)> = templates().into_iter().map(|(name, topics)| (name.to_string(), topics)).chain(self.form.saved.templates.iter().cloned()).take(6).collect();
-            let hint_key = |text: String| keycap(text).h(px(20.)).px(px(6.)).border_color(rgb(pal().line)).bg(rgb(pal().surface)).text_color(rgb(pal().muted));
+            let hint_key = |text: String| keycap(text).h(px(20.)).px(px(6.)).border_color(rgb(pal().line)).bg(rgb(pal().surface)).text_color(rgb(pal().text));
+            let hint = |keys: Option<String>, label: &'static str| {
+                keys.map(|keys| div().flex().items_center().gap(px(6.)).child(hint_key(keys)).child(div().text_xs().text_color(rgb(pal().muted)).child(label)))
+            };
+            let dot = || div().size(px(3.)).rounded_full().bg(rgb(pal().line));
+            // Rows of three, or two when that leaves no card alone on its row.
+            let per_row = if starts.len() % 3 != 1 || starts.len() < 3 { 3.0 } else { 2.0 };
+            let card_w = (WELCOME_W - (per_row - 1.0) * 8.0) / per_row;
+            let rule = || div().flex_1().h(px(1.)).bg(rgb(pal().line));
             div().absolute().size_full().flex().items_center().justify_center().pb(px(TOOLS_H + TOOLS_GAP)).child(
                 div()
-                    .w(px(540.))
+                    .w(px(WELCOME_W))
                     .max_w(gpui_kit::relative(0.92))
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap_3()
                     .text_center()
-                    .child(div().text_2xl().child(tr("Talk, and the board draws itself.", "说话，板书自己长出来。")))
-                    .child(div().max_w(px(380.)).text_sm().text_color(rgb(pal().muted)).child(tr(
+                    .map(|d| match written {
+                        Some(line) => d.child(line),
+                        None => d.child(div().text_2xl().child(headline)),
+                    })
+                    .child(div().mt(px(10.)).max_w(px(400.)).text_sm().line_height(px(21.)).text_color(rgb(pal().muted)).child(tr(
                         "Flows, notes, decisions and to-dos are written and connected as the conversation goes.",
                         "流程、要点、决定和待办，会随着讨论写上去、连起来。",
                     )))
                     .child(
                         div()
-                            .pt_1()
+                            .mt(px(20.))
                             .flex()
+                            .flex_wrap()
+                            .justify_center()
                             .items_center()
-                            .gap_2()
-                            .text_xs()
-                            .text_color(rgb(pal().muted))
-                            .when_some(self.keys.label(Action::Listen), |d, keys| d.child(hint_key(keys)).child(tr("to listen", "开始收音")).child(div().w(px(10.))))
-                            .when_some(self.keys.label(Action::TypeLine), |d, keys| d.child(hint_key(keys)).child(tr("to type a line", "输入一句话")).child(div().w(px(10.))))
-                            .when_some(self.keys.label(Action::Shortcuts), |d, keys| d.child(hint_key(keys)).child(tr("for all shortcuts", "查看所有快捷键"))),
+                            .gap(px(12.))
+                            .when_some(hint(self.keys.label(Action::Listen), tr("listen", "收音")), |d, h| d.child(h))
+                            .child(dot())
+                            .when_some(hint(self.keys.label(Action::TypeLine), tr("type a line", "打字输入")), |d, h| d.child(h))
+                            .child(dot())
+                            .when_some(hint(self.keys.label(Action::Shortcuts), tr("all shortcuts", "所有快捷键")), |d, h| d.child(h)),
                     )
-                    .when(self.store.is_some(), |d| {
-                        d.child(div().pt_5().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(tr("or start from a template", "或者从模板开始"))).child(
-                            div().flex().flex_wrap().justify_center().gap_2().children(starts.into_iter().enumerate().map(|(i, (name, topics))| {
+                    .when(self.store.is_some() && !starts.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .mt(px(36.))
+                                .w_full()
+                                .flex()
+                                .items_center()
+                                .gap_3()
+                                .child(rule())
+                                .child(div().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(tr("or start from a template", "或者从模板开始")))
+                                .child(rule()),
+                        )
+                        .child(
+                            div().mt(px(14.)).w_full().flex().flex_wrap().justify_center().gap(px(8.)).children(starts.into_iter().enumerate().map(|(i, (name, topics))| {
                                 let tip = topics.join(" · ");
-                                float()
+                                let preview = topics.iter().take(3).cloned().collect::<Vec<_>>().join(" · ");
+                                div()
                                     .id(("start-from", i))
-                                    .shadow_none()
-                                    .h(px(30.))
+                                    .w(px(card_w))
                                     .px_3()
+                                    .py(px(9.))
+                                    .flex()
+                                    .flex_col()
+                                    .items_start()
+                                    .gap(px(3.))
+                                    .text_left()
+                                    .rounded(px(6.))
+                                    .border_1()
+                                    .border_color(rgb(pal().line))
+                                    .bg(rgb(pal().surface))
                                     .cursor_pointer()
-                                    .text_sm()
-                                    .hover(|d| d.border_color(rgb(pal().text)))
+                                    .hover(|d| d.border_color(rgb(pal().muted)))
                                     .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
                                     .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(topics.clone(), cx)))
-                                    .child(name)
+                                    .child(div().text_sm().child(name))
+                                    .child(div().w_full().overflow_hidden().whitespace_nowrap().text_ellipsis().text_xs().text_color(rgb(pal().faint)).child(preview))
                             })),
                         )
                     })
-                    .child(div().pt_2().text_xs().text_color(rgb(pal().faint)).child(tr("Drop a PDF or an image anywhere to discuss it.", "把 PDF 或图片拖进窗口，就能对着它讨论。"))),
+                    .child(
+                        div()
+                            .mt(px(28.))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .text_xs()
+                            .text_color(rgb(pal().faint))
+                            .child(icon("import").size(px(12.)))
+                            .child(tr("Drop a PDF or an image anywhere to discuss it.", "把 PDF 或图片拖进窗口，就能对着它讨论。")),
+                    ),
             )
         });
         // The board fills its column; what works on it floats over its edges.
@@ -7465,7 +7524,7 @@ impl Render for Workbench {
             let ink = self.ink.borrow();
             (ink.extent.x1 > ink.extent.x0, f32::from(ink.canvas.size.height), ink.canvas.origin)
         };
-        let minimap = (map_on && has_ink && canvas_width >= ZOOM_TOOLS_FROM).then(|| {
+        let minimap = (map_on && has_ink && !blank && canvas_width >= ZOOM_TOOLS_FROM).then(|| {
             let (shown, press, moved, lift, lift_out) = (self.ink.clone(), self.ink.clone(), self.ink.clone(), self.ink.clone(), self.ink.clone());
             // Where it was dragged to, or the top right corner; kept on the board if the window has shrunk since.
             let (right, bottom, x, y) = self.form.saved.minimap_at.unwrap_or(MAP_START);
@@ -8173,6 +8232,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     store,
                     tray: inbox.as_ref().map(|i| tray_of(i, i.cards())).unwrap_or_default(),
                     trail: None,
+                    welcome_line: None,
                     inbox,
                     save: SaveState::Idle,
                     saving: None,

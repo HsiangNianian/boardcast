@@ -33,6 +33,66 @@ pub fn word_strokes(glyphs: &mut Glyphs) -> Vec<Inked> {
     strokes
 }
 
+/// A line of text in the board's pen, `size` tall, from (0, 0) at its top left: its strokes, and how wide and
+/// tall it is. A character the pen has no letter for leaves a space.
+pub fn written_line(glyphs: &mut Glyphs, text: &str, size: f32) -> (Vec<Inked>, f32, f32) {
+    let mut r = Rng::new(text);
+    let mut x = 0.0;
+    let mut strokes = vec![];
+    for c in text.chars() {
+        match glyphs.get(c) {
+            Some(glyph) => {
+                for stroke in place(&glyph.strokes, x, 0.0, size, &mut r, 0.0) {
+                    strokes.push(ink(&stroke, size * 0.085, size * 0.012, &mut r));
+                }
+                x += glyph.advance * size;
+            }
+            None => x += size * 0.32,
+        }
+    }
+    (strokes, x, size * 1.25)
+}
+
+/// Written strokes as an element `w` by `h`, the pen as far along them as `started` and `writing` say,
+/// scaled down to fit a narrower place than they were written for.
+pub fn written(strokes: Vec<Inked>, w: f32, h: f32, started: Instant, writing: Duration, window: &mut Window) -> impl IntoElement {
+    let elapsed = started.elapsed();
+    if elapsed < writing {
+        window.request_animation_frame();
+    }
+    let total: f32 = strokes.iter().map(|s| s.length).sum();
+    let done = total * (elapsed.as_secs_f32() / writing.as_secs_f32().max(0.001)).min(1.0);
+    canvas(
+        |_, _, _| (),
+        move |bounds: Bounds<Pixels>, (), window: &mut Window, _| {
+            let k = (f32::from(bounds.size.width) / w.max(1.0)).min(1.0);
+            // Centred in its place, at whatever scale fits.
+            let left = bounds.origin.x + px((f32::from(bounds.size.width) - w * k) / 2.0);
+            let top = bounds.origin.y + px((f32::from(bounds.size.height) - h * k) / 2.0);
+            let at = |p: &Pt| point(left + px(p[0] * k), top + px(p[1] * k));
+            let color: Hsla = rgb(pal().ink(INK)).into();
+            let mut left_to_write = done;
+            for stroke in &strokes {
+                if left_to_write <= 0.0 {
+                    break;
+                }
+                let shape = outline(stroke, (left_to_write / stroke.length.max(0.001)).min(1.0));
+                left_to_write -= stroke.length;
+                let mut pb = PathBuilder::fill();
+                let Some(first) = shape.first() else { continue };
+                pb.move_to(at(first));
+                shape[1..].iter().for_each(|p| pb.line_to(at(p)));
+                pb.close();
+                if let Ok(path) = pb.build() {
+                    window.paint_path(path, Background::from(color));
+                }
+            }
+        },
+    )
+    .w_full()
+    .h(px(h))
+}
+
 pub fn splash(strokes: &[Inked], started: Instant, window: &mut Window) -> impl IntoElement {
     let elapsed = started.elapsed();
     if elapsed < WRITING {

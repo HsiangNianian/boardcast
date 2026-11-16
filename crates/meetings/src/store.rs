@@ -345,6 +345,28 @@ impl Store {
         Ok(revision)
     }
 
+    /// Where meetings are kept, the folder the meetings list opens.
+    pub fn folder(&self) -> PathBuf {
+        self.current_dir()
+    }
+
+    /// A meeting's file, and the folder beside it with its pictures and its audio, which may not exist yet.
+    pub fn meeting_paths(&self, id: &str) -> Result<(PathBuf, PathBuf)> {
+        valid(id)?;
+        let dir = self.current_dir();
+        Ok((dir.join(format!("{id}.json")), dir.join(id)))
+    }
+
+    /// Where a meeting's kept audio goes: a file named `audio-<when it began>.opus` beside its images.
+    pub fn audio_path(&self, id: &str, name: &str) -> Result<PathBuf> {
+        valid(id)?;
+        let stamp = name.strip_prefix("audio-").and_then(|n| n.strip_suffix(".opus"));
+        if !stamp.is_some_and(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit())) {
+            bail!("Invalid audio name: {name}");
+        }
+        Ok(self.current_dir().join(id).join(name))
+    }
+
     fn asset_path(&self, dir: &Path, id: &str, key: &str) -> Result<PathBuf> {
         valid(id)?;
         if !valid_asset(key) {
@@ -660,5 +682,16 @@ mod tests {
         assert_eq!(a.len(), 20, "{a}");
         std::thread::sleep(std::time::Duration::from_millis(2));
         assert_ne!(new_id(), b);
+    }
+
+    #[test]
+    fn kept_audio_has_a_place_beside_the_meeting_and_no_other_name() {
+        let store = Store::new(std::env::temp_dir().join("boardcast-audio-path"));
+        let path = store.audio_path("m1", "audio-1763270000000.opus").unwrap();
+        assert!(path.ends_with("m1/audio-1763270000000.opus"), "{}", path.display());
+        for bad in ["audio-.opus", "audio-12.wav", "../audio-1.opus", "audio-1.opus/../x", "notes.opus"] {
+            assert!(store.audio_path("m1", bad).is_err(), "{bad}");
+        }
+        assert!(store.audio_path("../m1", "audio-1.opus").is_err());
     }
 }

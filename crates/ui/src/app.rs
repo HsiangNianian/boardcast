@@ -1417,6 +1417,8 @@ struct Workbench {
     /// The empty board's headline in the board's pen, for the words it was written for: its strokes, size and
     /// when the pen began.
     welcome_line: Option<(String, Vec<Inked>, f32, f32, Instant)>,
+    /// The file the audio is being kept in while listening, and when it began.
+    keeping: Option<(String, f64)>,
     /// The board a document was opened from, and which document, for the way back.
     trail: Option<(usize, String)>,
     save: SaveState,
@@ -1871,12 +1873,47 @@ impl Workbench {
     /// Turn the microphone on or off, counting the time it was on towards the meeting.
     fn toggle_mic(&mut self) {
         let was_listening = self.pipeline.listening();
-        self.pipeline.toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()));
+        // With the setting on, a saved meeting keeps what it hears: a file for each time it listens.
+        let keep = (!was_listening && self.form.saved.keep_audio && self.editable()).then(|| {
+            let start = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
+            let name = format!("audio-{start}.opus");
+            self.store.as_ref().and_then(|store| store.audio_path(self.live.id(), &name).ok()).map(|path| (name, start as f64, path))
+        });
+        let path = keep.flatten().map(|(name, start, path)| {
+            self.keeping = Some((name, start));
+            path
+        });
+        self.pipeline.toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()), path);
         if !was_listening {
             self.listening_since = Some(Instant::now());
         } else if let Some(since) = self.listening_since.take() {
-            self.live.add_recorded(since.elapsed().as_secs_f64() * 1000.0);
+            let ms = since.elapsed().as_secs_f64() * 1000.0;
+            self.live.add_recorded(ms);
+            if let Some((name, start)) = self.keeping.take() {
+                self.live.add_audio(&name, start, ms);
+            }
         }
+    }
+
+    /// Show a meeting's files in the system's file manager: its folder, or its file when it has no folder yet.
+    fn open_meeting_folder(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some(store) = &self.store else { return };
+        match store.meeting_paths(id) {
+            Ok((_, folder)) if folder.is_dir() => cx.open_with_system(&folder),
+            Ok((file, _)) => cx.reveal_path(&file),
+            Err(e) => {
+                self.notice = Some(format!("{e:#}"));
+                cx.notify();
+            }
+        }
+    }
+
+    fn set_keep_audio(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.form.saved.keep_audio = on;
+        if let Err(e) = self.form.saved.save() {
+            self.form.note = Some(format!("{e:#}"));
+        }
+        cx.notify();
     }
 
     /// Put the listening so far into the meeting before it is saved, and go on counting from here.
@@ -2954,6 +2991,10 @@ impl Workbench {
 
     /// Leave the current meeting only if it is safely saved; otherwise stay and say why.
     fn leave(&mut self) -> bool {
+        // Listening stops before the meeting is saved, so audio kept of it is noted in it.
+        if self.pipeline.listening() && self.keeping.is_some() {
+            self.toggle_mic();
+        }
         self.count_listening();
         match self.flush() {
             Ok(()) => true,
@@ -4205,6 +4246,7 @@ impl Workbench {
             proxy_url: self.form.saved.proxy_url.clone(),
             proxy_user: self.form.saved.proxy_user.clone(),
             proxy_password: self.form.saved.proxy_password.clone(),
+            keep_audio: self.form.saved.keep_audio,
         }
     }
 
@@ -4542,6 +4584,9 @@ impl Workbench {
     fn closing(&mut self, cx: &mut Context<Self>) -> bool {
         if self.close_refused {
             return true;
+        }
+        if self.pipeline.listening() && self.keeping.is_some() {
+            self.toggle_mic();
         }
         self.count_listening();
         if let Err(error) = self.flush() {
@@ -6572,9 +6617,10 @@ impl Render for Workbench {
                                                 .text_xs()
                                                 .text_color(rgb(pal().muted))
                                                 .hover(|d| d.text_color(rgb(pal().text)).border_color(rgb(pal().text)))
+                                                .px_4()
                                                 .on_click(cx.listener(|this, _, _, cx| this.save_template(cx)))
-                                                .child(icon("plus").size(px(11.)))
-                                                .child(tr("Keep this board's topics as a template", "把这张板的话题存成模板")),
+                                                .child(icon("plus").size(px(11.)).flex_none())
+                                                .child(div().min_w_0().text_center().child(tr("Keep this board's topics as a template", "把这张板的话题存成模板"))),
                                         )
                                     }),
                             )
@@ -6661,7 +6707,7 @@ impl Render for Workbench {
                         let current = id == self.live.id();
                         let pinned = self.pinned.iter().any(|p| *p == id);
                         let confirming = self.confirm_delete.as_deref() == Some(id.as_str());
-                        let (pin_id, delete_id, sure_id) = (id.clone(), id.clone(), id.clone());
+                        let (pin_id, delete_id, sure_id, folder_id) = (id.clone(), id.clone(), id.clone(), id.clone());
                         // When, as the group says it: the time today and yesterday, the date before; then how long.
                         let when = if group == 1 || group == 2 { local_time(m.updated_at).split(' ').nth(1).unwrap_or_default().to_string() } else { local_time(m.updated_at).split(' ').next().unwrap_or_default().to_string() };
                         let detail = match &m.read_error {
@@ -6737,7 +6783,26 @@ impl Render for Workbench {
                                                 })),
                                         )
                                     })
-                                    // The meeting that is open cannot be deleted from under itself.
+                                    // Its folder, with its pictures and its audio; a meeting with neither shows its file instead.
+                    .when(self.store.is_some(), |d| {
+                        let id = folder_id.clone();
+                        d.child(
+                            div()
+                                .id(("meeting-folder", i))
+                                .p_1()
+                                .cursor_pointer()
+                                .opacity(0.)
+                                .group_hover("meeting-row", |s| s.opacity(1.))
+                                .child(icon("folder").size_3().text_color(rgb(pal().faint)))
+                                .tooltip(|window, cx| Tooltip::new(tr("Open its folder: the meeting, its pictures and its audio", "打开它的文件夹：会议、图片和录音")).build(window, cx))
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.open_meeting_folder(&id, cx);
+                                })),
+                        )
+                    })
+                    // The meeting that is open cannot be deleted from under itself.
                                     .when(self.store.is_some() && !current, |d| {
                                         d.child(
                                             div()
@@ -7092,6 +7157,15 @@ impl Render for Workbench {
                         Switch::new("meeting-search").checked(self.form.saved.meeting_search).accessibility_label(tr("Search meetings by meaning", "按意思搜索会议")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_meeting_search(*on, cx))),
                     ))
                     .when_some(self.search_status(), |d, (text, failed)| d.child(div().pt_1().text_xs().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(text)))
+                    .child(row(
+                        tr("Keep the meeting's audio", "保存会议录音"),
+                        Some(tr(
+                            "Saves what is heard beside each meeting on this computer, about 10 MB an hour, so its replay and its export can have the sound. It is never uploaded.",
+                            "把听到的声音保存在本机的会议旁边，大约每小时 10 MB，回放和导出就能带上声音。不会上传。",
+                        )),
+                    ).child(
+                        Switch::new("keep-audio").checked(self.form.saved.keep_audio).accessibility_label(tr("Keep the meeting's audio", "保存会议录音")).on_click(cx.listener(|this, on: &bool, _, cx| this.set_keep_audio(*on, cx))),
+                    ))
                     .child(row(
                         tr("Network proxy", "网络代理"),
                         Some(tr("For downloading models and for a remote model. The model on this computer is always reached directly.", "用于下载模型和远程模型。本机运行的模型始终直连。")),
@@ -7473,6 +7547,16 @@ impl Render for Workbench {
                                             .flex()
                                             .items_center()
                                             .gap_2()
+                                            .when_some(self.store.as_ref().map(Store::folder), |d, folder| {
+                                                d.child(
+                                                    Button::new("library-folder")
+                                                        .small()
+                                                        .ghost()
+                                                        .child(div().flex().items_center().gap(px(6.)).child(icon("folder").size(px(13.))).child(div().text_sm().child(tr("Open folder", "打开文件夹"))))
+                                                        .tooltip(tr("Where every meeting is kept on this computer", "所有会议在本机保存的位置"))
+                                                        .on_click(cx.listener(move |_, _, _, cx| cx.open_with_system(&folder))),
+                                                )
+                                            })
                                             .when(self.store.is_some() && !sidebar_shown, |d| d.child(Button::new("library-page-new").small().primary().label(tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))))),
                                     ),
                             )
@@ -8357,6 +8441,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     store,
                     tray: inbox.as_ref().map(|i| tray_of(i, i.cards())).unwrap_or_default(),
                     trail: None,
+                    keeping: None,
                     welcome_line: None,
                     inbox,
                     save: SaveState::Idle,

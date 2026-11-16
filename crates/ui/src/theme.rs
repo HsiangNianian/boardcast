@@ -130,6 +130,7 @@ const PICTOGRAMS: [(&str, &str); 37] = [
     ("icons/eraser.svg", include_str!("../icons/eraser.svg")),
     ("icons/file-down.svg", include_str!("../icons/file-down.svg")),
     ("icons/file-plus.svg", include_str!("../icons/file-plus.svg")),
+    ("icons/folder.svg", include_str!("../icons/folder.svg")),
     ("icons/folder-open.svg", include_str!("../icons/folder-open.svg")),
     ("icons/fork.svg", include_str!("../icons/fork.svg")),
     ("icons/highlighter.svg", include_str!("../icons/highlighter.svg")),

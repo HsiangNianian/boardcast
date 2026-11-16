@@ -309,6 +309,14 @@ impl Graph {
         self.add_clip(&label, &text, &clip);
     }
 
+    /// Put a card for an imported document on the board: its first page in small, opening the document's boards.
+    pub fn add_document_card(&mut self, name: &str, first_page: &Clip, doc: &str) -> String {
+        let id = self.add_clip(name, "", first_page);
+        let i = self.index(&id).expect("just added");
+        self.nodes[i].extra.insert("opens".into(), Value::String(doc.to_string()));
+        id
+    }
+
     /// Put a card brought from elsewhere (the inbox) on the board where it was dropped, with its marks and
     /// what was drawn on it, and give back its id.
     pub fn add_card(&mut self, label: &str, text: &str, clip: &Clip, marks: &[String], drawn: &[Annotation], at: [f64; 2]) -> String {
@@ -694,6 +702,11 @@ impl NodeData {
     pub fn at(&self) -> Option<[f64; 4]> {
         let at = self.extra.get("at")?;
         Some([at["x"].as_f64()?, at["y"].as_f64()?, at["w"].as_f64()?, at["h"].as_f64()?])
+    }
+
+    /// The imported document a card opens, if it is a document's card.
+    pub fn opens(&self) -> Option<&str> {
+        self.extra.get("opens").and_then(Value::as_str)
     }
 
     /// Where a clip card was put by hand, its top left corner on the board, if it was.

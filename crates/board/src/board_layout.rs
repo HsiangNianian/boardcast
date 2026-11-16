@@ -1022,6 +1022,19 @@ mod clip_tests {
     }
 
     #[test]
+    fn a_document_card_shows_its_first_page_and_names_what_it_opens() {
+        let mut g = Graph::default();
+        g.apply(&crate::graph::parse_ops("T 「Plan」"));
+        let page = Clip { src: "asset:p1.jpg".into(), pw: 612.0, ph: 792.0, x: 0.0, y: 0.0, w: 612.0, h: 792.0 };
+        g.add_document_card("Serving latency", &page, "d1");
+        let card = g.nodes.iter().find(|n| n.kind == Kind::Clip).unwrap();
+        assert_eq!((card.label.as_str(), card.opens()), ("Serving latency", Some("d1")));
+        let l = StableLayout::default().layout(&g, &mut crate::sugiyama::first_diagram);
+        let laid = l.clips.iter().find(|c| c.id == card.id).unwrap();
+        assert!((laid.h - CLIP_MAX_H).abs() < 1e-9 && laid.w < laid.h, "a whole page, upright, as tall as a card goes: {laid:?}");
+    }
+
+    #[test]
     fn a_small_clip_is_enlarged_at_most_twice() {
         let clip = Clip { src: String::new(), pw: 800.0, ph: 1000.0, x: 0.0, y: 0.0, w: 40.0, h: 20.0 };
         assert_eq!(clip.card_size(), (80.0, 40.0));

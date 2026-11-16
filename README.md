@@ -80,6 +80,8 @@ Use **Import** in the sidebar, or drop a file on the board:
 | **arXiv** | Paste a link or paper ID to download the PDF. |
 | **PNG / JPEG / WebP / GIF** | Read the text in a screenshot or a photographed whiteboard with the local vision add-on. |
 
+Added to a meeting that already has a board, a document also leaves a card on that board: its first page in small. Double-click the card, or choose **Open** on it, to go to the document's pages; the title bar then reads *meeting › Board 1 › document 2/5*, and clicking *Board 1* takes you back.
+
 ### Take the meeting with you
 
 | Export | Use it for |

@@ -454,3 +454,6 @@ version-number = Version { $version }
 sample-title = Wochentermin
 sample-first-point = Beta am Freitag veröffentlichen
 sample-second-point = Mia nach den Dokumenten fragen
+one-html-file-for-someone-2 = Eine .html-Datei für alle, die die Besprechung verpasst haben, mit Ton. Nichts zu installieren.
+video-with-sound = Video mit Ton
+the-whole-meeting-in-real = Die ganze Besprechung in Echtzeit mit ihrer Aufnahme, jede Tafel so, wie sie gezeichnet wurde.

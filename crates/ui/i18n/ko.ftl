@@ -430,3 +430,6 @@ version-number = 버전 { $version }
 sample-title = 주간 회의
 sample-first-point = 금요일에 베타 출시
 sample-second-point = 문서는 Mia에게 확인
+one-html-file-for-someone-2 = 회의에 참석하지 못한 사람을 위한 .html 파일 하나. 음성이 포함되며 설치할 것이 없습니다.
+video-with-sound = 음성 포함 동영상
+the-whole-meeting-in-real = 회의 전체를 녹음과 함께 실제 시간대로 재생하며, 모든 보드를 그려진 그대로 보여 줍니다.

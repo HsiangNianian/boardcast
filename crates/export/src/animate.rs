@@ -61,6 +61,12 @@ impl Replay {
 
 /// Lay the board out step by step, as the app's replay does, and time each new piece of ink.
 pub fn replay(page: &replay_page::Page, glyphs: &mut Glyphs) -> Replay {
+    timed(page, glyphs, None)
+}
+
+/// As `replay`, but in real time: each step's ink begins no sooner than `starts` says, in ms, one for each
+/// step and one more for the board as kept, and nothing is sped up.
+pub fn timed(page: &replay_page::Page, glyphs: &mut Glyphs, starts: Option<&[f64]>) -> Replay {
     let mut graphs = vec![];
     let mut g = Graph::default();
     for step in &page.steps {
@@ -84,7 +90,10 @@ pub fn replay(page: &replay_page::Page, glyphs: &mut Glyphs) -> Replay {
     let mut pictures: Vec<Shown> = vec![];
     // Which picture each clip frame on the board shows, by the frame's key.
     let mut framed: HashMap<String, usize> = HashMap::new();
-    for g in &graphs {
+    for (i, g) in graphs.iter().enumerate() {
+        if let Some(start) = starts.and_then(|s| s.get(i)) {
+            at = f64::max(at, *start);
+        }
         layout.recall(&kept);
         let laid = layout.layout(g, &mut first_diagram);
         let (pieces, _) = compose(g, &laid, glyphs);
@@ -153,7 +162,7 @@ pub fn replay(page: &replay_page::Page, glyphs: &mut Glyphs) -> Replay {
         at = if wrote { pen } else { at } + PAUSE;
     }
     // However long the meeting was, the board is written in `TOTAL` at most.
-    let k = if at > TOTAL { TOTAL / at } else { 1.0 };
+    let k = if at > TOTAL && starts.is_none() { TOTAL / at } else { 1.0 };
     for s in &mut strokes {
         s.delay = (s.delay * k).round();
         s.duration = (s.duration * k).round();
@@ -192,49 +201,131 @@ struct Frames<'a> {
     height: u32,
     /// Each clip's picture, read once.
     pictures: Vec<Option<tiny_skia::Pixmap>>,
+    /// The page under the board, read once.
+    page: Option<tiny_skia::Pixmap>,
+    /// Each stroke's extent: left, top, right, bottom.
+    bounds: Vec<[f64; 4]>,
+    /// Each stroke's whole outline, worked out once, as most frames show most strokes finished.
+    whole: Vec<Vec<boardcast_board::glyphs::Pt>>,
 }
 
 impl<'a> Frames<'a> {
     /// At most `side` pixels on the longer side; `even` rounds both sides to even numbers, as a video's
     /// halved colour planes need.
     fn new(replay: &'a Replay, side: f64, even: bool) -> anyhow::Result<Self> {
-        use tiny_skia::{Color, FilterQuality, Pixmap, PixmapPaint, Transform};
-        let (x, y, w, h) = replay.frame;
+        let (_, _, w, h) = replay.frame;
         let scale = (side / w.max(h)).min(2.0);
         let round = |v: f64| if even { ((v / 2.0).round() as u32 * 2).max(2) } else { v.round().max(1.0) as u32 };
-        let (width, height) = (round(w * scale), round(h * scale));
-        let at = Transform::from_translate(-x as f32, -y as f32).post_scale(scale as f32, scale as f32);
+        Self::fitted(replay, round(w * scale), round(h * scale))
+    }
+
+    /// Exactly `width` by `height`, the board as large as fits, in the middle.
+    fn fitted(replay: &'a Replay, width: u32, height: u32) -> anyhow::Result<Self> {
+        use tiny_skia::{Color, FilterQuality, Pixmap, PixmapPaint, Transform};
+        let (x, y, w, h) = replay.frame;
+        let scale = (f64::from(width) / w).min(f64::from(height) / h).min(2.0);
+        let (dx, dy) = ((f64::from(width) - w * scale) / 2.0, (f64::from(height) - h * scale) / 2.0);
+        let at = Transform::from_translate(-x as f32, -y as f32).post_scale(scale as f32, scale as f32).post_translate(dx as f32, dy as f32);
         let mut base = Pixmap::new(width, height).ok_or_else(|| anyhow::anyhow!("the animation is too big to make"))?;
         let [_, r, g, bl] = PAPER.to_be_bytes();
         base.fill(Color::from_rgba8(r, g, bl, 255));
-        if let Some(page) = &replay.page {
-            let picture = crate::ink::page_pixmap(&page.image)?;
-            let fit = Transform::from_scale((page.w / f64::from(picture.width())) as f32, (page.h / f64::from(picture.height())) as f32).post_concat(at);
+        let mut page = None;
+        if let Some(under) = &replay.page {
+            let picture = crate::ink::page_pixmap(&under.image)?;
+            let fit = Transform::from_scale((under.w / f64::from(picture.width())) as f32, (under.h / f64::from(picture.height())) as f32).post_concat(at);
             base.draw_pixmap(0, 0, picture.as_ref(), &PixmapPaint { quality: FilterQuality::Bilinear, ..PixmapPaint::default() }, fit, None);
+            page = Some(picture);
         }
         let pictures = replay.pictures.iter().map(|p| crate::ink::page_pixmap(&p.picture.image).ok()).collect();
-        Ok(Self { replay, base, at, width, height, pictures })
+        let bounds = replay
+            .strokes
+            .iter()
+            .map(|s| {
+                let pad = f64::from(s.inked.width);
+                s.inked.center.iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, p| [b[0].min(f64::from(p[0]) - pad), b[1].min(f64::from(p[1]) - pad), b[2].max(f64::from(p[0]) + pad), b[3].max(f64::from(p[1]) + pad)])
+            })
+            .collect();
+        let whole = replay.strokes.iter().map(|s| outline(&s.inked, 1.0)).collect();
+        Ok(Self { replay, base, at, width, height, pictures, page, bounds, whole })
     }
 
     /// The board at `t` milliseconds, as RGBA.
     fn at(&self, t: f64) -> Vec<u8> {
         let mut canvas = self.base.clone();
+        self.ink(&mut canvas, t, self.at);
+        canvas.take()
+    }
+
+    /// The board at `t` with `view`, an area of the board, filling the picture, as RGBA.
+    fn seen(&self, t: f64, view: View) -> anyhow::Result<Vec<u8>> {
+        use tiny_skia::{Color, FilterQuality, Pixmap, PixmapPaint, Transform};
+        let scale = (f64::from(self.width) / view.2).min(f64::from(self.height) / view.3);
+        let (dx, dy) = ((f64::from(self.width) - view.2 * scale) / 2.0, (f64::from(self.height) - view.3 * scale) / 2.0);
+        let at = Transform::from_translate(-view.0 as f32, -view.1 as f32).post_scale(scale as f32, scale as f32).post_translate(dx as f32, dy as f32);
+        let mut canvas = Pixmap::new(self.width, self.height).ok_or_else(|| anyhow::anyhow!("the video is too big to make"))?;
+        let [_, r, g, b] = PAPER.to_be_bytes();
+        canvas.fill(Color::from_rgba8(r, g, b, 255));
+        if let (Some(page), Some(picture)) = (&self.replay.page, &self.page) {
+            let fit = Transform::from_scale((page.w / f64::from(picture.width())) as f32, (page.h / f64::from(picture.height())) as f32).post_concat(at);
+            canvas.draw_pixmap(0, 0, picture.as_ref(), &PixmapPaint { quality: FilterQuality::Bilinear, ..PixmapPaint::default() }, fit, None);
+        }
+        self.ink(&mut canvas, t, at);
+        Ok(canvas.take())
+    }
+
+    /// The pictures and strokes shown at `t`, as far as the pen has got.
+    fn ink(&self, canvas: &mut tiny_skia::Pixmap, t: f64, at: tiny_skia::Transform) {
         for (shown, pixels) in self.replay.pictures.iter().zip(&self.pictures) {
             let Some(pixels) = pixels.as_ref().filter(|_| t >= shown.from && shown.until.is_none_or(|u| t < u)) else { continue };
             let p = &shown.picture;
-            let fit = tiny_skia::Transform::from_scale((p.w / f64::from(pixels.width())) as f32, (p.h / f64::from(pixels.height())) as f32).post_translate(p.x as f32, p.y as f32).post_concat(self.at);
+            let fit = tiny_skia::Transform::from_scale((p.w / f64::from(pixels.width())) as f32, (p.h / f64::from(pixels.height())) as f32).post_translate(p.x as f32, p.y as f32).post_concat(at);
             canvas.draw_pixmap(0, 0, pixels.as_ref(), &tiny_skia::PixmapPaint { quality: tiny_skia::FilterQuality::Bilinear, ..tiny_skia::PixmapPaint::default() }, fit, None);
         }
         for under in [true, false] {
-            for s in self.replay.strokes.iter().filter(|s| s.style.under == under && s.until.is_none_or(|u| t < u)) {
+            for (s, whole) in self.replay.strokes.iter().zip(&self.whole).filter(|(s, _)| s.style.under == under && s.until.is_none_or(|u| t < u)) {
                 let k = if s.duration <= 0.0 { if t >= s.delay { 1.0 } else { 0.0 } } else { ((t - s.delay) / s.duration).clamp(0.0, 1.0) };
-                if k > 0.0 {
-                    crate::ink::fill_stroke(&mut canvas, &outline(&s.inked, k as f32), s.style, self.at);
+                if k >= 1.0 {
+                    crate::ink::fill_stroke(canvas, whole, s.style, at);
+                } else if k > 0.0 {
+                    crate::ink::fill_stroke(canvas, &outline(&s.inked, k as f32), s.style, at);
                 }
             }
         }
-        canvas.take()
     }
+
+    /// The area of the board that has anything on it at `t`, if anything has.
+    fn filled(&self, t: f64) -> Option<View> {
+        let mut area: Option<[f64; 4]> = None;
+        let mut add = |x0: f64, y0: f64, x1: f64, y1: f64| {
+            area = Some(area.map_or([x0, y0, x1, y1], |a| [a[0].min(x0), a[1].min(y0), a[2].max(x1), a[3].max(y1)]));
+        };
+        if let Some(page) = &self.replay.page {
+            add(0.0, 0.0, page.w, page.h);
+        }
+        for (s, b) in self.replay.strokes.iter().zip(&self.bounds) {
+            if t >= s.delay && s.until.is_none_or(|u| t < u) {
+                add(b[0], b[1], b[2], b[3]);
+            }
+        }
+        for p in self.replay.pictures.iter().filter(|p| t >= p.from && p.until.is_none_or(|u| t < u)) {
+            add(p.picture.x, p.picture.y, p.picture.x + p.picture.w, p.picture.y + p.picture.h);
+        }
+        area.map(|a| (a[0], a[1], a[2] - a[0], a[3] - a[1]))
+    }
+}
+
+/// An area of a board: left, top, width, height.
+type View = (f64, f64, f64, f64);
+
+/// What the real-time video looks at: `filled` with a margin, never so small that the writing is huge, in
+/// the picture's proportions.
+fn framing(filled: View, (width, height): (u32, u32)) -> View {
+    let aspect = f64::from(width) / f64::from(height);
+    let (x, y, w, h) = (filled.0 - PADDING, filled.1 - PADDING, filled.2 + 2.0 * PADDING, filled.3 + 2.0 * PADDING);
+    let w = w.max(h * aspect).max(LIVE_MIN_WIDTH);
+    let h = w / aspect;
+    let (cx, cy) = (x + (filled.2 + 2.0 * PADDING) / 2.0, y + (filled.3 + 2.0 * PADDING) / 2.0);
+    (cx - w / 2.0, cy - h / 2.0, w, h)
 }
 
 /// The replay as a GIF: the same strokes at the same times as the animated SVG, written frame by frame,
@@ -321,7 +412,7 @@ pub fn webm(replay: &Replay) -> anyhow::Result<Vec<u8>> {
     let take = |encoder: &mut Context<u8>, out: &mut Vec<crate::webm::Frame>| -> anyhow::Result<bool> {
         loop {
             match encoder.receive_packet() {
-                Ok(p) => out.push(crate::webm::Frame { number: p.input_frameno, key: p.frame_type == FrameType::KEY, data: p.data }),
+                Ok(p) => out.push(crate::webm::Frame { ms: (p.input_frameno as f64 * step) as u64, key: p.frame_type == FrameType::KEY, data: p.data }),
                 Err(EncoderStatus::Encoded) => {}
                 Err(EncoderStatus::NeedMoreData) => return Ok(false),
                 Err(EncoderStatus::LimitReached) => return Ok(true),
@@ -348,7 +439,171 @@ pub fn webm(replay: &Replay) -> anyhow::Result<Vec<u8>> {
     }
     encoder.flush();
     while !take(&mut encoder, &mut out)? {}
-    Ok(crate::webm::write(w as u32, h as u32, GIF_FPS as u32, &encoder.container_sequence_header(), &out))
+    let duration = count as f64 * step;
+    let video = crate::webm::Video { width: w as u32, height: h as u32, fps: Some(GIF_FPS as u32), av1c: &encoder.container_sequence_header(), frames: &out };
+    Ok(crate::webm::write(Some(video), None, duration))
+}
+
+/// The real-time video's size: 720p, which keeps the writing legible on a phone and a projector.
+const LIVE_SIZE: (u32, u32) = (1280, 720);
+/// However still the board is, a frame at least this often, so players show the time going by.
+const LIVE_EVERY_MS: f64 = 2000.0;
+/// The real-time video never looks at less of the board than this wide, so a first word is not huge.
+const LIVE_MIN_WIDTH: f64 = 900.0;
+/// How far the view moves towards what it should show in each tenth of a second.
+const LIVE_EASE: f64 = 0.15;
+
+/// The times, in ms, at which a replay's picture changes, as merged spans from first to last.
+fn busy(replay: &Replay) -> Vec<(f64, f64)> {
+    let mut spans: Vec<(f64, f64)> = vec![];
+    for s in &replay.strokes {
+        spans.push((s.delay, s.delay + s.duration));
+        if let Some(u) = s.until {
+            spans.push((u, u));
+        }
+    }
+    for p in &replay.pictures {
+        spans.push((p.from, p.from));
+        if let Some(u) = p.until {
+            spans.push((u, u));
+        }
+    }
+    spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut merged: Vec<(f64, f64)> = vec![];
+    for (a, b) in spans {
+        match merged.last_mut() {
+            Some(last) if a <= last.1 => last.1 = last.1.max(b),
+            _ => merged.push((a, b)),
+        }
+    }
+    merged
+}
+
+/// Whether anything changes after `from` up to and including `to`.
+fn changes(busy: &[(f64, f64)], from: f64, to: f64) -> bool {
+    // The first span that has not ended by `from`.
+    let i = busy.partition_point(|(_, end)| *end <= from);
+    busy.get(i).is_some_and(|(start, _)| *start <= to)
+}
+
+/// The whole meeting as a video with its sound, in real time: `boards` replayed on the sound's clock, the
+/// board in view at each moment from `shown` (when the meeting turned to each board, in ms, in order), and
+/// the sound beside them. A frame is only stored when the picture changes, or every two seconds.
+pub fn live_webm(boards: &[Replay], shown: &[(f64, usize)], sound: &crate::Sound) -> anyhow::Result<Vec<u8>> {
+    let drawn: Vec<Frames> = boards.iter().map(|r| Frames::fitted(r, LIVE_SIZE.0, LIVE_SIZE.1)).collect::<anyhow::Result<_>>()?;
+    let spans: Vec<Vec<(f64, f64)>> = boards.iter().map(busy).collect();
+    let written = boards.iter().flat_map(|r| r.strokes.iter().map(|s| s.delay + s.duration)).fold(0.0, f64::max);
+    let end = (sound.packets.len() as f64 * sound.packet_ms as f64).max(written + PAUSE);
+    // First which frames to store and what each looks at, which is quick; then the drawing and encoding.
+    let step = 1000.0 / GIF_FPS;
+    let board_at = |t: f64| shown.iter().take_while(|(at, _)| *at <= t).last().or(shown.first()).map_or(0, |(_, b)| *b).min(boards.len().saturating_sub(1));
+    let mut plan: Vec<(f64, usize, View)> = vec![];
+    let mut view: Option<View> = None;
+    let mut f = 0;
+    loop {
+        let t = f as f64 * step;
+        if t > end {
+            break;
+        }
+        f += 1;
+        let board = board_at(t);
+        let turned = plan.last().is_none_or(|(_, b, _)| *b != board);
+        let want = framing(drawn[board].filled(t).unwrap_or(boards[board].frame), LIVE_SIZE);
+        let moved = match view {
+            // A new board is looked at straight away; on the same one the view glides.
+            Some(v) if !turned => {
+                let next = (v.0 + (want.0 - v.0) * LIVE_EASE, v.1 + (want.1 - v.1) * LIVE_EASE, v.2 + (want.2 - v.2) * LIVE_EASE, v.3 + (want.3 - v.3) * LIVE_EASE);
+                // Less than half a pixel's difference is no move.
+                let pixel = v.2 / f64::from(LIVE_SIZE.0);
+                let far = [next.0 - v.0, next.1 - v.1, next.2 - v.2, next.3 - v.3].iter().any(|d| d.abs() > pixel * 0.5);
+                if far {
+                    view = Some(next);
+                }
+                far
+            }
+            _ => {
+                view = Some(want);
+                true
+            }
+        };
+        let changed = moved || changes(&spans[board], t - step, t);
+        if turned || changed || plan.last().is_some_and(|(at, _, _)| t - at >= LIVE_EVERY_MS) {
+            plan.push((t, board, view.expect("set above")));
+        }
+    }
+    // Pieces encoded side by side, each from a key frame, then joined: one encoder keeps only a few cores busy.
+    let pieces = std::thread::available_parallelism().map_or(4, |n| n.get()).clamp(1, 12);
+    let size = plan.len().div_ceil(pieces).max(LIVE_PIECE_MIN);
+    let encoded: Vec<anyhow::Result<(Vec<crate::webm::Frame>, Vec<u8>)>> = std::thread::scope(|scope| {
+        let drawn = &drawn;
+        let jobs: Vec<_> = plan.chunks(size).map(|part| scope.spawn(move || encode_live(drawn, part))).collect();
+        jobs.into_iter().map(|j| j.join().unwrap_or_else(|_| Err(anyhow::anyhow!("the video encoder stopped")))).collect()
+    });
+    let mut frames = vec![];
+    let mut header = vec![];
+    for piece in encoded {
+        let (piece, h) = piece?;
+        if header.is_empty() {
+            header = h;
+        }
+        frames.extend(piece);
+    }
+    let (w, h) = LIVE_SIZE;
+    let video = crate::webm::Video { width: w, height: h, fps: None, av1c: &header, frames: &frames };
+    let audio = crate::webm::Audio { head: &sound.head, pre_skip_ns: sound.pre_skip_ns(), packet_ms: sound.packet_ms, packets: &sound.packets };
+    Ok(crate::webm::write(Some(video), Some(audio), end))
+}
+
+/// Encoding a piece costs a key frame, so a piece is never shorter than this many frames.
+const LIVE_PIECE_MIN: usize = 120;
+
+/// Draw and encode some of the real-time video's frames, each `(when, which board, what it looks at)`;
+/// the first is a key frame, so pieces join. Gives the frames and the encoder's codec record.
+fn encode_live(drawn: &[Frames], part: &[(f64, usize, View)]) -> anyhow::Result<(Vec<crate::webm::Frame>, Vec<u8>)> {
+    use rav1e::prelude::*;
+    let (w, h) = (LIVE_SIZE.0 as usize, LIVE_SIZE.1 as usize);
+    let config = EncoderConfig {
+        width: w,
+        height: h,
+        time_base: Rational::new(1, GIF_FPS as u64),
+        bit_depth: 8,
+        chroma_sampling: ChromaSampling::Cs420,
+        pixel_range: PixelRange::Limited,
+        color_description: Some(ColorDescription { color_primaries: ColorPrimaries::BT709, transfer_characteristics: TransferCharacteristics::BT709, matrix_coefficients: MatrixCoefficients::BT709 }),
+        quantizer: 70,
+        speed_settings: SpeedSettings::from_preset(10),
+        // In stored frames: a place to start from at least every minute.
+        max_key_frame_interval: 30,
+        low_latency: true,
+        tiles: 4,
+        ..Default::default()
+    };
+    let mut encoder: Context<u8> = Config::new().with_encoder_config(config).with_threads(2).new_context().map_err(|e| anyhow::anyhow!("the video encoder would not start: {e:?}"))?;
+    let mut out: Vec<crate::webm::Frame> = vec![];
+    let take = |encoder: &mut Context<u8>, out: &mut Vec<crate::webm::Frame>| -> anyhow::Result<bool> {
+        loop {
+            match encoder.receive_packet() {
+                Ok(p) => out.push(crate::webm::Frame { ms: part[p.input_frameno as usize].0 as u64, key: p.frame_type == FrameType::KEY, data: p.data }),
+                Err(EncoderStatus::Encoded) => {}
+                Err(EncoderStatus::NeedMoreData) => return Ok(false),
+                Err(EncoderStatus::LimitReached) => return Ok(true),
+                Err(e) => anyhow::bail!("the video encoder failed: {e:?}"),
+            }
+        }
+    };
+    for &(t, board, view) in part {
+        let rgba = drawn[board].seen(t, view)?;
+        let mut frame = encoder.new_frame();
+        let (y, u, v) = yuv420(&rgba, w, h);
+        frame.planes[0].copy_from_raw_u8(&y, w, 1);
+        frame.planes[1].copy_from_raw_u8(&u, w / 2, 1);
+        frame.planes[2].copy_from_raw_u8(&v, w / 2, 1);
+        encoder.send_frame(frame).map_err(|e| anyhow::anyhow!("the video encoder failed: {e:?}"))?;
+        take(&mut encoder, &mut out)?;
+    }
+    encoder.flush();
+    while !take(&mut encoder, &mut out)? {}
+    Ok((out, encoder.container_sequence_header()))
 }
 
 /// RGBA as BT.709 limited-range Y, Cb and Cr, the colour planes halved both ways (each from four pixels).

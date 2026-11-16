@@ -430,3 +430,6 @@ version-number = バージョン { $version }
 sample-title = 週次ミーティング
 sample-first-point = 金曜日にベータ版を公開
 sample-second-point = ドキュメントについて Mia に確認
+one-html-file-for-someone-2 = 会議に出られなかった人向けの .html ファイル 1 つ。音声付きで、インストールは不要です。
+video-with-sound = 音声付き動画
+the-whole-meeting-in-real = 会議全体を録音付きで実時間どおりに再生し、各ボードを描かれたとおりに見せます。

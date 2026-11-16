@@ -452,3 +452,6 @@ version-number = версия { $version }
 sample-title = Еженедельная встреча
 sample-first-point = выпустить бету в пятницу
 sample-second-point = спросить Мию о документации
+one-html-file-for-someone-2 = Один файл .html для тех, кто пропустил встречу, со звуком. Ничего не нужно устанавливать.
+video-with-sound = Видео со звуком
+the-whole-meeting-in-real = Вся встреча в реальном времени с записью, каждая доска — так, как её рисовали.

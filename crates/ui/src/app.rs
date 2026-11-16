@@ -1366,23 +1366,10 @@ fn hand_sample(glyphs: &mut Glyphs) -> (Vec<Inked>, f32, f32) {
 /// A meeting's sound: its samples, its pieces' starts and lengths in ms, and its loudness along it.
 type ReadSound = (Vec<f32>, Vec<(f64, f64)>, Vec<f32>);
 
-/// A meeting's kept sound read from its files and laid end to end, with each piece's start and length in ms.
-/// A file that is gone is heard as silence of its length, so the rest stays in step.
+/// A meeting's kept sound read from its files and laid end to end, with each piece's start and length in ms,
+/// and how loud it is along its length.
 fn read_sound(files: Vec<(Option<PathBuf>, f64, f64)>) -> Result<ReadSound> {
-    let per_ms = f64::from(boardcast_audio::SAMPLE_RATE) / 1000.0;
-    let (mut samples, mut pieces) = (Vec::new(), Vec::new());
-    for (path, start, ms) in files {
-        let piece = match path.map(|p| boardcast_audio::keep::read(&p)) {
-            Some(Ok(piece)) => piece,
-            Some(Err(e)) => {
-                eprintln!("a piece of the meeting's sound could not be read: {e:#}");
-                vec![0.0; (ms * per_ms) as usize]
-            }
-            None => vec![0.0; (ms * per_ms) as usize],
-        };
-        pieces.push((start, piece.len() as f64 / per_ms));
-        samples.extend(piece);
-    }
+    let (samples, pieces) = boardcast_audio::keep::read_pieces(&files);
     if samples.is_empty() {
         anyhow::bail!("the meeting's sound is empty");
     }
@@ -2466,7 +2453,7 @@ impl Workbench {
         self.show_board_image(shown);
         self.wait_for_next_step();
         if !audio.is_empty() {
-            self.hear_replay(audio, track, cx);
+            self.hear_replay(track, cx);
         }
         window.focus(&self.focus, cx);
         cx.notify();
@@ -2474,9 +2461,14 @@ impl Workbench {
 
     /// Read the meeting's kept sound on another thread, then play the replay on its clock. `track` tells
     /// this replay from one begun since.
-    fn hear_replay(&mut self, audio: Vec<(String, f64, f64)>, track: Rc<std::cell::Cell<Bounds<Pixels>>>, cx: &mut Context<Self>) {
-        let id = self.live.id().to_string();
-        let files: Vec<(Option<PathBuf>, f64, f64)> = audio.into_iter().map(|(name, start, ms)| (self.store.as_ref().and_then(|s| s.audio_path(&id, &name).ok()), start, ms)).collect();
+    /// The meeting's kept sound: each piece's file, when it began and how long it was.
+    fn sound_files(&self) -> Vec<(Option<PathBuf>, f64, f64)> {
+        let id = self.live.id();
+        self.live.audio().into_iter().map(|(name, start, ms)| (self.store.as_ref().and_then(|s| s.audio_path(id, &name).ok()), start, ms)).collect()
+    }
+
+    fn hear_replay(&mut self, track: Rc<std::cell::Cell<Bounds<Pixels>>>, cx: &mut Context<Self>) {
+        let files = self.sound_files();
         cx.spawn(async move |this, cx| {
             let read = cx.background_executor().spawn(async move { read_sound(files) }).await;
             let _ = this.update(cx, |this, cx| {
@@ -2634,7 +2626,9 @@ impl Workbench {
             Some(store) => store.page_image(&id, name).ok(),
             None => boardcast_meetings::decode_data_url(name).ok(),
         };
-        let frozen = boardcast_export::freeze(&self.live, !crate::i18n::chinese(), &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
+        let mut frozen = boardcast_export::freeze(&self.live, !crate::i18n::chinese(), &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
+        // The video with sound needs it, and a replay page carries it when there is some.
+        let sound = matches!(kind, ExportKind::LiveVideo | ExportKind::ReplayPage).then(|| self.sound_files()).filter(|f| !f.is_empty());
         let directory = self.export_dir.clone().unwrap_or_else(|| {
             let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map_or_else(|| self.data.clone(), PathBuf::from);
             Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
@@ -2660,6 +2654,11 @@ impl Workbench {
             let written = cx
                 .background_executor()
                 .spawn(async move {
+                    if let Some(files) = sound {
+                        let (samples, pieces) = boardcast_audio::keep::read_pieces(&files);
+                        let encoded = boardcast_audio::keep::encode(&samples)?;
+                        frozen.sound = Some(boardcast_export::Sound { pieces, head: encoded.head, pre_skip: encoded.pre_skip, packet_ms: boardcast_audio::keep::PACKET_MS, packets: encoded.packets });
+                    }
                     let output = frozen.render(kind)?;
                     boardcast_export::write_file(&target, &output.bytes)?;
                     anyhow::Ok(output.text_left_out)
@@ -5294,16 +5293,27 @@ impl Workbench {
     fn export_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
         let drawn = !self.live.graph.nodes.is_empty() || self.live.graph.underlay().is_some();
         let content = self.live.has_content();
-        let formats = [
+        let heard = !self.live.audio().is_empty();
+        let mut formats = vec![
             (ExportKind::Markdown, "Markdown", t("key-points-a-mermaid-flow"), content),
             (ExportKind::Png, t("png-image"), t("this-board-as-it-looks"), drawn),
             (ExportKind::Svg, t("svg-vector"), t("this-board-stays-sharp-at"), drawn),
             (ExportKind::AnimatedSvg, t("animated-svg"), t("this-board-written-out-stroke"), drawn),
             (ExportKind::Gif, "GIF", t("this-board-written-out-stroke-2"), drawn),
             (ExportKind::Webm, t("video-webm"), t("this-board-written-out-stroke-3"), drawn),
-            (ExportKind::ReplayPage, t("replay-page"), t("one-html-file-for-someone"), content),
+            (
+                ExportKind::ReplayPage,
+                t("replay-page"),
+                if heard { t("one-html-file-for-someone-2") } else { t("one-html-file-for-someone") },
+                content,
+            ),
             (ExportKind::Pdf, t("whole-meeting-pdf"), t("a-page-per-board-then"), content),
         ];
+        // The whole meeting in real time, with what was said, once there is a recording.
+        if heard {
+            let at = formats.iter().position(|f| f.0 == ExportKind::Webm).map_or(formats.len(), |i| i + 1);
+            formats.insert(at, (ExportKind::LiveVideo, t("video-with-sound"), t("the-whole-meeting-in-real"), content));
+        }
         let busy = self.exporting;
         let rows = formats.into_iter().enumerate().map(|(i, (kind, name, hint, available))| {
             let enabled = available && busy.is_none();

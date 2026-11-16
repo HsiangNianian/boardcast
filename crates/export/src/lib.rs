@@ -16,6 +16,34 @@ use chrono::TimeZone;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+/// A meeting's kept sound, ready to go into a file: its pieces as `(when each began, in ms since the epoch,
+/// and how long it is, in ms)`, laid end to end, and the whole of it as Opus packets.
+pub struct Sound {
+    pub pieces: Vec<(f64, f64)>,
+    /// The identification header, the look-ahead in samples at 16 kHz, and evenly long packets.
+    pub head: Vec<u8>,
+    pub pre_skip: u64,
+    pub packet_ms: u64,
+    pub packets: Vec<Vec<u8>>,
+}
+
+impl Sound {
+    fn pre_skip_ns(&self) -> u64 {
+        self.pre_skip * 1_000_000_000 / 16_000
+    }
+
+    /// The sound alone, as a WebM file a browser plays.
+    fn webm(&self) -> Vec<u8> {
+        let audio = webm::Audio { head: &self.head, pre_skip_ns: self.pre_skip_ns(), packet_ms: self.packet_ms, packets: &self.packets };
+        webm::write(None, Some(audio), self.packets.len() as f64 * self.packet_ms as f64)
+    }
+
+    /// Where each step falls in the sound, in ms.
+    fn times_ms(&self, steps: &[Value]) -> Vec<f64> {
+        boardcast_board::steps::sound_times(steps, &self.pieces).into_iter().map(|s| s * 1000.0).collect()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Markdown,
@@ -26,6 +54,8 @@ pub enum Kind {
     Gif,
     /// The animated board as a WebM video (AV1): sharper and smaller than the GIF, for browsers and sites.
     Webm,
+    /// The whole meeting as a video with its kept sound, in real time.
+    LiveVideo,
     Pdf,
     ReplayPage,
 }
@@ -38,7 +68,7 @@ impl Kind {
             Self::Svg => "svg",
             Self::AnimatedSvg => "anim.svg",
             Self::Gif => "gif",
-            Self::Webm => "webm",
+            Self::Webm | Self::LiveVideo => "webm",
             Self::Pdf => "pdf",
             Self::ReplayPage => "html",
         }
@@ -115,6 +145,8 @@ pub struct Frozen {
     /// Every board with its record. A replay page lays out each step, so it does that on its own glyphs.
     replay_pages: Vec<replay_page::Page>,
     hanzi: HanziSource,
+    /// The meeting's kept sound, for the formats that carry it, when the caller has read it.
+    pub sound: Option<Sound>,
 }
 
 /// A finished file, and whether anything had to be left out of it.
@@ -175,12 +207,13 @@ pub fn freeze(live: &Live, english: bool, glyphs: &mut Glyphs, hanzi: HanziSourc
         current: live.page(),
         replay_pages,
         hanzi,
+        sound: None,
     }
 }
 
 impl Frozen {
     pub fn render(self, kind: Kind) -> Result<Output> {
-        let Self { doc, pages, current, replay_pages, hanzi } = self;
+        let Self { doc, pages, current, replay_pages, hanzi, sound } = self;
         let text_only = |bytes: Vec<u8>| Output { bytes, text_left_out: false };
         match kind {
             Kind::Markdown => Ok(text_only(markdown::markdown(&doc, current).into_bytes())),
@@ -190,7 +223,31 @@ impl Frozen {
             }
             Kind::ReplayPage => {
                 let mut glyphs = Glyphs::load(hanzi)?;
-                Ok(text_only(replay_page::replay_page(&doc, &replay_pages, &mut glyphs).into_bytes()))
+                Ok(text_only(replay_page::replay_page(&doc, &replay_pages, &mut glyphs, sound.as_ref()).into_bytes()))
+            }
+            Kind::LiveVideo => {
+                let sound = sound.context("This meeting kept no sound.")?;
+                let mut glyphs = Glyphs::load(hanzi)?;
+                // Each board in real time: its steps where they were heard, and the board as kept after the last.
+                let boards: Vec<animate::Replay> = replay_pages
+                    .iter()
+                    .map(|page| {
+                        let mut starts = sound.times_ms(&page.steps);
+                        starts.push(starts.last().copied().unwrap_or(0.0));
+                        animate::timed(page, &mut glyphs, Some(&starts))
+                    })
+                    .collect();
+                if boards.iter().all(animate::Replay::is_empty) {
+                    bail!("The board is empty.");
+                }
+                // The board in view follows the meeting from one to another.
+                let timeline = boardcast_board::steps::timeline(&replay_pages.iter().map(|p| p.steps.clone()).collect::<Vec<_>>());
+                let steps: Vec<Value> = timeline.iter().map(|(_, s)| s.clone()).collect();
+                let mut shown: Vec<(f64, usize)> = sound.times_ms(&steps).into_iter().zip(timeline.iter().map(|(b, _)| *b)).collect();
+                if shown.is_empty() {
+                    shown.push((0.0, current));
+                }
+                Ok(text_only(animate::live_webm(&boards, &shown, &sound)?))
             }
             // Both replay the board on screen step by step, which lays it out many times over.
             Kind::AnimatedSvg | Kind::Gif | Kind::Webm => {
@@ -225,7 +282,8 @@ pub fn file_name(kind: Kind) -> String {
 
 /// A picker may hand back the name without the extension that was suggested.
 pub fn with_extension(path: PathBuf, kind: Kind) -> PathBuf {
-    if Kind::from_path(&path) == Some(kind) {
+    let has = path.to_str().is_some_and(|p| p.to_ascii_lowercase().ends_with(&format!(".{}", kind.extension())));
+    if has {
         path
     } else {
         let mut name = path.into_os_string();

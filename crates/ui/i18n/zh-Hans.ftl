@@ -430,3 +430,6 @@ version-number = 版本 { $version }
 sample-title = 周会
 sample-first-point = 周五发布 beta 版
 sample-second-point = 找 Mia 确认文档
+one-html-file-for-someone-2 = 一个 .html 文件，带会议录音，发给没参会的人，双击就能看。
+video-with-sound = 带声音的视频
+the-whole-meeting-in-real = 整场会按真实时间播放，带录音，每张板都按当时的样子画出。

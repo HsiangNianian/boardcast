@@ -40,7 +40,8 @@ fn path(points: &[Pt], close: bool) -> String {
 
 /// The board at each step. Ink is kept once however many steps show it, and things start where they
 /// finally ended up, as the older player does, so the board does not shuffle as it plays.
-fn board_data(page: &Page, glyphs: &mut Glyphs) -> Value {
+/// With `heard`, each step's place in the meeting's sound, in seconds.
+fn board_data(page: &Page, glyphs: &mut Glyphs, heard: Option<&[f64]>) -> Value {
     let final_graph = ink_only(&page.graph);
     let mut graphs = vec![];
     if !page.steps.is_empty() {
@@ -93,7 +94,11 @@ fn board_data(page: &Page, glyphs: &mut Glyphs) -> Value {
         }
         // Frame 0 is the empty board, and frame n is what step n had reached.
         let step = i.checked_sub(1).and_then(|s| page.steps.get(s));
-        frames.push(json!({ "p": shown, "t": step.map_or(0.0, |s| s["t"].as_f64().unwrap_or(0.0)), "l": step.map_or(0, |s| s["line"].as_u64().unwrap_or(0)) }));
+        let mut frame = json!({ "p": shown, "t": step.map_or(0.0, |s| s["t"].as_f64().unwrap_or(0.0)), "l": step.map_or(0, |s| s["line"].as_u64().unwrap_or(0)) });
+        if let Some(heard) = heard {
+            frame["s"] = json!(i.checked_sub(1).and_then(|s| heard.get(s)).map_or(0.0, |s| (s * 1000.0).round() / 1000.0));
+        }
+        frames.push(frame);
     }
     let a = area.unwrap_or([0.0, 0.0, 800.0, 500.0]);
     let bounds = [a[0] - PADDING, a[1] - PADDING, a[2] - a[0] + 2.0 * PADDING, a[3] - a[1] + 2.0 * PADDING];
@@ -110,7 +115,8 @@ fn html_text(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
-pub fn replay_page(doc: &Doc, pages: &[Page], glyphs: &mut Glyphs) -> String {
+/// With `sound`, the page carries the meeting's sound and plays the board in real time beside it.
+pub fn replay_page(doc: &Doc, pages: &[Page], glyphs: &mut Glyphs, sound: Option<&crate::Sound>) -> String {
     let words = if doc.english {
         json!({ "play": "Play", "pause": "Pause", "end": "Skip to end", "replay": "boardcast replay", "summary": "Summary", "transcript": "Transcript", "count": "{} lines", "board": "Board", "boardN": "Board {}" })
     } else {
@@ -118,8 +124,18 @@ pub fn replay_page(doc: &Doc, pages: &[Page], glyphs: &mut Glyphs) -> String {
     };
     let note = doc.omits_visuals.then(|| if doc.english { "Imported pages and free-edit content are not included." } else { "导入页和自由编辑内容没有包含在内。" });
     let lines: Vec<Value> = doc.lines.iter().map(|l| json!({ "s": l.speaker, "t": l.text, "m": l.manual })).collect();
-    let boards: Vec<Value> = pages.iter().map(|page| board_data(page, glyphs)).collect();
-    let data = json!({ "title": doc.title, "began": doc.began, "summary": doc.summary.trim(), "words": words, "note": note, "lines": lines, "boards": boards });
+    let boards: Vec<Value> = pages
+        .iter()
+        .map(|page| {
+            let heard: Option<Vec<f64>> = sound.map(|s| s.times_ms(&page.steps).into_iter().map(|ms| ms / 1000.0).collect());
+            board_data(page, glyphs, heard.as_deref())
+        })
+        .collect();
+    let mut data = json!({ "title": doc.title, "began": doc.began, "summary": doc.summary.trim(), "words": words, "note": note, "lines": lines, "boards": boards });
+    if let Some(sound) = sound {
+        use base64::Engine;
+        data["sound"] = json!(format!("data:audio/webm;base64,{}", base64::engine::general_purpose::STANDARD.encode(sound.webm())));
+    }
     let licenses = format!(
         "Japanese stroke data: KanjiVG, Copyright (C) 2009/2010/2011 Ulrich Apel. https://kanjivg.tagaini.net/ adapted centerlines, CC BY-SA 3.0 https://creativecommons.org/licenses/by-sa/3.0/\n{}\n{}",
         include_str!("../../../assets/licenses/handwritten-OFL.txt"),
@@ -179,7 +195,7 @@ mod tests {
 
     #[test]
     fn every_step_has_a_frame_and_the_last_shows_the_whole_board() {
-        let html = replay_page(&doc("评审", "说"), &[page(&["T 「甲」", "L 「甲」 「乙」", "E 「丙」 -> 「丁」"])], &mut glyphs());
+        let html = replay_page(&doc("评审", "说"), &[page(&["T 「甲」", "L 「甲」 「乙」", "E 「丙」 -> 「丁」"])], &mut glyphs(), None);
         let data = embedded(&html);
         let board = &data["boards"][0];
         let frames = board["frames"].as_array().unwrap();
@@ -193,7 +209,7 @@ mod tests {
 
     #[test]
     fn ink_shown_in_many_steps_is_stored_once() {
-        let html = replay_page(&doc("t", "x"), &[page(&["T 「甲」", "T 「乙」"])], &mut glyphs());
+        let html = replay_page(&doc("t", "x"), &[page(&["T 「甲」", "T 「乙」"])], &mut glyphs(), None);
         let data = embedded(&html);
         let board = &data["boards"][0];
         let frames = board["frames"].as_array().unwrap();
@@ -208,7 +224,7 @@ mod tests {
     fn a_meeting_with_no_record_still_shows_its_board() {
         let mut g = Graph::default();
         g.apply(&parse_ops("T 「甲」"));
-        let html = replay_page(&doc("t", "x"), &[Page { graph: g, memory: Value::Null, steps: vec![], image: None, sources: Default::default() }], &mut glyphs());
+        let html = replay_page(&doc("t", "x"), &[Page { graph: g, memory: Value::Null, steps: vec![], image: None, sources: Default::default() }], &mut glyphs(), None);
         let frames = embedded(&html)["boards"][0]["frames"].as_array().unwrap().clone();
         assert_eq!(frames.len(), 1);
         assert!(!frames[0]["p"].as_array().unwrap().is_empty());
@@ -217,7 +233,7 @@ mod tests {
     #[test]
     fn meeting_text_cannot_escape_the_page() {
         let hostile = "</script><script>alert(1)</script>\u{2028}<!-- __DATA__ __TITLE__";
-        let html = replay_page(&doc("</title><img src=x>", hostile), &[page(&["T 「甲」"])], &mut glyphs());
+        let html = replay_page(&doc("</title><img src=x>", hostile), &[page(&["T 「甲」"])], &mut glyphs(), None);
         assert!(html.contains("<title>&lt;/title&gt;&lt;img src=x&gt; · 回放</title>"));
         assert_eq!(html.matches("</script>").count(), 2, "only the page's own scripts close");
         assert!(!html.contains('\u{2028}'));
@@ -229,7 +245,7 @@ mod tests {
     #[test]
     fn a_title_that_looks_like_a_marker_is_only_a_title() {
         let title = "__DATA__ __LICENSES__ __PAPER__";
-        let html = replay_page(&doc(title, "x"), &[page(&["T 「甲」"])], &mut glyphs());
+        let html = replay_page(&doc(title, "x"), &[page(&["T 「甲」"])], &mut glyphs(), None);
         assert!(html.contains(&format!("<title>{title} · 回放</title>")));
         assert_eq!(embedded(&html)["title"], title);
         assert!(html.contains("KanjiVG"));
@@ -237,7 +253,7 @@ mod tests {
 
     #[test]
     fn nothing_is_fetched_and_the_notices_stay_in_their_comment() {
-        let html = replay_page(&doc("t", "x"), &[page(&["T 「甲」"])], &mut glyphs());
+        let html = replay_page(&doc("t", "x"), &[page(&["T 「甲」"])], &mut glyphs(), None);
         assert!(html.contains("default-src 'none'"));
         assert!(html.contains("KanjiVG"));
         let start = html.find("<!--").unwrap();

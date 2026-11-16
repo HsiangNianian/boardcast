@@ -91,7 +91,8 @@ Added to a meeting that already has a board, a document also leaves a card on th
 | **Animated SVG** | This board, written out stroke by stroke in the order of the meeting. |
 | **GIF** | The same, for chats and documents that don't play SVG. |
 | **Video (WebM)** | The same as an AV1 video: smaller and sharper than the GIF, for browsers, GitHub and web pages. |
-| **Replay page** | One `.html` file for someone who missed the meeting. Nothing to install. |
+| **Video with sound** | The whole meeting in real time with its recording, following it from board to board. Offered when the meeting kept its audio. |
+| **Replay page** | One `.html` file for someone who missed the meeting. Nothing to install. With kept audio it carries the sound, and the board plays beside it. |
 | **Whole meeting PDF** | A page per board, then the summary and transcript, with selectable text. |
 
 Exports always use marker on white paper, whatever the window's theme.

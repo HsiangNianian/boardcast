@@ -439,3 +439,6 @@ version-number = version { $version }
 sample-title = Weekly sync
 sample-first-point = ship the beta on Friday
 sample-second-point = ask Mia about the docs
+one-html-file-for-someone-2 = One .html file for someone who missed the meeting, with its sound. Nothing to install.
+video-with-sound = Video with sound
+the-whole-meeting-in-real = The whole meeting in real time with its recording, every board as it was drawn.

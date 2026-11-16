@@ -788,6 +788,7 @@ name = "boardcast-export"
 version = "0.31.0"
 dependencies = [
  "anyhow",
+ "base64",
  "boardcast-board",
  "boardcast-meetings",
  "chrono",
@@ -879,6 +880,7 @@ dependencies = [
  "anyhow",
  "base64",
  "boardcast-agent",
+ "boardcast-audio",
  "boardcast-board",
  "boardcast-export",
  "boardcast-import",

@@ -458,3 +458,6 @@ version-number = versión { $version }
 sample-title = Reunión semanal
 sample-first-point = publicar la beta el viernes
 sample-second-point = preguntar a Mia por la documentación
+one-html-file-for-someone-2 = Un solo archivo .html para quien se perdió la reunión, con su sonido. No hay que instalar nada.
+video-with-sound = Vídeo con sonido
+the-whole-meeting-in-real = Toda la reunión en tiempo real con su grabación, cada pizarra tal como se dibujó.

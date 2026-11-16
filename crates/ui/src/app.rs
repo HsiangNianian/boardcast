@@ -71,9 +71,75 @@ const SIDEBAR_W: f32 = 236.0;
 const SIDEBAR_FROM: f32 = 900.0;
 /// The board is at least this wide before the zoom control floats beside the tool bar.
 const ZOOM_TOOLS_FROM: f32 = 640.0;
-/// The board is at least this wide before the tools under it are named beside their icons; narrower, the
-/// tooltips name them, so the bar keeps clear of the zoom control.
-const TOOL_LABELS_FROM: f32 = 920.0;
+/// The dock along the board's lower edge: how far it keeps from the sides, and between its parts.
+const DOCK_EDGE: f32 = 12.0;
+const DOCK_GAP: f32 = 12.0;
+
+/// How the listen button is shown: with its name and key, with its name, or as its dot alone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Mic {
+    Full,
+    Named,
+    Dot,
+}
+
+/// What of the dock is shown under a board of some width.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Dock {
+    /// The tools are named beside their icons.
+    named: bool,
+    mic: Mic,
+    /// Undo, redo and tidy are on the tool bar.
+    edit: bool,
+    zoom: bool,
+    /// The boards show only their number and the new-board button.
+    page_compact: bool,
+    /// The boards are shown at all: only a board too narrow for anything else goes without them.
+    pages: bool,
+    /// The tools sit in the middle, with room on both sides for what is beside them.
+    centered: bool,
+}
+
+/// The fullest dock that fits a board `width` pixels wide, giving way in this order: the tools lose their
+/// names, the zoom goes, the listen button loses its key, the boards keep only their number and the new-board
+/// button, undo, redo and tidy go (their keys still work), the listen button keeps only its dot, and on a
+/// board too narrow even for that the boards go. `tools` is how many board tools there are, Circle among
+/// them; without `editable` there is no tool bar at all.
+fn dock_plan(width: f32, tools: usize, editable: bool) -> Dock {
+    // Each part's width as drawn, in pixels, a little generous.
+    const MIC: [(Mic, f32); 3] = [(Mic::Full, 190.0), (Mic::Named, 146.0), (Mic::Dot, 44.0)];
+    const TOOL_NAMED: f32 = 86.0;
+    const TOOL_ICON: f32 = 36.0;
+    const EDIT: f32 = 12.0 + 3.0 * 36.0;
+    const ZOOM: f32 = 134.0;
+    const PAGE: f32 = 150.0;
+    const PAGE_COMPACT: f32 = 92.0;
+    let room = width - 2.0 * DOCK_EDGE;
+    let bar = |named: bool, mic: Mic, edit: bool| {
+        if !editable {
+            return 0.0;
+        }
+        let mic_w = MIC.iter().find(|(m, _)| *m == mic).map_or(0.0, |(_, w)| *w);
+        10.0 + mic_w + tools as f32 * if named { TOOL_NAMED } else { TOOL_ICON } + if edit { EDIT } else { 0.0 }
+    };
+    // Named tools, listen button, edit tools, zoom, compact boards, boards at all.
+    let steps = [
+        (true, Mic::Full, true, true, false, true),
+        (false, Mic::Full, true, true, false, true),
+        (false, Mic::Full, true, false, false, true),
+        (false, Mic::Named, true, false, false, true),
+        (false, Mic::Named, true, false, true, true),
+        (false, Mic::Named, false, false, true, true),
+        (false, Mic::Dot, false, false, true, true),
+        (false, Mic::Dot, false, false, true, false),
+    ];
+    let page_w = |compact: bool, shown: bool| if !shown { 0.0 } else if compact { PAGE_COMPACT + DOCK_GAP } else { PAGE + DOCK_GAP };
+    let fits = |&(named, mic, edit, zoom, compact, shown): &(bool, Mic, bool, bool, bool, bool)| bar(named, mic, edit) + if zoom { ZOOM + DOCK_GAP } else { 0.0 } + page_w(compact, shown) <= room;
+    let (named, mic, edit, zoom, page_compact, pages) = steps.iter().copied().find(|s| fits(s)).unwrap_or(steps[steps.len() - 1]);
+    let side = if zoom { ZOOM } else { 0.0 }.max(page_w(page_compact, pages) - DOCK_GAP);
+    let centered = (room - bar(named, mic, edit)) / 2.0 - DOCK_GAP >= side;
+    Dock { named, mic, edit, zoom, page_compact, pages, centered }
+}
 /// The map of the board: the room it has for the board, the edge around that, the grip above it that it is
 /// moved by, and how much of the board around its content it shows.
 const MAP_W: f32 = 176.0;
@@ -5407,6 +5473,10 @@ impl Render for Workbench {
                     |_, _, _| (),
                     move |bounds: Bounds<Pixels>, (), window: &mut Window, _: &mut App| {
                         let mut b = ink.borrow_mut();
+                        // What floats over the board is sized by it: a new size is drawn once more to fit it.
+                        if b.canvas.size != bounds.size {
+                            window.request_animation_frame();
+                        }
                         b.canvas = bounds;
                         b.dpr = window.scale_factor();
                         let started = Instant::now();
@@ -5934,7 +6004,10 @@ impl Render for Workbench {
         };
         let on_page = self.live.graph.underlay().is_some();
         let has_clips = self.live.graph.nodes.iter().any(|n| n.kind == Kind::Clip);
-        let named = f32::from(self.ink.borrow().canvas.size.width) >= TOOL_LABELS_FROM;
+        // How much of the dock fits under this board: the tools, the zoom and the boards, each giving way in turn.
+        let tool_count = 1 + usize::from(on_page) + usize::from(on_page || has_clips);
+        let dock = dock_plan(f32::from(self.ink.borrow().canvas.size.width), tool_count, editable);
+        let named = dock.named;
         let tool_h = px(TOOLS_H - 10.0);
         let tool_icon = |id: &'static str, name: &'static str, tooltip: String| Button::new(id).ghost().h(tool_h).w(tool_h).icon(icon(name)).tooltip(tooltip);
         // A key as it is printed on the keyboard.
@@ -6005,9 +6078,9 @@ impl Render for Workbench {
                                 .items_center()
                                 .gap_2()
                                 .child(div().size(px(10.)).flex_none().map(|d| if listening { d.bg(rgb(pal().on_strong)) } else { d.rounded_full().bg(rgb(pal().recording)) }))
-                                .child(div().text_sm().child(if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") }))
-                                .when_some(self.keys.label(Action::Listen).filter(|_| !listening), |d, keys| d.child(keycap(keys).border_color(rgb(pal().on_strong)).opacity(0.55)))
-                                .when(listening, |d| {
+                                .when(dock.mic != Mic::Dot, |d| d.child(div().text_sm().whitespace_nowrap().child(if listening { tr("Stop listening", "停止收音") } else { tr("Start listening", "开始收音") })))
+                                .when_some(self.keys.label(Action::Listen).filter(|_| !listening && dock.mic == Mic::Full), |d, keys| d.child(keycap(keys).border_color(rgb(pal().on_strong)).opacity(0.55)))
+                                .when(listening && dock.mic != Mic::Dot, |d| {
                                     let level = self.level;
                                     d.child(div().flex().items_end().gap(px(2.)).h(px(18.)).children((0..7).map(|i| {
                                         let h = 3.0 + level * 15.0 * (0.55 + 0.45 * ((i as f32) * 1.7).sin().abs());
@@ -6091,10 +6164,12 @@ impl Render for Workbench {
                             .child(div().flex().items_center().gap_2().child(icon("highlighter").size(px(16.))).when(named, |d| d.child(div().text_sm().child(tr("Mark", "标注"))))),
                     )
                 })
-                .child(Separator::vertical().h(px(20.)).mx_1())
-                .child(tool_icon("undo", "undo-2", self.keys.tip(Action::Undo, tr("Undo", "撤销"))).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
-                .child(tool_icon("redo", "redo-2", self.keys.tip(Action::Redo, tr("Redo", "重做"))).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
-                .child(tool_icon("tidy", "wand-sparkles", self.keys.tip(Action::Tidy, tr("Tidy the layout", "整理排版"))).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
+                .when(dock.edit, |d| {
+                    d.child(Separator::vertical().h(px(20.)).mx_1())
+                        .child(tool_icon("undo", "undo-2", self.keys.tip(Action::Undo, tr("Undo", "撤销"))).disabled(!self.live.can_undo()).on_click(cx.listener(|this, _, _, cx| this.step(false, cx))))
+                        .child(tool_icon("redo", "redo-2", self.keys.tip(Action::Redo, tr("Redo", "重做"))).disabled(!self.live.can_redo()).on_click(cx.listener(|this, _, _, cx| this.step(true, cx))))
+                        .child(tool_icon("tidy", "wand-sparkles", self.keys.tip(Action::Tidy, tr("Tidy the layout", "整理排版"))).on_click(cx.listener(|this, _, _, cx| this.tidy(cx))))
+                })
         });
         let map_on = !self.form.saved.minimap_hidden;
         // How far the board is zoomed, at its lower corner; the figure itself fits the board again.
@@ -6131,9 +6206,9 @@ impl Render for Workbench {
                 .id("page-tools")
                 .h(px(32.))
                 .px(px(3.))
-                .child(icon_button("previous", "chevron-left", tr("Previous board", "上一张板")).disabled(page == 0).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx))))
-                .child(div().px_1().text_color(rgb(pal().muted)).child(mono(format!("{} / {pages}", page + 1))))
-                .child(icon_button("next", "chevron-right", tr("Next board", "下一张板")).disabled(page + 1 >= pages).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx))))
+                .when(!dock.page_compact, |d| d.child(icon_button("previous", "chevron-left", tr("Previous board", "上一张板")).disabled(page == 0).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page.saturating_sub(1), cx)))))
+                .child(div().px_1().text_color(rgb(pal().muted)).whitespace_nowrap().child(mono(format!("{} / {pages}", page + 1))))
+                .when(!dock.page_compact, |d| d.child(icon_button("next", "chevron-right", tr("Next board", "下一张板")).disabled(page + 1 >= pages).on_click(cx.listener(move |this, _, _, cx| this.go_to_page(page + 1, cx)))))
                 .when(self.editable(), |d| {
                     d.child(Separator::vertical().h(px(16.)).mx(px(2.)))
                         .child(icon_button("new-board", "plus", self.keys.tip(Action::NewBoard, tr("New board", "新开一张板"))).on_click(cx.listener(|this, _, _, cx| this.new_board(cx))))
@@ -7602,6 +7677,8 @@ impl Render for Workbench {
             .relative()
             .flex_1()
             .min_h_0()
+            // Nothing over the board reaches past it onto the sidebars.
+            .overflow_hidden()
             // The map follows the pointer wherever it goes while it is held, not only over the map.
             .on_drag_move(cx.listener(|this, event: &DragMoveEvent<MapGrab>, _, cx| this.move_map(event, cx)))
             .child(board)
@@ -7617,11 +7694,32 @@ impl Render for Workbench {
                 )
             })
             .when_some(notices, |d, notices| d.child(notices))
-            // A replay takes the width, so the zoom control waits for it to end.
-            .when(canvas_width >= ZOOM_TOOLS_FROM && !replaying, |d| d.child(div().absolute().bottom(px(TOOLS_GAP + (TOOLS_H - 32.0) / 2.0)).left(px(12.)).child(zoom_tools)))
-            .when_some(page_tools.filter(|_| !replaying), |d, tools| d.child(div().absolute().bottom(px(TOOLS_GAP + (TOOLS_H - 32.0) / 2.0)).right(px(12.)).child(tools)))
             .when_some(swatches.filter(|_| !replaying), |d, bar| d.child(div().absolute().bottom(px(TOOLS_GAP + TOOLS_H + 8.0)).left_0().right_0().flex().justify_center().child(bar)))
-            .when_some(lower, |d, bar| d.child(div().absolute().bottom(px(TOOLS_GAP)).left_0().right_0().flex().justify_center().child(bar)));
+            // One row along the lower edge: the zoom, the tools and the boards, never over each other. The tools
+            // stay in the middle while both sides have room for what they hold; otherwise the three share the
+            // row from edge to edge. A replay takes the row for its own bar.
+            .map(|d| {
+                if replaying {
+                    return d.when_some(lower, |d, bar| d.child(div().absolute().bottom(px(TOOLS_GAP)).left_0().right_0().flex().justify_center().child(bar)));
+                }
+                let zoom = dock.zoom.then_some(zoom_tools);
+                let side = |end: bool| div().flex().items_center().when(dock.centered, |d| d.flex_1().min_w_0()).when(end, |d| d.justify_end());
+                d.child(
+                    div()
+                        .absolute()
+                        .bottom(px(TOOLS_GAP))
+                        .left(px(DOCK_EDGE))
+                        .right(px(DOCK_EDGE))
+                        .h(px(TOOLS_H))
+                        .flex()
+                        .items_center()
+                        .gap(px(DOCK_GAP))
+                        .when(!dock.centered, |d| d.justify_between())
+                        .child(side(false).when_some(zoom, |d, zoom| d.child(zoom)))
+                        .when_some(lower, |d, bar| d.child(div().flex_none().child(bar)))
+                        .child(side(true).when_some(page_tools.filter(|_| dock.pages), |d, tools| d.child(tools))),
+                )
+            });
         let main = div().relative().flex_1().min_w_0().h_full().flex().flex_col().child(canvas_area);
         // The meeting: the board and the panel beside it, under whatever page is open over them.
         let meeting = div()
@@ -8253,7 +8351,27 @@ fn page_number(graph: &Graph) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{encloses, erased, page_ranges};
+    use super::{dock_plan, encloses, erased, page_ranges, Mic};
+
+    #[test]
+    fn the_dock_gives_way_in_turn_as_the_board_narrows() {
+        let wide = dock_plan(1200.0, 3, true);
+        assert!(wide.named && wide.zoom && wide.edit && !wide.page_compact && wide.centered && wide.mic == Mic::Full, "{wide:?}");
+        let middling = dock_plan(760.0, 3, true);
+        assert!(!middling.named && middling.zoom && middling.mic == Mic::Full, "{middling:?}");
+        let narrow = dock_plan(380.0, 1, true);
+        assert!(!narrow.zoom && narrow.mic == Mic::Named && narrow.pages, "{narrow:?}");
+        let tiny = dock_plan(150.0, 1, true);
+        assert!(tiny.mic == Mic::Dot && !tiny.edit, "{tiny:?}");
+        // Each narrower board shows no more than a wider one.
+        let mut before = dock_plan(2000.0, 3, true);
+        for w in (100..2000).rev().step_by(10) {
+            let now = dock_plan(w as f32, 3, true);
+            assert!(!(now.named && !before.named) && !(now.zoom && !before.zoom) && !(now.edit && !before.edit), "{w}: {now:?} after {before:?}");
+            before = now;
+        }
+        assert!(dock_plan(300.0, 3, false).zoom || dock_plan(300.0, 3, false).mic == Mic::Full, "without tools the sides have the room");
+    }
 
     #[test]
     fn the_eraser_takes_what_it_touches_and_leaves_what_it_misses() {

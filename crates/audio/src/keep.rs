@@ -23,6 +23,8 @@ pub struct Keeper {
     waiting: Vec<f32>,
     /// Samples written so far, which is where the file has got to.
     written: u64,
+    /// The encoder's look-ahead, which every position in the file counts as well (RFC 7845).
+    pre_skip: u64,
 }
 
 impl Keeper {
@@ -51,7 +53,7 @@ impl Keeper {
         tags.extend_from_slice(vendor);
         tags.extend_from_slice(&0_u32.to_le_bytes());
         writer.write_packet(tags, SERIAL, PacketWriteEndInfo::EndPage, 0).context("writing the Opus tags")?;
-        Ok(Self { encoder, writer, waiting: vec![], written: 0 })
+        Ok(Self { encoder, writer, waiting: vec![], written: 0, pre_skip: u64::from(pre_skip) })
     }
 
     /// Keep these samples, as many whole frames as they make; the rest waits for more.
@@ -59,16 +61,20 @@ impl Keeper {
         self.waiting.extend_from_slice(samples);
         while self.waiting.len() >= FRAME {
             let frame: Vec<f32> = self.waiting.drain(..FRAME).collect();
-            self.frame(&frame, false)?;
+            self.frame(&frame, None)?;
         }
         Ok(())
     }
 
-    fn frame(&mut self, frame: &[f32], last: bool) -> Result<()> {
+    /// One frame; the last says how much of it was heard, so the file ends where the sound did.
+    fn frame(&mut self, frame: &[f32], heard: Option<u64>) -> Result<()> {
         let packet = self.encoder.encode_vec_float(frame, 4000).context("encoding the audio")?;
         self.written += frame.len() as u64;
-        let end = if last { PacketWriteEndInfo::EndStream } else { PacketWriteEndInfo::NormalPacket };
-        self.writer.write_packet(packet, SERIAL, end, self.written * GRANULES_PER_SAMPLE).context("writing the audio")
+        let (end, at) = match heard {
+            Some(heard) => (PacketWriteEndInfo::EndStream, heard),
+            None => (PacketWriteEndInfo::NormalPacket, self.written),
+        };
+        self.writer.write_packet(packet, SERIAL, end, (at + self.pre_skip) * GRANULES_PER_SAMPLE).context("writing the audio")
     }
 
     /// Finish the file, and say how many seconds it holds.
@@ -76,11 +82,45 @@ impl Keeper {
         let mut last = std::mem::take(&mut self.waiting);
         let heard = self.written + last.len() as u64;
         last.resize(FRAME, 0.0);
-        self.frame(&last, true)?;
+        self.frame(&last, Some(heard))?;
         let mut file = self.writer.into_inner();
         std::io::Write::flush(&mut file).context("saving the audio")?;
         Ok(heard as f64 / f64::from(SAMPLE_RATE))
     }
+}
+
+/// The samples of a kept file, at 16 kHz mono, as they were heard: the encoder's look-ahead taken off the
+/// front, and the padding of the last frame off the end.
+pub fn read(path: &Path) -> Result<Vec<f32>> {
+    let file = File::open(path).with_context(|| format!("opening {}", path.display()))?;
+    let mut reader = ogg::reading::PacketReader::new(std::io::BufReader::new(file));
+    let mut decoder = opus::Decoder::new(SAMPLE_RATE as u32, opus::Channels::Mono).context("starting the Opus decoder")?;
+    let (mut samples, mut pre_skip, mut end) = (vec![], 0_usize, None);
+    let mut buffer = vec![0.0_f32; FRAME * 6];
+    let mut index = 0;
+    while let Some(packet) = reader.read_packet().context("reading the audio")? {
+        index += 1;
+        if index == 1 {
+            // OpusHead: the look-ahead at 48 kHz, in bytes 10 and 11.
+            if packet.data.len() >= 12 && packet.data.starts_with(b"OpusHead") {
+                pre_skip = usize::from(u16::from_le_bytes([packet.data[10], packet.data[11]])) / GRANULES_PER_SAMPLE as usize;
+            }
+            continue;
+        }
+        if index == 2 {
+            continue;
+        }
+        let n = decoder.decode_float(&packet.data, &mut buffer, false).context("decoding the audio")?;
+        samples.extend_from_slice(&buffer[..n]);
+        if packet.last_in_stream() {
+            end = Some(packet.absgp_page() / GRANULES_PER_SAMPLE);
+        }
+    }
+    // The last page's position says where the sound ends, look-ahead and all; past it is the last frame's padding.
+    if let Some(end) = end {
+        samples.truncate((end as usize).min(samples.len()));
+    }
+    Ok(samples.split_off(pre_skip.min(samples.len())))
 }
 
 #[cfg(test)]
@@ -102,6 +142,14 @@ mod tests {
         assert_eq!(&bytes[..4], b"OggS");
         assert!(bytes.windows(8).any(|w| w == b"OpusHead") && bytes.windows(8).any(|w| w == b"OpusTags"));
         assert!(bytes.len() < 12_000, "about 24 kbit/s: {} bytes for two seconds", bytes.len());
+        // It reads back as long as it was heard, and sounds as it did.
+        let back = read(&path).unwrap();
+        assert_eq!(back.len(), tone.len());
+        // Opus shifts the sound by a few samples (a fraction of a millisecond); within that, it is the same.
+        let middle = SAMPLE_RATE as usize;
+        let error = |lag: i64| (middle..middle + 400).map(|i| (back[(i as i64 + lag) as usize] - tone[i]).abs()).sum::<f32>() / 400.0;
+        let best = (-6_i64..=6).map(error).fold(f32::MAX, f32::min);
+        assert!(best < 0.02, "mean error {best} at the best of a few samples' shift");
         // BOARDCAST_KEEP_TEST leaves the file, to be checked with a real decoder.
         if std::env::var_os("BOARDCAST_KEEP_TEST").is_none() {
             let _ = std::fs::remove_file(&path);

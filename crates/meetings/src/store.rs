@@ -351,10 +351,13 @@ impl Store {
     }
 
     /// A meeting's file, and the folder beside it with its pictures and its audio, which may not exist yet.
+    /// A meeting only in the older format is shown where it is, until its first save moves it.
     pub fn meeting_paths(&self, id: &str) -> Result<(PathBuf, PathBuf)> {
         valid(id)?;
-        let dir = self.current_dir();
-        Ok((dir.join(format!("{id}.json")), dir.join(id)))
+        let (current, legacy) = (self.current_dir(), self.legacy_dir());
+        let file = |dir: &Path| dir.join(format!("{id}.json"));
+        let dir = if !file(&current).exists() && file(&legacy).exists() { legacy } else { current };
+        Ok((file(&dir), dir.join(id)))
     }
 
     /// Where a meeting's kept audio goes: a file named `audio-<when it began>.opus` beside its images.
@@ -693,5 +696,18 @@ mod tests {
             assert!(store.audio_path("m1", bad).is_err(), "{bad}");
         }
         assert!(store.audio_path("../m1", "audio-1.opus").is_err());
+    }
+
+    #[test]
+    fn an_older_meeting_is_shown_where_it_is_until_saved_again() {
+        let root = std::env::temp_dir().join(format!("boardcast-paths-{}", new_id()));
+        let store = Store::new(root.clone());
+        std::fs::create_dir_all(root.join("meetings/v2")).unwrap();
+        std::fs::write(root.join("meetings/old.json"), "{}").unwrap();
+        assert_eq!(store.meeting_paths("old").unwrap(), (root.join("meetings/old.json"), root.join("meetings/old")));
+        std::fs::write(root.join("meetings/v2/old.json"), "{}").unwrap();
+        assert_eq!(store.meeting_paths("old").unwrap().0, root.join("meetings/v2/old.json"));
+        assert_eq!(store.meeting_paths("new").unwrap().0, root.join("meetings/v2/new.json"), "a new meeting goes to v2");
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

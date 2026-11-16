@@ -155,6 +155,34 @@ pub fn clock(ms: f64) -> String {
     }
 }
 
+/// Where each step falls in a meeting's kept sound, in seconds: the sound's pieces, each `(when it began, in
+/// ms since the epoch, and how long it is, in ms)`, laid end to end in order. A step made while nothing was
+/// heard waits at the end of the piece before it, or at the very start.
+pub fn sound_times(steps: &[Value], pieces: &[(f64, f64)]) -> Vec<f64> {
+    steps
+        .iter()
+        .map(|step| {
+            let t = time_of(step);
+            let mut before = 0.0;
+            for &(start, ms) in pieces {
+                if t < start {
+                    break;
+                }
+                if t <= start + ms {
+                    return (before + t - start) / 1000.0;
+                }
+                before += ms;
+            }
+            before / 1000.0
+        })
+        .collect()
+}
+
+/// How many steps have happened `seconds` into the sound, given each step's place in it.
+pub fn steps_heard(times: &[f64], seconds: f64) -> usize {
+    times.partition_point(|t| *t <= seconds)
+}
+
 pub const SPEEDS: [f64; 3] = [1.0, 2.0, 4.0];
 
 /// Where a replay has got to. It holds no board: the steps are passed in, as they belong to the meeting.
@@ -245,6 +273,19 @@ impl Player {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn steps_fall_where_they_were_heard() {
+        let step = |t: f64| json!({ "t": t, "line": 0, "d": {} });
+        let steps = [step(500.0), step(1500.0), step(4000.0), step(10_500.0), step(20_000.0)];
+        // Heard from 1 s to 3 s, then from 10 s to 12 s.
+        let times = sound_times(&steps, &[(1000.0, 2000.0), (10_000.0, 2000.0)]);
+        assert_eq!(times, [0.0, 0.5, 2.0, 2.5, 4.0]);
+        assert_eq!(steps_heard(&times, 0.0), 1);
+        assert_eq!(steps_heard(&times, 1.0), 2);
+        assert_eq!(steps_heard(&times, 2.4), 3);
+        assert_eq!(steps_heard(&times, 4.0), 5);
+    }
 
     #[test]
     fn a_replay_follows_the_meeting_across_boards() {

@@ -23,6 +23,8 @@ pub struct Page {
     pub memory: Value,
     pub steps: Vec<Value>,
     pub image: Option<PageImage>,
+    /// What its clips are cut from.
+    pub sources: crate::ink::Sources,
 }
 
 fn path(points: &[Pt], close: bool) -> String {
@@ -57,9 +59,12 @@ fn board_data(page: &Page, glyphs: &mut Glyphs) -> Value {
     let mut pieces: Vec<Value> = vec![];
     let mut frames = vec![];
     let mut area: Option<[f64; 4]> = None;
+    let mut cuts = HashMap::new();
     for (i, g) in graphs.iter().enumerate() {
         let laid = layout.layout(g, &mut first_diagram);
         let (composed, _) = compose(g, &laid, glyphs);
+        // A clip's picture goes with its frame, so it shows when the frame is drawn and goes when it does.
+        let pictures: HashMap<String, crate::ink::Picture> = crate::ink::pictures(g, &laid, &page.sources, &mut cuts).into_iter().map(|(id, p)| (format!("{id}|box"), p)).collect();
         if !g.nodes.is_empty() || g.underlay().is_some() {
             let b = &laid.bounds;
             area = Some(area.map_or([b.x0, b.y0, b.x1, b.y1], |a| [a[0].min(b.x0), a[1].min(b.y0), a[2].max(b.x1), a[3].max(b.y1)]));
@@ -78,7 +83,10 @@ fn board_data(page: &Page, glyphs: &mut Glyphs) -> Value {
                         json!([path(&outline(&inked, 1.0), true), path(&inked.center, false), (inked.length * 10.0).round() / 10.0, inked.width])
                     })
                     .collect();
-                pieces.push(json!([format!("#{:06x}", style.rgb), style.alpha, style.under, strokes]));
+                match pictures.get(&piece.seed) {
+                    Some(p) => pieces.push(json!([format!("#{:06x}", style.rgb), style.alpha, style.under, strokes, { "href": p.image.data_url(), "x": p.x, "y": p.y, "w": p.w, "h": p.h }])),
+                    None => pieces.push(json!([format!("#{:06x}", style.rgb), style.alpha, style.under, strokes])),
+                }
                 pieces.len() - 1
             });
             shown.push(index);
@@ -147,7 +155,7 @@ mod tests {
             g.apply(&parse_ops(ops));
             steps.push(json!({ "t": 1000 + i * 1000, "line": i + 1, "d": diff(&before, &g).unwrap() }));
         }
-        Page { graph: g, memory: Value::Null, steps, image: None }
+        Page { graph: g, memory: Value::Null, steps, image: None, sources: Default::default() }
     }
 
     fn doc(title: &str, text: &str) -> Doc {
@@ -200,7 +208,7 @@ mod tests {
     fn a_meeting_with_no_record_still_shows_its_board() {
         let mut g = Graph::default();
         g.apply(&parse_ops("T 「甲」"));
-        let html = replay_page(&doc("t", "x"), &[Page { graph: g, memory: Value::Null, steps: vec![], image: None }], &mut glyphs());
+        let html = replay_page(&doc("t", "x"), &[Page { graph: g, memory: Value::Null, steps: vec![], image: None, sources: Default::default() }], &mut glyphs());
         let frames = embedded(&html)["boards"][0]["frames"].as_array().unwrap().clone();
         assert_eq!(frames.len(), 1);
         assert!(!frames[0]["p"].as_array().unwrap().is_empty());

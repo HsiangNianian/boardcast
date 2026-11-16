@@ -2,7 +2,7 @@
 //! ink written stroke by stroke, and what moved or went away redrawn where it now is. The GIF draws it
 //! frame by frame; the SVG does it in CSS, so a viewer without animation shows the finished board.
 
-use crate::ink::Page;
+use crate::ink::{Page, Picture};
 use crate::replay_page;
 use boardcast_board::board_layout::StableLayout;
 use boardcast_board::compose::{compose, Style, PAPER};
@@ -37,11 +37,19 @@ pub struct Played {
     pub copy_of: Option<(usize, f32, f32)>,
 }
 
+/// A clip's picture in a replay: shown from when its card's frame is begun until the frame moves or goes.
+pub struct Shown {
+    pub picture: Picture,
+    pub from: f64,
+    pub until: Option<f64>,
+}
+
 /// A whole replay of one board: its strokes, the area it ever covers, the page under it, and how long it runs.
 pub struct Replay {
     pub strokes: Vec<Played>,
     pub frame: (f64, f64, f64, f64),
     pub page: Option<Page>,
+    pub pictures: Vec<Shown>,
     pub end: f64,
 }
 
@@ -72,10 +80,15 @@ pub fn replay(page: &replay_page::Page, glyphs: &mut Glyphs) -> Replay {
     let mut shown: HashMap<String, (String, Style, Vec<usize>)> = HashMap::new();
     let mut area: Option<[f64; 4]> = None;
     let mut at = 0.0;
+    let mut cuts = HashMap::new();
+    let mut pictures: Vec<Shown> = vec![];
+    // Which picture each clip frame on the board shows, by the frame's key.
+    let mut framed: HashMap<String, usize> = HashMap::new();
     for g in &graphs {
         layout.recall(&kept);
         let laid = layout.layout(g, &mut first_diagram);
         let (pieces, _) = compose(g, &laid, glyphs);
+        let mut cut: HashMap<String, Picture> = crate::ink::pictures(g, &laid, &page.sources, &mut cuts).into_iter().map(|(id, p)| (format!("{id}|box"), p)).collect();
         if !g.nodes.is_empty() || g.underlay().is_some() {
             let b = &laid.bounds;
             area = Some(area.map_or([b.x0, b.y0, b.x1, b.y1], |a| [a[0].min(b.x0), a[1].min(b.y0), a[2].max(b.x1), a[3].max(b.y1)]));
@@ -89,6 +102,9 @@ pub fn replay(page: &replay_page::Page, glyphs: &mut Glyphs) -> Replay {
             if !keep {
                 for &i in ids.iter() {
                     strokes[i].until = Some(at);
+                }
+                if let Some(p) = framed.remove(key.as_str()) {
+                    pictures[p].until = Some(at);
                 }
             }
             keep
@@ -128,6 +144,10 @@ pub fn replay(page: &replay_page::Page, glyphs: &mut Glyphs) -> Replay {
                 ids.push(strokes.len());
                 strokes.push(Played { inked, style: line.style, delay, duration, until: None, copy_of });
             }
+            if let (Some(picture), Some(&first)) = (cut.remove(&piece.seed), ids.first()) {
+                framed.insert(piece.key.clone(), pictures.len());
+                pictures.push(Shown { picture, from: strokes[first].delay, until: None });
+            }
             shown.insert(piece.key.clone(), (piece.seed.clone(), style, ids));
         }
         at = if wrote { pen } else { at } + PAUSE;
@@ -139,9 +159,13 @@ pub fn replay(page: &replay_page::Page, glyphs: &mut Glyphs) -> Replay {
         s.duration = (s.duration * k).round();
         s.until = s.until.map(|u| (u * k).round());
     }
+    for p in &mut pictures {
+        p.from = (p.from * k).round();
+        p.until = p.until.map(|u| (u * k).round());
+    }
     let a = area.unwrap_or([0.0, 0.0, 800.0, 500.0]);
     let image = page.image.clone().zip(page.graph.underlay()).map(|(image, (w, h))| Page { image, w, h });
-    Replay { strokes, frame: (a[0] - PADDING, a[1] - PADDING, a[2] - a[0] + 2.0 * PADDING, a[3] - a[1] + 2.0 * PADDING), page: image, end: (at * k).round() }
+    Replay { strokes, frame: (a[0] - PADDING, a[1] - PADDING, a[2] - a[0] + 2.0 * PADDING, a[3] - a[1] + 2.0 * PADDING), page: image, pictures, end: (at * k).round() }
 }
 
 fn path(points: &[[f32; 2]]) -> String {
@@ -166,6 +190,8 @@ struct Frames<'a> {
     at: tiny_skia::Transform,
     width: u32,
     height: u32,
+    /// Each clip's picture, read once.
+    pictures: Vec<Option<tiny_skia::Pixmap>>,
 }
 
 impl<'a> Frames<'a> {
@@ -186,12 +212,19 @@ impl<'a> Frames<'a> {
             let fit = Transform::from_scale((page.w / f64::from(picture.width())) as f32, (page.h / f64::from(picture.height())) as f32).post_concat(at);
             base.draw_pixmap(0, 0, picture.as_ref(), &PixmapPaint { quality: FilterQuality::Bilinear, ..PixmapPaint::default() }, fit, None);
         }
-        Ok(Self { replay, base, at, width, height })
+        let pictures = replay.pictures.iter().map(|p| crate::ink::page_pixmap(&p.picture.image).ok()).collect();
+        Ok(Self { replay, base, at, width, height, pictures })
     }
 
     /// The board at `t` milliseconds, as RGBA.
     fn at(&self, t: f64) -> Vec<u8> {
         let mut canvas = self.base.clone();
+        for (shown, pixels) in self.replay.pictures.iter().zip(&self.pictures) {
+            let Some(pixels) = pixels.as_ref().filter(|_| t >= shown.from && shown.until.is_none_or(|u| t < u)) else { continue };
+            let p = &shown.picture;
+            let fit = tiny_skia::Transform::from_scale((p.w / f64::from(pixels.width())) as f32, (p.h / f64::from(pixels.height())) as f32).post_translate(p.x as f32, p.y as f32).post_concat(self.at);
+            canvas.draw_pixmap(0, 0, pixels.as_ref(), &tiny_skia::PixmapPaint { quality: tiny_skia::FilterQuality::Bilinear, ..tiny_skia::PixmapPaint::default() }, fit, None);
+        }
         for under in [true, false] {
             for s in self.replay.strokes.iter().filter(|s| s.style.under == under && s.until.is_none_or(|u| t < u)) {
                 let k = if s.duration <= 0.0 { if t >= s.delay { 1.0 } else { 0.0 } } else { ((t - s.delay) / s.duration).clamp(0.0, 1.0) };
@@ -387,6 +420,13 @@ pub fn animated_svg(replay: &Replay, title: &str) -> String {
     if let Some(page) = &replay.page {
         let _ = writeln!(out, "<image href=\"{}\" x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\"/>", page.image.data_url(), page.w, page.h);
     }
+    // Clip pictures appear with their frames and go when they do, as strokes do.
+    for shown in &replay.pictures {
+        let p = &shown.picture;
+        let gone = shown.until.map_or(String::new(), |u| format!(" class=\"gone\" style=\"animation-duration:{u}ms\""));
+        let pop = if shown.from > 0.0 { format!(" class=\"pop\" style=\"animation-delay:{}ms\"", shown.from) } else { String::new() };
+        let _ = writeln!(out, "<g{gone}><image href=\"{}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\"{pop}/></g>", p.image.data_url(), p.x, p.y, p.w, p.h);
+    }
     // Strokes that are later moved are kept once and shown again where they moved to.
     let copied: HashSet<usize> = replay.strokes.iter().filter_map(|s| s.copy_of.map(|(o, _, _)| o)).collect();
     // Plain shapes, apart from the written ones with their masks and times, so a copy shows whatever the original does.
@@ -452,7 +492,7 @@ mod tests {
             let d = boardcast_board::steps::diff(&before, &g).unwrap();
             steps.push(serde_json::json!({ "d": d, "t": i as f64 * 1000.0 }));
         }
-        replay_page::Page { graph: g, memory: Value::Null, steps, image: None }
+        replay_page::Page { graph: g, memory: Value::Null, steps, image: None, sources: Default::default() }
     }
 
     #[test]

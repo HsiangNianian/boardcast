@@ -2298,7 +2298,12 @@ impl Workbench {
                 })
             })
             .collect();
-        let frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images);
+        let (store, id) = (self.store.clone(), self.live.id().to_string());
+        let asset = move |name: &str| match &store {
+            Some(store) => store.page_image(&id, name).ok(),
+            None => boardcast_meetings::decode_data_url(name).ok(),
+        };
+        let frozen = boardcast_export::freeze(&self.live, tr("en", "zh") == "en", &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
         let directory = self.export_dir.clone().unwrap_or_else(|| {
             let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map_or_else(|| self.data.clone(), PathBuf::from);
             Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)

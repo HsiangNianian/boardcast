@@ -48,7 +48,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         }
     }
     let bounds = Bounds { x0: 0.0, y0: 0.0, x1: f64::from(right), y1: f64::from(y - size * 0.4) };
-    std::fs::write(&out, png(&Drawn { strokes, bounds, page: None })?)?;
+    std::fs::write(&out, png(&Drawn { strokes, bounds, page: None, pictures: vec![] })?)?;
     println!("written to {}", out.display());
     Ok(())
 }

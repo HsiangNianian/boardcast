@@ -344,6 +344,11 @@ fn draw_board(surface: &mut Surface, board: &Drawn) {
     if let Some(page) = &board.page {
         draw_page(surface, page);
     }
+    for p in &board.pictures {
+        surface.push_transform(&Transform::from_translate(p.x as f32, p.y as f32));
+        draw_page(surface, &Page { image: p.image.clone(), w: p.w, h: p.h });
+        surface.pop();
+    }
     surface.push_blend_mode(BlendMode::Multiply);
     paint(surface, true);
     surface.pop();

@@ -359,7 +359,7 @@ struct Ui {
     sound: Element,
     credit: Element,
     audio: HtmlAudioElement,
-    /// The recording's sound beside the window.
+    /// The recording as a timeline under the window.
     waves: waves::Waves,
 }
 
@@ -510,7 +510,20 @@ async fn play_recorded(sample: &Sample, audio_name: &str, board: &Rc<RefCell<Boa
     let audio = &ui.audio;
     if !control.silent {
         audio.set_src(&format!("../media/{audio_name}"));
-        ui.waves.load(&format!("../media/{audio_name}"));
+        // Each line's stretch, coloured as its speaker is in the transcript: by the order they first speak.
+        let mut order: Vec<&str> = vec![];
+        let spans = sample
+            .lines
+            .iter()
+            .filter_map(|l| {
+                let n = order.iter().position(|s| *s == l.speaker).unwrap_or_else(|| {
+                    order.push(&l.speaker);
+                    order.len() - 1
+                });
+                Some((l.start?, l.end?, n))
+            })
+            .collect();
+        ui.waves.load(&format!("../media/{audio_name}"), spans);
         audio.set_muted(!control.sound.get());
         audio.set_current_time(0.0);
         if !control.paused.get() && !control.away() {

@@ -45,19 +45,12 @@ body > .site-header { padding-top: 0; padding-bottom: 28px; }
 :where(.window) button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* The window. */
-/* The recording's two channels as a live scope in the page's margins either side of the window, level with
-   its middle: the left channel on the left, the right on the right, each filling the room to the page's edge.
-   Only a screen with margins wide enough shows them. */
-.stage { position: relative; }
-.wave-side { display: none; }
-@media (min-width: 1640px) {
-  .wave-side { display: block; position: absolute; top: 50%; height: 88px; transform: translateY(-50%); width: calc((100vw - 100%) / 2 - 56px); pointer-events: none; }
-  .wave-side.left { right: calc(100% + 24px); }
-  .wave-side.right { left: calc(100% + 24px); }
-}
-.wave { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--text); }
+/* The recording under the window, as long as it is wide. */
+.timeline { position: relative; height: 40px; margin-top: 12px; }
+.timeline canvas { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--text); }
+@media (max-width: 760px) { .timeline { display: none; } }
 html.embed .stage, html.bg .stage { display: contents; }
-html.embed .wave-side, html.bg .wave-side { display: none; }
+html.embed .timeline, html.bg .timeline { display: none; }
 .window { border: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; height: min(820px, calc(100vh - 80px)); min-height: 520px; overflow: hidden; }
 .ico { display: grid; place-items: center; width: 26px; height: 26px; color: var(--text); }
 .ico svg { width: 14px; height: 14px; }

@@ -457,3 +457,21 @@ sample-second-point = Mia nach den Dokumenten fragen
 one-html-file-for-someone-2 = Eine .html-Datei für alle, die die Besprechung verpasst haben, mit Ton. Nichts zu installieren.
 video-with-sound = Video mit Ton
 the-whole-meeting-in-real = Die ganze Besprechung in Echtzeit mit ihrer Aufnahme, jede Tafel so, wie sie gezeichnet wurde.
+share = Teilen
+share-tip = Andere im selben Netzwerk die Besprechung verfolgen lassen
+share-on = Wird im Netzwerk geteilt
+share-intro = Andere im selben Netzwerk können diese Besprechung im Browser verfolgen: wie die Tafel wächst und was gesagt wird. Sie können zurückblättern, aber nichts ändern.
+share-privacy = Solange geteilt wird, kann jeder in diesem Netzwerk mit dem Zugangscode diese Besprechung sehen. Beende das Teilen, wenn die Besprechung vorbei ist.
+share-start = Teilen starten
+share-stop = Teilen beenden
+share-open = Auf einem Handy oder Computer im selben Netzwerk öffnen
+share-code = Zugangscode
+share-scan = Scannen zum Öffnen, mit Code
+share-watching = { $n ->
+        [one] { $n } Person schaut zu
+       *[other] { $n } Personen schauen zu
+    }
+share-none-watching = Noch schaut niemand zu
+share-copy-link = Link kopieren
+share-failed = Teilen konnte nicht starten: { $error }
+share-stopped-other-meeting = Teilen beendet: Eine andere Besprechung wurde geöffnet, und Zuschauer waren nur für die vorige zugelassen.

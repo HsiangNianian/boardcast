@@ -461,3 +461,21 @@ sample-second-point = chiedere a Mia della documentazione
 one-html-file-for-someone-2 = Un solo file .html per chi ha perso la riunione, con l’audio. Niente da installare.
 video-with-sound = Video con audio
 the-whole-meeting-in-real = L’intera riunione in tempo reale con la registrazione, ogni lavagna come è stata disegnata.
+share = Condividi
+share-tip = Fai seguire la riunione ad altri su questa rete
+share-on = Condivisione in rete attiva
+share-intro = Altri sulla stessa rete possono seguire questa riunione nel browser: la lavagna mentre cresce e la trascrizione mentre si parla. Possono tornare indietro, ma non modificare nulla.
+share-privacy = Finché la condivisione è attiva, chiunque su questa rete abbia il codice di accesso può vedere questa riunione. Interrompi la condivisione a riunione finita.
+share-start = Avvia condivisione
+share-stop = Interrompi condivisione
+share-open = Apri su un telefono o un computer della stessa rete
+share-code = Codice di accesso
+share-scan = Inquadra per aprire, codice incluso
+share-watching = { $n ->
+        [one] { $n } persona guarda
+       *[other] { $n } persone guardano
+    }
+share-none-watching = Nessuno sta ancora guardando
+share-copy-link = Copia link
+share-failed = Impossibile avviare la condivisione: { $error }
+share-stopped-other-meeting = Condivisione interrotta: è stata aperta un’altra riunione, e gli spettatori avevano accesso solo alla precedente.

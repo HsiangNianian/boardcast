@@ -461,3 +461,21 @@ sample-second-point = preguntar a Mia por la documentación
 one-html-file-for-someone-2 = Un solo archivo .html para quien se perdió la reunión, con su sonido. No hay que instalar nada.
 video-with-sound = Vídeo con sonido
 the-whole-meeting-in-real = Toda la reunión en tiempo real con su grabación, cada pizarra tal como se dibujó.
+share = Compartir
+share-tip = Que otros en esta red vean la reunión
+share-on = Compartiendo en la red
+share-intro = Otras personas en la misma red pueden ver esta reunión en un navegador: la pizarra mientras crece y la transcripción mientras se habla. Pueden volver atrás, pero no cambiar nada.
+share-privacy = Mientras se comparte, cualquiera en esta red que tenga el código de acceso puede ver esta reunión. Deja de compartir cuando termine.
+share-start = Empezar a compartir
+share-stop = Dejar de compartir
+share-open = Abre en un teléfono o un ordenador de la misma red
+share-code = Código de acceso
+share-scan = Escanea para abrir, con el código
+share-watching = { $n ->
+        [one] { $n } persona mirando
+       *[other] { $n } personas mirando
+    }
+share-none-watching = Nadie está mirando todavía
+share-copy-link = Copiar enlace
+share-failed = No se pudo empezar a compartir: { $error }
+share-stopped-other-meeting = Se dejó de compartir: se abrió otra reunión, y los espectadores solo tenían acceso a la anterior.

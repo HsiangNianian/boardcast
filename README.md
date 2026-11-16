@@ -97,6 +97,10 @@ Added to a meeting that already has a board, a document also leaves a card on th
 
 Exports always use marker on white paper, whatever the window's theme.
 
+### Let others watch
+
+**Share** in the top bar lets people on the same network follow the meeting in a browser, on a phone or a laptop: the board as it grows and the transcript as it is said, with nothing to install. They scan the QR code, or open the address and type the access code. They can look back through what came before, but cannot change anything. Sharing is off until you start it, shows only the meeting that is open, and stops when you stop it or open another one; anyone on the network with the code can watch while it is on.
+
 ### Online meetings and recordings
 
 In **Settings › Speech › Listen to**, choose a microphone or, on Linux, the **Monitor of …** input of the speakers or headphones that play the meeting. That is how the other side of an online call, or a recording playing in a media player, is heard. One input is heard at a time. On a Mac, any package can use Apple's own recognizer instead, from the same section.

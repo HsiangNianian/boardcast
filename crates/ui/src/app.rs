@@ -1173,6 +1173,7 @@ enum Panel {
     Import,
     Speakers,
     Settings,
+    Share,
 }
 
 impl Panel {
@@ -1539,6 +1540,13 @@ struct Workbench {
     form: SettingsForm,
     summary: SummaryPanel,
     replay: Option<Replaying>,
+    /// The meeting shown on the network while sharing is on, how many were watching when last drawn, and why
+    /// sharing could not start, if it could not.
+    sharing: Option<crate::share::Sharing>,
+    watching: usize,
+    /// Which of its addresses the QR code shows.
+    share_address: usize,
+    share_note: Option<String>,
     import: ImportState,
     arxiv_input: Entity<InputState>,
     /// Which of a read document's pages to import, as "1-5, 8"; empty for all.
@@ -2205,6 +2213,7 @@ impl Workbench {
         self.pump_probe(&mut changed);
         self.pump_import(&mut changed);
         self.pump_replay(&mut changed, cx);
+        self.pump_share(&mut changed);
         self.pump_summary(&mut changed, cx);
         self.pump_download(&mut changed);
         self.pump_search(&mut changed);
@@ -2390,6 +2399,157 @@ impl Workbench {
         cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(text));
         self.summary.note = Some(what.to_string());
         cx.notify();
+    }
+
+    /// Send viewers the meeting as it changes, and notice when someone starts or stops watching.
+    fn pump_share(&mut self, changed: &mut bool) {
+        let Some(sharing) = &mut self.sharing else { return };
+        // Another meeting opened ends the share: viewers were let in to that one only.
+        if !sharing.shows(&self.live) {
+            self.sharing = None;
+            self.watching = 0;
+            self.notice = Some(t("share-stopped-other-meeting").into());
+            *changed = true;
+            return;
+        }
+        sharing.offer(&self.live, self.store.as_ref(), !crate::i18n::chinese());
+        let watching = sharing.share().viewers();
+        if watching != self.watching {
+            self.watching = watching;
+            *changed = true;
+        }
+    }
+
+    fn start_sharing(&mut self, cx: &mut Context<Self>) {
+        match crate::share::Sharing::start(self.live.id(), self.hanzi.clone()) {
+            Ok(sharing) => {
+                self.sharing = Some(sharing);
+                self.share_address = 0;
+                self.share_note = None;
+            }
+            Err(e) => self.share_note = Some(ta!("share-failed", error = format!("{e:#}"))),
+        }
+        self.watching = 0;
+        cx.notify();
+    }
+
+    fn stop_sharing(&mut self, cx: &mut Context<Self>) {
+        self.sharing = None;
+        self.watching = 0;
+        cx.notify();
+    }
+
+    fn share_panel(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<gpui_kit::Div> {
+        let privacy = div().w_full().p_3().rounded(px(6.)).bg(rgb(pal().danger_soft)).text_xs().text_color(rgb(pal().text)).child(t("share-privacy"));
+        let Some(sharing) = &self.sharing else {
+            return div()
+                .id("share-panel")
+                .flex()
+                .flex_col()
+                .gap_3()
+                .w(px(420.))
+                .child(div().text_sm().text_color(rgb(pal().muted)).child(t("share-intro")))
+                .child(privacy)
+                .when_some(self.share_note.clone(), |d, note| d.child(div().text_xs().text_color(rgb(pal().danger)).child(note)))
+                .child(div().flex().child(Button::new("share-start").primary().label(t("share-start")).on_click(cx.listener(|this, _, _, cx| this.start_sharing(cx)))));
+        };
+        let share = sharing.share();
+        let addresses = share.addresses();
+        let chosen = self.share_address.min(addresses.len().saturating_sub(1));
+        let (link, code) = (share.link(&addresses[chosen]), share.code().to_string());
+        // Every network this computer is on, the one the QR code shows marked; another is a click away.
+        let address_list = div().flex().flex_col().gap(px(2.)).children(addresses.iter().enumerate().map(|(i, address)| {
+            let on = i == chosen;
+            div()
+                .id(("share-address", i))
+                .font_family(theme::MONO)
+                .text_sm()
+                .whitespace_nowrap()
+                .when(!on, |d| d.text_color(rgb(pal().faint)).cursor_pointer().hover(|d| d.text_color(rgb(pal().text))))
+                .when(addresses.len() > 1 && on, |d| d.text_color(rgb(pal().text)))
+                .child(address.clone())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.share_address = i;
+                    cx.notify();
+                }))
+        }));
+        let modules = crate::share::qr(&link).unwrap_or_default();
+        // The QR code, drawn module by module, with the quiet margin a reader needs around it.
+        let qr = canvas(
+            |_, _, _| (),
+            move |bounds: Bounds<Pixels>, (), window: &mut Window, _: &mut App| {
+                let n = modules.len().max(1) as f32 + 8.0;
+                let side = f32::from(bounds.size.width).min(f32::from(bounds.size.height));
+                let unit = (side / n).floor().max(1.0);
+                // Whole pixels for a module keep it sharp; what is left over goes evenly round it.
+                let margin = (side - unit * (n - 8.0)) / 2.0;
+                let origin = bounds.origin + point(px(margin), px(margin));
+                window.paint_quad(gpui_kit::fill(bounds, rgb(0xffffff)));
+                for (y, row) in modules.iter().enumerate() {
+                    for (x, dark) in row.iter().enumerate() {
+                        if *dark {
+                            window.paint_quad(gpui_kit::fill(Bounds::new(origin + point(px(x as f32 * unit), px(y as f32 * unit)), size(px(unit), px(unit))), rgb(0x000000)));
+                        }
+                    }
+                }
+            },
+        )
+        .size(px(176.))
+        .flex_none()
+        .rounded(px(6.));
+        let copied = link.clone();
+        div()
+            .id("share-panel")
+            .flex()
+            .flex_col()
+            .gap_4()
+            .w(px(500.))
+            .child(
+                div()
+                    .flex()
+                    .gap_5()
+                    .child(div().flex().flex_col().items_center().gap_1().child(div().p_1().rounded(px(8.)).border_1().border_color(rgb(pal().line)).bg(rgb(0xffffff)).child(qr)).child(div().text_xs().text_color(rgb(pal().faint)).child(t("share-scan"))))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(t("share-open")))
+                                    .child(address_list),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(t("share-code")))
+                                    .child(div().font_family(theme::MONO).text_size(px(26.)).font_weight(gpui_kit::FontWeight::SEMIBOLD).child(code)),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(div().size(px(7.)).rounded_full().bg(rgb(if self.watching > 0 { pal().recording } else { pal().faint })))
+                                    .child(div().text_xs().text_color(rgb(pal().muted)).child(if self.watching > 0 { ta!("share-watching", n = self.watching) } else { t("share-none-watching").to_string() })),
+                            ),
+                    ),
+            )
+            .child(privacy)
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .child(button("share-copy", t("share-copy-link")).on_click(cx.listener(move |_, _, _, cx| cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(copied.clone())))))
+                    .child(Button::new("share-stop").small().danger().label(t("share-stop")).on_click(cx.listener(|this, _, _, cx| this.stop_sharing(cx)))),
+            )
     }
 
     fn pump_replay(&mut self, changed: &mut bool, cx: &mut Context<Self>) {
@@ -6394,6 +6554,12 @@ impl Render for Workbench {
                         }
                     })),
             )
+            .child(
+                bar_button("share", "broadcast", t("share"))
+                    .tooltip(if self.sharing.is_some() { t("share-on") } else { t("share-tip") })
+                    .selected(self.panel == Panel::Share || self.sharing.is_some())
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Share, cx))),
+            )
             .child(bar_button("export", "file-down", t("export")).selected(self.panel == Panel::Export).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Export, cx))))
             .child(Separator::vertical().h(px(18.)).mx_1())
             .child(
@@ -7726,6 +7892,7 @@ impl Render for Workbench {
             );
         let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
+        let share_panel = (self.panel == Panel::Share).then(|| self.share_panel(cx));
         let import_panel = (self.panel == Panel::Import).then(|| self.import_panel(cx));
         let speakers_panel = (self.panel == Panel::Speakers).then(|| self.speakers_panel(editable, cx));
         let side = div()
@@ -7858,9 +8025,10 @@ impl Render for Workbench {
                         .child(body.px_5().pb_5().pt_2()),
                 )
         };
-        let in_dialog = matches!(self.panel, Panel::Export | Panel::Import);
+        let in_dialog = matches!(self.panel, Panel::Export | Panel::Import | Panel::Share);
         let mut overlay: Option<gpui_kit::AnyElement> = match self.panel {
             Panel::Export => export_panel.map(|body| dialog(t("export"), body, cx).into_any_element()),
+            Panel::Share => share_panel.map(|body| dialog(t("share"), body, cx).into_any_element()),
             Panel::Import => import_panel.map(|body| dialog(t("import"), body, cx).into_any_element()),
             Panel::Library => Some(
                 div()
@@ -8467,6 +8635,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     Some("import") => Panel::Import,
                     Some("speakers") => Panel::Speakers,
                     Some("settings") => Panel::Settings,
+                    Some("share") => Panel::Share,
                     _ => Panel::Transcript,
                 }
             }
@@ -8786,6 +8955,10 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     keeping: None,
                     welcome_line: None,
                     hand_sample: None,
+                    sharing: None,
+                    watching: 0,
+                    share_address: 0,
+                    share_note: None,
                     inbox,
                     save: SaveState::Idle,
                     saving: None,

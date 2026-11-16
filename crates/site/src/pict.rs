@@ -19,6 +19,10 @@ pub fn icon(name: &str) -> String {
         "lasso" => r#"<path class="s" d="M18 39C5 31 11 12 30 10C48 8 60 21 54 34C48 47 29 47 18 39C10 44 12 53 23 55" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" data-from="0,8"/>"#.into(),
         "mic" => r#"<rect class="f" x="22" y="4" width="20" height="34" rx="10" data-from="0,-16"/><path class="s" d="M12 28 a20 20 0 0 0 40 0" stroke-width="5" data-from="0,10"/><rect class="f" x="29" y="48" width="6" height="10" data-from="0,14"/><rect class="f" x="18" y="56" width="28" height="5" data-from="0,18"/>"#.into(),
         "speakers" => r#"<circle class="f" cx="22" cy="24" r="14" data-from="-12,0"/><path class="f" d="M2 60 a20 18 0 0 1 40 0z" data-from="-12,10"/><circle class="s" cx="46" cy="20" r="9" stroke-width="5" data-from="12,0"/><path class="s" d="M34 46 a14 13 0 0 1 28 0" stroke-width="5" data-from="12,10"/>"#.into(),
+        // A dot with waves going out on both sides, as the app's Share button.
+        "share" => r#"<circle class="f" cx="32" cy="32" r="7" data-from="0,0" data-scale="0.3"/><path class="s" d="M21 21a15.5 15.5 0 0 0 0 22" stroke-width="6" data-from="8,0"/><path class="s" d="M43 21a15.5 15.5 0 0 1 0 22" stroke-width="6" data-from="-8,0"/><path class="s" d="M12 12a28 28 0 0 0 0 40" stroke-width="6" data-from="14,0"/><path class="s" d="M52 12a28 28 0 0 1 0 40" stroke-width="6" data-from="-14,0"/>"#.into(),
+        // A globe of blocks: its rim, its equator and one meridian.
+        "globe" => r#"<circle class="s" cx="32" cy="32" r="25" stroke-width="5" data-from="0,0" data-scale="0.5"/><rect class="f" x="7" y="29.5" width="50" height="5" data-from="-16,0"/><path class="s" d="M32 7c-13 14-13 36 0 50c13-14 13-36 0-50Z" stroke-width="5" data-from="0,-14"/>"#.into(),
         _ => r#"<rect class="f" x="5.5" y="5.5" width="53" height="7" data-from="0,14"/><rect class="f" x="51.5" y="5.5" width="7" height="53" data-from="-14,0"/><rect class="f" x="5.5" y="51.5" width="53" height="7" data-from="0,-14"/><rect class="f" x="5.5" y="5.5" width="7" height="53" data-from="14,0"/>"#.into(),
     }
 }

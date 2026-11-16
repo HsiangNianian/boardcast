@@ -458,6 +458,33 @@ section.block { padding-top: 140px; }
 .files .flow s { width: 16px; height: 9px; border: 1px solid var(--grey); }
 .files .flow u { width: 10px; height: 1px; background: var(--grey); }
 .files .h { font: 400 14px/1 var(--hand); color: var(--board-ink); }
+/* Watch live: the host's code on the left, waves across, the board on a phone and a laptop on the right. */
+.share { display: flex; align-items: center; gap: 22px; }
+.share-host { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.share-qr { width: 64px; height: 64px; border: 1px solid var(--faint); background:
+  linear-gradient(var(--fg) 0 0) 6px 6px / 14px 14px no-repeat, linear-gradient(var(--fg) 0 0) 44px 6px / 14px 14px no-repeat, linear-gradient(var(--fg) 0 0) 6px 44px / 14px 14px no-repeat,
+  repeating-conic-gradient(var(--fg) 0 25%, transparent 0 50%) 24px 24px / 8px 8px; }
+.share-host .label { font-size: 10px; white-space: nowrap; }
+.share-code { font: 600 15px var(--mono); letter-spacing: 2px; }
+.share-waves { display: flex; gap: 5px; }
+.share-waves i { width: 10px; height: 26px; border: 2px solid var(--faint); border-left: 0; border-radius: 0 20px 20px 0; }
+.share-screens { display: flex; align-items: flex-end; gap: 12px; }
+.share .screen { display: flex; flex-direction: column; gap: 5px; padding: 8px; border: 1px solid var(--faint); background: var(--bg); }
+.share .phone { width: 52px; height: 92px; border-radius: 8px; }
+.share .laptop { width: 112px; height: 72px; }
+.share .screen i { display: block; height: 3px; background: var(--faint); }
+.share .screen .h { width: 60%; height: 5px; background: var(--board-ink); }
+.share .screen .x { width: 50%; }
+.share .screen em { margin-top: auto; font: 400 8px var(--mono); font-style: normal; color: var(--accent); }
+/* Your language: the eleven, the first one chosen. */
+.langs { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px; max-width: 220px; font: 400 15px var(--hand); color: var(--board-ink); }
+.langs li { opacity: .55; transition: opacity .3s; }
+.langs li:first-child, .card:hover .langs li { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .share-waves i { animation: share-wave 1.6s ease-in-out infinite; }
+  .share-waves i:nth-child(2) { animation-delay: .25s; } .share-waves i:nth-child(3) { animation-delay: .5s; }
+}
+@keyframes share-wave { 0%, 100% { border-color: var(--faint); } 40% { border-color: var(--accent); } }
 .files .ln { height: 1px; width: 80%; background: var(--grey); }
 .files .ln + .ln { width: 62%; }
 .files .ln.x { background: var(--accent); }

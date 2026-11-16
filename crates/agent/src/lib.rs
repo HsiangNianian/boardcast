@@ -985,6 +985,13 @@ impl Session {
         (graph.clone(), id)
     }
 
+    /// Put an imported document's card on the board, and give back the board.
+    pub fn add_document_card(&self, name: &str, first_page: &boardcast_board::graph::Clip, doc: &str) -> Graph {
+        let mut graph = self.graph.lock().expect("graph lock");
+        graph.add_document_card(name, first_page, doc);
+        graph.clone()
+    }
+
     /// Leave a clip card where it was dragged to.
     pub fn place(&self, id: &str, x: f64, y: f64) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");

@@ -117,6 +117,8 @@ const TOOLBAR_W_SPEAKER: f32 = 110.0;
 const TOOLBAR_H: f32 = 36.0;
 /// Room for rewriting and removing, which imported text does not offer.
 const TOOLBAR_W_EDIT: f32 = 72.0;
+/// A document's card also offers to open it.
+const TOOLBAR_W_OPEN: f32 = 64.0;
 /// The bar while a label is being rewritten.
 const TOOLBAR_W_EDITING: f32 = 300.0;
 const PREPARING_PAGE_AFTER: Duration = Duration::from_secs(5);
@@ -621,9 +623,10 @@ impl Ink {
         let has_text = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| !n.rows().is_empty());
         let raised = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| by_of_node(n).is_some());
         let fixed = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| n.kind == Kind::Region);
+        let opens = self.graph.as_ref().and_then(|g| g.nodes.iter().find(|n| &n.id == id)).is_some_and(|n| n.opens().is_some());
         let width = match self.editing {
             true => TOOLBAR_W_EDITING,
-            false => (if has_text { TOOLBAR_W_WITH_UNITS } else { TOOLBAR_W }) + if raised { TOOLBAR_W_SPEAKER } else { 0.0 } + if fixed { 0.0 } else { TOOLBAR_W_EDIT },
+            false => (if has_text { TOOLBAR_W_WITH_UNITS } else { TOOLBAR_W }) + if raised { TOOLBAR_W_SPEAKER } else { 0.0 } + if fixed { 0.0 } else { TOOLBAR_W_EDIT } + if opens { TOOLBAR_W_OPEN } else { 0.0 },
         };
         Some((x.clamp(8.0, (w - width - 8.0).max(8.0)), y.clamp(8.0, (floor - TOOLBAR_H - 8.0).max(8.0))))
     }
@@ -1334,6 +1337,8 @@ struct Workbench {
     inbox: Option<Inbox>,
     /// What is in it, each with its picture as the window paints it.
     tray: Vec<(Tucked, Option<Arc<RenderImage>>)>,
+    /// The board a document was opened from, and which document, for the way back.
+    trail: Option<(usize, String)>,
     save: SaveState,
     saving: Option<(Receiver<Result<u64, String>>, u64)>,
     saved_changes: u64,
@@ -3055,6 +3060,27 @@ impl Workbench {
         cx.notify();
     }
 
+    /// Open an imported document's first page, remembering the board it was opened from.
+    fn open_document(&mut self, doc: &str, cx: &mut Context<Self>) {
+        let Some(&first) = self.live.document_pages(doc).first() else {
+            self.notice = Some(tr("This document's pages are no longer in this meeting.", "这份文档的页面已不在这场会议里。").into());
+            cx.notify();
+            return;
+        };
+        let from = self.live.page();
+        self.go_to_page(first, cx);
+        if self.live.page() == first {
+            self.trail = Some((from, doc.to_string()));
+        }
+    }
+
+    /// Back to the board the document was opened from.
+    fn leave_document(&mut self, cx: &mut Context<Self>) {
+        if let Some((from, _)) = self.trail.take() {
+            self.go_to_page(from, cx);
+        }
+    }
+
     fn pump_import(&mut self, changed: &mut bool) {
         let ImportState::Reading { updates, progress, .. } = &mut self.import else { return };
         loop {
@@ -3243,9 +3269,29 @@ impl Workbench {
                 live.set_title(title);
             }
         }
+        // Into a board with something on it, the document goes as its own pages, with a card for it here
+        // showing its first page, which opens them.
+        let blank = live.graph.underlay().is_none() && !live.graph.nodes.iter().any(|n| n.ink == "ink");
+        let name = preview.title.clone().filter(|t| !t.trim().is_empty()).unwrap_or_else(|| preview.name.clone());
+        let doc = boardcast_meetings::new_id();
+        let first = preview.pages.first().and_then(|p| p.graph.underlay()).zip(stored.first().cloned());
+        let from = live.page();
+        let carded = !fresh && !blank && first.is_some();
+        if let (false, false, Some(((pw, ph), src))) = (fresh, blank, first) {
+            let card = Clip { src, pw, ph, x: 0.0, y: 0.0, w: pw, h: ph };
+            let graph = self.session().add_document_card(&name, &card, &doc);
+            self.next_batch += 1;
+            let mut ink = self.ink.borrow_mut();
+            ink.update(&graph, self.next_batch);
+            let memory = ink.board.snapshot();
+            drop(ink);
+            live.change_board(graph, memory);
+        }
         let added = preview.pages.into_iter().map(|p| p.graph).zip(stored).collect();
-        live.add_pages(added, &preview.note);
+        live.add_document(added, &preview.note, Some((doc.as_str(), name.as_str())));
         self.show(live);
+        // Arriving on the new pages, the way back is to the board the card was left on.
+        self.trail = carded.then(|| (from, doc.clone()));
         self.live.changes += 1;
         self.panel = Panel::Transcript;
         cx.notify();
@@ -5228,6 +5274,15 @@ impl Render for Workbench {
                 // A press on a clip card takes hold of the card rather than the board.
                 let at = b.on_board(e.position);
                 let card = b.clips.iter().find(|(r, _)| f64::from(at[0]) >= r.x && f64::from(at[0]) <= r.x + r.w && f64::from(at[1]) >= r.y && f64::from(at[1]) <= r.y + r.h).map(|(r, _)| r.id.clone());
+                // A double click on a document's card opens it.
+                if e.click_count >= 2 {
+                    let doc = card.as_ref().and_then(|id| b.graph.as_ref()?.nodes.iter().find(|n| &n.id == id)?.opens().map(str::to_string));
+                    if let Some(doc) = doc {
+                        drop(b);
+                        this.open_document(&doc, cx);
+                        return;
+                    }
+                }
                 if let Some(id) = card.filter(|_| this.editable()) {
                     b.card_drag = Some((id, at, at));
                     return;
@@ -5557,6 +5612,7 @@ impl Render for Workbench {
             let fixed = self.live.graph.nodes.iter().find(|n| n.id == id).is_some_and(|n| n.kind == Kind::Region);
             let editing = self.ink.borrow().editing;
             let raised = self.live.graph.nodes.iter().find(|n| n.id == id).and_then(|n| by_of_node(n)).map(str::to_string);
+            let opens = self.live.graph.nodes.iter().find(|n| n.id == id).and_then(|n| n.opens()).map(str::to_string);
             let unit_now = self.ink.borrow().mark_unit;
             let active: Vec<String> = self
                 .ink
@@ -5584,6 +5640,17 @@ impl Render for Workbench {
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .when(editing, |d| d.child(div().w(px(TOOLBAR_W_EDITING - 16.0)).child(Input::new(&self.label_input).small())))
+                    // A document's card opens its pages, as a double click on it does.
+                    .when_some(opens.filter(|_| !editing), |d, doc| {
+                        d.child(
+                            Button::new("open-document")
+                                .small()
+                                .ghost()
+                                .label(tr("Open", "打开"))
+                                .tooltip(tr("Open the document's pages (or double-click the card)", "打开这份文档的页面（或双击卡片）"))
+                                .on_click(cx.listener(move |this, _, _, cx| this.open_document(&doc, cx))),
+                        )
+                    })
                     .when_some(raised.clone().filter(|_| !editing), |d, who| {
                         let (speakers, source) = (self.live.speakers(), id.clone());
                         d.child(
@@ -5739,6 +5806,31 @@ impl Render for Workbench {
                             .on_click(cx.listener(|this, _, window, cx| this.edit_title(window, cx))),
                     )
                 }
+            })
+            // On a document's page: where it was opened from, the document, and which page of it.
+            .when_some(self.live.document_of(self.live.page()), |d, (doc, name)| {
+                let pages = self.live.document_pages(&doc);
+                let at = pages.iter().position(|&p| p == self.live.page()).map_or(1, |i| i + 1);
+                let from = self.trail.as_ref().filter(|(_, opened)| *opened == doc).map(|(from, _)| *from);
+                let crumb = |d: gpui_kit::Div| d.child(icon("chevron-right").size(px(10.)).text_color(rgb(pal().faint)));
+                d.gap_2()
+                    .when_some(from, |d, from| {
+                        crumb(d).child(
+                            div()
+                                .id("crumb-back")
+                                .text_sm()
+                                .text_color(rgb(pal().muted))
+                                .cursor_pointer()
+                                .hover(|d| d.text_color(rgb(pal().text)))
+                                .child(format!("{} {}", tr("Board", "板"), from + 1))
+                                .tooltip(|window, cx| Tooltip::new(tr("Back to the board it was opened from", "回到打开它的那块板")).build(window, cx))
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .on_click(cx.listener(|this, _, _, cx| this.leave_document(cx))),
+                        )
+                    })
+                    .map(crumb)
+                    .child(div().max_w(px(220.)).overflow_hidden().whitespace_nowrap().text_ellipsis().text_sm().child(name))
+                    .child(div().font_family(theme::MONO).text_size(px(11.)).text_color(rgb(pal().faint)).child(format!("{at}/{}", pages.len())))
             })
             .when(recording || !recorded.is_zero(), |d| {
                 d.child(
@@ -7625,6 +7717,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let mut summarize_when_done = false;
     // For looking at a replay without clicking to it.
     let mut start_replaying = false;
+    // A file to import at once, as if dropped on the window.
+    let mut start_import: Option<PathBuf> = None;
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--case" => case = args.next(),
@@ -7651,6 +7745,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--open" => open = args.next(),
             "--summarize" => summarize_when_done = true,
             "--replay" => start_replaying = true,
+            "--import" => start_import = args.next().map(PathBuf::from),
             "--root" => root = args.next().map(PathBuf::from),
             other => anyhow::bail!("unknown flag {other}"),
         }
@@ -7956,6 +8051,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     live,
                     store,
                     tray: inbox.as_ref().map(|i| tray_of(i, i.cards())).unwrap_or_default(),
+                    trail: None,
                     inbox,
                     save: SaveState::Idle,
                     saving: None,
@@ -8038,6 +8134,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 workbench.show_page_image();
                 if start_replaying {
                     workbench.start_replay(window, cx);
+                }
+                if let Some(path) = start_import.take() {
+                    workbench.import_paths(&[path], cx);
                 }
                 workbench
             });

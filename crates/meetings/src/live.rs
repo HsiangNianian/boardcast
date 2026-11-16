@@ -293,6 +293,12 @@ impl Live {
     /// Add imported pages, each a board and how to find its picture, and show the first. They take the
     /// place of a board with nothing on it, and otherwise go after the others.
     pub fn add_pages(&mut self, added: Vec<(Graph, String)>, note: &str) {
+        self.add_document(added, note, None);
+    }
+
+    /// As [`Live::add_pages`], marking the pages as one document, `(id, name)`, which a card on another board
+    /// can open.
+    pub fn add_document(&mut self, added: Vec<(Graph, String)>, note: &str, doc: Option<(&str, &str)>) {
         if added.is_empty() {
             return;
         }
@@ -308,7 +314,16 @@ impl Live {
             pages.remove(current);
         }
         let first = added[0].0.clone();
-        let entries = added.into_iter().map(|(graph, underlay)| json!({ "graph": graph, "underlay": underlay }));
+        let entries = added.into_iter().enumerate().map(|(i, (graph, underlay))| {
+            let mut entry = json!({ "graph": graph, "underlay": underlay });
+            if let Some((id, name)) = doc {
+                entry["doc"] = json!(id);
+                if i == 0 {
+                    entry["docName"] = json!(name);
+                }
+            }
+            entry
+        });
         pages.splice(at..at, entries);
         self.raw.insert("page".into(), json!(at));
         self.graph = first;
@@ -322,6 +337,19 @@ impl Live {
             self.refresh_title();
         }
         self.touch();
+    }
+
+    /// The boards of an imported document, in order.
+    pub fn document_pages(&self, doc: &str) -> Vec<usize> {
+        array(&self.raw, "pages").iter().enumerate().filter(|(_, p)| p["doc"].as_str() == Some(doc)).map(|(i, _)| i).collect()
+    }
+
+    /// The document a board belongs to, with its name, if it is an imported document's page.
+    pub fn document_of(&self, page: usize) -> Option<(String, String)> {
+        let pages = array(&self.raw, "pages");
+        let doc = pages.get(page)?["doc"].as_str()?.to_string();
+        let name = pages.iter().find(|p| p["doc"].as_str() == Some(&doc) && p["docName"].is_string()).and_then(|p| p["docName"].as_str()).unwrap_or_default().to_string();
+        Some((doc, name))
     }
 
     /// Name the meeting, so its board's contents no longer do.
@@ -843,6 +871,17 @@ mod tests {
 
     fn page_board(no: u32) -> Graph {
         serde_json::from_value(json!({ "nodes": [{ "id": "n1", "label": format!("第 {no} 页"), "aliases": [], "kind": "region", "marks": [], "ink": "ink", "at": { "x": 1, "y": 2, "w": 3, "h": 4 } }], "edges": [], "groups": [], "nextNode": 2, "nextGroup": 1, "underlay": { "w": 900, "h": 1200, "no": no } })).unwrap()
+    }
+
+    #[test]
+    fn an_imported_document_knows_its_pages_and_name() {
+        let mut live = Live::new();
+        live.add_pages(vec![(page_board(9), "asset:x.jpg".into())], "导入了");
+        live.add_document(vec![(page_board(1), "asset:a.jpg".into()), (page_board(2), "asset:b.jpg".into())], "导入了", Some(("d1", "Serving latency")));
+        assert_eq!(live.document_pages("d1"), [1, 2]);
+        assert_eq!(live.document_of(2), Some(("d1".to_string(), "Serving latency".to_string())));
+        assert_eq!(live.document_of(0), None, "a page imported on its own belongs to no document");
+        assert!(live.document_pages("nothing").is_empty());
     }
 
     #[test]

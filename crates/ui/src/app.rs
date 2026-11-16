@@ -6327,14 +6327,14 @@ impl Render for Workbench {
                 div()
                     .flex()
                     .items_center()
-                    .gap_5()
-                    .pl_4()
+                    .gap_3()
+                    .pl_3()
                     .pr_1()
                     .h(px(40.))
                     .flex_none()
                     .border_b_1()
                     .border_color(rgb(pal().line))
-                    .children([(Panel::Transcript, "tab-transcript", tr("Transcript", "转写"), 0), (Panel::Summary, "tab-summary", tr("Summary", "摘要"), 0), (Panel::Speakers, "tab-speakers", tr("Speakers", "说话人"), speakers.len())].map(|(panel, id, label, count)| {
+                    .children([(Panel::Transcript, "tab-transcript", "transcript", tr("Transcript", "转写"), 0), (Panel::Summary, "tab-summary", "summary", tr("Summary", "摘要"), 0), (Panel::Speakers, "tab-speakers", "users", tr("Speakers", "说话人"), speakers.len())].map(|(panel, id, glyph, label, count)| {
                         let on = side_panel == panel;
                         div()
                             .id(id)
@@ -6346,8 +6346,10 @@ impl Render for Workbench {
                             .border_color(rgb(if on { pal().text } else { pal().surface }))
                             .cursor_pointer()
                             .text_sm()
-                            .map(|d| if on { d.font_weight(gpui_kit::FontWeight::MEDIUM) } else { d.text_color(rgb(pal().muted)).hover(|d| d.text_color(rgb(pal().text))) })
-                            .child(label)
+                            .px_1()
+                            .map(|d| if on { d.text_color(rgb(pal().text)) } else { d.text_color(rgb(pal().muted)).hover(|d| d.text_color(rgb(pal().text))) })
+                            .child(icon(glyph).size(px(15.)))
+                            .tooltip(move |window, cx| Tooltip::new(label).build(window, cx))
                             .when(count > 0, |d| d.child(div().font_family(theme::MONO).text_size(px(10.)).text_color(rgb(pal().faint)).child(count.to_string())))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.panel = panel;

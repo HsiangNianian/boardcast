@@ -64,7 +64,7 @@ Click **Circle** in the tool bar under the board, then drag around things on the
 
 ### Crop a page
 
-On an imported page, click **Crop** in the same tool bar and drag a box over the part you want: a figure, a few table rows, a paragraph. It becomes a card beside the page, showing that part of the picture and carrying the text printed in it, so the model can read it and draw lines to it. Select the card to see where it was cut from. Undo removes it; `Esc` or the same button stops cropping.
+On an imported page, click **Crop** in the same tool bar and drag a box over the part you want: a figure, a few table rows, a paragraph. It becomes a card beside the page, showing that part of the picture and carrying the text printed in it, so the model can read it and draw lines to it. Select the card to see where it was cut from. Undo removes it; `Esc` or the same button stops cropping. The board model crops too: say "pull table 4 out" or "clip these two rows so we can compare them" and it cuts that block, or just the lines you quote, into a card.
 
 **Mark** draws by hand on an imported page or on a clip: a yellow, green or pink highlighter, or a red pen, picked from the colours above the tool bar. Marks on a clip stay on the card wherever it goes and go with it when it is deleted; marks on a page stay where you drew them. They are part of the board: undo, replay and exports include them. On a narrow board the tools show as icons, named in their tooltips.
 
@@ -163,6 +163,7 @@ Everything is Rust, the website included: it is built with [Trunk](https://trunk
 | [`eval/cases.json`](eval/cases.json) | 32 meetings | Development and regression, including English, a real-meeting regression, and the known failures: a chain through a middle node, one very long line, and several sentences arriving as one turn |
 | [`eval/holdout.json`](eval/holdout.json) | 27 meetings | Held out from prompt tuning |
 | [`eval/pointing.json`](eval/pointing.json) | 18 cases | Chinese and English pointing cases with fixed starting boards |
+| [`eval/pages.json`](eval/pages.json) | 10 cases | An imported page: cutting a table, rows or a paragraph out as clips when asked, and not when only looking or marking; scored as Crop F1 by how the boxes overlap |
 | [`eval/revisions.json`](eval/revisions.json) | 3 cases | Transcription revisions that must keep node identity and unrelated content; not run until the GPUI app revises transcripts |
 
 Start a working llama-server, then run:

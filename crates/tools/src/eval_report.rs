@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-const METRICS: [(&str, &str); 7] = [("node", "Node F1"), ("edge", "Edge F1"), ("topic", "Topic recall"), ("item", "Item F1"), ("strike", "Strike F1"), ("mark", "Marks found"), ("group", "Groups right")];
+const METRICS: [(&str, &str); 8] = [("node", "Node F1"), ("edge", "Edge F1"), ("topic", "Topic recall"), ("item", "Item F1"), ("strike", "Strike F1"), ("mark", "Marks found"), ("group", "Groups right"), ("crop", "Crop F1")];
 /// The metrics a case table and the trend show.
 const SHOWN: [(&str, &str); 4] = [("node", "node"), ("edge", "edge"), ("item", "item"), ("mark", "marks")];
 /// Categorical colours, in a fixed order, checked for colour-blind separation as a set of three.

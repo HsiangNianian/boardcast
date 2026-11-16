@@ -619,8 +619,13 @@ impl Canvas<'_> {
     fn page_marks(&mut self, g: &Graph, l: &Layout) {
         let plain = |v: Vec<Vec<Pt>>| v.into_iter().map(|s| (s, WEIGHT)).collect::<Vec<_>>();
         let font = FONT as f32;
-        for n in g.nodes.iter().filter(|n| n.kind == Kind::Region) {
-            let Some([x, y, w, h]) = n.at().map(|a| a.map(|v| v as f32)) else {
+        // A clip is marked as the block it was cut from would be, around its card.
+        for n in g.nodes.iter().filter(|n| matches!(n.kind, Kind::Region | Kind::Clip)) {
+            let at = match n.kind {
+                Kind::Clip => l.clips.iter().find(|c| c.id == n.id).map(|c| [c.x, c.y, c.w, c.h]),
+                _ => n.at(),
+            };
+            let Some([x, y, w, h]) = at.map(|a| a.map(|v| v as f32)) else {
                 continue;
             };
             let mut r = Rng::new(&format!("{}|pin", n.id));

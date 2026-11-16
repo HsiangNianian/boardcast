@@ -70,6 +70,10 @@ pub fn definitions() -> Value {
         tool("rename", "R：改名", json!({ "target": target(thing), "name": target("新名字") }), &["target", "name"]),
         tool("alias", "A：记别名", json!({ "target": target(thing), "alias": target("别名") }), &["target", "alias"]),
         tool("delete", "D：删除（说错了、画错了）", json!({ "target": target(thing) }), &["target"]),
+        tool("crop", "C：把一块 [原文] 剪成卡片放在页面旁边，单独拿出来讨论；只要其中几行就给 quote", json!({
+            "target": target("那块 [原文] 的编号"),
+            "quote": target("只剪含这几个字的那几行，可省略")
+        }), &["target"]),
     ])
 }
 
@@ -135,6 +139,10 @@ pub fn command(name: &str, args: &Value) -> Option<String> {
         "rename" => format!("R {} {}", r("target")?, q("name")?),
         "alias" => format!("A {} {}", r("target")?, q("alias")?),
         "delete" => format!("D {}", r("target")?),
+        "crop" => match q("quote") {
+            Some(quote) => format!("C {} {quote}", r("target")?),
+            None => format!("C {}", r("target")?),
+        },
         _ => return None,
     })
 }
@@ -162,6 +170,7 @@ pub(crate) fn call(op: &Op) -> Option<(&'static str, Value)> {
         Op::R(target, name) => ("rename", json!({ "target": arg(target), "name": name })),
         Op::A(target, alias) => ("alias", json!({ "target": arg(target), "alias": alias })),
         Op::D(target) => ("delete", json!({ "target": arg(target) })),
+        Op::C(target, quote) => ("crop", json!({ "target": arg(target), "quote": quote })),
         Op::N(_) => return None,
     })
 }
@@ -171,7 +180,7 @@ pub(crate) fn call(op: &Op) -> Option<(&'static str, Value)> {
 fn system(text: &str) -> String {
     let start = text.find("只输出操作").unwrap_or(text.len());
     let end = text.find("规则：").unwrap_or(text.len());
-    let tools = "用工具改白板：一次调用做一件事，这一句需要的改动一次都调用完。东西要用编号或名字指明：已有的写编号（n3），这一轮刚新建的还没有编号，写名字，新名字会自动建节点。这句不需要改白板（寒暄、跑题、复述），就不调用任何工具，只回复 -。\n规则里的字母对应工具：E=link，X=unlink，G=group，T=topic，L=item，Q=question，F=formula，K=note，M=mark，I=icon，H=point，R=rename，A=alias，D=delete。\n\n";
+    let tools = "用工具改白板：一次调用做一件事，这一句需要的改动一次都调用完。东西要用编号或名字指明：已有的写编号（n3），这一轮刚新建的还没有编号，写名字，新名字会自动建节点。这句不需要改白板（寒暄、跑题、复述），就不调用任何工具，只回复 -。\n规则里的字母对应工具：E=link，X=unlink，G=group，T=topic，L=item，Q=question，F=formula，K=note，M=mark，I=icon，H=point，R=rename，A=alias，D=delete，C=crop。\n\n";
     format!("{}{tools}{}", &text[..start], &text[end..])
 }
 
@@ -269,6 +278,9 @@ mod tests {
         assert_eq!(command("question", &json!({ "text": "要不要上 MQ" })).unwrap(), "Q 「要不要上 MQ」");
         assert_eq!(command("group", &json!({ "name": "后端", "members": ["n1", "支付服务"] })).unwrap(), "G 「后端」 n1 「支付服务」");
         assert!(command("mark", &json!({ "target": "n3", "mark": "boldface" })).is_none(), "only the board's marks");
+        assert_eq!(command("crop", &json!({ "target": "n4" })).unwrap(), "C n4");
+        assert_eq!(command("crop", &json!({ "target": "n4", "quote": "Table 2" })).unwrap(), "C n4 「Table 2」");
+        assert!(command("crop", &json!({ "quote": "x" })).is_none(), "a crop needs its block");
         assert!(command("teleport", &json!({})).is_none());
         assert!(command("link", &json!({ "from": "n1" })).is_none(), "a link needs both ends");
     }

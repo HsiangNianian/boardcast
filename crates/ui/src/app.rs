@@ -328,6 +328,8 @@ struct Ink {
     clips: Vec<(Rect, Clip)>,
     /// The page pictures clips are cut from, by the name the meeting stores them under; None if one could not be read.
     clip_images: HashMap<String, Option<Arc<RenderImage>>>,
+    /// A clip card being dragged: which, where it was taken hold of and where the pointer is now, on the board.
+    card_drag: Option<(String, [f32; 2], [f32; 2])>,
     /// Dragging draws with a highlighter or the pen rather than moving the board.
     marking: bool,
     /// Which of them: one of the board's annotation tools.
@@ -3281,6 +3283,23 @@ impl Workbench {
         self.live.change_board(graph, memory);
     }
 
+    /// Leave a clip card where it was dragged: moved by `by` from where the layout had it. Only that card moves.
+    fn move_card(&mut self, id: &str, by: [f32; 2], cx: &mut Context<Self>) {
+        cx.notify();
+        if !self.editable() {
+            return;
+        }
+        let Some(card) = self.ink.borrow().clips.iter().find(|(r, _)| r.id == id).map(|(r, _)| r.clone()) else { return };
+        let graph = self.session().place(id, card.x + f64::from(by[0]), card.y + f64::from(by[1]));
+        self.next_batch += 1;
+        let mut ink = self.ink.borrow_mut();
+        ink.update(&graph, self.next_batch);
+        ink.selected = Some(id.to_string());
+        let memory = ink.board.snapshot();
+        drop(ink);
+        self.live.change_board(graph, memory);
+    }
+
     /// Read the page pictures that clips on the board are cut from and are not read yet.
     fn load_clip_images(&mut self) {
         let wanted: Vec<String> = {
@@ -4987,11 +5006,31 @@ impl Render for Workbench {
                     b.drawing = Some(vec![start]);
                     return;
                 }
+                // A press on a clip card takes hold of the card rather than the board.
+                let at = b.on_board(e.position);
+                let card = b.clips.iter().find(|(r, _)| f64::from(at[0]) >= r.x && f64::from(at[0]) <= r.x + r.w && f64::from(at[1]) >= r.y && f64::from(at[1]) <= r.y + r.h).map(|(r, _)| r.id.clone());
+                if let Some(id) = card.filter(|_| this.editable()) {
+                    b.card_drag = Some((id, at, at));
+                    return;
+                }
                 let view = b.shown();
                 b.drag = Some((e.position, view));
             }))
             .on_mouse_move(cx.listener(move |_, e: &MouseMoveEvent, _, cx| {
                 let mut b = moved.borrow_mut();
+                // A release outside the window never arrives: the card is let go where it was.
+                if b.card_drag.is_some() && e.pressed_button != Some(MouseButton::Left) {
+                    b.card_drag = None;
+                    cx.notify();
+                }
+                if b.card_drag.is_some() && e.pressed_button == Some(MouseButton::Left) {
+                    let at = b.on_board(e.position);
+                    if let Some((_, _, to)) = b.card_drag.as_mut() {
+                        *to = at;
+                    }
+                    cx.notify();
+                    return;
+                }
                 if b.scribble.is_some() && e.pressed_button == Some(MouseButton::Left) {
                     let at = b.on_board(e.position);
                     let k = b.shown().k;
@@ -5028,6 +5067,17 @@ impl Render for Workbench {
                 }
             }))
             .on_mouse_up(MouseButton::Left, cx.listener(move |this, e: &MouseUpEvent, _, cx| {
+                let held = release.borrow_mut().card_drag.take();
+                if let Some((id, from, to)) = held {
+                    let k = release.borrow().shown().k;
+                    if (to[0] - from[0]).hypot(to[1] - from[1]) * k < CLICK_SLOP {
+                        release.borrow_mut().click(e.position);
+                        cx.notify();
+                    } else {
+                        this.move_card(&id, [to[0] - from[0], to[1] - from[1]], cx);
+                    }
+                    return;
+                }
                 let line = release.borrow_mut().scribble.take();
                 if let Some(line) = line {
                     this.annotate(&line, cx);
@@ -5119,6 +5169,22 @@ impl Render for Workbench {
                             }
                             tier.under.paint(window, origin, v.k, Some(bounds));
                             tier.layer.paint(window, origin, v.k, Some(bounds));
+                            // A card on its way somewhere: its picture where it would land, edged in the accent.
+                            if let Some((card, clip, dx, dy)) = state.card_drag.as_ref().and_then(|(id, from, to)| state.clips.iter().find(|(r, _)| &r.id == id).map(|(r, c)| (r, c, f64::from(to[0] - from[0]), f64::from(to[1] - from[1])))) {
+                                let at = |x: f64, y: f64| origin + point(px(x as f32 * v.k), px(y as f32 * v.k));
+                                let area = Bounds::new(at(card.x + dx, card.y + dy), size(px(card.w as f32 * v.k), px(card.h as f32 * v.k)));
+                                let src = if clip.src.is_empty() { state.page_src.as_ref() } else { Some(&clip.src) };
+                                if let Some(Some(image)) = src.and_then(|src| state.clip_images.get(src).cloned()) {
+                                    let k = card.w / clip.w;
+                                    let whole = Bounds::new(at(card.x + dx - clip.x * k, card.y + dy - clip.y * k), size(px((clip.pw * k) as f32 * v.k), px((clip.ph * k) as f32 * v.k)));
+                                    window.with_content_mask(Some(gpui_kit::ContentMask { bounds: area.intersect(&bounds) }), |window| {
+                                        let _ = window.paint_image(whole, whole, gpui_kit::Corners::default(), image, 0, false);
+                                    });
+                                }
+                                let mut edge: Hsla = rgb(pal().accent).into();
+                                edge.a = 0.9;
+                                window.paint_quad(gpui_kit::outline(area, edge, gpui_kit::BorderStyle::Solid));
+                            }
                             // Ink is already on textures, so tracing someone veils the board and paints
                             // their parts again on top, which costs next to nothing to turn on and off.
                             if let Some((tone, shown, marked)) = trace {
@@ -7353,6 +7419,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 pointed: vec![],
                 cropping: false,
                 crop: None,
+                card_drag: None,
                 marking: false,
                 mark_tool: "yellow",
                 scribble: None,

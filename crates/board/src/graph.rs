@@ -248,6 +248,13 @@ impl Graph {
         }
     }
 
+    /// Put a clip card where it was dragged to; the layout keeps it there and places everything else around it.
+    pub fn place(&mut self, id: &str, x: f64, y: f64) {
+        if let Some(i) = self.index(id).filter(|&i| self.nodes[i].kind == Kind::Clip) {
+            self.nodes[i].extra.insert("placed".into(), json!({ "x": x.round(), "y": y.round() }));
+        }
+    }
+
     /// Put a clip of an imported page on the board, as a card of its own, and give back its id.
     /// `text` is what the clip's part of the page says, which the model is shown in place of the label.
     pub fn add_clip(&mut self, label: &str, text: &str, clip: &Clip) -> String {
@@ -604,6 +611,12 @@ impl NodeData {
     pub fn at(&self) -> Option<[f64; 4]> {
         let at = self.extra.get("at")?;
         Some([at["x"].as_f64()?, at["y"].as_f64()?, at["w"].as_f64()?, at["h"].as_f64()?])
+    }
+
+    /// Where a clip card was put by hand, its top left corner on the board, if it was.
+    pub fn placed(&self) -> Option<[f64; 2]> {
+        let at = self.extra.get("placed")?;
+        Some([at["x"].as_f64()?, at["y"].as_f64()?])
     }
 
     /// Where a clip was cut from, if this is one.

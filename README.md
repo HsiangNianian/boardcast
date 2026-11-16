@@ -64,7 +64,7 @@ Click **Circle** in the tool bar under the board, then drag around things on the
 
 ### Crop a page
 
-On an imported page, click **Crop** in the same tool bar and drag a box over the part you want: a figure, a few table rows, a paragraph. It becomes a card beside the page, showing that part of the picture and carrying the text printed in it, so the model can read it and draw lines to it. Select the card to see where it was cut from. Undo removes it; `Esc` or the same button stops cropping.
+On an imported page, click **Crop** in the same tool bar and drag a box over the part you want: a figure, a few table rows, a paragraph. It becomes a card beside the page, showing that part of the picture and carrying the text printed in it, so the model can read it and draw lines to it. Select the card to see where it was cut from, and drag it to put it anywhere on the board; it stays where you drop it, and only that card moves. Undo removes it; `Esc` or the same button stops cropping.
 
 **Mark** draws by hand on an imported page or on a clip: a yellow, green or pink highlighter, or a red pen, picked from the colours above the tool bar. Marks on a clip stay on the card wherever it goes and go with it when it is deleted; marks on a page stay where you drew them. They are part of the board: undo, replay and exports include them. On a narrow board the tools show as icons, named in their tooltips.
 

@@ -8,10 +8,10 @@
     </header>
     <!-- The app's window as it is: meetings on the left, the board in the middle with its tools floating over it,
          and the transcript on the right. The icons are the app's own pictograms. -->
-    <!-- The recording's sound on either side: its left channel on the left and its right on the right, running
-         down past a line that marks now. -->
+    <!-- The recording's sound as a live scope beside the window: its left channel on the left, its right on the
+         right, each the wave of the moment as it plays. -->
     <div class="stage">
-    <div class="wave-side" aria-hidden="true"><canvas class="wave" id="wave-left"></canvas></div>
+    <div class="wave-side left" aria-hidden="true"><canvas class="wave" id="wave-left"></canvas></div>
     <div class="window" role="region" aria-label="The boardcast window replaying a sample meeting">
       <div class="titlebar">
         <!-- Puts the sidebar away or brings it back, as the app's does; a narrow window keeps it over the board. -->
@@ -65,5 +65,5 @@
         </aside>
       </div>
     </div>
-    <div class="wave-side" aria-hidden="true"><canvas class="wave" id="wave-right"></canvas></div>
+    <div class="wave-side right" aria-hidden="true"><canvas class="wave" id="wave-right"></canvas></div>
     </div>

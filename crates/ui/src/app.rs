@@ -1258,6 +1258,9 @@ struct SettingsForm {
     messy: Entity<SliderState>,
     /// The proxy's address, when the user gives one, and why it cannot be used if it cannot.
     proxy_url: Entity<InputState>,
+    /// The proxy's login, both optional.
+    proxy_user: Entity<InputState>,
+    proxy_password: Entity<InputState>,
     proxy_note: Option<String>,
     saved: Settings,
     note: Option<String>,
@@ -3441,8 +3444,16 @@ impl Workbench {
     /// and the system's proxy is used meanwhile.
     fn apply_proxy(&mut self) {
         use boardcast_models::net::{self, Proxy};
-        let (choice, address) = (self.form.saved.proxy.clone(), self.form.saved.proxy_url.clone());
+        let saved = &self.form.saved;
+        let (choice, address) = (saved.proxy.clone(), saved.proxy_url.clone());
         self.form.proxy_note = None;
+        let address = match net::with_login(&address, &saved.proxy_user, &saved.proxy_password) {
+            Ok(address) => address,
+            Err(_) => {
+                self.form.proxy_note = Some(tr("A username cannot contain a colon (:). Until it is fixed, the proxy is used without a login.", "用户名不能包含冒号（:）；改好之前，代理不带账号使用。").to_string());
+                address
+            }
+        };
         let proxy = match Proxy::from_setting(&choice, &address) {
             Proxy::Custom(a) => match Proxy::check(&a) {
                 Ok(()) => Proxy::Custom(a),
@@ -3662,6 +3673,8 @@ impl Workbench {
             shortcuts: self.keys.custom().to_vec(),
             proxy: self.form.saved.proxy.clone(),
             proxy_url: self.form.saved.proxy_url.clone(),
+            proxy_user: self.form.saved.proxy_user.clone(),
+            proxy_password: self.form.saved.proxy_password.clone(),
         }
     }
 
@@ -6113,6 +6126,8 @@ impl Render for Workbench {
                                 .pt_2()
                                 .child(Input::new(&self.form.proxy_url))
                                 .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("http://host:port or socks5://host:port", "http://主机:端口 或 socks5://主机:端口")))
+                                .child(div().flex().gap_2().pt_1().child(div().flex_1().child(Input::new(&self.form.proxy_user))).child(div().flex_1().child(Input::new(&self.form.proxy_password).mask_toggle())))
+                                .child(div().text_xs().text_color(rgb(pal().muted)).child(tr("Only if the proxy asks for a login.", "仅在代理需要登录时填写。")))
                                 .when_some(self.form.proxy_note.clone(), |d, note| d.child(div().text_xs().text_color(rgb(pal().danger)).child(note))),
                         )
                     })
@@ -6933,7 +6948,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let check_at = (prefix.is_some() && !scripted).then(|| Instant::now() + Duration::from_secs(8));
     let binaries = resources.binaries.clone();
     let settings = Settings::load();
-    boardcast_models::net::set(match boardcast_models::net::Proxy::from_setting(&settings.proxy, &settings.proxy_url) {
+    let proxy_address = boardcast_models::net::with_login(&settings.proxy_url, &settings.proxy_user, &settings.proxy_password).unwrap_or_else(|_| settings.proxy_url.clone());
+    boardcast_models::net::set(match boardcast_models::net::Proxy::from_setting(&settings.proxy, &proxy_address) {
         boardcast_models::net::Proxy::Custom(a) if boardcast_models::net::Proxy::check(&a).is_err() => boardcast_models::net::Proxy::System,
         chosen => chosen,
     });
@@ -7087,6 +7103,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let glossary = cx.new(|cx| InputState::new(window, cx).placeholder("鉴权; OpenAI; API = A P I, エーピーアイ").default_value(settings.glossary.clone()));
             let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
             let proxy_url = cx.new(|cx| InputState::new(window, cx).placeholder("http://127.0.0.1:7890").default_value(settings.proxy_url.clone()));
+            let proxy_user = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Username (optional)", "用户名（可选）")).default_value(settings.proxy_user.clone()));
+            let proxy_password = cx.new(|cx| InputState::new(window, cx).placeholder(tr("Password (optional)", "密码（可选）")).masked(true).default_value(settings.proxy_password.clone()));
             let key = cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true));
             let editor = cx.new(|cx| TextareaState::new(window, cx));
             let arxiv_input = cx.new(|cx| InputState::new(window, cx).placeholder("arxiv.org/abs/2401.12345"));
@@ -7115,6 +7133,23 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 cx.subscribe_in(&proxy_url, window, |this: &mut Workbench, field, event, _, cx| {
                     if matches!(event, InputEvent::Change) {
                         this.form.saved.proxy_url = field.read(cx).value().trim().to_string();
+                        this.apply_proxy();
+                        cx.notify();
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&proxy_user, window, |this: &mut Workbench, field, event, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.form.saved.proxy_user = field.read(cx).value().trim().to_string();
+                        this.apply_proxy();
+                        cx.notify();
+                    }
+                })
+                .detach();
+                cx.subscribe_in(&proxy_password, window, |this: &mut Workbench, field, event, _, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        // A password is kept exactly as typed: spaces can be part of it.
+                        this.form.saved.proxy_password = field.read(cx).value().to_string();
                         this.apply_proxy();
                         cx.notify();
                     }
@@ -7203,7 +7238,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     inputs: vec![],
                     library_query,
                     label_input,
-                    form: SettingsForm { glossary, base_url, model, key, remote, messy: messy.clone(), proxy_url, proxy_note: None, saved: settings, note: None, probing: None },
+                    form: SettingsForm { glossary, base_url, model, key, remote, messy: messy.clone(), proxy_url, proxy_user, proxy_password, proxy_note: None, saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,
                     import: ImportState::Idle,

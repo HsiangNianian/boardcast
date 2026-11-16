@@ -345,6 +345,18 @@ impl Store {
         Ok(revision)
     }
 
+    /// Where meetings are kept, the folder the meetings list opens.
+    pub fn folder(&self) -> PathBuf {
+        self.current_dir()
+    }
+
+    /// A meeting's file, and the folder beside it with its pictures and its audio, which may not exist yet.
+    pub fn meeting_paths(&self, id: &str) -> Result<(PathBuf, PathBuf)> {
+        valid(id)?;
+        let dir = self.current_dir();
+        Ok((dir.join(format!("{id}.json")), dir.join(id)))
+    }
+
     /// Where a meeting's kept audio goes: a file named `audio-<when it began>.opus` beside its images.
     pub fn audio_path(&self, id: &str, name: &str) -> Result<PathBuf> {
         valid(id)?;

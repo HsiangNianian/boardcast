@@ -62,7 +62,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), interface_language: "auto".into(), appearance: "auto".into(), input: String::new(), meeting_search: true, messy: 0.0, sidebar_hidden: false, minimap_hidden: false, minimap_at: None, folded_groups: vec![], shortcuts: vec![], proxy: "system".into(), proxy_url: String::new(), proxy_user: String::new(), proxy_password: String::new(), keep_audio: false }
+        Self { base_url: String::new(), api_key: String::new(), model: String::new(), enabled: false, diarize: true, turn_pages: false, glossary: String::new(), templates: vec![], system_speech: false, speech_language: "auto".into(), interface_language: "auto".into(), appearance: "auto".into(), input: String::new(), meeting_search: true, messy: 0.0, sidebar_hidden: false, minimap_hidden: false, minimap_at: None, folded_groups: vec![], shortcuts: vec![], proxy: "system".into(), proxy_url: String::new(), proxy_user: String::new(), proxy_password: String::new(), keep_audio: true }
     }
 }
 
@@ -127,7 +127,7 @@ impl Settings {
             proxy: v["proxy"].as_str().filter(|p| matches!(*p, "system" | "custom" | "off")).unwrap_or("system").to_string(),
             proxy_url: text("proxyUrl"),
             proxy_user: text("proxyUser"),
-            keep_audio: v["keepAudio"].as_bool().unwrap_or(false),
+            keep_audio: v["keepAudio"].as_bool().unwrap_or(true),
             proxy_password: text("proxyPassword"),
             folded_groups: v["foldedGroups"].as_array().map(|a| a.iter().filter_map(|g| g.as_str().map(str::to_string)).collect()).unwrap_or_default(),
         }
@@ -190,6 +190,13 @@ mod tests {
     }
 
     #[test]
+    fn audio_is_kept_unless_turned_off() {
+        assert!(Settings::default().keep_audio);
+        assert!(Settings::parse("{}").keep_audio, "a settings file from before the setting keeps it");
+        assert!(!Settings::parse(r#"{"keepAudio":false}"#).keep_audio);
+    }
+
+    #[test]
     fn the_hint_never_shows_the_whole_key() {
         let key = |k: &str| Settings { api_key: k.into(), ..Settings::default() }.key_hint();
         assert_eq!(key(""), None);
@@ -203,7 +210,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("boardcast-settings-{}", std::process::id()));
         std::env::set_var("BOARDCAST_CONFIG", &dir);
-        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, turn_pages: true, glossary: "鉴权; API = A P I".into(), templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])], system_speech: true, speech_language: "ja-JP".into(), interface_language: "zh".into(), appearance: "dark".into(), input: "pulse:monitor".into(), meeting_search: false, messy: 0.25, sidebar_hidden: true, minimap_hidden: true, minimap_at: Some((false, true, 24.0, 80.5)), folded_groups: vec!["earlier".into(), "pinned".into()], shortcuts: vec![("map".into(), "mod-shift-m".into()), ("tidy".into(), "mod-t".into())], proxy: "custom".into(), proxy_url: "socks5://127.0.0.1:7891".into(), proxy_user: "me".into(), proxy_password: "p@ss".into(), keep_audio: true };
+        let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, turn_pages: true, glossary: "鉴权; API = A P I".into(), templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])], system_speech: true, speech_language: "ja-JP".into(), interface_language: "zh".into(), appearance: "dark".into(), input: "pulse:monitor".into(), meeting_search: false, messy: 0.25, sidebar_hidden: true, minimap_hidden: true, minimap_at: Some((false, true, 24.0, 80.5)), folded_groups: vec!["earlier".into(), "pinned".into()], shortcuts: vec![("map".into(), "mod-shift-m".into()), ("tidy".into(), "mod-t".into())], proxy: "custom".into(), proxy_url: "socks5://127.0.0.1:7891".into(), proxy_user: "me".into(), proxy_password: "p@ss".into(), keep_audio: false };
         s.save().unwrap();
         assert_eq!(Settings::load(), s);
         assert_eq!(fs::metadata(dir.join("remote.json")).unwrap().permissions().mode() & 0o777, 0o600);

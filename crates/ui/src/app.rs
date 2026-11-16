@@ -1892,6 +1892,19 @@ impl Workbench {
         }
     }
 
+    /// Show a meeting's files in the system's file manager: its folder, or its file when it has no folder yet.
+    fn open_meeting_folder(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some(store) = &self.store else { return };
+        match store.meeting_paths(id) {
+            Ok((_, folder)) if folder.is_dir() => cx.open_with_system(&folder),
+            Ok((file, _)) => cx.reveal_path(&file),
+            Err(e) => {
+                self.notice = Some(format!("{e:#}"));
+                cx.notify();
+            }
+        }
+    }
+
     fn set_keep_audio(&mut self, on: bool, cx: &mut Context<Self>) {
         self.form.saved.keep_audio = on;
         if let Err(e) = self.form.saved.save() {
@@ -6547,9 +6560,10 @@ impl Render for Workbench {
                                                 .text_xs()
                                                 .text_color(rgb(pal().muted))
                                                 .hover(|d| d.text_color(rgb(pal().text)).border_color(rgb(pal().text)))
+                                                .px_4()
                                                 .on_click(cx.listener(|this, _, _, cx| this.save_template(cx)))
-                                                .child(icon("plus").size(px(11.)))
-                                                .child(tr("Keep this board's topics as a template", "把这张板的话题存成模板")),
+                                                .child(icon("plus").size(px(11.)).flex_none())
+                                                .child(div().min_w_0().text_center().child(tr("Keep this board's topics as a template", "把这张板的话题存成模板"))),
                                         )
                                     }),
                             )
@@ -6636,7 +6650,7 @@ impl Render for Workbench {
                         let current = id == self.live.id();
                         let pinned = self.pinned.iter().any(|p| *p == id);
                         let confirming = self.confirm_delete.as_deref() == Some(id.as_str());
-                        let (pin_id, delete_id, sure_id) = (id.clone(), id.clone(), id.clone());
+                        let (pin_id, delete_id, sure_id, folder_id) = (id.clone(), id.clone(), id.clone(), id.clone());
                         // When, as the group says it: the time today and yesterday, the date before; then how long.
                         let when = if group == 1 || group == 2 { local_time(m.updated_at).split(' ').nth(1).unwrap_or_default().to_string() } else { local_time(m.updated_at).split(' ').next().unwrap_or_default().to_string() };
                         let detail = match &m.read_error {
@@ -6712,7 +6726,26 @@ impl Render for Workbench {
                                                 })),
                                         )
                                     })
-                                    // The meeting that is open cannot be deleted from under itself.
+                                    // Its folder, with its pictures and its audio; a meeting with neither shows its file instead.
+                    .when(self.store.is_some(), |d| {
+                        let id = folder_id.clone();
+                        d.child(
+                            div()
+                                .id(("meeting-folder", i))
+                                .p_1()
+                                .cursor_pointer()
+                                .opacity(0.)
+                                .group_hover("meeting-row", |s| s.opacity(1.))
+                                .child(icon("folder-open").size_3().text_color(rgb(pal().faint)))
+                                .tooltip(|window, cx| Tooltip::new(tr("Open its folder: the meeting, its pictures and its audio", "打开它的文件夹：会议、图片和录音")).build(window, cx))
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.open_meeting_folder(&id, cx);
+                                })),
+                        )
+                    })
+                    // The meeting that is open cannot be deleted from under itself.
                                     .when(self.store.is_some() && !current, |d| {
                                         d.child(
                                             div()
@@ -7457,6 +7490,16 @@ impl Render for Workbench {
                                             .flex()
                                             .items_center()
                                             .gap_2()
+                                            .when_some(self.store.as_ref().map(Store::folder), |d, folder| {
+                                                d.child(
+                                                    Button::new("library-folder")
+                                                        .small()
+                                                        .ghost()
+                                                        .child(div().flex().items_center().gap(px(6.)).child(icon("folder-open").size(px(13.))).child(div().text_sm().child(tr("Open folder", "打开文件夹"))))
+                                                        .tooltip(tr("Where every meeting is kept on this computer", "所有会议在本机保存的位置"))
+                                                        .on_click(cx.listener(move |_, _, _, cx| cx.open_with_system(&folder))),
+                                                )
+                                            })
                                             .when(self.store.is_some() && !sidebar_shown, |d| d.child(Button::new("library-page-new").small().primary().label(tr("New meeting", "新建会议")).on_click(cx.listener(|this, _, _, cx| this.new_meeting(cx))))),
                                     ),
                             )

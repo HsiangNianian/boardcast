@@ -27,7 +27,7 @@ use boardcast_export::Kind as ExportKind;
 use boardcast_import::pdf::NewPage;
 use boardcast_board::spans::{span_at, Unit};
 use boardcast_board::speakers::{by_of_edge, by_of_node, first_seen, initial, said_at};
-use boardcast_board::steps::{clock, replay_to, Player};
+use boardcast_board::steps::{clock, replay_to, sound_times, steps_heard, Player};
 use gpui_kit::base::input::{Textarea, TextareaState};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
@@ -1299,6 +1299,60 @@ struct Replaying {
     track: Rc<std::cell::Cell<Bounds<Pixels>>>,
     /// The track is held, and the replay follows the pointer along it.
     held: bool,
+    /// The meeting's kept sound, once read: the replay then runs on its clock, in real time.
+    sound: Option<Sound>,
+    /// The sound is still being read, and the replay waits for it.
+    hearing: bool,
+}
+
+/// A replay's sound, and where each of its steps falls in it.
+struct Sound {
+    player: boardcast_audio::play::Player,
+    /// When each step happened, in seconds into the sound.
+    times: Vec<f64>,
+    /// How loud the sound is along its length, from 0 to 1, for the track.
+    peaks: Rc<Vec<f32>>,
+}
+
+impl Sound {
+    /// Where a step happened: the start for the empty board.
+    fn time_of(&self, at: usize) -> f64 {
+        at.checked_sub(1).and_then(|i| self.times.get(i)).copied().unwrap_or(0.0)
+    }
+}
+
+/// A meeting's sound: its samples, its pieces' starts and lengths in ms, and its loudness along it.
+type ReadSound = (Vec<f32>, Vec<(f64, f64)>, Vec<f32>);
+
+/// A meeting's kept sound read from its files and laid end to end, with each piece's start and length in ms.
+/// A file that is gone is heard as silence of its length, so the rest stays in step.
+fn read_sound(files: Vec<(Option<PathBuf>, f64, f64)>) -> Result<ReadSound> {
+    let per_ms = f64::from(boardcast_audio::SAMPLE_RATE) / 1000.0;
+    let (mut samples, mut pieces) = (Vec::new(), Vec::new());
+    for (path, start, ms) in files {
+        let piece = match path.map(|p| boardcast_audio::keep::read(&p)) {
+            Some(Ok(piece)) => piece,
+            Some(Err(e)) => {
+                eprintln!("a piece of the meeting's sound could not be read: {e:#}");
+                vec![0.0; (ms * per_ms) as usize]
+            }
+            None => vec![0.0; (ms * per_ms) as usize],
+        };
+        pieces.push((start, piece.len() as f64 / per_ms));
+        samples.extend(piece);
+    }
+    if samples.is_empty() {
+        anyhow::bail!("the meeting's sound is empty");
+    }
+    // The loudest moment in each of many short stretches, eased so quiet speech still shows.
+    const STRETCHES: usize = 1200;
+    let size = samples.len().div_ceil(STRETCHES).max(1);
+    let mut peaks: Vec<f32> = samples.chunks(size).map(|c| c.iter().fold(0.0f32, |m, v| m.max(v.abs()))).collect();
+    let loudest = peaks.iter().copied().fold(0.0f32, f32::max).max(1e-4);
+    for p in &mut peaks {
+        *p = (*p / loudest).sqrt();
+    }
+    Ok((samples, pieces, peaks))
 }
 
 enum Exported {
@@ -2307,7 +2361,20 @@ impl Workbench {
     }
 
     fn pump_replay(&mut self, changed: &mut bool, cx: &mut Context<Self>) {
-        let Some(replay) = &self.replay else { return };
+        let Some(replay) = &mut self.replay else { return };
+        // With sound, the board follows the sound's clock.
+        if let Some(sound) = &replay.sound {
+            let playing = sound.player.playing();
+            let heard = steps_heard(&sound.times, sound.player.at());
+            if playing || replay.player.playing {
+                *changed = true;
+            }
+            replay.player.playing = playing;
+            if heard != replay.player.at {
+                self.show_step(heard, cx);
+            }
+            return;
+        }
         if replay.player.playing && Instant::now() >= replay.next_at {
             let next = replay.player.at + 1;
             self.seek_replay(next, cx);
@@ -2346,16 +2413,76 @@ impl Workbench {
         self.notice = None;
         self.panel = Panel::Transcript;
         let shown = timeline.first().map_or(self.live.page(), |(b, _)| *b);
-        self.replay = Some(Replaying { player: Player::new(total), timeline, steps, shown, memory, view, next_at: Instant::now(), track: Rc::default(), held: false });
+        let audio = self.live.audio();
+        let mut player = Player::new(total);
+        player.playing = audio.is_empty();
+        let track: Rc<std::cell::Cell<Bounds<Pixels>>> = Rc::default();
+        self.replay = Some(Replaying { player, timeline, steps, shown, memory, view, next_at: Instant::now(), track: track.clone(), held: false, sound: None, hearing: !audio.is_empty() });
         self.show_board_image(shown);
         self.wait_for_next_step();
+        if !audio.is_empty() {
+            self.hear_replay(audio, track, cx);
+        }
         window.focus(&self.focus, cx);
         cx.notify();
     }
 
+    /// Read the meeting's kept sound on another thread, then play the replay on its clock. `track` tells
+    /// this replay from one begun since.
+    fn hear_replay(&mut self, audio: Vec<(String, f64, f64)>, track: Rc<std::cell::Cell<Bounds<Pixels>>>, cx: &mut Context<Self>) {
+        let id = self.live.id().to_string();
+        let files: Vec<(Option<PathBuf>, f64, f64)> = audio.into_iter().map(|(name, start, ms)| (self.store.as_ref().and_then(|s| s.audio_path(&id, &name).ok()), start, ms)).collect();
+        cx.spawn(async move |this, cx| {
+            let read = cx.background_executor().spawn(async move { read_sound(files) }).await;
+            let _ = this.update(cx, |this, cx| {
+                let Some(replay) = this.replay.as_mut().filter(|r| Rc::ptr_eq(&r.track, &track)) else { return };
+                replay.hearing = false;
+                match read {
+                    Ok((samples, pieces, peaks)) => {
+                        let times = sound_times(&replay.steps, &pieces);
+                        let mut player = boardcast_audio::play::Player::new(samples);
+                        player.play();
+                        replay.sound = Some(Sound { player, times, peaks: Rc::new(peaks) });
+                    }
+                    Err(e) => {
+                        eprintln!("replaying without sound: {e:#}");
+                        replay.player.playing = true;
+                        this.wait_for_next_step();
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Go to a step, and with sound, to the moment it happened.
     fn seek_replay(&mut self, at: usize, cx: &mut Context<Self>) {
+        if let Some(sound) = self.replay.as_mut().and_then(|r| r.sound.as_mut()) {
+            let at = at.min(sound.times.len());
+            sound.player.seek(sound.time_of(at));
+        }
+        self.show_step(at, cx);
+    }
+
+    /// Go to a moment of the sound, and to the board as it was then.
+    fn seek_sound(&mut self, seconds: f64, cx: &mut Context<Self>) {
+        let Some(sound) = self.replay.as_mut().and_then(|r| r.sound.as_mut()) else { return };
+        sound.player.seek(seconds);
+        let at = steps_heard(&sound.times, sound.player.at());
+        self.show_step(at, cx);
+        cx.notify();
+    }
+
+    /// Show the board as it was after `at` steps.
+    fn show_step(&mut self, at: usize, cx: &mut Context<Self>) {
         let Some(replay) = &mut self.replay else { return };
+        let playing = replay.player.playing;
         let Some(moved) = replay.player.seek(at) else { return };
+        if replay.sound.is_some() {
+            // The sound plays on past the last step.
+            replay.player.playing = playing;
+        }
         let (board, count) = boardcast_board::steps::board_at(&replay.timeline, replay.player.at);
         let own: Vec<serde_json::Value> = replay.timeline.iter().filter(|(b, _)| *b == board).map(|(_, s)| s.clone()).collect();
         let graph = replay_to(&own, count);
@@ -2383,6 +2510,23 @@ impl Workbench {
 
     fn toggle_replay(&mut self, cx: &mut Context<Self>) {
         let Some(replay) = &mut self.replay else { return };
+        if replay.hearing {
+            return;
+        }
+        if let Some(sound) = &mut replay.sound {
+            if sound.player.playing() {
+                sound.player.pause();
+            } else {
+                if sound.player.at() >= sound.player.seconds() {
+                    replay.player.at = 0;
+                    self.ink.borrow_mut().open(&Graph::default(), &serde_json::Value::Null);
+                }
+                sound.player.play();
+            }
+            replay.player.playing = sound.player.playing();
+            cx.notify();
+            return;
+        }
         if replay.player.toggle() {
             self.ink.borrow_mut().open(&Graph::default(), &serde_json::Value::Null);
         }
@@ -2408,7 +2552,7 @@ impl Workbench {
         if replay.player.at == 0 || self.live.read_only.is_some() {
             return;
         }
-        let when = clock(replay.player.elapsed_ms(&replay.steps));
+        let when = clock(replay.sound.as_ref().map_or_else(|| replay.player.elapsed_ms(&replay.steps), |s| s.player.at() * 1000.0));
         // The fork is of the board in view, from as far as that board had come.
         let (board, at) = boardcast_board::steps::board_at(&replay.timeline, replay.player.at);
         self.live.go_to_page(board);
@@ -4673,16 +4817,37 @@ impl Workbench {
         let replay = self.replay.as_ref()?;
         let player = replay.player.clone();
         let steps = &replay.steps;
-        let (now, whole) = (clock(player.elapsed_ms(steps)), clock(Player::duration_ms(steps)));
+        let sound = replay.sound.as_ref();
+        let hearing = replay.hearing;
+        let peaks = sound.map(|s| s.peaks.clone());
+        let playing = sound.map_or(player.playing, |s| s.player.playing());
+        let (now, whole) = match sound {
+            Some(s) => (clock(s.player.at() * 1000.0), clock(s.player.seconds() * 1000.0)),
+            None => (clock(player.elapsed_ms(steps)), clock(Player::duration_ms(steps))),
+        };
         let can_fork = player.at > 0 && self.live.read_only.is_none();
-        let done = if player.total == 0 { 0.0 } else { player.at as f32 / player.total as f32 };
+        let done = match sound {
+            Some(s) => (s.player.at() / s.player.seconds().max(1e-3)) as f32,
+            None if player.total == 0 => 0.0,
+            None => player.at as f32 / player.total as f32,
+        };
         let area = replay.track.clone();
-        // The step under a point on the track.
-        let step_at = |this: &Self, x: Pixels| {
-            let replay = this.replay.as_ref()?;
+        // Go to the point under the pointer on the track: a moment of the sound, or a step without it.
+        let go_to = |this: &mut Self, x: Pixels, cx: &mut Context<Self>| {
+            let Some(replay) = this.replay.as_ref() else { return };
             let b = replay.track.get();
-            let k = (f32::from(x - b.origin.x) / f32::from(b.size.width).max(1.0)).clamp(0.0, 1.0);
-            Some((k * replay.player.total as f32).round() as usize)
+            let k = (f32::from(x - b.origin.x - px(6.)) / f32::from(b.size.width - px(12.)).max(1.0)).clamp(0.0, 1.0);
+            match &replay.sound {
+                Some(sound) => {
+                    let seconds = f64::from(k) * sound.player.seconds();
+                    this.seek_sound(seconds, cx);
+                }
+                None if replay.hearing => {}
+                None => {
+                    let at = (k * replay.player.total as f32).round() as usize;
+                    this.seek_replay(at, cx);
+                }
+            }
         };
         // A thin line, the part played in ink and the rest faint, and a small round knob at where it is.
         let track = div()
@@ -4703,7 +4868,28 @@ impl Workbench {
                             c.a = alpha;
                             gpui_kit::fill(Bounds::new(point(left + width * from, middle - px(1.5)), size(width * (to - from), px(3.))), c).corner_radii(px(1.5))
                         };
-                        window.paint_quad(line(0.0, 1.0, pal().line, 1.0));
+                        if let Some(peaks) = &peaks {
+                            // The sound's loudness as thin bars, those heard in ink and the rest faint, with a
+                            // line where it is instead of a knob.
+                            let (bar, gap) = (2.0f32, 1.0f32);
+                            let count = (f32::from(width) / (bar + gap)).floor().max(1.0) as usize;
+                            let tall = f32::from(bounds.size.height) - 6.0;
+                            for i in 0..count {
+                                let (a, b) = (i * peaks.len() / count, ((i + 1) * peaks.len() / count).max(i * peaks.len() / count + 1));
+                                let loud = peaks[a.min(peaks.len() - 1)..b.min(peaks.len())].iter().copied().fold(0.0f32, f32::max);
+                                let h = (loud * tall).max(2.0);
+                                let x = left + px(i as f32 * (bar + gap));
+                                let heard = (i as f32 + 0.5) / count as f32 <= done;
+                                let mut c: Hsla = rgb(if heard { pal().text } else { pal().faint }).into();
+                                c.a = if heard { 0.9 } else { 0.45 };
+                                window.paint_quad(gpui_kit::fill(Bounds::new(point(x, middle - px(h / 2.0)), size(px(bar), px(h))), c).corner_radii(px(1.)));
+                            }
+                            let head = Bounds::new(point(left + width * done - px(1.), bounds.origin.y), size(px(2.), bounds.size.height));
+                            window.paint_quad(gpui_kit::fill(head, rgb(pal().text)).corner_radii(px(1.)));
+                            return;
+                        }
+                        // Reading the sound: the line waits, faint.
+                        window.paint_quad(line(0.0, 1.0, pal().line, if hearing { 0.5 } else { 1.0 }));
                         window.paint_quad(line(0.0, done, pal().text, 1.0));
                         let knob = Bounds::new(point(left + width * done - px(6.), middle - px(6.)), size(px(12.), px(12.)));
                         window.paint_quad(gpui_kit::fill(knob, rgb(pal().surface)).corner_radii(px(6.)).border_widths(px(2.)).border_color(rgb(pal().text)));
@@ -4712,12 +4898,10 @@ impl Workbench {
                 .size_full(),
             )
             .on_mouse_down(MouseButton::Left, cx.listener(move |this, e: &MouseDownEvent, _, cx| {
-                if let Some(at) = step_at(this, e.position.x) {
-                    if let Some(replay) = &mut this.replay {
-                        replay.held = true;
-                    }
-                    this.seek_replay(at, cx);
+                if let Some(replay) = &mut this.replay {
+                    replay.held = true;
                 }
+                go_to(this, e.position.x, cx);
             }))
             .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
                 let held = this.replay.as_ref().is_some_and(|r| r.held);
@@ -4730,9 +4914,7 @@ impl Workbench {
                     }
                     return;
                 }
-                if let Some(at) = step_at(this, e.position.x) {
-                    this.seek_replay(at, cx);
-                }
+                go_to(this, e.position.x, cx);
             }))
             .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| {
                 if let Some(replay) = &mut this.replay {
@@ -4755,8 +4937,9 @@ impl Workbench {
                         .h(px(30.))
                         .w(px(30.))
                         .rounded(px(15.))
-                        .icon(icon(if player.playing { "pause" } else { "play" }))
-                        .tooltip(if player.playing { tr("Pause (Space)", "暂停（空格）") } else { tr("Play (Space)", "播放（空格）") })
+                        .icon(icon(if playing { "pause" } else { "play" }))
+                        .disabled(hearing)
+                        .tooltip(if playing { tr("Pause (Space)", "暂停（空格）") } else { tr("Play (Space)", "播放（空格）") })
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_replay(cx))),
                 )
                 .child(div().w(px(2.)))
@@ -4764,13 +4947,16 @@ impl Workbench {
                 .child(track)
                 .child(div().font_family(theme::MONO).text_size(px(11.)).whitespace_nowrap().text_color(rgb(pal().faint)).child(whole))
                 .child(Separator::vertical().h(px(18.)).mx_1())
-                .child(Button::new("replay-speed").ghost().small().label(format!("{}×", player.speed)).tooltip(tr("Speed", "速度")).on_click(cx.listener(|this, _, _, cx| {
-                    if let Some(replay) = &mut this.replay {
-                        replay.player.next_speed();
-                    }
-                    this.wait_for_next_step();
-                    cx.notify();
-                })))
+                // With sound the replay runs in real time, so there is no speed to choose.
+                .when(sound.is_none() && !hearing, |d| {
+                    d.child(Button::new("replay-speed").ghost().small().label(format!("{}×", player.speed)).tooltip(tr("Speed", "速度")).on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(replay) = &mut this.replay {
+                            replay.player.next_speed();
+                        }
+                        this.wait_for_next_step();
+                        cx.notify();
+                    })))
+                })
                 .when(self.live.read_only.is_none(), |d| {
                     d.child(icon_button("replay-fork", "fork", tr("Fork a board: start a new board from this moment", "另起一板：从这一刻另起一张板")).disabled(!can_fork).on_click(cx.listener(|this, _, _, cx| this.fork_replay(cx))))
                 })

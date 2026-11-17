@@ -42,3 +42,9 @@ opt-level = "s"
 
 [profile.release.package.boardcast-demo]
 opt-level = "s"
+
+# Our fork of sherpa-onnx: 2.0.1 with Nemotron-3-Diarization (k2-fsa/sherpa-onnx#4032) and streaming speaker
+# diarization on top (#292). Its prebuilt libraries come from the same tag's release; see .cargo/config.toml.
+[patch.crates-io]
+sherpa-onnx = { git = "https://github.com/HsiangNianian/sherpa-onnx", tag = "boardcast-2.0.1-2" }
+sherpa-onnx-sys = { git = "https://github.com/HsiangNianian/sherpa-onnx", tag = "boardcast-2.0.1-2" }

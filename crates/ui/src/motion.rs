@@ -32,14 +32,19 @@ pub const GLIDE: SpringConfig = SpringConfig::new(576., 48., 1.);
 /// The same, settling in about 240 ms, for starting and stopping listening.
 pub const SETTLE: SpringConfig = SpringConfig::new(400., 40., 1.);
 
-/// A colour `t` of the way from `a` to `b`.
-pub fn mix(a: u32, b: u32, t: f32) -> Hsla {
+/// A colour `t` of the way from `a` to `b`, as 0xRRGGBB.
+pub fn mix_rgb(a: u32, b: u32, t: f32) -> u32 {
     let t = t.clamp(0., 1.);
     let channel = |shift: u32| {
         let (x, y) = (((a >> shift) & 0xff) as f32, ((b >> shift) & 0xff) as f32);
         ((x + (y - x) * t).round() as u32) << shift
     };
-    rgb(channel(16) | channel(8) | channel(0)).into()
+    channel(16) | channel(8) | channel(0)
+}
+
+/// A colour `t` of the way from `a` to `b`.
+pub fn mix(a: u32, b: u32, t: f32) -> Hsla {
+    rgb(mix_rgb(a, b, t)).into()
 }
 
 /// The fill of a row or quiet button, `t` of the way into hover: the hover shade, faded in over whatever
@@ -50,22 +55,39 @@ pub fn hover_fill(t: f32) -> Hsla {
     fill
 }
 
+/// What a small system command prints, trimmed; nothing if it cannot be run or fails.
+fn run(program: &str, args: &[&str]) -> Option<String> {
+    let mut command = std::process::Command::new(program);
+    command.args(args).stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // No console window flashing up for a moment.
+        command.creation_flags(0x0800_0000);
+    }
+    let out = command.output().ok().filter(|o| o.status.success())?;
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Whether the computer is running on its battery: then what moves only for looks, the halftone ground, holds
+/// still. Anything that cannot be read counts as on mains.
+pub fn on_battery() -> bool {
+    if cfg!(target_os = "macos") {
+        run("pmset", &["-g", "batt"]).is_some_and(|v| v.contains("'Battery Power'"))
+    } else if cfg!(windows) {
+        // 1 is "discharging" in Win32_Battery's BatteryStatus.
+        run("powershell", &["-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_Battery).BatteryStatus"]).is_some_and(|v| v.lines().any(|l| l.trim() == "1"))
+    } else {
+        std::fs::read_dir("/sys/class/power_supply").is_ok_and(|dir| {
+            dir.flatten().any(|entry| std::fs::read_to_string(entry.path().join("status")).is_ok_and(|s| s.trim() == "Discharging"))
+        })
+    }
+}
+
 /// Whether the system asks for less motion: GNOME's or KDE's animation settings on Linux, Reduce motion on a
 /// Mac, animations turned off on Windows. Read once at start, off the main thread; anything that cannot be
 /// read counts as no.
 pub fn system_reduces() -> bool {
-    let run = |program: &str, args: &[&str]| -> Option<String> {
-        let mut command = std::process::Command::new(program);
-        command.args(args).stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            // No console window flashing up for a moment.
-            command.creation_flags(0x0800_0000);
-        }
-        let out = command.output().ok().filter(|o| o.status.success())?;
-        Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
-    };
     if cfg!(target_os = "macos") {
         run("defaults", &["read", "com.apple.universalaccess", "reduceMotion"]).is_some_and(|v| v == "1")
     } else if cfg!(windows) {

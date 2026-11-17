@@ -2,7 +2,7 @@
 //! read, which is a board before its first ink and the pages that cover the board. A soft noise field drifts
 //! slowly and is screened through an 8x8 ordered dither into small dots on a 3 px lattice. GPUI has no shader
 //! for this, so the dots are drawn into an image on a background thread a few times a second, and that image
-//! is painted; with reduced motion the field holds still.
+//! is painted; with reduced motion, or on battery, the field holds still.
 
 use crate::theme;
 use gpui_kit::{px, size, App, Bounds, Context, Corners, Pixels, RenderImage, Window};
@@ -29,7 +29,12 @@ pub struct Ground {
     stale: Vec<Arc<RenderImage>>,
     running: bool,
     started: Option<Instant>,
+    /// Whether the computer was on its battery when last asked, and when that was.
+    battery: Option<(bool, Instant)>,
 }
+
+/// How often to ask again whether the computer is on its battery.
+const BATTERY_EVERY: Duration = Duration::from_secs(60);
 
 pub type Shared = Rc<RefCell<Ground>>;
 
@@ -57,7 +62,14 @@ pub fn want<V: 'static>(ground: &Shared, clear: Option<(f32, f32)>, cx: &mut Con
             g.at.map(|at| (at, g.clear, g.started.map_or(0., |s| s.elapsed().as_secs_f32())))
         };
         if let Some(((w, h, scale), clear, seconds)) = job {
-            let still = cx.update(|cx: &mut App| cx.reduce_motion());
+            // Held still with reduced motion, and on battery, where drawing it again and again only costs power.
+            let ask = ground.borrow().battery.is_none_or(|(_, at)| at.elapsed() > BATTERY_EVERY);
+            if ask {
+                let on_battery = cx.background_executor().spawn(async { crate::motion::on_battery() }).await;
+                ground.borrow_mut().battery = Some((on_battery, Instant::now()));
+            }
+            let on_battery = ground.borrow().battery.is_some_and(|(b, _)| b);
+            let still = cx.update(|cx: &mut App| cx.reduce_motion()) || on_battery;
             let dark = theme::is_dark();
             let t = if still { 0. } else { seconds };
             let image = cx.background_executor().spawn(async move { draw(w, h, scale, t, dark, clear) }).await;

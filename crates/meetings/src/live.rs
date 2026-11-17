@@ -406,7 +406,8 @@ impl Live {
 
     /// A line of speech or typing. Without `ms` it counts as still waiting for the model.
     pub fn add_line(&mut self, speaker: Option<&str>, text: &str, asr_ms: Option<u128>) {
-        let mut line = json!({ "text": text, "page": self.page() });
+        // When it was said, on the wall clock, for the transcript to show beside the speaker.
+        let mut line = json!({ "text": text, "page": self.page(), "at": now_ms() });
         if let Some(speaker) = speaker {
             line["speaker"] = json!(speaker);
         }

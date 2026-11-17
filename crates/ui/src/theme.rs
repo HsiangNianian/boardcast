@@ -25,7 +25,7 @@ pub struct Palette {
     pub raised_line: u32,
     /// The one solid button: ink in the light, a lifted grey in the dark rather than a white slab.
     pub button: u32,
-    button_hover: u32,
+    pub button_hover: u32,
     pub on_button: u32,
     pub selected: u32,
     pub text: u32,
@@ -126,6 +126,19 @@ pub mod size {
     pub const HEADING: f32 = 18.;
     /// A page of its own: Meetings, Settings.
     pub const PAGE: f32 = 26.;
+}
+
+/// The steps of space between things, in pixels. Values off these steps in the window are optical nudges
+/// (a bullet set on a text's middle, the padding inside a key's label), not spacing.
+pub mod space {
+    /// A hairline gap, between rows that touch.
+    pub const HAIR: f32 = 2.;
+    pub const XS: f32 = 4.;
+    pub const S: f32 = 8.;
+    pub const M: f32 = 12.;
+    pub const L: f32 = 16.;
+    pub const XL: f32 = 24.;
+    pub const XXL: f32 = 32.;
 }
 
 /// The type scale on anything styled: `div().text_ui()`.

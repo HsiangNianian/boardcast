@@ -3,7 +3,7 @@
 use boardcast_agent::{Backend, Guidance, Said, Session, Update};
 use anyhow::{bail, Result};
 use boardcast_audio::system::SystemSpeech;
-use boardcast_audio::{capture, play_wav, Ear, Language, Recognizers, Sentence};
+use boardcast_audio::{capture, play_wav, Ear, Language, Recognizers, Sentence, Sources, Warning};
 use boardcast_board::graph::Utterance;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -219,9 +219,9 @@ impl Pipeline {
         self.mic_stop.is_some()
     }
 
-    /// Start or stop listening, to `input` when it is given and still there. With `keep`, what is heard is
-    /// also saved there as it comes, and the file is finished when listening stops.
-    pub fn toggle_mic(&mut self, input: Option<String>, keep: Option<std::path::PathBuf>) {
+    /// Start or stop listening, to `sources`. With `keep`, what is heard is also saved there as it comes, and
+    /// the file is finished when listening stops.
+    pub fn toggle_mic(&mut self, sources: Sources, keep: Option<std::path::PathBuf>) {
         if let Some(stop) = self.mic_stop.take() {
             stop.store(true, Ordering::Relaxed);
             return;
@@ -264,10 +264,15 @@ impl Pipeline {
         };
         thread::spawn(move || {
             let warn = tx.clone();
-            let fell_back = move |_: &str| {
-                let _ = warn.send(Event::Failed(crate::i18n::t("the-chosen-input-isn-t").into()));
+            let warn = move |warning: Warning| {
+                let text = match warning {
+                    Warning::MicrophoneGone => crate::i18n::t("the-chosen-input-isn-t").to_string(),
+                    Warning::ComputerGone => crate::i18n::t("the-chosen-sound-output-isn-t").to_string(),
+                    Warning::ComputerFailed(error) => crate::ta!("the-computer-s-sound-can-t", error = error),
+                };
+                let _ = warn.send(Event::Failed(text));
             };
-            if let Err(e) = capture(&stop, &samples, input.as_deref(), fell_back) {
+            if let Err(e) = capture(&stop, &samples, &sources, warn) {
                 let _ = tx.send(Event::Failed(format!("{e:#}")));
             }
         });

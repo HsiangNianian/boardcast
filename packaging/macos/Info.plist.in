@@ -22,6 +22,8 @@
   <string>13.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>When you choose to hear the computer's sound, boardcast listens to what this Mac plays, such as the other side of an online meeting. The sound is recognized on this Mac and never uploaded.</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>boardcast listens to what is said in a meeting and turns it into a board. The sound is recognized on this Mac and never uploaded.</string>
   <key>NSSpeechRecognitionUsageDescription</key>

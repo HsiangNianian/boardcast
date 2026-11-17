@@ -167,6 +167,17 @@ pub enum Lift {
     Sheet,
 }
 
+/// The shadow for a lift, `t` of the way in: none at 0, all of it at 1.
+pub fn shadow_at(lift: Lift, t: f32) -> Vec<gpui_kit::BoxShadow> {
+    shadow(lift)
+        .into_iter()
+        .map(|mut s| {
+            s.color.a *= t.clamp(0., 1.);
+            s
+        })
+        .collect()
+}
+
 /// The shadow for a lift. In the dark a shadow hardly shows, so what floats there is also a lighter surface
 /// ([`Palette::raised`]); the shadow only deepens the edge.
 pub fn shadow(lift: Lift) -> Vec<gpui_kit::BoxShadow> {

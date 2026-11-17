@@ -49,3 +49,41 @@ pub fn hover_fill(t: f32) -> Hsla {
     fill.a = t.clamp(0., 1.);
     fill
 }
+
+/// Whether the system asks for less motion: GNOME's or KDE's animation settings on Linux, Reduce motion on a
+/// Mac, animations turned off on Windows. Read once at start, off the main thread; anything that cannot be
+/// read counts as no.
+pub fn system_reduces() -> bool {
+    let run = |program: &str, args: &[&str]| -> Option<String> {
+        let mut command = std::process::Command::new(program);
+        command.args(args).stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            // No console window flashing up for a moment.
+            command.creation_flags(0x0800_0000);
+        }
+        let out = command.output().ok().filter(|o| o.status.success())?;
+        Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+    if cfg!(target_os = "macos") {
+        run("defaults", &["read", "com.apple.universalaccess", "reduceMotion"]).is_some_and(|v| v == "1")
+    } else if cfg!(windows) {
+        run("reg", &["query", r"HKCU\Control Panel\Desktop\WindowMetrics", "/v", "MinAnimate"]).is_some_and(|v| v.split_whitespace().last() == Some("0"))
+    } else {
+        run("gsettings", &["get", "org.gnome.desktop.interface", "enable-animations"]).is_some_and(|v| v == "false")
+            || ["kreadconfig6", "kreadconfig5"].iter().any(|k| run(k, &["--group", "KDE", "--key", "AnimationDurationFactor"]).is_some_and(|v| v.parse::<f32>().is_ok_and(|f| f == 0.)))
+    }
+}
+
+static SYSTEM_REDUCES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Note what the system asks for, once it is known.
+pub fn set_system(reduces: bool) {
+    SYSTEM_REDUCES.store(reduces, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether to draw animations at rest: the setting, or the system asking for it.
+pub fn reduced(setting: bool) -> bool {
+    setting || SYSTEM_REDUCES.load(std::sync::atomic::Ordering::Relaxed)
+}

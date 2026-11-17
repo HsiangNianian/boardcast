@@ -17,6 +17,7 @@ use crate::i18n::t;
 use crate::ta;
 use crate::theme::{self, icon, pal, Type as _};
 use crate::motion;
+use crate::quiet::Quiet;
 use gpui_kit::{AnimationExt as _, SpringAnimation};
 use crate::pipeline::{Event, Pipeline, Script, Speech};
 use crate::resources;
@@ -44,14 +45,14 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::TitleBar;
-use gpui_kit::component::{Disableable, Selectable, Sizable};
+use gpui_kit::component::{Disableable, Sizable};
 use gpui_kit::{
     canvas, div, point, prelude::*, px, rgb, size, App, Background, Bounds, Context, Entity, FillOptions, FocusHandle,
     DragMoveEvent, Hsla, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PathBuilder, PathStyle, Pixels, Point, Render, RenderImage,
     ScrollEvent, Window, WindowBounds, WindowOptions,
 };
 use serde::Deserialize;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -1607,6 +1608,9 @@ struct Workbench {
     transcript_open: bool,
     /// The row or quiet button under the pointer, whose fill fades in while the others fade out.
     hovered: Option<gpui_kit::ElementId>,
+    /// Where the sidebar's list starts and where its selected row is, as laid out in the last frame, for the
+    /// selection's sheet to glide to.
+    side_sheet: Rc<Cell<(Option<f32>, Option<f32>)>>,
     /// Whether listening was on at the last frame, and when it last changed: the listen button glides between
     /// ink and red from then, both halves of it together.
     listen_flip: (bool, Option<Instant>),
@@ -2037,7 +2041,7 @@ impl Workbench {
         if let Err(e) = self.form.saved.save() {
             self.form.note = Some(format!("{e:#}"));
         }
-        cx.set_reduce_motion(on);
+        cx.set_reduce_motion(motion::reduced(on));
         cx.notify();
     }
 
@@ -2481,7 +2485,14 @@ impl Workbench {
         }
         if let Some(typing) = &self.typing {
             if typing.follow {
-                self.transcript_scroll.scroll_to_bottom();
+                // Glide down to the newest line rather than jumping: a good part of the way each tick.
+                let (at, end) = (self.transcript_scroll.offset(), -self.transcript_scroll.max_offset().y);
+                let gap = end - at.y;
+                if cx.reduce_motion() || gap.abs() < px(1.) {
+                    self.transcript_scroll.scroll_to_bottom();
+                } else {
+                    self.transcript_scroll.set_offset(point(at.x, at.y + gap * 0.45));
+                }
             }
             let len = self.live.lines.get(typing.line).and_then(|l| l["text"].as_str()).map_or(0, |t| t.chars().count());
             // Kept a little past the last character, so the list is laid out before it stops following.
@@ -4999,12 +5010,12 @@ impl Workbench {
         crate::i18n::choose(language);
         // A field keeps the hint it was made with, so each is given the new language's.
         for (field, id) in [
-            (&self.input, "type-a-line-enter-puts"),
+            (&self.input, "type-a-line-for-the-board"),
             (&self.form.proxy_user, "username-optional"),
             (&self.form.proxy_password, "password-optional"),
             (&self.import_pages, "all-pages-or-e-g"),
             (&self.title_input, "meeting-name"),
-            (&self.library_query, "search-meetings"),
+            (&self.library_query, "search-what-was-said"),
         ] {
             field.update(cx, |field, cx| field.set_placeholder(t(id), window, cx));
         }
@@ -5293,6 +5304,21 @@ impl Workbench {
 
 /// A summary as it reads on screen. To-dos can be ticked when `tick` is given, with a target big
 /// enough for a finger.
+/// A point's owner, when it ends in "(owner: …)" or "（负责人：…）": the point without it, and who, unless
+/// the owner given is nobody, when it is just left off.
+fn owner_of(text: &str) -> (String, Option<String>) {
+    let trimmed = text.trim_end();
+    let Some(close) = trimmed.chars().last().filter(|c| *c == ')' || *c == '）') else { return (text.to_string(), None) };
+    let body = &trimmed[..trimmed.len() - close.len_utf8()];
+    let Some(open) = body.rfind(['(', '（']) else { return (text.to_string(), None) };
+    let inner = body[open..].trim_start_matches(['(', '（']).trim();
+    let Some(name) = ["负责人", "負責人", "owner", "Owner"].iter().find_map(|k| inner.strip_prefix(k)).map(|r| r.trim_start_matches([':', '：', ' ']).trim()) else {
+        return (text.to_string(), None);
+    };
+    let nobody = name.is_empty() || ["无", "無", "未定", "待定", "未知"].contains(&name) || ["none", "n/a", "tbd", "unknown"].contains(&name.to_lowercase().as_str());
+    (body[..open].trim_end().to_string(), (!nobody).then(|| name.to_string()))
+}
+
 fn summary_blocks(text: &str, group: &'static str, tick: Option<&Context<Workbench>>) -> Vec<gpui_kit::AnyElement> {
     let blocks = summary::blocks(text);
     // A section with to-dos says how many are done beside its name.
@@ -5324,7 +5350,11 @@ fn summary_blocks(text: &str, group: &'static str, tick: Option<&Context<Workben
                 .line_height(gpui_kit::relative(1.5))
                 // A small square, as the board's own marks are drawn from blocks.
                 .child(div().flex_shrink_0().mt(px(9.)).size(px(4.)).bg(rgb(pal().faint)))
-                .child(div().flex_1().min_w_0().child(text.clone()))
+                .map(|d| {
+                    // Who is to do it stands apart on the right, rather than in brackets in the sentence.
+                    let (text, owner) = owner_of(text);
+                    d.child(div().flex_1().min_w_0().child(text)).when_some(owner, |d, owner| d.child(div().flex_none().mt(px(3.)).font_family(theme::MONO).text_meta().text_color(rgb(pal().faint)).child(owner)))
+                })
                 .into_any_element(),
             Block::Todo { done, text, line } => {
                 let (done, line) = (*done, *line);
@@ -5348,7 +5378,11 @@ fn summary_blocks(text: &str, group: &'static str, tick: Option<&Context<Workben
                     .py(px(3.))
                     .text_body()
                     .child(tick_box)
-                    .child(div().flex_1().min_w_0().when(done, |d| d.text_color(rgb(pal().faint)).line_through()).child(text.clone()));
+                    .map(|d| {
+                        let (text, owner) = owner_of(text);
+                        d.child(div().flex_1().min_w_0().when(done, |d| d.text_color(rgb(pal().faint)).line_through()).child(text))
+                            .when_some(owner, |d, owner| d.child(div().flex_none().mt(px(3.)).font_family(theme::MONO).text_meta().text_color(rgb(pal().faint)).child(owner)))
+                    });
                 match tick {
                     Some(cx) => row.cursor_pointer().on_click(cx.listener(move |this, _, _, cx| this.tick_todo(line, cx))).into_any_element(),
                     None => row.into_any_element(),
@@ -5582,9 +5616,12 @@ impl Workbench {
         // A meeting that has nothing in it yet is not on disk, and still has to be somewhere in the list.
         let unsaved = self.store.is_some() && !self.library.iter().any(|m| m.id == current);
         let mut rows: Vec<gpui_kit::AnyElement> = vec![];
+        // Whether the meeting on the board has a row in the list at all; an old one may not.
+        let rows_lit = unsaved || pinned.iter().chain(recent.iter()).any(|(_, m)| m.id == current);
         // The meeting on the board is raised like a sheet, unless a page such as Meetings or Settings covers the
         // board, when the page's own row is the one lit. While it is heard it keeps a pulsing red dot.
         let page_open = matches!(self.panel, Panel::Library | Panel::Settings);
+        let sheet = self.side_sheet.clone();
         let row = |index: usize, id: String, title: String, when: Option<f64>| {
             let open = id == current;
             let lit = open && !page_open;
@@ -5605,12 +5642,21 @@ impl Workbench {
                 .cursor_pointer()
                 .text_ui()
                 .active(|d| d.bg(rgb(pal().press)))
-                .map(|d| if lit { d.bg(rgb(pal().raised)).border_color(rgb(pal().raised_line)).font_weight(gpui_kit::FontWeight::MEDIUM) } else { d.text_color(rgb(if open { pal().text } else { pal().muted })) })
+                // The selected row is raised by the sheet behind the list, which glides from row to row; the row
+                // only notes where it was laid out.
+                .map(|d| if lit { d.relative().font_weight(gpui_kit::FontWeight::MEDIUM).child(measure(&sheet, true)) } else { d.text_color(rgb(if open { pal().text } else { pal().muted })) })
                 .on_hover(cx.listener({
                     let key = key.clone();
                     move |this, over: &bool, _, cx| this.hover(key.clone(), *over, cx)
                 }))
-                .when(live, |d| d.child(div().size(px(6.)).flex_none().rounded_full().bg(rgb(pal().recording)).with_animation("side-live", motion::pulse(), |d, t| d.opacity(t))))
+                .when(live, |d| {
+                    d.child(
+                        div().size(px(6.)).flex_none().flex().items_center().justify_center().child(
+                            div().size_full().rounded_full().bg(rgb(pal().recording)).with_animation("side-live", motion::pulse(), |d, t| d.opacity(t)),
+                        )
+                        .with_animation("side-live-in", motion::ease(motion::BASE), |d, t| d.size(px(6. * t))),
+                    )
+                })
                 .child(div().flex_1().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().child(title))
                 .map(|d| match (live, when) {
                     (true, _) => d.child(div().flex_none().font_family(theme::MONO).text_meta().text_color(rgb(pal().danger)).child(t("live"))),
@@ -5643,6 +5689,15 @@ impl Workbench {
             }
         }
         let building = self.search.as_ref().and_then(|s| s.building.map(|total| (s.indexing.unwrap_or((0, total)), s.held)));
+        // The sheet shows once the selected row has been laid out somewhere in the list.
+        let lit_shown = !page_open && rows_lit;
+        let selected_at = match self.side_sheet.get() {
+            (Some(top), Some(row)) if lit_shown => Some(row - top),
+            _ => None,
+        };
+        if !lit_shown {
+            self.side_sheet.set((self.side_sheet.get().0, None));
+        }
         div()
             .id("sidebar")
             .w(px(SIDEBAR_W))
@@ -5698,6 +5753,22 @@ impl Workbench {
                     .flex()
                     .flex_col()
                     .gap(px(1.))
+                    // Where the list starts, and the sheet under the selected row, measured from there.
+                    .child(measure(&self.side_sheet, false))
+                    .when_some(selected_at, |d, top| {
+                        d.child(
+                            div()
+                                .absolute()
+                                .left(px(8.))
+                                .right(px(8.))
+                                .h(px(30.))
+                                .rounded(px(2.))
+                                .border_1()
+                                .border_color(rgb(pal().raised_line))
+                                .bg(rgb(pal().raised))
+                                .with_spring("side-sheet", SpringAnimation::new(motion::GLIDE).to(top), |d, y| d.top(px(y))),
+                        )
+                    })
                     .when(self.store.is_none(), |d| d.child(div().px_2().pt_4().text_small().text_color(rgb(pal().muted)).child(t("this-is-a-sample-it"))))
                     .children(rows)
                     .when(more > 0, |d| {
@@ -5735,18 +5806,27 @@ impl Workbench {
                     .border_color(rgb(pal().line))
                     // Building every meeting's search index takes a while, and it is said here, out of the board's way.
                     .when_some(building, |d, ((done, total), held)| {
+                        // How far along it is, as a hairline filling under the words.
+                        let share = if total == 0 { 0. } else { (done as f32 / total as f32).clamp(0., 1.) };
                         d.child(
                             div()
                                 .flex()
-                                .items_center()
-                                .gap_2()
-                                .h(px(26.))
+                                .flex_col()
+                                .gap(px(6.))
                                 .px_2()
-                                .text_small()
-                                .text_color(rgb(pal().muted))
-                                .when(!held, |d| d.child(Spinner::new().xsmall().color(rgb(pal().muted).into())))
-                                .child(div().flex_1().min_w_0().overflow_hidden().whitespace_nowrap().child(if held { t("search-index-paused") } else { t("indexing-for-search") }))
-                                .child(div().font_family(theme::MONO).text_meta().text_color(rgb(pal().faint)).child(format!("{done}/{total}"))),
+                                .pt(px(4.))
+                                .pb(px(8.))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .text_small()
+                                        .text_color(rgb(pal().muted))
+                                        .child(div().flex_1().min_w_0().overflow_hidden().whitespace_nowrap().child(if held { t("search-index-paused") } else { t("indexing-for-search") }))
+                                        .child(div().font_family(theme::MONO).text_meta().text_color(rgb(pal().faint)).child(format!("{done} / {total}"))),
+                                )
+                                .child(div().h(px(2.)).w_full().bg(rgb(pal().line)).child(div().h_full().w(gpui_kit::relative(share)).bg(rgb(if held { pal().faint } else { pal().text })))),
                         )
                     })
                     .child(fade(nav("side-settings", "settings", t("settings"), self.panel == Panel::Settings, Some(format!("v{}", boardcast_update::VERSION))).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))), "side-settings", self.panel == Panel::Settings)),
@@ -5951,6 +6031,18 @@ impl Workbench {
                     .min_w_0()
                     .text_small()
                     .text_color(rgb(state_color))
+                    // What can be done to the summary first, then where it stands.
+                    .when(editable && busy.is_some(), |d| d.child(button("stop-summary", t("stop")).on_click(cx.listener(|this, _, _, cx| this.stop_summary(cx)))))
+                    .when(editable && busy.is_none() && has_text && !editing, |d| {
+                        d.child(
+                            Button::new("make-summary")
+                                .small()
+                                .outline()
+                                .label(t("write-again"))
+                                .disabled(!can_make)
+                                .when(can_make, |b| b.on_click(cx.listener(|this, _, _, cx| this.make_summary(cx)))),
+                        )
+                    })
                     .when_some(state, |d, state| {
                         d.when(busy.is_some() || stale, |d| d.child(div().size(px(6.)).flex_none().rounded_full().bg(rgb(state_color)))).child(div().overflow_hidden().whitespace_nowrap().child(state))
                     }),
@@ -5961,18 +6053,6 @@ impl Workbench {
                     .items_center()
                     .gap_1()
                     .flex_none()
-                    .when(editable && busy.is_some(), |d| d.child(button("stop-summary", t("stop")).on_click(cx.listener(|this, _, _, cx| this.stop_summary(cx)))))
-                    .when(editable && busy.is_none() && has_text && !editing, |d| {
-                        d.child(
-                            Button::new("make-summary")
-                                .small()
-                                .map(|b| if stale { b.primary() } else { b.outline() })
-                                .mr_1()
-                                .label(t("write-again"))
-                                .disabled(!can_make)
-                                .when(can_make, |b| b.on_click(cx.listener(|this, _, _, cx| this.make_summary(cx)))),
-                        )
-                    })
                     .when(has_text && !editing, |d| {
                         let (markdown, plain) = (text.clone(), summary::plain_text(&text));
                         // One copy button, which asks how: the two ways were an icon and the letters "MD" side by side.
@@ -6106,6 +6186,29 @@ fn title_bar() -> TitleBar {
     TitleBar::new().bg(rgb(pal().surface)).border_color(rgb(pal().line)).when(cfg!(not(target_os = "macos")), |bar| bar.h(px(BAR_H)))
 }
 
+/// A point that notes, as it is laid out, how far down the window it is: where a list starts (`row` false), or
+/// where its selected row is (`row` true). When either moves, the frame is drawn again so what is placed by
+/// them follows at once.
+fn measure(cell: &Rc<Cell<(Option<f32>, Option<f32>)>>, row: bool) -> impl IntoElement {
+    let cell = cell.clone();
+    gpui_kit::canvas(
+        move |bounds, window, _| {
+            let y = Some(f32::from(bounds.origin.y));
+            let (top, at) = cell.get();
+            let next = if row { (top, y) } else { (y, at) };
+            if next != (top, at) {
+                cell.set(next);
+                window.refresh();
+            }
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size(px(0.))
+}
+
 /// The halftone ground, filling what it is put in.
 fn ground_layer(ground: &crate::ground::Shared) -> impl IntoElement {
     let ground = ground.clone();
@@ -6117,8 +6220,8 @@ fn button(id: impl Into<gpui_kit::ElementId>, label: impl Into<gpui_kit::SharedS
 }
 
 /// An icon that does something, named in a tooltip.
-fn icon_button(id: &'static str, name: &'static str, tooltip: impl Into<gpui_kit::SharedString>) -> Button {
-    Button::new(id).small().ghost().icon(icon(name)).tooltip(tooltip)
+fn icon_button(id: &'static str, name: &'static str, tooltip: impl Into<gpui_kit::SharedString>) -> Quiet {
+    Quiet::new(id).icon(name, 14.).square(px(28.)).tooltip(tooltip)
 }
 
 fn case_or_measurement(turns: &[Utterance], wav: &Option<PathBuf>, demo: &Option<String>, synthetic: Option<usize>) -> bool {
@@ -6157,7 +6260,7 @@ fn template_card(id: impl Into<gpui_kit::ElementId>, name: String, topics: &[Str
         .border_color(rgb(pal().line))
         .bg(rgb(pal().raised))
         .cursor_pointer()
-        .hover(|d| d.border_color(rgb(pal().faint)).shadow(theme::shadow(theme::Lift::Float)))
+        .hover(|d| d.border_color(rgb(pal().faint)))
         .child(
             div()
                 .flex()
@@ -6788,7 +6891,8 @@ impl Render for Workbench {
         // What floats over the board: a surface with an edge and a little shadow under it.
         let float = || div().occlude().flex().items_center().bg(rgb(pal().raised)).border_1().border_color(rgb(pal().raised_line)).rounded(px(3.)).shadow(theme::shadow(theme::Lift::Float));
         // A word on how things stand, with a dot in the colour of how much it matters.
-        let chip = |text: String, tone: u32| {
+        // While something is under way (the model starting, the board being drawn) its dot pulses.
+        let chip = |text: String, tone: u32, busy: bool| {
             div()
                 .flex()
                 .items_center()
@@ -6798,7 +6902,7 @@ impl Render for Workbench {
                 .rounded(px(2.))
                 .text_small()
                 .whitespace_nowrap()
-                .child(div().size(px(6.)).flex_none().rounded_full().bg(rgb(tone)))
+                .child(div().size(px(6.)).flex_none().rounded_full().bg(rgb(tone)).map(|d| if busy { d.with_animation("status-busy", motion::pulse(), |d, t| d.opacity(t)).into_any_element() } else { d.into_any_element() }))
                 .child(div().text_color(rgb(if tone == pal().faint { pal().muted } else { tone })).child(text))
         };
         let (state_text, state_color, state_line) = match () {
@@ -6816,6 +6920,13 @@ impl Render for Workbench {
         // The title bar: the meeting on the left, with how it stands, and what is done with the whole of it on the right.
         // A page that covers the board, Meetings or Settings, is named in the bar instead of the meeting under it,
         // and the commands for that meeting step aside until the board is back.
+        let on_page = self.live.graph.underlay().is_some();
+        let has_clips = self.live.graph.nodes.iter().any(|n| n.kind == Kind::Clip);
+        // How much of the dock fits under this board: the tools, the zoom and the boards, each giving way in turn.
+        let tool_count = 1 + usize::from(on_page) + usize::from(on_page || has_clips);
+        let dock = dock_plan(f32::from(self.ink.borrow().canvas.size.width), tool_count, editable);
+        // While it listens the clock is on the listen button, when the button has room for it.
+        let clock_on_button = editable && dock.mic != Mic::Dot;
         let page_open = match self.panel {
             Panel::Library => Some(t("meetings")),
             Panel::Settings => Some(t("settings")),
@@ -6887,7 +6998,7 @@ impl Render for Workbench {
                     .child(div().max_w(px(220.)).overflow_hidden().whitespace_nowrap().text_ellipsis().text_ui().child(name))
                     .child(div().font_family(theme::MONO).text_meta().text_color(rgb(pal().faint)).child(format!("{at}/{}", pages.len())))
             })
-            .when(recording || (!recorded.is_zero() && page_open.is_none()), |d| {
+            .when((recording && !(clock_on_button && page_open.is_none())) || (!recording && !recorded.is_zero() && page_open.is_none()), |d| {
                 d.child(
                     div()
                         .flex()
@@ -6901,7 +7012,7 @@ impl Render for Workbench {
             })
             .when(!state_text.is_empty(), |d| d.child(
                 // Each new word fades in over the last, keyed by what it says.
-                chip(state_text.clone(), state_color)
+                chip(state_text.clone(), state_color, waiting > 0 || matches!(self.status, ModelStatus::Starting | ModelStatus::Loading))
                     .id("board-state")
                     .when(state_line.is_some() || self.needs_model, |d| d.cursor_pointer().hover(|d| d.bg(rgb(pal().hover))))
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -6920,11 +7031,11 @@ impl Render for Workbench {
             .when(!save_label.is_empty(), |d| {
                 // A meeting that is not on disk is the one state here that must not go unseen.
                 let failed = matches!(self.save, SaveState::Failed(_));
-                d.child(chip(save_label, if failed { pal().danger } else { pal().faint }))
+                d.child(chip(save_label, if failed { pal().danger } else { pal().faint }, false))
             });
         // A command in the title bar, by name: there are few enough of them to say what they are.
         let bar_button = |id: &'static str, icon_name: &'static str, label: &'static str| {
-            Button::new(id).small().ghost().child(div().flex().items_center().gap(px(6.)).child(icon(icon_name).size(px(14.))).child(div().text_ui().child(label)))
+            Quiet::new(id).icon(icon_name, 14.).label(label)
         };
         let open_side = div()
             .flex()
@@ -6979,14 +7090,9 @@ impl Render for Workbench {
             let ink = self.ink.borrow();
             (ink.circling, ink.pointed.len(), ink.cropping, ink.marking, ink.mark_tool)
         };
-        let on_page = self.live.graph.underlay().is_some();
-        let has_clips = self.live.graph.nodes.iter().any(|n| n.kind == Kind::Clip);
-        // How much of the dock fits under this board: the tools, the zoom and the boards, each giving way in turn.
-        let tool_count = 1 + usize::from(on_page) + usize::from(on_page || has_clips);
-        let dock = dock_plan(f32::from(self.ink.borrow().canvas.size.width), tool_count, editable);
         let named = dock.named;
         let tool_h = px(TOOLS_H - 12.0);
-        let tool_icon = |id: &'static str, name: &'static str, tooltip: String| Button::new(id).ghost().h(tool_h).w(tool_h).icon(icon(name).size(px(16.))).tooltip(tooltip);
+        let tool_icon = |id: &'static str, name: &'static str, tooltip: String| Quiet::new(id).icon(name, 16.).square(tool_h).tooltip(tooltip);
         // A key as it is printed on the keyboard.
         let keycap = |text: String| div().flex().items_center().h(px(18.)).px(px(5.)).border_1().rounded(px(2.)).font_family(theme::MONO).text_meta().child(text);
         // The colours of the marker, in a small bar of their own just above the tools while marking.
@@ -7045,6 +7151,9 @@ impl Render for Workbench {
             let eased = 1. - (1. - done).powi(5);
             if listening { eased } else { 1. - eased }
         };
+        // The button's words rise into place as they change, a little faster than its colour.
+        let face = if cx.reduce_motion() { 1. } else { self.listen_flip.1.map_or(1., |at| (at.elapsed().as_secs_f32() / 0.18).min(1.)) };
+        let face = 1. - (1. - face).powi(5);
         let (fill, ink) = (motion::mix(pal().button, pal().recording, red), motion::mix(pal().on_button, pal().on_strong, red));
         let mut rule = ink;
         rule.a = 0.22;
@@ -7072,11 +7181,15 @@ impl Render for Workbench {
                         }))
                         .child(
                             div()
+                                .relative()
+                                .top(px(6. * (1. - face)))
+                                .opacity(0.25 + 0.75 * face)
                                 .flex()
                                 .items_center()
                                 .gap_2()
-                                .child(div().size(px(10.)).flex_none().map(|d| if listening { d.bg(rgb(pal().on_strong)) } else { d.rounded_full().bg(rgb(pal().recording)) }))
-                                .when(dock.mic != Mic::Dot, |d| d.child(div().text_ui().whitespace_nowrap().child(if listening { t("stop-listening") } else { t("start-listening") })))
+                                .child(div().size(px(10.)).flex_none().map(|d| if listening { d.bg(ink) } else { d.rounded_full().bg(rgb(pal().recording)) }))
+                                // Saying what it is doing while it listens; stopping is in the tooltip and the square.
+                                .when(dock.mic != Mic::Dot, |d| d.child(div().text_ui().whitespace_nowrap().child(if listening { t("listening") } else { t("start-listening") })))
                                 .when_some(self.keys.label(Action::Listen).filter(|_| !listening && dock.mic == Mic::Full), |d, keys| d.child(keycap(keys).h(px(18.)).border_color(rule).text_color(motion::mix(pal().button, pal().on_button, 0.7))))
                                 .when(listening && dock.mic != Mic::Dot, |d| {
                                     let level = self.level;
@@ -7084,7 +7197,9 @@ impl Render for Workbench {
                                         let h = 3.0 + level * 15.0 * (0.55 + 0.45 * ((i as f32) * 1.7).sin().abs());
                                         div().w(px(3.)).h(px(h)).bg(ink)
                                     })))
-                                }),
+                                })
+                                // How long it has listened, on the button rather than up in the title bar.
+                                .when(listening && clock_on_button, |d| d.child(div().font_family(theme::MONO).text_small().whitespace_nowrap().child(clock(recorded.as_secs_f64() * 1000.0)))),
                         ),
                 )
                 // Where the sound comes from, beside the button that starts hearing it; the devices are in Settings.
@@ -7126,10 +7241,9 @@ impl Render for Workbench {
                 .child(Separator::vertical().h(px(20.)).mx_1())
                 .child(
                     // While circling, the button counts what is circled; what to do is in its tooltip.
-                    Button::new("circle")
-                        .ghost()
+                    Quiet::new("circle")
                         .h(tool_h)
-                        .px_3()
+                        .pad(px(12.))
                         .selected(circling)
                         .tooltip(match (circling, circled) {
                             (false, _) => t("circle-things-on-the-board"),
@@ -7155,10 +7269,9 @@ impl Render for Workbench {
                 )
                 .when(on_page, |d| {
                     d.child(
-                        Button::new("crop")
-                            .ghost()
+                        Quiet::new("crop")
                             .h(tool_h)
-                            .px_3()
+                            .pad(px(12.))
                             .selected(cropping)
                             .tooltip(if cropping { t("drag-a-box-over-the") } else { t("cut-a-part-of-the") })
                             .on_click(cx.listener(|this, _, _, cx| {
@@ -7176,10 +7289,9 @@ impl Render for Workbench {
                 })
                 .when(on_page || has_clips, |d| {
                     d.child(
-                        Button::new("mark-tool")
-                            .ghost()
+                        Quiet::new("mark-tool")
                             .h(tool_h)
-                            .px_3()
+                            .pad(px(12.))
                             .selected(marking)
                             .tooltip(if marking {
                                 t("draw-over-the-page-or")
@@ -7302,6 +7414,19 @@ impl Render for Workbench {
         });
         // During a replay the transcript has only reached that moment.
         let shown_lines = self.replay.as_ref().map_or(self.live.lines.len(), |r| r.player.lines_said(&r.steps).min(self.live.lines.len()));
+        // When each line was said, as the clock read when the board first changed for it. A line that changed
+        // nothing on the board has no time of its own.
+        let said_times: Vec<Option<f64>> = {
+            let mut times = vec![None; self.live.lines.len()];
+            for step in &self.live.steps {
+                if let (Some(n), Some(t)) = (step["line"].as_u64(), step["t"].as_f64()) {
+                    if let Some(slot) = (n as usize).checked_sub(1).and_then(|i| times.get_mut(i)) {
+                        slot.get_or_insert(t);
+                    }
+                }
+            }
+            times
+        };
         let replay_bar = self.replay_bar(window, cx);
         let transcript = div()
             .id("transcript")
@@ -7327,12 +7452,14 @@ impl Render for Workbench {
                 )
             })
             .children(self.live.lines[..shown_lines].iter().enumerate().map(|(i, l)| {
+                let said_at = said_times.get(i).copied().flatten();
                 let manual = l["manual"].as_bool().unwrap_or(false);
                 // The badge is drawn in outline until the model has put the line on the board.
                 let drawn = !l["ms"].is_null() && !l["failed"].as_bool().unwrap_or(false);
                 // A note about a change made by hand is shown in the language shown now.
                 let text = crate::i18n::line_text(l);
                 let typing = self.typing.as_ref().filter(|t| t.line == i && t.animate).map(Typing::chars).filter(|&n| n < text.chars().count());
+                let writing = typing.is_some();
                 let text = match typing {
                     Some(n) => format!("{}▍", text.chars().take(n).collect::<String>()),
                     None => text,
@@ -7361,13 +7488,28 @@ impl Render for Workbench {
                                 .child(line_badge(&speakers, &name, drawn))
                                 // A speaker known only by a letter is named as one, rather than the letter twice.
                                 .child(div().text_ui().font_weight(gpui_kit::FontWeight::MEDIUM).child(if name.chars().count() == 1 { ta!("speaker-letter", name = name.clone()) } else { name.clone() }))
+                                .map(|d| match (writing, said_at) {
+                                    (true, _) => d.child(div().font_family(theme::MONO).text_meta().text_color(rgb(pal().danger)).child(t("now"))),
+                                    (false, Some(ms)) => d.child(div().font_family(theme::MONO).text_meta().text_color(rgb(pal().faint)).child(local_time(ms).rsplit(' ').next().unwrap_or_default().to_string())),
+                                    _ => d,
+                                })
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.choose_speaker(picked.clone(), window, cx);
                                     this.speaker_line = Some(i);
                                 })),
                         )
                     })
-                    .child(div().id(("line-text", i)).text_body().line_height(gpui_kit::relative(1.5)).when(speaker.is_some(), |d| d.pl(px(28.))).when(manual, |d| d.text_color(rgb(pal().faint))).child(text).when_some(line_timing(l), |d, tip| d.tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))))
+                    // Grey while it is being written out, then settling to ink once it is all there.
+                    .child({
+                        let line = div().id(("line-text", i)).text_body().line_height(gpui_kit::relative(1.5)).when(speaker.is_some(), |d| d.pl(px(28.))).when(manual, |d| d.text_color(rgb(pal().faint))).child(text).when_some(line_timing(l), |d, tip| d.tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx)));
+                        if writing {
+                            line.text_color(rgb(pal().faint)).into_any_element()
+                        } else if !manual && i + 1 == shown_lines {
+                            line.with_animation(("line-settle", i), motion::ease(motion::BASE), |d, t| d.text_color(motion::mix(pal().faint, pal().text, t))).into_any_element()
+                        } else {
+                            line.into_any_element()
+                        }
+                    })
                     .when(!note.is_empty() && !manual, |d| {
                         d.child(div().text_small().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { pal().danger } else { pal().faint })).child(note))
                     })
@@ -7454,8 +7596,14 @@ impl Render for Workbench {
                                                 template_card(("template", i), name, &topics, card_w)
                                                     .w_full()
                                                     .h_full()
+                                                    .relative()
                                                     .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
-                                                    .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(started.clone(), cx))),
+                                                    .on_hover(cx.listener(move |this, over: &bool, _, cx| this.hover(gpui_kit::ElementId::NamedInteger("template".into(), i as u64), *over, cx)))
+                                                    .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(started.clone(), cx)))
+                                                    // Lifting off the page under the pointer: up a little, its shadow fading in.
+                                                    .with_spring(("template-lift", i), SpringAnimation::new(motion::SNAP).to(self.hovered == Some(gpui_kit::ElementId::NamedInteger("template".into(), i as u64))), |d, t| {
+                                                        d.top(px(-2. * t.0)).shadow(theme::shadow_at(theme::Lift::Float, t.0))
+                                                    }),
                                             )
                                             // A template the user kept can be let go of, from its corner.
                                             .when_some(saved, |d, index| {
@@ -7651,12 +7799,11 @@ impl Render for Workbench {
                                     .items_center()
                                     .gap_2()
                                     .flex_none()
-                                    // Who was there: the first few speakers' badges, overlapping a little.
-                                    .when(!m.speakers.is_empty(), |d| {
-                                        d.child(div().flex().items_center().mr_2().children(m.speakers.iter().enumerate().map(|(k, s)| {
-                                            div().when(k > 0, |d| d.ml(px(-4.))).rounded_full().border_2().border_color(rgb(pal().paper)).child(speaker_badge(&m.speakers, s))
-                                        })))
-                                    })
+                                    // Who was there: the first few speakers' badges, overlapping a little, in a slot of their
+                                    // own so they line up from row to row whatever actions follow.
+                                    .child(div().w(px(84.)).flex().items_center().justify_end().mr_2().children(m.speakers.iter().enumerate().map(|(k, s)| {
+                                        div().when(k > 0, |d| d.ml(px(-4.))).rounded_full().border_2().border_color(rgb(pal().paper)).child(speaker_badge(&m.speakers, s))
+                                    })))
                                     // Shown on hover, and the pin stays once a meeting is pinned, in ink: red is for recording and
                                     // for what is marked on the board.
                                     .when(self.store.is_some(), |d| {
@@ -7695,6 +7842,8 @@ impl Render for Workbench {
                         )
                     })
                     // The meeting that is open cannot be deleted from under itself.
+                                    // The open meeting cannot be deleted from here; its gap keeps the row's actions in line.
+                                    .when(self.store.is_some() && current, |d| d.child(div().flex_none().size(px(20.))))
                                     .when(self.store.is_some() && !current, |d| {
                                         d.child(
                                             div()
@@ -7811,15 +7960,15 @@ impl Render for Workbench {
                 .flex_col()
                 .gap(px(6.))
                 .pt_6()
-                .when_some(caption, |d, caption| d.child(div().px_1().font_family(theme::MONO).text_meta().text_color(rgb(pal().faint)).child(caption)))
+                .when_some(caption, |d, caption| d.child(div().px_1().font_family(theme::MONO).text_label().text_color(rgb(pal().faint)).child(caption.to_uppercase())))
                 .child(
                     div()
                         .flex()
                         .flex_col()
                         .border_1()
                         .border_color(rgb(pal().line))
-                        .rounded(px(8.))
-                        .bg(rgb(pal().surface))
+                        .rounded(px(3.))
+                        .bg(rgb(pal().raised))
                         .overflow_hidden()
                         .children(rows.into_iter().enumerate().map(|(i, r)| div().when(i > 0, |d| d.border_t_1().border_color(rgb(pal().line))).child(r))),
                 )
@@ -7827,8 +7976,11 @@ impl Render for Workbench {
         // A line under a card, for what is worth knowing but is not a setting.
         let footnote = |text: gpui_kit::SharedString, color: u32| div().px_1().pt_2().text_small().text_color(rgb(color)).child(text);
         // A few choices side by side, the chosen one filled.
-        let segmented = |buttons: Vec<Button>| div().flex().flex_none().p(px(2.)).gap(px(2.)).border_1().border_color(rgb(pal().line)).rounded(px(5.)).bg(rgb(pal().paper)).children(buttons);
-        let choice = |id: gpui_kit::ElementId, label: &'static str, on: bool| Button::new(id).small().label(label).map(|b| if on { b.primary() } else { b.ghost() });
+        let segmented = |buttons: Vec<Button>| div().flex().flex_none().p(px(2.)).gap(px(2.)).border_1().border_color(rgb(pal().line)).rounded(px(3.)).bg(rgb(pal().chrome)).children(buttons);
+        // The chosen one is raised like the sidebar's selection; the one solid button stays listening's.
+        let choice = |id: gpui_kit::ElementId, label: &'static str, on: bool| {
+            Button::new(id).small().ghost().label(label).map(|b| if on { b.bg(rgb(pal().raised)).border_1().border_color(rgb(pal().raised_line)).font_weight(gpui_kit::FontWeight::MEDIUM) } else { b.text_color(rgb(pal().muted)) })
+        };
         // What a page is for, in a line above its first card.
         let intro = |text: &'static str| div().pt_5().text_ui().text_color(rgb(pal().muted)).child(text);
         let save_setting = |this: &mut Self, cx: &mut Context<Self>| {
@@ -8348,16 +8500,18 @@ impl Render for Workbench {
             .bg(rgb(pal().paper))
             .flex()
             .justify_center()
+            // The same ground in the margins, and the same column, as the Meetings page.
+            .child(div().absolute().size_full().child(ground_layer(&self.ground)))
             .child(
                 div()
                     .w_full()
-                    .max_w(px(720.))
+                    .max_w(px(LIBRARY_W + 80.))
                     .h_full()
                     .flex()
                     .flex_col()
                     .pt_8()
-                    .child(div().px_8().pb_4().text_page().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(t("settings")))
-                    .child(div().mx_8().flex().items_center().gap_1().h(px(40.)).flex_none().border_b_1().border_color(rgb(pal().line)).children(tabs.into_iter().map(|(t, glyph, label)| {
+                    .child(div().px_10().pb_3().text_page().font_weight(gpui_kit::FontWeight::MEDIUM).child(t("settings")))
+                    .child(div().mx_10().flex().items_center().gap_1().h(px(40.)).flex_none().border_b_1().border_color(rgb(pal().line)).children(tabs.into_iter().map(|(t, glyph, label)| {
                         let on = t == tab;
                         div()
                             .id(label)
@@ -8378,7 +8532,7 @@ impl Render for Workbench {
                                 cx.notify();
                             }))
                     })))
-                    .child(div().id("settings-page-body").flex_1().min_h_0().overflow_y_scroll().child(div().px_8().pb_12().child(page))),
+                    .child(div().id("settings-page-body").flex_1().min_h_0().overflow_y_scroll().child(div().px_10().pb_12().child(page))),
             );
         let summary_panel = (self.panel == Panel::Summary).then(|| self.summary_panel(editable, cx));
         let export_panel = (self.panel == Panel::Export).then(|| self.export_panel(cx));
@@ -8460,7 +8614,8 @@ impl Render for Workbench {
                                         .on_click(cx.listener(move |this, _, window, cx| this.choose_speaker(picked.clone(), window, cx))),
                                 )
                             })
-                            .child(Input::new(&self.input)),
+                            // Enter is shown as the key it is, beside the hint, rather than spelled out in it.
+                            .child(Input::new(&self.input).suffix(div().flex().items_center().h(px(18.)).px(px(5.)).border_1().border_color(rgb(pal().line)).rounded(px(2.)).font_family(theme::MONO).text_meta().text_color(rgb(pal().faint)).child("Enter"))),
                     )
                 })
             })
@@ -8945,9 +9100,9 @@ impl Render for Workbench {
         let lower = replay_bar.map(|bar| float().id("replay-tools").w(px(620.)).max_w(gpui_kit::relative(0.94)).h(px(TOOLS_H)).child(bar)).or(tool_bar);
         // The halftone ground shows where there is nothing to read yet: an empty board, with its middle kept
         // clear for the welcome, and the Meetings page.
-        if blank || self.panel == Panel::Library {
+        if blank || matches!(self.panel, Panel::Library | Panel::Settings) {
             // On the Meetings page the ground keeps to the margins, so no row of text lies on dots.
-            crate::ground::want(&self.ground, Some(if self.panel == Panel::Library { (0.34, 4.) } else { (0.3, 0.3) }), cx);
+            crate::ground::want(&self.ground, Some(if matches!(self.panel, Panel::Library | Panel::Settings) { (0.34, 4.) } else { (0.3, 0.3) }), cx);
         }
         let canvas_area = div()
             .relative()
@@ -9016,11 +9171,11 @@ impl Render for Workbench {
             .child(main)
             // The panels slide open and shut rather than appearing: each is drawn at its full width inside a
             // frame whose width moves, so its contents do not reflow on the way, and the board follows the room.
-            .child(div().flex_none().h_full().overflow_hidden().flex().justify_end().child(side).with_spring("side-slide", SpringAnimation::new(motion::GLIDE).to(if side_shown { SIDE_W } else { 0. }), |d, w| d.w(px(w.max(0.)))))
+            .child(div().flex_none().h_full().overflow_hidden().flex().justify_end().child(side).with_spring("side-slide", SpringAnimation::new(motion::GLIDE).to(if side_shown { SIDE_W } else { 0. }), |d, w| d.w(px(w.max(0.))).opacity((w / SIDE_W).clamp(0., 1.))))
             .when(self.panel == Panel::Settings, |d| d.child(settings))
             .when_some(overlay.take_if(|_| !in_dialog), |d, page| d.child(page))
             .when_some(preparing_page, |d, page| d.child(page));
-        let sidebar = div().flex_none().h_full().overflow_hidden().child(self.sidebar(listening, cx)).with_spring("sidebar-slide", SpringAnimation::new(motion::GLIDE).to(if sidebar_shown { SIDEBAR_W } else { 0. }), |d, w| d.w(px(w.max(0.))));
+        let sidebar = div().flex_none().h_full().overflow_hidden().child(self.sidebar(listening, cx)).with_spring("sidebar-slide", SpringAnimation::new(motion::GLIDE).to(if sidebar_shown { SIDEBAR_W } else { 0. }), |d, w| d.w(px(w.max(0.))).opacity((w / SIDEBAR_W).clamp(0., 1.)));
         let shortcuts_window = self.shortcuts_shown.then(|| self.shortcuts_window(cx));
         let content = div()
             .relative()
@@ -9308,6 +9463,13 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     gpui_kit::application().with_assets(theme::Assets).run(move |cx: &mut App| {
         gpui_kit::init(cx);
         cx.set_reduce_motion(reduce_motion);
+        // The system may ask for less motion too; asking it takes a moment, so it is done off to the side.
+        cx.spawn(async move |cx| {
+            let system = cx.background_executor().spawn(async { motion::system_reduces() }).await;
+            motion::set_system(system);
+            cx.update(|cx| cx.set_reduce_motion(motion::reduced(reduce_motion)));
+        })
+        .detach();
         theme::load_fonts(cx);
         theme::apply(cx);
         let options = WindowOptions {
@@ -9340,7 +9502,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             pipeline.start_script();
             let ink = Rc::new(RefCell::new(state));
             // A hint in the interface's language is set again when the language changes: see `choose_language`.
-            let input = cx.new(|cx| InputState::new(window, cx).placeholder(t("type-a-line-enter-puts")));
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(t("type-a-line-for-the-board")));
             let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
             let messy = cx.new(|_| SliderState::new().min(0.0).max(1.0).step(0.1).default_value(settings.messy));
             let glossary_text = Glossary::parse(&settings.glossary).to_text();
@@ -9358,7 +9520,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let speaker_name = cx.new(|cx| InputState::new(window, cx));
             let title_input = cx.new(|cx| InputState::new(window, cx).placeholder(t("meeting-name")));
             let label_input = cx.new(|cx| InputState::new(window, cx));
-            let library_query = cx.new(|cx| InputState::new(window, cx).placeholder(t("search-meetings")));
+            let library_query = cx.new(|cx| InputState::new(window, cx).placeholder(t("search-what-was-said")));
             let view = cx.new(|cx| {
                 cx.subscribe_in(&input, window, |this: &mut Workbench, _, event, window, cx| {
                     if matches!(event, InputEvent::PressEnter { .. }) {
@@ -9526,6 +9688,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     preparing: None,
                     transcript_open: true,
                     hovered: None,
+                    side_sheet: Default::default(),
                     listen_flip: (false, None),
                     ground: Default::default(),
                     sidebar_narrow: false,
@@ -9668,7 +9831,7 @@ fn page_number(graph: &Graph) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{dock_plan, encloses, erased, page_ranges, Mic};
+    use super::{dock_plan, encloses, erased, owner_of, page_ranges, Mic};
 
     #[test]
     fn the_dock_gives_way_in_turn_as_the_board_narrows() {
@@ -9688,6 +9851,14 @@ mod tests {
             before = now;
         }
         assert!(dock_plan(300.0, 3, false).zoom || dock_plan(300.0, 3, false).mic == Mic::Full, "without tools the sides have the room");
+    }
+
+    #[test]
+    fn an_owner_in_brackets_stands_apart_and_nobody_is_left_off() {
+        assert_eq!(owner_of("Finish load testing (owner: Noah)"), ("Finish load testing".into(), Some("Noah".into())));
+        assert_eq!(owner_of("同账号合并后的计量单位（负责人：无）"), ("同账号合并后的计量单位".into(), None));
+        assert_eq!(owner_of("A point (with an aside)"), ("A point (with an aside)".into(), None));
+        assert_eq!(owner_of("No brackets"), ("No brackets".into(), None));
     }
 
     #[test]

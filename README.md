@@ -103,11 +103,11 @@ Exports always use marker on white paper, whatever the window's theme.
 
 ### Online meetings and recordings
 
-In **Settings › Speech › Listen to**, choose a microphone or, on Linux, the **Monitor of …** input of the speakers or headphones that play the meeting. That is how the other side of an online call, or a recording playing in a media player, is heard. One input is heard at a time. On a Mac, any package can use Apple's own recognizer instead, from the same section.
+In **Settings › Speech › Listen to**, choose where the sound comes from: the **Microphone**, the **Computer sound** (what the speakers or headphones play: the other side of an online call, or a recording in a media player), or **Both**, mixed. The same choice is in the menu beside **Start listening**. Under it, pick the microphone and the output to hear, or leave each on the system's default. With both and speakers rather than headphones, the other side can be heard twice. Computer sound on a Mac needs macOS 14.6 or later and asks for permission the first time. On a Mac, any package can use Apple's own recognizer instead, from the same section.
 
 ### Not in this app yet
 
-These were in the earlier app and have not been rebuilt yet: free editing and export with Excalidraw, the glossary and pronunciation correction ([#117](https://github.com/HsiangNianian/boardcast/issues/117)), hearing the microphone and system audio together, system audio on macOS ([#34](https://github.com/HsiangNianian/boardcast/issues/34)), a Windows package, a global microphone shortcut and the diagnostics bundle.
+These were in the earlier app and have not been rebuilt yet: free editing and export with Excalidraw, the glossary and pronunciation correction ([#117](https://github.com/HsiangNianian/boardcast/issues/117)), a Windows package, a global microphone shortcut and the diagnostics bundle.
 
 ## Shortcuts
 

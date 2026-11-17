@@ -9,6 +9,7 @@ use boardcast_agent::sound::Glossary;
 use boardcast_board::follow;
 use boardcast_board::sugiyama::first_diagram;
 use boardcast_agent::settings::Settings;
+use boardcast_audio::{Listen, Sources};
 use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
 use boardcast_meetings::{Inbox, Tucked, default_dir, Info, Live, Store, ViewOnly};
 use boardcast_board::pen::{marker, outline, Inked, Rng};
@@ -84,6 +85,8 @@ const ZOOM_TOOLS_FROM: f32 = 640.0;
 /// The dock along the board's lower edge: how far it keeps from the sides, and between its parts.
 const DOCK_EDGE: f32 = 12.0;
 const DOCK_GAP: f32 = 12.0;
+/// The button beside the listen button that says where the sound comes from.
+const SOURCE_W: f32 = 22.0;
 
 /// How the listen button is shown: with its name and key, with its name, or as its dot alone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +94,24 @@ enum Mic {
     Full,
     Named,
     Dot,
+}
+
+/// Where sound comes from, named in a word or two.
+fn listen_name(listen: Listen) -> &'static str {
+    match listen {
+        Listen::Microphone => t("microphone-2"),
+        Listen::Computer => t("computer-sound"),
+        Listen::Both => t("both"),
+    }
+}
+
+/// What listening this way hears, in a line.
+fn listen_hint(listen: Listen) -> &'static str {
+    match listen {
+        Listen::Microphone => t("the-room-through-a-microphone"),
+        Listen::Computer => t("what-this-computer-plays-the"),
+        Listen::Both => t("the-room-and-the-online"),
+    }
 }
 
 /// What of the dock is shown under a board of some width.
@@ -117,7 +138,7 @@ struct Dock {
 /// them; without `editable` there is no tool bar at all.
 fn dock_plan(width: f32, tools: usize, editable: bool) -> Dock {
     // Each part's width as drawn, in pixels, a little generous.
-    const MIC: [(Mic, f32); 3] = [(Mic::Full, 190.0), (Mic::Named, 146.0), (Mic::Dot, 44.0)];
+    const MIC: [(Mic, f32); 3] = [(Mic::Full, 190.0 + SOURCE_W), (Mic::Named, 146.0 + SOURCE_W), (Mic::Dot, 44.0 + SOURCE_W)];
     const TOOL_NAMED: f32 = 86.0;
     const TOOL_ICON: f32 = 36.0;
     const EDIT: f32 = 12.0 + 3.0 * 36.0;
@@ -1531,8 +1552,9 @@ struct Workbench {
     /// taken.
     recording_keys: Option<Action>,
     keys_note: Option<String>,
-    /// What can be listened to, as of opening Settings.
+    /// The microphones, and the sound outputs that can be heard, as of opening Settings.
     inputs: Vec<boardcast_audio::Input>,
+    outputs: Vec<boardcast_audio::Input>,
     /// The label being written for the selected thing on the board.
     label_input: Entity<InputState>,
     /// What the meeting list is narrowed to.
@@ -1941,6 +1963,13 @@ impl Workbench {
         self.live.read_only.is_none() && self.replay.is_none()
     }
 
+    /// What to listen to, as saved.
+    fn sources(&self) -> Sources {
+        let saved = &self.form.saved;
+        let chosen = |id: &str| Some(id.to_string()).filter(|i| !i.is_empty());
+        Sources { listen: Listen::from_setting(&saved.listen), microphone: chosen(&saved.input), computer: chosen(&saved.computer) }
+    }
+
     /// Turn the microphone on or off, counting the time it was on towards the meeting.
     fn toggle_mic(&mut self) {
         let was_listening = self.pipeline.listening();
@@ -1954,7 +1983,7 @@ impl Workbench {
             self.keeping = Some((name, start));
             path
         });
-        self.pipeline.toggle_mic(Some(self.form.saved.input.clone()).filter(|i| !i.is_empty()), path);
+        self.pipeline.toggle_mic(self.sources(), path);
         if !was_listening {
             self.listening_since = Some(Instant::now());
         } else if let Some(since) = self.listening_since.take() {
@@ -4552,7 +4581,8 @@ impl Workbench {
         self.recording_keys = None;
         self.keys_note = None;
         if self.panel == Panel::Settings {
-            self.inputs = boardcast_audio::inputs();
+            self.inputs = boardcast_audio::microphones();
+            self.outputs = boardcast_audio::computer_sounds();
         }
         if self.panel == Panel::Library {
             if let Some(store) = &self.store {
@@ -4586,7 +4616,9 @@ impl Workbench {
             speech_language: self.form.saved.speech_language.clone(),
             interface_language: self.form.saved.interface_language.clone(),
             appearance: self.form.saved.appearance.clone(),
+            listen: self.form.saved.listen.clone(),
             input: self.form.saved.input.clone(),
+            computer: self.form.saved.computer.clone(),
             meeting_search: self.form.saved.meeting_search,
             messy: self.form.saved.messy,
             sidebar_hidden: self.form.saved.sidebar_hidden,
@@ -4602,9 +4634,9 @@ impl Workbench {
         }
     }
 
-    /// Listen to another input from now on, switching over at once if listening.
-    fn choose_input(&mut self, id: String, cx: &mut Context<Self>) {
-        self.form.saved.input = id;
+    /// Listen another way, or through another device, from now on, switching over at once if listening.
+    fn choose_listening(&mut self, change: impl FnOnce(&mut Settings), cx: &mut Context<Self>) {
+        change(&mut self.form.saved);
         if let Err(e) = self.form.saved.save() {
             self.form.note = Some(format!("{e:#}"));
         }
@@ -6675,6 +6707,35 @@ impl Render for Workbench {
                                 }),
                         ),
                 )
+                // Where the sound comes from, beside the button that starts hearing it; the devices are in Settings.
+                .child({
+                    let listen = Listen::from_setting(&self.form.saved.listen);
+                    let workbench = cx.entity().downgrade();
+                    Button::new("listen-to")
+                        .ghost()
+                        .h(tool_h)
+                        .w(px(SOURCE_W))
+                        .icon(icon("chevron-down").size(px(12.)))
+                        .tooltip(ta!("listening-to", what = listen_name(listen)))
+                        .dropdown_menu_with_anchor(gpui_kit::Anchor::BottomLeft, move |menu, _, _| {
+                            let menu = [Listen::Microphone, Listen::Computer, Listen::Both].into_iter().fold(menu.min_w(px(200.)), |menu, choice_of| {
+                                let workbench = workbench.clone();
+                                menu.item(PopupMenuItem::new(listen_name(choice_of)).checked(listen == choice_of).on_click(move |_, _, cx| {
+                                    let _ = workbench.update(cx, |this, cx| this.choose_listening(move |s| s.listen = choice_of.setting().into(), cx));
+                                }))
+                            });
+                            let workbench = workbench.clone();
+                            menu.separator().item(PopupMenuItem::new(t("choose-devices")).on_click(move |_, _, cx| {
+                                let _ = workbench.update(cx, |this, cx| {
+                                    this.settings_tab = SettingsTab::Speech;
+                                    if this.panel != Panel::Settings {
+                                        this.toggle_panel(Panel::Settings, cx);
+                                    }
+                                    cx.notify();
+                                });
+                            }))
+                        })
+                })
                 .child(
                     // While circling, the button counts what is circled; what to do is in its tooltip.
                     Button::new("circle")
@@ -7457,40 +7518,57 @@ impl Render for Workbench {
                     .into_any_element()
             }
             SettingsTab::Speech => {
-                let chosen = self.form.saved.input.clone();
-                let inputs = std::iter::once((String::new(), t("the-system-s-default-input").to_string()))
-                    .chain(self.inputs.iter().map(|i| (i.id.clone(), i.name.clone())))
-                    .chain((!chosen.is_empty() && !self.inputs.iter().any(|i| i.id == chosen)).then(|| (chosen.clone(), t("the-chosen-input-not-connected").to_string())));
-                // A long list of inputs scrolls in its card rather than pushing everything else down.
-                let input_list = div().id("inputs").flex().flex_col().max_h(px(236.)).overflow_y_scroll().children(inputs.enumerate().map(|(i, (id, name))| {
-                    let on = id == chosen;
-                    div()
-                        .id(("input", i))
-                        .flex()
-                        .items_center()
-                        .gap_3()
-                        .px_4()
-                        .py(px(9.))
-                        .when(i > 0, |d| d.border_t_1().border_color(rgb(pal().line)))
-                        .cursor_pointer()
-                        .text_sm()
-                        .hover(|d| d.bg(rgb(pal().selected)))
-                        // A radio: a ring, filled when chosen.
-                        .child(
-                            div()
-                                .size(px(14.))
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .rounded_full()
-                                .border_1()
-                                .border_color(rgb(if on { pal().text } else { pal().faint }))
-                                .when(on, |d| d.child(div().size(px(6.)).rounded_full().bg(rgb(pal().text)))),
-                        )
-                        .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(name))
-                        .on_click(cx.listener(move |this, _, _, cx| this.choose_input(id.clone(), cx)))
-                }));
+                let listen = Listen::from_setting(&self.form.saved.listen);
+                // The devices of one kind as radios: the system's default first, then each connected one, then
+                // the chosen one if it is not connected now. A long list scrolls in its card.
+                let devices = |key: &'static str, connected: &[boardcast_audio::Input], chosen: String, default: &'static str, missing: &'static str, set: fn(&mut Settings, String)| {
+                    let entries = std::iter::once((String::new(), default.to_string()))
+                        .chain(connected.iter().map(|i| (i.id.clone(), i.name.clone())))
+                        .chain((!chosen.is_empty() && !connected.iter().any(|i| i.id == chosen)).then(|| (chosen.clone(), missing.to_string())));
+                    div().id(key).flex().flex_col().max_h(px(236.)).overflow_y_scroll().children(entries.enumerate().map(|(i, (id, name))| {
+                        let on = id == chosen;
+                        div()
+                            .id((key, i))
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .px_4()
+                            .py(px(9.))
+                            .when(i > 0, |d| d.border_t_1().border_color(rgb(pal().line)))
+                            .cursor_pointer()
+                            .text_sm()
+                            .hover(|d| d.bg(rgb(pal().selected)))
+                            // A radio: a ring, filled when chosen.
+                            .child(
+                                div()
+                                    .size(px(14.))
+                                    .flex_none()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(rgb(if on { pal().text } else { pal().faint }))
+                                    .when(on, |d| d.child(div().size(px(6.)).rounded_full().bg(rgb(pal().text)))),
+                            )
+                            .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().whitespace_nowrap().child(name))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let id = id.clone();
+                                this.choose_listening(move |s| set(s, id), cx);
+                            }))
+                    }))
+                };
+                let listen_row = row(t("sound-from"), Some(listen_hint(listen))).child(segmented(
+                    [Listen::Microphone, Listen::Computer, Listen::Both]
+                        .into_iter()
+                        .map(|choice_of| {
+                            choice(gpui_kit::ElementId::Name(format!("listen-{}", choice_of.setting()).into()), listen_name(choice_of), listen == choice_of)
+                                .on_click(cx.listener(move |this, _, _, cx| this.choose_listening(move |s| s.listen = choice_of.setting().into(), cx)))
+                        })
+                        .collect(),
+                ));
+                let microphones = devices("inputs", &self.inputs, self.form.saved.input.clone(), t("the-system-s-default-input"), t("the-chosen-input-not-connected"), |s, id| s.input = id);
+                let outputs = devices("outputs", &self.outputs, self.form.saved.computer.clone(), t("the-system-s-default-output"), t("the-chosen-output-not-connected"), |s, id| s.computer = id);
                 let system = self.speech_helper.is_some() && self.form.saved.system_speech;
                 let language = self.form.saved.speech_language.clone();
                 // Telling the language sentence by sentence is still an experiment; Apple's Automatic only
@@ -7545,13 +7623,10 @@ impl Render for Workbench {
                     .flex()
                     .flex_col()
                     .child(intro(t("what-is-heard-and-how")))
-                    .child(section(Some(t("listen-to-2")), vec![input_list.into_any_element()]))
-                    .when(cfg!(target_os = "linux"), |d| {
-                        d.child(footnote(
-                            t("for-the-other-side-of").into(),
-                            pal().muted,
-                        ))
-                    })
+                    .child(section(Some(t("listen-to-2")), vec![listen_row.into_any_element()]))
+                    .when(listen.microphone(), |d| d.child(section(Some(t("microphone")), vec![microphones.into_any_element()])))
+                    .when(listen.computer(), |d| d.child(section(Some(t("computer-sound-2")), vec![outputs.into_any_element()])))
+                    .when(listen.computer() && cfg!(target_os = "macos"), |d| d.child(footnote(t("on-a-mac-hearing-the").into(), pal().muted)))
                     .child(section(Some(t("recognition")), recognition))
                     .child(section(
                         Some(t("during-the-meeting")),
@@ -8994,6 +9069,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     recording_keys: None,
                     keys_note: None,
                     inputs: vec![],
+                    outputs: vec![],
                     library_query,
                     label_input,
                     form: SettingsForm { glossary, base_url, model, key, remote, messy: messy.clone(), proxy_url, proxy_user, proxy_password, proxy_note: None, saved: settings, note: None, probing: None },
@@ -9160,7 +9236,7 @@ mod tests {
     fn the_dock_gives_way_in_turn_as_the_board_narrows() {
         let wide = dock_plan(1200.0, 3, true);
         assert!(wide.named && wide.zoom && wide.edit && !wide.page_compact && wide.centered && wide.mic == Mic::Full, "{wide:?}");
-        let middling = dock_plan(760.0, 3, true);
+        let middling = dock_plan(790.0, 3, true);
         assert!(!middling.named && middling.zoom && middling.mic == Mic::Full, "{middling:?}");
         let narrow = dock_plan(380.0, 1, true);
         assert!(!narrow.zoom && narrow.mic == Mic::Named && narrow.pages, "{narrow:?}");

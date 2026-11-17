@@ -268,7 +268,7 @@ impl Pipeline {
                 let text = match warning {
                     Warning::MicrophoneGone => crate::i18n::t("the-chosen-input-isn-t").to_string(),
                     Warning::ComputerGone => crate::i18n::t("the-chosen-sound-output-isn-t").to_string(),
-                    Warning::ComputerFailed(error) => crate::ta!("the-computer-s-sound-can-t", error = error),
+                    Warning::ComputerFailed(error) => crate::ta!("the-device-s-sound-can-t", error = error),
                 };
                 let _ = warn.send(Event::Failed(text));
             };

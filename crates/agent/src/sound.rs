@@ -187,6 +187,73 @@ impl Glossary {
         self.terms.is_empty()
     }
 
+    /// As it is kept and shown for editing: one name a line, `Name = heard, heard`.
+    pub fn to_text(&self) -> String {
+        self.terms.iter().map(|t| if t.heard.is_empty() { t.text.clone() } else { format!("{} = {}", t.text, t.heard.join(", ")) }).collect::<Vec<_>>().join("\n")
+    }
+
+    /// As a spreadsheet takes it: the name, then each way it is heard, a row a name.
+    pub fn to_csv(&self) -> String {
+        let field = |f: &str| if f.contains([',', '"', '\n']) { format!("\"{}\"", f.replace('"', "\"\"")) } else { f.to_string() };
+        let mut out = String::from("name,heard as\n");
+        for term in &self.terms {
+            let row: Vec<String> = std::iter::once(&term.text).chain(&term.heard).map(|f| field(f)).collect();
+            out.push_str(&row.join(","));
+            out.push('\n');
+        }
+        out
+    }
+
+    /// Names from a file: the glossary's own lines, or a spreadsheet's rows (comma or tab apart) with the name
+    /// first and the ways it is heard after it. A first row naming the columns is left out.
+    pub fn import(text: &str) -> Self {
+        let text = text.trim_start_matches('\u{feff}');
+        let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+        // A line with an equals sign is the glossary's own; otherwise a tab, then a comma, separates fields.
+        let own = lines.iter().any(|l| l.contains(['=', '＝'])) || !lines.iter().any(|l| l.contains(['\t', ',']));
+        if own {
+            return Self::parse(text);
+        }
+        let tabs = lines.iter().any(|l| l.contains('\t'));
+        let mut terms: Vec<Term> = vec![];
+        for (i, line) in lines.iter().enumerate() {
+            let fields = if tabs { line.split('\t').map(|f| f.trim().trim_matches('"').to_string()).collect() } else { csv_fields(line) };
+            let mut fields = fields.into_iter().map(|f| f.trim().to_string()).filter(|f| !f.is_empty());
+            let Some(name) = fields.next() else { continue };
+            if i == 0 && ["name", "names", "term", "terms", "word", "written as", "术语", "名称", "用語"].contains(&name.to_lowercase().as_str()) {
+                continue;
+            }
+            // A cell may hold several ways it is heard, as the glossary writes them.
+            let heard = fields.flat_map(|f| f.split([',', '，', '、']).map(|h| h.trim().to_string()).collect::<Vec<_>>()).filter(|h| !h.is_empty() && *h != name).collect();
+            terms.push(Term { text: name, heard });
+        }
+        Self { terms }
+    }
+
+    /// Take in `other`'s names: a new one goes at the end, and one already here gains the ways it is heard.
+    /// Returns how many were added and how many gained something.
+    pub fn merge(&mut self, other: Glossary) -> (usize, usize) {
+        let (mut added, mut updated) = (0, 0);
+        for term in other.terms {
+            match self.terms.iter_mut().find(|t| t.text == term.text) {
+                Some(have) => {
+                    let before = have.heard.len();
+                    for h in term.heard {
+                        if !have.heard.contains(&h) {
+                            have.heard.push(h);
+                        }
+                    }
+                    updated += usize::from(have.heard.len() > before);
+                }
+                None => {
+                    self.terms.push(term);
+                    added += 1;
+                }
+            }
+        }
+        (added, updated)
+    }
+
     /// A line with its names written the glossary's way.
     pub fn correct(&self, text: &str) -> String {
         let mut out = text.to_string();
@@ -210,6 +277,25 @@ impl Glossary {
         }
         out
     }
+}
+
+/// A CSV row's fields, quotes taken off.
+fn csv_fields(line: &str) -> Vec<String> {
+    let mut fields = vec![String::new()];
+    let mut quoted = false;
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' if quoted && chars.peek() == Some(&'"') => {
+                chars.next();
+                fields.last_mut().expect("one field at least").push('"');
+            }
+            '"' => quoted = !quoted,
+            ',' if !quoted => fields.push(String::new()),
+            c => fields.last_mut().expect("one field at least").push(c),
+        }
+    }
+    fields
 }
 
 fn han(s: &str) -> bool {
@@ -542,6 +628,37 @@ mod tests {
         assert_eq!(cache.correct("cashier"), "cashier", "a word of its own");
         let ja = Glossary::parse("構成; 認証");
         assert_eq!(ja.correct("こうせいを見直して、にんしょうも確認"), "構成を見直して、認証も確認");
+    }
+
+    #[test]
+    fn a_glossary_is_written_out_and_read_back() {
+        let g = Glossary::parse("鉴权; OpenAI; API = A P I, エーピーアイ");
+        assert_eq!(g.to_text(), "鉴权\nOpenAI\nAPI = A P I, エーピーアイ");
+        assert_eq!(Glossary::parse(&g.to_text()), g);
+        assert_eq!(Glossary::import(&g.to_text()), g, "its own file");
+        let tricky = Glossary::parse("Say \"hi\" = a, b");
+        assert_eq!(Glossary::import(&tricky.to_csv()), tricky, "through a spreadsheet");
+        assert_eq!(g.to_csv(), "name,heard as\n鉴权\nOpenAI\nAPI,A P I,エーピーアイ\n");
+    }
+
+    #[test]
+    fn a_spreadsheet_gives_names_and_how_they_are_heard() {
+        let csv = Glossary::import("\u{feff}Name,Heard as\nAPI,A P I,\"エーピー, アイ\"\nKubernetes,\n\n鉴权,健全");
+        assert_eq!(csv.terms.len(), 3);
+        assert_eq!(csv.terms[0].heard, ["A P I", "エーピー", "アイ"]);
+        assert!(csv.terms[1].heard.is_empty());
+        let tsv = Glossary::import("API\tA P I\tエーピーアイ\nOpenAI");
+        assert_eq!(tsv.terms[0].heard, ["A P I", "エーピーアイ"]);
+        assert_eq!(tsv.terms[1].text, "OpenAI");
+        assert_eq!(Glossary::import("OpenAI\nKubernetes").terms.len(), 2, "a plain list");
+    }
+
+    #[test]
+    fn merging_adds_new_names_and_new_ways_of_hearing() {
+        let mut g = Glossary::parse("API = A P I\nOpenAI");
+        let (added, updated) = g.merge(Glossary::parse("API = A P I, エーピーアイ\nOpenAI\n鉴权"));
+        assert_eq!((added, updated), (1, 1));
+        assert_eq!(g.to_text(), "API = A P I, エーピーアイ\nOpenAI\n鉴权");
     }
 
     #[test]

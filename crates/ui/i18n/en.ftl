@@ -76,6 +76,8 @@ exit-replay-esc = Exit replay (Esc)
 show-these-meetings = Show these meetings
 fold-these-meetings-away = Fold these meetings away
 pinned = pinned
+# A meeting being heard right now, beside its name in the sidebar.
+live = live
 today = today
 yesterday = yesterday
 earlier = earlier
@@ -297,6 +299,8 @@ language = Language
 the-board-and-summary-follow = The board and summary follow the meeting's own language.
 system = System
 appearance = Appearance
+reduce-motion = Reduce motion
+reduce-motion-hint = Things change in place instead of sliding and fading. What listening shows keeps moving, since it says how loud the room is.
 light = Light
 dark = Dark
 handwriting = Handwriting
@@ -334,6 +338,8 @@ safe-to-delete-the-model = Safe to delete; the model compiles it again in about 
 transcript-2 = Transcript
 summary-2 = Summary
 speakers = Speakers
+# A speaker the transcript knows only by a letter, such as A.
+speaker-letter = Speaker { $name }
 typing-as = Typing as { $name }
 close-esc = Close (Esc)
 open-folder = Open folder

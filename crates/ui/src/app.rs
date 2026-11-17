@@ -100,7 +100,7 @@ enum Mic {
 fn listen_name(listen: Listen) -> &'static str {
     match listen {
         Listen::Microphone => t("microphone-2"),
-        Listen::Computer => t("computer-sound"),
+        Listen::Computer => t("device-sound"),
         Listen::Both => t("both"),
     }
 }
@@ -109,7 +109,7 @@ fn listen_name(listen: Listen) -> &'static str {
 fn listen_hint(listen: Listen) -> &'static str {
     match listen {
         Listen::Microphone => t("the-room-through-a-microphone"),
-        Listen::Computer => t("what-this-computer-plays-the"),
+        Listen::Computer => t("what-this-device-plays-the"),
         Listen::Both => t("the-room-and-the-online"),
     }
 }
@@ -7867,7 +7867,7 @@ impl Render for Workbench {
                     .child(intro(t("what-is-heard-and-how")))
                     .child(section(Some(t("listen-to-2")), vec![listen_row.into_any_element()]))
                     .when(listen.microphone(), |d| d.child(section(Some(t("microphone")), vec![microphones.into_any_element()])))
-                    .when(listen.computer(), |d| d.child(section(Some(t("computer-sound-2")), vec![outputs.into_any_element()])))
+                    .when(listen.computer(), |d| d.child(section(Some(t("device-sound-2")), vec![outputs.into_any_element()])))
                     .when(listen.computer() && cfg!(target_os = "macos"), |d| d.child(footnote(t("on-a-mac-hearing-the").into(), pal().muted)))
                     .child(section(Some(t("recognition")), recognition))
                     .child(section(Some(t("glossary-2")), glossary))

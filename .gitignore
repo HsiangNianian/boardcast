@@ -17,3 +17,5 @@ target/
 !crates/models/
 /eval/asr/own-voice/recordings/
 eval/search/.models/
+# Python caches from running the scripts.
+__pycache__/

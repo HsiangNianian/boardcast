@@ -12,8 +12,11 @@
 
 mod app;
 mod bench;
+mod ground;
 mod i18n;
+mod motion;
 mod pipeline;
+mod quiet;
 mod raster;
 mod resources;
 mod share;

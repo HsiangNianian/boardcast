@@ -17,7 +17,16 @@ pub struct Palette {
     /// The sidebar: the app around the meeting, a shade away from the meeting itself.
     pub chrome: u32,
     pub line: u32,
-    hover: u32,
+    pub hover: u32,
+    /// One shade past hover, while pressed.
+    pub press: u32,
+    /// What floats over the board: white on paper, a lighter grey on black.
+    pub raised: u32,
+    pub raised_line: u32,
+    /// The one solid button: ink in the light, a lifted grey in the dark rather than a white slab.
+    pub button: u32,
+    pub button_hover: u32,
+    pub on_button: u32,
     pub selected: u32,
     pub text: u32,
     pub muted: u32,
@@ -42,11 +51,17 @@ const LIGHT: Palette = Palette {
     surface: 0xff_ff_ff,
     chrome: 0xf3_f3_f1,
     line: 0xe2_e2_e2,
-    hover: 0xf2_f2_f2,
+    hover: 0xeb_eb_e8,
+    press: 0xe0_e0_dc,
+    raised: 0xff_ff_ff,
+    raised_line: 0xe2_e2_e2,
+    button: 0x11_11_11,
+    button_hover: 0x33_33_33,
+    on_button: 0xff_ff_ff,
     selected: 0xec_ec_ec,
     text: 0x11_11_11,
     muted: 0x55_55_55,
-    faint: 0x8a_8a_8a,
+    faint: 0x6e_6e_6e,
     accent: 0x3b_5b_db,
     strong: 0x11_11_11,
     strong_hover: 0x33_33_33,
@@ -65,11 +80,17 @@ const DARK: Palette = Palette {
     surface: 0x00_00_00,
     chrome: 0x0e_0e_0e,
     line: 0x26_26_26,
-    hover: 0x14_14_14,
+    hover: 0x1a_1a_1a,
+    press: 0x22_22_22,
+    raised: 0x16_16_16,
+    raised_line: 0x2a_2a_2a,
+    button: 0x2a_2a_2a,
+    button_hover: 0x33_33_33,
+    on_button: 0xf2_f2_f2,
     selected: 0x1f_1f_1f,
     text: 0xf2_f2_f2,
     muted: 0xc4_c4_c4,
-    faint: 0x8a_8a_8a,
+    faint: 0x8f_8f_8f,
     accent: 0x9f_b4_ff,
     strong: 0xf2_f2_f2,
     strong_hover: 0xc4_c4_c4,
@@ -86,6 +107,109 @@ const DARK: Palette = Palette {
 /// The interface face and the one for labels, numbers and keys, bundled so every platform looks alike.
 pub const SANS: &str = "DM Sans";
 pub const MONO: &str = "JetBrains Mono";
+
+/// The sizes of type, one scale for the whole window. Mono is for numbers, times, keys and group labels.
+pub mod size {
+    /// A group's name over its rows, in small capitals.
+    pub const LABEL: f32 = 10.5;
+    /// Numbers, times and keys.
+    pub const META: f32 = 11.;
+    /// Hints and secondary lines.
+    pub const SMALL: f32 = 12.;
+    /// Rows, buttons and tabs.
+    pub const UI: f32 = 13.;
+    /// What was said and written: transcript, summary.
+    pub const BODY: f32 = 14.;
+    /// The meeting's name in the title bar.
+    pub const TITLE: f32 = 15.;
+    /// A section of a page.
+    pub const HEADING: f32 = 18.;
+    /// A page of its own: Meetings, Settings.
+    pub const PAGE: f32 = 26.;
+}
+
+/// The steps of space between things, in pixels. Values off these steps in the window are optical nudges
+/// (a bullet set on a text's middle, the padding inside a key's label), not spacing.
+pub mod space {
+    /// A hairline gap, between rows that touch.
+    pub const HAIR: f32 = 2.;
+    pub const XS: f32 = 4.;
+    pub const S: f32 = 8.;
+    pub const M: f32 = 12.;
+    pub const L: f32 = 16.;
+    pub const XL: f32 = 24.;
+    pub const XXL: f32 = 32.;
+}
+
+/// The type scale on anything styled: `div().text_ui()`.
+pub trait Type: gpui_kit::Styled + Sized {
+    fn text_label(self) -> Self {
+        self.text_size(px(size::LABEL))
+    }
+    fn text_meta(self) -> Self {
+        self.text_size(px(size::META))
+    }
+    fn text_small(self) -> Self {
+        self.text_size(px(size::SMALL))
+    }
+    fn text_ui(self) -> Self {
+        self.text_size(px(size::UI))
+    }
+    fn text_body(self) -> Self {
+        self.text_size(px(size::BODY))
+    }
+    fn text_title(self) -> Self {
+        self.text_size(px(size::TITLE))
+    }
+    fn text_heading(self) -> Self {
+        self.text_size(px(size::HEADING))
+    }
+    fn text_page(self) -> Self {
+        self.text_size(px(size::PAGE))
+    }
+}
+
+impl<T: gpui_kit::Styled> Type for T {}
+
+/// How far something stands off what is under it.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Lift {
+    /// What floats over the board: tools, the page switcher, the map, menus.
+    Float,
+    /// A sheet lying on the board, such as an imported page: paper on a desk.
+    Sheet,
+}
+
+/// The shadow for a lift, `t` of the way in: none at 0, all of it at 1.
+pub fn shadow_at(lift: Lift, t: f32) -> Vec<gpui_kit::BoxShadow> {
+    shadow(lift)
+        .into_iter()
+        .map(|mut s| {
+            s.color.a *= t.clamp(0., 1.);
+            s
+        })
+        .collect()
+}
+
+/// The shadow for a lift. In the dark a shadow hardly shows, so what floats there is also a lighter surface
+/// ([`Palette::raised`]); the shadow only deepens the edge.
+pub fn shadow(lift: Lift) -> Vec<gpui_kit::BoxShadow> {
+    let shade = |alpha: f32, y: f32, blur: f32| gpui_kit::BoxShadow {
+        color: gpui_kit::hsla(0., 0., 0., alpha),
+        offset: gpui_kit::point(px(0.), px(y)),
+        blur_radius: px(blur),
+        spread_radius: px(0.),
+        inset: false,
+    };
+    // A faint light along the top edge of a lifted dark surface, as if it caught the light.
+    let rim = gpui_kit::BoxShadow { color: gpui_kit::hsla(0., 0., 1., 0.05), offset: gpui_kit::point(px(0.), px(1.)), blur_radius: px(0.), spread_radius: px(0.), inset: true };
+    match (lift, is_dark()) {
+        (Lift::Float, false) => vec![shade(0.05, 1., 2.), shade(0.07, 6., 20.)],
+        (Lift::Float, true) => vec![rim, shade(0.55, 10., 28.)],
+        (Lift::Sheet, false) => vec![shade(0.08, 1., 3.), shade(0.06, 10., 30.)],
+        (Lift::Sheet, true) => vec![shade(0.6, 10., 30.)],
+    }
+}
 
 static DARK_MODE: AtomicBool = AtomicBool::new(false);
 /// Whether the system's appearance decides, rather than a choice in Settings.
@@ -237,16 +361,17 @@ pub fn apply(cx: &mut App) {
         theme.primary_foreground = color(p.on_strong);
         theme.danger = color(p.recording);
         theme.danger_foreground = color(p.on_strong);
-        theme.button_primary = color(p.strong);
-        theme.button_primary_hover = color(p.strong_hover);
-        theme.button_primary_active = color(p.text);
-        theme.button_primary_foreground = color(p.on_strong);
+        theme.button_primary = color(p.button);
+        theme.button_primary_hover = color(p.button_hover);
+        theme.button_primary_active = color(if dark { 0x22_22_22 } else { 0x00_00_00 });
+        theme.button_primary_foreground = color(p.on_button);
         theme.button_danger = color(p.recording);
         theme.button_danger_foreground = color(p.on_strong);
         theme.button_success = color(p.accent);
         theme.button_success_foreground = color(p.on_strong);
         theme.progress_bar = color(p.strong);
         theme.font_family = SANS.into();
+        theme.font_size = px(size::BODY);
         theme.mono_font_family = MONO.into();
         // Square, as on the website; just enough rounding to keep edges from looking cut.
         theme.radius = px(2.);

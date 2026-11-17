@@ -73,8 +73,27 @@ pub struct Info {
     pub updated_at: f64,
     pub lines: usize,
     pub pages: usize,
+    /// The first few people heard, in the order they first spoke, for the list to show who was there.
+    pub speakers: Vec<String>,
     /// Unreadable files stay listed, so a damaged meeting is visible rather than silently gone.
     pub read_error: Option<String>,
+}
+
+/// How many speakers a list row has room for.
+const SPEAKERS_SHOWN: usize = 4;
+
+/// The first speakers of a meeting's lines, each once, in the order they first spoke.
+pub fn speakers_of(lines: &[Value]) -> Vec<String> {
+    let mut seen: Vec<String> = vec![];
+    for name in lines.iter().filter_map(|l| l["speaker"].as_str()).filter(|s| !s.is_empty()) {
+        if !seen.iter().any(|s| s == name) {
+            seen.push(name.to_string());
+            if seen.len() == SPEAKERS_SHOWN {
+                break;
+            }
+        }
+    }
+    seen
 }
 
 fn info(v: &Value) -> Option<Info> {
@@ -85,6 +104,7 @@ fn info(v: &Value) -> Option<Info> {
         updated_at: v.get("updatedAt").and_then(Value::as_f64).unwrap_or(0.0),
         lines: v["lines"].as_array().map_or(0, |ls| ls.iter().filter(|l| !l["manual"].as_bool().unwrap_or(false)).count()),
         pages: v["pages"].as_array().map_or(1, |p| p.len().max(1)),
+        speakers: speakers_of(v["lines"].as_array().map_or(&[][..], Vec::as_slice)),
         read_error: None,
     })
 }
@@ -239,6 +259,7 @@ impl Store {
                 updated_at: 0.0,
                 lines: 0,
                 pages: 0,
+                speakers: vec![],
                 read_error: Some(error),
             }));
         }

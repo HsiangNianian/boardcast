@@ -268,8 +268,22 @@ tell-speakers-apart-by-voice = Различать говорящих по гол
 new-voices-are-named-a = Новые голоса называются A, B, C. Данные голоса хранятся в файле встречи на этом компьютере.
 turn-to-the-page-being = Переходить на страницу, о которой говорят
 otherwise-the-board-s-corner = Иначе страницу предложит угол доски.
-glossary = Глоссарий
-names-as-they-should-be = Имена так, как их нужно писать, через точку с запятой; варианты ошибочного распознавания идут после знака равенства: API = A P I.
+glossary-2 = глоссарий
+names-as-they-should-be-2 = Имена так, как их должно писать распознавание, и как оно их ослышивает.
+list = Список
+text = Текст
+a-glossary-file-or-a = Файл глоссария или таблица, сохранённая как CSV или TSV
+as-text-or-as-csv = Текстом, или как CSV для таблицы, если имя файла оканчивается на .csv
+one-name-a-line-ways = Одно имя на строку. Как его ослышивают — после знака равенства, через запятую: API = A P I, エーピーアイ
+no-names-yet-add-one = Имён пока нет. Добавьте ниже или импортируйте список.
+written-as = Пишется
+also-heard-as-apart-by = Также слышится как, через запятую
+add = Добавить
+glossary-imported = Из { $file } добавлено { $added }, обновлено { $updated }.
+no-names-found-in = В { $file } не найдено имён.
+could-not-read-the-glossary = Не удаётся прочитать файл: { $error }
+glossary-exported = Сохранено имён: { $count }, в { $file }.
+could-not-save-the-glossary = Не удаётся сохранить файл: { $error }
 recognize-speech-with = Распознавать речь с помощью
 speech-models = Речевые модели
 automatic = Автоматически

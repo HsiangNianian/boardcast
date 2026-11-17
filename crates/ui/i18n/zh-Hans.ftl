@@ -269,8 +269,22 @@ tell-speakers-apart-by-voice = 按声音区分说话人
 new-voices-are-named-a = 新的声音按 A、B、C 命名，声纹只保存在本机的会议文件里。
 turn-to-the-page-being = 讲到别的页时自动翻过去
 otherwise-the-board-s-corner = 关闭时只在画布角落给出建议。
-glossary = 术语表
-names-as-they-should-be = 名字应该怎么写，用分号隔开；听错的写法写在等号后面，例如：API = A P I。
+glossary-2 = 术语表
+names-as-they-should-be-2 = 识别结果里名字应该怎么写，以及它常被听成什么。
+list = 列表
+text = 文本
+a-glossary-file-or-a = 术语表文件，或存成 CSV / TSV 的表格
+as-text-or-as-csv = 存成文本；文件名以 .csv 结尾时存成表格用的 CSV
+one-name-a-line-ways = 一行一个名字。常被听成的写法放在等号后面，用逗号隔开：API = A P I, エーピーアイ
+no-names-yet-add-one = 还没有名字。在下面添加，或者导入一份列表。
+written-as = 写作
+also-heard-as-apart-by = 也会被听成（用逗号隔开）
+add = 添加
+glossary-imported = 从 { $file } 新增 { $added } 个，更新 { $updated } 个。
+no-names-found-in = { $file } 里没有找到名字。
+could-not-read-the-glossary = 读不了这个文件：{ $error }
+glossary-exported = 已把 { $count } 个名字存到 { $file }。
+could-not-save-the-glossary = 存不了这个文件：{ $error }
 recognize-speech-with = 语音识别
 speech-models = 语音模型
 automatic = 自动

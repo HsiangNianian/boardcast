@@ -268,8 +268,22 @@ tell-speakers-apart-by-voice = Sprecher an der Stimme unterscheiden
 new-voices-are-named-a = Neue Stimmen heißen A, B, C. Stimmdaten bleiben in der Besprechungsdatei auf diesem Computer.
 turn-to-the-page-being = Zur besprochenen Seite blättern
 otherwise-the-board-s-corner = Sonst bietet die Tafelecke die Seite an.
-glossary = Glossar
-names-as-they-should-be = Namen, wie sie geschrieben werden sollen, durch Semikolons getrennt; Verhörer folgen nach einem Gleichheitszeichen: API = A P I.
+glossary-2 = Glossar
+names-as-they-should-be-2 = Namen, wie die Erkennung sie schreiben soll, und wie sie sich verhört.
+list = Liste
+text = Text
+a-glossary-file-or-a = Eine Glossardatei oder eine als CSV oder TSV gespeicherte Tabelle
+as-text-or-as-csv = Als Text, oder als CSV für eine Tabelle, wenn der Name auf .csv endet
+one-name-a-line-ways = Ein Name pro Zeile. Verhörte Formen nach einem Gleichheitszeichen, durch Kommas getrennt: API = A P I, エーピーアイ
+no-names-yet-add-one = Noch keine Namen. Unten einen hinzufügen oder eine Liste importieren.
+written-as = Geschrieben als
+also-heard-as-apart-by = Auch gehört als, durch Kommas getrennt
+add = Hinzufügen
+glossary-imported = { $added } hinzugefügt und { $updated } aktualisiert aus { $file }.
+no-names-found-in = Keine Namen in { $file } gefunden.
+could-not-read-the-glossary = Die Datei kann nicht gelesen werden: { $error }
+glossary-exported = { $count } Namen in { $file } gespeichert.
+could-not-save-the-glossary = Die Datei kann nicht gespeichert werden: { $error }
 recognize-speech-with = Sprache erkennen mit
 speech-models = Sprachmodelle
 automatic = Automatisch

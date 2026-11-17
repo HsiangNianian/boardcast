@@ -269,8 +269,22 @@ tell-speakers-apart-by-voice = Tell speakers apart by voice
 new-voices-are-named-a = New voices are named A, B, C. Voice data stays in the meeting file on this computer.
 turn-to-the-page-being = Turn to the page being talked about
 otherwise-the-board-s-corner = Otherwise the board's corner offers the page.
-glossary = Glossary
-names-as-they-should-be = Names as they should be written, apart by semicolons; ways they are misheard go after an equals sign: API = A P I.
+glossary-2 = glossary
+names-as-they-should-be-2 = Names as recognition should write them, and the ways it mishears them.
+list = List
+text = Text
+a-glossary-file-or-a = A glossary file, or a spreadsheet saved as CSV or TSV
+as-text-or-as-csv = As text, or as CSV for a spreadsheet when the name ends in .csv
+one-name-a-line-ways = One name a line. Ways it is misheard go after an equals sign, apart by commas: API = A P I, エーピーアイ
+no-names-yet-add-one = No names yet. Add one below, or import a list.
+written-as = Written as
+also-heard-as-apart-by = Also heard as, apart by commas
+add = Add
+glossary-imported = Added { $added } and updated { $updated } from { $file }.
+no-names-found-in = No names found in { $file }.
+could-not-read-the-glossary = Couldn't read the file: { $error }
+glossary-exported = Saved { $count } names to { $file }.
+could-not-save-the-glossary = Couldn't save the file: { $error }
 recognize-speech-with = Recognize speech with
 speech-models = Speech models
 automatic = Automatic

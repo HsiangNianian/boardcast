@@ -1488,8 +1488,17 @@ enum DownloadUpdate {
 }
 
 struct SettingsForm {
-    /// How names are written, as one line of entries apart by semicolons.
-    glossary: Entity<InputState>,
+    /// The glossary as text, one name a line, for pasting or editing many at once.
+    glossary: Entity<TextareaState>,
+    /// A name being added to the glossary or changed: how it is written, and the ways it is misheard.
+    glossary_name: Entity<InputState>,
+    glossary_heard: Entity<InputState>,
+    /// The name being changed, by its place in the glossary; None while adding one.
+    glossary_editing: Option<usize>,
+    /// The glossary is shown as text rather than as a list.
+    glossary_as_text: bool,
+    /// What the last import or export did.
+    glossary_note: Option<String>,
     base_url: Entity<InputState>,
     model: Entity<InputState>,
     key: Entity<InputState>,
@@ -2069,6 +2078,250 @@ impl Workbench {
         self.pipeline.set_speech(Speech { helper: self.speech_helper.clone(), system, language: saved.speech_language.clone() });
         self.hearing = None;
         cx.notify();
+    }
+
+    fn glossary(&self) -> Glossary {
+        Glossary::parse(&self.form.saved.glossary)
+    }
+
+    /// Keep `glossary` from now on: for hearing, in the settings file, and in the text view.
+    fn set_glossary(&mut self, glossary: Glossary, window: &mut Window, cx: &mut Context<Self>) {
+        let text = glossary.to_text();
+        self.form.saved.glossary = text.clone();
+        self.session().set_glossary(glossary);
+        if let Err(e) = self.form.saved.save() {
+            self.form.note = Some(format!("{e:#}"));
+        }
+        self.form.glossary.update(cx, |state, cx| {
+            if state.value().as_ref() != text {
+                state.set_value(text, window, cx);
+            }
+        });
+        cx.notify();
+    }
+
+    /// Add the name in the fields below the list, or put it in place of the one being changed. A name already
+    /// in the glossary gains the ways it is heard.
+    fn submit_glossary_term(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let name = self.form.glossary_name.read(cx).value().trim().to_string();
+        if name.is_empty() {
+            return;
+        }
+        let heard_text = self.form.glossary_heard.read(cx).value().to_string();
+        let mut heard: Vec<String> = vec![];
+        for h in heard_text.split([',', '，', '、', ';', '；']).map(str::trim) {
+            if !h.is_empty() && h != name && !heard.iter().any(|x| x == h) {
+                heard.push(h.to_string());
+            }
+        }
+        let term = boardcast_agent::sound::Term { text: name, heard };
+        let mut glossary = self.glossary();
+        match self.form.glossary_editing.take() {
+            Some(i) if i < glossary.terms.len() => glossary.terms[i] = term,
+            _ => {
+                glossary.merge(Glossary { terms: vec![term] });
+            }
+        }
+        for field in [&self.form.glossary_name, &self.form.glossary_heard] {
+            field.update(cx, |state, cx| state.set_value("", window, cx));
+        }
+        self.form.glossary_note = None;
+        self.set_glossary(glossary, window, cx);
+        self.form.glossary_name.update(cx, |state, cx| state.focus(window, cx));
+    }
+
+    fn edit_glossary_term(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(term) = self.glossary().terms.get(index).cloned() else { return };
+        self.form.glossary_name.update(cx, |state, cx| state.set_value(term.text, window, cx));
+        self.form.glossary_heard.update(cx, |state, cx| state.set_value(term.heard.join(", "), window, cx));
+        self.form.glossary_editing = Some(index);
+        self.form.glossary_name.update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
+    }
+
+    fn cancel_glossary_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.form.glossary_editing = None;
+        for field in [&self.form.glossary_name, &self.form.glossary_heard] {
+            field.update(cx, |state, cx| state.set_value("", window, cx));
+        }
+        cx.notify();
+    }
+
+    fn remove_glossary_term(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let mut glossary = self.glossary();
+        if index >= glossary.terms.len() {
+            return;
+        }
+        glossary.terms.remove(index);
+        match self.form.glossary_editing {
+            Some(i) if i == index => self.cancel_glossary_edit(window, cx),
+            Some(i) if i > index => self.form.glossary_editing = Some(i - 1),
+            _ => {}
+        }
+        self.set_glossary(glossary, window, cx);
+    }
+
+    /// Add the names in a file: the glossary's own text, or a spreadsheet's rows saved as CSV or TSV.
+    fn import_glossary(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let answer = cx.prompt_for_paths(gpui_kit::PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = answer.await else { return };
+            let Some(path) = paths.into_iter().next() else { return };
+            let file = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+            let read = std::fs::read(&path).map(|bytes| String::from_utf8_lossy(&bytes).into_owned());
+            let _ = this.update_in(cx, |this, window, cx| {
+                let found = match read {
+                    Ok(text) => Glossary::import(&text),
+                    Err(e) => {
+                        this.form.glossary_note = Some(ta!("could-not-read-the-glossary", error = format!("{e}")));
+                        cx.notify();
+                        return;
+                    }
+                };
+                if found.is_empty() {
+                    this.form.glossary_note = Some(ta!("no-names-found-in", file = file));
+                    cx.notify();
+                    return;
+                }
+                let mut glossary = this.glossary();
+                let (added, updated) = glossary.merge(found);
+                this.form.glossary_note = Some(ta!("glossary-imported", added = added, updated = updated, file = file));
+                this.set_glossary(glossary, window, cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Save the glossary to a file: CSV, for a spreadsheet, when the name ends so; otherwise its own text.
+    fn export_glossary(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let glossary = self.glossary();
+        let directory = self.export_dir.clone().unwrap_or_else(|| {
+            let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map_or_else(|| self.data.clone(), PathBuf::from);
+            Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
+        });
+        let answer = cx.prompt_for_new_path(&directory, Some("glossary.txt"));
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(path))) = answer.await else { return };
+            let csv = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("csv"));
+            let mut text = if csv { glossary.to_csv() } else { glossary.to_text() };
+            if !text.ends_with('\n') {
+                text.push('\n');
+            }
+            let file = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+            let written = std::fs::write(&path, text);
+            let _ = this.update(cx, |this, cx| {
+                this.form.glossary_note = Some(match written {
+                    Ok(()) => ta!("glossary-exported", count = glossary.terms.len(), file = file),
+                    Err(e) => ta!("could-not-save-the-glossary", error = format!("{e}")),
+                });
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// The glossary's card in Settings: a row a name with the ways it is misheard, and fields to add or change
+    /// one; or all of it as text, for pasting many at once. Import and export are at its top.
+    fn glossary_card(&self, cx: &mut Context<Self>) -> Vec<gpui_kit::AnyElement> {
+        let glossary = self.glossary();
+        let as_text = self.form.glossary_as_text;
+        let editing = self.form.glossary_editing;
+        let line = rgb(pal().line);
+        let choice = |id: &'static str, label: &'static str, on: bool| Button::new(id).small().label(label).map(|b| if on { b.primary() } else { b.ghost() });
+        let top = div()
+            .flex()
+            .items_center()
+            .gap_3()
+            .px_4()
+            .py_3()
+            .child(div().flex_1().min_w_0().text_xs().text_color(rgb(pal().muted)).child(t("names-as-they-should-be-2")))
+            .child(
+                div()
+                    .flex()
+                    .flex_none()
+                    .p(px(2.))
+                    .gap(px(2.))
+                    .border_1()
+                    .border_color(line)
+                    .rounded(px(5.))
+                    .bg(rgb(pal().paper))
+                    .child(choice("glossary-list", t("list"), !as_text).on_click(cx.listener(|this, _, _, cx| {
+                        this.form.glossary_as_text = false;
+                        cx.notify();
+                    })))
+                    .child(choice("glossary-text", t("text"), as_text).on_click(cx.listener(|this, _, window, cx| {
+                        this.cancel_glossary_edit(window, cx);
+                        this.form.glossary_as_text = true;
+                        cx.notify();
+                    }))),
+            )
+            .child(Button::new("glossary-import").small().outline().icon(icon("import")).label(t("import")).tooltip(t("a-glossary-file-or-a")).on_click(cx.listener(|this, _, window, cx| this.import_glossary(window, cx))))
+            .child(Button::new("glossary-export").small().outline().icon(icon("file-down")).label(t("export")).disabled(glossary.is_empty()).tooltip(t("as-text-or-as-csv")).on_click(cx.listener(|this, _, window, cx| this.export_glossary(window, cx))));
+        let mut rows = vec![top.into_any_element()];
+        if as_text {
+            rows.push(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .px_4()
+                    .py_3()
+                    .child(div().h(px(220.)).border_1().border_color(line).rounded(px(6.)).bg(rgb(pal().paper)).p_2().text_sm().child(Textarea::new(&self.form.glossary)))
+                    .child(div().text_xs().text_color(rgb(pal().muted)).child(t("one-name-a-line-ways")))
+                    .into_any_element(),
+            );
+            return rows;
+        }
+        if glossary.is_empty() {
+            rows.push(div().px_4().py_4().text_sm().text_color(rgb(pal().faint)).child(t("no-names-yet-add-one")).into_any_element());
+        } else {
+            let list = div().id("glossary-terms").flex().flex_col().max_h(px(300.)).overflow_y_scroll().children(glossary.terms.iter().enumerate().map(|(i, term)| {
+                let chosen = editing == Some(i);
+                div()
+                    .id(("glossary-term", i))
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .px_4()
+                    .py(px(7.))
+                    .when(i > 0, |d| d.border_t_1().border_color(line))
+                    .when(chosen, |d| d.bg(rgb(pal().selected)))
+                    .hover(|d| d.bg(rgb(pal().selected)))
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, window, cx| this.edit_glossary_term(i, window, cx)))
+                    .child(div().flex_none().w(px(180.)).overflow_hidden().text_ellipsis().whitespace_nowrap().text_sm().font_weight(gpui_kit::FontWeight::MEDIUM).child(term.text.clone()))
+                    .child(div().flex_1().min_w_0().flex().flex_wrap().gap_1().children(term.heard.iter().map(|h| {
+                        div().px(px(6.)).py(px(1.)).rounded(px(4.)).border_1().border_color(line).bg(rgb(pal().paper)).text_xs().text_color(rgb(pal().muted)).child(h.clone())
+                    })))
+                    .child(Button::new(("glossary-remove", i)).ghost().xsmall().icon(icon("x")).tooltip(t("delete")).on_click(cx.listener(move |this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.remove_glossary_term(i, window, cx);
+                    })))
+            }));
+            rows.push(list.into_any_element());
+        }
+        rows.push(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_4()
+                .py_3()
+                .bg(rgb(pal().paper))
+                .child(div().w(px(180.)).flex_none().child(Input::new(&self.form.glossary_name).small()))
+                .child(div().flex_1().min_w_0().child(Input::new(&self.form.glossary_heard).small()))
+                .child(
+                    Button::new("glossary-submit")
+                        .small()
+                        .primary()
+                        .when(editing.is_none(), |b| b.icon(icon("plus")))
+                        .label(if editing.is_some() { t("save") } else { t("add") })
+                        .on_click(cx.listener(|this, _, window, cx| this.submit_glossary_term(window, cx))),
+                )
+                .when(editing.is_some(), |d| d.child(Button::new("glossary-cancel").small().ghost().label(t("cancel")).on_click(cx.listener(|this, _, window, cx| this.cancel_glossary_edit(window, cx)))))
+                .into_any_element(),
+        );
+        rows
     }
 
     fn dirty(&self) -> bool {
@@ -7607,18 +7860,7 @@ impl Render for Workbench {
                         )))
                         .into_any_element(),
                 );
-                recognition.push(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .px_4()
-                        .py_3()
-                        .child(div().text_sm().child(t("glossary")))
-                        .child(div().text_xs().text_color(rgb(pal().muted)).child(t("names-as-they-should-be")))
-                        .child(div().pt_1().child(Input::new(&self.form.glossary).small()))
-                        .into_any_element(),
-                );
+                let glossary = self.glossary_card(cx);
                 div()
                     .flex()
                     .flex_col()
@@ -7628,6 +7870,8 @@ impl Render for Workbench {
                     .when(listen.computer(), |d| d.child(section(Some(t("computer-sound-2")), vec![outputs.into_any_element()])))
                     .when(listen.computer() && cfg!(target_os = "macos"), |d| d.child(footnote(t("on-a-mac-hearing-the").into(), pal().muted)))
                     .child(section(Some(t("recognition")), recognition))
+                    .child(section(Some(t("glossary-2")), glossary))
+                    .when_some(self.form.glossary_note.clone(), |d, note| d.child(footnote(note.into(), pal().muted)))
                     .child(section(
                         Some(t("during-the-meeting")),
                         vec![
@@ -8923,7 +9167,10 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(t("type-a-line-enter-puts")));
             let base_url = cx.new(|cx| InputState::new(window, cx).placeholder("https://api.deepseek.com").default_value(settings.base_url.clone()));
             let messy = cx.new(|_| SliderState::new().min(0.0).max(1.0).step(0.1).default_value(settings.messy));
-            let glossary = cx.new(|cx| InputState::new(window, cx).placeholder("鉴权; OpenAI; API = A P I, エーピーアイ").default_value(settings.glossary.clone()));
+            let glossary_text = Glossary::parse(&settings.glossary).to_text();
+            let glossary = cx.new(|cx| TextareaState::new(window, cx).placeholder("鉴权\nOpenAI\nAPI = A P I, エーピーアイ").default_value(glossary_text));
+            let glossary_name = cx.new(|cx| InputState::new(window, cx).placeholder(t("written-as")));
+            let glossary_heard = cx.new(|cx| InputState::new(window, cx).placeholder(t("also-heard-as-apart-by")));
             let model = cx.new(|cx| InputState::new(window, cx).placeholder("deepseek-flash").default_value(settings.model.clone()));
             let proxy_url = cx.new(|cx| InputState::new(window, cx).placeholder("http://127.0.0.1:7890").default_value(settings.proxy_url.clone()));
             let proxy_user = cx.new(|cx| InputState::new(window, cx).placeholder(t("username-optional")).default_value(settings.proxy_user.clone()));
@@ -8944,15 +9191,27 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 })
                 .detach();
                 cx.subscribe_in(&glossary, window, |this: &mut Workbench, field, event, _, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.form.saved.glossary = field.read(cx).value().to_string();
+                    // Typed into the text view; the list follows it. A change made from the list is already kept.
+                    let text = field.read(cx).value().to_string();
+                    if matches!(event, InputEvent::Change) && Glossary::parse(&text) != Glossary::parse(&this.form.saved.glossary) {
+                        this.form.saved.glossary = text;
+                        this.form.glossary_editing = None;
                         this.session().set_glossary(Glossary::parse(&this.form.saved.glossary));
                         if let Err(e) = this.form.saved.save() {
                             this.form.note = Some(format!("{e:#}"));
                         }
+                        cx.notify();
                     }
                 })
                 .detach();
+                for field in [&glossary_name, &glossary_heard] {
+                    cx.subscribe_in(field, window, |this: &mut Workbench, _, event, window, cx| {
+                        if matches!(event, InputEvent::PressEnter { .. }) {
+                            this.submit_glossary_term(window, cx);
+                        }
+                    })
+                    .detach();
+                }
                 cx.subscribe_in(&proxy_url, window, |this: &mut Workbench, field, event, _, cx| {
                     if matches!(event, InputEvent::Change) {
                         this.form.saved.proxy_url = field.read(cx).value().trim().to_string();
@@ -9072,7 +9331,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     outputs: vec![],
                     library_query,
                     label_input,
-                    form: SettingsForm { glossary, base_url, model, key, remote, messy: messy.clone(), proxy_url, proxy_user, proxy_password, proxy_note: None, saved: settings, note: None, probing: None },
+                    form: SettingsForm { glossary, glossary_name: glossary_name.clone(), glossary_heard: glossary_heard.clone(), glossary_editing: None, glossary_as_text: false, glossary_note: None, base_url, model, key, remote, messy: messy.clone(), proxy_url, proxy_user, proxy_password, proxy_note: None, saved: settings, note: None, probing: None },
                     summary: SummaryPanel { editor, editing: false, job: None, draft: None, cleared: None, edits: 0, note: None, current: None },
                     replay: None,
                     import: ImportState::Idle,

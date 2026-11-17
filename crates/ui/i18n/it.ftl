@@ -268,8 +268,22 @@ tell-speakers-apart-by-voice = Distingui gli interlocutori dalla voce
 new-voices-are-named-a = Le nuove voci si chiamano A, B, C. I dati vocali restano nel file della riunione su questo computer.
 turn-to-the-page-being = Passa alla pagina di cui si parla
 otherwise-the-board-s-corner = Altrimenti l'angolo della lavagna propone la pagina.
-glossary = Glossario
-names-as-they-should-be = I nomi come vanno scritti, separati da punto e virgola; i modi in cui vengono sentiti male vanno dopo un segno uguale: API = A P I.
+glossary-2 = glossario
+names-as-they-should-be-2 = I nomi come il riconoscimento deve scriverli, e come li fraintende.
+list = Elenco
+text = Testo
+a-glossary-file-or-a = Un file di glossario, o un foglio di calcolo salvato come CSV o TSV
+as-text-or-as-csv = Come testo, o come CSV per un foglio di calcolo se il nome finisce in .csv
+one-name-a-line-ways = Un nome per riga. I modi in cui viene frainteso vanno dopo un segno di uguale, separati da virgole: API = A P I, エーピーアイ
+no-names-yet-add-one = Ancora nessun nome. Aggiungine uno qui sotto o importa un elenco.
+written-as = Si scrive
+also-heard-as-apart-by = Sentito anche come, separato da virgole
+add = Aggiungi
+glossary-imported = Aggiunti { $added } e aggiornati { $updated } da { $file }.
+no-names-found-in = Nessun nome trovato in { $file }.
+could-not-read-the-glossary = Impossibile leggere il file: { $error }
+glossary-exported = Salvati { $count } nomi in { $file }.
+could-not-save-the-glossary = Impossibile salvare il file: { $error }
 recognize-speech-with = Riconosci la voce con
 speech-models = Modelli vocali
 automatic = Automatico

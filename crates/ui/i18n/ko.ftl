@@ -268,8 +268,22 @@ tell-speakers-apart-by-voice = 목소리로 화자 구분
 new-voices-are-named-a = 새 목소리는 A, B, C로 이름이 붙습니다. 음성 데이터는 이 컴퓨터의 회의 파일에만 보관됩니다.
 turn-to-the-page-being = 이야기 중인 페이지로 넘기기
 otherwise-the-board-s-corner = 끄면 보드 모서리에서 페이지를 제안합니다.
-glossary = 용어집
-names-as-they-should-be = 올바른 표기를 세미콜론으로 구분해 적고, 잘못 들리는 표기는 등호 뒤에 적습니다: API = A P I.
+glossary-2 = 용어집
+names-as-they-should-be-2 = 인식 결과에서 이름을 어떻게 쓸지, 그리고 자주 잘못 듣는 방식.
+list = 목록
+text = 텍스트
+a-glossary-file-or-a = 용어집 파일, 또는 CSV / TSV로 저장한 표
+as-text-or-as-csv = 텍스트로 저장합니다. 파일 이름이 .csv로 끝나면 표 계산용 CSV로 저장합니다
+one-name-a-line-ways = 한 줄에 이름 하나. 잘못 듣는 방식은 등호 뒤에 쉼표로 구분: API = A P I, エーピーアイ
+no-names-yet-add-one = 아직 이름이 없습니다. 아래에서 추가하거나 목록을 가져오세요.
+written-as = 표기
+also-heard-as-apart-by = 잘못 듣는 방식(쉼표로 구분)
+add = 추가
+glossary-imported = { $file }에서 { $added }개 추가, { $updated }개 업데이트했습니다.
+no-names-found-in = { $file }에서 이름을 찾지 못했습니다.
+could-not-read-the-glossary = 파일을 읽을 수 없습니다: { $error }
+glossary-exported = 이름 { $count }개를 { $file }에 저장했습니다.
+could-not-save-the-glossary = 파일을 저장할 수 없습니다: { $error }
 recognize-speech-with = 음성 인식 방식
 speech-models = 음성 모델
 automatic = 자동

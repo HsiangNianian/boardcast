@@ -268,8 +268,22 @@ tell-speakers-apart-by-voice = 声で話者を区別する
 new-voices-are-named-a = 新しい声には A、B、C と名前が付きます。声のデータはこのコンピューター上の会議ファイルにのみ保存されます。
 turn-to-the-page-being = 話しているページへ自動で移動
 otherwise-the-board-s-corner = オフの場合は、ボードの隅にページが提案されます。
-glossary = 用語集
-names-as-they-should-be = 正しい表記をセミコロンで区切って入力します。聞き間違いやすい表記はイコールの後ろに書きます（例：API = A P I）。
+glossary-2 = 用語集
+names-as-they-should-be-2 = 認識結果での名前の書き方と、よくある聞き間違い。
+list = リスト
+text = テキスト
+a-glossary-file-or-a = 用語集ファイル、または CSV / TSV で保存した表
+as-text-or-as-csv = テキストで保存。ファイル名が .csv で終わるときは表計算用の CSV
+one-name-a-line-ways = 1 行に 1 つの名前。聞き間違いは等号の後にカンマ区切りで：API = A P I, エーピーアイ
+no-names-yet-add-one = まだ名前がありません。下で追加するか、リストを読み込んでください。
+written-as = 表記
+also-heard-as-apart-by = 聞き間違い（カンマ区切り）
+add = 追加
+glossary-imported = { $file } から { $added } 件追加、{ $updated } 件更新しました。
+no-names-found-in = { $file } に名前が見つかりません。
+could-not-read-the-glossary = ファイルを読めません：{ $error }
+glossary-exported = { $count } 件の名前を { $file } に保存しました。
+could-not-save-the-glossary = ファイルを保存できません：{ $error }
 recognize-speech-with = 音声認識エンジン
 speech-models = 音声モデル
 automatic = 自動

@@ -148,23 +148,26 @@ pub fn target_at(targets: &[Rect], x: f64, y: f64) -> Option<&Rect> {
     targets.iter().find(|b| x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)
 }
 
-/// Rough width: CJK characters take a full em, others a bit over half.
+/// Chinese and Japanese characters, which a line may break between.
+fn wide(c: char) -> bool {
+    matches!(c as u32, 0x2E80..=0x9FFF | 0xFF00..=0xFFEF)
+}
+
+/// Rough width: Chinese, Japanese and Korean characters take a full em, others a bit over half.
 pub fn text_width(s: &str, size: f64) -> f64 {
-    s.chars()
-        .map(|c| if matches!(c as u32, 0x2E80..=0x9FFF | 0xFF00..=0xFFEF) { size } else { size * 0.62 })
-        .sum()
+    s.chars().map(|c| if wide(c) || matches!(c as u32, 0xAC00..=0xD7A3) { size } else { size * 0.62 }).sum()
 }
 
 /// Punctuation that never starts a line, and so stays with the text before it.
 const NO_LINE_START: &str = "，。、；：？！）」』】》〉”’…,.;:?!)]}%";
 
 /// Text broken into lines no wider than `max` where it can be: Chinese and Japanese between any two
-/// characters, other scripts between words, and closing punctuation kept on the line it closes.
+/// characters, other scripts between words (Korean too, which writes spaces), and closing punctuation
+/// kept on the line it closes.
 pub fn wrap(s: &str, size: f64, max: f64) -> Vec<String> {
     if text_width(s, size) <= max {
         return vec![s.to_string()];
     }
-    let wide = |c: char| matches!(c as u32, 0x2E80..=0x9FFF | 0xFF00..=0xFFEF);
     // The pieces a line may break between: one wide character, or a word with the spaces after it.
     let mut pieces: Vec<String> = vec![];
     for c in s.chars() {
@@ -803,6 +806,10 @@ mod wrap_tests {
         assert_eq!(wrap("用户输入，抖音账号", 16.0, 70.0), ["用户输", "入，抖音", "账号"]);
         assert_eq!(wrap("forwards every request", 16.0, 90.0), ["forwards", "every", "request"]);
         assert_eq!(wrap("ログインして確認", 16.0, 70.0), ["ログイン", "して確認"]);
+        // Korean is as wide as Chinese, and breaks at its spaces.
+        assert_eq!(text_width("회의", 16.0), 32.0);
+        assert_eq!(wrap("회의를 시작하겠습니다", 16.0, 100.0), ["회의를", "시작하겠습니다"]);
+        assert_eq!(wrap("план выпуска версии", 16.0, 90.0), ["план", "выпуска", "версии"]);
     }
 
     #[test]

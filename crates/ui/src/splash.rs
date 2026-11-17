@@ -5,7 +5,7 @@ use crate::i18n::t;
 use crate::theme::pal;
 use boardcast_board::glyphs::{Glyphs, Pt};
 use boardcast_board::pen::{ink, line, outline, place, Inked, Rng};
-use gpui_kit::{canvas, div, point, prelude::*, px, rgb, Background, Bounds, Hsla, IntoElement, PathBuilder, Pixels, Window};
+use gpui_kit::{canvas, div, point, prelude::*, px, rgb, Background, Bounds, FillOptions, Hsla, IntoElement, PathBuilder, PathStyle, Pixels, Window};
 use std::time::{Duration, Instant};
 
 const WORD: &str = "boardcast";
@@ -78,7 +78,7 @@ pub fn written(strokes: Vec<Inked>, w: f32, h: f32, started: Instant, writing: D
                 }
                 let shape = outline(stroke, (left_to_write / stroke.length.max(0.001)).min(1.0));
                 left_to_write -= stroke.length;
-                let mut pb = PathBuilder::fill();
+                let mut pb = solid();
                 let Some(first) = shape.first() else { continue };
                 pb.move_to(at(first));
                 shape[1..].iter().for_each(|p| pb.line_to(at(p)));
@@ -91,6 +91,12 @@ pub fn written(strokes: Vec<Inked>, w: f32, h: f32, started: Instant, writing: D
     )
     .w_full()
     .h(px(h))
+}
+
+/// A stroke that crosses itself (the bowl of в coming back to its stem) stays solid rather than punching a
+/// hole, as on the board.
+fn solid() -> PathBuilder {
+    PathBuilder::fill().with_style(PathStyle::Fill(FillOptions::non_zero()))
 }
 
 pub fn splash(strokes: &[Inked], started: Instant, window: &mut Window) -> impl IntoElement {
@@ -118,7 +124,7 @@ pub fn splash(strokes: &[Inked], started: Instant, window: &mut Window) -> impl 
                         }
                         let shape = outline(stroke, (left / stroke.length.max(0.001)).min(1.0));
                         left -= stroke.length;
-                        let mut pb = PathBuilder::fill();
+                        let mut pb = solid();
                         let Some(first) = shape.first() else { continue };
                         pb.move_to(at(first));
                         shape[1..].iter().for_each(|p| pb.line_to(at(p)));

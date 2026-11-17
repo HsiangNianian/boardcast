@@ -501,7 +501,10 @@ impl Canvas<'_> {
             };
             // The printed English letters are already uneven; more on top pulls apart where strokes meet.
             // Joined-up letters are hurried already, and small: half as much again keeps them legible.
-            let shaken = if script { messy * 0.5 } else if g.latin { messy * 0.2 } else { messy };
+            // Korean is a few plain strokes to a letter, and which way each leans is what tells ㄴ from ㅅ:
+            // shaken as hard as a Chinese character, 니 stops being read.
+            let korean = matches!(ch as u32, 0x3131..=0x318E | 0xAC00..=0xD7A3);
+            let shaken = if script || korean { messy * 0.5 } else if g.latin { messy * 0.2 } else { messy };
             let placed = place(&g.strokes, cx, y, size, &mut r, shaken);
             if let (Some(end), Some(start)) = (joins, placed.first().and_then(|s| s.first())) {
                 if dist(end, *start) < size * 0.7 {

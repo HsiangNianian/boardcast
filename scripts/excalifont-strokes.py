@@ -5,7 +5,7 @@
 
 Reads Excalifont from the pinned @excalidraw/excalidraw 0.18.1 package on npm, downloaded and checked here.
 
-Extract ASCII and mathematical centerlines for the existing animated ink renderer.
+Extract centerlines for the animated ink renderer: ASCII, accented Latin, Greek, Cyrillic and mathematical signs.
 The generated data is committed; normal builds do not need Python or these tools.
 
 A skeleton breaks at every junction and runs in no particular direction, so the pieces are then put back
@@ -285,44 +285,85 @@ def tidy(paths, letter):
     return order(paths, letter)
 
 
-assert "SIL OPEN FONT LICENSE" in (ROOT / "assets/licenses/handwritten-OFL.txt").read_text()
-assert "Microsoft Corporation" in (ROOT / "assets/licenses/handwritten-cascadia.txt").read_text()
-codes = set(range(32, 127)) | {0xb0, 0xb1, 0xb2, 0xb3, 0xb5, 0xb9, 0xbc, 0xbd, 0xbe, 0xd7, 0xf7}
-codes |= {c for c in range(0x370, 0x400) if unicodedata.category(chr(c)).startswith("L")}
-codes |= set(range(0x2070, 0x20a0)) | set(range(0x2100, 0x2150)) | set(range(0x2190, 0x2300))
-codes |= set(range(0x1d62, 0x1d6b))
-data = {}
-# shortcut: symbols are limited to the bundled fonts; broader alphabets need another licensed glyph source.
-for family in ["Excalifont", "Cascadia"]:
-    for path in sorted((fonts() / family).glob("*.woff2")):
-        font = TTFont(path)
-        available = sorted(c for c in codes & font.getBestCmap().keys() if chr(c) not in data)
-        if not available:
+def marks_last(paths, base):
+    """An accent is written after its letter (é, ñ, й): the strokes wholly above the plain letter, or wholly
+    below it, go to the end, left to right."""
+    ys = [y for s in base for _, y in s]
+    if not ys:
+        return paths
+    top, bottom = min(ys) + 0.02, max(ys) - 0.02
+    marks = [p for p in paths if max(y for _, y in p) < top or min(y for _, y in p) > bottom]
+    if len(marks) == len(paths):
+        return paths
+    return [p for p in paths if p not in marks] + sorted(marks, key=lambda p: min(x for x, _ in p))
+
+
+def plain(ch):
+    """The letter an accented one is built on, without its dot when the accent takes the dot's place."""
+    parts = unicodedata.normalize("NFD", ch)
+    if len(parts) < 2 or not unicodedata.category(ch).startswith("L") or not all(unicodedata.combining(c) for c in parts[1:]):
+        return None
+    above = any(unicodedata.combining(c) == 230 for c in parts[1:])
+    return {"i": "ı", "j": "ȷ"}.get(parts[0], parts[0]) if above else parts[0]
+
+
+def trace(face, ch):
+    """A character of a font as raw centerline pieces, and its advance."""
+    image = Image.new("L", (SIZE * 2, SIZE * 2))
+    ImageDraw.Draw(image).text((PAD, PAD + SIZE * 0.88), ch, font=face, anchor="ls", fill=255)
+    return strokes(image), round(face.getlength(ch) / SIZE, 4)
+
+
+def load(path):
+    """A font file and the characters it has."""
+    font = TTFont(path)
+    cmap = set(font.getBestCmap().keys())
+    font.flavor = None
+    binary = io.BytesIO()
+    font.save(binary)
+    return ImageFont.truetype(io.BytesIO(binary.getvalue()), SIZE), cmap
+
+
+def main():
+    assert "SIL OPEN FONT LICENSE" in (ROOT / "assets/licenses/handwritten-OFL.txt").read_text()
+    assert "Microsoft Corporation" in (ROOT / "assets/licenses/handwritten-cascadia.txt").read_text()
+    codes = set(range(32, 127)) | {0xb0, 0xb1, 0xb2, 0xb3, 0xb5, 0xb9, 0xbc, 0xbd, 0xbe, 0xd7, 0xf7}
+    codes |= {c for c in range(0x370, 0x400) if unicodedata.category(chr(c)).startswith("L")}
+    codes |= set(range(0x2070, 0x20a0)) | set(range(0x2100, 0x2150)) | set(range(0x2190, 0x2300))
+    codes |= set(range(0x1d62, 0x1d6b))
+    # The letters of the other languages the fonts can write: accented Latin, and Cyrillic.
+    codes |= (set(range(0xa1, 0x180)) - {0xad}) | {0x192, 0x218, 0x219, 0x21a, 0x21b, 0x237} | set(range(0x400, 0x500))
+    codes |= set(range(0x2010, 0x2028)) | {0x2030, 0x2039, 0x203a, 0x20ac}
+    data = {}
+    for family in ["Excalifont", "Cascadia"]:
+        for path in sorted((fonts() / family).glob("*.woff2")):
+            face, cmap = load(path)
+            for code in sorted(c for c in codes & cmap if chr(c) not in data):
+                ch = chr(code)
+                paths, advance = trace(face, ch)
+                assert paths or ch == " ", f"Empty glyph: {ch}"
+                data[ch] = {"strokes": tidy(paths, unicodedata.category(ch).startswith("L")), "advance": advance}
+
+    for ch in data:
+        if plain(ch) in data:
+            data[ch]["strokes"] = marks_last(data[ch]["strokes"], data[plain(ch)]["strokes"])
+
+    for code in sorted(codes):
+        ch = chr(code)
+        if ch in data:
             continue
-        font.flavor = None
-        binary = io.BytesIO()
-        font.save(binary)
-        face = ImageFont.truetype(io.BytesIO(binary.getvalue()), SIZE)
-        for code in available:
-            ch = chr(code)
-            image = Image.new("L", (SIZE * 2, SIZE * 2))
-            ImageDraw.Draw(image).text((PAD, PAD + SIZE * 0.88), ch, font=face, anchor="ls", fill=255)
-            paths = strokes(image)
-            assert paths or ch == " ", f"Empty glyph: {ch}"
-            data[ch] = {"strokes": tidy(paths, unicodedata.category(ch).startswith("L")), "advance": round(face.getlength(ch) / SIZE, 4)}
+        placement = unicodedata.decomposition(ch).split()[:1]
+        base = data.get(unicodedata.normalize("NFKD", ch))
+        if base and placement in [["<super>"], ["<sub>"]]:
+            shift = -0.15 if placement == ["<super>"] else 0.4
+            data[ch] = {"strokes": [[[round(x * 0.65, 4), round(y * 0.65 + shift, 4)] for x, y in s] for s in base["strokes"]], "advance": round(base["advance"] * 0.65, 4)}
 
-for code in sorted(codes):
-    ch = chr(code)
-    if ch in data:
-        continue
-    placement = unicodedata.decomposition(ch).split()[:1]
-    base = data.get(unicodedata.normalize("NFKD", ch))
-    if base and placement in [["<super>"], ["<sub>"]]:
-        shift = -0.15 if placement == ["<super>"] else 0.4
-        data[ch] = {"strokes": [[[round(x * 0.65, 4), round(y * 0.65 + shift, 4)] for x, y in s] for s in base["strokes"]], "advance": round(base["advance"] * 0.65, 4)}
+    (ROOT / "assets/glyphs/handwritten.json").write_text(json.dumps(dict(sorted(data.items())), separators=(",", ":")) + "\n")
+    # The website's pen only writes ASCII, so it carries just that part.
+    ascii_only = {chr(c): data[chr(c)] for c in range(32, 127) if chr(c) in data}
+    (ROOT / "crates/site/src/excalifont.json").write_text(json.dumps(ascii_only, separators=(",", ":")) + "\n")
+    print(f"Generated {len(data)} glyphs; licenses in assets/licenses/handwritten-*.txt.")
 
-(ROOT / "assets/glyphs/handwritten.json").write_text(json.dumps(dict(sorted(data.items())), separators=(",", ":")) + "\n")
-# The website's pen only writes ASCII, so it carries just that part.
-ascii_only = {chr(c): data[chr(c)] for c in range(32, 127) if chr(c) in data}
-(ROOT / "crates/site/src/excalifont.json").write_text(json.dumps(ascii_only, separators=(",", ":")) + "\n")
-print(f"Generated {len(data)} glyphs; licenses in assets/licenses/handwritten-*.txt.")
+
+if __name__ == "__main__":
+    main()

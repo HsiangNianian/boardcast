@@ -308,4 +308,24 @@ mod tests {
         // The dot of an i is written last.
         assert!(table["i"].strokes[1][0][1] < table["i"].strokes[0][0][1]);
     }
+
+    /// The pen writes the letters of the interface's European languages, and an accent after its letter.
+    #[test]
+    fn accented_and_cyrillic_letters_are_written_and_an_accent_comes_last() {
+        let mut glyphs = Glyphs::load(HanziSource::Directory(std::env::temp_dir().join("boardcast-no-glyphs"))).unwrap();
+        let words = "Reunión veröffentlichen français coração perché Привет встреча ёж Ünïcödé ¿Qué? «да» “so” it’s €5 łódź Čeština ğış";
+        let missing: String = words.chars().filter(|c| !c.is_whitespace() && glyphs.get(*c).is_none()).collect();
+        assert_eq!(missing, "");
+        let top = |s: &Stroke| s.iter().map(|p| p[1]).fold(f32::MAX, f32::min);
+        let bottom = |s: &Stroke| s.iter().map(|p| p[1]).fold(f32::MIN, f32::max);
+        for (accented, plain) in [('é', 'e'), ('ñ', 'n'), ('ü', 'u'), ('Ö', 'O'), ('й', 'и'), ('ё', 'е'), ('č', 'c'), ('É', 'E')] {
+            let (with, without) = (glyphs.get(accented).unwrap(), glyphs.get(plain).unwrap());
+            assert!(with.latin, "{accented} is as heavy as English");
+            assert!(with.strokes.len() > without.strokes.len(), "{accented} has its accent");
+            let letter_top = with.strokes[..without.strokes.len()].iter().map(top).fold(f32::MAX, f32::min);
+            for mark in &with.strokes[without.strokes.len()..] {
+                assert!(bottom(mark) < letter_top + 0.03, "the accent of {accented} is above its letter and after it");
+            }
+        }
+    }
 }

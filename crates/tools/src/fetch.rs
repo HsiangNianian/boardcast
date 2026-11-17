@@ -315,7 +315,8 @@ const HANZI_WRITER_DATA: &str = "2.0.1";
 const HANZI_WRITER_SHA256: &str = "72baf3d82b114e60d6e40ea05f24d2262a05cd39d544e2f322ba2fceb7beff15";
 
 /// One file per character holding only its stroke medians in order, from hanzi-writer-data (Arphic Public
-/// License), then the Japanese kanji it lacks from KanjiVG, leaving its Chinese shapes as they are.
+/// License), then the Japanese kanji it lacks from KanjiVG, leaving its Chinese shapes as they are, then
+/// Korean from Xiaolai.
 fn glyphs() -> Result<()> {
     let root = root();
     let archive = cached(
@@ -354,16 +355,19 @@ fn glyphs() -> Result<()> {
         println!("fetch: {written} characters into assets/hanzi");
     }
 
-    let kanji: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_reader(flate2::read::GzDecoder::new(File::open(root.join("assets/glyphs/kanji.json.gz"))?))?;
-    for (character, medians) in kanji.iter().filter(|(c, _)| !chinese.contains(*c)) {
-        let file = out.join(format!("{character}.json"));
-        let data = serde_json::to_string(&as_javascript(medians))?;
-        if fs::read_to_string(&file).ok().as_deref() != Some(data.as_str()) {
-            fs::write(file, data)?;
+    for committed in ["kanji", "hangul"] {
+        let file = File::open(root.join(format!("assets/glyphs/{committed}.json.gz")))?;
+        let characters: serde_json::Map<String, serde_json::Value> = serde_json::from_reader(flate2::read::GzDecoder::new(file))?;
+        for (character, medians) in characters.iter().filter(|(c, _)| !chinese.contains(*c)) {
+            let file = out.join(format!("{character}.json"));
+            let data = serde_json::to_string(&as_javascript(medians))?;
+            if fs::read_to_string(&file).ok().as_deref() != Some(data.as_str()) {
+                fs::write(file, data)?;
+            }
         }
     }
     fs::copy(root.join("assets/licenses/kanjivg-CC-BY-SA-3.0.txt"), out.join("KANJIVG-LICENSE.txt"))?;
+    fs::copy(root.join("assets/licenses/handwritten-xiaolai-OFL.txt"), out.join("XIAOLAI-LICENSE.txt"))?;
     Ok(())
 }
 
@@ -383,6 +387,23 @@ fn as_javascript(value: &serde_json::Value) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The Korean the pen writes is committed whole: every syllable there is, and the letters on their own.
+    #[test]
+    fn every_korean_syllable_has_strokes() {
+        let file = File::open(root().join("assets/glyphs/hangul.json.gz")).unwrap();
+        let korean: serde_json::Map<String, serde_json::Value> = serde_json::from_reader(flate2::read::GzDecoder::new(file)).unwrap();
+        let missing: String = ('가'..='힣').chain('ㄱ'..='ㅣ').filter(|c| !korean.contains_key(&c.to_string())).collect();
+        // The font has no 썏, a syllable no word uses.
+        assert_eq!(missing, "썏");
+        // 한: ㅎ is a tick, a bar and a ring; ㅏ a long stroke and a tick; ㄴ one stroke. In that order.
+        let han: Vec<Vec<[f32; 2]>> = serde_json::from_value(korean["한"].clone()).unwrap();
+        assert_eq!(han.len(), 6);
+        let middle = |s: &Vec<[f32; 2]>| (s.iter().map(|p| p[0]).sum::<f32>() / s.len() as f32, s.iter().map(|p| p[1]).sum::<f32>() / s.len() as f32);
+        assert!(han[..3].iter().all(|s| middle(s).0 < 512.0 && middle(s).1 > 400.0), "the first consonant is at the top left");
+        assert!(han[3..5].iter().all(|s| middle(s).0 > 512.0), "the vowel is on the right");
+        assert!(middle(&han[5]).1 < 300.0, "the last consonant is at the bottom, where y is small");
+    }
 
     #[test]
     fn whole_numbers_drop_their_point() {

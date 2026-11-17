@@ -206,7 +206,7 @@ pub fn live_page(doc: &Doc, data: &Value) -> String {
 
 fn page_html(doc: &Doc, data: &Value) -> String {
     let licenses = format!(
-        "Japanese stroke data: KanjiVG, Copyright (C) 2009/2010/2011 Ulrich Apel. https://kanjivg.tagaini.net/ adapted centerlines, CC BY-SA 3.0 https://creativecommons.org/licenses/by-sa/3.0/\n{}\n{}",
+        "Japanese stroke data: KanjiVG, Copyright (C) 2009/2010/2011 Ulrich Apel. https://kanjivg.tagaini.net/ adapted centerlines, CC BY-SA 3.0 https://creativecommons.org/licenses/by-sa/3.0/\nKorean stroke data: centerlines derived from Xiaolai SC, Copyright 2020-2024 LXGW https://github.com/lxgw/kose-font and Copyright 2014 Nozomi Seto, under the SIL Open Font License 1.1, copied below.\n{}\n{}",
         include_str!("../../../assets/licenses/handwritten-OFL.txt"),
         include_str!("../../../assets/licenses/handwritten-cascadia.txt"),
     );

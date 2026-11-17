@@ -80,7 +80,7 @@ const WELCOME_SIZE: f32 = 34.0;
 const WELCOME_WRITING: Duration = Duration::from_millis(1100);
 
 /// The meetings page's content, at its widest.
-const LIBRARY_W: f32 = 680.0;
+const LIBRARY_W: f32 = 840.0;
 
 /// The board is at least this wide before the zoom control floats beside the tool bar.
 const ZOOM_TOOLS_FROM: f32 = 640.0;
@@ -3534,7 +3534,7 @@ impl Workbench {
         let id = self.live.id().to_string();
         let now = chrono::Local::now().timestamp_millis() as f64;
         let lines = self.live.lines.iter().filter(|l| !l["manual"].as_bool().unwrap_or(false)).count();
-        let entry = Info { id: id.clone(), title: self.live.title().to_string(), created_at: self.live.created_at().unwrap_or(now), updated_at: now, lines, pages: self.live.pages(), read_error: None };
+        let entry = Info { id: id.clone(), title: self.live.title().to_string(), created_at: self.live.created_at().unwrap_or(now), updated_at: now, lines, pages: self.live.pages(), speakers: boardcast_meetings::speakers_of(&self.live.lines), read_error: None };
         self.library.retain(|m| m.id != id);
         self.library.insert(0, entry);
     }
@@ -6165,7 +6165,7 @@ fn template_card(id: impl Into<gpui_kit::ElementId>, name: String, topics: &[Str
                 .justify_between()
                 .gap_2()
                 .child(div().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().text_ui().font_weight(gpui_kit::FontWeight::MEDIUM).child(name))
-                .child(div().flex_none().font_family(theme::MONO).text_meta().text_color(rgb(pal().faint)).child(ta!("topic-count", n = topics.len()))),
+                .child(div().flex_none().font_family(theme::MONO).text_meta().text_color(rgb(pal().faint)).child(topics.len().to_string())),
         )
         .child(
             div()
@@ -7393,7 +7393,7 @@ impl Render for Workbench {
             .min_h_0()
             .flex()
             .flex_col()
-            .when(self.store.is_some(), |d| d.child(div().pb_3().child(Input::new(&self.library_query).cleanable(true))))
+            .when(self.store.is_some(), |d| d.child(div().pb_2().child(Input::new(&self.library_query).prefix(icon("search").size(px(14.)).text_color(rgb(pal().faint))).cleanable(true))))
             .when_some(building, |d, ((done, total), held)| {
                 let text = if held {
                     t("the-search-index-waits-while")
@@ -7434,13 +7434,14 @@ impl Render for Workbench {
                         // Templates as cards, rows of three, or two when that leaves none alone; the page is at most
                         // LIBRARY_W wide.
                         let count = own.len() + usize::from(has_topics);
-                        let per_row = if count % 3 != 1 || count < 3 { 3.0 } else { 2.0 };
+                        let per_row = if count % 4 != 1 || count < 4 { 4.0 } else { 3.0 };
                         let card_w = (LIBRARY_W - (per_row - 1.0) * 8.0) / per_row;
                         d.child(section(t("start-from-a-template")))
                             .child(
+                                // A grid, so the cards fill the column edge to edge whatever its width.
                                 div()
-                                    .flex()
-                                    .flex_wrap()
+                                    .grid()
+                                    .grid_cols(per_row as u16)
                                     .gap_2()
                                     .pb_6()
                                     .children(own.into_iter().enumerate().map(|(i, (name, topics, saved))| {
@@ -7451,6 +7452,8 @@ impl Render for Workbench {
                                             .group("template")
                                             .child(
                                                 template_card(("template", i), name, &topics, card_w)
+                                                    .w_full()
+                                                    .h_full()
                                                     .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
                                                     .on_click(cx.listener(move |this, _, _, cx| this.new_meeting_from(started.clone(), cx))),
                                             )
@@ -7485,7 +7488,7 @@ impl Render for Workbench {
                                         d.child(
                                             div()
                                                 .id("save-template")
-                                                .w(px(card_w))
+                                                .w_full()
                                                 .min_h(px(92.))
                                                 .flex()
                                                 .items_center()
@@ -7506,7 +7509,6 @@ impl Render for Workbench {
                                         )
                                     }),
                             )
-                            .child(section(t("meetings")))
                     })
                     .when(self.store.is_some() && self.library.is_empty(), |d| {
                         d.child(div().py_4().text_ui().text_color(rgb(pal().faint)).child(t("no-meetings-yet-a-meeting")))
@@ -7583,7 +7585,7 @@ impl Render for Workbench {
                         let heading = (last_group != Some(group)).then(|| {
                             last_group = Some(group);
                             let name = [t("pinned-2"), t("today-2"), t("yesterday-2"), t("earlier-2")][group];
-                            div().pt_5().pb_1().px_3().font_family(theme::MONO).text_label().text_color(rgb(pal().faint)).border_b_1().border_color(rgb(pal().line)).child(name.to_uppercase()).into_any_element()
+                            div().pt_5().pb_1().px_3().font_family(theme::MONO).text_label().text_color(rgb(pal().faint)).child(name.to_uppercase()).into_any_element()
                         });
                         let id = m.id.clone();
                         let current = id == self.live.id();
@@ -7612,7 +7614,7 @@ impl Render for Workbench {
                             .border_b_1()
                             .border_color(rgb(pal().line))
                             .when(m.read_error.is_none(), |d| d.cursor_pointer().hover(|d| d.bg(rgb(pal().hover))))
-                            .when(current, |d| d.font_weight(gpui_kit::FontWeight::MEDIUM))
+                            .font_weight(gpui_kit::FontWeight::MEDIUM)
                             .child(
                                 div()
                                     .flex()
@@ -7649,6 +7651,12 @@ impl Render for Workbench {
                                     .items_center()
                                     .gap_2()
                                     .flex_none()
+                                    // Who was there: the first few speakers' badges, overlapping a little.
+                                    .when(!m.speakers.is_empty(), |d| {
+                                        d.child(div().flex().items_center().mr_2().children(m.speakers.iter().enumerate().map(|(k, s)| {
+                                            div().when(k > 0, |d| d.ml(px(-4.))).rounded_full().border_2().border_color(rgb(pal().paper)).child(speaker_badge(&m.speakers, s))
+                                        })))
+                                    })
                                     // Shown on hover, and the pin stays once a meeting is pinned, in ink: red is for recording and
                                     // for what is marked on the board.
                                     .when(self.store.is_some(), |d| {
@@ -8537,7 +8545,7 @@ impl Render for Workbench {
                                     .items_center()
                                     .justify_between()
                                     .pb_3()
-                                    .child(div().text_page().font_weight(gpui_kit::FontWeight::SEMIBOLD).child(t("meetings")))
+                                    .child(div().text_page().font_weight(gpui_kit::FontWeight::MEDIUM).child(t("meetings")))
                                     .child(
                                         div()
                                             .flex()
@@ -8547,7 +8555,7 @@ impl Render for Workbench {
                                                 d.child(
                                                     Button::new("library-folder")
                                                         .small()
-                                                        .ghost()
+                                                        .outline()
                                                         .child(div().flex().items_center().gap(px(6.)).child(icon("folder").size(px(13.))).child(div().text_ui().child(t("open-folder"))))
                                                         .tooltip(t("where-every-meeting-is-kept"))
                                                         .on_click(cx.listener(move |_, _, _, cx| cx.open_with_system(&folder))),

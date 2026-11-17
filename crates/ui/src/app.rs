@@ -88,7 +88,7 @@ const ZOOM_TOOLS_FROM: f32 = 640.0;
 const DOCK_EDGE: f32 = 12.0;
 const DOCK_GAP: f32 = 12.0;
 /// The button beside the listen button that says where the sound comes from.
-const SOURCE_W: f32 = 22.0;
+const SOURCE_W: f32 = 24.0;
 
 /// How the listen button is shown: with its name and key, with its name, or as its dot alone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -153,7 +153,8 @@ fn dock_plan(width: f32, tools: usize, editable: bool) -> Dock {
             return 0.0;
         }
         let mic_w = MIC.iter().find(|(m, _)| *m == mic).map_or(0.0, |(_, w)| *w);
-        10.0 + mic_w + tools as f32 * if named { TOOL_NAMED } else { TOOL_ICON } + if edit { EDIT } else { 0.0 }
+        // The bar's padding and the rule after the listen button.
+        22.0 + mic_w + tools as f32 * if named { TOOL_NAMED } else { TOOL_ICON } + if edit { EDIT } else { 0.0 }
     };
     // Named tools, listen button, edit tools, zoom, compact boards, boards at all.
     let steps = [
@@ -1606,6 +1607,9 @@ struct Workbench {
     transcript_open: bool,
     /// The row or quiet button under the pointer, whose fill fades in while the others fade out.
     hovered: Option<gpui_kit::ElementId>,
+    /// Whether listening was on at the last frame, and when it last changed: the listen button glides between
+    /// ink and red from then, both halves of it together.
+    listen_flip: (bool, Option<Instant>),
     /// The website's halftone, drawn behind an empty board and the Meetings page.
     ground: crate::ground::Shared,
     /// The sidebar brought out over a narrow window, where it otherwise gives its room to the board.
@@ -1776,6 +1780,10 @@ fn mark_tool_name(tool: &str) -> &'static str {
         _ => t("yellow-highlighter"),
     }
 }
+
+/// Whether the inbox is in use: the tray of cards along the board's left edge, and letting a card go there to
+/// keep it. Off for now; the cards already kept stay on disk and come back when it is turned on again.
+const INBOX_ON: bool = false;
 
 /// How wide the strip along the board's left edge is where a card is let go to go into the inbox, and how
 /// much of each card in the inbox shows there.
@@ -6977,8 +6985,8 @@ impl Render for Workbench {
         let tool_count = 1 + usize::from(on_page) + usize::from(on_page || has_clips);
         let dock = dock_plan(f32::from(self.ink.borrow().canvas.size.width), tool_count, editable);
         let named = dock.named;
-        let tool_h = px(TOOLS_H - 10.0);
-        let tool_icon = |id: &'static str, name: &'static str, tooltip: String| Button::new(id).ghost().h(tool_h).w(tool_h).icon(icon(name)).tooltip(tooltip);
+        let tool_h = px(TOOLS_H - 12.0);
+        let tool_icon = |id: &'static str, name: &'static str, tooltip: String| Button::new(id).ghost().h(tool_h).w(tool_h).icon(icon(name).size(px(16.))).tooltip(tooltip);
         // A key as it is printed on the keyboard.
         let keycap = |text: String| div().flex().items_center().h(px(18.)).px(px(5.)).border_1().rounded(px(2.)).font_family(theme::MONO).text_meta().child(text);
         // The colours of the marker, in a small bar of their own just above the tools while marking.
@@ -7024,18 +7032,39 @@ impl Render for Workbench {
                     })),
             )
         });
+        // How red the listen button is: it glides from ink as listening starts and back as it stops.
+        if self.listen_flip.0 != listening {
+            self.listen_flip = (listening, Some(Instant::now()));
+        }
+        let red = {
+            let done = self.listen_flip.1.map_or(1., |at| at.elapsed().as_secs_f32() / 0.24).min(1.);
+            let done = if cx.reduce_motion() { 1. } else { done };
+            if done < 1. {
+                window.request_animation_frame();
+            }
+            let eased = 1. - (1. - done).powi(5);
+            if listening { eased } else { 1. - eased }
+        };
+        let (fill, ink) = (motion::mix(pal().button, pal().recording, red), motion::mix(pal().on_button, pal().on_strong, red));
+        let mut rule = ink;
+        rule.a = 0.22;
         let tool_bar = editable.then(|| {
             float()
                 .id("tools")
                 .h(px(TOOLS_H))
-                .px(px(4.))
+                .px(px(6.))
                 .gap(px(2.))
                 // Black until it listens, then red with the level beside it: the one thing here that is always wanted.
+                // With where the sound comes from it makes one split button, two halves of one fill.
                 .child(
                     Button::new("mic")
                         .map(|b| if listening { b.danger() } else { b.primary() })
                         .h(tool_h)
                         .px_3()
+                        .bg(fill)
+                        .text_color(ink)
+                        .rounded_tr(px(0.))
+                        .rounded_br(px(0.))
                         .tooltip(self.keys.tip(Action::Listen, if listening { t("stop-listening") } else { t("start-listening") }))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.toggle_mic();
@@ -7048,31 +7077,32 @@ impl Render for Workbench {
                                 .gap_2()
                                 .child(div().size(px(10.)).flex_none().map(|d| if listening { d.bg(rgb(pal().on_strong)) } else { d.rounded_full().bg(rgb(pal().recording)) }))
                                 .when(dock.mic != Mic::Dot, |d| d.child(div().text_ui().whitespace_nowrap().child(if listening { t("stop-listening") } else { t("start-listening") })))
-                                .when_some(self.keys.label(Action::Listen).filter(|_| !listening && dock.mic == Mic::Full), |d, keys| d.child(keycap(keys).border_color(rgb(pal().on_strong)).opacity(0.55)))
+                                .when_some(self.keys.label(Action::Listen).filter(|_| !listening && dock.mic == Mic::Full), |d, keys| d.child(keycap(keys).h(px(18.)).border_color(rule).text_color(motion::mix(pal().button, pal().on_button, 0.7))))
                                 .when(listening && dock.mic != Mic::Dot, |d| {
                                     let level = self.level;
                                     d.child(div().flex().items_end().gap(px(2.)).h(px(18.)).children((0..7).map(|i| {
                                         let h = 3.0 + level * 15.0 * (0.55 + 0.45 * ((i as f32) * 1.7).sin().abs());
-                                        div().w(px(3.)).h(px(h)).bg(rgb(pal().on_strong))
+                                        div().w(px(3.)).h(px(h)).bg(ink)
                                     })))
                                 }),
-                        )
-                        // From ink to red, and back, rather than in one cut.
-                        .with_spring("mic-fill", SpringAnimation::new(motion::SETTLE).to(listening), |b, v| {
-                            let p = pal();
-                            let t = v.0.clamp(0., 1.);
-                            b.bg(motion::mix(p.button, p.recording, t)).text_color(motion::mix(p.on_button, p.on_strong, t))
-                        }),
+                        ),
                 )
                 // Where the sound comes from, beside the button that starts hearing it; the devices are in Settings.
                 .child({
                     let listen = Listen::from_setting(&self.form.saved.listen);
                     let workbench = cx.entity().downgrade();
                     Button::new("listen-to")
-                        .ghost()
+                        .map(|b| if listening { b.danger() } else { b.primary() })
                         .h(tool_h)
                         .w(px(SOURCE_W))
-                        .icon(icon("chevron-down").size(px(12.)))
+                        .bg(fill)
+                        .text_color(ink)
+                        .rounded_tl(px(0.))
+                        .rounded_bl(px(0.))
+                        .border_l_1()
+                        .border_color(rule)
+                        // A child, not the button's icon, which the kit would draw at its own size.
+                        .child(icon("chevron-down").size(px(8.)).text_color(ink))
                         .tooltip(ta!("listening-to", what = listen_name(listen)))
                         .dropdown_menu_with_anchor(gpui_kit::Anchor::BottomLeft, move |menu, _, _| {
                             let menu = [Listen::Microphone, Listen::Computer, Listen::Both].into_iter().fold(menu.min_w(px(200.)), |menu, choice_of| {
@@ -7093,6 +7123,7 @@ impl Render for Workbench {
                             }))
                         })
                 })
+                .child(Separator::vertical().h(px(20.)).mx_1())
                 .child(
                     // While circling, the button counts what is circled; what to do is in its tooltip.
                     Button::new("circle")
@@ -9160,7 +9191,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     };
     // A sample or measurement never reads or writes real meetings, and a script starts a new one.
     let store = start_board.is_none().then(|| Store::new(data.clone()));
-    let inbox = store.as_ref().map(|_| Inbox::new(data.clone()));
+    let inbox = store.as_ref().filter(|_| INBOX_ON).map(|_| Inbox::new(data.clone()));
     let reopen = if turns.is_empty() && wav.is_none() { open.or_else(|| store.as_ref().and_then(Store::last_opened)) } else { None };
     let reads_meetings = store.is_some();
     let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone() };
@@ -9487,6 +9518,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     preparing: None,
                     transcript_open: true,
                     hovered: None,
+                    listen_flip: (false, None),
                     ground: Default::default(),
                     sidebar_narrow: false,
                     map_grab: Point::default(),
@@ -9634,7 +9666,7 @@ mod tests {
     fn the_dock_gives_way_in_turn_as_the_board_narrows() {
         let wide = dock_plan(1200.0, 3, true);
         assert!(wide.named && wide.zoom && wide.edit && !wide.page_compact && wide.centered && wide.mic == Mic::Full, "{wide:?}");
-        let middling = dock_plan(790.0, 3, true);
+        let middling = dock_plan(810.0, 3, true);
         assert!(!middling.named && middling.zoom && middling.mic == Mic::Full, "{middling:?}");
         let narrow = dock_plan(380.0, 1, true);
         assert!(!narrow.zoom && narrow.mic == Mic::Named && narrow.pages, "{narrow:?}");

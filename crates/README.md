@@ -141,8 +141,11 @@ for all of them.
 `crates/audio/examples/asr-compare.rs` compares the two and the routing on any recordings with known text, such as
 `eval/asr/own-voice/`.
 
-Speakers are told apart by voice with CAM++, comparing each sentence with the voices heard so far, as the older app does and
-with its threshold. On the two recordings in `eval/asr/corpus.json` with four labelled speakers, run through the whole
+Speakers are told apart by voice with CAM++, comparing each sentence with the voices heard so far, as the older app does.
+Since #292, Nemotron-3-Diarization (streaming Sortformer, through our sherpa-onnx fork) also hears the input as it
+comes: a sentence is split where one person stops and another goes on, and a piece too short or too unusual for its
+voiceprint is named by the model's speaker slot (`crates/audio/src/turns.rs`, `identify_in_slot`). The threshold
+is 0.5; `eval/asr/README.md` has the measurements. The table below is from before, with one sentence per line. On the two recordings in `eval/asr/corpus.json` with four labelled speakers, run through the whole
 speech chain, it found the right number of voices. Purity is how often a name holds one person, and coverage how often a
 person keeps one name. These are two recordings, so the threshold was left alone; a wrong split or join is put right by
 renaming or merging in the speakers panel.

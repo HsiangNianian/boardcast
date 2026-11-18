@@ -7,8 +7,10 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 
 /// How alike two voiceprints must be to count as one person. CAM++ usually gives one person above 0.5
-/// and two people below 0.2; sentences in a meeting are short, so this is a little looser.
-const SAME: f64 = 0.45;
+/// and two people below 0.2. It was 0.45, a little looser for short sentences; since sentences are split
+/// where the speaker changes and a voice like no other follows its diarization slot (see
+/// [`identify_in_slot`]), 0.5 is better on every measure in `asr-eval speakers` (#292).
+const SAME: f64 = 0.5;
 /// The most sentences a voice is weighted by, as a voice changes and old sentences must not outweigh new ones.
 const MEMORY: u32 = 30;
 
@@ -82,7 +84,29 @@ pub fn identify_sentence(voices: &mut Vec<Voice>, voiceprint: &[f64], seconds: f
 
 /// As [`identify_sentence`], with the threshold and the shortest new voice given, for measuring others.
 pub fn identify_sentence_at(voices: &mut Vec<Voice>, voiceprint: &[f64], seconds: f64, taken: &[&str], same: f64, new_voice: f64) -> Option<String> {
+    identify_in_slot_at(voices, voiceprint, seconds, taken, None, same, new_voice)
+}
+
+/// As [`identify_sentence`], for a sentence the diarization model gave to a speaker slot that already has
+/// a name. A voiceprint like none heard so far would start a new voice; the slot says who it is instead,
+/// and the voice joins that person's. Short pieces cut where the speaker changes have unsteady
+/// voiceprints, and without this each odd one becomes someone new.
+pub fn identify_in_slot(voices: &mut Vec<Voice>, voiceprint: &[f64], seconds: f64, taken: &[&str], slot_name: Option<&str>) -> Option<String> {
+    identify_in_slot_at(voices, voiceprint, seconds, taken, slot_name, SAME, NEW_VOICE_SECONDS)
+}
+
+/// As [`identify_in_slot`], with the threshold and the shortest new voice given, for measuring others.
+pub fn identify_in_slot_at(voices: &mut Vec<Voice>, voiceprint: &[f64], seconds: f64, taken: &[&str], slot_name: Option<&str>, same: f64, new_voice: f64) -> Option<String> {
     let known = voices.iter().any(|voice| dot(&voice.centroid, voiceprint) >= same);
+    if !known {
+        if let Some(voice) = slot_name.and_then(|name| voices.iter_mut().find(|v| v.name == name)) {
+            let weight = f64::from(voice.n.min(MEMORY));
+            let merged: Vec<f64> = voice.centroid.iter().enumerate().map(|(k, x)| x * weight + voiceprint.get(k).copied().unwrap_or(0.0)).collect();
+            voice.centroid = unit(&merged);
+            voice.n += 1;
+            return Some(voice.name.clone());
+        }
+    }
     (known || seconds >= new_voice).then(|| identify_at(voices, voiceprint, taken, same))
 }
 
@@ -287,6 +311,34 @@ pub fn said_at(lines: &[Value], who: &str, names: &[&str], page: usize, before: 
 /// How many things on this board a speaker raised.
 pub fn raised_by(graph: &Graph, who: &str) -> usize {
     graph.nodes.iter().filter(|n| by_of_node(n) == Some(who)).count() + graph.edges.iter().filter(|e| by_of_edge(e) == Some(who)).count()
+}
+
+#[cfg(test)]
+mod slot_tests {
+    use super::*;
+
+    fn print(angle: f64) -> Vec<f64> {
+        vec![angle.cos(), angle.sin()]
+    }
+
+    #[test]
+    fn a_strange_voice_in_a_named_slot_joins_that_person() {
+        let mut voices = vec![];
+        assert_eq!(identify_in_slot(&mut voices, &print(0.0), 3.0, &[], None).as_deref(), Some("A"));
+        // At right angles to A: alone it would be someone new.
+        assert_eq!(identify_in_slot(&mut voices, &print(1.5), 3.0, &[], Some("A")).as_deref(), Some("A"));
+        assert_eq!((voices.len(), voices[0].n), (1, 2));
+        assert_eq!(identify_in_slot(&mut voices, &print(-1.6), 3.0, &[], None).as_deref(), Some("B"));
+    }
+
+    #[test]
+    fn a_known_voice_wins_over_its_slot() {
+        let mut voices = vec![];
+        identify_in_slot(&mut voices, &print(0.0), 3.0, &[], None);
+        identify_in_slot(&mut voices, &print(1.5), 3.0, &[], None);
+        // The slot says A, but the voice is plainly B's.
+        assert_eq!(identify_in_slot(&mut voices, &print(1.5), 3.0, &[], Some("A")).as_deref(), Some("B"));
+    }
 }
 
 #[cfg(test)]

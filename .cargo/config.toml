@@ -2,3 +2,9 @@
 # libopus, which audiopus_sys builds into the app with CMake, still asks for CMake older than 3.5, which CMake 4
 # refuses unless told the oldest policies it may assume.
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+# The prebuilt sherpa-onnx libraries of our fork (see [patch.crates-io] in Cargo.toml), from the release of the same
+# tag: built there once, so neither a checkout nor a release builds sherpa-onnx.
+SHERPA_ONNX_RELEASE_URL = "https://github.com/HsiangNianian/sherpa-onnx/releases/download/boardcast-2.0.1-3"
+# That release's SHA256SUMS, kept here: the build fails if a downloaded archive differs from the one it lists, so a
+# replaced release asset never gets linked into the app. A new tag brings a new copy of this file.
+SHERPA_ONNX_SHA256SUMS = { value = ".cargo/sherpa-onnx.sha256", relative = true }

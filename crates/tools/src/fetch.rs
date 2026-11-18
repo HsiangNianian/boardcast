@@ -124,7 +124,9 @@ fn voice() -> Result<()> {
             sources.push(boardcast_models::Source { name: "ModelScope".into(), url: format!("https://modelscope.cn/models/{path}"), direct: true });
         }
         for (name, host) in [("hf-mirror", "https://hf-mirror.com"), ("Hugging Face", "https://huggingface.co")] {
-            sources.push(boardcast_models::Source { name: name.into(), url: format!("{host}/{}", file.huggingface), direct: false });
+            if let Some(path) = &file.huggingface {
+                sources.push(boardcast_models::Source { name: name.into(), url: format!("{host}/{path}"), direct: false });
+            }
         }
         if let Some(url) = file.github {
             sources.push(boardcast_models::Source { name: "GitHub".into(), url: url.into(), direct: false });

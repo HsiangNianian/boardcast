@@ -10,7 +10,7 @@
 //!       unheard or silence is heard as words; the controls only report it.
 //!   asr-eval compare <report.json>...
 //!       The runs' language totals side by side.
-//!   asr-eval speakers <root> [--only id,id] [--output dir] [--reuse]
+//!   asr-eval speakers <root> [--only id,id] [--output dir] [--reuse] [--turns off|slow|medium|fast]
 //!       How well speakers are told apart on the meeting recordings, at several thresholds; see speakers.rs.
 //!
 //! The speech models are read from <root>/resources/voice, where the packages take them from too.
@@ -32,6 +32,7 @@ fn main() -> Result<()> {
     let root = PathBuf::from(args.next().context("the boardcast checkout")?);
     let mut options = run::Options { suite: "quick".into(), engine: "routed".into(), vad: true, enhance: "none".into(), only: None, output: None };
     let mut reuse = false;
+    let mut turns = Some(boardcast_audio::Latency::Slow);
     while let Some(flag) = args.next() {
         let mut value = || args.next().with_context(|| format!("{flag} needs a value"));
         match flag.as_str() {
@@ -48,13 +49,14 @@ fn main() -> Result<()> {
             "--only" => options.only = Some(value()?.split(',').map(str::to_string).collect()),
             "--output" => options.output = Some(PathBuf::from(value()?)),
             "--reuse" => reuse = true,
+            "--turns" => turns = speakers::turns(&value()?)?,
             other => bail!("unknown flag {other}"),
         }
     }
     match command.as_str() {
         "download" => corpus::prepare(&root, &corpus::load(&root, &options.suite)?),
         "run" => run::run(&root, &options),
-        "speakers" => speakers::run(&root, options.only.as_deref(), &options.output.clone().unwrap_or_else(|| root.join("eval/reports/speakers")), reuse),
+        "speakers" => speakers::run(&root, options.only.as_deref(), &options.output.clone().unwrap_or_else(|| root.join("eval/reports/speakers")), reuse, turns),
         _ => bail!("usage: asr-eval download|run <root> [flags] | asr-eval compare <report.json>..."),
     }
 }

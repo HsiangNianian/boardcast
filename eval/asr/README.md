@@ -85,8 +85,26 @@ Your own voice can be recorded for a personal check with [own-voice/record.sh](o
 
 ## Telling speakers apart
 
-`asr-eval speakers <root> [--only id,id] [--output dir] [--reuse]` hears the meeting recordings whose
-references say who spoke when, keeps every sentence's voiceprint in `<output>/sentences/`, and gives the
-sentences to speakers by the app's own rule at thresholds from 0.35 to 0.6. Each sentence is compared with the
-reference speaker it overlaps most: purity is how much of each speaker found is one person, coverage how much of
-each person is one speaker found. `--reuse` measures again from the kept voiceprints without hearing anything.
+`asr-eval speakers <root> [--only id,id] [--output dir] [--reuse] [--turns off|slow|medium|fast]` hears the
+meeting recordings whose references say who spoke when, keeps every sentence's voiceprint and diarization slot in
+`<output>/sentences*/`, and gives the sentences to speakers by the app's own rule at thresholds from 0.35 to 0.6.
+Each sentence is compared with the reference speaker it overlaps most: purity is how much of each speaker found is
+one person, coverage how much of each person is one speaker found. It also gives F1 over sentences of 2 s or more,
+and the share of mixed sentences, in which two people each speak for 1 s or more. `--turns` sets whether
+sentences are split where the diarization model hears the speaker change, and at which latency; `slow` (1.04 s)
+is the app's and the default, `off` hears them whole. `--reuse` measures again from the kept sentences without
+hearing anything.
+
+On the 9 meetings (2026-11-18, `slow` against `off`, each at its best threshold):
+
+| Sentences | Threshold | Mixed | Purity | Coverage | F1 | F1, 2 s or more | Speakers found / real in AMI |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| heard whole, as before | 0.45 | 5.9% | 0.887 | 0.907 | 0.882 | 0.883 | 6 / 4 |
+| split where the speaker changes | 0.5 | 3.9% | 0.900 | 0.903 | 0.889 | 0.911 | 4 / 4 |
+
+The AMI recording alone went from 37% mixed sentences to 15%. Splitting alone, without a split piece following its
+slot, found 14 speakers in AMI: short pieces have unsteady voiceprints. Raising the threshold alone, without
+splitting, made it worse (9 / 4). `cargo run --release -p boardcast-audio --example turn-delay -- resources/voice
+<recording.wav>` measures what waiting for the model costs: on AMI a line arrives 0.72 s after its sentence on
+average instead of 0.31 s (1.03 s instead of 0.52 s for nine in ten), and the model takes about half of real time
+on two threads of an i7-12700H.

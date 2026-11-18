@@ -1588,6 +1588,9 @@ struct Workbench {
     import_pages: Entity<InputState>,
     /// Who is speaking now, as far as anyone knows: lines with no voiceprint and typed lines go to them.
     speaker: Option<String>,
+    /// The name each of the diarization model's speaker slots last had, which names a line too short for
+    /// a voiceprint: a quick answer goes to whoever its slot is, not to whoever spoke last.
+    slots: HashMap<usize, String>,
     /// The speaker being looked at in the speakers panel, and the name being written for them.
     speaker_chosen: Option<String>,
     /// The transcript line whose speaker was clicked, which can be given to someone else alone.
@@ -2414,7 +2417,7 @@ impl Workbench {
                 }
                 Event::Spoken { meeting, sentence } => {
                     if meeting == self.session().meeting() {
-                        let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds);
+                        let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds, sentence.slot);
                         let mut sentence = sentence;
                         sentence.text = self.as_glossary_writes(&sentence.text);
                         self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
@@ -3658,6 +3661,7 @@ impl Workbench {
         self.ink.borrow_mut().open(&live.graph, &live.memory);
         self.summary.reset();
         self.speaker = None;
+        self.slots.clear();
         self.speaker_chosen = None;
         self.speaker_line = None;
         self.speaker_hovered = None;
@@ -5132,11 +5136,27 @@ impl Workbench {
     }
 
     /// A voice says who it is. A sentence too short to tell goes to whoever spoke last.
-    fn who_spoke(&mut self, voiceprint: Option<&[f32]>, seconds: f64) -> Option<String> {
-        if let Some(print) = voiceprint.filter(|_| self.form.saved.diarize) {
-            if let Some(name) = self.live.identify_voice(print, seconds) {
+    /// By voice where the line has a voiceprint that can tell; otherwise by the name its diarization slot
+    /// last had; otherwise whoever spoke last.
+    fn who_spoke(&mut self, voiceprint: Option<&[f32]>, seconds: f64, slot: Option<usize>) -> Option<String> {
+        if !self.form.saved.diarize {
+            return self.speaker.clone();
+        }
+        let slot_name = slot.and_then(|slot| self.slots.get(&slot)).cloned();
+        let by_voice = voiceprint.and_then(|print| self.live.identify_voice(print, seconds, slot_name.as_deref()));
+        match (by_voice, slot) {
+            (Some(name), slot) => {
+                if let Some(slot) = slot {
+                    self.slots.insert(slot, name.clone());
+                }
                 self.speaker = Some(name);
             }
+            (None, Some(slot)) => {
+                if let Some(name) = self.slots.get(&slot) {
+                    self.speaker = Some(name.clone());
+                }
+            }
+            (None, None) => {}
         }
         self.speaker.clone()
     }
@@ -5169,6 +5189,9 @@ impl Workbench {
         self.speaker_hovered = None;
         if self.speaker.as_deref() == Some(from.as_str()) {
             self.speaker = Some(to.clone());
+        }
+        for name in self.slots.values_mut().filter(|name| **name == from) {
+            *name = to.clone();
         }
         self.choose_speaker(to, window, cx);
     }
@@ -9712,6 +9735,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     arxiv_input,
                     import_pages,
                     speaker: None,
+                    slots: HashMap::new(),
                     speaker_chosen: None,
                     speaker_line: None,
                     speaker_name,

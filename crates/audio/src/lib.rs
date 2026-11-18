@@ -1,5 +1,6 @@
-//! The audio chain: microphone or file -> 16 kHz mono -> Silero VAD -> a recognizer and CAM++ -> a finished sentence.
-//! Any of the recognizers may be missing; SenseVoice, when there, decides which language a sentence is in.
+//! The audio chain: microphone or file -> 16 kHz mono -> Silero VAD -> split where the speaker changes ->
+//! a recognizer and CAM++ -> a finished sentence. Any of the recognizers may be missing; SenseVoice, when
+//! there, decides which language a sentence is in.
 //! It knows nothing about boards; callers receive each sentence through a callback.
 
 /// A meeting's audio kept as it is heard, and read back.
@@ -15,6 +16,8 @@ use std::time::{Duration, Instant};
 
 pub mod system;
 mod listen;
+mod turns;
+pub use turns::Latency;
 pub use listen::{capture, computer_sounds, microphones, Input, Listen, Sources, Warning};
 
 pub const SAMPLE_RATE: i32 = boardcast_keep::SAMPLE_RATE;
@@ -87,6 +90,11 @@ fn soft_break(loudness: &[f32]) -> Option<usize> {
     (run >= need).then_some(run / 2)
 }
 
+/// The latency the diarization model runs at; see [`Latency`].
+const LATENCY: Latency = Latency::Slow;
+/// A piece of a sentence shorter than this, in samples, is too short to read: a quarter second.
+const MIN_PIECE: usize = SAMPLE_RATE as usize / 4;
+
 /// Shorter than this says too little about a voice, so "yeah" and "right" carry no voiceprint.
 const METER_RANGE_DB: f32 = 60.0;
 const MIN_VOICEPRINT: usize = SAMPLE_RATE as usize * 4 / 5;
@@ -109,6 +117,10 @@ pub struct Sentence {
     pub seconds: f64,
     /// Which recognizer wrote the text.
     pub engine: Engine,
+    /// The diarization model's speaker slot, which stays with one person while at most four talk. It counts
+    /// on past 3 after the ear was finished and heard again, as the model then starts over and a slot may
+    /// be someone else. Missing without the model, or when it heard nobody.
+    pub slot: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -426,6 +438,10 @@ pub struct Ear {
     level: VadLevel,
     /// The original samples: recognition must not hear the detector's gain.
     audio: VecDeque<f32>,
+    /// Who is talking, when the diarization model is there.
+    turns: Option<turns::Turns>,
+    /// Sentences waiting for `turns` to know who said them, with where they start.
+    waiting: VecDeque<(Vec<f32>, usize)>,
 }
 
 impl Ear {
@@ -459,6 +475,10 @@ impl Ear {
         if speaker.is_none() {
             eprintln!("the speaker model did not load, so speakers will not be told apart");
         }
+        let turns = turns::Turns::load(models, LATENCY);
+        if turns.is_none() {
+            eprintln!("the diarization model did not load, so a sentence is not split between speakers");
+        }
         Ok(Self {
             vad,
             asr,
@@ -473,7 +493,15 @@ impl Ear {
             fed: 0,
             level: VadLevel::default(),
             audio: VecDeque::new(),
+            turns,
+            waiting: VecDeque::new(),
         })
+    }
+
+    /// Tell speakers apart at this latency instead, or not split sentences at all with `None`.
+    pub fn turns(mut self, models: &Path, latency: Option<Latency>) -> Self {
+        self.turns = latency.and_then(|l| turns::Turns::load(models, l));
+        self
     }
 
     pub fn feed(&mut self, samples: &[f32], heard: &mut impl Heard) {
@@ -482,6 +510,9 @@ impl Ear {
             let chunk: Vec<f32> = self.pending.drain(..VAD_WINDOW).collect();
             self.fed += VAD_WINDOW;
             self.audio.extend(&chunk);
+            if let Some(turns) = self.turns.as_mut() {
+                turns.accept(&chunk);
+            }
             let mut leveled = chunk.clone();
             self.level.apply(&mut leveled);
             self.vad.accept_waveform(&leveled);
@@ -507,9 +538,14 @@ impl Ear {
                 self.vad.flush();
             }
             self.drain(heard);
+            self.release(false, heard);
             let keep_from = if self.in_speech { self.sent_until } else { self.fed.saturating_sub(PREROLL) };
             let discard = keep_from.saturating_sub(self.fed - self.audio.len()).min(self.audio.len());
             self.audio.drain(..discard);
+            let oldest = self.waiting.front().map_or(keep_from, |w| w.1.min(keep_from));
+            if let Some(turns) = self.turns.as_mut() {
+                turns.forget_before(oldest);
+            }
         }
     }
 
@@ -524,10 +560,38 @@ impl Ear {
         self.hear(&head, self.sent_until - head.len(), heard);
     }
 
+    /// A sentence the detector cut out: heard now, or once the diarization model knows who said it.
     fn hear(&mut self, samples: &[f32], start: usize, heard: &mut impl Heard) {
         if samples.len() < VAD_WINDOW {
             return;
         }
+        if self.turns.is_some() {
+            self.waiting.push_back((samples.to_vec(), start));
+            self.release(false, heard);
+        } else {
+            self.hear_piece(samples, start, None, heard);
+        }
+    }
+
+    /// Hear the waiting sentences whose speakers are known, or all of them at the end, each split where
+    /// the speaker changes.
+    fn release(&mut self, all: bool, heard: &mut impl Heard) {
+        while let Some((samples, start)) = self.waiting.front() {
+            let Some(turns) = self.turns.as_ref() else { break };
+            if !all && start + samples.len() > turns.known_until() {
+                break;
+            }
+            let pieces = turns.split(*start, samples.len());
+            let (samples, start) = self.waiting.pop_front().expect("a waiting sentence");
+            for (from, len, slot) in pieces {
+                if len >= MIN_PIECE {
+                    self.hear_piece(&samples[from..from + len], start + from, slot, heard);
+                }
+            }
+        }
+    }
+
+    fn hear_piece(&mut self, samples: &[f32], start: usize, slot: Option<usize>, heard: &mut impl Heard) {
         let ended = Instant::now();
         let (text, engine) = self.asr.hear(samples);
         // A word or two out of clicks, breath or hum: the recognizers find words in anything, but
@@ -537,7 +601,7 @@ impl Ear {
         }
         if !text.is_empty() {
             let asr_ms = ended.elapsed().as_millis();
-            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine });
+            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine, slot });
         }
     }
 
@@ -590,6 +654,15 @@ impl Ear {
         }
         self.vad.flush();
         self.drain(heard);
+        if let Some(turns) = self.turns.as_mut() {
+            turns.finish();
+        }
+        self.release(true, heard);
+        // The ear may hear again, as when listening resumes: that is a new stream for the model.
+        let fed = self.fed;
+        if let Some(turns) = self.turns.as_mut() {
+            turns.restart(fed);
+        }
     }
 }
 

@@ -38,6 +38,7 @@ for variant in $variants; do
   cp target/pdfium/libpdfium.so "$lib/pdfium/"
   cp resources/voice/silero_vad.onnx "$lib/voice/"
   cp resources/voice/speaker/campplus_zh_en.onnx "$lib/voice/speaker/"
+  cp resources/voice/speaker/nemotron-3-diarization.int8.onnx "$lib/voice/speaker/"
   copy_models "$variant" "$lib/voice"
   copy_search "$lib/search"
   printf '%s\n' "$variant" > "$lib/variant"

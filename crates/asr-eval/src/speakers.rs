@@ -9,7 +9,9 @@
 //! - coverage: of each real person, how much ended up as one speaker found;
 //! - F1 of the two, and how many speakers were found against how many there were;
 //! - F1 over sentences of two seconds or more alone, as splitting must not make long turns worse;
-//! - mixed: the share of sentences in which two real people each speak for a second or more.
+//! - mixed: the share of sentences in which two real people each speak for a second or more;
+//! - "also speaking" marks (#295): of the sentences marked as heard over someone, how many had another
+//!   real person talking in them, and of those that had, how many were marked.
 //!
 //! `--turns` sets whether sentences are split where the diarization model hears the speaker change, and at
 //! which latency (slow, medium, fast or off; slow is the app's). Each has its own folder of sentences.
@@ -32,6 +34,48 @@ struct Heard {
     /// The diarization model's speaker slot.
     #[serde(default)]
     slot: Option<usize>,
+    /// Other slots heard talking at the same time.
+    #[serde(default)]
+    also: Vec<usize>,
+}
+
+/// Someone besides a sentence's main speaker talking this long in it, in seconds, was heard under it: the
+/// app's own rule (0.32 s), and plain interruptions (1 s).
+const UNDER: [f64; 2] = [0.32, 1.0];
+
+/// Marks against the reference: marked, marked and right, and how many sentences had someone under them
+/// for each of `UNDER`, with how many of those were marked.
+#[derive(Clone, Copy, Debug, Default)]
+struct Marks {
+    marked: usize,
+    right: usize,
+    under: [usize; 2],
+    caught: [usize; 2],
+}
+
+fn marks(turns: &[(f64, f64, String)], heard: &[Heard]) -> Marks {
+    let mut m = Marks::default();
+    for h in heard {
+        let mut talk: HashMap<&str, f64> = HashMap::new();
+        for (a, b, who) in turns {
+            let o = (h.start + h.seconds).min(*b) - h.start.max(*a);
+            if o > 0.0 {
+                *talk.entry(who).or_default() += o;
+            }
+        }
+        let main = talk.iter().max_by(|a, b| a.1.total_cmp(b.1)).map(|(w, _)| *w);
+        let other = |least: f64| talk.iter().any(|(w, t)| Some(*w) != main && *t >= least);
+        let marked = !h.also.is_empty();
+        m.marked += usize::from(marked);
+        m.right += usize::from(marked && other(UNDER[0]));
+        for (k, least) in UNDER.iter().enumerate() {
+            if other(*least) {
+                m.under[k] += 1;
+                m.caught[k] += usize::from(marked);
+            }
+        }
+    }
+    m
 }
 
 /// A sentence this long or longer counts as a long turn.
@@ -69,6 +113,7 @@ pub fn run(root: &Path, only: Option<&[String]>, output: &Path, reuse: bool, lat
     });
     std::fs::create_dir_all(&cache)?;
     let models = root.join("resources/voice");
+    let mut all_marks = Marks::default();
     let mut rows = vec![];
     for s in &corpus.samples {
         let kept = cache.join(format!("{}.json", s.id));
@@ -82,7 +127,7 @@ pub fn run(root: &Path, only: Option<&[String]>, output: &Path, reuse: bool, lat
             // A new ear for each recording: an ear counts time from the first sample it was given.
             let mut ear = Ear::with(&models, Recognizers::load(&models))?.turns(&models, latency).wait_for_turns();
             let mut out: Vec<Heard> = vec![];
-            let mut keep = |s: Sentence| out.push(Heard { start: s.start, seconds: s.seconds, voiceprint: s.voiceprint, slot: s.slot });
+            let mut keep = |s: Sentence| out.push(Heard { start: s.start, seconds: s.seconds, voiceprint: s.voiceprint, slot: s.slot, also: s.also });
             for chunk in wave.samples().chunks(1600) {
                 ear.feed(chunk, &mut keep);
             }
@@ -94,6 +139,8 @@ pub fn run(root: &Path, only: Option<&[String]>, output: &Path, reuse: bool, lat
         let truth: Vec<Option<String>> = heard.iter().map(|h| speaker_at(&turns, h.start, h.start + h.seconds)).collect();
         let long: Vec<bool> = heard.iter().map(|h| h.seconds >= LONG).collect();
         let mixed = heard.iter().filter(|h| is_mixed(&turns, h.start, h.start + h.seconds)).count() as f64 / heard.len().max(1) as f64;
+        let m = marks(&turns, &heard);
+        all_marks = Marks { marked: all_marks.marked + m.marked, right: all_marks.right + m.right, under: [all_marks.under[0] + m.under[0], all_marks.under[1] + m.under[1]], caught: [all_marks.caught[0] + m.caught[0], all_marks.caught[1] + m.caught[1]] };
         let people = { let mut p: Vec<&String> = turns.iter().map(|t| &t.2).collect(); p.sort(); p.dedup(); p.len() };
         for same in THRESHOLDS {
             let found = assign(&heard, same, NEW_VOICE);
@@ -104,7 +151,10 @@ pub fn run(root: &Path, only: Option<&[String]>, output: &Path, reuse: bool, lat
         }
         println!("{}: {} sentences, {people} people, {:.0}% mixed", s.id, heard.len(), mixed * 100.0);
     }
-    let report = report(&rows, latency);
+    let mut report = report(&rows, latency);
+    if latency.is_some() {
+        report.push_str(&marks_report(&all_marks));
+    }
     std::fs::write(output.join("speakers.md"), &report)?;
     println!("{report}");
     if let Some(summary) = std::env::var_os("GITHUB_STEP_SUMMARY") {
@@ -212,6 +262,23 @@ fn measure(truth: &[Option<String>], found: &[Option<String>]) -> Score {
     Score { purity: majority(true), coverage: majority(false), found: names.len(), sentences: pairs.len() }
 }
 
+fn marks_report(m: &Marks) -> String {
+    let share = |a: usize, b: usize| if b == 0 { 0.0 } else { a as f64 / b as f64 * 100.0 };
+    format!(
+        "\n### Also speaking (#295)\n\nSentences marked as heard over someone else: {}. Of those, {:.1}% had another real person talking in them for {} s or more. Of the sentences that had, {:.1}% were marked ({} of {}); of those with someone talking under them for {} s or more, {:.1}% ({} of {}).\n",
+        m.marked,
+        share(m.right, m.marked),
+        UNDER[0],
+        share(m.caught[0], m.under[0]),
+        m.caught[0],
+        m.under[0],
+        UNDER[1],
+        share(m.caught[1], m.under[1]),
+        m.caught[1],
+        m.under[1],
+    )
+}
+
 fn report(rows: &[Row], latency: Option<Latency>) -> String {
     let split = match latency {
         None => "not split".to_string(),
@@ -235,6 +302,16 @@ fn report(rows: &[Row], latency: Option<Latency>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn marks_are_checked_against_who_else_talked() {
+        let turns = vec![(0.0, 10.0, "x".to_string()), (2.0, 2.5, "y".to_string()), (5.0, 6.5, "y".to_string())];
+        let h = |start: f64, seconds: f64, also: Vec<usize>| Heard { start, seconds, voiceprint: None, slot: Some(0), also };
+        // Marked over a 0.5 s answer; not marked over a 1.5 s one; marked over nobody; quiet and unmarked.
+        let m = marks(&turns, &[h(1.0, 3.0, vec![1]), h(4.0, 4.0, vec![]), h(8.0, 1.5, vec![1]), h(9.5, 0.5, vec![])]);
+        assert_eq!((m.marked, m.right), (2, 1));
+        assert_eq!((m.under, m.caught), ([2, 1], [1, 0]));
+    }
 
     #[test]
     fn purity_and_coverage_see_splits_and_merges() {

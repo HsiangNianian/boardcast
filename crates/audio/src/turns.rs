@@ -4,7 +4,8 @@
 //! on, so two people in one breath get two lines; each piece carries the slot it belongs to, which names a
 //! piece too short for a voiceprint.
 //!
-//! Speech over speech cannot be taken apart, so a voice heard under another's never cuts that sentence.
+//! Speech over speech cannot be taken apart, so a voice heard under another's never cuts that sentence. Each
+//! piece says instead who else was heard talking in it, for the transcript to show (#295).
 //!
 //! The model costs about half of real time on two threads, so it hears only speech: the ear gives it what
 //! the detector calls speech, from the first window loud enough to be part of it, and a little after, which
@@ -54,6 +55,20 @@ impl Latency {
 const ACTIVE: f32 = 0.5;
 /// A run shorter than this, in frames of 80 ms, is a flicker and goes to its neighbour.
 const MIN_RUN: usize = 3;
+/// Someone talking under a piece for this many frames, 0.32 s, counts as speaking at the same time.
+const MIN_ALSO: usize = 4;
+
+/// A piece of a sentence, split where the speaker changes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Piece {
+    /// Its first sample, counted from the sentence's start, and its length.
+    pub from: usize,
+    pub len: usize,
+    /// The slot speaking it, if anyone was heard.
+    pub slot: Option<usize>,
+    /// Other slots heard talking at the same time.
+    pub also: Vec<usize>,
+}
 
 /// Where the stretches of input the model heard came from: the model's samples follow one another, the
 /// ear's have gaps where it heard silence.
@@ -302,25 +317,36 @@ impl Turns {
         self.timeline.forget_before(self.first * self.shift);
     }
 
-    /// Where the `len` samples from the ear's sample `start` change hands: each piece's first sample,
-    /// counted from `start`, its length and its speaker slot. One piece with no slot when nobody was heard.
-    pub(crate) fn split(&self, start: usize, len: usize) -> Vec<(usize, usize, Option<usize>)> {
-        let numbered = |pieces: Vec<(usize, usize, Option<usize>)>| pieces.into_iter().map(|(a, n, slot)| (a, n, slot.map(|s| s + self.generation * self.width))).collect();
+    /// Where the `len` samples from the ear's sample `start` change hands. One piece with no slot when
+    /// nobody was heard.
+    pub(crate) fn split(&self, start: usize, len: usize) -> Vec<Piece> {
+        let offset = self.generation * self.width;
+        let numbered = |pieces: Vec<Piece>| pieces.into_iter().map(|p| Piece { slot: p.slot.map(|s| s + offset), also: p.also.iter().map(|s| s + offset).collect(), ..p }).collect();
+        let whole = |rows: &[&[f32]]| {
+            let slot = main_speaker(rows);
+            Piece { from: 0, len, slot, also: also_speaking(rows, slot) }
+        };
         let (ear_start, end) = (start, self.timeline.to_model(start + len));
         let start = self.timeline.to_model(start);
         if end <= start {
-            return vec![(0, len, None)];
+            return vec![whole(&[])];
         }
         let from = start / self.shift;
         let to = end.div_ceil(self.shift);
         let rows: Vec<&[f32]> = (from..to).filter_map(|f| f.checked_sub(self.first).and_then(|i| self.frames.get(i))).map(Vec::as_slice).collect();
         // Frames already forgotten or not yet known leave the sentence whole.
         if rows.len() != to - from {
-            return numbered(vec![(0, len, main_speaker(&rows))]);
+            return numbered(vec![whole(&rows)]);
         }
         let pieces = changes(&rows);
         let edge = |frame: usize| self.timeline.to_ear((from + frame) * self.shift).saturating_sub(ear_start).min(len);
-        numbered(pieces.iter().map(|&(a, b, who)| (edge(a), edge(b) - edge(a), who)).filter(|p| p.1 > 0).collect())
+        numbered(
+            pieces
+                .iter()
+                .map(|&(a, b, slot)| Piece { from: edge(a), len: edge(b) - edge(a), slot, also: also_speaking(&rows[a..b], slot) })
+                .filter(|p| p.len > 0)
+                .collect(),
+        )
     }
 }
 
@@ -329,6 +355,12 @@ fn main_speaker(rows: &[&[f32]]) -> Option<usize> {
     let width = rows.first()?.len();
     let talk: Vec<usize> = (0..width).map(|s| rows.iter().filter(|r| r[s] > ACTIVE).count()).collect();
     talk.iter().enumerate().filter(|(_, n)| **n > 0).max_by_key(|(_, n)| **n).map(|(s, _)| s)
+}
+
+/// The slots other than `slot` heard talking for `MIN_ALSO` frames or more of these.
+fn also_speaking(rows: &[&[f32]], slot: Option<usize>) -> Vec<usize> {
+    let width = rows.first().map_or(0, |r| r.len());
+    (0..width).filter(|&s| Some(s) != slot && rows.iter().filter(|r| r[s] > ACTIVE).count() >= MIN_ALSO).collect()
 }
 
 /// The turns in a run of frames, as (first frame, end frame, slot). A change of speaker becomes a cut only
@@ -456,6 +488,18 @@ mod tests {
         }
         let rows: Vec<&[f32]> = f.iter().map(Vec::as_slice).collect();
         assert_eq!(changes(&rows), vec![(0, 16, Some(0))]);
+    }
+
+    #[test]
+    fn a_voice_under_another_is_named_as_also_speaking() {
+        let mut f = frames(&["################", "......####......", "..#............."]);
+        for row in &mut f[6..10] {
+            row[1] = 0.95;
+        }
+        let rows: Vec<&[f32]> = f.iter().map(Vec::as_slice).collect();
+        // The third slot's one frame is a flicker, not someone speaking.
+        assert_eq!(also_speaking(&rows, Some(0)), vec![1]);
+        assert_eq!(also_speaking(&rows[..6], Some(0)), Vec::<usize>::new());
     }
 
     #[test]

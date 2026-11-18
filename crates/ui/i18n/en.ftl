@@ -344,6 +344,10 @@ summary-2 = Summary
 speakers = Speakers
 # A speaker the transcript knows only by a letter, such as A.
 speaker-letter = Speaker { $name }
+# Others heard talking at the same time as a line, whose words were lost under it.
+also-speaking = Also speaking: { $names }
+# Someone heard but not yet named.
+someone = someone
 typing-as = Typing as { $name }
 close-esc = Close (Esc)
 open-folder = Open folder

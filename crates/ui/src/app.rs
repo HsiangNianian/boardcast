@@ -1960,6 +1960,21 @@ fn fingerprint_of(live: &Live) -> String {
 }
 
 /// What is still to happen to a line, said under it; a line on the board needs nothing.
+/// "Also speaking: …" for a line others were heard under, or nothing.
+fn also_note(line: &serde_json::Value) -> Option<String> {
+    let names: Vec<String> = line["also"]
+        .as_array()?
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .map(|name| match name.chars().count() {
+            0 => t("someone").to_string(),
+            1 => ta!("speaker-letter", name = name.to_string()),
+            _ => name.to_string(),
+        })
+        .collect();
+    (!names.is_empty()).then(|| ta!("also-speaking", names = names.join(t("list-separator"))))
+}
+
 fn line_note(line: &serde_json::Value, model_loading: bool) -> String {
     if line["failed"].as_bool().unwrap_or(false) {
         t("not-drawn").to_string()
@@ -2418,9 +2433,11 @@ impl Workbench {
                 Event::Spoken { meeting, sentence } => {
                     if meeting == self.session().meeting() {
                         let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds, sentence.slot);
+                        let also = self.also_speaking(&sentence.also, speaker.as_deref());
                         let mut sentence = sentence;
                         sentence.text = self.as_glossary_writes(&sentence.text);
                         self.live.add_line(speaker.as_deref(), &sentence.text, Some(sentence.asr_ms));
+                        self.live.mark_also(&also);
                         self.line_arrived(true);
                         self.keep_heard_text();
                         if self.follow_pages(&sentence.text, cx) {
@@ -5161,6 +5178,22 @@ impl Workbench {
         self.speaker.clone()
     }
 
+    /// The names of the slots heard under a line, by the name each last had; an empty name for one never
+    /// named. The line's own speaker is not among them, and nobody is when speakers are not told apart.
+    fn also_speaking(&self, slots: &[usize], speaker: Option<&str>) -> Vec<String> {
+        if !self.form.saved.diarize {
+            return vec![];
+        }
+        let mut names: Vec<String> = vec![];
+        for slot in slots {
+            let name = self.slots.get(slot).cloned().unwrap_or_default();
+            if Some(name.as_str()) != speaker && !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        names
+    }
+
     fn choose_speaker(&mut self, name: String, window: &mut Window, cx: &mut Context<Self>) {
         self.speaker_name.update(cx, |state, cx| state.set_value(name.clone(), window, cx));
         self.speaker_chosen = Some(name);
@@ -7571,6 +7604,8 @@ impl Render for Workbench {
                             line.into_any_element()
                         }
                     })
+                    // Someone heard under this line: their words are lost, but not that they spoke (#295).
+                    .when_some(also_note(l).filter(|_| !manual), |d, also| d.child(div().pl(px(28.)).text_small().text_color(rgb(pal().faint)).child(also)))
                     .when(!note.is_empty() && !manual, |d| {
                         d.child(div().text_small().text_color(rgb(if l["failed"].as_bool().unwrap_or(false) { pal().danger } else { pal().faint })).child(note))
                     })

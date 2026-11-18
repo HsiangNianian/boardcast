@@ -112,11 +112,32 @@ fn soft_break(loudness: &[f32]) -> Option<usize> {
     (run >= need).then_some(run / 2)
 }
 
-/// The latency the diarization model runs at; see [`Latency`].
+/// The latency the diarization model runs at; see [`Latency`]. `BOARDCAST_DIARIZATION` set to slow, medium,
+/// fast, long or off chooses another without building again: `long` halves the model's work for 0.35 s
+/// more on each line, for a slow machine.
 const LATENCY: Latency = Latency::Slow;
-/// How long after speech the diarization model keeps hearing, in samples: its latency and one step, so the
-/// frames at the end of a sentence come out.
-const TAIL: usize = SAMPLE_RATE as usize * 3 / 2;
+
+/// The latency from `BOARDCAST_DIARIZATION`, or [`LATENCY`]; `None` when it is off.
+fn chosen_latency() -> Option<Latency> {
+    match std::env::var("BOARDCAST_DIARIZATION").ok().as_deref().map(str::trim) {
+        Some("off") => None,
+        Some("slow") => Some(Latency::Slow),
+        Some("medium") => Some(Latency::Medium),
+        Some("fast") => Some(Latency::Fast),
+        Some("long") => Some(Latency::Long),
+        Some(other) if !other.is_empty() => {
+            eprintln!("BOARDCAST_DIARIZATION is slow, medium, fast, long or off, not {other}; using the default");
+            Some(LATENCY)
+        }
+        _ => Some(LATENCY),
+    }
+}
+
+/// How long the diarization model keeps hearing after speech, in samples. Pauses between sentences stay in
+/// what it hears: left out, it judged turns worse (F1 0.889 to 0.877 on the speaker eval). Only a longer
+/// silence, as in a break, is left out, and it needs at least its latency and a step to give out the frames
+/// at the end of a sentence.
+const TAIL: usize = SAMPLE_RATE as usize * 10;
 /// A window this far below the loud part of the audio before speech, 20 dB, is silence the diarization
 /// model need not hear.
 const ONSET_RATIO: f32 = 0.1;
@@ -510,7 +531,7 @@ impl Ear {
         if speaker.is_none() {
             eprintln!("the speaker model did not load, so speakers will not be told apart");
         }
-        let turns = turns::Turns::load(models, LATENCY);
+        let turns = chosen_latency().and_then(|latency| turns::Turns::load(models, latency));
         if turns.is_none() {
             eprintln!("the diarization model did not load, so a sentence is not split between speakers");
         }
@@ -608,8 +629,8 @@ impl Ear {
     }
 
     /// Give the diarization model what it should hear of the input so far: speech, from the first window
-    /// loud enough to belong to it, and `TAIL` after it, so the frames at its end come out. Silence is left
-    /// out, as the model costs about half of real time.
+    /// loud enough to belong to it, and up to `TAIL` of quiet after it. A longer silence, as in a break, is
+    /// left out, as the model costs about half of real time, so a meeting can be left listening.
     fn feed_turns(&mut self) {
         let Some(turns) = self.turns.as_mut() else { return };
         if !self.in_speech && self.fed >= self.quiet_since + TAIL {

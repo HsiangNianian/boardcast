@@ -104,6 +104,9 @@ pub struct Said {
     pub page: u64,
     /// A note about a hand-made change rather than something said.
     pub manual: bool,
+    /// Others heard talking at the same time, whose words were lost under this line; an empty name is
+    /// someone not yet named (#295).
+    pub also: Vec<String>,
 }
 
 impl Said {
@@ -117,8 +120,19 @@ impl Said {
                 text: text_of(l),
                 page: l["page"].as_u64().unwrap_or(0),
                 manual: l["manual"].as_bool().unwrap_or(false),
+                also: l["also"].as_array().map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default(),
             })
             .collect()
+    }
+
+    /// "（同时在说：B）" or " (also speaking: B)" after the line, or nothing.
+    pub fn also_note(&self, english: bool) -> String {
+        if self.also.is_empty() {
+            return String::new();
+        }
+        let someone = if english { "someone" } else { "有人" };
+        let names: Vec<&str> = self.also.iter().map(|n| if n.is_empty() { someone } else { n.as_str() }).collect();
+        if english { format!(" (also speaking: {})", names.join(", ")) } else { format!("（同时在说：{}）", names.join("、")) }
     }
 }
 
@@ -313,6 +327,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn who_else_spoke_follows_the_line() {
+        let lines = [serde_json::json!({ "speaker": "A", "text": "x", "also": ["B", ""] }), serde_json::json!({ "speaker": "A", "text": "y" })];
+        let said = Said::from_stored(&lines, &|l| l["text"].as_str().unwrap_or_default().to_string());
+        assert_eq!(said[0].also, vec!["B".to_string(), String::new()]);
+        assert_eq!(said[0].also_note(false), "（同时在说：B、有人）");
+        assert_eq!(said[0].also_note(true), " (also speaking: B, someone)");
+        assert_eq!(said[1].also_note(false), "");
+    }
+
+    #[test]
     fn a_missing_extension_is_added_and_a_right_one_kept() {
         assert_eq!(with_extension("/a/notes".into(), Kind::Pdf), PathBuf::from("/a/notes.pdf"));
         assert_eq!(with_extension("/a/notes.PDF".into(), Kind::Pdf), PathBuf::from("/a/notes.PDF"));
@@ -337,7 +361,7 @@ mod tests {
     #[test]
     fn stored_lines_keep_their_board_and_notes_stay_marked() {
         let lines = Said::from_stored(&[serde_json::json!({ "text": "a", "speaker": "A", "page": 1 }), serde_json::json!({ "text": "b", "manual": true })], &kept_text);
-        assert_eq!(lines[0], Said { speaker: Some("A".into()), text: "a".into(), page: 1, manual: false });
+        assert_eq!(lines[0], Said { speaker: Some("A".into()), text: "a".into(), page: 1, manual: false, also: vec![] });
         assert!(lines[1].manual);
     }
 }

@@ -127,7 +127,7 @@ fn words(english: bool) -> Value {
 /// The meeting's words for the page: everything but its boards.
 fn meeting_data(doc: &Doc) -> Value {
     let note = doc.omits_visuals.then(|| if doc.english { "Imported pages and free-edit content are not included." } else { "导入页和自由编辑内容没有包含在内。" });
-    let lines: Vec<Value> = doc.lines.iter().map(|l| json!({ "s": l.speaker, "t": l.text, "m": l.manual })).collect();
+    let lines: Vec<Value> = doc.lines.iter().map(|l| json!({ "s": l.speaker, "t": format!("{}{}", l.text, l.also_note(doc.english)), "m": l.manual })).collect();
     json!({ "title": doc.title, "began": doc.began, "summary": doc.summary.trim(), "words": words(doc.english), "note": note, "lines": lines })
 }
 
@@ -258,7 +258,7 @@ mod tests {
             began: "2026-01-02 03:04".into(),
             summary: "### 结论\n- 好".into(),
             boards: vec![],
-            lines: vec![Said { speaker: Some("A".into()), text: text.into(), page: 0, manual: false }],
+            lines: vec![Said { speaker: Some("A".into()), text: text.into(), page: 0, manual: false, also: vec![] }],
             english: false,
             omits_visuals: false,
         }

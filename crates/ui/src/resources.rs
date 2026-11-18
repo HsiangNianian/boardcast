@@ -81,6 +81,7 @@ impl Resources {
             ("llama-server", self.binaries.join(boardcast_agent::LLAMA_SERVER)),
             ("voice activity model", self.voice.join("silero_vad.onnx")),
             ("speaker model", self.voice.join("speaker/campplus_zh_en.onnx")),
+            ("diarization model", self.voice.join("speaker/nemotron-3-diarization.int8.onnx")),
             ("PDF library", boardcast_import::pdf::library_file(&self.pdfium)),
             // Every package carries it, the one without speech models too.
             ("meeting search model", self.search.join(boardcast_models::embedding().file)),

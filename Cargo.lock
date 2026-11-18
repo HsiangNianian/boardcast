@@ -6759,7 +6759,7 @@ dependencies = [
 [[package]]
 name = "sherpa-onnx"
 version = "2.0.1"
-source = "git+https://github.com/HsiangNianian/sherpa-onnx?tag=boardcast-2.0.1-2#9c5d161a6d5c9a83cc2d572bd5fe877d3ac31a62"
+source = "git+https://github.com/HsiangNianian/sherpa-onnx?tag=boardcast-2.0.1-3#25a370e1e0f4aac9bc54741bd8a5e235f1ffbd9f"
 dependencies = [
  "serde",
  "serde_json",
@@ -6769,9 +6769,10 @@ dependencies = [
 [[package]]
 name = "sherpa-onnx-sys"
 version = "2.0.1"
-source = "git+https://github.com/HsiangNianian/sherpa-onnx?tag=boardcast-2.0.1-2#9c5d161a6d5c9a83cc2d572bd5fe877d3ac31a62"
+source = "git+https://github.com/HsiangNianian/sherpa-onnx?tag=boardcast-2.0.1-3#25a370e1e0f4aac9bc54741bd8a5e235f1ffbd9f"
 dependencies = [
  "bzip2 0.4.4",
+ "sha2 0.10.9",
  "tar",
  "ureq",
  "zip",

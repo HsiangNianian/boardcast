@@ -6,10 +6,10 @@
 //!
 //! Speech over speech cannot be taken apart, so a voice heard under another's never cuts that sentence.
 //!
-//! The model costs about half of real time on two threads, so it hears only speech: the ear gives it what
-//! the detector calls speech, from the first window loud enough to be part of it, and a little after, which
-//! the model needs to give out the frames at the end of a sentence. [`Timeline`] keeps where in the ear's
-//! input each stretch it heard came from.
+//! The model costs about half of real time on two threads, so it does not hear long silences: the ear
+//! gives it what the detector calls speech, from the first window loud enough to be part of it, and the
+//! pauses between, up to ten seconds of quiet. [`Timeline`] keeps where in the ear's input each stretch it
+//! heard came from.
 //!
 //! It runs on a thread of its own. Should it take more than four fifths of real time on this machine, the
 //! ear stops splitting and names speakers by voice alone, as before.

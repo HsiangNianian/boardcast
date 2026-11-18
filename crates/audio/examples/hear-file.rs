@@ -19,6 +19,7 @@ fn main() -> anyhow::Result<()> {
         "slow" => Some(Latency::Slow),
         "medium" => Some(Latency::Medium),
         "fast" => Some(Latency::Fast),
+            "long" => Some(Latency::Long),
         other => anyhow::bail!("unknown setting {other}"),
     };
     let mut ear = Ear::load(Path::new(models))?.turns(Path::new(models), latency);

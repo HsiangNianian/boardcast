@@ -46,7 +46,8 @@ pub fn turns(value: &str) -> Result<Option<Latency>> {
         "slow" => Some(Latency::Slow),
         "medium" => Some(Latency::Medium),
         "fast" => Some(Latency::Fast),
-        other => anyhow::bail!("--turns is off, slow, medium or fast, not {other}"),
+            "long" => Some(Latency::Long),
+        other => anyhow::bail!("--turns is off, slow, medium, fast or long, not {other}"),
     })
 }
 
@@ -64,6 +65,7 @@ pub fn run(root: &Path, only: Option<&[String]>, output: &Path, reuse: bool, lat
         Some(Latency::Slow) => "sentences-turns-slow",
         Some(Latency::Medium) => "sentences-turns-medium",
         Some(Latency::Fast) => "sentences-turns-fast",
+        Some(Latency::Long) => "sentences-turns-long",
     });
     std::fs::create_dir_all(&cache)?;
     let models = root.join("resources/voice");
@@ -78,7 +80,7 @@ pub fn run(root: &Path, only: Option<&[String]>, output: &Path, reuse: bool, lat
             let wave = Wave::read(&path.to_string_lossy()).with_context(|| format!("reading {}", s.file))?;
             ensure!(wave.sample_rate() == SAMPLE_RATE, "{} is not 16 kHz", s.file);
             // A new ear for each recording: an ear counts time from the first sample it was given.
-            let mut ear = Ear::with(&models, Recognizers::load(&models))?.turns(&models, latency);
+            let mut ear = Ear::with(&models, Recognizers::load(&models))?.turns(&models, latency).wait_for_turns();
             let mut out: Vec<Heard> = vec![];
             let mut keep = |s: Sentence| out.push(Heard { start: s.start, seconds: s.seconds, voiceprint: s.voiceprint, slot: s.slot });
             for chunk in wave.samples().chunks(1600) {

@@ -113,8 +113,8 @@ on two threads of an i7-12700H.
 
 ## Drafts while someone speaks
 
-`asr-eval drafts <root> [--only id,id] [--output dir] [--drafts reread|stream:<folder>|bylanguage:<folder>]`
-hears the meeting recordings as the app does and measures the drafts shown before a sentence ends (#291), per
+`asr-eval drafts <root> [--only id,id] [--output dir] [--drafts reread|stream:<folder>|bylanguage:<folder>]
+[--variant all|en|ja]` hears the meeting recordings as the app does and measures the drafts shown before a sentence ends (#291), per
 stretch of speech:
 - first text: from the moment speech grew loud to the first draft (median and 90th percentile);
 - error: how far the last draft was from the sentence that replaced it (CER, or WER for English);
@@ -125,3 +125,9 @@ stretch of speech:
 `<output>/<meeting>.json` keeps each stretch's drafts beside its final text, so they can be read.
 `bylanguage:resources/voice/draft-zh` is what the app does: the streaming Chinese zipformer for Chinese, and
 SenseVoice rereading for English and Japanese, showing only what two readings in a row agree on.
+
+`--variant` hears with the models a package carries (see `packaging/models.sh`): `all`, the default, has every
+model; `en` has only Parakeet and `ja` only ReazonSpeech, so they draft by reading again with that one
+recognizer, and are measured on their own language's meetings. Results go to `<output>/<variant>/`. Measured
+2026-11-19: the en package drafts after 1.10 s with 12% taken back at 0.28 of real time; the ja package after
+1.06 s with 19% taken back at 0.08.

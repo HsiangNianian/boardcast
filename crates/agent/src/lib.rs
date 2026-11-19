@@ -6,6 +6,7 @@
 //! Other remote models have not been measured, so they go without.
 //! Hints from the checker did not help on either model, so they stay opt-in.
 
+pub mod consolidate;
 pub mod settings;
 pub mod sound;
 pub mod summary;
@@ -13,7 +14,7 @@ pub mod tools;
 pub mod vision;
 
 use anyhow::{anyhow, bail, Context, Result};
-use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, Graph, Utterance};
+use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, Graph, Kind, Utterance};
 use boardcast_board::speakers::{attribute, rename_by};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};
@@ -102,25 +103,55 @@ impl Provider {
 
     /// An ordinary question with no grammar, as a summary needs.
     pub fn chat(&self, messages: &[Value], max_tokens: u32) -> Result<String> {
+        let reply = self.chat_reply(messages, max_tokens)?;
+        Ok(strip_thinking(message(&reply)?).to_string())
+    }
+
+    /// As [`Self::chat`], the whole reply: with its usage, and a reasoning model's thinking.
+    pub fn chat_reply(&self, messages: &[Value], max_tokens: u32) -> Result<Value> {
+        self.chat_reply_with(messages, max_tokens, "high")
+    }
+
+    /// As [`Self::chat_reply`], with how hard a reasoning model thinks: high, medium or low. Thinking less is
+    /// how a long task is made cheaper; cutting its room short only cuts the answer off.
+    pub fn chat_reply_with(&self, messages: &[Value], max_tokens: u32, effort: &str) -> Result<Value> {
+        self.chat_reply_thinking(messages, max_tokens, effort, false)
+    }
+
+    /// As [`Self::chat_reply_with`], and a local model thinks first when `think_locally`: slower, but a small
+    /// model rewriting a whole board does better for it. A remote model thinks as `effort` says either way.
+    pub fn chat_reply_thinking(&self, messages: &[Value], max_tokens: u32, effort: &str, think_locally: bool) -> Result<Value> {
         let body = match self {
             Self::Remote { model, .. } => {
                 let mut body = json!({ "model": model, "messages": messages, "temperature": 0.2, "max_tokens": max_tokens, "stream": false });
                 if self.is_deepseek() {
                     body["thinking"] = json!({ "type": "enabled" });
-                    body["reasoning_effort"] = json!("high");
+                    body["reasoning_effort"] = json!(effort);
                 }
                 body
             }
             // Left to itself a small model can fall into repeating the same few lines until it runs out of room.
-            Self::Local { .. } => json!({ "model": "local", "messages": messages, "temperature": 0.2, "repeat_penalty": 1.15, "repeat_last_n": 256, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": false } }),
+            Self::Local { .. } => json!({ "model": "local", "messages": messages, "temperature": 0.2, "repeat_penalty": 1.15, "repeat_last_n": 256, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": think_locally } }),
             #[cfg(test)]
             Self::Scripted(reply) => {
                 let said = messages.last().and_then(|m| m["content"].as_str()).unwrap_or_default().to_string();
-                return reply(&said);
+                return Ok(json!({ "choices": [{ "message": { "content": reply(&said)? } }] }));
             }
         };
-        let reply = self.send(&self.endpoint(), &body)?;
-        Ok(strip_thinking(message(&reply)?).to_string())
+        self.send(&self.endpoint(), &body)
+    }
+
+    /// For a local server: its context window, and how much of it `messages` take, from the server itself
+    /// (`/props`, `/apply-template`, `/tokenize`). `None` for a remote model, or if the server cannot say.
+    pub fn room_for(&self, messages: &[Value]) -> Option<(u64, u64)> {
+        let Self::Local { base } = self else { return None };
+        let get = |path: &str| -> Option<Value> { http(base).get(&format!("{base}{path}")).timeout(Duration::from_secs(10)).call().ok()?.into_json().ok() };
+        let post = |path: &str, body: Value| -> Option<Value> { http(base).post(&format!("{base}{path}")).timeout(Duration::from_secs(30)).send_json(body).ok()?.into_json().ok() };
+        let props = get("/props")?;
+        let window = props["default_generation_settings"]["n_ctx"].as_u64().or_else(|| props["n_ctx"].as_u64())?;
+        let prompt = post("/apply-template", json!({ "messages": messages }))?["prompt"].as_str()?.to_string();
+        let used = post("/tokenize", json!({ "content": prompt }))?["tokens"].as_array()?.len() as u64;
+        Some((window, used))
     }
 
     fn endpoint(&self) -> String {
@@ -232,6 +263,16 @@ impl Provider {
 /// How much of an unusable reply an error quotes.
 const EXCERPT: usize = 240;
 
+/// How many of a reply's tokens went to thinking, as OpenAI-style services report it.
+fn reasoning_tokens(reply: &Value) -> u64 {
+    reply["usage"]["completion_tokens_details"]["reasoning_tokens"].as_u64().unwrap_or(0)
+}
+
+/// The reasoning a reply carries apart from its answer, as DeepSeek's `reasoning_content`.
+fn reasoning(reply: &Value) -> Option<&str> {
+    reply["choices"][0]["message"]["reasoning_content"].as_str().filter(|t| !t.trim().is_empty())
+}
+
 /// The words of a chat reply. One without a message is a failure, not an empty answer.
 fn message(reply: &Value) -> Result<&str> {
     reply["choices"][0]["message"]["content"].as_str().ok_or_else(|| {
@@ -249,6 +290,7 @@ pub struct Guidance {
     pub harness: tools::Harness,
 }
 
+#[derive(Default)]
 pub struct Reply {
     pub ops: String,
     pub ms: u128,
@@ -262,6 +304,71 @@ pub struct Reply {
     pub prompt_read: Option<u64>,
     pub prompt_ms: Option<f64>,
     pub predicted_ms: Option<f64>,
+    /// What a reasoning model thought before answering, as DeepSeek returns it in `reasoning_content`: why it
+    /// drew what it drew, for improving the prompt. Empty when the model gives none.
+    pub thinking: String,
+    /// How many of `tokens_out` went to thinking, where the service says.
+    pub reasoning_tokens: u64,
+}
+
+/// Sounds a listener makes to keep a speaker going, in Chinese: one character each.
+const FILLERS_ZH: &str = "嗯恩啊呃额对是好行哦噢唉吧呢嘛诶嘿哈呀哇";
+/// And in English, a word each.
+const FILLERS_EN: [&str; 15] = ["yeah", "yes", "yep", "ok", "okay", "right", "uh", "um", "mm", "hmm", "mhm", "oh", "ah", "sure", "uh-huh"];
+
+/// A line that only acknowledges or trails off, "嗯。", "对对对。", "啊。嗯后。", "Yeah.": what a far microphone
+/// catches of a listener, or of a speaker cut off. It goes into the discussion the model reads with the next
+/// line, but is not worth a turn of its own: in the AliMeeting phone meeting a turn on such a line drew a
+/// guess at best. At most one other character may be left, the end of a word the recognizer cut off.
+pub fn backchannel(text: &str) -> bool {
+    let mut left = 0;
+    for word in text.split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '\'')).filter(|w| !w.is_empty()) {
+        if word.is_ascii() {
+            if !FILLERS_EN.contains(&word.to_lowercase().as_str()) {
+                return false;
+            }
+            continue;
+        }
+        left += word.chars().filter(|c| !FILLERS_ZH.contains(*c)).count();
+    }
+    left <= 1
+}
+
+/// Words that drop something: what a strike needs the line to say.
+const DROP_CUES: [&str; 33] = [
+    "不用", "不要了", "取消", "不做", "划掉", "删掉", "去掉", "放弃", "算了", "不考虑", "不搞", "砍掉", "否了", "不行", "不适合", "换成", "改成", "不采用", "不选",
+    "drop", "cancel", "scrap", "not doing", "strike", "cross", "forget", "won't", "no longer", "instead", "rule out", "skip", "not going", "remove",
+];
+/// Words that stress something: what a circle, star, underline or highlight needs the line to say.
+const STRESS_CUES: [&str; 33] = [
+    "重点", "关键", "最重要", "重要", "一定要", "必须", "务必", "核心", "圈", "星", "强调", "注意", "首要", "优先", "下划线", "画线", "标黄", "高亮", "结论", "定了",
+    "key", "important", "crucial", "must", "critical", "priority", "highlight", "circle", "star", "emphas", "underline", "main", "decided",
+];
+
+/// A small model's marks, kept only where the line asks for one. Left to itself the 4B strikes and circles
+/// points nobody dropped or stressed: on the AliMeeting phone meeting it struck ten of 37 nodes, a third of
+/// them points still standing. A strike stays when the line drops something ("不用了", "cancel"), any other
+/// mark when it stresses something ("重点", "key"). Marks on an imported page stay, as there the line reads
+/// the page aloud rather than saying why, and so does anything a line points at.
+fn marks_said(ops: &str, said: &str, graph: &Graph) -> String {
+    let said = said.to_lowercase();
+    let drops = DROP_CUES.iter().any(|c| said.contains(c));
+    let stresses = STRESS_CUES.iter().any(|c| said.contains(c));
+    let on_page = |target: &str| {
+        let name = target.trim_start_matches('「').trim_end_matches('」');
+        graph.nodes.iter().any(|n| (n.id == target || n.label == name) && matches!(n.kind, Kind::Region | Kind::Clip))
+    };
+    ops.lines()
+        .filter(|line| {
+            let mut words = line.split_whitespace();
+            if words.next() != Some("M") {
+                return true;
+            }
+            let (Some(target), Some(mark)) = (words.next(), words.next()) else { return true };
+            on_page(target) || if mark == "划掉" { drops } else { stresses }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// One model turn for one line of speech.
@@ -342,12 +449,15 @@ pub fn pieces(text: &str) -> Vec<String> {
 /// is given pieces (see [`PIECE_UNITS`]), and a line about what was circled is not cut, since what it asks
 /// for must happen once.
 pub fn propose_with(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &Utterance, guidance: Guidance, hint: Option<&str>, glossary: &sound::Glossary, references: &[(u32, String)]) -> Result<Reply> {
+    if next.pointing.is_empty() && backchannel(&next.text) {
+        return Ok(Reply::default());
+    }
     let parts = if provider.short_reply() && next.pointing.is_empty() { pieces(&next.text) } else { vec![next.text.clone()] };
     if parts.len() == 1 {
         return propose_once(provider, graph, recent, next, guidance, hint, glossary, references);
     }
     let (mut board, mut heard) = (graph.clone(), recent.to_vec());
-    let mut whole = Reply { ops: String::new(), ms: 0, tokens_in: 0, tokens_cached: 0, tokens_out: 0, prompt_read: None, prompt_ms: None, predicted_ms: None };
+    let mut whole = Reply::default();
     for (i, text) in parts.into_iter().enumerate() {
         let piece = Utterance { speaker: next.speaker.clone(), text, pointing: vec![] };
         let context = &heard[heard.len().saturating_sub(CONTEXT_LINES)..];
@@ -381,13 +491,17 @@ fn propose_tools(provider: &Provider, graph: &Graph, prompt: Vec<Value>, harness
     messages.push(prompt[prompt.len() - 1].clone());
     let started = Instant::now();
     let (mut board, mut lines) = (graph.clone(), vec![]);
-    let mut whole = Reply { ops: String::new(), ms: 0, tokens_in: 0, tokens_cached: 0, tokens_out: 0, prompt_read: None, prompt_ms: None, predicted_ms: None };
+    let mut whole = Reply::default();
     let rounds = if harness == tools::Harness::ToolsChecked { 1 + tools::CHECK_ROUNDS } else { 1 };
     for round in 0..rounds {
         let reply = provider.call_tools(&messages)?;
         whole.tokens_in += reply["usage"]["prompt_tokens"].as_u64().unwrap_or(0);
         whole.tokens_cached += reply["usage"]["prompt_cache_hit_tokens"].as_u64().or_else(|| reply["usage"]["prompt_tokens_details"]["cached_tokens"].as_u64()).unwrap_or(0);
         whole.tokens_out += reply["usage"]["completion_tokens"].as_u64().unwrap_or(0);
+        whole.reasoning_tokens += reasoning_tokens(&reply);
+        if let Some(thought) = reasoning(&reply) {
+            whole.thinking.push_str(thought);
+        }
         let calls = tools::calls(&reply);
         if calls.is_empty() {
             break;
@@ -432,8 +546,9 @@ fn propose_once(provider: &Provider, graph: &Graph, recent: &[Utterance], next: 
     }
     let started = Instant::now();
     let reply = provider.call(messages, graph, english)?;
+    let ops = strip_thinking(message(&reply)?);
     Ok(Reply {
-        ops: strip_thinking(message(&reply)?).to_string(),
+        ops: if provider.short_reply() { marks_said(ops, &next.text, graph) } else { ops.to_string() },
         ms: started.elapsed().as_millis(),
         tokens_in: reply["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
         tokens_cached: reply["usage"]["prompt_cache_hit_tokens"].as_u64().or_else(|| reply["usage"]["prompt_tokens_details"]["cached_tokens"].as_u64()).unwrap_or(0),
@@ -441,6 +556,8 @@ fn propose_once(provider: &Provider, graph: &Graph, recent: &[Utterance], next: 
         prompt_read: reply["timings"]["prompt_n"].as_u64(),
         prompt_ms: reply["timings"]["prompt_ms"].as_f64(),
         predicted_ms: reply["timings"]["predicted_ms"].as_f64(),
+        thinking: reasoning(&reply).unwrap_or_default().to_string(),
+        reasoning_tokens: reasoning_tokens(&reply),
     })
 }
 
@@ -562,6 +679,10 @@ fn llama_command(server: &LocalServer, device: Option<&str>, discrete: bool, por
         .arg(&server.model)
         .args(["--host", "127.0.0.1", "--port", &port.to_string()])
         .args(["-c", "4096", "-np", "1", "--jinja"])
+        // Prompts kept aside in memory, to pick up again without reading them anew: 8 GiB unless told, and a
+        // Qwen3.5 prompt holds about 330 MiB, so an eval server with varied prompts grew to 10 GB and ran this
+        // computer out of memory (2026-11-19). The lines' own prompt stays in its slot either way.
+        .args(["--cache-ram", "1024"])
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     match device {
@@ -728,6 +849,35 @@ pub enum Backend {
     NoModel,
 }
 
+/// How many lines a remote model hears between rewrites of the whole board, as agent-eval measures with
+/// `--consolidate 8`.
+const CONSOLIDATE_EVERY: usize = 8;
+
+/// Rewrite a board that has piled up into an organised outline, beside the line-by-line turns: the model
+/// thinks for a minute or two, and the lines heard meanwhile are drawn as usual and kept
+/// ([`consolidate::catch_up`]). The result arrives as an ordinary drawing, so it can be undone. A board that
+/// does not need it, a failed reply, or another meeting opened meanwhile leaves the board alone.
+fn consolidate_live(provider: &Provider, graph: &Mutex<Graph>, history: &Mutex<Vec<Utterance>>, meeting: &AtomicU64, current: u64, updates: &Sender<Update>) {
+    let asked = graph.lock().expect("graph lock").clone();
+    let heard = history.lock().expect("history lock").clone();
+    let Some(last) = heard.last() else { return };
+    let english = board_is_english(&heard[heard.len().saturating_sub(CONTEXT_LINES + 1)..heard.len() - 1], last);
+    let done = match consolidate::consolidate(provider, &asked, &heard, english, None, "high") {
+        Ok(Some(done)) => done,
+        Ok(None) => return,
+        Err(e) => {
+            eprintln!("consolidating the board failed: {e:#}");
+            return;
+        }
+    };
+    let mut board = graph.lock().expect("graph lock");
+    if meeting.load(Ordering::SeqCst) != current {
+        return;
+    }
+    *board = consolidate::catch_up(&asked, &board, &done.graph);
+    let _ = updates.send(Update::Drawn { meeting: current, graph: board.clone(), ops: String::new(), lines: vec![], asr_ms: None, llm_ms: done.ms, ended: Instant::now() });
+}
+
 /// The running session: one request at a time, with lines heard meanwhile merged into the next.
 ///
 /// `graph` is shared so a hand-made mark takes effect at once; a reply applies on the latest board.
@@ -820,6 +970,10 @@ impl Session {
                 }
             }
             let _ = ready.send(());
+            // Lines heard in this meeting since the board was last consolidated, and whether a
+            // consolidation is under way.
+            let (mut since, mut since_meeting) = (0_usize, u64::MAX);
+            let consolidating = Arc::new(std::sync::atomic::AtomicBool::new(false));
             while let Ok(first) = said.recv() {
                 let mut batch = vec![first];
                 while let Ok(more) = said.try_recv() {
@@ -860,12 +1014,16 @@ impl Session {
                 };
                 let seen = graph.lock().expect("graph lock").clone();
                 let note = hint.lock().expect("hint lock").take();
-                let result = provider_now(&updates).and_then(|provider| {
-                    let chosen = guidance.lock().expect("guidance lock").unwrap_or_else(|| provider.default_guidance());
-                    let terms = glossary.lock().expect("glossary lock").clone();
-                    let cited = references.lock().expect("references lock").clone();
-                    propose_with(&provider, &seen, &recent, &next, chosen, note.as_deref(), &terms, &cited)
-                });
+                let provider = provider_now(&updates);
+                let result = match &provider {
+                    Ok(provider) => {
+                        let chosen = guidance.lock().expect("guidance lock").unwrap_or_else(|| provider.default_guidance());
+                        let terms = glossary.lock().expect("glossary lock").clone();
+                        let cited = references.lock().expect("references lock").clone();
+                        propose_with(provider, &seen, &recent, &next, chosen, note.as_deref(), &terms, &cited)
+                    }
+                    Err(e) => Err(anyhow!("{e:#}")),
+                };
                 // The lock is held across the check, so a meeting cannot open between it and the write.
                 let mut board = graph.lock().expect("graph lock");
                 if meeting.load(Ordering::SeqCst) != current {
@@ -891,6 +1049,21 @@ impl Session {
                 };
                 drop(board);
                 let _ = updates.send(update);
+                if since_meeting != current {
+                    (since, since_meeting) = (0, current);
+                }
+                since += batch.len();
+                if let Ok(Provider::Remote { .. }) = &provider {
+                    if since >= CONSOLIDATE_EVERY && !consolidating.swap(true, Ordering::SeqCst) {
+                        since = 0;
+                        let provider = provider.as_ref().expect("checked above").clone();
+                        let (graph, history, meeting, updates, consolidating) = (graph.clone(), history.clone(), meeting.clone(), updates.clone(), consolidating.clone());
+                        thread::spawn(move || {
+                            consolidate_live(&provider, &graph, &history, &meeting, current, &updates);
+                            consolidating.store(false, Ordering::SeqCst);
+                        });
+                    }
+                }
                 let _ = drained.send(());
             }
         });
@@ -1041,6 +1214,27 @@ impl Session {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn a_small_model_marks_only_what_the_line_asks_for() {
+        let mut board = Graph::default();
+        board.apply(&parse_ops("T 「方案」\nL 「方案」 「自建」\nL 「方案」 「SaaS」"));
+        let ops = "L n1 「三个月」\nM n2 划掉\nM n3 圈出";
+        assert_eq!(marks_said(ops, "自建的坏处是至少要三个月。", &board), "L n1 「三个月」");
+        assert_eq!(marks_said(ops, "那自建先不做了，时间等不起。", &board), "L n1 「三个月」\nM n2 划掉");
+        assert_eq!(marks_said(ops, "成本是最关键的，一定要标出来。", &board), "L n1 「三个月」\nM n3 圈出");
+        assert_eq!(marks_said("M n2 划掉", "We're not doing self-hosting.", &board), "M n2 划掉");
+    }
+
+    #[test]
+    fn a_line_that_only_acknowledges_gets_no_turn() {
+        for line in ["嗯。", "对对对。", "是吧。", "Yeah.", "OK, right.", "啊。嗯后。"] {
+            assert!(super::backchannel(line), "{line}");
+        }
+        for line in ["人群。", "No.", "对，就这么定。", "Yeah, ship it.", "什么手机壳。", "好的，周五前交"] {
+            assert!(!super::backchannel(line), "{line}");
+        }
+    }
+
+    #[test]
     fn shipped_prompts_match_the_typescript_engine() {
         let goldens: serde_json::Value = serde_json::from_str(include_str!("../../board/fixtures/goldens.json")).unwrap();
         assert_eq!(super::prompts(), goldens["prompts"]);
@@ -1085,6 +1279,14 @@ mod tests {
         assert!(is_discrete(&gpus, Some("Vulkan1")));
         assert!(!is_discrete(&gpus, Some("Vulkan0")));
         assert!(!is_discrete(&gpus, None));
+    }
+
+    #[test]
+    fn the_local_server_keeps_little_aside_in_memory() {
+        let server = LocalServer { binaries: "bin".into(), model: "m.gguf".into(), shaders: None };
+        let args: Vec<String> = llama_command(&server, None, false, 1, None).get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        let at = args.iter().position(|a| a == "--cache-ram").expect("the prompt cache is capped");
+        assert!(args[at + 1].parse::<u32>().unwrap() <= 1024, "{args:?}");
     }
 
     #[test]

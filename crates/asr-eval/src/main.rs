@@ -10,7 +10,7 @@
 //!       unheard or silence is heard as words; the controls only report it.
 //!   asr-eval compare <report.json>...
 //!       The runs' language totals side by side.
-//!   asr-eval speakers <root> [--only id,id] [--output dir] [--reuse] [--turns off|slow|medium|fast]
+//!   asr-eval speakers <root> [--only id,id] [--output dir] [--reuse] [--turns off|slow|medium|fast|long]
 //!       How well speakers are told apart on the meeting recordings, at several thresholds; see speakers.rs.
 //!
 //! The speech models are read from <root>/resources/voice, where the packages take them from too.

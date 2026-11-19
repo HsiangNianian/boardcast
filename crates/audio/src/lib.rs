@@ -492,6 +492,9 @@ pub struct Ear {
     audio: VecDeque<f32>,
     /// Who is talking, when the diarization model is there.
     turns: Option<turns::Turns>,
+    /// The diarization model to load, with the folder it is in, once the first audio comes: loading waits
+    /// until then so that choosing another latency first never loads two.
+    turns_wanted: Option<(PathBuf, Latency)>,
     /// When speech last ended, counted like `fed`: the diarization model hears on for `TAIL` after it.
     quiet_since: usize,
     /// Wait for the diarization model at every step, rather than take what it has given so far.
@@ -531,10 +534,7 @@ impl Ear {
         if speaker.is_none() {
             eprintln!("the speaker model did not load, so speakers will not be told apart");
         }
-        let turns = chosen_latency().and_then(|latency| turns::Turns::load(models, latency));
-        if turns.is_none() {
-            eprintln!("the diarization model did not load, so a sentence is not split between speakers");
-        }
+        let turns_wanted = chosen_latency().map(|latency| (models.to_path_buf(), latency));
         Ok(Self {
             vad,
             asr,
@@ -549,7 +549,8 @@ impl Ear {
             fed: 0,
             level: VadLevel::default(),
             audio: VecDeque::new(),
-            turns,
+            turns: None,
+            turns_wanted,
             quiet_since: 0,
             wait_for_turns: false,
             waiting: VecDeque::new(),
@@ -558,19 +559,27 @@ impl Ear {
 
     /// Tell speakers apart at this latency instead, or not split sentences at all with `None`.
     pub fn turns(mut self, models: &Path, latency: Option<Latency>) -> Self {
-        self.turns = latency.and_then(|l| turns::Turns::load(models, l));
+        self.turns = None;
+        self.turns_wanted = latency.map(|l| (models.to_path_buf(), l));
         self
     }
 
     /// Wait for the diarization model at every step, which runs on its own thread, as a recording heard
     /// faster than real time needs: lines then come out when they would live, on a machine fast enough,
-    /// and the results do not depend on how busy this one is.
+    /// and the results do not depend on how busy this one is. Without it, input given faster than real
+    /// time piles up for the model and soon counts as a machine too slow for it.
     pub fn wait_for_turns(mut self) -> Self {
         self.wait_for_turns = true;
         self
     }
 
     pub fn feed(&mut self, samples: &[f32], heard: &mut impl Heard) {
+        if let Some((models, latency)) = self.turns_wanted.take() {
+            self.turns = turns::Turns::load(&models, latency);
+            if self.turns.is_none() {
+                eprintln!("the diarization model did not load, so a sentence is not split between speakers");
+            }
+        }
         self.pending.extend_from_slice(samples);
         while self.pending.len() >= VAD_WINDOW {
             let chunk: Vec<f32> = self.pending.drain(..VAD_WINDOW).collect();
@@ -677,6 +686,11 @@ impl Ear {
         // Waiting at every step is for measuring, where the machine's load must not change the result.
         if !self.wait_for_turns && turns.too_slow() {
             eprintln!("the diarization model cannot keep up on this machine, so sentences are no longer split between speakers");
+            self.turns = None;
+            return self.release(all, heard);
+        }
+        if turns.stalled() {
+            eprintln!("the diarization model stopped answering, so sentences are no longer split between speakers");
             self.turns = None;
             return self.release(all, heard);
         }

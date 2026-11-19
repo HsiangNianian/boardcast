@@ -17,9 +17,11 @@
 
 use sherpa_onnx::{OnlineSpeakerDiarization, OnlineSpeakerDiarizationConfig};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Arc;
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::path::Path;
 
 /// Under `models`, as `fetch voice` and the packages put it.
@@ -68,6 +70,12 @@ pub(crate) struct Piece {
     pub slot: Option<usize>,
     /// Other slots heard talking at the same time.
     pub also: Vec<usize>,
+}
+
+impl Drop for Turns {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+    }
 }
 
 /// Where the stretches of input the model heard came from: the model's samples follow one another, the
@@ -146,8 +154,9 @@ struct Answer {
     took: f64,
 }
 
-/// The model runs on a thread of its own, so the recognizers never wait for it.
-fn spawn(model: OnlineSpeakerDiarization) -> (Sender<Ask>, Receiver<Answer>) {
+/// The model runs on a thread of its own, so the recognizers never wait for it. `None` if the system gives
+/// no thread: the ear then hears without it. Once `stop` is set, what is still queued is dropped.
+fn spawn(model: OnlineSpeakerDiarization, stop: Arc<AtomicBool>) -> Option<(Sender<Ask>, Receiver<Answer>)> {
     let (ask, asked) = channel::<Ask>();
     let (answer, answers) = channel::<Answer>();
     let rate = f64::from(model.sample_rate());
@@ -157,6 +166,9 @@ fn spawn(model: OnlineSpeakerDiarization) -> (Sender<Ask>, Receiver<Answer>) {
             let mut model = model;
             let mut generation = 0;
             for ask in asked {
+                if stop.load(Ordering::Relaxed) {
+                    return;
+                }
                 let began = Instant::now();
                 let heard = match ask {
                     Ask::Hear(samples) => {
@@ -180,18 +192,33 @@ fn spawn(model: OnlineSpeakerDiarization) -> (Sender<Ask>, Receiver<Answer>) {
                 }
             }
         })
-        .expect("a thread for the diarization model");
-    (ask, answers)
+        .map_err(|e| eprintln!("no thread for the diarization model: {e}"))
+        .ok()?;
+    Some((ask, answers))
 }
 
 /// The model is too slow for this machine when, over this much audio, it took more than `TOO_SLOW` of its
 /// length: with the recognizers on the same processor, it would fall ever further behind.
 const JUDGED_OVER: f64 = 30.0;
 const TOO_SLOW: f64 = 0.8;
+/// More audio than this waiting for the model, in seconds, is too slow at once: the queue must not grow
+/// while the 30 s above are still being heard.
+const BACKLOG: f64 = 10.0;
+/// Waiting at every step, as measuring does, gives up after this: a model that stopped answering must not
+/// hang a run.
+const STALLED: Duration = Duration::from_secs(60);
 
 pub(crate) struct Turns {
     ask: Sender<Ask>,
     answers: Receiver<Answer>,
+    /// Tells the model's thread to drop what is queued and end, when this is dropped.
+    stop: Arc<AtomicBool>,
+    /// Samples sent and samples answered for, to see how much waits for the model.
+    sent: usize,
+    answered_samples: usize,
+    rate: f64,
+    /// The model stopped answering while waited for.
+    stalled: bool,
     /// Asks sent and answers taken: when they match, the model has heard everything it was given.
     asked: usize,
     answered: usize,
@@ -226,8 +253,10 @@ impl Turns {
         let model = OnlineSpeakerDiarization::create(&config)?;
         let shift = (model.frame_shift() * model.sample_rate() as f32).round() as usize;
         let width = usize::try_from(model.num_speakers()).unwrap_or(4).max(1);
-        let (ask, answers) = spawn(model);
-        Some(Self { ask, answers, asked: 0, answered: 0, timeline: Timeline::default(), frames: VecDeque::new(), first: 0, shift: shift.max(1), generation: 0, width, pace: VecDeque::new() })
+        let rate = f64::from(model.sample_rate());
+        let stop = Arc::new(AtomicBool::new(false));
+        let (ask, answers) = spawn(model, stop.clone())?;
+        Some(Self { ask, answers, stop, sent: 0, answered_samples: 0, rate, stalled: false, asked: 0, answered: 0, timeline: Timeline::default(), frames: VecDeque::new(), first: 0, shift: shift.max(1), generation: 0, width, pace: VecDeque::new() })
     }
 
     fn send(&mut self, ask: Ask) {
@@ -239,6 +268,7 @@ impl Turns {
     /// Hear `samples`, which begin at the ear's sample `at`.
     pub(crate) fn accept(&mut self, at: usize, samples: &[f32]) {
         self.timeline.push(at, samples.len());
+        self.sent += samples.len();
         self.send(Ask::Hear(samples.to_vec()));
     }
 
@@ -266,9 +296,12 @@ impl Turns {
     pub(crate) fn take(&mut self, wait: bool) {
         loop {
             let answer = if wait && self.answered < self.asked {
-                match self.answers.recv() {
+                match self.answers.recv_timeout(STALLED) {
                     Ok(a) => a,
-                    Err(_) => return,
+                    Err(_) => {
+                        self.stalled = true;
+                        return;
+                    }
                 }
             } else {
                 match self.answers.try_recv() {
@@ -277,6 +310,7 @@ impl Turns {
                 }
             };
             self.answered += 1;
+            self.answered_samples += (answer.heard * self.rate).round() as usize;
             if answer.heard > 0.0 {
                 self.pace.push_back((answer.heard, answer.took));
                 while self.pace.iter().map(|p| p.0).sum::<f64>() - self.pace.front().map_or(0.0, |p| p.0) > JUDGED_OVER {
@@ -293,10 +327,16 @@ impl Turns {
         }
     }
 
-    /// Whether the model has lately taken too long for the audio it heard.
+    /// Whether the model has lately taken too long for the audio it heard, or has too much waiting for it.
     pub(crate) fn too_slow(&self) -> bool {
         let (heard, took) = self.pace.iter().fold((0.0, 0.0), |(h, t), p| (h + p.0, t + p.1));
-        heard >= JUDGED_OVER && took > heard * TOO_SLOW
+        let waiting = self.sent.saturating_sub(self.answered_samples) as f64 / self.rate;
+        (heard >= JUDGED_OVER && took > heard * TOO_SLOW) || waiting > BACKLOG
+    }
+
+    /// Whether the model stopped answering while waited for.
+    pub(crate) fn stalled(&self) -> bool {
+        self.stalled
     }
 
     /// Every sample of the ear's before this has its speakers known, or was never to be heard. `now` is

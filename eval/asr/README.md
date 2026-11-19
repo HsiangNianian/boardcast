@@ -85,7 +85,7 @@ Your own voice can be recorded for a personal check with [own-voice/record.sh](o
 
 ## Telling speakers apart
 
-`asr-eval speakers <root> [--only id,id] [--output dir] [--reuse] [--turns off|slow|medium|fast]` hears the
+`asr-eval speakers <root> [--only id,id] [--output dir] [--reuse] [--turns off|slow|medium|fast|long]` hears the
 meeting recordings whose references say who spoke when, keeps every sentence's voiceprint and diarization slot in
 `<output>/sentences*/`, and gives the sentences to speakers by the app's own rule at thresholds from 0.35 to 0.6.
 Each sentence is compared with the reference speaker it overlaps most: purity is how much of each speaker found is

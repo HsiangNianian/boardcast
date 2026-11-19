@@ -12,6 +12,8 @@
 //!   version-newer <new> <old>   Fails unless <new> is a later version than <old>.
 //!   meetings-check <data-dir>   Rewrites every meeting into <data-dir>'s v2 folder; use on a copy.
 //!   search-eval <root> <model.gguf> <gemma|qwen3> [--out <report.json>]   Meeting search on eval/search/queries.json.
+//!   score-board <case.json> <meeting.json>   A board as a meeting keeps it, scored against a case's answer the way
+//!              agent-eval scores a model's: for a board drawn by hand as a target, or one a model drew.
 //!   ink-sample <root> <out.png> [--size <px>] [--messy <0..1>]... <text>...   A sheet of the board's handwriting.
 //!   demo-record <root> <sample-id> <out.json> <model> --title … --name … --audio … --credit …
 //!   <model> is --llm <url> | --deepseek | --remote <url> --model <name> | --saved; see model_flags.rs.
@@ -54,6 +56,7 @@ fn main() -> Result<()> {
         Some("search-eval") => search_eval::run(args),
         Some("demo-record") => demo_record::run(args),
         Some("ink-sample") => ink_sample::run(args),
+        Some("score-board") => score_board(args),
         _ => bail!("usage: check <root> ... | agent-eval <root> <output.json> ..."),
     }
 }
@@ -101,5 +104,19 @@ fn version_newer(mut args: impl Iterator<Item = String>) -> Result<()> {
     if new <= old {
         bail!("{new} is not newer than {old}");
     }
+    Ok(())
+}
+
+fn score_board(mut args: impl Iterator<Item = String>) -> Result<()> {
+    let (Some(case), Some(meeting)) = (args.next(), args.next()) else {
+        bail!("usage: score-board <case.json> <meeting.json>");
+    };
+    let read = |path: &str| -> Result<serde_json::Value> { Ok(serde_json::from_str(&std::fs::read_to_string(path).with_context(|| path.to_string())?)?) };
+    let case = read(&case)?;
+    // A file of cases holds a list; one case is an object.
+    let case = case.as_array().and_then(|cases| cases.first().cloned()).unwrap_or(case);
+    let gold: score::Gold = serde_json::from_value(case["gold"].clone()).context("the case's gold")?;
+    let graph: boardcast_board::graph::Graph = serde_json::from_value(read(&meeting)?["graph"].clone()).context("the meeting's graph")?;
+    println!("{:#?}", score::score(&graph, &gold));
     Ok(())
 }

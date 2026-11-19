@@ -19,9 +19,10 @@ fn main() -> anyhow::Result<()> {
         "slow" => Some(Latency::Slow),
         "medium" => Some(Latency::Medium),
         "fast" => Some(Latency::Fast),
+            "long" => Some(Latency::Long),
         other => anyhow::bail!("unknown setting {other}"),
     };
-    let mut ear = Ear::load(Path::new(models))?.turns(Path::new(models), latency);
+    let mut ear = Ear::load(Path::new(models))?.turns(Path::new(models), latency).wait_for_turns();
     let wave = Wave::read(wav).ok_or_else(|| anyhow::anyhow!("cannot read {wav}"))?;
     let mut heard = |s: Sentence| {
         let slot = s.slot.map_or("-".to_string(), |n| n.to_string());

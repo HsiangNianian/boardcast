@@ -34,6 +34,9 @@ struct Heard {
     slot: Option<usize>,
 }
 
+/// The version of the kept sentences: 2 since the diarization model leaves long silences out.
+const SENTENCES_VERSION: u32 = 2;
+
 /// A sentence this long or longer counts as a long turn.
 const LONG: f64 = 2.0;
 /// Two people speaking this long each, in seconds, make a sentence mixed.
@@ -46,7 +49,8 @@ pub fn turns(value: &str) -> Result<Option<Latency>> {
         "slow" => Some(Latency::Slow),
         "medium" => Some(Latency::Medium),
         "fast" => Some(Latency::Fast),
-        other => anyhow::bail!("--turns is off, slow, medium or fast, not {other}"),
+            "long" => Some(Latency::Long),
+        other => anyhow::bail!("--turns is off, slow, medium, fast or long, not {other}"),
     })
 }
 
@@ -59,12 +63,15 @@ pub fn run(root: &Path, only: Option<&[String]>, output: &Path, reuse: bool, lat
     let mut corpus: Corpus = corpus::load(root, "meetings")?;
     corpus.samples.retain(|s| s.reference.iter().any(|t| !t.speaker.is_empty()) && only.is_none_or(|o| o.contains(&s.id)));
     ensure!(!corpus.samples.is_empty(), "no meeting with speakers in its reference");
-    let cache = output.join(match latency {
+    let setting = match latency {
         None => "sentences",
         Some(Latency::Slow) => "sentences-turns-slow",
         Some(Latency::Medium) => "sentences-turns-medium",
         Some(Latency::Fast) => "sentences-turns-fast",
-    });
+        Some(Latency::Long) => "sentences-turns-long",
+    };
+    // A change to how sentences are heard bumps the version, so --reuse never measures older sentences.
+    let cache = output.join(format!("{setting}-v{SENTENCES_VERSION}"));
     std::fs::create_dir_all(&cache)?;
     let models = root.join("resources/voice");
     let mut rows = vec![];
@@ -78,7 +85,7 @@ pub fn run(root: &Path, only: Option<&[String]>, output: &Path, reuse: bool, lat
             let wave = Wave::read(&path.to_string_lossy()).with_context(|| format!("reading {}", s.file))?;
             ensure!(wave.sample_rate() == SAMPLE_RATE, "{} is not 16 kHz", s.file);
             // A new ear for each recording: an ear counts time from the first sample it was given.
-            let mut ear = Ear::with(&models, Recognizers::load(&models))?.turns(&models, latency);
+            let mut ear = Ear::with(&models, Recognizers::load(&models))?.turns(&models, latency).wait_for_turns();
             let mut out: Vec<Heard> = vec![];
             let mut keep = |s: Sentence| out.push(Heard { start: s.start, seconds: s.seconds, voiceprint: s.voiceprint, slot: s.slot });
             for chunk in wave.samples().chunks(1600) {

@@ -70,6 +70,32 @@ fn rms(samples: &[f32]) -> f32 {
     (samples.iter().map(|x| x * x).sum::<f32>() / samples.len().max(1) as f32).sqrt()
 }
 
+/// Below this a window of the sentence is quiet: a share of its median loudness. The quiet-room floor stays
+/// below speech itself; an absolute floor cuts quiet words in half.
+fn quiet_level(loudness: &[f32]) -> f32 {
+    if loudness.is_empty() {
+        return 0.0;
+    }
+    let mut sorted = loudness.to_vec();
+    sorted.sort_by(f32::total_cmp);
+    let median = sorted[loudness.len() / 2];
+    (median * QUIET_RATIO).max(0.003_f32.min(median * 0.5))
+}
+
+/// How many windows at the start are quiet, before speech begins, keeping one of them in front of it. Quiet
+/// is 20 dB below the loud part, its 90th percentile: the audio kept from before speech was detected is
+/// mostly silence, so a share of its median would be a share of the silence itself.
+fn quiet_lead(loudness: &[f32]) -> usize {
+    if loudness.is_empty() {
+        return 0;
+    }
+    let mut sorted = loudness.to_vec();
+    sorted.sort_by(f32::total_cmp);
+    let loud = sorted[(sorted.len() - 1) * 9 / 10];
+    let quiet = loud * ONSET_RATIO;
+    loudness.iter().take_while(|&&r| r < quiet).count().saturating_sub(1)
+}
+
 /// Given each window's loudness, whether the sentence can end at the dip it finishes on, and how many
 /// windows at the end belong to the next one.
 fn soft_break(loudness: &[f32]) -> Option<usize> {
@@ -77,11 +103,7 @@ fn soft_break(loudness: &[f32]) -> Option<usize> {
     if n * VAD_WINDOW < (SOFT_MAX * SAMPLE_RATE as f32) as usize {
         return None;
     }
-    let mut sorted = loudness.to_vec();
-    sorted.sort_by(f32::total_cmp);
-    // The quiet-room floor stays below speech itself; an absolute floor cuts quiet words in half.
-    let median = sorted[n / 2];
-    let quiet = (median * QUIET_RATIO).max(0.003_f32.min(median * 0.5));
+    let quiet = quiet_level(loudness);
     let run = loudness.iter().rev().take_while(|&&r| r < quiet).count();
     // One window less per second past SOFT_MAX.
     let over = (n * VAD_WINDOW) as f32 / SAMPLE_RATE as f32 - SOFT_MAX;
@@ -90,8 +112,35 @@ fn soft_break(loudness: &[f32]) -> Option<usize> {
     (run >= need).then_some(run / 2)
 }
 
-/// The latency the diarization model runs at; see [`Latency`].
+/// The latency the diarization model runs at; see [`Latency`]. `BOARDCAST_DIARIZATION` set to slow, medium,
+/// fast, long or off chooses another without building again: `long` halves the model's work for 0.35 s
+/// more on each line, for a slow machine.
 const LATENCY: Latency = Latency::Slow;
+
+/// The latency from `BOARDCAST_DIARIZATION`, or [`LATENCY`]; `None` when it is off.
+fn chosen_latency() -> Option<Latency> {
+    match std::env::var("BOARDCAST_DIARIZATION").ok().as_deref().map(str::trim) {
+        Some("off") => None,
+        Some("slow") => Some(Latency::Slow),
+        Some("medium") => Some(Latency::Medium),
+        Some("fast") => Some(Latency::Fast),
+        Some("long") => Some(Latency::Long),
+        Some(other) if !other.is_empty() => {
+            eprintln!("BOARDCAST_DIARIZATION is slow, medium, fast, long or off, not {other}; using the default");
+            Some(LATENCY)
+        }
+        _ => Some(LATENCY),
+    }
+}
+
+/// How long the diarization model keeps hearing after speech, in samples. Pauses between sentences stay in
+/// what it hears: left out, it judged turns worse (F1 0.889 to 0.877 on the speaker eval). Only a longer
+/// silence, as in a break, is left out, and it needs at least its latency and a step to give out the frames
+/// at the end of a sentence.
+const TAIL: usize = SAMPLE_RATE as usize * 10;
+/// A window this far below the loud part of the audio before speech, 20 dB, is silence the diarization
+/// model need not hear.
+const ONSET_RATIO: f32 = 0.1;
 /// A piece of a sentence shorter than this, in samples, is too short to read: a quarter second.
 const MIN_PIECE: usize = SAMPLE_RATE as usize / 4;
 
@@ -117,8 +166,8 @@ pub struct Sentence {
     pub seconds: f64,
     /// Which recognizer wrote the text.
     pub engine: Engine,
-    /// The diarization model's speaker slot, which stays with one person while at most four talk. It counts
-    /// on past 3 after the ear was finished and heard again, as the model then starts over and a slot may
+    /// The diarization model's speaker slot, which stays with one person while at most eight talk. It counts
+    /// on past 7 after the ear was finished and heard again, as the model then starts over and a slot may
     /// be someone else. Missing without the model, or when it heard nobody.
     pub slot: Option<usize>,
 }
@@ -440,6 +489,13 @@ pub struct Ear {
     audio: VecDeque<f32>,
     /// Who is talking, when the diarization model is there.
     turns: Option<turns::Turns>,
+    /// The diarization model to load, with the folder it is in, once the first audio comes: loading waits
+    /// until then so that choosing another latency first never loads two.
+    turns_wanted: Option<(PathBuf, Latency)>,
+    /// When speech last ended, counted like `fed`: the diarization model hears on for `TAIL` after it.
+    quiet_since: usize,
+    /// Wait for the diarization model at every step, rather than take what it has given so far.
+    wait_for_turns: bool,
     /// Sentences waiting for `turns` to know who said them, with where they start.
     waiting: VecDeque<(Vec<f32>, usize)>,
 }
@@ -475,10 +531,7 @@ impl Ear {
         if speaker.is_none() {
             eprintln!("the speaker model did not load, so speakers will not be told apart");
         }
-        let turns = turns::Turns::load(models, LATENCY);
-        if turns.is_none() {
-            eprintln!("the diarization model did not load, so a sentence is not split between speakers");
-        }
+        let turns_wanted = chosen_latency().map(|latency| (models.to_path_buf(), latency));
         Ok(Self {
             vad,
             asr,
@@ -493,26 +546,43 @@ impl Ear {
             fed: 0,
             level: VadLevel::default(),
             audio: VecDeque::new(),
-            turns,
+            turns: None,
+            turns_wanted,
+            quiet_since: 0,
+            wait_for_turns: false,
             waiting: VecDeque::new(),
         })
     }
 
     /// Tell speakers apart at this latency instead, or not split sentences at all with `None`.
     pub fn turns(mut self, models: &Path, latency: Option<Latency>) -> Self {
-        self.turns = latency.and_then(|l| turns::Turns::load(models, l));
+        self.turns = None;
+        self.turns_wanted = latency.map(|l| (models.to_path_buf(), l));
+        self
+    }
+
+    /// Wait for the diarization model at every step, which runs on its own thread, as a recording heard
+    /// faster than real time needs: lines then come out when they would live, on a machine fast enough,
+    /// and the results do not depend on how busy this one is. Without it, input given faster than real
+    /// time piles up for the model and soon counts as a machine too slow for it.
+    pub fn wait_for_turns(mut self) -> Self {
+        self.wait_for_turns = true;
         self
     }
 
     pub fn feed(&mut self, samples: &[f32], heard: &mut impl Heard) {
+        if let Some((models, latency)) = self.turns_wanted.take() {
+            self.turns = turns::Turns::load(&models, latency);
+            if self.turns.is_none() {
+                eprintln!("the diarization model did not load, so a sentence is not split between speakers");
+            }
+        }
         self.pending.extend_from_slice(samples);
         while self.pending.len() >= VAD_WINDOW {
             let chunk: Vec<f32> = self.pending.drain(..VAD_WINDOW).collect();
             self.fed += VAD_WINDOW;
             self.audio.extend(&chunk);
-            if let Some(turns) = self.turns.as_mut() {
-                turns.accept(&chunk);
-            }
+            let was_speaking = self.in_speech;
             let mut leveled = chunk.clone();
             self.level.apply(&mut leveled);
             self.vad.accept_waveform(&leveled);
@@ -538,6 +608,10 @@ impl Ear {
                 self.vad.flush();
             }
             self.drain(heard);
+            if was_speaking && !self.in_speech {
+                self.quiet_since = self.fed;
+            }
+            self.feed_turns();
             self.release(false, heard);
             let keep_from = if self.in_speech { self.sent_until } else { self.fed.saturating_sub(PREROLL) };
             let discard = keep_from.saturating_sub(self.fed - self.audio.len()).min(self.audio.len());
@@ -560,6 +634,28 @@ impl Ear {
         self.hear(&head, self.sent_until - head.len(), heard);
     }
 
+    /// Give the diarization model what it should hear of the input so far: speech, from the first window
+    /// loud enough to belong to it, and up to `TAIL` of quiet after it. A longer silence, as in a break, is
+    /// left out, as the model costs about half of real time, so a meeting can be left listening.
+    fn feed_turns(&mut self) {
+        let Some(turns) = self.turns.as_mut() else { return };
+        if !self.in_speech && self.fed >= self.quiet_since + TAIL {
+            return;
+        }
+        let kept_from = self.fed - self.audio.len();
+        let mut from = turns.heard_until().unwrap_or(0).max(self.fed - VAD_WINDOW).max(kept_from);
+        if self.in_speech {
+            // The audio before the detector heard speech, from its first loud window.
+            let onset = self.speech_start + quiet_lead(&self.loudness) * VAD_WINDOW;
+            from = turns.heard_until().unwrap_or(0).max(onset).max(kept_from).min(from);
+        }
+        if from >= self.fed {
+            return;
+        }
+        let samples: Vec<f32> = self.audio.iter().skip(from - kept_from).copied().collect();
+        turns.accept(from, &samples);
+    }
+
     /// A sentence the detector cut out: heard now, or once the diarization model knows who said it.
     fn hear(&mut self, samples: &[f32], start: usize, heard: &mut impl Heard) {
         if samples.len() < VAD_WINDOW {
@@ -576,9 +672,28 @@ impl Ear {
     /// Hear the waiting sentences whose speakers are known, or all of them at the end, each split where
     /// the speaker changes.
     fn release(&mut self, all: bool, heard: &mut impl Heard) {
+        let Some(turns) = self.turns.as_mut() else {
+            // Turned off while sentences waited: they are heard whole.
+            while let Some((samples, start)) = self.waiting.pop_front() {
+                self.hear_piece(&samples, start, None, heard);
+            }
+            return;
+        };
+        turns.take(self.wait_for_turns);
+        // Waiting at every step is for measuring, where the machine's load must not change the result.
+        if !self.wait_for_turns && turns.too_slow() {
+            eprintln!("the diarization model cannot keep up on this machine, so sentences are no longer split between speakers");
+            self.turns = None;
+            return self.release(all, heard);
+        }
+        if turns.stalled() {
+            eprintln!("the diarization model stopped answering, so sentences are no longer split between speakers");
+            self.turns = None;
+            return self.release(all, heard);
+        }
         while let Some((samples, start)) = self.waiting.front() {
             let Some(turns) = self.turns.as_ref() else { break };
-            if !all && start + samples.len() > turns.known_until() {
+            if !all && start + samples.len() > turns.known_until(self.fed) {
                 break;
             }
             let pieces = turns.split(*start, samples.len());
@@ -659,9 +774,8 @@ impl Ear {
         }
         self.release(true, heard);
         // The ear may hear again, as when listening resumes: that is a new stream for the model.
-        let fed = self.fed;
         if let Some(turns) = self.turns.as_mut() {
-            turns.restart(fed);
+            turns.restart();
         }
     }
 }
@@ -675,6 +789,33 @@ pub fn play_wav(path: &Path, samples: &Sender<Vec<f32>>) -> Result<()> {
     }
     let _ = samples.send(vec![0.0; SAMPLE_RATE as usize]);
     Ok(())
+}
+
+#[cfg(test)]
+mod onset_tests {
+    use super::*;
+
+    #[test]
+    fn the_silence_before_speech_is_left_out_but_one_window() {
+        // A second of quiet room, then a third of a second of speech.
+        let mut loudness = vec![0.002_f32; 31];
+        loudness.extend([0.05, 0.08, 0.1, 0.09, 0.07, 0.1, 0.08, 0.06, 0.09, 0.1]);
+        assert_eq!(quiet_lead(&loudness), 30);
+    }
+
+    #[test]
+    fn a_soft_start_is_kept() {
+        // Speech that rises slowly from the room: its quiet beginning is still well above the room.
+        let mut loudness = vec![0.002_f32; 10];
+        loudness.extend([0.012, 0.03, 0.06, 0.1, 0.1, 0.1]);
+        assert_eq!(quiet_lead(&loudness), 9);
+    }
+
+    #[test]
+    fn nothing_is_left_out_of_a_loud_room() {
+        assert_eq!(quiet_lead(&[0.05; 20]), 0);
+        assert_eq!(quiet_lead(&[]), 0);
+    }
 }
 
 #[cfg(test)]

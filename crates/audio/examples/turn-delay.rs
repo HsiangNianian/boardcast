@@ -7,7 +7,8 @@
 //! - after its own speech: from the end of the line itself, which is how late it feels to the people in
 //!   the room, as the first part of a split sentence still waits for the rest.
 //!
-//! Usage: turn-delay <voice-models> <recording.wav>
+//! Usage: turn-delay <voice-models> <recording.wav> [setting,setting...]
+//! The settings are off, slow, medium and fast; off, slow and medium unless given.
 
 use boardcast_audio::{Ear, Latency, Recognizers, Sentence, SAMPLE_RATE};
 use sherpa_onnx::Wave;
@@ -17,15 +18,25 @@ use std::time::Instant;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let [models, wav] = args.as_slice() else {
-        anyhow::bail!("usage: turn-delay <voice-models> <recording.wav>");
+    let (models, wav, settings) = match args.as_slice() {
+        [models, wav] => (models, wav, "off,slow,medium"),
+        [models, wav, settings] => (models, wav, settings.as_str()),
+        _ => anyhow::bail!("usage: turn-delay <voice-models> <recording.wav> [setting,setting...]"),
     };
     let models = Path::new(models);
     let wave = Wave::read(wav).ok_or_else(|| anyhow::anyhow!("cannot read {wav}"))?;
     let seconds = wave.samples().len() as f64 / f64::from(SAMPLE_RATE);
     println!("setting,lines,sentence_mean_s,sentence_p50_s,sentence_p90_s,line_mean_s,line_p50_s,line_p90_s,wall_s,rtf");
-    for (name, latency) in [("off", None), ("slow", Some(Latency::Slow)), ("medium", Some(Latency::Medium))] {
-        let mut ear = Ear::with(models, Recognizers::load(models))?.turns(models, latency);
+    for name in settings.split(',') {
+        let latency = match name {
+            "off" => None,
+            "slow" => Some(Latency::Slow),
+            "medium" => Some(Latency::Medium),
+            "fast" => Some(Latency::Fast),
+            "long" => Some(Latency::Long),
+            other => anyhow::bail!("unknown setting {other}"),
+        };
+        let mut ear = Ear::with(models, Recognizers::load(models))?.turns(models, latency).wait_for_turns();
         let fed = Cell::new(0usize);
         // When each line arrived, and where it ended, in seconds.
         let mut arrivals: Vec<(f64, f64)> = vec![];

@@ -1,6 +1,6 @@
 //! The speech models shipped in every package, about 1.2 GB: SenseVoice, the Silero VAD, the CAM++
-//! speaker model, Nemotron-3-Diarization for telling speakers apart as they talk, Parakeet for English and
-//! ReazonSpeech for Japanese. CI caches them by this file's hash. The speaker model is not on ModelScope,
+//! speaker model, Nemotron-3-Diarization for telling speakers apart as they talk, a streaming Chinese
+//! zipformer for drafts while someone speaks, Parakeet for English and ReazonSpeech for Japanese. CI caches them by this file's hash. The speaker model is not on ModelScope,
 //! so it comes from Hugging Face or GitHub; the diarization model, exported to ONNX by our sherpa-onnx
 //! fork's CI, only from that fork's release.
 
@@ -18,6 +18,9 @@ pub struct VoiceFile {
 
 const PARAKEET: &str = "csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7";
 const DIARIZATION: &str = "https://github.com/HsiangNianian/sherpa-onnx/releases/download/boardcast-2.0.1-3/nemotron-3-diarization.int8.onnx";
+/// The streaming Chinese model that drafts while someone speaks (#291). Its authors state no license yet;
+/// boardcast's maintainer has asked them for one.
+const DRAFT_ZH: &str = "csukuangfj/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30/resolve/ad658fa0201659a09ea3c176129a191c77ecae8f";
 const REAZON: &str = "reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407";
 
 pub fn files() -> Vec<VoiceFile> {
@@ -62,6 +65,38 @@ pub fn files() -> Vec<VoiceFile> {
             modelscope: None,
             huggingface: None,
             github: Some(DIARIZATION),
+        },
+        VoiceFile {
+            name: "voice/draft-zh/encoder.int8.onnx",
+            size: 161_141_793,
+            sha256: "5ac51e27981bb4dab01bb9be4958453ba50c3b61c063ddda0eab23fd3671aa4f",
+            modelscope: None,
+            huggingface: Some(pinned(DRAFT_ZH, "encoder.int8.onnx")),
+            github: None,
+        },
+        VoiceFile {
+            name: "voice/draft-zh/decoder.onnx",
+            size: 5_165_083,
+            sha256: "06522ad63cec0fdf6809f4e1db9bb4f7d710c34582e3b35db62ac60eccafac7e",
+            modelscope: None,
+            huggingface: Some(pinned(DRAFT_ZH, "decoder.onnx")),
+            github: None,
+        },
+        VoiceFile {
+            name: "voice/draft-zh/joiner.int8.onnx",
+            size: 1_033_416,
+            sha256: "b34584dc6f561089e1d747fedebb3765f2caa72c927ef54d7ca55e5ae40a814b",
+            modelscope: None,
+            huggingface: Some(pinned(DRAFT_ZH, "joiner.int8.onnx")),
+            github: None,
+        },
+        VoiceFile {
+            name: "voice/draft-zh/tokens.txt",
+            size: 20_628,
+            sha256: "6193c7ea1c96d0d9a1e9652789b40d13a8a913b434a5451e93158f5a09fd6652",
+            modelscope: None,
+            huggingface: Some(pinned(DRAFT_ZH, "tokens.txt")),
+            github: None,
         },
         VoiceFile {
             name: "voice/parakeet-en/encoder.int8.onnx",

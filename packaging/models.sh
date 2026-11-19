@@ -1,12 +1,13 @@
 # Shared by the package scripts: which speech models a variant carries, and what its package is called.
-#   all    SenseVoice, Parakeet (English) and ReazonSpeech (Japanese); "full" is its older name
+#   all    SenseVoice, Parakeet (English), ReazonSpeech (Japanese) and the streaming Chinese model that
+#          drafts while someone speaks; "full" is its older name
 #   ja     ReazonSpeech only
 #   en     Parakeet only
 #   none   no models: Apple's own recognizer, on a Mac only
 
 variant_models() {
   case "$1" in
-    all | full) echo "sense-voice parakeet-en reazon-ja" ;;
+    all | full) echo "sense-voice parakeet-en reazon-ja draft-zh" ;;
     ja) echo "reazon-ja" ;;
     en) echo "parakeet-en" ;;
     none) echo "" ;;
@@ -27,6 +28,7 @@ copy_models() {
       sense-voice) cp resources/voice/sense-voice/model.int8.onnx resources/voice/sense-voice/tokens.txt "$2/$model/" ;;
       parakeet-en) cp resources/voice/parakeet-en/encoder.int8.onnx resources/voice/parakeet-en/decoder.int8.onnx resources/voice/parakeet-en/joiner.int8.onnx resources/voice/parakeet-en/tokens.txt "$2/$model/" ;;
       reazon-ja) cp resources/voice/reazon-ja/encoder-epoch-99-avg-1.int8.onnx resources/voice/reazon-ja/decoder-epoch-99-avg-1.int8.onnx resources/voice/reazon-ja/joiner-epoch-99-avg-1.int8.onnx resources/voice/reazon-ja/tokens.txt "$2/$model/" ;;
+      draft-zh) cp resources/voice/draft-zh/encoder.int8.onnx resources/voice/draft-zh/decoder.onnx resources/voice/draft-zh/joiner.int8.onnx resources/voice/draft-zh/tokens.txt "$2/$model/" ;;
     esac
   done
 }

@@ -256,8 +256,8 @@ fn rows_of(doc: &Doc) -> Vec<Row> {
                 out.push(Row { color: MUTED, indent: 7.0, ..Row::new(clean(&format!("{note_prefix}{}", l.text)), 9.1) });
             } else {
                 let said = match &l.speaker {
-                    Some(speaker) => format!("{speaker}{colon}{}", l.text),
-                    None => l.text.clone(),
+                    Some(speaker) => format!("{speaker}{colon}{}{}", l.text, l.also_note(doc.english)),
+                    None => format!("{}{}", l.text, l.also_note(doc.english)),
                 };
                 out.push(Row { indent: 7.0, ..Row::new(clean(&said), BODY) });
             }
@@ -482,7 +482,7 @@ mod tests {
             began: "2026-01-02 03:04".into(),
             summary: "### 待办\n- [ ] 写接口\n- [x] 定方案\n- 普通".into(),
             boards: vec![Graph::default()],
-            lines: (0..lines).map(|i| Said { speaker: Some("A".into()), text: format!("第 {i} 句 mixed with English"), page: 0, manual: i == 1 }).collect(),
+            lines: (0..lines).map(|i| Said { speaker: Some("A".into()), text: format!("第 {i} 句 mixed with English"), page: 0, manual: i == 1, also: vec![] }).collect(),
             english: false,
             omits_visuals: false,
         }

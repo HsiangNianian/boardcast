@@ -418,6 +418,18 @@ impl Live {
         self.touch();
     }
 
+    /// Who else was heard talking at the same time as the last line, whose words are lost under it. An
+    /// empty name is someone not yet named. Kept in the meeting as the line's `also`.
+    pub fn mark_also(&mut self, names: &[String]) {
+        if names.is_empty() {
+            return;
+        }
+        if let Some(line) = self.lines.last_mut() {
+            line["also"] = json!(names);
+            self.touch();
+        }
+    }
+
     /// The last line asked to turn to another board rather than to draw: it is done, and says where it
     /// turned, so a replay can follow.
     pub fn turned_to(&mut self, page: usize) {
@@ -485,6 +497,14 @@ impl Live {
         for said in self.lines.iter_mut().chain(&mut self.history) {
             if said["speaker"] == from {
                 said["speaker"] = json!(to);
+            }
+            if let Some(also) = said.get_mut("also").and_then(Value::as_array_mut) {
+                for name in also.iter_mut().filter(|n| *n == from) {
+                    *name = json!(to);
+                }
+                // Renaming one voice to another's name joins them: each is listed once.
+                let mut seen = std::collections::HashSet::new();
+                also.retain(|n| seen.insert(n.to_string()));
             }
         }
         rename_voice(&mut self.voices, from, to);
@@ -838,6 +858,22 @@ mod tests {
     }
 
         #[test]
+    fn who_else_spoke_is_kept_and_follows_a_rename() {
+        let mut live = Live::build(json!({ "id": "x" }).as_object().unwrap().clone(), Origin::Current, 1);
+        live.add_line(Some("A"), "first", Some(1));
+        live.mark_also(&[]);
+        assert!(live.lines[0].get("also").is_none());
+        live.mark_also(&["B".to_string(), String::new()]);
+        assert_eq!(live.lines[0]["also"], json!(["B", ""]));
+        live.rename_speaker("B", "Mia");
+        assert_eq!(live.lines[0]["also"], json!(["Mia", ""]));
+        live.mark_also(&["Mia".to_string(), "C".to_string()]);
+        live.rename_speaker("C", "Mia");
+        assert_eq!(live.lines[0]["also"], json!(["Mia"]));
+        assert_eq!(live.snapshot()["lines"][0]["also"], json!(["Mia"]));
+    }
+
+    #[test]
     fn a_summary_is_written_and_removed_as_the_older_app_does() {
         let mut live = Live::new();
         assert!(!live.has_content());

@@ -92,8 +92,10 @@ Each sentence is compared with the reference speaker it overlaps most: purity is
 one person, coverage how much of each person is one speaker found. It also gives F1 over sentences of 2 s or more,
 and the share of mixed sentences, in which two people each speak for 1 s or more. `--turns` sets whether
 sentences are split where the diarization model hears the speaker change, and at which latency; `slow` (1.04 s)
-is the app's and the default, `off` hears them whole. `--reuse` measures again from the kept sentences without
-hearing anything.
+is the app's and the default, `off` hears them whole. With splitting it also checks the "also speaking" marks
+(#295): of the sentences marked as heard over someone, how many had another real person talking in them for
+0.32 s or more, and of the sentences that had (or had for 1 s or more), how many were marked. `--reuse` measures
+again from the kept sentences without hearing anything.
 
 On the 9 meetings (2026-11-18, `slow` against `off`, each at its best threshold):
 

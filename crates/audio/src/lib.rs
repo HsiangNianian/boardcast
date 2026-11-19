@@ -170,6 +170,9 @@ pub struct Sentence {
     /// on past 7 after the ear was finished and heard again, as the model then starts over and a slot may
     /// be someone else. Missing without the model, or when it heard nobody.
     pub slot: Option<usize>,
+    /// Other slots heard talking at the same time, whose words are lost under this one's: speech over
+    /// speech cannot be taken apart, but who interrupted can be shown.
+    pub also: Vec<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -665,7 +668,7 @@ impl Ear {
             self.waiting.push_back((samples.to_vec(), start));
             self.release(false, heard);
         } else {
-            self.hear_piece(samples, start, None, heard);
+            self.hear_piece(samples, start, None, vec![], heard);
         }
     }
 
@@ -675,7 +678,7 @@ impl Ear {
         let Some(turns) = self.turns.as_mut() else {
             // Turned off while sentences waited: they are heard whole.
             while let Some((samples, start)) = self.waiting.pop_front() {
-                self.hear_piece(&samples, start, None, heard);
+                self.hear_piece(&samples, start, None, vec![], heard);
             }
             return;
         };
@@ -698,15 +701,15 @@ impl Ear {
             }
             let pieces = turns.split(*start, samples.len());
             let (samples, start) = self.waiting.pop_front().expect("a waiting sentence");
-            for (from, len, slot) in pieces {
-                if len >= MIN_PIECE {
-                    self.hear_piece(&samples[from..from + len], start + from, slot, heard);
+            for piece in pieces {
+                if piece.len >= MIN_PIECE {
+                    self.hear_piece(&samples[piece.from..piece.from + piece.len], start + piece.from, piece.slot, piece.also, heard);
                 }
             }
         }
     }
 
-    fn hear_piece(&mut self, samples: &[f32], start: usize, slot: Option<usize>, heard: &mut impl Heard) {
+    fn hear_piece(&mut self, samples: &[f32], start: usize, slot: Option<usize>, also: Vec<usize>, heard: &mut impl Heard) {
         let ended = Instant::now();
         let (text, engine) = self.asr.hear(samples);
         // A word or two out of clicks, breath or hum: the recognizers find words in anything, but
@@ -716,7 +719,7 @@ impl Ear {
         }
         if !text.is_empty() {
             let asr_ms = ended.elapsed().as_millis();
-            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine, slot });
+            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine, slot, also });
         }
     }
 

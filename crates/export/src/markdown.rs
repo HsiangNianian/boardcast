@@ -310,8 +310,8 @@ pub fn markdown(doc: &Doc, current: usize) -> String {
                 out.extend([format!("### {}", board_name(l.page + 1)), String::new()]);
             }
             out.push(match &l.speaker {
-                Some(speaker) => format!("- **{}**{}{}", text(speaker), w.colon, text(&l.text)),
-                None => format!("- {}", text(&l.text)),
+                Some(speaker) => format!("- **{}**{}{}{}", text(speaker), w.colon, text(&l.text), text(&l.also_note(doc.english))),
+                None => format!("- {}{}", text(&l.text), text(&l.also_note(doc.english))),
             });
         }
         out.push(String::new());

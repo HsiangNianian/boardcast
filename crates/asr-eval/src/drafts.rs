@@ -11,7 +11,7 @@
 use crate::corpus::{self, Corpus};
 use crate::score::error_rate;
 use anyhow::{bail, ensure, Context, Result};
-use boardcast_audio::{Draft, DraftWith, Ear, Recognizers, Sentence, SAMPLE_RATE};
+use boardcast_audio::{load_parakeet, load_reazon, Draft, DraftWith, Ear, Language, Recognizers, Sentence, SAMPLE_RATE};
 use sherpa_onnx::Wave;
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -61,22 +61,33 @@ pub fn variant(value: &str) -> Result<String> {
     Ok(value.to_string())
 }
 
+/// Only the recognizers the package carries are loaded, so measuring one needs no more memory than it.
 fn recognizers(models: &Path, variant: &str) -> Recognizers {
-    let mut asr = Recognizers::load(models);
+    let only = |english, japanese| Recognizers { system: None, sense_voice: None, english, japanese, sense_voice_dir: None, chinese: None, language: Language::Auto };
     match variant {
-        "en" => (asr.sense_voice, asr.japanese) = (None, None),
-        "ja" => (asr.sense_voice, asr.english) = (None, None),
-        _ => {}
+        "en" => only(load_parakeet(&models.join("parakeet-en")), None),
+        "ja" => only(None, load_reazon(&models.join("reazon-ja"))),
+        _ => Recognizers::load(models),
     }
-    asr
+}
+
+/// Whether a package for one language hears this meeting: each is measured on its own language.
+fn heard_by(variant: &str, language: &str) -> bool {
+    match variant {
+        "en" => language == "en",
+        "ja" => language == "ja",
+        _ => true,
+    }
 }
 
 pub fn run(root: &Path, only: Option<&[String]>, output: &Path, drafts: DraftWith, variant: &str) -> Result<()> {
     // A package for one language has no streaming model, so it reads again whatever was asked.
     let drafts = if variant == "all" { drafts } else { DraftWith::Reread };
     let mut corpus: Corpus = corpus::load(root, "meetings")?;
-    corpus.samples.retain(|s| s.language != "silence" && only.is_none_or(|o| o.contains(&s.id)));
+    corpus.samples.retain(|s| s.language != "silence" && heard_by(variant, &s.language) && only.is_none_or(|o| o.contains(&s.id)));
     ensure!(!corpus.samples.is_empty(), "no meeting to draft");
+    // Each package's results go to a folder of their own, so measuring several never mixes them.
+    let output = &output.join(variant);
     std::fs::create_dir_all(output)?;
     let models = root.join("resources/voice");
     let mut rows = String::new();
@@ -187,5 +198,7 @@ mod tests {
         assert!(matches!(with("reread").unwrap(), DraftWith::Reread));
         assert!(matches!(with("stream:/m").unwrap(), DraftWith::Stream(p) if p == Path::new("/m")));
         assert!(with("zipformer").is_err());
+        assert!(heard_by("all", "zh") && heard_by("en", "en") && !heard_by("en", "zh") && !heard_by("ja", "en"));
+        assert!(variant("en").is_ok() && variant("zh").is_err());
     }
 }

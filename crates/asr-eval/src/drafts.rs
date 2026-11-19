@@ -53,7 +53,27 @@ fn common_prefix(before: &str, after: &str) -> usize {
     before.chars().zip(after.chars()).take_while(|(a, b)| a == b).count()
 }
 
-pub fn run(root: &Path, only: Option<&[String]>, output: &Path, drafts: DraftWith) -> Result<()> {
+/// The speech models a package carries, as packaging/models.sh says: `all`, or `en` (Parakeet only) and
+/// `ja` (ReazonSpeech only), which have no SenseVoice and no streaming Chinese model, so they draft by
+/// reading again with their one recognizer.
+pub fn variant(value: &str) -> Result<String> {
+    ensure!(["all", "en", "ja"].contains(&value), "--variant is all, en or ja, not {value}");
+    Ok(value.to_string())
+}
+
+fn recognizers(models: &Path, variant: &str) -> Recognizers {
+    let mut asr = Recognizers::load(models);
+    match variant {
+        "en" => (asr.sense_voice, asr.japanese) = (None, None),
+        "ja" => (asr.sense_voice, asr.english) = (None, None),
+        _ => {}
+    }
+    asr
+}
+
+pub fn run(root: &Path, only: Option<&[String]>, output: &Path, drafts: DraftWith, variant: &str) -> Result<()> {
+    // A package for one language has no streaming model, so it reads again whatever was asked.
+    let drafts = if variant == "all" { drafts } else { DraftWith::Reread };
     let mut corpus: Corpus = corpus::load(root, "meetings")?;
     corpus.samples.retain(|s| s.language != "silence" && only.is_none_or(|o| o.contains(&s.id)));
     ensure!(!corpus.samples.is_empty(), "no meeting to draft");
@@ -68,7 +88,7 @@ pub fn run(root: &Path, only: Option<&[String]>, output: &Path, drafts: DraftWit
         ensure!(wave.sample_rate() == SAMPLE_RATE, "{} is not 16 kHz", s.file);
         let got: Arc<Mutex<Vec<Draft>>> = Arc::default();
         let keep = got.clone();
-        let mut ear = Ear::with(&models, Recognizers::load(&models))?.turns(&models, None).drafts(drafts.clone(), Box::new(move |d| keep.lock().expect("drafts").push(d)));
+        let mut ear = Ear::with(&models, recognizers(&models, variant))?.turns(&models, None).drafts(drafts.clone(), Box::new(move |d| keep.lock().expect("drafts").push(d)));
         let mut said: BTreeMap<usize, String> = BTreeMap::new();
         let mut hear = |sentence: Sentence| {
             let text = said.entry(sentence.utterance).or_default();
@@ -126,7 +146,7 @@ pub fn run(root: &Path, only: Option<&[String]>, output: &Path, drafts: DraftWit
         DraftWith::ByLanguage(dir) => format!("by language: Chinese streamed by {}, the rest reread", dir.file_name().map_or(String::new(), |n| n.to_string_lossy().into_owned())),
     };
     let mut report = format!(
-        "## Drafts ({how})\n\nPer stretch of speech: when the first draft came after speech began to be loud (median, 90th percentile), how far the last draft was from the text that replaced it (CER for Chinese and Japanese, WER for English), the share of shown characters a later draft took back, the stretches with text but no draft, and drafting time over audio time.\n\n| Meeting | Stretches | First text, median / P90 | Error | Rewritten | Missed | Cost |\n|---|---:|---:|---:|---:|---:|---:|\n{rows}"
+        "## Drafts ({how}, {variant} package)\n\nPer stretch of speech: when the first draft came after speech began to be loud (median, 90th percentile), how far the last draft was from the text that replaced it (CER for Chinese and Japanese, WER for English), the share of shown characters a later draft took back, the stretches with text but no draft, and drafting time over audio time.\n\n| Meeting | Stretches | First text, median / P90 | Error | Rewritten | Missed | Cost |\n|---|---:|---:|---:|---:|---:|---:|\n{rows}"
     );
     let _ = writeln!(report, "{}", summary("**all**", &all));
     std::fs::write(output.join("drafts.md"), &report)?;

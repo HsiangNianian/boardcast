@@ -12,7 +12,7 @@
 //!       The runs' language totals side by side.
 //!   asr-eval speakers <root> [--only id,id] [--output dir] [--reuse] [--turns off|slow|medium|fast|long]
 //!       How well speakers are told apart on the meeting recordings, at several thresholds; see speakers.rs.
-//!   asr-eval drafts <root> [--only id,id] [--output dir] [--drafts reread|stream:<folder>|bylanguage:<folder>]
+//!   asr-eval drafts <root> [--only id,id] [--output dir] [--drafts reread|stream:<folder>|bylanguage:<folder>] [--variant all|en|ja]
 //!       How good the drafts shown while someone speaks are, on the meeting recordings; see drafts.rs.
 //!
 //! The speech models are read from <root>/resources/voice, where the packages take them from too.
@@ -36,6 +36,7 @@ fn main() -> Result<()> {
     let mut options = run::Options { suite: "quick".into(), engine: "routed".into(), vad: true, enhance: "none".into(), only: None, output: None };
     let mut reuse = false;
     let mut draft_with = boardcast_audio::DraftWith::Reread;
+    let mut variant = "all".to_string();
     let mut turns = Some(boardcast_audio::Latency::Slow);
     while let Some(flag) = args.next() {
         let mut value = || args.next().with_context(|| format!("{flag} needs a value"));
@@ -55,13 +56,14 @@ fn main() -> Result<()> {
             "--reuse" => reuse = true,
             "--turns" => turns = speakers::turns(&value()?)?,
             "--drafts" => draft_with = drafts::with(&value()?)?,
+            "--variant" => variant = drafts::variant(&value()?)?,
             other => bail!("unknown flag {other}"),
         }
     }
     match command.as_str() {
         "download" => corpus::prepare(&root, &corpus::load(&root, &options.suite)?),
         "run" => run::run(&root, &options),
-        "drafts" => drafts::run(&root, options.only.as_deref(), &options.output.clone().unwrap_or_else(|| root.join("eval/reports/drafts")), draft_with),
+        "drafts" => drafts::run(&root, options.only.as_deref(), &options.output.clone().unwrap_or_else(|| root.join("eval/reports/drafts")), draft_with, &variant),
         "speakers" => speakers::run(&root, options.only.as_deref(), &options.output.clone().unwrap_or_else(|| root.join("eval/reports/speakers")), reuse, turns),
         _ => bail!("usage: asr-eval download|run <root> [flags] | asr-eval compare <report.json>..."),
     }

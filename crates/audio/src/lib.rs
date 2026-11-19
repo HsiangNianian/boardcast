@@ -494,7 +494,10 @@ impl Recognizers {
     /// every language, otherwise by the recognizer there is.
     fn draft(&self, samples: &[f32]) -> String {
         match (&self.sense_voice, &self.japanese, &self.english) {
-            (Some(asr), _, _) | (None, Some(asr), _) | (None, None, Some(asr)) => recognize(asr, samples),
+            (Some(asr), _, _) => recognize(asr, samples),
+            // ReazonSpeech fails on audio this short rather than reading nothing.
+            (None, Some(_), _) if samples.len() < MIN_JAPANESE => String::new(),
+            (None, Some(asr), _) | (None, None, Some(asr)) => recognize(asr, samples),
             _ => String::new(),
         }
     }
@@ -793,7 +796,9 @@ impl Ear {
             Some(Drafter::Reread | Drafter::ByLanguage(_)) => {
                 // Reading again costs as much as all the speech so far, so the longer it runs, the more must
                 // come before the next read: a quarter more, and never less than a step.
-                if utterance == self.utterance && spoken < read + drafts::REREAD_STEP.max(read / 4) {
+                // The first read waits for a step of speech too: a recognizer reading a few windows reads
+                // nothing, and ReazonSpeech fails outright on them.
+                if spoken < drafts::REREAD_STEP || (utterance == self.utterance && spoken < read + drafts::REREAD_STEP.max(read / 4)) {
                     return;
                 }
                 let reading = self.asr.draft(&self.speech[from..]);

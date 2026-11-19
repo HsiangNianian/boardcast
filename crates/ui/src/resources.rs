@@ -74,7 +74,7 @@ impl Resources {
             "sensevoice" => sense_voice.into(),
             // "apple" is what the package without models was called first.
             "none" | "apple" => vec![("Apple speech helper", std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join("boardcast-speech"))).unwrap_or_default())],
-            _ => sense_voice.into_iter().chain(english).chain(japanese).collect(),
+            _ => sense_voice.into_iter().chain(english).chain(japanese).chain([model("Chinese draft model", "draft-zh/encoder.int8.onnx")]).collect(),
         };
         let checks: Vec<(&str, PathBuf)> = [
             ("glyphs", self.hanzi_path().to_path_buf()),

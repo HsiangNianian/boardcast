@@ -234,6 +234,9 @@ const TYPE_STEP: Duration = Duration::from_millis(28);
 const TYPE_CHARS: usize = 3;
 
 /// The line being typed into the transcript, and whether the list follows it to the bottom.
+/// A draft with no sentence after it this long heard only noise, and goes.
+const DRAFT_KEPT: Duration = Duration::from_secs(4);
+
 struct Typing {
     line: usize,
     started: Instant,
@@ -1588,6 +1591,12 @@ struct Workbench {
     import_pages: Entity<InputState>,
     /// Who is speaking now, as far as anyone knows: lines with no voiceprint and typed lines go to them.
     speaker: Option<String>,
+    /// What is being said now, shown faint under the transcript until its sentence arrives (#291).
+    draft: Option<boardcast_audio::Draft>,
+    /// The reader was at the newest line when the draft came, so the list keeps it in view.
+    draft_follow: bool,
+    /// When the draft last changed: one that heard only noise gets no sentence, so it goes after a while.
+    draft_at: Instant,
     /// The name each of the diarization model's speaker slots last had, which names a line too short for
     /// a voiceprint: a quick answer goes to whoever its slot is, not to whoever spoke last.
     slots: HashMap<usize, String>,
@@ -2026,6 +2035,7 @@ impl Workbench {
     /// Turn the microphone on or off, counting the time it was on towards the meeting.
     fn toggle_mic(&mut self) {
         let was_listening = self.pipeline.listening();
+        self.draft = None;
         // With the setting on, a saved meeting keeps what it hears: a file for each time it listens.
         let keep = (!was_listening && self.form.saved.keep_audio && self.editable()).then(|| {
             let start = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis());
@@ -2430,7 +2440,18 @@ impl Workbench {
                         self.line_arrived(true);
                     }
                 }
+                Event::Draft { meeting, draft } => {
+                    if meeting == self.session().meeting() && self.editable() {
+                        let (offset, max) = (f32::from(self.transcript_scroll.offset().y), f32::from(self.transcript_scroll.max_offset().y));
+                        self.draft_follow = -offset >= max - 24.0;
+                        self.draft = Some(draft);
+                        self.draft_at = Instant::now();
+                    }
+                }
                 Event::Spoken { meeting, sentence } => {
+                    if self.draft.as_ref().is_some_and(|d| sentence.utterance >= d.utterance) {
+                        self.draft = None;
+                    }
                     if meeting == self.session().meeting() {
                         let speaker = self.who_spoke(sentence.voiceprint.as_deref(), sentence.seconds, sentence.slot);
                         let also = self.also_speaking(&sentence.also, speaker.as_deref());
@@ -2507,6 +2528,20 @@ impl Workbench {
                 // A list scrolls only once it has been laid out, which the transcript may not have
                 // been if another panel was showing.
                 self.transcript_scroll.scroll_to_item(line);
+                changed = true;
+            }
+        }
+        if self.draft.is_some() && self.draft_at.elapsed() > DRAFT_KEPT {
+            self.draft = None;
+            changed = true;
+        }
+        if self.draft.is_some() && self.draft_follow && self.typing.is_empty() {
+            let (at, end) = (self.transcript_scroll.offset(), -self.transcript_scroll.max_offset().y);
+            let gap = end - at.y;
+            if cx.reduce_motion() || gap.abs() < px(1.) {
+                self.transcript_scroll.scroll_to_bottom();
+            } else {
+                self.transcript_scroll.set_offset(point(at.x, at.y + gap * 0.45));
                 changed = true;
             }
         }
@@ -3679,6 +3714,7 @@ impl Workbench {
         self.summary.reset();
         self.speaker = None;
         self.slots.clear();
+        self.draft = None;
         self.speaker_chosen = None;
         self.speaker_line = None;
         self.speaker_hovered = None;
@@ -7530,7 +7566,7 @@ impl Render for Workbench {
             .gap_4()
             .flex()
             .flex_col()
-            .when(shown_lines == 0, |d| {
+            .when(shown_lines == 0 && self.draft.is_none(), |d| {
                 d.child(
                     div()
                         .flex_1()
@@ -7615,7 +7651,11 @@ impl Render for Workbench {
                     // The newest line rises a little into place as it arrives. Every line keeps the same wrapper, so
                     // nothing inside it starts over when a newer line arrives; only the newest has any time to move.
                     .with_animation(("line-in", i), motion::ease(if i + 1 == shown_lines { motion::BASE } else { Duration::from_millis(1) }), |d, t| d.relative().top(px(6. * (1. - t))).opacity(t))
-            }));
+            }))
+            // What is being said now: faint, unnamed until its sentence arrives with a speaker, and never saved.
+            .when_some(self.draft.as_ref().filter(|_| self.replay.is_none()).map(|d| d.text.clone()), |d, text| {
+                d.child(div().id("draft-line").pl(px(28.)).text_body().line_height(gpui_kit::relative(1.5)).text_color(rgb(pal().faint)).child(format!("{text}▍")))
+            });
         // Building every meeting's search index takes a while, so the board and the library say so until it is done.
         let building = self.search.as_ref().and_then(|s| s.building.map(|total| (s.indexing.unwrap_or((0, total)), s.held)));
         let typed = self.library_query.read(cx).value().to_string();
@@ -9771,6 +9811,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                     import_pages,
                     speaker: None,
                     slots: HashMap::new(),
+                    draft: None,
+                    draft_follow: false,
+                    draft_at: Instant::now(),
                     speaker_chosen: None,
                     speaker_line: None,
                     speaker_name,

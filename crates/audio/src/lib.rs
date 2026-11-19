@@ -18,6 +18,8 @@ pub mod system;
 mod listen;
 mod turns;
 pub use turns::Latency;
+mod drafts;
+pub use drafts::{Draft, DraftWith, MODEL as DRAFT_MODEL};
 pub use listen::{capture, computer_sounds, microphones, Input, Listen, Sources, Warning};
 
 pub const SAMPLE_RATE: i32 = boardcast_keep::SAMPLE_RATE;
@@ -80,6 +82,21 @@ fn quiet_level(loudness: &[f32]) -> f32 {
     sorted.sort_by(f32::total_cmp);
     let median = sorted[loudness.len() / 2];
     (median * QUIET_RATIO).max(0.003_f32.min(median * 0.5))
+}
+
+/// What two readings agree on from the start, ending at the last whole word or character they share. A
+/// draft built of it never takes back what it showed, unless a later reading disagrees with both.
+fn agreed_start(before: &str, after: &str) -> String {
+    let shared: String = before.chars().zip(after.chars()).take_while(|(a, b)| a == b).map(|(a, _)| a).collect();
+    if shared.chars().count() == after.chars().count() {
+        return shared;
+    }
+    // A Latin word cut in the middle is not shown until the readings agree on all of it.
+    match shared.char_indices().rev().find(|(_, c)| !c.is_ascii_alphanumeric()) {
+        Some((i, c)) if after.as_bytes().get(shared.len()).is_some_and(u8::is_ascii_alphanumeric) => shared[..i + c.len_utf8()].trim_end().to_string(),
+        None if after.as_bytes().get(shared.len()).is_some_and(u8::is_ascii_alphanumeric) => String::new(),
+        _ => shared.trim_end().to_string(),
+    }
 }
 
 /// How many windows at the start are quiet, before speech begins, keeping one of them in front of it. Quiet
@@ -173,6 +190,8 @@ pub struct Sentence {
     /// Other slots heard talking at the same time, whose words are lost under this one's: speech over
     /// speech cannot be taken apart, but who interrupted can be shown.
     pub also: Vec<usize>,
+    /// The stretch of speech it came from, which its drafts share (see [`Draft`]).
+    pub utterance: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -238,6 +257,12 @@ fn still_not_chinese(language: Language, text: &str) -> bool {
 
 /// Shorter than this, ReazonSpeech makes up words, so SenseVoice's reading stands.
 const MIN_JAPANESE: usize = SAMPLE_RATE as usize * 3 / 10;
+
+/// Whether recognized text is Chinese: it has Han characters, and no kana or Hangul, and is not mostly
+/// English.
+pub fn is_chinese(text: &str) -> bool {
+    text.chars().any(|c| matches!(c as u32, 0x4E00..=0x9FFF | 0x3400..=0x4DBF)) && !is_japanese(text) && !is_korean(text) && !is_english(text)
+}
 
 /// Whether recognized text is Japanese: it has kana. Japanese written only in kanji is too rare to matter,
 /// and telling it from Chinese would take more than the text.
@@ -460,6 +485,20 @@ impl Recognizers {
 }
 
 impl Recognizers {
+    /// Whether a draft can be read: by SenseVoice, or by the one recognizer a package for one language has.
+    fn can_draft(&self) -> bool {
+        self.sense_voice.is_some() || self.japanese.is_some() || self.english.is_some()
+    }
+
+    /// The speech so far read once, for a draft: by SenseVoice when it is there, as it is fast and hears
+    /// every language, otherwise by the recognizer there is.
+    fn draft(&self, samples: &[f32]) -> String {
+        match (&self.sense_voice, &self.japanese, &self.english) {
+            (Some(asr), _, _) | (None, Some(asr), _) | (None, None, Some(asr)) => recognize(asr, samples),
+            _ => String::new(),
+        }
+    }
+
     /// A sentence SenseVoice heard as Korean, or as Japanese when Chinese was chosen, is Chinese it
     /// misheard: read it again as Chinese. Should that fail as well, nothing is written rather than the
     /// wrong language.
@@ -470,6 +509,14 @@ impl Recognizers {
         let again = self.chinese.as_ref().map(|zh| recognize(zh, samples)).unwrap_or_default();
         if still_not_chinese(self.language, &again) { String::new() } else { again }
     }
+}
+
+/// How an ear drafts.
+enum Drafter {
+    Reread,
+    Stream(drafts::Stream),
+    /// The stream for Chinese, reading again otherwise.
+    ByLanguage(drafts::Stream),
 }
 
 pub struct Ear {
@@ -499,8 +546,28 @@ pub struct Ear {
     quiet_since: usize,
     /// Wait for the diarization model at every step, rather than take what it has given so far.
     wait_for_turns: bool,
+    /// How drafts are made while speech goes on, and who is told of them.
+    drafter: Option<Drafter>,
+    on_draft: Option<Box<dyn FnMut(Draft) + Send>>,
+    /// The stretch of speech being heard now, counting from 0: a sentence ends it.
+    utterance: usize,
+    /// Where it began to be loud, counted like `fed`.
+    onset: usize,
+    /// The last draft given and how much speech it read, so the next is given only when it says more.
+    last_draft: (usize, usize, String),
+    /// Time spent drafting, to see what it costs.
+    drafting: Duration,
+    /// Whether the last sentence heard was Chinese, which in automatic mode settles how the next is drafted;
+    /// before any, it is read again, which drafts every language.
+    last_chinese: bool,
+    /// The stretch being drafted and whether it is drafted by the stream.
+    draft_streams: (usize, bool),
+    /// The last reading of the speech so far, when drafts are read again: only what two readings in a row
+    /// agree on is shown, as a recognizer reading a sentence whole often changes its start once it hears
+    /// more.
+    last_reading: (usize, String),
     /// Sentences waiting for `turns` to know who said them, with where they start.
-    waiting: VecDeque<(Vec<f32>, usize)>,
+    waiting: VecDeque<(Vec<f32>, usize, usize)>,
 }
 
 impl Ear {
@@ -552,6 +619,15 @@ impl Ear {
             turns: None,
             turns_wanted,
             quiet_since: 0,
+            drafter: None,
+            on_draft: None,
+            utterance: 0,
+            onset: 0,
+            last_draft: (usize::MAX, 0, String::new()),
+            drafting: Duration::ZERO,
+            last_reading: (usize::MAX, String::new()),
+            last_chinese: false,
+            draft_streams: (usize::MAX, false),
             wait_for_turns: false,
             waiting: VecDeque::new(),
         })
@@ -562,6 +638,34 @@ impl Ear {
         self.turns = None;
         self.turns_wanted = latency.map(|l| (models.to_path_buf(), l));
         self
+    }
+
+    /// Draft what is being said while it is said, `with` the way given, and tell `on_draft` of each draft
+    /// that says more than the last. Without a recognizer able to draft, nothing is drafted.
+    pub fn drafts(mut self, with: DraftWith, on_draft: Box<dyn FnMut(Draft) + Send>) -> Self {
+        self.drafter = match with {
+            DraftWith::Reread => self.asr.can_draft().then_some(Drafter::Reread),
+            DraftWith::Stream(dir) => drafts::Stream::load(&dir).map(Drafter::Stream).or_else(|| {
+                eprintln!("the streaming model in {} did not load, so nothing is drafted", dir.display());
+                None
+            }),
+            // A package without the streaming model, such as one for English or Japanese only, reads again.
+            DraftWith::ByLanguage(dir) => match drafts::Stream::load(&dir) {
+                Some(stream) if self.asr.can_draft() => Some(Drafter::ByLanguage(stream)),
+                _ => self.asr.can_draft().then_some(Drafter::Reread),
+            },
+        };
+        // The system's recognizer drafts on its own, once it can (#291).
+        if self.asr.system.is_some() {
+            self.drafter = None;
+        }
+        self.on_draft = Some(on_draft);
+        self
+    }
+
+    /// The time spent drafting so far, in seconds.
+    pub fn drafting_seconds(&self) -> f64 {
+        self.drafting.as_secs_f64()
     }
 
     /// Wait for the diarization model at every step, which runs on its own thread, as a recording heard
@@ -606,6 +710,10 @@ impl Ear {
                 self.speech = std::mem::take(&mut self.recent);
                 self.speech_start = self.fed - self.speech.len();
                 self.loudness = self.speech.chunks(VAD_WINDOW).map(rms).collect();
+                self.onset = self.speech_start + quiet_lead(&self.loudness) * VAD_WINDOW;
+            }
+            if self.in_speech {
+                self.draft();
             }
             if self.in_speech && self.fed - self.speech_start >= RETAIN - PREROLL {
                 self.vad.flush();
@@ -635,6 +743,7 @@ impl Ear {
         self.loudness.drain(..windows - back.min(windows));
         self.sent_until = self.fed - keep;
         self.hear(&head, self.sent_until - head.len(), heard);
+        self.onset = self.sent_until;
     }
 
     /// Give the diarization model what it should hear of the input so far: speech, from the first window
@@ -659,16 +768,67 @@ impl Ear {
         turns.accept(from, &samples);
     }
 
-    /// A sentence the detector cut out: heard now, or once the diarization model knows who said it.
+    /// Draft the speech heard so far, when a draft is wanted and there is more to say.
+    fn draft(&mut self) {
+        if self.on_draft.is_none() || self.drafter.is_none() {
+            return;
+        }
+        let kept_from = self.fed - self.speech.len();
+        let from = self.onset.saturating_sub(kept_from).min(self.speech.len());
+        let spoken = self.speech.len() - from;
+        let (utterance, read, _) = self.last_draft;
+        // How this stretch is drafted is settled when it begins, so a draft never changes hands midway.
+        if self.draft_streams.0 != self.utterance {
+            let chinese = match self.asr.language {
+                Language::Chinese => true,
+                Language::English | Language::Japanese => false,
+                Language::Auto => self.last_chinese,
+            };
+            self.draft_streams = (self.utterance, chinese);
+        }
+        let began = Instant::now();
+        let text = match self.drafter.as_mut() {
+            Some(Drafter::Stream(stream)) => stream.hear(self.utterance, &self.speech[from..]),
+            Some(Drafter::ByLanguage(stream)) if self.draft_streams.1 => stream.hear(self.utterance, &self.speech[from..]),
+            Some(Drafter::Reread | Drafter::ByLanguage(_)) => {
+                // Reading again costs as much as all the speech so far, so the longer it runs, the more must
+                // come before the next read: a quarter more, and never less than a step.
+                if utterance == self.utterance && spoken < read + drafts::REREAD_STEP.max(read / 4) {
+                    return;
+                }
+                let reading = self.asr.draft(&self.speech[from..]);
+                let agreed = if self.last_reading.0 == self.utterance { agreed_start(&self.last_reading.1, &reading) } else { String::new() };
+                self.last_reading = (self.utterance, reading);
+                agreed
+            }
+            None => return,
+        };
+        self.drafting += began.elapsed();
+        let same = utterance == self.utterance && text == self.last_draft.2;
+        self.last_draft = (self.utterance, spoken, text.clone());
+        if text.is_empty() || same {
+            return;
+        }
+        let seconds = |at: usize| at as f64 / f64::from(SAMPLE_RATE);
+        let draft = Draft { text, utterance: self.utterance, spoken_from: seconds(self.onset), at: seconds(self.fed) };
+        if let Some(tell) = self.on_draft.as_mut() {
+            tell(draft);
+        }
+    }
+
+    /// A sentence the detector cut out: heard now, or once the diarization model knows who said it. It
+    /// ends the stretch of speech its drafts were of.
     fn hear(&mut self, samples: &[f32], start: usize, heard: &mut impl Heard) {
+        let utterance = self.utterance;
+        self.utterance += 1;
         if samples.len() < VAD_WINDOW {
             return;
         }
         if self.turns.is_some() {
-            self.waiting.push_back((samples.to_vec(), start));
+            self.waiting.push_back((samples.to_vec(), start, utterance));
             self.release(false, heard);
         } else {
-            self.hear_piece(samples, start, None, vec![], heard);
+            self.hear_piece(samples, start, None, vec![], utterance, heard);
         }
     }
 
@@ -677,8 +837,8 @@ impl Ear {
     fn release(&mut self, all: bool, heard: &mut impl Heard) {
         let Some(turns) = self.turns.as_mut() else {
             // Turned off while sentences waited: they are heard whole.
-            while let Some((samples, start)) = self.waiting.pop_front() {
-                self.hear_piece(&samples, start, None, vec![], heard);
+            while let Some((samples, start, utterance)) = self.waiting.pop_front() {
+                self.hear_piece(&samples, start, None, vec![], utterance, heard);
             }
             return;
         };
@@ -694,22 +854,22 @@ impl Ear {
             self.turns = None;
             return self.release(all, heard);
         }
-        while let Some((samples, start)) = self.waiting.front() {
+        while let Some((samples, start, _)) = self.waiting.front() {
             let Some(turns) = self.turns.as_ref() else { break };
             if !all && start + samples.len() > turns.known_until(self.fed) {
                 break;
             }
             let pieces = turns.split(*start, samples.len());
-            let (samples, start) = self.waiting.pop_front().expect("a waiting sentence");
+            let (samples, start, utterance) = self.waiting.pop_front().expect("a waiting sentence");
             for piece in pieces {
                 if piece.len >= MIN_PIECE {
-                    self.hear_piece(&samples[piece.from..piece.from + piece.len], start + piece.from, piece.slot, piece.also, heard);
+                    self.hear_piece(&samples[piece.from..piece.from + piece.len], start + piece.from, piece.slot, piece.also, utterance, heard);
                 }
             }
         }
     }
 
-    fn hear_piece(&mut self, samples: &[f32], start: usize, slot: Option<usize>, also: Vec<usize>, heard: &mut impl Heard) {
+    fn hear_piece(&mut self, samples: &[f32], start: usize, slot: Option<usize>, also: Vec<usize>, utterance: usize, heard: &mut impl Heard) {
         let ended = Instant::now();
         let (text, engine) = self.asr.hear(samples);
         // A word or two out of clicks, breath or hum: the recognizers find words in anything, but
@@ -718,8 +878,9 @@ impl Ear {
             return;
         }
         if !text.is_empty() {
+            self.last_chinese = is_chinese(&text);
             let asr_ms = ended.elapsed().as_millis();
-            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine, slot, also });
+            heard(Sentence { text, voiceprint: self.voiceprint(samples), asr_ms, ended, start: start as f64 / f64::from(SAMPLE_RATE), seconds: samples.len() as f64 / f64::from(SAMPLE_RATE), engine, slot, also, utterance });
         }
     }
 
@@ -797,6 +958,24 @@ pub fn play_wav(path: &Path, samples: &Sender<Vec<f32>>) -> Result<()> {
 #[cfg(test)]
 mod onset_tests {
     use super::*;
+
+    #[test]
+    fn chinese_is_told_from_japanese_korean_and_english() {
+        assert!(is_chinese("我们下周二再发布"));
+        assert!(is_chinese("这个 API 要改一下"));
+        assert!(!is_chinese("会議を始めます"));
+        assert!(!is_chinese("회의를 시작합니다"));
+        assert!(!is_chinese("Let's ship it on Friday."));
+    }
+
+    #[test]
+    fn a_draft_shows_what_two_readings_agree_on() {
+        assert_eq!(agreed_start("今天天气", "今天天气很好"), "今天天气");
+        assert_eq!(agreed_start("今天天汽很", "今天天气很好"), "今天天");
+        assert_eq!(agreed_start("we will ship on fri", "we will ship on friday"), "we will ship on");
+        assert_eq!(agreed_start("hello", "help me"), "");
+        assert_eq!(agreed_start("", "今天"), "");
+    }
 
     #[test]
     fn the_silence_before_speech_is_left_out_but_one_window() {

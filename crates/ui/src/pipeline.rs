@@ -19,6 +19,8 @@ pub enum Event {
     /// A sentence from the microphone or a recording. The window works out who said it, as it holds
     /// the meeting's voices, and passes it on to the model.
     Spoken { meeting: u64, sentence: Sentence },
+    /// What is being said, while it is said (#291): shown until the sentence it belongs to arrives.
+    Draft { meeting: u64, draft: boardcast_audio::Draft },
     Failed(String),
     /// What recognizes speech now, and why it isn't what was chosen, if it isn't.
     Hearing { with: String, note: Option<String> },
@@ -119,7 +121,11 @@ impl Pipeline {
             let load = |speech: &Speech| match ear_for(&voice_models, speech) {
                 Ok((ear, with, note)) => {
                     let _ = tx.send(Event::Hearing { with, note });
-                    Some(ear)
+                    let (drafts, stamp) = (tx.clone(), stamp.clone());
+                    let draft_with = boardcast_audio::DraftWith::ByLanguage(voice_models.join(boardcast_audio::DRAFT_MODEL));
+                    Some(ear.drafts(draft_with, Box::new(move |draft| {
+                        let _ = drafts.send(Event::Draft { meeting: stamp.load(Ordering::SeqCst), draft });
+                    })))
                 }
                 Err(e) => {
                     let _ = tx.send(Event::Failed(format!("{e:#}")));
@@ -153,6 +159,12 @@ impl Pipeline {
                 }
                 if finish_rx.try_recv().is_ok() {
                     if let Some(ear) = ear.as_mut() {
+                        // The finish comes on its own channel, so the input can still be queued behind it, as
+                        // when a recording plays while the models load: all of it is heard first, or the last
+                        // sentence would wait for a finish that already went by.
+                        while let Ok(chunk) = samples_rx.try_recv() {
+                            ear.feed(&chunk, &mut heard);
+                        }
                         ear.finish(&mut heard);
                     }
                 }

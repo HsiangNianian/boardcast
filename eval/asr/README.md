@@ -110,3 +110,18 @@ splitting, made it worse (9 / 4). `cargo run --release -p boardcast-audio --exam
 <recording.wav>` measures what waiting for the model costs: on AMI a line arrives 0.72 s after its sentence on
 average instead of 0.31 s (1.03 s instead of 0.52 s for nine in ten), and the model takes about half of real time
 on two threads of an i7-12700H.
+
+## Drafts while someone speaks
+
+`asr-eval drafts <root> [--only id,id] [--output dir] [--drafts reread|stream:<folder>|bylanguage:<folder>]`
+hears the meeting recordings as the app does and measures the drafts shown before a sentence ends (#291), per
+stretch of speech:
+- first text: from the moment speech grew loud to the first draft (median and 90th percentile);
+- error: how far the last draft was from the sentence that replaced it (CER, or WER for English);
+- rewritten: the share of shown characters that a later draft took back;
+- missed: stretches with text that no draft showed;
+- cost: time spent drafting over audio time.
+
+`<output>/<meeting>.json` keeps each stretch's drafts beside its final text, so they can be read.
+`bylanguage:resources/voice/draft-zh` is what the app does: the streaming Chinese zipformer for Chinese, and
+SenseVoice rereading for English and Japanese, showing only what two readings in a row agree on.

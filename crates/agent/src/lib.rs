@@ -15,7 +15,7 @@ pub mod tools;
 pub mod vision;
 
 use anyhow::{anyhow, bail, Context, Result};
-use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, Graph, Kind, Utterance};
+use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message_within, Graph, Kind, Utterance};
 use boardcast_board::speakers::{attribute, rename_by};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};
@@ -543,6 +543,14 @@ fn propose_tools(provider: &Provider, graph: &Graph, prompt: Vec<Value>, harness
     Ok(whole)
 }
 
+/// How much of a line's message, in characters, goes to the board and the lines before it, for a local
+/// model: its instructions and examples take about 2,400 tokens of the server's 6,144, and the board of a long
+/// meeting would otherwise take the rest and more, failing every line (#314). A character is a token or less
+/// for Qwen; models that spend more still fit, and one that does not is asked again with half.
+const LOCAL_PROMPT_CHARS: usize = 2000;
+/// The same for a remote model, whose context is large: a long meeting's board would only cost more.
+const REMOTE_PROMPT_CHARS: usize = 12_000;
+
 /// One model turn for one piece of a line.
 #[allow(clippy::too_many_arguments)]
 fn propose_once(provider: &Provider, graph: &Graph, recent: &[Utterance], next: &Utterance, guidance: Guidance, hint: Option<&str>, glossary: &sound::Glossary, references: &[(u32, String)]) -> Result<Reply> {
@@ -554,20 +562,30 @@ fn propose_once(provider: &Provider, graph: &Graph, recent: &[Utterance], next: 
         let text = messages[0]["content"].as_str().unwrap_or("").to_string();
         messages[0]["content"] = json!(format!("{text}\n\n{SKILL_RULES}"));
     }
-    let mut content = user_message(graph, recent, next);
-    if let Some(h) = hint.filter(|_| guidance.hint) {
-        content = format!("{h}\n{content}");
-    }
     let labels: Vec<&str> = graph.nodes.iter().map(|n| n.label.as_str()).collect();
-    if let Some(note) = sound::note_with(glossary, references, &next.text, &labels, english) {
-        content = format!("{note}\n{content}");
-    }
-    messages.push(json!({ "role": "user", "content": content }));
+    let asked = |budget: usize| -> Vec<Value> {
+        let mut content = user_message_within(graph, recent, next, budget);
+        if let Some(h) = hint.filter(|_| guidance.hint) {
+            content = format!("{h}\n{content}");
+        }
+        if let Some(note) = sound::note_with(glossary, references, &next.text, &labels, english) {
+            content = format!("{note}\n{content}");
+        }
+        let mut asked = messages.clone();
+        asked.push(json!({ "role": "user", "content": content }));
+        asked
+    };
+    let budget = if provider.short_reply() { LOCAL_PROMPT_CHARS } else { REMOTE_PROMPT_CHARS };
     if guidance.harness != tools::Harness::Commands {
-        return propose_tools(provider, graph, messages, guidance.harness);
+        return propose_tools(provider, graph, asked(budget), guidance.harness);
     }
     let started = Instant::now();
-    let reply = provider.call(messages, graph, english)?;
+    // Still too long for the server, as with a model that spends more tokens on a character: once more with
+    // half as much of the board.
+    let reply = match provider.call(asked(budget), graph, english) {
+        Err(e) if format!("{e:#}").contains("context") => provider.call(asked(budget / 2), graph, english)?,
+        other => other?,
+    };
     let ops = strip_thinking(message(&reply)?);
     Ok(Reply {
         ops: if provider.short_reply() { marks_said(ops, &next.text, graph) } else { ops.to_string() },
@@ -723,7 +741,8 @@ fn llama_command(server: &LocalServer, device: Option<&str>, discrete: bool, por
     cmd.arg("-m")
         .arg(&server.model)
         .args(["--host", "127.0.0.1", "--port", &port.to_string()])
-        .args(["-c", "4096", "-np", "1", "--jinja"])
+        // Instructions about 2,400 tokens, the board and earlier lines at most LOCAL_PROMPT_CHARS, the reply 160.
+        .args(["-c", "6144", "-np", "1", "--jinja"])
         // Prompts kept aside in memory, to pick up again without reading them anew: 8 GiB unless told, and a
         // Qwen3.5 prompt holds about 330 MiB, so an eval server with varied prompts grew to 10 GB and ran this
         // computer out of memory (2026-11-19). The lines' own prompt stays in its slot either way.
@@ -1343,6 +1362,33 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_long_meetings_board_stays_within_a_local_models_context() {
+        let mut ops = String::new();
+        for t in 0..70 {
+            ops += &format!("T 「议题{t}」\n");
+            for i in 0..8 {
+                ops += &format!("L 「议题{t}」 「议题{t}的第{i}条要点，说得比较长」\n");
+            }
+        }
+        ops += "T 「无人机巡检」\nL 「无人机巡检」 「夜间用红外摄像头」\n";
+        let mut board = Graph::default();
+        board.apply(&parse_ops(&ops));
+        assert!(board.describe().chars().count() > 10_000);
+        let asked = Arc::new(Mutex::new(String::new()));
+        let seen = asked.clone();
+        let provider = Provider::Scripted(Arc::new(move |said: &str| {
+            *seen.lock().unwrap() = said.to_string();
+            Ok("-".into())
+        }));
+        let next = Utterance { speaker: Some("A".into()), text: "夜间巡检的红外摄像头再看看".into(), pointing: vec![] };
+        let guidance = provider.default_guidance();
+        propose(&provider, &board, &[], &next, guidance, None).unwrap();
+        let said = asked.lock().unwrap().clone();
+        assert!(said.chars().count() <= LOCAL_PROMPT_CHARS + 200, "{} characters", said.chars().count());
+        assert!(said.contains("夜间用红外摄像头"), "{said}");
+    }
+
     #[test]
     fn a_small_model_marks_only_what_the_line_asks_for() {
         let mut board = Graph::default();

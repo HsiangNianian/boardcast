@@ -4,6 +4,7 @@
     icon.py macos    > macos.svg     Big Sur grid: 824 px tile on a 1024 canvas, with its drop shadow
     icon.py desktop  > desktop.svg   Linux and Windows: a larger tile, no shadow
     icon.py ios      > ios.svg       App Store: full-bleed square, the system masks the corners
+    icon.py favicon                  The website's tab icon: the desktop tile, outlined in a dark browser
 
 make.sh turns these into icon.icns, the Linux PNG and icon.ico.
 """
@@ -50,7 +51,7 @@ def svg(kind):
     canvas = 1024
     if kind == "macos":
         tile, radius, shadow = 824, 185.4, True
-    elif kind == "desktop":
+    elif kind in ("desktop", "favicon"):
         tile, radius, shadow = 928, 208.8, False
     elif kind == "ios":
         tile, radius, shadow = 1024, 0, False
@@ -65,10 +66,14 @@ def svg(kind):
     if shadow:
         under = ('<filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="10"/></filter>'
                  f'{shape} fill="#000" fill-opacity="0.3" transform="translate(0 10)" filter="url(#s)"/>\n')
+    # A dark tab strip is about the tile's own colour, so there the tab icon gets a faint chalk edge.
+    if kind == "favicon":
+        under += ("<style>@media (prefers-color-scheme: dark) "
+                  "{ .t { stroke: #f3efe6; stroke-opacity: 0.3; stroke-width: 40 } }</style>\n")
     cx, cy, r = DOT
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {canvas} {canvas}" width="{canvas}" height="{canvas}">
 {under}<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2a29"/><stop offset="1" stop-color="{INK}"/></linearGradient>
-{shape} fill="url(#g)"/>
+{shape} class="t" fill="url(#g)"/>
 <g transform="translate({off - 2 * scale:.3f} {off - 2 * scale:.3f}) scale({scale:.5f}) {GLYPH}">
 <path d="{WAVE}" fill="none" stroke="{CHALK}" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="{cx}" cy="{cy}" r="{r}" fill="{RED}"/>

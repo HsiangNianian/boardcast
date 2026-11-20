@@ -1,4 +1,4 @@
-# boardcast interface text: ru. Message IDs are shared by every language; English is the source.
+# Banshu interface text: ru. Message IDs are shared by every language; English is the source.
 
 starting = Запуск…
 loading-the-board-model = Загрузка модели доски…
@@ -366,7 +366,7 @@ drop-a-pdf-or-an = Перетащите PDF или изображение в л�
 drag-to-move-the-map = Перетащите, чтобы переместить карту
 close-the-map = Закрыть карту
 take-out-of-the-inbox = Убрать из входящих
-quit-boardcast = Выйти из boardcast
+quit-boardcast = Выйти из Banshu
 type-a-line-for-the-board = Строка для доски
 username-optional = Имя пользователя (необязательно)
 password-optional = Пароль (необязательно)

@@ -460,9 +460,9 @@ fn event(name: &str, data: &Value) -> String {
 fn code_page(problem: Option<&str>) -> String {
     let note = problem.map(|p| format!("<p class=wrong>{p}</p>")).unwrap_or_default();
     format!(
-        r#"<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>boardcast</title>
+        r#"<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Banshu</title>
 <style>body{{font:16px system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#fffefa;color:#1e1e1e}}form{{display:grid;gap:12px;padding:24px;max-width:320px}}input{{font:600 24px ui-monospace,monospace;letter-spacing:4px;text-transform:uppercase;padding:8px 12px;border:1px solid #ccc;border-radius:8px;text-align:center}}button{{font:inherit;padding:10px;border:0;border-radius:8px;background:#1e1e1e;color:#fff}}.wrong{{color:#b3261e;margin:0}}p{{margin:0;color:#62665c}}</style></head>
-<body><form method=get action="/"><b>boardcast</b><p>Enter the access code shown on the host's screen. / 输入主持人屏幕上的访问码。</p>{note}<input name=c autocomplete=off autofocus maxlength=12><button>Watch / 观看</button></form></body></html>"#
+<body><form method=get action="/"><b>Banshu</b><p>Enter the access code shown on the host's screen. / 输入主持人屏幕上的访问码。</p>{note}<input name=c autocomplete=off autofocus maxlength=12><button>Watch / 观看</button></form></body></html>"#
     )
 }
 

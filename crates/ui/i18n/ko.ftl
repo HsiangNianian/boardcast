@@ -1,4 +1,4 @@
-# boardcast interface text: ko. Message IDs are shared by every language; English is the source.
+# Banshu interface text: ko. Message IDs are shared by every language; English is the source.
 
 starting = 시작하는 중…
 loading-the-board-model = 보드 모델을 불러오는 중…
@@ -366,7 +366,7 @@ drop-a-pdf-or-an = PDF나 이미지를 아무 곳에나 끌어다 놓으면 그�
 drag-to-move-the-map = 드래그하여 지도 이동
 close-the-map = 지도 닫기
 take-out-of-the-inbox = 보관함에서 꺼내기
-quit-boardcast = boardcast 종료
+quit-boardcast = Banshu 종료
 type-a-line-for-the-board = 보드에 올릴 한 줄 입력
 username-optional = 사용자 이름(선택)
 password-optional = 비밀번호(선택)

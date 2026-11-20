@@ -1,4 +1,4 @@
-# boardcast interface text: zh-Hans. Message IDs are shared by every language; English is the source.
+# Banshu interface text: zh-Hans. Message IDs are shared by every language; English is the source.
 
 starting = 启动中…
 loading-the-board-model = 正在加载板书模型…
@@ -367,7 +367,7 @@ drop-a-pdf-or-an = 把 PDF 或图片拖进窗口，就能对着它讨论。
 drag-to-move-the-map = 拖动可以移动小地图
 close-the-map = 收起小地图
 take-out-of-the-inbox = 从收纳栏拿走
-quit-boardcast = 退出 boardcast
+quit-boardcast = 退出 Banshu
 type-a-line-for-the-board = 输入一行，放上白板
 username-optional = 用户名（可选）
 password-optional = 密码（可选）

@@ -103,7 +103,7 @@ pub fn fetch(release: &Release, dir: &Path, cancel: &AtomicBool, report: &mut dy
     let file = format!("boardcast-{}.tar.gz", release.version);
     let model = Model {
         id: "update",
-        label: "boardcast",
+        label: "Banshu",
         file,
         size: release.size,
         sha256: release.sha256.clone(),
@@ -137,7 +137,7 @@ pub fn verify(path: &Path, signature: &str, key: &str) -> Result<()> {
         }
         stream.update(&buffer[..n]);
     }
-    stream.finalize().map_err(|_| anyhow!("this update is not signed by boardcast, so it was not installed"))
+    stream.finalize().map_err(|_| anyhow!("this update is not signed by Banshu, so it was not installed"))
 }
 
 /// Unpack below `dest`, dropping the package's top folder. Nothing may land outside `dest`.

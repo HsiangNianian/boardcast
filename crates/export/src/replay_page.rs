@@ -118,9 +118,9 @@ fn html_text(text: &str) -> String {
 /// The page's own words, in the meeting's interface language.
 fn words(english: bool) -> Value {
     if english {
-        json!({ "play": "Play", "pause": "Pause", "end": "Skip to end", "replay": "boardcast replay", "summary": "Summary", "transcript": "Transcript", "count": "{} lines", "board": "Board", "boardN": "Board {}", "live": "Live", "lost": "Reconnecting…", "ended": "Sharing has stopped" })
+        json!({ "play": "Play", "pause": "Pause", "end": "Skip to end", "replay": "Banshu replay", "summary": "Summary", "transcript": "Transcript", "count": "{} lines", "board": "Board", "boardN": "Board {}", "live": "Live", "lost": "Reconnecting…", "ended": "Sharing has stopped" })
     } else {
-        json!({ "play": "播放", "pause": "暂停", "end": "跳到结尾", "replay": "boardcast 回放", "summary": "摘要", "transcript": "会议记录", "count": "{} 句", "board": "板书", "boardN": "第 {} 张板", "live": "直播中", "lost": "正在重新连接…", "ended": "已停止共享" })
+        json!({ "play": "播放", "pause": "暂停", "end": "跳到结尾", "replay": "Banshu 回放", "summary": "摘要", "transcript": "会议记录", "count": "{} 句", "board": "板书", "boardN": "第 {} 张板", "live": "直播中", "lost": "正在重新连接…", "ended": "已停止共享" })
     }
 }
 

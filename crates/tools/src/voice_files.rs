@@ -1,7 +1,7 @@
 //! The speech models shipped in every package, about 1.2 GB: SenseVoice, the Silero VAD, the CAM++
 //! speaker model, Nemotron-3-Diarization for telling speakers apart as they talk, a streaming Chinese
 //! zipformer for drafts while someone speaks, Parakeet for English and ReazonSpeech for Japanese. CI caches them by this file's hash. The speaker model is not on ModelScope,
-//! so it comes from Hugging Face or GitHub; the diarization model, exported to ONNX by our sherpa-onnx
+//! so it comes from Hugging Face, pinned to the revision the app was tested with; the diarization model, exported to ONNX by our sherpa-onnx
 //! fork's CI, only from that fork's release.
 
 pub struct VoiceFile {
@@ -21,6 +21,10 @@ const DIARIZATION: &str = "https://github.com/HsiangNianian/sherpa-onnx/releases
 /// The streaming Chinese model that drafts while someone speaks (#291). Its authors state no license yet;
 /// boardcast's maintainer has asked them for one.
 const DRAFT_ZH: &str = "csukuangfj/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30/resolve/ad658fa0201659a09ea3c176129a191c77ecae8f";
+/// The CAM++ speaker model as it was until 2026-11-19, when its author replaced the file on Hugging Face and
+/// in sherpa-onnx's GitHub release with one a byte longer (a8055d6): every download then failed verification.
+/// This revision still serves the bytes pinned below; the GitHub copy no longer does, so it is not a source.
+const CAMPPLUS: &str = "csukuangfj/speaker-embedding-models/resolve/0743f301363dec56491a490f6d6cbc9d67f9a3bf";
 const REAZON: &str = "reazon-research/reazonspeech-k2-v2/resolve/291488c8151be24d7da4bf7af26e533fad96e407";
 
 pub fn files() -> Vec<VoiceFile> {
@@ -55,8 +59,8 @@ pub fn files() -> Vec<VoiceFile> {
             size: 28_281_164,
             sha256: "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
             modelscope: None,
-            huggingface: Some("csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx".into()),
-            github: Some("https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"),
+            huggingface: Some(pinned(CAMPPLUS, "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx")),
+            github: None,
         },
         VoiceFile {
             name: "voice/speaker/nemotron-3-diarization.int8.onnx",

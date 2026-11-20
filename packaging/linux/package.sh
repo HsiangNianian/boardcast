@@ -43,7 +43,9 @@ for variant in $variants; do
   copy_search "$lib/search"
   printf '%s\n' "$variant" > "$lib/variant"
 
-  cp LICENSE assets/licenses/* crates/ui/fonts/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$out/share/licenses/boardcast/"
+  cp LICENSE assets/licenses/* crates/fonts/files/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$out/share/licenses/boardcast/"
+  # The fonts built into the program (crates/fonts) go with their licenses.
+  for f in OFL-DMSans.txt OFL-JetBrainsMono.txt OFL-NotoSansCJK.txt; do test -f "$out/share/licenses/boardcast/$f" || { echo "missing font license $f" >&2; exit 1; }; done
   cp target/pdfium/LICENSE "$out/share/licenses/boardcast/pdfium-LICENSE"
   install -m644 packaging/icons/128x128@2x.png "$out/share/boardcast.png"
   install -m644 packaging/linux/boardcast.desktop.in "$out/share/boardcast.desktop.in"

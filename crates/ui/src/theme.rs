@@ -319,12 +319,21 @@ pub fn icon(name: &str) -> Icon {
     Icon::empty().path(format!("icons/{name}.svg"))
 }
 
-/// The interface's fonts, registered once at start.
+/// The interface's fonts, built into the program (crates/fonts), registered once at start.
 pub fn load_fonts(cx: &mut App) {
-    let fonts = vec![Cow::Borrowed(&include_bytes!("../fonts/DMSans.ttf")[..]), Cow::Borrowed(&include_bytes!("../fonts/JetBrainsMono.ttf")[..])];
+    let fonts = boardcast_fonts::ALL.iter().map(|f| Cow::Borrowed(f.bytes)).collect();
     if let Err(e) = cx.text_system().add_fonts(fonts) {
         eprintln!("fonts: {e:#}");
     }
+}
+
+/// The interface font, falling back to the built-in Chinese, Japanese and Korean font for what DM Sans cannot
+/// draw, before any font the system has: the same text on every computer, and none missing on one without
+/// such fonts. Set at the root, so text in the monospace font falls back the same way.
+pub fn interface_font() -> gpui_kit::Font {
+    let mut font = gpui_kit::font(SANS);
+    font.fallbacks = Some(gpui_kit::FontFallbacks::from_fonts(vec![boardcast_fonts::CJK_FAMILY.to_string()]));
+    font
 }
 
 /// Whether the light or dark choice follows the system.

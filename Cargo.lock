@@ -788,6 +788,7 @@ dependencies = [
  "anyhow",
  "base64",
  "boardcast-board",
+ "boardcast-fonts",
  "boardcast-meetings",
  "chrono",
  "fontdb",
@@ -797,6 +798,13 @@ dependencies = [
  "rav1e",
  "serde_json",
  "tiny-skia",
+ "ttf-parser",
+]
+
+[[package]]
+name = "boardcast-fonts"
+version = "0.32.0"
+dependencies = [
  "ttf-parser",
 ]
 
@@ -926,6 +934,7 @@ dependencies = [
  "boardcast-audio",
  "boardcast-board",
  "boardcast-export",
+ "boardcast-fonts",
  "boardcast-import",
  "boardcast-meetings",
  "boardcast-models",

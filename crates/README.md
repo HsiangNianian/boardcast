@@ -12,6 +12,7 @@ is kept as frozen fixtures.
 | `boardcast-meetings` | Meeting files, the open meeting's state, undo, the replay record | UI, audio, network |
 | `boardcast-models` | The board models too large for the installer: the catalog and downloading | UI, audio, board |
 | `boardcast-export` | Writing a meeting out as Markdown, PNG, SVG, animated SVG, PDF or a replay page | UI, audio |
+| `boardcast-fonts` | The fonts built into the program (DM Sans, JetBrains Mono, Noto Sans CJK SC) and their check | Everything else |
 | `boardcast-import` | Turning PDFs and images into boards: reading a page's layout, its picture and arXiv | UI, audio |
 | `boardcast-update` | Finding, verifying and installing a new version | UI, audio, board |
 | `boardcast-ui` | The GPUI window, tiled ink rendering, wiring the chain together | |

@@ -46,7 +46,9 @@ for variant in $variants; do
   copy_search "$lib/search"
   printf '%s\n' "$variant" > "$lib/variant"
 
-  cp LICENSE assets/licenses/* crates/ui/fonts/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$out/licenses/"
+  cp LICENSE assets/licenses/* crates/fonts/files/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$out/licenses/"
+  # The fonts built into the program (crates/fonts) go with their licenses.
+  for f in OFL-DMSans.txt OFL-JetBrainsMono.txt OFL-NotoSansCJK.txt; do test -f "$out/licenses/$f" || { echo "missing font license $f" >&2; exit 1; }; done
   cp target/pdfium/LICENSE "$out/licenses/pdfium-LICENSE"
   printf '%s\n' "$version" > "$out/VERSION"
 

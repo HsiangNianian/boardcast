@@ -8,6 +8,7 @@ license.workspace = true
 anyhow.workspace = true
 base64 = "0.22"
 boardcast-board.workspace = true
+boardcast-fonts.workspace = true
 boardcast-meetings.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 fontdb = "0.23"

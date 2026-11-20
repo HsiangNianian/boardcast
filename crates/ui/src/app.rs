@@ -9329,7 +9329,7 @@ impl Render for Workbench {
         div()
             .id("workbench")
             .track_focus(&self.focus)
-            .font_family(theme::SANS)
+            .font(theme::interface_font())
             .on_key_down(cx.listener(Self::on_key))
             .on_drop(cx.listener(|this, paths: &gpui_kit::ExternalPaths, _, cx| this.import_paths(paths.paths(), cx)))
             .size_full()
@@ -9380,7 +9380,7 @@ struct Shell {
 
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().font_family(theme::SANS).bg(rgb(pal().paper)).map(|d| match &self.workbench {
+        div().size_full().font(theme::interface_font()).bg(rgb(pal().paper)).map(|d| match &self.workbench {
             Some(workbench) => d.child(workbench.clone()).into_any_element(),
             // The bar is there from the start, so the window can be moved while the app gets ready.
             None => d.flex().flex_col().child(title_bar()).child(div().flex_1().min_h_0().child(crate::splash::splash(&self.word, self.started, window))).into_any_element(),

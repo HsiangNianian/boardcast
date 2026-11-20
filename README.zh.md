@@ -160,6 +160,23 @@ sh packaging/linux/package.sh           # target/package/boardcast-<version>-<ar
 
 全部代码都是 Rust，官网也一样：用 [Trunk](https://trunkrs.dev) 构建（`cd landing && trunk serve`），见 [landing/README.md](landing/README.md)。
 
+### 字体
+
+构建和运行桌面版都不需要安装字体：显示文字用的字体都编进了程序（[crates/fonts](crates/fonts)），所以界面和导出的 PDF 在哪台电脑上都一样，没有中文、日文、韩文字体的电脑也不会缺字。`boardcast --self-check` 会检查每个字体能否加载、能否显示它负责的语言。
+
+| 字体 | 用途 | 开发时是否要安装 | 是否随发布包分发 | 许可证 |
+| --- | --- | --- | --- | --- |
+| DM Sans | 界面正文 | 否，已编进程序 | 是，在程序里 | SIL OFL |
+| JetBrains Mono | 数字、时间和快捷键 | 否，已编进程序 | 是，在程序里 | SIL OFL |
+| Noto Sans CJK SC（常规、粗体） | 界面里的中日韩文和西里尔字母，PDF 里的摘要和会议记录 | 否，已编进程序 | 是，在程序里 | SIL OFL |
+| Excalifont | 英文、拉丁字母、希腊字母、西里尔字母和数学笔画的来源 | 否，笔画已提交 | 否，只分发笔画 | SIL OFL |
+| Cascadia Code | 部分数学笔画的来源 | 否，笔画已提交 | 否，只分发笔画 | 随附许可证 |
+| Xiaolai | 韩文笔画的来源 | 否，笔画已提交 | 否，只分发笔画 | SIL OFL |
+| KanjiVG、Hanzi Writer 数据 | 假名和汉字笔画的来源 | 否，笔画已提交 | 否，只分发笔画 | CC BY-SA 3.0、Arphic Public License |
+| DM Sans、JetBrains Mono、Excalifont（WOFF2） | 官网 | 否，属于网站 | 随网站发布 | SIL OFL |
+
+Noto Sans CJK SC 能显示所有汉字、假名和韩文，字形是简体中文风格；它没有的字符，界面和 PDF 都会再去系统字体里找。内置字体的许可证会复制进每个安装包。上面列出的 `libfontconfig` 和 `libfreetype` 是 Linux 上绘制文字用的库，不是字体。
+
 <details>
 <summary><strong>评测</strong></summary>
 
@@ -203,4 +220,4 @@ target/release/asr-eval run . --suite meetings     # 9 段约 10 分钟、跨行
 
 在 [Issues](https://github.com/HsiangNianian/boardcast/issues) 里报告问题或讨论想法，也欢迎直接提 PR。
 
-代码使用 [MIT](LICENSE) 许可。中文笔画数据来自 [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data)，源自 Make Me a Hanzi 和文鼎字体，采用 Arphic Public License，许可证随生成的数据一起分发。日文假名和补充汉字来自 Ulrich Apel 的 [KanjiVG](https://kanjivg.tagaini.net/)，改为中心线后以 [CC BY-SA 3.0](assets/licenses/kanjivg-CC-BY-SA-3.0.txt) 分发。默认的英文和数学符号笔画源自 Excalifont，采用 [SIL OFL](assets/licenses/handwritten-OFL.txt)；另有部分数学符号来自内置的 Cascadia Code 字体，见其[附带许可](assets/licenses/handwritten-cascadia.txt)。潦草时的英文连写来自 [hersheytext](https://github.com/techninja/hersheytextjs) 里的 Hershey 连写体，采用 [MIT](assets/licenses/hersheytext-MIT.txt)。桌面版内置 DM Sans 和 JetBrains Mono，采用 SIL OFL（见 [crates/ui/fonts](crates/ui/fonts)）。官网使用 DM Sans、JetBrains Mono 和未修改的 Excalifont 拉丁子集，均采用 SIL OFL，见 [landing/public/licenses](landing/public/licenses)。
+代码使用 [MIT](LICENSE) 许可。中文笔画数据来自 [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data)，源自 Make Me a Hanzi 和文鼎字体，采用 Arphic Public License，许可证随生成的数据一起分发。日文假名和补充汉字来自 Ulrich Apel 的 [KanjiVG](https://kanjivg.tagaini.net/)，改为中心线后以 [CC BY-SA 3.0](assets/licenses/kanjivg-CC-BY-SA-3.0.txt) 分发。默认的英文和数学符号笔画源自 Excalifont，采用 [SIL OFL](assets/licenses/handwritten-OFL.txt)；另有部分数学符号来自内置的 Cascadia Code 字体，见其[附带许可](assets/licenses/handwritten-cascadia.txt)。潦草时的英文连写来自 [hersheytext](https://github.com/techninja/hersheytextjs) 里的 Hershey 连写体，采用 [MIT](assets/licenses/hersheytext-MIT.txt)。桌面版内置 DM Sans、JetBrains Mono 和 Noto Sans CJK SC，均采用 SIL OFL（见 [crates/fonts/files](crates/fonts/files)）。官网使用 DM Sans、JetBrains Mono 和未修改的 Excalifont 拉丁子集，均采用 SIL OFL，见 [landing/public/licenses](landing/public/licenses)。

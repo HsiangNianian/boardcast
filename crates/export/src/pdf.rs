@@ -1,5 +1,7 @@
 //! A whole meeting as a PDF: one page per board in vector ink, then the summary and transcript as
-//! real text. System fonts are embedded, cut down to the characters used.
+//! real text, in the app's own Chinese, Japanese and Korean font (boardcast-fonts) so it reads the same
+//! from every computer; a character it lacks is looked for in the system's fonts. Fonts are embedded, cut down
+//! to the characters used.
 
 use crate::ink::{Drawn, Page};
 use crate::{Doc, Output};
@@ -36,7 +38,8 @@ const LINE_HEIGHT: f32 = 1.55;
 const INK: u32 = 0x1e_1e_1e;
 const MUTED: u32 = 0x6b_6b_6b;
 
-/// Tried in order; a character none of them has is looked for in every other installed font.
+/// System fonts tried after the built-in one, in order; a character none of them has is looked for in every
+/// other installed font.
 const FAMILIES: [&str; 8] = ["PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans CN", "WenQuanYi Micro Hei", "Hiragino Sans GB"];
 
 struct Face {
@@ -64,10 +67,10 @@ struct Fonts {
 }
 
 impl Fonts {
+    /// The built-in fonts first, then the system's.
     fn system() -> Self {
-        let mut db = Database::new();
-        db.load_system_fonts();
-        let mut fonts = Self { db, faces: vec![], regular: vec![], bold: vec![], known: HashMap::new() };
+        let mut fonts = Self::built_in();
+        fonts.db.load_system_fonts();
         let names: Vec<Family> = FAMILIES.iter().map(|n| Family::Name(n)).chain([Family::SansSerif]).collect();
         for family in names {
             for (weight, bold) in [(Weight::NORMAL, false), (Weight::BOLD, true)] {
@@ -78,6 +81,21 @@ impl Fonts {
                         list.push(index);
                     }
                 }
+            }
+        }
+        fonts
+    }
+
+    /// Only the fonts built into the program: what a computer without any Chinese, Japanese or Korean font
+    /// still has, and so what the summary and transcript are always written in.
+    fn built_in() -> Self {
+        let mut fonts = Self { db: Database::new(), faces: vec![], regular: vec![], bold: vec![], known: HashMap::new() };
+        for built in [&boardcast_fonts::CJK_REGULAR, &boardcast_fonts::CJK_BOLD] {
+            let data = Arc::new(built.bytes.to_vec());
+            if let Some(font) = Font::new(data.clone().into(), 0) {
+                fonts.faces.push(Face { font, data, index: 0 });
+                let index = fonts.faces.len() - 1;
+                if built.bold { fonts.bold.push(index) } else { fonts.regular.push(index) }
             }
         }
         fonts
@@ -404,7 +422,10 @@ fn draw_lead(surface: &mut Surface, fonts: &mut Fonts, lead: Lead, x: f32, basel
 }
 
 pub fn pdf(doc: &Doc, boards: &[Drawn]) -> Result<Output> {
-    let mut fonts = Fonts::system();
+    pdf_with(doc, boards, Fonts::system())
+}
+
+fn pdf_with(doc: &Doc, boards: &[Drawn], mut fonts: Fonts) -> Result<Output> {
     let mut document = Document::new();
     document.set_metadata(Metadata::new().title(doc.title.clone()).creator("boardcast".to_string()));
     let settings = || PageSettings::from_wh(WIDTH, HEIGHT).ok_or_else(|| anyhow!("bad page size"));
@@ -513,11 +534,28 @@ mod tests {
     }
 
     #[test]
+    fn the_built_in_font_writes_every_language_without_system_fonts() {
+        let mut fonts = Fonts::built_in();
+        for bold in [false, true] {
+            for c in "简体繁體ひらがなカタカナ한국어РусскийAz09".chars() {
+                let (face, advance) = fonts.pick(c, bold).unwrap_or_else(|| panic!("{c} has no font"));
+                assert!(advance > 0.0, "{c}");
+                assert_eq!(fonts.bold.contains(&face), bold, "{c} in the {} weight", if bold { "bold" } else { "regular" });
+            }
+        }
+        let mut written = doc(2);
+        written.summary = "### 结论\n- 主打年轻化，日本語・한국어・Русский".into();
+        let out = pdf_with(&written, &[], Fonts::built_in()).unwrap();
+        assert!(out.bytes.starts_with(b"%PDF"));
+        // Text is written in the font, its outlines embedded, rather than left out as with no font at all.
+        let none = Fonts { db: Database::new(), faces: vec![], regular: vec![], bold: vec![], known: HashMap::new() };
+        let bare = pdf_with(&written, &[], none).unwrap();
+        assert!(out.bytes.len() > bare.bytes.len() + 4_000, "{} against {} bytes without a font", out.bytes.len(), bare.bytes.len());
+    }
+
+    #[test]
     fn wrapping_never_loses_a_character_and_keeps_words_whole() {
         let mut fonts = Fonts::system();
-        if fonts.is_empty() {
-            return;
-        }
         let rows = wrap(&mut fonts, "alpha beta gamma delta", 90.0, 10.0, false);
         assert!(rows.len() > 1, "{rows:?}");
         assert_eq!(rows.join(" "), "alpha beta gamma delta");

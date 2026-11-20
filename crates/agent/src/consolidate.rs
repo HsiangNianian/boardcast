@@ -314,6 +314,26 @@ pub fn catch_up(asked: &Graph, now: &Graph, rewritten: &Graph) -> Graph {
     graph
 }
 
+/// When a consolidation is asked for, which decides whether it is worth it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum When {
+    /// During the meeting: only once the board has piled up ([`needed`]), so it is not rewritten under
+    /// people's eyes every few lines.
+    Piled,
+    /// When listening stops, after a meeting rather than a short exchange: whenever lines came since the last
+    /// rewrite, as what was drawn after it would otherwise stay as drawn line by line. On the heard phone
+    /// meeting the three passes rewritten at the end scored 0.70-0.73 item F1, the three left with a rewrite 3
+    /// to 23 lines earlier 0.48-0.67. A board that piled up is rewritten whatever its length.
+    Final,
+}
+
+/// A board smaller than this is not rewritten at the end: there is nothing to organise.
+const FINAL_LEAST: usize = 6;
+/// Fewer lines than this is an exchange, not a meeting, and its board is left as drawn at the end: rewriting
+/// five lines of a retrospective folded its three sections into one topic, and an options board's pros and
+/// cons into notes (dev set item F1 0.84 to 0.70).
+const FINAL_LINES: usize = 16;
+
 /// More points straight under one topic than this, and the board is piling up remarks: the layout skill's own
 /// limit (skills/board-layout/RULES.md, rule C).
 const CROWDED: usize = 7;
@@ -458,8 +478,12 @@ pub struct Consolidated {
 /// Ask the model to rewrite the board, after asking what kind of meeting it is. `None` when the board is not
 /// one to consolidate. `system` replaces the instructions, and the question, to try other wording without
 /// building again.
-pub fn consolidate(provider: &Provider, graph: &Graph, history: &[Utterance], english: bool, system: Option<&str>, effort: &str) -> Result<Option<Consolidated>> {
-    if !applies_to(graph) || !needed(graph) {
+pub fn consolidate(provider: &Provider, graph: &Graph, history: &[Utterance], english: bool, system: Option<&str>, effort: &str, when: When) -> Result<Option<Consolidated>> {
+    let wanted = match when {
+        When::Piled => needed(graph),
+        When::Final => needed(graph) || (history.len() >= FINAL_LINES && graph.nodes.len() >= FINAL_LEAST),
+    };
+    if !applies_to(graph) || !wanted {
         return Ok(None);
     }
     let started = std::time::Instant::now();
@@ -622,6 +646,22 @@ mod tests {
         assert!(!labels.contains(&"抢占份额") && !labels.contains(&"提价"), "{labels:?}");
         assert!(labels.contains(&"网关") && labels.contains(&"鉴权服务"), "a flow the outline never mentions stays: {labels:?}");
         assert_eq!(rebuilt.edges.len(), 1);
+    }
+
+    #[test]
+    fn a_tidy_board_is_rewritten_only_at_the_end() {
+        let mut tidy = Graph::default();
+        tidy.apply(&parse_ops("T 议题\nL 议题 一\nL 议题 二\nT 另一题\nL 另一题 三\nL 另一题 四"));
+        assert!(!needed(&tidy));
+        let provider = Provider::Scripted(std::sync::Arc::new(|_: &str| Ok("T 议题\n  L 一\n  L 二\nT 另一题\n  L 三\n  L 四 [星标]".to_string())));
+        let heard: Vec<Utterance> = (0..FINAL_LINES).map(|i| Utterance { speaker: None, text: format!("第{i}句，四最重要"), pointing: vec![] }).collect();
+        assert!(consolidate(&provider, &tidy, &heard, false, None, "high", When::Piled).unwrap().is_none(), "left alone during the meeting");
+        let done = consolidate(&provider, &tidy, &heard, false, None, "high", When::Final).unwrap().expect("rewritten at the end");
+        assert!(done.graph.nodes.iter().any(|n| n.label == "四" && n.marks == ["星标"]));
+        let mut small = Graph::default();
+        small.apply(&parse_ops("T 议题\nL 议题 一"));
+        assert!(consolidate(&provider, &small, &heard, false, None, "high", When::Final).unwrap().is_none(), "too small to organise");
+        assert!(consolidate(&provider, &tidy, &heard[..5], false, None, "high", When::Final).unwrap().is_none(), "a short exchange is left as drawn");
     }
 
     #[test]

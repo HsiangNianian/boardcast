@@ -6,6 +6,9 @@
 //!                [--consolidate N]   rewrite the board every N lines and at the end (see boardcast_agent::consolidate)
 //!                [--consolidate-prompt <file>]   consolidate with these instructions instead of skills/board-consolidate
 //!                [--consolidate-effort high|medium|low]   how hard a reasoning model thinks when consolidating
+//!                [--turns]           draw whole turns put back together from the lines, as the app does
+//!                [--context N]       how many earlier transcript lines the model reads with each turn (2, or
+//!                                    6 with --turns, as the app)
 //!                [--consolidate-by saved|<llama-server url>]   consolidate with another model than draws the lines:
 //!                                    the remote one saved in Settings, or a local server
 //!
@@ -55,6 +58,38 @@ struct Turn {
     /// What was circled while this was said.
     #[serde(default)]
     pointing: Vec<String>,
+    /// Where in the recording it was said, in seconds, for cases taken from what the app heard.
+    #[serde(default)]
+    start: Option<f64>,
+    #[serde(default)]
+    end: Option<f64>,
+}
+
+/// A case's lines as the board is asked about them: each line alone, or, with `--turns`, put back together
+/// into whole turns (boardcast_agent::turns), each with the lines that went into it or were said during it.
+fn steps(case: &Case, turns: bool) -> Vec<(Option<Utterance>, Vec<Utterance>)> {
+    if !turns {
+        return case.turns.iter().map(|t| (Some(t.utterance()), vec![t.utterance()])).collect();
+    }
+    struct Timed(Utterance, Option<(f64, f64)>);
+    impl boardcast_agent::turns::Piece for Timed {
+        fn utterance(&self) -> &Utterance {
+            &self.0
+        }
+        fn span(&self) -> Option<(f64, f64)> {
+            self.1
+        }
+        fn urgent(&self) -> bool {
+            !self.0.pointing.is_empty()
+        }
+    }
+    let mut assembler = boardcast_agent::turns::Assembler::default();
+    let mut out = vec![];
+    for t in &case.turns {
+        out.extend(assembler.push(Timed(t.utterance(), t.start.zip(t.end))));
+    }
+    out.extend(assembler.flush());
+    out.into_iter().map(|r| (r.turn, r.pieces.into_iter().map(|p| p.0).collect())).collect()
 }
 
 impl Turn {
@@ -74,6 +109,10 @@ struct Options {
     consolidate_effort: String,
     /// The model that consolidates, when not the one drawing line by line.
     consolidator: Option<Provider>,
+    /// Draw whole turns put back together from the lines, as the app does (boardcast_agent::turns).
+    turns: bool,
+    /// How many earlier lines of the transcript the model reads with each turn.
+    context: usize,
 }
 
 const SETS: [(&str, &[&str]); 5] = [
@@ -115,9 +154,17 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
     // Input tokens, and how many of them the service had cached, for what a run costs.
     let (mut tokens_in, mut tokens_cached) = (0_u64, 0_u64);
     let (mut prompt_read, mut prompt_ms, mut predicted_ms) = (vec![], vec![], vec![]);
-    for turn in &case.turns {
-        let next = turn.utterance();
-        let recent = &history[history.len().saturating_sub(CONTEXT_LINES)..];
+    // Lines heard since the board was last consolidated.
+    let mut since = 0_usize;
+    for (turn, pieces) in steps(case, options.turns) {
+        let Some(next) = turn else {
+            // Nothing to draw: it only joins the discussion the model reads.
+            let _ = writeln!(log, "> {}\n  (no turn)", pieces.iter().map(|p| p.text.as_str()).collect::<Vec<_>>().join(" / "));
+            since += pieces.len();
+            history.extend(pieces);
+            continue;
+        };
+        let recent = &history[history.len().saturating_sub(options.context)..];
         if options.guidance.hint && hint.is_some() {
             hints_sent += 1;
         }
@@ -146,12 +193,14 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
         let current = repaired.unwrap_or(found);
         soft_total += current.soft.len();
         hint = current.hint();
-        history.push(next);
-        if options.consolidate > 0 && history.len().is_multiple_of(options.consolidate) {
+        since += pieces.len();
+        history.extend(pieces);
+        if options.consolidate > 0 && since >= options.consolidate {
+            since = 0;
             consolidate_case(options, &mut graph, &history, &mut turns_log, &mut log, &mut errors);
         }
     }
-    if options.consolidate > 0 && !history.len().is_multiple_of(options.consolidate) {
+    if options.consolidate > 0 && since > 0 {
         consolidate_case(options, &mut graph, &history, &mut turns_log, &mut log, &mut errors);
     }
     let (found, repaired) = check_and_repair(&graph, &mut board, &mut glyphs);
@@ -255,6 +304,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let mut consolidate_prompt: Option<String> = None;
     let mut consolidate_effort = "high".to_string();
     let mut consolidator: Option<Provider> = None;
+    let (mut turns, mut context) = (false, None::<usize>);
     while let Some(flag) = args.next() {
         if model.take(&flag, &mut args)? {
             continue;
@@ -276,6 +326,8 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
                 flags.take(given, &mut std::iter::once(by.clone()).filter(|_| given == "--llm"))?;
                 consolidator = flags.chosen()?.map(|(p, _)| p);
             }
+            "--turns" => turns = true,
+            "--context" => context = Some(args.next().context("count")?.parse()?),
             "--consolidate-effort" => consolidate_effort = args.next().context("high, medium or low")?,
             "--consolidate-prompt" => {
                 let path = args.next().context("file")?;
@@ -321,7 +373,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     if cases.is_empty() {
         bail!("no matching eval cases");
     }
-    let options = Options { guidance, provider, consolidate, consolidate_prompt, consolidate_effort, consolidator };
+    let options = Options { guidance, provider, consolidate, consolidate_prompt, consolidate_effort, consolidator, turns, context: context.unwrap_or(if turns { boardcast_agent::TURN_CONTEXT_LINES } else { CONTEXT_LINES }) };
 
     // One line first: a model that cannot be reached would otherwise score every case 0, which reads like a
     // result. It also puts the fixed prompt into the server's cache, so the first case's latency is typical.

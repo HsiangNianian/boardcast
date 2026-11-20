@@ -7,6 +7,7 @@
 //! Hints from the checker did not help on either model, so they stay opt-in.
 
 pub mod consolidate;
+pub mod turns;
 pub mod settings;
 pub mod sound;
 pub mod summary;
@@ -30,8 +31,16 @@ use std::time::{Duration, Instant};
 
 /// How many earlier lines the model hears with each new one.
 pub const CONTEXT_LINES: usize = 2;
+/// How many earlier lines of the transcript the model reads with each whole turn ([`turns`]). On the AliMeeting
+/// phone meeting as the app heard it, DeepSeek over nine passes: 0.61 item F1 with six lines, 0.52 with two;
+/// a turn holds more than a line did, and the remarks around it say what it answers.
+pub const TURN_CONTEXT_LINES: usize = 6;
 const LLAMA_PORT: u16 = 18_765;
 const ATTEMPTS: u32 = 4;
+/// How long a local model may think before answering a long request, such as rewriting a whole board: on a
+/// laptop whose graphics card is shared, the 4B wrote 12 tokens a second, five and a half minutes for one
+/// rewrite, past the 300 s every other request is given.
+const LOCAL_THINKING_LIMIT: Duration = Duration::from_secs(600);
 const NO_MODEL: &str = "No board model is set up. Download one or add a remote model in Settings.";
 
 /// The layout skill's rules, short enough for a prompt. The full guidance is skills/board-layout/SKILL.md.
@@ -131,7 +140,14 @@ impl Provider {
                 body
             }
             // Left to itself a small model can fall into repeating the same few lines until it runs out of room.
-            Self::Local { .. } => json!({ "model": "local", "messages": messages, "temperature": 0.2, "repeat_penalty": 1.15, "repeat_last_n": 256, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": think_locally } }),
+            Self::Local { .. } => {
+                let body = json!({ "model": "local", "messages": messages, "temperature": 0.2, "repeat_penalty": 1.15, "repeat_last_n": 256, "max_tokens": max_tokens, "cache_prompt": true, "chat_template_kwargs": { "enable_thinking": think_locally } });
+                if think_locally {
+                    // Once, within ten minutes: the caller asks again without thinking if it fails.
+                    return self.send_within(&self.endpoint(), &body, LOCAL_THINKING_LIMIT, 1);
+                }
+                body
+            }
             #[cfg(test)]
             Self::Scripted(reply) => {
                 let said = messages.last().and_then(|m| m["content"].as_str()).unwrap_or_default().to_string();
@@ -214,9 +230,15 @@ impl Provider {
     /// One request, retried while the failure might pass. A reply that cannot be used says what came
     /// back, cut short and with the key taken out, so a failure can be told apart afterwards.
     fn send(&self, url: &str, body: &Value) -> Result<Value> {
+        self.send_within(url, body, Duration::from_secs(300), ATTEMPTS)
+    }
+
+    /// As [`Self::send`], with its own time limit and number of attempts: a local model thinking over a whole
+    /// board can take minutes, and trying such a request again after it ran out of time only loses more.
+    fn send_within(&self, url: &str, body: &Value, limit: Duration, attempts: u32) -> Result<Value> {
         let mut last = anyhow!("no attempt made");
-        for attempt in 0..ATTEMPTS {
-            let mut call = http(url).post(url).timeout(Duration::from_secs(300));
+        for attempt in 0..attempts {
+            let mut call = http(url).post(url).timeout(limit);
             if let Self::Remote { key, .. } = self {
                 call = call.set("Authorization", &format!("Bearer {key}"));
             }
@@ -240,7 +262,7 @@ impl Provider {
                 }
                 Err(e) => last = anyhow!("model request failed: {e}"),
             }
-            if attempt + 1 < ATTEMPTS {
+            if attempt + 1 < attempts {
                 thread::sleep(Duration::from_secs(2_u64.pow(attempt + 1)));
             }
         }
@@ -570,7 +592,30 @@ pub struct Said {
     pub meeting: u64,
     /// From `Session::renames_seen`: speakers renamed after this count are renamed in this line too.
     pub renames: usize,
+    /// Where in the input it was heard, in seconds from its start to its end; none for a typed line.
+    pub span: Option<(f64, f64)>,
 }
+
+impl turns::Piece for Said {
+    fn utterance(&self) -> &Utterance {
+        &self.line
+    }
+    fn span(&self) -> Option<(f64, f64)> {
+        self.span
+    }
+    fn urgent(&self) -> bool {
+        self.asr_ms.is_none() || !self.line.pointing.is_empty()
+    }
+}
+
+/// How long a turn is held after the last sound of speech, a line or a draft, before it is drawn: drafts come
+/// about three times a second while anyone talks, so a second without one is a pause.
+const QUIET: Duration = Duration::from_millis(1000);
+/// The same without drafts, when only finished lines say someone is talking: a speaker's next piece can take
+/// the recognizer a few seconds to finish.
+const QUIET_WITHOUT_DRAFTS: Duration = Duration::from_millis(2500);
+/// A turn is drawn after this long however it goes on, so the board never falls far behind a monologue.
+const MAX_HOLD: Duration = Duration::from_secs(15);
 
 pub enum Update {
     Loading,
@@ -897,6 +942,12 @@ pub struct Session {
     local_base: Arc<Mutex<Option<String>>>,
     /// Speakers renamed in this meeting, in order, for lines that were on their way at the time.
     renames: Arc<Mutex<Vec<(String, String)>>>,
+    /// When speech was last heard, from the drafts, so a turn is held while its speaker goes on.
+    speaking: Arc<Mutex<Option<Instant>>>,
+    /// Whether the board is being consolidated now: one at a time.
+    consolidating: Arc<std::sync::atomic::AtomicBool>,
+    /// Where a last consolidation sends its board, as the worker does.
+    updates: Sender<Update>,
 }
 
 fn rename_line(line: &mut Utterance, renames: &[(String, String)]) {
@@ -920,6 +971,9 @@ impl Session {
             meeting: Arc::new(AtomicU64::new(0)),
             local_base: Arc::new(Mutex::new(None)),
             renames: Arc::new(Mutex::new(vec![])),
+            speaking: Arc::new(Mutex::new(None)),
+            consolidating: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            updates: updates.clone(),
         };
         let (graph, history, hint, backend, guidance, meeting) =
             (session.graph.clone(), session.history.clone(), session.hint.clone(), session.backend.clone(), session.guidance.clone(), session.meeting.clone());
@@ -927,6 +981,8 @@ impl Session {
         let references = session.references.clone();
         let local_base = session.local_base.clone();
         let renames = session.renames.clone();
+        let speaking = session.speaking.clone();
+        let consolidating = session.consolidating.clone();
         thread::spawn(move || {
             // Held for the thread's lifetime: the child's death signal is tied to this thread.
             let mut server: Option<(Child, String, PathBuf)> = None;
@@ -973,56 +1029,104 @@ impl Session {
             // Lines heard in this meeting since the board was last consolidated, and whether a
             // consolidation is under way.
             let (mut since, mut since_meeting) = (0_usize, u64::MAX);
-            let consolidating = Arc::new(std::sync::atomic::AtomicBool::new(false));
-            while let Ok(first) = said.recv() {
-                let mut batch = vec![first];
-                while let Ok(more) = said.try_recv() {
-                    batch.push(more);
+            // Lines are put back together into whole turns before the board hears them (turns.rs); the
+            // transcript keeps them as they were heard.
+            let mut assembler: turns::Assembler<Said> = turns::Assembler::default();
+            let (mut last_line, mut held_since) = (Instant::now(), None::<Instant>);
+            loop {
+                let mut ready: Vec<turns::Ready<Said>> = vec![];
+                let heard = *speaking.lock().expect("speaking lock");
+                let quiet = if heard.is_some() { QUIET } else { QUIET_WITHOUT_DRAFTS };
+                let last_sound = heard.map_or(last_line, |h| h.max(last_line));
+                let held_too_long = held_since.is_some_and(|t| t.elapsed() >= MAX_HOLD);
+                let got = if !assembler.holding() {
+                    said.recv().map_err(|_| std::sync::mpsc::RecvTimeoutError::Disconnected)
+                } else if held_too_long {
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+                } else {
+                    said.recv_timeout((last_sound + quiet).saturating_duration_since(Instant::now()))
+                };
+                match got {
+                    Ok(first) => {
+                        last_line = Instant::now();
+                        // Read after the wait: a meeting opened while it waited is the one lines belong to now.
+                        let current = meeting.load(Ordering::SeqCst);
+                        for piece in std::iter::once(first).chain(std::iter::from_fn(|| said.try_recv().ok())) {
+                            if piece.meeting == current {
+                                ready.extend(assembler.push(piece));
+                            }
+                        }
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                        // Speech heard again since: its speaker is still going.
+                        let again = speaking.lock().expect("speaking lock").is_some_and(|h| h > last_sound);
+                        if again && !held_too_long {
+                            continue;
+                        }
+                        ready.extend(assembler.flush());
+                    }
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+                held_since = if assembler.holding() { held_since.or(Some(Instant::now())) } else { None };
+                // What was held for a meeting since closed goes with it.
+                ready.retain(|r| r.pieces.iter().all(|p| p.meeting == meeting.load(Ordering::SeqCst)));
+                if ready.is_empty() {
+                    if !assembler.holding() {
+                        let _ = drained.send(());
+                    }
+                    continue;
                 }
                 let current = meeting.load(Ordering::SeqCst);
-                batch.retain(|s| s.meeting == current);
-                if batch.is_empty() {
-                    let _ = drained.send(());
-                    continue;
+                let mut batch: Vec<Said> = vec![];
+                let mut said_turns: Vec<Utterance> = vec![];
+                for r in ready {
+                    said_turns.extend(r.turn);
+                    batch.extend(r.pieces);
                 }
                 let renames_seen = {
                     let renames = renames.lock().expect("renames lock");
                     for said in &mut batch {
                         rename_line(&mut said.line, renames.get(said.renames..).unwrap_or_default());
                     }
+                    // A turn is renamed from its earliest piece's count on; a rename it already had changes nothing.
+                    let earliest = batch.iter().map(|s| s.renames).min().unwrap_or(0);
+                    for turn in &mut said_turns {
+                        rename_line(turn, renames.get(earliest..).unwrap_or_default());
+                    }
                     renames.len()
                 };
-                let next = if batch.len() == 1 {
-                    batch[0].line.clone()
-                } else {
-                    let text: Vec<String> = batch
-                        .iter()
-                        .map(|s| s.line.speaker.as_ref().map_or_else(|| s.line.text.clone(), |n| format!("{n}：{}", s.line.text)))
-                        .collect();
-                    // Everything circled across the merged lines still counts, in the order it was circled.
-                    let mut pointing: Vec<String> = vec![];
-                    for id in batch.iter().flat_map(|s| &s.line.pointing) {
-                        if !pointing.contains(id) {
-                            pointing.push(id.clone());
+                let next = match said_turns.len() {
+                    0 => None,
+                    1 => Some(said_turns[0].clone()),
+                    _ => {
+                        let text: Vec<String> = said_turns.iter().map(|t| t.speaker.as_ref().map_or_else(|| t.text.clone(), |n| format!("{n}：{}", t.text))).collect();
+                        // Everything circled across the merged turns still counts, in the order it was circled.
+                        let mut pointing: Vec<String> = vec![];
+                        for id in said_turns.iter().flat_map(|t| &t.pointing) {
+                            if !pointing.contains(id) {
+                                pointing.push(id.clone());
+                            }
                         }
+                        Some(Utterance { speaker: None, text: text.join(" "), pointing })
                     }
-                    Utterance { speaker: None, text: text.join(" "), pointing }
                 };
                 let recent: Vec<Utterance> = {
                     let all = history.lock().expect("history lock");
-                    all[all.len().saturating_sub(CONTEXT_LINES)..].to_vec()
+                    all[all.len().saturating_sub(TURN_CONTEXT_LINES)..].to_vec()
                 };
                 let seen = graph.lock().expect("graph lock").clone();
                 let note = hint.lock().expect("hint lock").take();
                 let provider = provider_now(&updates);
-                let result = match &provider {
-                    Ok(provider) => {
+                let result = match (&provider, &next) {
+                    // Nothing to draw: the lines only join the discussion.
+                    (_, None) => Ok(Reply::default()),
+                    (Ok(provider), Some(next)) => {
                         let chosen = guidance.lock().expect("guidance lock").unwrap_or_else(|| provider.default_guidance());
                         let terms = glossary.lock().expect("glossary lock").clone();
                         let cited = references.lock().expect("references lock").clone();
-                        propose_with(provider, &seen, &recent, &next, chosen, note.as_deref(), &terms, &cited)
+                        propose_with(provider, &seen, &recent, next, chosen, note.as_deref(), &terms, &cited)
                     }
-                    Err(e) => Err(anyhow!("{e:#}")),
+                    (Err(e), Some(_)) => Err(anyhow!("{e:#}")),
                 };
                 // The lock is held across the check, so a meeting cannot open between it and the write.
                 let mut board = graph.lock().expect("graph lock");
@@ -1033,7 +1137,7 @@ impl Session {
                 }
                 // A rename also holds the board's lock, so none can come between this and the write.
                 let mut lines: Vec<Utterance> = batch.iter().map(|s| s.line.clone()).collect();
-                for line in &mut lines {
+                for line in lines.iter_mut().chain(said_turns.iter_mut()) {
                     rename_line(line, renames.lock().expect("renames lock").get(renames_seen..).unwrap_or_default());
                 }
                 history.lock().expect("history lock").extend(lines.iter().cloned());
@@ -1042,7 +1146,8 @@ impl Session {
                     Ok(reply) => {
                         let before = board.clone();
                         board.apply(&parse_ops(&reply.ops));
-                        attribute(&before, &mut board, &lines);
+                        // New nodes belong to who said the turn, not to whoever said "对" in the middle of it.
+                        attribute(&before, &mut board, if said_turns.is_empty() { &lines } else { &said_turns });
                         Update::Drawn { meeting: current, graph: board.clone(), ops: reply.ops, lines, asr_ms: tail.asr_ms, llm_ms: reply.ms, ended: batch[0].ended }
                     }
                     Err(e) => Update::Failed { meeting: current, message: format!("{e:#}"), lines },
@@ -1068,6 +1173,31 @@ impl Session {
             }
         });
         session
+    }
+
+    /// Listening stopped: once the last turn has been drawn, consolidate the board a last time, as one that
+    /// piled up since the last rewrite would otherwise stay as drawn line by line. In the AliMeeting phone
+    /// meeting the second half (promotion channels) was never rewritten, so its dropped channel was never
+    /// struck. Remote models only, as during the meeting; nothing happens if a rewrite is running.
+    pub fn wrap_up(&self) {
+        let Backend::Ready(provider @ Provider::Remote { .. }) = self.backend.lock().expect("backend lock").clone() else { return };
+        if self.consolidating.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let (graph, history, meeting, consolidating) = (self.graph.clone(), self.history.clone(), self.meeting.clone(), self.consolidating.clone());
+        let updates = self.updates.clone();
+        let current = self.meeting();
+        thread::spawn(move || {
+            // The last turn is held until its speaker has been quiet, then drawn: it should be on the board.
+            thread::sleep(QUIET_WITHOUT_DRAFTS + Duration::from_millis(500));
+            consolidate_live(&provider, &graph, &history, &meeting, current, &updates);
+            consolidating.store(false, Ordering::SeqCst);
+        });
+    }
+
+    /// Someone is talking now, as a draft of what they say shows: a turn being held waits for them.
+    pub fn heard_speech(&self) {
+        *self.speaking.lock().expect("speaking lock") = Some(Instant::now());
     }
 
     /// A handle on the meeting stamp, for threads that hear lines.
@@ -1464,7 +1594,7 @@ mod tests {
 
     impl Harness {
         fn say(&self, text: &str) {
-            self.said.send(Said { line: Utterance { speaker: None, text: text.into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: self.session.meeting(), renames: 0 }).unwrap();
+            self.said.send(Said { line: Utterance { speaker: None, text: text.into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: self.session.meeting(), renames: 0, span: None }).unwrap();
         }
 
         fn wait(&self) {
@@ -1557,7 +1687,7 @@ mod tests {
         });
         let stale = h.session.meeting();
         h.session.open(Graph::default(), vec![]);
-        h.said.send(Said { line: Utterance { speaker: None, text: "排队的旧话".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: stale, renames: 0 }).unwrap();
+        h.said.send(Said { line: Utterance { speaker: None, text: "排队的旧话".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: stale, renames: 0, span: None }).unwrap();
         h.wait();
         h.say("新会议的话");
         h.wait();
@@ -1576,7 +1706,7 @@ mod tests {
             release_rx.lock().unwrap().recv().unwrap();
             Ok("N n1 「网关」".into())
         });
-        let line = |renames| Said { line: Utterance { speaker: Some("B".into()), text: "网关".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: h.session.meeting(), renames };
+        let line = |renames| Said { line: Utterance { speaker: Some("B".into()), text: "网关".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: h.session.meeting(), renames, span: None };
         h.said.send(line(0)).unwrap();
         entered.recv_timeout(Duration::from_secs(5)).unwrap();
         // Renamed while the model is answering, with the name then given to someone else's next line.
@@ -1592,6 +1722,33 @@ mod tests {
         h.wait();
         let Update::Drawn { lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("not drawn") };
         assert_eq!(lines[0].speaker.as_deref(), Some("B"), "the name now belongs to the next speaker");
+    }
+
+    #[test]
+    fn a_speakers_pieces_reach_the_board_as_one_turn() {
+        let asked = Arc::new(Mutex::new(Vec::<String>::new()));
+        let seen = asked.clone();
+        let h = harness(move |said| {
+            seen.lock().unwrap().push(said.to_string());
+            Ok("-".into())
+        });
+        let heard = |who: &str, text: &str, from: f64, to: f64| Said {
+            line: Utterance { speaker: Some(who.into()), text: text.into(), pointing: vec![] },
+            ended: Instant::now(),
+            asr_ms: Some(100),
+            meeting: h.session.meeting(),
+            renames: 0,
+            span: Some((from, to)),
+        };
+        h.said.send(heard("C", "对，而且你现在设计的产品。", 0.0, 2.0)).unwrap();
+        h.said.send(heard("A", "对啊", 2.1, 2.4)).unwrap();
+        h.said.send(heard("C", "主要推出的是它有照相的功能。", 2.5, 5.0)).unwrap();
+        // Held until the speaker has been quiet a while, then drawn once.
+        h.wait();
+        let asked = asked.lock().unwrap();
+        assert_eq!(asked.len(), 1, "{asked:?}");
+        assert!(asked[0].contains("新的一句：C：对，而且你现在设计的产品。主要推出的是它有照相的功能。"), "{}", asked[0]);
+        assert_eq!(h.session.history.lock().unwrap().len(), 3, "every piece is in the discussion, the aside too");
     }
 
     #[test]
@@ -1627,12 +1784,12 @@ mod tests {
         let session = Session::start(Backend::NoModel, None, said_rx, ready_tx, drained_tx, updates_tx);
         ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(matches!(updates.recv_timeout(Duration::from_secs(5)).unwrap(), Update::NoModel));
-        said.send(Said { line: Utterance { speaker: None, text: "这句没有模型".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
+        said.send(Said { line: Utterance { speaker: None, text: "这句没有模型".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0, span: None }).unwrap();
         drained.recv_timeout(Duration::from_secs(5)).unwrap();
         let Update::Failed { lines, .. } = updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("expected a failure") };
         assert_eq!(lines[0].text, "这句没有模型");
         session.set_backend(Backend::Ready(Provider::Scripted(Arc::new(|_| Ok("T 「现在有了」".into())))));
-        said.send(Said { line: Utterance { speaker: None, text: "再试".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0 }).unwrap();
+        said.send(Said { line: Utterance { speaker: None, text: "再试".into(), pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting: session.meeting(), renames: 0, span: None }).unwrap();
         drained.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(session.board().nodes.len(), 1, "a model added later takes effect");
     }

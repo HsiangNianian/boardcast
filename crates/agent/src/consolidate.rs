@@ -213,8 +213,38 @@ pub fn rebuild(old: &Graph, outline: &[Line]) -> Result<Graph> {
     // the outline and goes. Links between points stay while both ends do.
     let is_flow = |id: &str| old.nodes.iter().any(|n| n.id == id && n.kind == Kind::Node);
     let in_flow = |id: &str| old.edges.iter().any(|e| (e.from == id && is_flow(&e.to)) || (e.to == id && is_flow(&e.from)));
+    // A chain the outline wrote out in its own words, every node's name inside one of its lines ("让利 ->
+    // 抢占份额 -> 提价" as "先让利抢占份额，份额稳定后提价"), was a point drawn as a flow: it goes, or the board
+    // shows it twice. A chain with any node the outline does not mention is a flow chart, and stays.
+    let written: Vec<String> = outline.iter().map(|l| normal(&l.label)).collect();
+    let mentioned = |n: &Node| {
+        let name = normal(&n.label);
+        !name.is_empty() && written.iter().any(|w| w.contains(&name))
+    };
+    let mut folded: HashSet<String> = HashSet::new();
+    for n in old.nodes.iter().filter(|n| n.kind == Kind::Node && !used.contains(&n.id)) {
+        if folded.contains(&n.id) {
+            continue;
+        }
+        // The flow nodes linked to this one, directly or through others.
+        let mut chain = vec![n.id.clone()];
+        let mut at = 0;
+        while at < chain.len() {
+            let id = chain[at].clone();
+            for e in &old.edges {
+                let other = if e.from == id { &e.to } else if e.to == id { &e.from } else { continue };
+                if is_flow(other) && !used.contains(other) && !chain.contains(other) {
+                    chain.push(other.clone());
+                }
+            }
+            at += 1;
+        }
+        if chain.len() > 1 && chain.iter().all(|id| old.nodes.iter().any(|m| &m.id == id && mentioned(m))) {
+            folded.extend(chain);
+        }
+    }
     for n in &old.nodes {
-        if n.kind == Kind::Node && !used.contains(&n.id) && in_flow(&n.id) {
+        if n.kind == Kind::Node && !used.contains(&n.id) && !folded.contains(&n.id) && in_flow(&n.id) {
             let mut kept = n.clone();
             kept.parent = kept.parent.clone().filter(|p| used.contains(p));
             used.insert(kept.id.clone());
@@ -368,7 +398,8 @@ const LOCAL_FEWEST_LINES: usize = 8;
 /// A local model, within its context window, which is far smaller than a service's: the discussion is
 /// shortened, earliest lines first, until the board, the instructions and the room to answer all fit. It
 /// thinks first when `think`, and if its thinking runs out of room or comes to nothing, it is asked again
-/// without. A request the server still turns away for its length is tried once more with half the discussion.
+/// without, as it is when thinking fails or runs past its time. A request the server still turns away for its
+/// length is tried once more with half the discussion.
 fn ask_local(provider: &Provider, graph: &Graph, history: &[Utterance], english: bool, instructions: &str, think: bool) -> Result<Value> {
     let mut heard = &history[history.len().saturating_sub(HISTORY_LINES)..];
     let mut room = LOCAL_ROOM;
@@ -397,6 +428,8 @@ fn ask_local(provider: &Provider, graph: &Graph, history: &[Utterance], english:
             heard = &heard[heard.len() / 2..];
             ask(heard, false)?
         }
+        // Thinking ran out of time, or failed some other way: once more, without it.
+        Err(_) if think => ask(heard, false)?,
         Err(e) => return Err(e),
     };
     if think && cut_off(&reply) {
@@ -578,6 +611,17 @@ mod tests {
         let reason = caught.nodes.iter().find(|n| n.label == "一的理由").unwrap();
         assert_eq!(reason.parent.as_deref(), Some(new_point.id.as_str()), "its children follow it to the new id");
         assert_eq!(caught.nodes.iter().find(|n| n.label == "后来说的").unwrap().id, taken);
+    }
+
+    #[test]
+    fn a_chain_the_outline_wrote_out_is_not_shown_twice() {
+        let mut old = Graph::default();
+        old.apply(&parse_ops("T 促销方式\nL 促销方式 地推\nE 让利 -> 抢占份额\nE 抢占份额 -> 提价\nE 网关 -> 鉴权服务"));
+        let rebuilt = rebuild(&old, &parse("T 促销方式\n  L 地推 [划掉]\n  L 先让利抢占份额，份额稳定后提价")).unwrap();
+        let labels: Vec<&str> = rebuilt.nodes.iter().map(|n| n.label.as_str()).collect();
+        assert!(!labels.contains(&"抢占份额") && !labels.contains(&"提价"), "{labels:?}");
+        assert!(labels.contains(&"网关") && labels.contains(&"鉴权服务"), "a flow the outline never mentions stays: {labels:?}");
+        assert_eq!(rebuilt.edges.len(), 1);
     }
 
     #[test]

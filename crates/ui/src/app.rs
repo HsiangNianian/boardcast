@@ -2446,6 +2446,8 @@ impl Workbench {
                         self.draft_follow = -offset >= max - 24.0;
                         self.draft = Some(draft);
                         self.draft_at = Instant::now();
+                        // Someone is still talking: a turn held for the board waits for them to finish.
+                        self.session().heard_speech();
                     }
                 }
                 Event::Spoken { meeting, sentence } => {
@@ -2466,7 +2468,7 @@ impl Workbench {
                         }
                         let renames = self.session().renames_seen();
                         let line = Utterance { speaker, text: sentence.text, pointing: self.take_pointing() };
-                        let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, asr_ms: Some(sentence.asr_ms), meeting, renames });
+                        let _ = self.pipeline.said.send(Said { line, ended: sentence.ended, asr_ms: Some(sentence.asr_ms), meeting, renames, span: Some((sentence.start, sentence.start + sentence.seconds)) });
                     }
                 }
                 Event::Agent(Update::Drawn { meeting, graph, ops, lines, asr_ms, llm_ms, ended }) => {
@@ -2511,6 +2513,9 @@ impl Workbench {
                 }
                 Event::Done => {
                     println!("{{\"done\":true,\"rss_mb\":{}}}", rss_mb());
+                    // A recording played in has ended: the board gets its last consolidation, as when
+                    // listening stops.
+                    self.session().wrap_up();
                     if self.summarize_when_done {
                         self.panel = Panel::Summary;
                         self.make_summary(cx);
@@ -5143,7 +5148,7 @@ impl Workbench {
     fn retry_line(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some((speaker, text)) = self.live.retry_line(index) else { return };
         let (meeting, renames) = (self.session().meeting(), self.session().renames_seen());
-        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting, renames });
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing: vec![] }, ended: Instant::now(), asr_ms: None, meeting, renames, span: None });
         cx.notify();
     }
 
@@ -5390,7 +5395,7 @@ impl Workbench {
         let meeting = self.session().meeting();
         let renames = self.session().renames_seen();
         let pointing = self.take_pointing();
-        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing }, ended: Instant::now(), asr_ms: None, meeting, renames });
+        let _ = self.pipeline.said.send(Said { line: Utterance { speaker, text, pointing }, ended: Instant::now(), asr_ms: None, meeting, renames, span: None });
         cx.notify();
     }
 

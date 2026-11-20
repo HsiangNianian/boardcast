@@ -6486,6 +6486,10 @@ fn synthetic_board(chars: usize) -> Graph {
             ops += &format!("E 「服务{i}」 -> 「存储{i}」\n");
             written += 8;
         }
+        // Long links between points far apart, as a long meeting's board grows: each crosses most of it.
+        if i % 10 == 9 {
+            ops += &format!("E 「{}0-0」 -> 「{}{i}-5」 : 「后来」\n", NAMES[0], NAMES[(i + 5) % NAMES.len()]);
+        }
         i += 1;
     }
     let mut g = Graph::default();

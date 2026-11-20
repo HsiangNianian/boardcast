@@ -902,12 +902,12 @@ const CONSOLIDATE_EVERY: usize = 8;
 /// thinks for a minute or two, and the lines heard meanwhile are drawn as usual and kept
 /// ([`consolidate::catch_up`]). The result arrives as an ordinary drawing, so it can be undone. A board that
 /// does not need it, a failed reply, or another meeting opened meanwhile leaves the board alone.
-fn consolidate_live(provider: &Provider, graph: &Mutex<Graph>, history: &Mutex<Vec<Utterance>>, meeting: &AtomicU64, current: u64, updates: &Sender<Update>) {
+fn consolidate_live(provider: &Provider, graph: &Mutex<Graph>, history: &Mutex<Vec<Utterance>>, meeting: &AtomicU64, current: u64, updates: &Sender<Update>, when: consolidate::When) {
     let asked = graph.lock().expect("graph lock").clone();
     let heard = history.lock().expect("history lock").clone();
     let Some(last) = heard.last() else { return };
     let english = board_is_english(&heard[heard.len().saturating_sub(CONTEXT_LINES + 1)..heard.len() - 1], last);
-    let done = match consolidate::consolidate(provider, &asked, &heard, english, None, "high") {
+    let done = match consolidate::consolidate(provider, &asked, &heard, english, None, "high", when) {
         Ok(Some(done)) => done,
         Ok(None) => return,
         Err(e) => {
@@ -1164,7 +1164,7 @@ impl Session {
                         let provider = provider.as_ref().expect("checked above").clone();
                         let (graph, history, meeting, updates, consolidating) = (graph.clone(), history.clone(), meeting.clone(), updates.clone(), consolidating.clone());
                         thread::spawn(move || {
-                            consolidate_live(&provider, &graph, &history, &meeting, current, &updates);
+                            consolidate_live(&provider, &graph, &history, &meeting, current, &updates, consolidate::When::Piled);
                             consolidating.store(false, Ordering::SeqCst);
                         });
                     }
@@ -1190,7 +1190,7 @@ impl Session {
         thread::spawn(move || {
             // The last turn is held until its speaker has been quiet, then drawn: it should be on the board.
             thread::sleep(QUIET_WITHOUT_DRAFTS + Duration::from_millis(500));
-            consolidate_live(&provider, &graph, &history, &meeting, current, &updates);
+            consolidate_live(&provider, &graph, &history, &meeting, current, &updates, consolidate::When::Final);
             consolidating.store(false, Ordering::SeqCst);
         });
     }

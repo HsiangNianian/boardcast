@@ -20,13 +20,14 @@
 
 use crate::score::{f1, score, Gold};
 use anyhow::{bail, Context, Result};
+use boardcast_agent::consolidate::When;
 use boardcast_agent::{propose, Guidance, Provider, CONTEXT_LINES};
 use boardcast_board::board_layout::StableLayout;
 use boardcast_board::check::check_and_repair;
 use boardcast_board::glyphs::Glyphs;
 use boardcast_board::graph::{board_is_english, parse_ops, Graph, Utterance};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -197,11 +198,11 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
         history.extend(pieces);
         if options.consolidate > 0 && since >= options.consolidate {
             since = 0;
-            consolidate_case(options, &mut graph, &history, &mut turns_log, &mut log, &mut errors);
+            rewrite_scored(case, options, &mut graph, &history, &mut turns_log, &mut log, &mut errors, When::Piled);
         }
     }
     if options.consolidate > 0 && since > 0 {
-        consolidate_case(options, &mut graph, &history, &mut turns_log, &mut log, &mut errors);
+        rewrite_scored(case, options, &mut graph, &history, &mut turns_log, &mut log, &mut errors, When::Final);
     }
     let (found, repaired) = check_and_repair(&graph, &mut board, &mut glyphs);
     let last = repaired.unwrap_or(found);
@@ -253,11 +254,32 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
     Ok(Run { metrics, violations: s.violations.len(), detail, latencies, tokens_out, prompt_read, prompt_ms, predicted_ms, errors, row })
 }
 
+/// Item F1 of a board, for watching it change along a case.
+fn item_f1(graph: &Graph, gold: &Gold) -> Option<f64> {
+    let s = score(graph, gold);
+    s.item_p.zip(s.item_r).map(|(p, r)| f1(p, r))
+}
+
+/// [`consolidate_case`], with the board scored before and after in its log entry: whether a pass that ends
+/// badly went wrong line by line or in one rewrite.
+#[allow(clippy::too_many_arguments)]
+fn rewrite_scored(case: &Case, options: &Options, graph: &mut Graph, history: &[Utterance], turns_log: &mut Vec<Value>, log: &mut String, errors: &mut usize, when: When) {
+    let before = item_f1(graph, &case.gold);
+    let logged = turns_log.len();
+    consolidate_case(options, graph, history, turns_log, log, errors, when);
+    let after = item_f1(graph, &case.gold);
+    if let Some(entry) = turns_log.get_mut(logged) {
+        entry["item_before"] = json!(before);
+        entry["item_after"] = json!(after);
+        entry["lines_heard"] = json!(history.len());
+    }
+}
+
 /// Rewrite the board as the app does every few lines, logging the outline and what the model thought.
-fn consolidate_case(options: &Options, graph: &mut Graph, history: &[Utterance], turns_log: &mut Vec<Value>, log: &mut String, errors: &mut usize) {
+fn consolidate_case(options: &Options, graph: &mut Graph, history: &[Utterance], turns_log: &mut Vec<Value>, log: &mut String, errors: &mut usize, when: When) {
     let english = history.split_last().is_some_and(|(last, before)| board_is_english(before, last));
     let provider = options.consolidator.as_ref().unwrap_or(&options.provider);
-    match boardcast_agent::consolidate::consolidate(provider, graph, history, english, options.consolidate_prompt.as_deref(), &options.consolidate_effort) {
+    match boardcast_agent::consolidate::consolidate(provider, graph, history, english, options.consolidate_prompt.as_deref(), &options.consolidate_effort, when) {
         Ok(Some(done)) => {
             let _ = writeln!(log, "= consolidated as {} ({} ms)\n{}", done.style.map_or("given instructions", boardcast_agent::consolidate::Style::name), done.ms, done.outline.trim());
             turns_log.push(json!({ "consolidate": true, "outline": done.outline, "thinking": done.thinking, "ms": done.ms, "tokens_in": done.tokens_in, "tokens_out": done.tokens_out, "reasoning_tokens": done.reasoning_tokens, "style": done.style.map(boardcast_agent::consolidate::Style::name) }));
@@ -412,6 +434,23 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     }
 
     std::fs::write(&output, serde_json::to_vec(&passes[0].iter().map(|r| &r.row).collect::<Vec<_>>())?)?;
+    // Every pass, each case with its scores, beside the first: what to compare when passes disagree.
+    if repeat > 1 {
+        let all: Vec<Vec<Value>> = passes
+            .iter()
+            .map(|pass| {
+                pass.iter()
+                    .map(|r| {
+                        let mut row = r.row.clone();
+                        row["metrics"] = json!(METRICS.iter().zip(r.metrics).map(|(m, v)| (m.to_string(), json!(v))).collect::<Map<String, Value>>());
+                        row["detail"] = json!(r.detail);
+                        row
+                    })
+                    .collect()
+            })
+            .collect();
+        std::fs::write(format!("{}.passes.json", output.trim_end_matches(".json")), serde_json::to_vec(&all)?)?;
+    }
     let report = report(&cases, &passes, &label, &set);
     let dir = root.join("eval/reports");
     std::fs::create_dir_all(&dir)?;

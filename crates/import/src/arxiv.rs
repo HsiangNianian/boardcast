@@ -40,7 +40,7 @@ pub fn download(id: &str, cancel: &AtomicBool) -> Result<Vec<u8>> {
     if !ID.is_match(id) {
         bail!("Invalid arXiv ID: {id}");
     }
-    let agent = ureq::AgentBuilder::new().try_proxy_from_env(true).timeout_connect(Duration::from_secs(15)).timeout(Duration::from_secs(120)).user_agent("boardcast (https://github.com/HsiangNianian/boardcast)").build();
+    let agent = ureq::AgentBuilder::new().try_proxy_from_env(true).timeout_connect(Duration::from_secs(15)).timeout(Duration::from_secs(120)).user_agent("Banshu (https://github.com/HsiangNianian/boardcast)").build();
     let response = match agent.get(&format!("https://arxiv.org/pdf/{id}")).call() {
         Ok(response) => response,
         Err(ureq::Error::Status(code, _)) => bail!("arXiv returned {code}: the ID may be incorrect"),

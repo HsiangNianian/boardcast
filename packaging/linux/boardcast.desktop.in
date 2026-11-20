@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=boardcast
+Name=Banshu
 GenericName=Live meeting whiteboard
 Comment=Talk, and the whiteboard draws itself
 Exec=@BINDIR@/boardcast

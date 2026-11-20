@@ -293,9 +293,9 @@ impl Frozen {
     }
 }
 
-/// `boardcast-20260102-0304.md`, as the older app names them.
+/// `banshu-20260102-0304.md`, as the older app names them.
 pub fn file_name(kind: Kind) -> String {
-    format!("boardcast-{}.{}", chrono::Local::now().format("%Y%m%d-%H%M"), kind.extension())
+    format!("banshu-{}.{}", chrono::Local::now().format("%Y%m%d-%H%M"), kind.extension())
 }
 
 /// A picker may hand back the name without the extension that was suggested.

@@ -1,4 +1,4 @@
-# boardcast interface text: ja. Message IDs are shared by every language; English is the source.
+# Banshu interface text: ja. Message IDs are shared by every language; English is the source.
 
 starting = 起動しています…
 loading-the-board-model = ボードモデルを読み込んでいます…
@@ -366,7 +366,7 @@ drop-a-pdf-or-an = PDF や画像をどこにでもドロップして、それを
 drag-to-move-the-map = ドラッグしてマップを移動
 close-the-map = マップを閉じる
 take-out-of-the-inbox = インボックスから取り出す
-quit-boardcast = boardcast を終了
+quit-boardcast = Banshu を終了
 type-a-line-for-the-board = ボードに書く一行を入力
 username-optional = ユーザー名（任意）
 password-optional = パスワード（任意）

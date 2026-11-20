@@ -1,4 +1,4 @@
-# boardcast interface text: fr. Message IDs are shared by every language; English is the source.
+# Banshu interface text: fr. Message IDs are shared by every language; English is the source.
 
 starting = Démarrage…
 loading-the-board-model = Chargement du modèle de tableau…
@@ -366,7 +366,7 @@ drop-a-pdf-or-an = Déposez un PDF ou une image n’importe où pour en discuter
 drag-to-move-the-map = Faites glisser pour déplacer la carte
 close-the-map = Fermer la carte
 take-out-of-the-inbox = Retirer de la boîte de réception
-quit-boardcast = Quitter boardcast
+quit-boardcast = Quitter Banshu
 type-a-line-for-the-board = Saisir une ligne pour le tableau
 username-optional = Nom d’utilisateur (facultatif)
 password-optional = Mot de passe (facultatif)

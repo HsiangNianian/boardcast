@@ -285,7 +285,7 @@ fn board(g: &Graph, h: &str, w: &Words, english: bool, out: &mut Vec<String>) {
 pub fn markdown(doc: &Doc, current: usize) -> String {
     let w = if doc.english { &EN } else { &ZH };
     let board_name = |n: u64| w.board.replace("{}", &n.to_string());
-    let mut out = vec![format!("# {}", text(&doc.title)), String::new(), format!("> {} · boardcast", doc.exported), String::new()];
+    let mut out = vec![format!("# {}", text(&doc.title)), String::new(), format!("> {} · Banshu", doc.exported), String::new()];
     if !doc.summary.trim().is_empty() {
         out.extend([format!("## {}", w.summary), String::new(), doc.summary.trim().to_string(), String::new()]);
     }

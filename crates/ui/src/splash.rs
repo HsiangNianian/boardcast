@@ -8,7 +8,7 @@ use boardcast_board::pen::{ink, line, outline, place, Inked, Rng};
 use gpui_kit::{canvas, div, point, prelude::*, px, rgb, Background, Bounds, FillOptions, Hsla, IntoElement, PathBuilder, PathStyle, Pixels, Window};
 use std::time::{Duration, Instant};
 
-const WORD: &str = "boardcast";
+const WORD: &str = "Banshu";
 const SIZE: f32 = 56.0;
 const INK: u32 = 0x1e_1e_1e;
 /// As long as the name takes to write, so it never flashes past half written.
@@ -141,4 +141,19 @@ pub fn splash(strokes: &[Inked], started: Instant, window: &mut Window) -> impl 
         .when(elapsed > SAY_MORE_AFTER, |d| {
             d.child(div().absolute().bottom(px(48.)).w_full().flex().justify_center().text_sm().text_color(rgb(pal().faint)).child(t("getting-things-ready")))
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use boardcast_board::glyphs::HanziSource;
+
+    /// The pen skips a letter it has no strokes for, which would quietly misspell the name.
+    #[test]
+    fn the_pen_writes_every_letter_of_the_name() {
+        let mut glyphs = Glyphs::load(HanziSource::Directory(std::env::temp_dir().join("boardcast-no-hanzi"))).unwrap();
+        for c in WORD.chars() {
+            assert!(glyphs.get(c).is_some(), "the pen has no strokes for {c:?}");
+        }
+    }
 }

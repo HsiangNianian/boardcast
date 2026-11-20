@@ -520,6 +520,132 @@ impl Graph {
         lines.join("\n")
     }
 
+    /// The board as [`Self::describe`] gives it, within `budget` characters. A board that fits is described
+    /// whole, word for word. A larger one, as a long meeting's grows, is described around what `said` and
+    /// `pointing` are about: every topic is listed by its title, and as many as fit are given in full, first
+    /// those pointed at, then those whose words the line uses, then those added to most recently. A local
+    /// model's context holds about 1,500 tokens beside its instructions, so after a hundred or so nodes every
+    /// line failed (#314); this keeps the prompt the same size however long the meeting runs.
+    pub fn describe_within(&self, budget: usize, said: &str, pointing: &[String]) -> String {
+        let whole = self.describe();
+        if whole.chars().count() <= budget {
+            return whole;
+        }
+        let len = |lines: &[String]| lines.iter().map(|l| l.chars().count() + 1).sum::<usize>();
+        let number = |id: &str| id.trim_start_matches(|c: char| !c.is_ascii_digit()).parse::<u64>().unwrap_or(0);
+        // Two-letter pieces of what was said, to find the topics it is about however it is worded.
+        let letters: Vec<char> = said.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect();
+        let pairs: HashSet<(char, char)> = letters.windows(2).map(|w| (w[0], w[1])).collect();
+        struct Part<'a> {
+            root: &'a Node,
+            lines: Vec<String>,
+            ids: HashSet<String>,
+            pointed: bool,
+            hits: usize,
+            newest: u64,
+        }
+        let mut parts: Vec<Part> = vec![];
+        for n in &self.nodes {
+            if n.parent.as_deref().is_some_and(|p| self.index(p).is_some()) {
+                continue;
+            }
+            let mut lines = vec![];
+            self.describe_node(n, 0, &mut lines);
+            let mut ids = HashSet::new();
+            let mut stack = vec![n.id.clone()];
+            while let Some(id) = stack.pop() {
+                stack.extend(self.children(&id).map(|c| c.id.clone()));
+                ids.insert(id);
+            }
+            let words: Vec<char> = ids
+                .iter()
+                .filter_map(|id| self.index(id))
+                .flat_map(|i| std::iter::once(&self.nodes[i].label).chain(&self.nodes[i].aliases))
+                .flat_map(|l| l.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).chain(['\n']))
+                .collect();
+            let found: HashSet<(char, char)> = words.windows(2).map(|w| (w[0], w[1])).filter(|p| pairs.contains(p)).collect();
+            parts.push(Part {
+                root: n,
+                pointed: pointing.iter().any(|p| ids.contains(p)),
+                hits: found.len(),
+                newest: ids.iter().map(|id| number(id)).max().unwrap_or(0),
+                lines,
+                ids,
+            });
+        }
+        let mut order: Vec<usize> = (0..parts.len()).collect();
+        order.sort_by_key(|&i| (std::cmp::Reverse(parts[i].pointed), std::cmp::Reverse(parts[i].hits), std::cmp::Reverse(parts[i].newest)));
+        let note = "（白板很大，只展开了和这句相关的部分；其余话题只列标题，括号里是下面有几项）".to_string();
+        let title = |p: &Part| format!("{} {}{}（{} 项未展开）", p.root.id, p.root.kind.tag(), p.root.label, p.ids.len() - 1);
+        // Titles first, so every topic can be found; at most a third of the budget, the most relevant first.
+        let mut listed: HashSet<usize> = HashSet::new();
+        let mut used = note.chars().count() + 1;
+        for &i in &order {
+            let cost = title(&parts[i]).chars().count() + 1;
+            if used + cost > budget / 3 {
+                break;
+            }
+            listed.insert(i);
+            used += cost;
+        }
+        let mut expanded: HashSet<usize> = HashSet::new();
+        for &i in &order {
+            // Given in full, a topic's lines take the place of its title.
+            let title_cost = if listed.contains(&i) { title(&parts[i]).chars().count() + 1 } else { 0 };
+            let after = used - title_cost + len(&parts[i].lines);
+            if after <= budget || expanded.is_empty() {
+                expanded.insert(i);
+                listed.insert(i);
+                used = after;
+            }
+        }
+        let name = |id: &str| self.index(id).map_or("", |i| self.nodes[i].label.as_str());
+        let build = |expanded: &HashSet<usize>| -> Vec<String> {
+            let shown: HashSet<&str> = expanded.iter().flat_map(|&i| parts[i].ids.iter().map(String::as_str)).collect();
+            let mut lines = vec![note.clone()];
+            for (i, part) in parts.iter().enumerate() {
+                if expanded.contains(&i) {
+                    lines.extend(part.lines.iter().cloned());
+                } else if listed.contains(&i) {
+                    lines.push(title(part));
+                }
+            }
+            let left = parts.len() - listed.len();
+            if left > 0 {
+                lines.push(format!("（另有 {left} 个话题没有列出）"));
+            }
+            for e in self.edges.iter().filter(|e| shown.contains(e.from.as_str()) && shown.contains(e.to.as_str())) {
+                let label = e.label.as_ref().filter(|l| !l.is_empty()).map_or(String::new(), |l| format!(" {l}"));
+                lines.push(format!("{}({}) -> {}({}){label}", e.from, name(&e.from), e.to, name(&e.to)));
+            }
+            lines
+        };
+        // Links and the count of unlisted topics were not reckoned above: give back the least relevant topics
+        // in full until it fits.
+        let mut lines = build(&expanded);
+        while len(&lines) > budget + 1 && expanded.len() > 1 {
+            let last = *order.iter().rev().find(|i| expanded.contains(i)).expect("more than one is expanded");
+            expanded.remove(&last);
+            lines = build(&expanded);
+        }
+        // One topic larger than the whole budget keeps its title and its newest lines.
+        if len(&lines) > budget + 1 {
+            let head: Vec<String> = lines.iter().take_while(|l| !l.starts_with("  ")).cloned().collect();
+            let mut tail: Vec<String> = vec![];
+            let mut size = len(&head);
+            for line in lines[head.len()..].iter().rev() {
+                if size + line.chars().count() + 1 > budget {
+                    break;
+                }
+                size += line.chars().count() + 1;
+                tail.push(line.clone());
+            }
+            tail.reverse();
+            lines = head.into_iter().chain(tail).collect();
+        }
+        lines.join("\n")
+    }
+
     fn describe_node(&self, n: &Node, depth: usize, lines: &mut Vec<String>) {
         let mut extra = vec![];
         if !n.aliases.is_empty() {
@@ -951,12 +1077,30 @@ fn pointing_line(g: &Graph, ids: &[String]) -> Option<String> {
     (!shown.is_empty()).then(|| format!("当前手指着：{}", shown.join("、")))
 }
 
+/// [`user_message`] within `budget` characters: the earlier lines keep at most a quarter of it, the oldest
+/// going first, and the board gets the rest, described around the new line ([`Graph::describe_within`]). What
+/// fits is word for word what [`user_message`] writes.
+pub fn user_message_within(g: &Graph, recent: &[Utterance], next: &Utterance, budget: usize) -> String {
+    let mut from = 0;
+    while from < recent.len() && recent[from..].iter().map(|u| u.line().chars().count() + 1).sum::<usize>() > budget / 4 {
+        from += 1;
+    }
+    let recent = &recent[from..];
+    let spoken: usize = recent.iter().chain([next]).map(|u| u.line().chars().count() + 1).sum();
+    let board = budget.saturating_sub(spoken).max(budget / 3);
+    message_with(g, recent, next, &g.describe_within(board, &next.text, &next.pointing))
+}
+
 pub fn user_message(g: &Graph, recent: &[Utterance], next: &Utterance) -> String {
+    message_with(g, recent, next, &g.describe())
+}
+
+fn message_with(g: &Graph, recent: &[Utterance], next: &Utterance, board: &str) -> String {
     let mut parts = vec![];
     if board_is_english(recent, next) {
         parts.push(ENGLISH_BOARD.to_string());
     }
-    parts.push(format!("白板：\n{}", g.describe()));
+    parts.push(format!("白板：\n{board}"));
     if !recent.is_empty() {
         let lines: Vec<String> = recent.iter().map(|u| pointing_line(g, &u.pointing).map_or_else(|| u.line(), |p| format!("{p}\n{}", u.line()))).collect();
         parts.push(format!("前文（已经画过了）：\n{}", lines.join("\n")));
@@ -1008,6 +1152,56 @@ pub fn grammar(g: &Graph, max_ops: usize, english: bool) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    fn long_meeting() -> Graph {
+        let mut ops = String::new();
+        for t in 0..60 {
+            ops += &format!("T 「议题{t}」\n");
+            for i in 0..8 {
+                ops += &format!("L 「议题{t}」 「议题{t}的第{i}条要点，说得比较长」\n");
+            }
+        }
+        // The topic about the new line is old; the newest is the last one added.
+        ops += "T 「无人机巡检」\nL 「无人机巡检」 「夜间用红外摄像头」\n";
+        for t in 0..20 {
+            ops += &format!("T 「后来的议题{t}」\nL 「后来的议题{t}」 「一条」\n");
+        }
+        ops += "T 「最新的议题」\nL 「最新的议题」 「刚加的一条」\n";
+        let mut g = Graph::default();
+        g.apply(&parse_ops(&ops));
+        g
+    }
+
+    #[test]
+    fn a_board_that_fits_is_described_whole() {
+        let mut g = Graph::default();
+        g.apply(&parse_ops("T 「注册」\nL 「注册」 「手机号」\nE 「网关」 -> 「鉴权」"));
+        assert_eq!(g.describe_within(2000, "随便说一句", &[]), g.describe());
+        let next = Utterance { speaker: Some("A".into()), text: "加个短信验证".into(), pointing: vec![] };
+        let recent = [Utterance { speaker: Some("B".into()), text: "先说注册".into(), pointing: vec![] }];
+        assert_eq!(user_message_within(&g, &recent, &next, 2000), user_message(&g, &recent, &next));
+    }
+
+    #[test]
+    fn a_long_meeting_is_described_around_the_new_line_within_budget() {
+        let g = long_meeting();
+        assert!(g.nodes.len() > 500 && g.describe().chars().count() > 10_000);
+        let text = g.describe_within(1500, "夜间巡检的红外摄像头还要再看看", &[]);
+        assert!(text.chars().count() <= 1500, "{} characters", text.chars().count());
+        assert!(text.contains("夜间用红外摄像头"), "the topic the line is about is given in full:\n{text}");
+        assert!(text.contains("刚加的一条"), "and the newest one:\n{text}");
+        assert!(text.contains("项未展开"), "others by their titles:\n{text}");
+        assert!(text.starts_with("（白板很大"), "{text}");
+        // What a point at a node asks for comes first.
+        let pointed = g.nodes.iter().find(|n| n.label == "议题3的第5条要点，说得比较长").unwrap().id.clone();
+        assert!(g.describe_within(1500, "这个", &[pointed]).contains("议题3的第5条要点"));
+        // Long earlier lines give way to the board, oldest first.
+        let long = |t: &str| Utterance { speaker: Some("A".into()), text: t.repeat(100), pointing: vec![] };
+        let next = Utterance { speaker: Some("B".into()), text: "夜间巡检怎么排班".into(), pointing: vec![] };
+        let message = user_message_within(&g, &[long("很早的话"), long("刚才的话")], &next, 2000);
+        assert!(message.chars().count() <= 2200, "{} characters", message.chars().count());
+        assert!(!message.contains("很早的话") && message.contains("夜间用红外摄像头"), "{message}");
+    }
     mod pointing {
         use super::super::*;
 

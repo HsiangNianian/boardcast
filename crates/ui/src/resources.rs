@@ -89,8 +89,11 @@ impl Resources {
         .into_iter()
         .chain(speech)
         .collect();
-        let rows: Vec<_> = checks.iter().map(|(name, path)| json!({ "name": name, "path": path, "ok": path.exists() })).collect();
-        let ok = checks.iter().all(|(_, path)| path.exists());
+        let mut rows: Vec<_> = checks.iter().map(|(name, path)| json!({ "name": name, "path": path, "ok": path.exists() })).collect();
+        // Built into the program, so never missing as a file, but each must load and draw its languages.
+        let fonts = boardcast_fonts::check();
+        rows.extend(fonts.iter().map(|(name, problem)| json!({ "name": format!("font {name}"), "built in": true, "ok": problem.is_none(), "problem": problem })));
+        let ok = checks.iter().all(|(_, path)| path.exists()) && fonts.iter().all(|(_, problem)| problem.is_none());
         let gpus = boardcast_agent::list_gpus(&self.binaries);
         let report = json!({
             "version": boardcast_update::VERSION,

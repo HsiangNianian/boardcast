@@ -49,7 +49,9 @@ for variant in $variants; do
   copy_models "$variant" "$lib/voice"
   copy_search "$lib/search"
   printf '%s\n' "$variant" > "$lib/variant"
-  cp LICENSE assets/licenses/* crates/ui/fonts/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$lib/licenses/"
+  cp LICENSE assets/licenses/* crates/fonts/files/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$lib/licenses/"
+  # The fonts built into the program (crates/fonts) go with their licenses.
+  for f in OFL-DMSans.txt OFL-JetBrainsMono.txt OFL-NotoSansCJK.txt; do test -f "$lib/licenses/$f" || { echo "missing font license $f" >&2; exit 1; }; done
   cp target/pdfium/LICENSE "$lib/licenses/pdfium-LICENSE"
 
   codesign --force --deep --sign - "$out/boardcast.app"

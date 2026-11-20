@@ -165,6 +165,23 @@ sh packaging/linux/package.sh           # target/package/boardcast-<version>-<ar
 
 Everything is Rust, the website included: it is built with [Trunk](https://trunkrs.dev) (`cd landing && trunk serve`); see [landing/README.md](landing/README.md).
 
+### Fonts
+
+No font needs installing to build or run the desktop app: the fonts it shows text in are built into the program ([crates/fonts](crates/fonts)), so the interface and exported PDFs look the same everywhere, and nothing goes missing on a computer without Chinese, Japanese or Korean fonts. `boardcast --self-check` reports whether each one loads and draws its languages.
+
+| Font | Used for | Install for development? | In the release packages | License |
+| --- | --- | --- | --- | --- |
+| DM Sans | Interface text | No, built into the program | Yes, inside the program | SIL OFL |
+| JetBrains Mono | Numbers, times and shortcuts | No, built into the program | Yes, inside the program | SIL OFL |
+| Noto Sans CJK SC (Regular, Bold) | Chinese, Japanese, Korean and Cyrillic in the interface, and the summary and transcript in PDFs | No, built into the program | Yes, inside the program | SIL OFL |
+| Excalifont | Source of the English, Latin, Greek, Cyrillic and maths strokes | No, the strokes are committed | No, only the strokes | SIL OFL |
+| Cascadia Code | Source of some maths strokes | No, the strokes are committed | No, only the strokes | Its included license |
+| Xiaolai | Source of the Korean strokes | No, the strokes are committed | No, only the strokes | SIL OFL |
+| KanjiVG, Hanzi Writer data | Source of the kana and Chinese strokes | No, the strokes are committed | No, only the strokes | CC BY-SA 3.0, Arphic Public License |
+| DM Sans, JetBrains Mono, Excalifont (WOFF2) | The website | No, part of the site | With the website | SIL OFL |
+
+Noto Sans CJK SC draws every Chinese character, kana and Hangul in Simplified Chinese shapes; a character it lacks falls back to the system's fonts, in the interface and in PDFs. The licenses of the built-in fonts are copied into every package. `libfontconfig` and `libfreetype` above are for drawing text on Linux, not fonts.
+
 <details>
 <summary><strong>Evaluation</strong></summary>
 
@@ -224,4 +241,4 @@ Raise the workspace version, merge it, then push an annotated tag whose message 
 
 Report problems or discuss ideas in [Issues](https://github.com/HsiangNianian/boardcast/issues), or send a PR.
 
-Code is licensed under [MIT](LICENSE). Chinese stroke data comes from [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data), derived from Make Me a Hanzi and Arphic fonts under the Arphic Public License; its license is distributed with the generated data. Japanese kana and supplementary kanji come from [KanjiVG](https://kanjivg.tagaini.net/) by Ulrich Apel, adapted into centerlines under [CC BY-SA 3.0](assets/licenses/kanjivg-CC-BY-SA-3.0.txt). Default English, accented Latin, Greek, Cyrillic and mathematical strokes are derived from Excalifont under the [SIL OFL](assets/licenses/handwritten-OFL.txt), with additional mathematical glyphs from the bundled Cascadia Code font under its [included license](assets/licenses/handwritten-cascadia.txt). Korean strokes are derived from [Xiaolai](https://github.com/lxgw/kose-font) by LXGW, itself derived from SetoFont by Nozomi Seto, under the [SIL OFL](assets/licenses/handwritten-xiaolai-OFL.txt). Joined-up English for a messy hand comes from the Hershey script font in [hersheytext](https://github.com/techninja/hersheytextjs), under [MIT](assets/licenses/hersheytext-MIT.txt). The desktop app bundles DM Sans and JetBrains Mono under the SIL OFL ([crates/ui/fonts](crates/ui/fonts)). The website uses DM Sans, JetBrains Mono and an unmodified Latin subset of Excalifont, all under the SIL OFL; see [landing/public/licenses](landing/public/licenses).
+Code is licensed under [MIT](LICENSE). Chinese stroke data comes from [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data), derived from Make Me a Hanzi and Arphic fonts under the Arphic Public License; its license is distributed with the generated data. Japanese kana and supplementary kanji come from [KanjiVG](https://kanjivg.tagaini.net/) by Ulrich Apel, adapted into centerlines under [CC BY-SA 3.0](assets/licenses/kanjivg-CC-BY-SA-3.0.txt). Default English, accented Latin, Greek, Cyrillic and mathematical strokes are derived from Excalifont under the [SIL OFL](assets/licenses/handwritten-OFL.txt), with additional mathematical glyphs from the bundled Cascadia Code font under its [included license](assets/licenses/handwritten-cascadia.txt). Korean strokes are derived from [Xiaolai](https://github.com/lxgw/kose-font) by LXGW, itself derived from SetoFont by Nozomi Seto, under the [SIL OFL](assets/licenses/handwritten-xiaolai-OFL.txt). Joined-up English for a messy hand comes from the Hershey script font in [hersheytext](https://github.com/techninja/hersheytextjs), under [MIT](assets/licenses/hersheytext-MIT.txt). The desktop app has DM Sans, JetBrains Mono and Noto Sans CJK SC built in, all under the SIL OFL ([crates/fonts/files](crates/fonts/files)). The website uses DM Sans, JetBrains Mono and an unmodified Latin subset of Excalifont, all under the SIL OFL; see [landing/public/licenses](landing/public/licenses).

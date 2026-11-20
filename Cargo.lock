@@ -942,6 +942,7 @@ dependencies = [
  "boardcast-share",
  "boardcast-update",
  "chrono",
+ "embed-resource",
  "fluent-bundle",
  "gpui-kit",
  "gpui-kit-assets",

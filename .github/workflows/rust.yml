@@ -87,6 +87,7 @@ jobs:
               - *app
               - 'LICENSE'
               - 'packaging/models.sh'
+              - 'packaging/icons/**'
               - 'packaging/windows/**'
 
   core:

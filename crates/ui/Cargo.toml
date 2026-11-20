@@ -35,5 +35,8 @@ sys-locale = "0.3"
 tiny-skia = "0.11"
 unic-langid = "0.9"
 
+[build-dependencies]
+embed-resource = "3.0"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Console"] }

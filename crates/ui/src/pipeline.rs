@@ -199,7 +199,7 @@ impl Pipeline {
             for turn in script.turns {
                 let meeting = stamp.load(Ordering::SeqCst);
                 let _ = tx.send(Event::Heard { meeting, speaker: turn.speaker.clone(), text: turn.text.clone(), asr_ms: None });
-                let _ = to_model.send(Said { line: turn, ended: Instant::now(), asr_ms: None, meeting, renames: 0 });
+                let _ = to_model.send(Said { line: turn, ended: Instant::now(), asr_ms: None, meeting, renames: 0, span: None });
                 thread::sleep(Duration::from_millis(2500));
             }
             // Lines can merge into one request, so this waits for silence rather than a count.
@@ -236,6 +236,7 @@ impl Pipeline {
     pub fn toggle_mic(&mut self, sources: Sources, keep: Option<std::path::PathBuf>) {
         if let Some(stop) = self.mic_stop.take() {
             stop.store(true, Ordering::Relaxed);
+            self.session.wrap_up();
             return;
         }
         let stop = Arc::new(AtomicBool::new(false));

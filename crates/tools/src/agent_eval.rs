@@ -3,6 +3,14 @@
 //!
 //!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [--only id,id]
 //!                [<model>] [--harness commands|tools|tools-check] [--skill | --rules-only | --hints-only] [--workers N]
+//!                [--consolidate N]   rewrite the board every N lines and at the end (see boardcast_agent::consolidate)
+//!                [--consolidate-prompt <file>]   consolidate with these instructions instead of skills/board-consolidate
+//!                [--consolidate-effort high|medium|low]   how hard a reasoning model thinks when consolidating
+//!                [--turns]           draw whole turns put back together from the lines, as the app does
+//!                [--context N]       how many earlier transcript lines the model reads with each turn (2, or
+//!                                    6 with --turns, as the app)
+//!                [--consolidate-by saved|<llama-server url>]   consolidate with another model than draws the lines:
+//!                                    the remote one saved in Settings, or a local server
 //!
 //! The output file keeps each case's final board and what the layout checker found. A Markdown report goes to
 //! eval/reports/ and, in GitHub Actions, the job summary. A failed request fails the run, since a case it
@@ -16,7 +24,7 @@ use boardcast_agent::{propose, Guidance, Provider, CONTEXT_LINES};
 use boardcast_board::board_layout::StableLayout;
 use boardcast_board::check::check_and_repair;
 use boardcast_board::glyphs::Glyphs;
-use boardcast_board::graph::{parse_ops, Graph, Utterance};
+use boardcast_board::graph::{board_is_english, parse_ops, Graph, Utterance};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::fmt::Write as _;
@@ -50,6 +58,38 @@ struct Turn {
     /// What was circled while this was said.
     #[serde(default)]
     pointing: Vec<String>,
+    /// Where in the recording it was said, in seconds, for cases taken from what the app heard.
+    #[serde(default)]
+    start: Option<f64>,
+    #[serde(default)]
+    end: Option<f64>,
+}
+
+/// A case's lines as the board is asked about them: each line alone, or, with `--turns`, put back together
+/// into whole turns (boardcast_agent::turns), each with the lines that went into it or were said during it.
+fn steps(case: &Case, turns: bool) -> Vec<(Option<Utterance>, Vec<Utterance>)> {
+    if !turns {
+        return case.turns.iter().map(|t| (Some(t.utterance()), vec![t.utterance()])).collect();
+    }
+    struct Timed(Utterance, Option<(f64, f64)>);
+    impl boardcast_agent::turns::Piece for Timed {
+        fn utterance(&self) -> &Utterance {
+            &self.0
+        }
+        fn span(&self) -> Option<(f64, f64)> {
+            self.1
+        }
+        fn urgent(&self) -> bool {
+            !self.0.pointing.is_empty()
+        }
+    }
+    let mut assembler = boardcast_agent::turns::Assembler::default();
+    let mut out = vec![];
+    for t in &case.turns {
+        out.extend(assembler.push(Timed(t.utterance(), t.start.zip(t.end))));
+    }
+    out.extend(assembler.flush());
+    out.into_iter().map(|r| (r.turn, r.pieces.into_iter().map(|p| p.0).collect())).collect()
 }
 
 impl Turn {
@@ -61,6 +101,18 @@ impl Turn {
 struct Options {
     guidance: Guidance,
     provider: Provider,
+    /// Consolidate the board every this many lines, and once at the end; 0 never.
+    consolidate: usize,
+    /// Instructions for consolidating in place of the built-in ones, to try other wording.
+    consolidate_prompt: Option<String>,
+    /// How hard a reasoning model thinks when consolidating: high, medium or low.
+    consolidate_effort: String,
+    /// The model that consolidates, when not the one drawing line by line.
+    consolidator: Option<Provider>,
+    /// Draw whole turns put back together from the lines, as the app does (boardcast_agent::turns).
+    turns: bool,
+    /// How many earlier lines of the transcript the model reads with each turn.
+    context: usize,
 }
 
 const SETS: [(&str, &[&str]); 5] = [
@@ -97,12 +149,22 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
     let mut hint: Option<String> = None;
     let (mut hard_steps, mut hints_sent, mut soft_total, mut empty, mut errors) = (0, 0, 0, 0, 0);
     let (mut latencies, mut tokens_out, mut log) = (vec![], vec![], String::new());
+    // Each line, what the model did with it, and what it thought: the reasons behind a board, to read.
+    let mut turns_log: Vec<Value> = vec![];
     // Input tokens, and how many of them the service had cached, for what a run costs.
     let (mut tokens_in, mut tokens_cached) = (0_u64, 0_u64);
     let (mut prompt_read, mut prompt_ms, mut predicted_ms) = (vec![], vec![], vec![]);
-    for turn in &case.turns {
-        let next = turn.utterance();
-        let recent = &history[history.len().saturating_sub(CONTEXT_LINES)..];
+    // Lines heard since the board was last consolidated.
+    let mut since = 0_usize;
+    for (turn, pieces) in steps(case, options.turns) {
+        let Some(next) = turn else {
+            // Nothing to draw: it only joins the discussion the model reads.
+            let _ = writeln!(log, "> {}\n  (no turn)", pieces.iter().map(|p| p.text.as_str()).collect::<Vec<_>>().join(" / "));
+            since += pieces.len();
+            history.extend(pieces);
+            continue;
+        };
+        let recent = &history[history.len().saturating_sub(options.context)..];
         if options.guidance.hint && hint.is_some() {
             hints_sent += 1;
         }
@@ -118,6 +180,7 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
                 let ops = reply.ops.trim();
                 empty += usize::from(ops.is_empty());
                 let _ = writeln!(log, "> {}\n{}\n  ({} ms, {} tokens out)", next.text, if ops.is_empty() { "-" } else { ops }, reply.ms, reply.tokens_out);
+                turns_log.push(json!({ "speaker": next.speaker, "line": next.text, "ops": ops, "thinking": reply.thinking, "tokens_in": reply.tokens_in, "tokens_out": reply.tokens_out, "reasoning_tokens": reply.reasoning_tokens }));
                 graph.apply(&parse_ops(&reply.ops));
             }
             Err(e) => {
@@ -130,7 +193,15 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
         let current = repaired.unwrap_or(found);
         soft_total += current.soft.len();
         hint = current.hint();
-        history.push(next);
+        since += pieces.len();
+        history.extend(pieces);
+        if options.consolidate > 0 && since >= options.consolidate {
+            since = 0;
+            consolidate_case(options, &mut graph, &history, &mut turns_log, &mut log, &mut errors);
+        }
+    }
+    if options.consolidate > 0 && since > 0 {
+        consolidate_case(options, &mut graph, &history, &mut turns_log, &mut log, &mut errors);
     }
     let (found, repaired) = check_and_repair(&graph, &mut board, &mut glyphs);
     let last = repaired.unwrap_or(found);
@@ -177,8 +248,27 @@ fn run_case(case: &Case, root: &Path, options: &Options) -> Result<Run> {
         "tokens_out": tokens_out.iter().sum::<u64>(),
         "empty_replies": empty,
         "errors": errors,
+        "turns_log": turns_log,
     });
     Ok(Run { metrics, violations: s.violations.len(), detail, latencies, tokens_out, prompt_read, prompt_ms, predicted_ms, errors, row })
+}
+
+/// Rewrite the board as the app does every few lines, logging the outline and what the model thought.
+fn consolidate_case(options: &Options, graph: &mut Graph, history: &[Utterance], turns_log: &mut Vec<Value>, log: &mut String, errors: &mut usize) {
+    let english = history.split_last().is_some_and(|(last, before)| board_is_english(before, last));
+    let provider = options.consolidator.as_ref().unwrap_or(&options.provider);
+    match boardcast_agent::consolidate::consolidate(provider, graph, history, english, options.consolidate_prompt.as_deref(), &options.consolidate_effort) {
+        Ok(Some(done)) => {
+            let _ = writeln!(log, "= consolidated as {} ({} ms)\n{}", done.style.map_or("given instructions", boardcast_agent::consolidate::Style::name), done.ms, done.outline.trim());
+            turns_log.push(json!({ "consolidate": true, "outline": done.outline, "thinking": done.thinking, "ms": done.ms, "tokens_in": done.tokens_in, "tokens_out": done.tokens_out, "reasoning_tokens": done.reasoning_tokens, "style": done.style.map(boardcast_agent::consolidate::Style::name) }));
+            *graph = done.graph;
+        }
+        Ok(None) => {}
+        Err(e) => {
+            *errors += 1;
+            let _ = writeln!(log, "= consolidating failed: {e:#}");
+        }
+    }
 }
 
 fn mean(xs: &[f64]) -> f64 {
@@ -210,6 +300,11 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let (mut rules, mut harness) = (None::<(bool, bool)>, None);
     let mut model = crate::model_flags::ModelFlags::default();
     let (mut set, mut only, mut workers, mut repeat, mut label) = ("all".to_string(), None::<String>, 1, 1, None::<String>);
+    let mut consolidate = 0_usize;
+    let mut consolidate_prompt: Option<String> = None;
+    let mut consolidate_effort = "high".to_string();
+    let mut consolidator: Option<Provider> = None;
+    let (mut turns, mut context) = (false, None::<usize>);
     while let Some(flag) = args.next() {
         if model.take(&flag, &mut args)? {
             continue;
@@ -223,6 +318,21 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--only-holdout" => set = "holdout".into(),
             "--only" => only = args.next(),
             "--workers" => workers = args.next().context("count")?.parse()?,
+            "--consolidate" => consolidate = args.next().context("count")?.parse()?,
+            "--consolidate-by" => {
+                let by = args.next().context("saved, or a llama-server address")?;
+                let mut flags = crate::model_flags::ModelFlags::default();
+                let given = if by == "saved" { "--saved" } else { "--llm" };
+                flags.take(given, &mut std::iter::once(by.clone()).filter(|_| given == "--llm"))?;
+                consolidator = flags.chosen()?.map(|(p, _)| p);
+            }
+            "--turns" => turns = true,
+            "--context" => context = Some(args.next().context("count")?.parse()?),
+            "--consolidate-effort" => consolidate_effort = args.next().context("high, medium or low")?,
+            "--consolidate-prompt" => {
+                let path = args.next().context("file")?;
+                consolidate_prompt = Some(std::fs::read_to_string(&path).with_context(|| path.clone())?);
+            }
             "--repeat" => repeat = args.next().context("count")?.parse::<usize>()?.max(1),
             "--label" => label = Some(args.next().context("label")?),
             "--harness" => {
@@ -263,7 +373,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     if cases.is_empty() {
         bail!("no matching eval cases");
     }
-    let options = Options { guidance, provider };
+    let options = Options { guidance, provider, consolidate, consolidate_prompt, consolidate_effort, consolidator, turns, context: context.unwrap_or(if turns { boardcast_agent::TURN_CONTEXT_LINES } else { CONTEXT_LINES }) };
 
     // One line first: a model that cannot be reached would otherwise score every case 0, which reads like a
     // result. It also puts the fixed prompt into the server's cache, so the first case's latency is typical.

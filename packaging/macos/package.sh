@@ -14,6 +14,7 @@ cd "$root"
 . packaging/macos/sign.sh
 variants="${VARIANTS:-all}"
 setup_signing
+rm -rf "$notary_list" target/package/notarized
 
 cargo build --release -p alcyo-tools
 for what in glyphs "llama" voice search pdfium; do
@@ -68,5 +69,8 @@ for variant in $variants; do
   rm -rf "$out"
   ls -lh "target/package/$name.zip"
 done
-# With NOTARIZE=1 every disk image is with Apple by now; wait for them all and staple their tickets.
-notary_wait
+# With NOTARIZE=1 every disk image is with Apple by now. Wait for them all and staple their tickets, unless
+# NOTARY_WAIT=0 leaves that to a later step (notarize-wait.sh), as the release does.
+if [ "${NOTARY_WAIT:-1}" = 1 ]; then
+  notary_wait
+fi

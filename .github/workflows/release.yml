@@ -13,6 +13,9 @@ name: Release
 # pre-release, where the alphas looked. It lists Linux packages only, as the updater only installs on
 # Linux; Mac and Windows apps are downloaded by hand.
 #
+# The Mac disk images are notarized by Apple, which has taken from minutes to several hours; the release
+# waits for that, at most five hours, in a job of its own.
+#
 # So only Linux has to build for a release to go out. A Mac or Windows build that fails holds nothing up:
 # the release goes out without it, the run says which packages are missing, and "Re-run failed jobs"
 # builds them again and adds them to the release, which is otherwise left as it is.
@@ -137,12 +140,13 @@ jobs:
         with:
           path: resources/search
           key: search-${{ hashFiles('crates/models/src/lib.rs') }}
-      # Signed with the Developer ID certificate, and notarized, so the app opens from a download like any
-      # other (packaging/macos/sign.sh).
+      # Signed with the Developer ID certificate and sent to Apple to notarize (packaging/macos/sign.sh). The
+      # wait for Apple is the notarize job's, so a slow queue never costs the packages built here.
       - run: sh packaging/macos/package.sh
         env:
           VARIANTS: ${{ env.MAC_VARIANTS }}
           NOTARIZE: 1
+          NOTARY_WAIT: 0
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
@@ -152,9 +156,51 @@ jobs:
         with:
           name: macos-packages-${{ matrix.runner }}
           overwrite: true
+          path: target/package/alcyo-*-macos*.zip
+          retention-days: 3
+      # The disk images as sent, with their submissions, for the notarize job; never published as they are.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-sent-${{ matrix.runner }}
+          overwrite: true
           path: |
-            target/package/alcyo-*-macos*.zip
             target/package/alcyo-*-macos*.dmg
+            target/package/notary-pending.txt
+          retention-days: 7
+
+  # Waits for Apple, which has taken from minutes to several hours, and staples each image's ticket. If it
+  # runs out of time, "Re-run failed jobs" waits again on the same submissions: nothing is built or sent
+  # again, and the images done by then have been kept.
+  notarize:
+    needs: macos
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-26, macos-15-intel]
+    # Only waiting and stapling, which any Mac does.
+    runs-on: macos-26
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-sent-${{ matrix.runner }}
+          path: target/package
+      - run: sh packaging/macos/notarize-wait.sh
+        env:
+          NOTARY_HOURS: 5
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+      # Whatever was stapled, even when the wait ran out, so it is published and the re-run adds the rest.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-notarized-${{ matrix.runner }}
+          overwrite: true
+          path: target/package/notarized/alcyo-*.dmg
+          if-no-files-found: ignore
           retention-days: 3
 
   windows:
@@ -189,7 +235,7 @@ jobs:
   # Once every build has finished, whichever way: Linux is what the updater installs, so without it there is
   # no release; the Mac and Windows go out if they built, and are added by a re-run if they did not.
   publish:
-    needs: [linux, macos, windows]
+    needs: [linux, macos, notarize, windows]
     if: ${{ !cancelled() && needs.linux.result == 'success' }}
     runs-on: ubuntu-22.04
     env:
@@ -197,20 +243,28 @@ jobs:
       VERSION: ${{ needs.linux.outputs.version }}
       PRERELEASE: ${{ needs.linux.outputs.prerelease }}
       MACOS: ${{ needs.macos.result }}
+      NOTARIZE: ${{ needs.notarize.result }}
       WINDOWS: ${{ needs.windows.result }}
     steps:
       - uses: actions/checkout@v4
-      # Every package built in this run, in any attempt: a re-run finds what the first attempt built.
+      # Every package built in this run, in any attempt: a re-run finds what the first attempt built. Only
+      # what is published: not the disk images as they were sent, before their tickets were stapled.
       - uses: actions/download-artifact@v4
         with:
+          name: linux-packages
+          path: packages
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: '{windows-packages,macos-packages-*,macos-notarized-*}'
           path: packages
           merge-multiple: true
       - name: Say which packages are missing
         run: |
-          for platform in "macOS $MACOS" "Windows $WINDOWS"; do
+          for platform in "macOS $MACOS" "macOS-notarizing $NOTARIZE" "Windows $WINDOWS"; do
             set -- $platform
             if [ "$2" != success ]; then
-              note="The $1 packages did not build ($2), so the release goes out without them. Re-run the failed jobs to add them."
+              note="$1: $2, so the release goes out without those packages. Re-run the failed jobs to add them."
               echo "::warning::$note"
               echo "- $note" >> "$GITHUB_STEP_SUMMARY"
             fi

@@ -209,19 +209,22 @@ fn check_unpacked(staged: &Path, current: &str) -> Result<()> {
     Ok(())
 }
 
-/// Replace the app and its resources, undoing the swap if any part of it fails. A package under the new
-/// name installed over one from before the rename leaves the old command behind as a link to the new one,
-/// so launchers and shells that still say `boardcast` keep working.
+/// Replace the app and its resources, undoing the swap if any part of it fails. Whatever the package
+/// calls them inside, they are installed as `bin/alcyo` and `lib/alcyo`, and an install from before the
+/// rename keeps `bin/boardcast` as a link to the new program, so launchers and shells that still say
+/// `boardcast` keep working. (Packages keep `bin/boardcast` and `lib/boardcast` inside, because that is
+/// all an updater from before the rename knows how to install.)
 fn swap(staged: &Path, prefix: &Path) -> Result<()> {
-    let name = if staged.join("lib").join(NAME).is_dir() { NAME } else { OLD_NAME };
+    let staged_lib = lib_dir(staged).context("the package has no resources folder")?;
+    let staged_program = program(staged);
     let current = lib_dir(prefix).context("this install has no resources folder")?;
-    let (lib, old_lib) = (prefix.join("lib").join(name), prefix.join("lib/.update-old"));
+    let (lib, old_lib) = (prefix.join("lib").join(NAME), prefix.join("lib/.update-old"));
     let _ = fs::remove_dir_all(&old_lib);
     fs::rename(&current, &old_lib).context("moving the current version aside")?;
     let replace = || -> Result<()> {
-        fs::rename(staged.join("lib").join(name), &lib)?;
+        fs::rename(&staged_lib, &lib)?;
         // A rename over the running program is safe: it keeps running from the old file.
-        fs::rename(staged.join("bin").join(name), prefix.join("bin").join(name))?;
+        fs::rename(&staged_program, prefix.join("bin").join(NAME))?;
         Ok(())
     };
     if let Err(e) = replace() {
@@ -230,43 +233,44 @@ fn swap(staged: &Path, prefix: &Path) -> Result<()> {
         return Err(e.context("the update failed and the previous version was restored"));
     }
     let _ = fs::remove_dir_all(&old_lib);
-    if name == NAME {
-        renamed(staged, prefix);
+    let old = prefix.join("bin").join(OLD_NAME);
+    if fs::symlink_metadata(&old).is_ok_and(|m| !m.file_type().is_symlink()) {
+        let _ = fs::remove_file(&old);
+        #[cfg(unix)]
+        let _ = std::os::unix::fs::symlink(NAME, &old);
     }
     // Licences follow the code; failing to refresh them must not undo a working update.
-    let licenses = prefix.join("share/licenses").join(name);
-    let had_licenses = licenses.is_dir() || prefix.join("share/licenses").join(OLD_NAME).is_dir();
-    if had_licenses && fs::create_dir_all(&licenses).is_ok() {
-        if let Ok(files) = fs::read_dir(staged.join("share/licenses").join(name)) {
+    let licenses = prefix.join("share/licenses");
+    if licenses.join(NAME).is_dir() || licenses.join(OLD_NAME).is_dir() {
+        let staged_licenses = [NAME, OLD_NAME].into_iter().map(|n| staged.join("share/licenses").join(n)).find(|d| d.is_dir());
+        if let (Ok(()), Some(Ok(files))) = (fs::create_dir_all(licenses.join(NAME)), staged_licenses.map(fs::read_dir)) {
             for file in files.flatten() {
-                let _ = fs::copy(file.path(), licenses.join(file.file_name()));
+                let _ = fs::copy(file.path(), licenses.join(NAME).join(file.file_name()));
             }
         }
-        if name == NAME {
-            let _ = fs::remove_dir_all(prefix.join("share/licenses").join(OLD_NAME));
-        }
+        let _ = fs::remove_dir_all(licenses.join(OLD_NAME));
     }
+    let version = fs::read_to_string(staged.join("VERSION")).unwrap_or_default();
+    refresh_launcher(prefix, version.trim());
     Ok(())
 }
 
-/// After the first update under the new name: point the old command at the new program, and replace the
-/// launcher entry and icon that install.sh wrote under the old name. None of this may fail the update.
-fn renamed(staged: &Path, prefix: &Path) {
-    let old = prefix.join("bin").join(OLD_NAME);
-    let _ = fs::remove_file(&old);
-    #[cfg(unix)]
-    let _ = std::os::unix::fs::symlink(NAME, &old);
+const LAUNCHER: &str = include_str!("../../../packaging/linux/app.alcyo.board.desktop.in");
+const LAUNCHER_ICON: &[u8] = include_bytes!("../../../packaging/icons/128x128@2x.png");
+
+/// Replace the launcher entry and icon install.sh wrote under the old name with app.alcyo.board ones,
+/// which match the window's app id. Both come built in, so this works for an install whose files were
+/// put there by an updater from before the rename. Anything that fails is left as it was.
+pub fn refresh_launcher(prefix: &Path, version: &str) {
     let apps = prefix.join("share/applications");
-    let template = staged.join("share/app.alcyo.board.desktop.in");
-    if let (true, Ok(text)) = (apps.join("boardcast.desktop").is_file(), fs::read_to_string(&template)) {
-        let version = fs::read_to_string(staged.join("VERSION")).unwrap_or_default();
-        let entry = text.replace("@BINDIR@", &prefix.join("bin").to_string_lossy()).replace("@VERSION@", version.trim());
+    if apps.join("boardcast.desktop").is_file() {
+        let entry = LAUNCHER.replace("@BINDIR@", &prefix.join("bin").to_string_lossy()).replace("@VERSION@", version);
         if fs::write(apps.join("app.alcyo.board.desktop"), entry).is_ok() {
             let _ = fs::remove_file(apps.join("boardcast.desktop"));
         }
     }
     let icons = prefix.join("share/icons/hicolor/256x256/apps");
-    if icons.join("boardcast.png").is_file() && fs::copy(staged.join("share/app.alcyo.board.png"), icons.join("app.alcyo.board.png")).is_ok() {
+    if icons.join("boardcast.png").is_file() && fs::write(icons.join("app.alcyo.board.png"), LAUNCHER_ICON).is_ok() {
         let _ = fs::remove_file(icons.join("boardcast.png"));
     }
 }
@@ -379,8 +383,7 @@ mod tests {
         package_named(dir, OLD_NAME, version, reported, healthy)
     }
 
-    /// The same, with its program and resources under `name`; a package under the new name also carries
-    /// the launcher template and icon install.sh uses.
+    /// The same, with its program and resources under `name`.
     fn package_named(dir: &Path, name: &str, version: &str, reported: &str, healthy: bool) -> PathBuf {
         let root = dir.join("source");
         let _ = fs::remove_dir_all(&root);
@@ -392,10 +395,6 @@ mod tests {
         fs::write(lib.join("glyphs.pack"), version).unwrap();
         fs::write(lib.join("llama/llama-server"), version).unwrap();
         fs::write(root.join("share/licenses").join(name).join("LICENSE"), version).unwrap();
-        if name == NAME {
-            fs::write(root.join("share/app.alcyo.board.desktop.in"), "Exec=@BINDIR@/alcyo\nX-Version=@VERSION@\n").unwrap();
-            fs::write(root.join("share/app.alcyo.board.png"), "icon").unwrap();
-        }
         let code = if healthy { 0 } else { 1 };
         let script = format!("#!/bin/sh\necho '{{\"ok\":{healthy},\"version\":\"{reported}\"}}'\nexit {code}\n");
         fs::write(root.join("bin").join(name), &script).unwrap();
@@ -438,13 +437,16 @@ mod tests {
         let prefix = installed(&dir.0);
         let archive = package(&dir.0, "0.3.0", "0.3.0", true);
         steps(&archive, &prefix, "0.2.0").unwrap();
-        assert!(fs::read_to_string(prefix.join("bin/boardcast")).unwrap().contains("0.3.0"));
-        assert_eq!(fs::read_to_string(prefix.join("lib/boardcast/glyphs.pack")).unwrap(), "0.3.0");
-        assert!(prefix.join("lib/boardcast/llama/llama-server").is_file());
-        assert!(!prefix.join("lib/boardcast/leftover").exists(), "old resources must not linger");
-        assert_eq!(fs::read_to_string(prefix.join("share/licenses/boardcast/LICENSE")).unwrap(), "0.3.0");
+        // A package laid out the old way still installs under the new names.
+        assert!(fs::read_to_string(prefix.join("bin/alcyo")).unwrap().contains("0.3.0"));
+        assert_eq!(fs::read_to_string(prefix.join("lib/alcyo/glyphs.pack")).unwrap(), "0.3.0");
+        assert!(prefix.join("lib/alcyo/llama/llama-server").is_file());
+        assert!(!prefix.join("lib/boardcast").exists(), "old resources must not linger");
+        assert_eq!(fs::read_link(prefix.join("bin/boardcast")).unwrap(), Path::new("alcyo"), "the old command still starts the app");
+        assert_eq!(fs::read_to_string(prefix.join("share/licenses/alcyo/LICENSE")).unwrap(), "0.3.0");
+        assert!(!prefix.join("share/licenses/boardcast").exists());
         assert!(!prefix.join(".alcyo-update").exists() && !prefix.join("lib/.update-old").exists());
-        assert!(fs::metadata(prefix.join("bin/boardcast")).unwrap().permissions().mode() & 0o111 != 0, "it must stay runnable");
+        assert!(fs::metadata(prefix.join("bin/alcyo")).unwrap().permissions().mode() & 0o111 != 0, "it must stay runnable");
     }
 
     #[test]
@@ -466,12 +468,35 @@ mod tests {
         assert_eq!(program(&prefix), prefix.join("bin/alcyo"));
         assert_eq!(lib_dir(&prefix), Some(prefix.join("lib/alcyo")));
         let entry = fs::read_to_string(apps.join("app.alcyo.board.desktop")).unwrap();
-        assert!(entry.contains(&format!("Exec={}/alcyo", prefix.join("bin").display())) && entry.contains("X-Version=0.3.0"), "{entry}");
+        assert!(entry.contains(&format!("Exec={}/alcyo", prefix.join("bin").display())) && entry.contains("X-AppVersion=0.3.0"), "{entry}");
+        assert!(entry.contains("StartupWMClass=app.alcyo.board"), "the entry matches the window");
         assert!(!apps.join("boardcast.desktop").exists());
         assert!(icons.join("app.alcyo.board.png").is_file() && !icons.join("boardcast.png").exists());
         assert_eq!(fs::read_to_string(prefix.join("share/licenses/alcyo/LICENSE")).unwrap(), "0.3.0");
         assert!(!prefix.join("share/licenses/boardcast").exists());
         assert!(!prefix.join(".alcyo-update").exists() && !prefix.join("lib/.update-old").exists());
+    }
+
+    #[test]
+    fn an_install_updated_by_an_older_updater_gets_its_launcher_fixed() {
+        // Updated by a build from before the rename: new program, old launcher files, nothing else.
+        let dir = Dir::new();
+        let prefix = installed(&dir.0);
+        let apps = prefix.join("share/applications");
+        let icons = prefix.join("share/icons/hicolor/256x256/apps");
+        fs::create_dir_all(&apps).unwrap();
+        fs::create_dir_all(&icons).unwrap();
+        fs::write(apps.join("boardcast.desktop"), "Exec=old").unwrap();
+        fs::write(icons.join("boardcast.png"), "old icon").unwrap();
+        refresh_launcher(&prefix, "0.34.0");
+        let entry = fs::read_to_string(apps.join("app.alcyo.board.desktop")).unwrap();
+        assert!(entry.contains("Name=Alcyo") && entry.contains("X-AppVersion=0.34.0"));
+        assert!(!apps.join("boardcast.desktop").exists() && !icons.join("boardcast.png").exists());
+        assert_eq!(fs::read(icons.join("app.alcyo.board.png")).unwrap(), LAUNCHER_ICON);
+        // An install that never had the old files is left alone.
+        let fresh = dir.0.join("fresh");
+        refresh_launcher(&fresh, "0.34.0");
+        assert!(!fresh.exists());
     }
 
     #[test]

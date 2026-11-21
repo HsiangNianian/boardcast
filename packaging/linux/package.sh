@@ -29,8 +29,8 @@ for variant in $variants; do
   lib="$out/lib/boardcast"
   mkdir -p "$out/bin" "$lib/voice/speaker" "$lib/pdfium" "$out/share/licenses/boardcast"
 
-  # Still bin/boardcast and lib/boardcast inside: installs from before the rename can only update to a
-  # package laid out the way they expect. Their updater then learns the new layout for the next release.
+  # bin/boardcast and lib/boardcast inside, as before the rename: that is all an updater from before it
+  # can install. install.sh and the updater put them in place as bin/alcyo and lib/alcyo.
   install -m755 target/release/alcyo "$out/bin/boardcast"
   strip "$out/bin/boardcast"
 
@@ -49,8 +49,8 @@ for variant in $variants; do
   # The fonts built into the program (crates/fonts) go with their licenses.
   for f in OFL-DMSans.txt OFL-JetBrainsMono.txt OFL-NotoSansCJK.txt; do test -f "$out/share/licenses/boardcast/$f" || { echo "missing font license $f" >&2; exit 1; }; done
   cp target/pdfium/LICENSE "$out/share/licenses/boardcast/pdfium-LICENSE"
-  install -m644 packaging/icons/128x128@2x.png "$out/share/boardcast.png"
-  install -m644 packaging/linux/boardcast.desktop.in "$out/share/boardcast.desktop.in"
+  install -m644 packaging/icons/128x128@2x.png "$out/share/app.alcyo.board.png"
+  install -m644 packaging/linux/app.alcyo.board.desktop.in "$out/share/app.alcyo.board.desktop.in"
   install -m755 packaging/linux/install.sh "$out/install.sh"
   printf '%s\n' "$version" > "$out/VERSION"
 

@@ -9469,6 +9469,11 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let resources = resources::locate(&data);
     let update_data = data.clone();
     let prefix = alcyo_update::installed_prefix();
+    // An install that an updater from before the rename brought here still has the old launcher entry,
+    // which no longer matches the window's app id.
+    if let Some(prefix) = &prefix {
+        alcyo_update::refresh_launcher(prefix, alcyo_update::VERSION);
+    }
     let scripted = case_or_measurement(&turns, &wav, &demo, synthetic);
     // Looking for updates waits a moment, so it never competes with starting up.
     let check_at = (prefix.is_some() && !scripted).then(|| Instant::now() + Duration::from_secs(8));
@@ -9619,7 +9624,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             window_bounds: Some(WindowBounds::Windowed(Bounds::new(point(px(0.), px(0.)), size(px(1360.), px(860.))))),
             // Under this, the board and the transcript beside it have no room left to be read.
             window_min_size: Some(size(px(720.), px(480.))),
-            app_id: Some("boardcast".into()),
+            app_id: Some("app.alcyo.board".into()),
             // On a Mac and on Windows the system bar goes, and ours takes its place with the window buttons in it:
             // the toolkit draws Windows' buttons itself, so keeping the system bar there showed both. Linux keeps
             // what the compositor draws, and the toolkit adds buttons only when the compositor leaves it to us.

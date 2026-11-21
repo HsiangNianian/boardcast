@@ -203,6 +203,10 @@ jobs:
         env:
           ALCYO_VOICE_DIR: ${{ github.workspace }}/resources/voice
           CARGO_TARGET_DIR: ${{ runner.temp }}/macos-tests
+      # The disk image holds the same app as the zip, so only one is kept: the image when the build was signed,
+      # the zip when it was not (pull requests from forks have no certificate).
+      - name: Keep one copy of each package
+        run: if ls target/package/*.dmg >/dev/null 2>&1; then rm -f target/package/*.zip; fi
       - uses: actions/upload-artifact@v4
         with:
           name: alcyo-${{ matrix.runner }}

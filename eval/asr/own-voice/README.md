@@ -1,6 +1,6 @@
 # Your own voice
 
-The shared corpus is other people's recordings. This set is 30 sentences read by whoever uses boardcast,
+The shared corpus is other people's recordings. This set is 30 sentences read by whoever uses Alcyo,
 on their own microphone: 20 in Chinese with the English terms a technical meeting carries, including
 board commands, and 10 in English. It measures recognition where it matters, and compares engines on
 the same audio.

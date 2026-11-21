@@ -1,4 +1,4 @@
-Boardcast Handwritten, Korean: centerline data derived from Xiaolai SC Regular.
+Alcyo Handwritten, Korean: centerline data derived from Xiaolai SC Regular.
 Source: @excalidraw/excalidraw 0.18.1, fonts/Xiaolai
 https://github.com/lxgw/kose-font
 

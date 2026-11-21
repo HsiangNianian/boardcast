@@ -27,7 +27,7 @@ pub struct Embedded {
 /// The family that Chinese, Japanese, Korean and Cyrillic text falls back to.
 pub const CJK_FAMILY: &str = "Noto Sans CJK SC";
 
-pub const DM_SANS: Embedded = Embedded { name: "DM Sans", family: "DM Sans", bold: false, bytes: include_bytes!("../files/DMSans.ttf"), covers: "Boardcast éü" };
+pub const DM_SANS: Embedded = Embedded { name: "DM Sans", family: "DM Sans", bold: false, bytes: include_bytes!("../files/DMSans.ttf"), covers: "Alcyo éü" };
 pub const JETBRAINS_MONO: Embedded = Embedded { name: "JetBrains Mono", family: "JetBrains Mono", bold: false, bytes: include_bytes!("../files/JetBrainsMono.ttf"), covers: "0123:45" };
 pub const CJK_REGULAR: Embedded = Embedded { name: "Noto Sans CJK SC Regular", family: CJK_FAMILY, bold: false, bytes: include_bytes!("../files/NotoSansCJKsc-Regular.otf"), covers: SAMPLE };
 pub const CJK_BOLD: Embedded = Embedded { name: "Noto Sans CJK SC Bold", family: CJK_FAMILY, bold: true, bytes: include_bytes!("../files/NotoSansCJKsc-Bold.otf"), covers: SAMPLE };

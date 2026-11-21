@@ -193,7 +193,7 @@ pub fn init() {
         }
         {
             let card = card.clone();
-            crate::util::on(&win(), "boardcast-theme-change", move |_| card.recolor());
+            crate::util::on(&win(), "alcyo-theme-change", move |_| card.recolor());
         }
         let io = crate::util::observer(None, None, move |entry, _| {
             card.visible.set(entry.is_intersecting());

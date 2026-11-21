@@ -57,7 +57,7 @@ struct Point {
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let root = PathBuf::from(args.next().context("boardcast root")?);
+    let root = PathBuf::from(args.next().context("the repository root")?);
     let out = PathBuf::from(args.next().context("output .html")?);
     let (mut history, mut prices, mut files) = (None::<PathBuf>, BTreeMap::<String, (f64, f64, f64)>::new(), vec![]);
     while let Some(arg) = args.next() {

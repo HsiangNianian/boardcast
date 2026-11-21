@@ -84,8 +84,7 @@ fn package_size(assets: &Assets, key: &str) -> Option<u64> {
     let variant = if variant.is_empty() { String::new() } else { format!("-{variant}") };
     exts.iter().find_map(|ext| {
         let ending = format!("-{system}{variant}.{ext}");
-        // Packages are alcyo-…; releases from before the rename still have boardcast-….
-        assets.iter().filter(|(name, _)| (name.starts_with("alcyo-") || name.starts_with("boardcast-")) && name.ends_with(&ending)).map(|&(_, size)| size).max()
+        assets.iter().filter(|(name, _)| name.starts_with("alcyo-") && name.ends_with(&ending)).map(|&(_, size)| size).max()
     })
 }
 
@@ -391,11 +390,11 @@ mod tests {
     #[test]
     fn download_sizes_come_from_the_release_packages() {
         let release = serde_json::json!({ "assets": [
-            { "name": "boardcast-0.27.0-arm64-macos.zip", "size": 845_000_000u64 },
-            { "name": "boardcast-0.27.0-x86_64-macos.zip", "size": 847_000_000u64 },
-            { "name": "boardcast-0.27.0-x86_64-macos-none.zip", "size": 70_000_000u64 },
-            { "name": "boardcast-0.27.0-x86_64-linux.tar.gz", "size": 876_246_171u64 },
-            { "name": "boardcast-0.27.0-x86_64-linux-en.tar.gz", "size": 1_200_000_000u64 },
+            { "name": "alcyo-0.27.0-arm64-macos.zip", "size": 845_000_000u64 },
+            { "name": "alcyo-0.27.0-x86_64-macos.zip", "size": 847_000_000u64 },
+            { "name": "alcyo-0.27.0-x86_64-macos-none.zip", "size": 70_000_000u64 },
+            { "name": "alcyo-0.27.0-x86_64-linux.tar.gz", "size": 876_246_171u64 },
+            { "name": "alcyo-0.27.0-x86_64-linux-en.tar.gz", "size": 1_200_000_000u64 },
             { "name": "manifest.json", "size": 900u64 },
         ]});
         let assets = parse_assets(&release);

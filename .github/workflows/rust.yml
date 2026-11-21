@@ -149,8 +149,6 @@ jobs:
           PREFIX="$PWD/prefix" sh unpacked/*/install.sh
           rm -rf unpacked
           prefix/bin/alcyo --self-check
-          # The old command name stays as a link, for launchers and shells from before the rename.
-          prefix/bin/boardcast --version
       - uses: actions/upload-artifact@v4
         with:
           name: alcyo-linux

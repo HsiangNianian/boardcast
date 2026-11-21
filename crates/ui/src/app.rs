@@ -9392,13 +9392,13 @@ impl Render for Shell {
     }
 }
 
-gpui_kit::actions!(boardcast, [Quit]);
+gpui_kit::actions!(alcyo, [Quit]);
 
 /// A Mac app quits from its menu and with Cmd+Q, and either way saves first, as closing the window does.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn app_menu(cx: &mut App) {
     cx.bind_keys([gpui_kit::KeyBinding::new("cmd-q", Quit, None)]);
-    cx.set_menus(vec![gpui_kit::Menu { name: "Alcyo".into(), items: vec![gpui_kit::MenuItem::action(t("quit-boardcast"), Quit)], disabled: false }]);
+    cx.set_menus(vec![gpui_kit::Menu { name: "Alcyo".into(), items: vec![gpui_kit::MenuItem::action(t("quit-alcyo"), Quit)], disabled: false }]);
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
@@ -9469,11 +9469,6 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let resources = resources::locate(&data);
     let update_data = data.clone();
     let prefix = alcyo_update::installed_prefix();
-    // An install that an updater from before the rename brought here still has the old launcher entry,
-    // which no longer matches the window's app id.
-    if let Some(prefix) = &prefix {
-        alcyo_update::refresh_launcher(prefix, alcyo_update::VERSION);
-    }
     let scripted = case_or_measurement(&turns, &wav, &demo, synthetic);
     // Looking for updates waits a moment, so it never competes with starting up.
     let check_at = (prefix.is_some() && !scripted).then(|| Instant::now() + Duration::from_secs(8));

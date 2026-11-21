@@ -151,7 +151,7 @@ mod tests {
     /// The pen skips a letter it has no strokes for, which would quietly misspell the name.
     #[test]
     fn the_pen_writes_every_letter_of_the_name() {
-        let mut glyphs = Glyphs::load(HanziSource::Directory(std::env::temp_dir().join("boardcast-no-hanzi"))).unwrap();
+        let mut glyphs = Glyphs::load(HanziSource::Directory(std::env::temp_dir().join("alcyo-no-hanzi"))).unwrap();
         for c in WORD.chars() {
             assert!(glyphs.get(c).is_some(), "the pen has no strokes for {c:?}");
         }

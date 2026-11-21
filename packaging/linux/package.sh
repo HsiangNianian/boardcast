@@ -26,13 +26,11 @@ for variant in $variants; do
   name="alcyo-$version-$(uname -m)-linux$(variant_suffix "$variant")"
   out="target/package/$name"
   rm -rf "$out"
-  lib="$out/lib/boardcast"
-  mkdir -p "$out/bin" "$lib/voice/speaker" "$lib/pdfium" "$out/share/licenses/boardcast"
+  lib="$out/lib/alcyo"
+  mkdir -p "$out/bin" "$lib/voice/speaker" "$lib/pdfium" "$out/share/licenses/alcyo"
 
-  # bin/boardcast and lib/boardcast inside, as before the rename: that is all an updater from before it
-  # can install. install.sh and the updater put them in place as bin/alcyo and lib/alcyo.
-  install -m755 target/release/alcyo "$out/bin/boardcast"
-  strip "$out/bin/boardcast"
+  install -m755 target/release/alcyo "$out/bin/alcyo"
+  strip "$out/bin/alcyo"
 
   cp "$glyphs" "$lib/glyphs.pack"
   cp -r resources/llama "$lib/llama"
@@ -45,16 +43,16 @@ for variant in $variants; do
   copy_search "$lib/search"
   printf '%s\n' "$variant" > "$lib/variant"
 
-  cp LICENSE assets/licenses/* crates/fonts/files/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$out/share/licenses/boardcast/"
+  cp LICENSE assets/licenses/* crates/fonts/files/OFL-*.txt assets/hanzi/ARPHICPL.TXT "$out/share/licenses/alcyo/"
   # The fonts built into the program (crates/fonts) go with their licenses.
-  for f in OFL-DMSans.txt OFL-JetBrainsMono.txt OFL-NotoSansCJK.txt; do test -f "$out/share/licenses/boardcast/$f" || { echo "missing font license $f" >&2; exit 1; }; done
-  cp target/pdfium/LICENSE "$out/share/licenses/boardcast/pdfium-LICENSE"
+  for f in OFL-DMSans.txt OFL-JetBrainsMono.txt OFL-NotoSansCJK.txt; do test -f "$out/share/licenses/alcyo/$f" || { echo "missing font license $f" >&2; exit 1; }; done
+  cp target/pdfium/LICENSE "$out/share/licenses/alcyo/pdfium-LICENSE"
   install -m644 packaging/icons/128x128@2x.png "$out/share/app.alcyo.board.png"
   install -m644 packaging/linux/app.alcyo.board.desktop.in "$out/share/app.alcyo.board.desktop.in"
   install -m755 packaging/linux/install.sh "$out/install.sh"
   printf '%s\n' "$version" > "$out/VERSION"
 
-  "$out/bin/boardcast" --self-check
+  "$out/bin/alcyo" --self-check
   tar -C target/package -czf "target/package/$name.tar.gz" "$name"
   rm -rf "$out"
   ls -lh "target/package/$name.tar.gz"

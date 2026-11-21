@@ -70,7 +70,7 @@ fn failures(summary: &str, checks: &[Check]) -> Vec<String> {
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let root = PathBuf::from(args.next().context("boardcast root")?);
+    let root = PathBuf::from(args.next().context("the repository root")?);
     let mut model = crate::model_flags::ModelFlags::default();
     let (mut repeat, mut only) = (1, None::<String>);
     while let Some(flag) = args.next() {

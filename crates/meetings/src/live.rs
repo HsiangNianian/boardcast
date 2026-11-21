@@ -944,7 +944,7 @@ mod tests {
 
     #[test]
     fn saving_a_migrated_meeting_again_keeps_its_migration_record() {
-        let dir = std::env::temp_dir().join(format!("boardcast-migration-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("alcyo-migration-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("meetings")).unwrap();
         let text = json!({ "id": "m1", "title": "旧" }).to_string();
@@ -1310,7 +1310,7 @@ mod tests {
 
     #[test]
     fn a_saved_meeting_reopens_identically() {
-        let path = std::env::temp_dir().join(format!("boardcast-live-{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("alcyo-live-{}", std::process::id()));
         let store = Store::new(path.clone());
         let mut live = Live::new();
         live.add_line(None, "用户调网关", None);

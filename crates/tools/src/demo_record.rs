@@ -57,7 +57,7 @@ fn cut(speaker: &str, text: &str, start: f64, end: f64) -> Vec<Line> {
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let root = PathBuf::from(args.next().context("boardcast root")?);
+    let root = PathBuf::from(args.next().context("the repository root")?);
     let id = args.next().context("sample id")?;
     let out = PathBuf::from(args.next().context("output .json")?);
     let mut model = crate::model_flags::ModelFlags::default();

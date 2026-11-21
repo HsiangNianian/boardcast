@@ -15,7 +15,7 @@ fn demo_lines(root: &Path, name: &str) -> Result<Vec<String>> {
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let root = PathBuf::from(args.next().context("boardcast root")?);
+    let root = PathBuf::from(args.next().context("the repository root")?);
     let mut sets: Vec<(String, Vec<String>)> = vec![];
     let mut tidy = false;
     while let Some(flag) = args.next() {

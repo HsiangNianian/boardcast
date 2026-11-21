@@ -316,7 +316,7 @@ fn cell(v: Option<f64>) -> String {
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let root = PathBuf::from(args.next().context("boardcast root")?);
+    let root = PathBuf::from(args.next().context("the repository root")?);
     let output = args.next().context("output file")?;
     // The model is asked as the app asks it (Provider::default_guidance) unless these say otherwise.
     let (mut rules, mut harness) = (None::<(bool, bool)>, None);

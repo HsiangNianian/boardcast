@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn a_pack_returns_exactly_what_went_in_and_rejects_damage() {
-        let dir = std::env::temp_dir().join(format!("boardcast-glyphs-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("alcyo-glyphs-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("甲.json"), "[[[108,472],[180.5,470]],[[261,814]]]").unwrap();
         std::fs::write(dir.join("乙.json"), "[[[1,-18]]]").unwrap();
@@ -312,7 +312,7 @@ mod tests {
     /// The pen writes the letters of the interface's European languages, and an accent after its letter.
     #[test]
     fn accented_and_cyrillic_letters_are_written_and_an_accent_comes_last() {
-        let mut glyphs = Glyphs::load(HanziSource::Directory(std::env::temp_dir().join("boardcast-no-glyphs"))).unwrap();
+        let mut glyphs = Glyphs::load(HanziSource::Directory(std::env::temp_dir().join("alcyo-no-glyphs"))).unwrap();
         let words = "Reunión veröffentlichen français coração perché Привет встреча ёж Ünïcödé ¿Qué? «да» “so” it’s €5 łódź Čeština ğış";
         let missing: String = words.chars().filter(|c| !c.is_whitespace() && glyphs.get(*c).is_none()).collect();
         assert_eq!(missing, "");

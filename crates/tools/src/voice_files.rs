@@ -17,7 +17,7 @@ pub struct VoiceFile {
 }
 
 const PARAKEET: &str = "csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7";
-const DIARIZATION: &str = "https://github.com/HsiangNianian/sherpa-onnx/releases/download/boardcast-2.0.1-3/nemotron-3-diarization.int8.onnx";
+const DIARIZATION: &str = "https://github.com/HsiangNianian/sherpa-onnx/releases/download/alcyo-2.0.1-3/nemotron-3-diarization.int8.onnx";
 /// The streaming Chinese model that drafts while someone speaks (#291). Its authors state no license yet;
 /// Alcyo's maintainer has asked them for one.
 const DRAFT_ZH: &str = "csukuangfj/sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30/resolve/ad658fa0201659a09ea3c176129a191c77ecae8f";

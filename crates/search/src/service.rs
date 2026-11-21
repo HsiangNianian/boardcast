@@ -347,7 +347,7 @@ mod tests {
 
     #[test]
     fn indexing_waits_while_held_and_goes_on_after() {
-        let data = std::env::temp_dir().join(format!("boardcast-held-{}", std::process::id()));
+        let data = std::env::temp_dir().join(format!("alcyo-held-{}", std::process::id()));
         let spawn: Spawn = Box::new(|_| bail!("no model in this test"));
         let (jobs, events) = start(&data, data.join("model.gguf"), spawn);
         jobs.send(Job::Hold(true)).unwrap();
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn meetings_without_an_index_are_counted() {
-        let data = std::env::temp_dir().join(format!("boardcast-unindexed-{}", std::process::id()));
+        let data = std::env::temp_dir().join(format!("alcyo-unindexed-{}", std::process::id()));
         let meetings = vec!["a".to_string(), "b".to_string(), "c".to_string()];
         assert_eq!(unindexed(&data, &meetings), 3, "no search folder at all");
         std::fs::create_dir_all(data.join("search")).unwrap();

@@ -72,7 +72,7 @@ fn lines_of(sample: &Value) -> Vec<(Option<String>, String)> {
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let root = PathBuf::from(args.next().context("boardcast root")?);
+    let root = PathBuf::from(args.next().context("the repository root")?);
     let model = PathBuf::from(args.next().context("model .gguf")?);
     let family = Family::parse(&args.next().context("gemma or qwen3")?).context("the family is gemma or qwen3")?;
     let mut out = None;

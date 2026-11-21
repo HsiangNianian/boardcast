@@ -95,10 +95,9 @@ fn build_manifest(dir: &Path, tag: &str, version: &str, notes: &str, repo: &str)
     Ok(serde_json::json!({ "version": version, "notes": notes, "platforms": platforms }))
 }
 
-/// `alcyo-<version>-<arch>-linux[-<variant>].tar.gz` (or `boardcast-…` from before the rename) as its
-/// version and platform key.
+/// `alcyo-<version>-<arch>-linux[-<variant>].tar.gz` as its version and platform key.
 fn package_name(name: &str) -> Option<(&str, String)> {
-    let rest = name.strip_prefix("alcyo-").or_else(|| name.strip_prefix("boardcast-"))?.strip_suffix(".tar.gz")?;
+    let rest = name.strip_prefix("alcyo-")?.strip_suffix(".tar.gz")?;
     let (head, variant) = match rest.rsplit_once("-linux") {
         Some((head, "")) => (head, None),
         Some((head, tail)) => (head, Some(tail.strip_prefix('-').filter(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_lowercase()))?)),
@@ -118,7 +117,7 @@ mod tests {
     const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/signing");
 
     fn temp(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("boardcast-release-{}-{name}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("alcyo-release-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -132,12 +131,12 @@ mod tests {
         let public = fs::read_to_string(format!("{FIXTURES}/tauri-test.key.pub")).unwrap();
         let dir = temp("sign");
         let package = dir.join("payload.bin");
-        fs::write(&package, b"boardcast signing fixture\n").unwrap();
+        fs::write(&package, b"alcyo signing fixture\n").unwrap();
         let signed = signature(&key, &package).unwrap();
         assert!(decode_text(&signed).unwrap().contains("\tfile:payload.bin\n"));
         alcyo_update::verify(&package, &signed, public.trim()).unwrap();
 
-        fs::write(&package, b"boardcast signing fixturE\n").unwrap();
+        fs::write(&package, b"alcyo signing fixturE\n").unwrap();
         assert!(alcyo_update::verify(&package, &signed, public.trim()).is_err());
         assert!(secret_key(&fs::read_to_string(format!("{FIXTURES}/tauri-test.key")).unwrap(), "wrong").is_err());
         fs::remove_dir_all(dir).unwrap();
@@ -146,7 +145,6 @@ mod tests {
     #[test]
     fn package_names_become_platform_keys() {
         assert_eq!(package_name("alcyo-0.30.0-x86_64-linux.tar.gz"), Some(("0.30.0", "x86_64-linux".into())));
-        assert_eq!(package_name("boardcast-0.30.0-x86_64-linux.tar.gz"), Some(("0.30.0", "x86_64-linux".into())));
         assert_eq!(package_name("alcyo-0.30.0-alpha.1-aarch64-linux-ja.tar.gz"), Some(("0.30.0-alpha.1", "aarch64-linux-ja".into())));
         assert_eq!(package_name("alcyo-0.30.0-x86_64-linux.tar.gz.sig"), None);
         assert_eq!(package_name("alcyo-0.30.0-aarch64-macos.zip"), None);

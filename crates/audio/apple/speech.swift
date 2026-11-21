@@ -277,7 +277,7 @@ func selfTest() throws {
 @main
 struct Main {
     static func main() async {
-        // Leave if boardcast goes away without closing stdin.
+        // Leave if Alcyo goes away without closing stdin.
         let parent = getppid()
         let watchdog = DispatchSource.makeTimerSource(queue: .global())
         watchdog.schedule(deadline: .now() + 1, repeating: 1)

@@ -1,6 +1,6 @@
 {
   "version": "asr-fixtures-v1",
-  "baseUrl": "https://github.com/HsiangNianian/boardcast/releases/download/asr-fixtures-v1",
+  "baseUrl": "https://github.com/HsiangNianian/alcyo/releases/download/asr-fixtures-v1",
   "sources": {
     "alimeeting": {
       "name": "AliMeeting · Alibaba Group",
@@ -30,10 +30,10 @@
       "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
     },
     "generated": {
-      "name": "boardcast silence control",
-      "url": "https://github.com/HsiangNianian/boardcast",
+      "name": "Alcyo silence control",
+      "url": "https://github.com/HsiangNianian/alcyo",
       "license": "MIT",
-      "licenseUrl": "https://github.com/HsiangNianian/boardcast/blob/main/LICENSE"
+      "licenseUrl": "https://github.com/HsiangNianian/alcyo/blob/main/LICENSE"
     }
   },
   "samples": [

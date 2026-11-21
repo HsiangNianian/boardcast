@@ -314,7 +314,7 @@ pub fn import_image(bytes: &[u8], english: bool, cancel: &AtomicBool, read: &mut
 #[cfg(test)]
 mod tests {
     use super::*;
-    use boardcast_board::graph::Kind;
+    use alcyo_board::graph::Kind;
     use serde_json::Value;
 
     fn goldens() -> Value {

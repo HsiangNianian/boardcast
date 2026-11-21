@@ -14,21 +14,40 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const MEETING_VERSION: u64 = 2;
 
-/// Where the older app keeps its data, unless `BOARDCAST_DATA` says otherwise.
+/// The app's folder name on every platform; the older builds used [`OLD_ID`].
+pub const APP_ID: &str = "app.alcyo.board";
+pub const OLD_ID: &str = "games.mmstudio.boardcast";
+
+/// Where the app keeps its data, unless `ALCYO_DATA` (or the older `BOARDCAST_DATA`) says otherwise.
+/// A folder left by a build that still used [`OLD_ID`] is moved here the first time.
 pub fn default_dir() -> Result<PathBuf> {
-    if let Ok(dir) = std::env::var("BOARDCAST_DATA") {
+    if let Ok(dir) = std::env::var("ALCYO_DATA").or_else(|_| std::env::var("BOARDCAST_DATA")) {
         return Ok(PathBuf::from(dir));
     }
     #[cfg(target_os = "macos")]
-    return Ok(PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join("Library/Application Support/games.mmstudio.boardcast"));
+    let base = PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join("Library/Application Support");
     #[cfg(windows)]
-    return Ok(PathBuf::from(std::env::var("APPDATA").context("APPDATA is not set")?).join("games.mmstudio.boardcast"));
+    let base = PathBuf::from(std::env::var("APPDATA").context("APPDATA is not set")?);
     #[cfg(not(any(target_os = "macos", windows)))]
-    if let Ok(dir) = std::env::var("XDG_DATA_HOME") {
-        return Ok(PathBuf::from(dir).join("games.mmstudio.boardcast"));
+    let base = match std::env::var("XDG_DATA_HOME") {
+        Ok(dir) => PathBuf::from(dir),
+        Err(_) => PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join(".local/share"),
+    };
+    Ok(moved_in(&base, OLD_ID, APP_ID))
+}
+
+/// `base/new`, after moving `base/old` there if only the old folder exists. Both live in the same
+/// folder, so the move is a rename and takes no time however much is inside. If it cannot be moved,
+/// the old folder keeps being used, so nothing already there is ever lost from view.
+pub fn moved_in(base: &Path, old: &str, new: &str) -> PathBuf {
+    let (old, new) = (base.join(old), base.join(new));
+    if new.exists() || !old.exists() {
+        return new;
     }
-    #[cfg(not(any(target_os = "macos", windows)))]
-    Ok(PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join(".local/share/games.mmstudio.boardcast"))
+    match fs::rename(&old, &new) {
+        Ok(()) => new,
+        Err(_) => old,
+    }
 }
 
 /// Time plus a little randomness, using only characters that are safe in a file name.
@@ -607,6 +626,37 @@ mod tests {
     }
 
     #[test]
+    fn the_older_folder_moves_to_the_new_name_once() {
+        let base = Dir::new();
+        fs::create_dir_all(base.0.join(OLD_ID).join("meetings")).unwrap();
+        fs::write(base.0.join(OLD_ID).join("meetings/a.json"), "{}").unwrap();
+        let dir = moved_in(&base.0, OLD_ID, APP_ID);
+        assert_eq!(dir, base.0.join(APP_ID));
+        assert!(dir.join("meetings/a.json").exists(), "what was there comes along");
+        assert!(!base.0.join(OLD_ID).exists());
+        // Run again: nothing left to move, the same folder.
+        assert_eq!(moved_in(&base.0, OLD_ID, APP_ID), dir);
+    }
+
+    #[test]
+    fn a_new_folder_is_never_overwritten_by_an_old_one() {
+        let base = Dir::new();
+        fs::create_dir_all(base.0.join(OLD_ID)).unwrap();
+        fs::create_dir_all(base.0.join(APP_ID)).unwrap();
+        fs::write(base.0.join(APP_ID).join("kept"), "new").unwrap();
+        assert_eq!(moved_in(&base.0, OLD_ID, APP_ID), base.0.join(APP_ID));
+        assert_eq!(fs::read_to_string(base.0.join(APP_ID).join("kept")).unwrap(), "new");
+        assert!(base.0.join(OLD_ID).exists(), "the old folder is left alone");
+    }
+
+    #[test]
+    fn with_no_folder_yet_the_new_name_is_used() {
+        let base = Dir::new();
+        assert_eq!(moved_in(&base.0, OLD_ID, APP_ID), base.0.join(APP_ID));
+        assert!(!base.0.join(APP_ID).exists(), "nothing is created just by asking");
+    }
+
+    #[test]
     fn saving_and_loading_keeps_unknown_fields_and_counts_revisions() {
         let dir = Dir::new();
         let store = Store::new(dir.0.clone());
@@ -710,7 +760,7 @@ mod tests {
 
     #[test]
     fn kept_audio_has_a_place_beside_the_meeting_and_no_other_name() {
-        let store = Store::new(std::env::temp_dir().join("boardcast-audio-path"));
+        let store = Store::new(std::env::temp_dir().join("alcyo-audio-path"));
         let path = store.audio_path("m1", "audio-1763270000000.opus").unwrap();
         assert!(path.ends_with("m1/audio-1763270000000.opus"), "{}", path.display());
         for bad in ["audio-.opus", "audio-12.wav", "../audio-1.opus", "audio-1.opus/../x", "notes.opus"] {

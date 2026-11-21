@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build the Mac apps: target/package/boardcast-<version>-<arch>-macos[-<variant>].zip, holding Banshu.app,
+# Build the Mac apps: target/package/alcyo-<version>-<arch>-macos[-<variant>].zip, holding Alcyo.app,
 # one per variant in VARIANTS (default "all"; see packaging/models.sh). "none" carries no speech models
 # and recognizes with Apple's own SpeechAnalyzer, or SFSpeechRecognizer before macOS 26.
 # They are signed only ad hoc, which Apple silicon requires to run at all, so a downloaded copy has to
@@ -12,30 +12,30 @@ cd "$root"
 . packaging/models.sh
 variants="${VARIANTS:-all}"
 
-cargo build --release -p boardcast-tools
+cargo build --release -p alcyo-tools
 for what in glyphs "llama" voice search pdfium; do
-  target/release/boardcast-tools fetch $what
+  target/release/alcyo-tools fetch $what
 done
-cargo build --release -p boardcast-ui
+cargo build --release -p alcyo-ui
 
-version=$(target/release/boardcast --version | cut -d' ' -f2)
+version=$(target/release/alcyo --version | cut -d' ' -f2)
 mkdir -p target/package
 glyphs=target/package/glyphs.pack
-target/release/boardcast-tools pack-glyphs assets/hanzi "$glyphs"
-speech=target/package/boardcast-speech
+target/release/alcyo-tools pack-glyphs assets/hanzi "$glyphs"
+speech=target/package/alcyo-speech
 sh scripts/build-apple-speech.sh "$speech"
 
 for variant in $variants; do
-  name="boardcast-$version-$(uname -m)-macos$(variant_suffix "$variant")"
+  name="alcyo-$version-$(uname -m)-macos$(variant_suffix "$variant")"
   out="target/package/$name"
   rm -rf "$out"
-  app="$out/Banshu.app/Contents"
-  lib="$app/Resources/boardcast"
+  app="$out/Alcyo.app/Contents"
+  lib="$app/Resources/alcyo"
   mkdir -p "$app/MacOS" "$lib/voice/speaker" "$lib/pdfium" "$lib/licenses"
 
-  install -m755 target/release/boardcast "$app/MacOS/boardcast"
-  strip "$app/MacOS/boardcast"
-  install -m755 "$speech" "$app/MacOS/boardcast-speech"
+  install -m755 target/release/alcyo "$app/MacOS/alcyo"
+  strip "$app/MacOS/alcyo"
+  install -m755 "$speech" "$app/MacOS/alcyo-speech"
   sed "s/@VERSION@/$version/g" packaging/macos/Info.plist.in > "$app/Info.plist"
   cp packaging/icons/icon.icns "$app/Resources/icon.icns"
 
@@ -54,10 +54,10 @@ for variant in $variants; do
   for f in OFL-DMSans.txt OFL-JetBrainsMono.txt OFL-NotoSansCJK.txt; do test -f "$lib/licenses/$f" || { echo "missing font license $f" >&2; exit 1; }; done
   cp target/pdfium/LICENSE "$lib/licenses/pdfium-LICENSE"
 
-  codesign --force --deep --sign - "$out/Banshu.app"
+  codesign --force --deep --sign - "$out/Alcyo.app"
 
-  "$app/MacOS/boardcast" --self-check
-  ditto -c -k --keepParent "$out/Banshu.app" "target/package/$name.zip"
+  "$app/MacOS/alcyo" --self-check
+  ditto -c -k --keepParent "$out/Alcyo.app" "target/package/$name.zip"
   rm -rf "$out"
   ls -lh "target/package/$name.zip"
 done

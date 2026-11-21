@@ -3,7 +3,7 @@
 //!   release-manifest <packages> <tag>    prints manifest.json for every Linux package in a folder
 //!
 //! The key is the older app's, in the form `tauri signer` wrote it: minisign's encrypted secret key,
-//! base64-encoded, in BOARDCAST_SIGNING_KEY with its password in BOARDCAST_SIGNING_KEY_PASSWORD.
+//! base64-encoded, in ALCYO_SIGNING_KEY with its password in ALCYO_SIGNING_KEY_PASSWORD.
 //! A signature is written the same way, so installs already out there accept it.
 
 use crate::fetch::hex;
@@ -21,8 +21,8 @@ fn decode_text(encoded: &str) -> Result<String> {
 }
 
 pub fn sign(files: impl Iterator<Item = String>) -> Result<()> {
-    let key = std::env::var("BOARDCAST_SIGNING_KEY").context("BOARDCAST_SIGNING_KEY is not set")?;
-    let password = std::env::var("BOARDCAST_SIGNING_KEY_PASSWORD").unwrap_or_default();
+    let key = std::env::var("ALCYO_SIGNING_KEY").context("ALCYO_SIGNING_KEY is not set")?;
+    let password = std::env::var("ALCYO_SIGNING_KEY_PASSWORD").unwrap_or_default();
     let key = secret_key(&key, &password)?;
     let mut any = false;
     for file in files {
@@ -59,7 +59,7 @@ pub fn manifest(mut args: impl Iterator<Item = String>) -> Result<()> {
     let tag = args.next().context("usage: release-manifest <packages> <tag>")?;
     let version = std::env::var("VERSION").context("VERSION is not set")?;
     let notes = std::env::var("NOTES").unwrap_or_default();
-    let repo = std::env::var("GITHUB_REPOSITORY").unwrap_or_else(|_| "HsiangNianian/boardcast".into());
+    let repo = std::env::var("GITHUB_REPOSITORY").unwrap_or_else(|_| "HsiangNianian/alcyo".into());
     println!("{}", serde_json::to_string_pretty(&build_manifest(Path::new(&dir), &tag, &version, &notes, &repo)?)?);
     Ok(())
 }
@@ -95,9 +95,10 @@ fn build_manifest(dir: &Path, tag: &str, version: &str, notes: &str, repo: &str)
     Ok(serde_json::json!({ "version": version, "notes": notes, "platforms": platforms }))
 }
 
-/// `boardcast-<version>-<arch>-linux[-<variant>].tar.gz` as its version and platform key.
+/// `alcyo-<version>-<arch>-linux[-<variant>].tar.gz` (or `boardcast-…` from before the rename) as its
+/// version and platform key.
 fn package_name(name: &str) -> Option<(&str, String)> {
-    let rest = name.strip_prefix("boardcast-")?.strip_suffix(".tar.gz")?;
+    let rest = name.strip_prefix("alcyo-").or_else(|| name.strip_prefix("boardcast-"))?.strip_suffix(".tar.gz")?;
     let (head, variant) = match rest.rsplit_once("-linux") {
         Some((head, "")) => (head, None),
         Some((head, tail)) => (head, Some(tail.strip_prefix('-').filter(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_lowercase()))?)),
@@ -134,38 +135,39 @@ mod tests {
         fs::write(&package, b"boardcast signing fixture\n").unwrap();
         let signed = signature(&key, &package).unwrap();
         assert!(decode_text(&signed).unwrap().contains("\tfile:payload.bin\n"));
-        boardcast_update::verify(&package, &signed, public.trim()).unwrap();
+        alcyo_update::verify(&package, &signed, public.trim()).unwrap();
 
         fs::write(&package, b"boardcast signing fixturE\n").unwrap();
-        assert!(boardcast_update::verify(&package, &signed, public.trim()).is_err());
+        assert!(alcyo_update::verify(&package, &signed, public.trim()).is_err());
         assert!(secret_key(&fs::read_to_string(format!("{FIXTURES}/tauri-test.key")).unwrap(), "wrong").is_err());
         fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
     fn package_names_become_platform_keys() {
+        assert_eq!(package_name("alcyo-0.30.0-x86_64-linux.tar.gz"), Some(("0.30.0", "x86_64-linux".into())));
         assert_eq!(package_name("boardcast-0.30.0-x86_64-linux.tar.gz"), Some(("0.30.0", "x86_64-linux".into())));
-        assert_eq!(package_name("boardcast-0.30.0-alpha.1-aarch64-linux-ja.tar.gz"), Some(("0.30.0-alpha.1", "aarch64-linux-ja".into())));
-        assert_eq!(package_name("boardcast-0.30.0-x86_64-linux.tar.gz.sig"), None);
-        assert_eq!(package_name("boardcast-0.30.0-aarch64-macos.zip"), None);
+        assert_eq!(package_name("alcyo-0.30.0-alpha.1-aarch64-linux-ja.tar.gz"), Some(("0.30.0-alpha.1", "aarch64-linux-ja".into())));
+        assert_eq!(package_name("alcyo-0.30.0-x86_64-linux.tar.gz.sig"), None);
+        assert_eq!(package_name("alcyo-0.30.0-aarch64-macos.zip"), None);
     }
 
     #[test]
     fn the_manifest_lists_signed_packages_and_needs_the_full_one() {
         let dir = temp("manifest");
-        for (name, body) in [("boardcast-1.2.0-x86_64-linux.tar.gz", "full"), ("boardcast-1.2.0-x86_64-linux-ja.tar.gz", "ja")] {
+        for (name, body) in [("alcyo-1.2.0-x86_64-linux.tar.gz", "full"), ("alcyo-1.2.0-x86_64-linux-ja.tar.gz", "ja")] {
             fs::write(dir.join(name), body).unwrap();
             fs::write(dir.join(format!("{name}.sig")), "c2ln\n").unwrap();
         }
-        fs::write(dir.join("boardcast-1.2.0-aarch64-macos.zip"), "mac").unwrap();
+        fs::write(dir.join("alcyo-1.2.0-aarch64-macos.zip"), "mac").unwrap();
         let manifest = build_manifest(&dir, "v1.2.0", "1.2.0", "notes", "o/r").unwrap();
-        assert_eq!(manifest["platforms"]["x86_64-linux-ja"]["url"], "https://github.com/o/r/releases/download/v1.2.0/boardcast-1.2.0-x86_64-linux-ja.tar.gz");
+        assert_eq!(manifest["platforms"]["x86_64-linux-ja"]["url"], "https://github.com/o/r/releases/download/v1.2.0/alcyo-1.2.0-x86_64-linux-ja.tar.gz");
         assert_eq!(manifest["platforms"]["x86_64-linux"]["size"], 4);
         assert_eq!(manifest["platforms"]["x86_64-linux"]["signature"], "c2ln");
         assert_eq!(manifest["platforms"]["x86_64-linux-sensevoice"], manifest["platforms"]["x86_64-linux"], "retired variant follows the full one");
         assert_eq!(manifest["platforms"].as_object().unwrap().len(), 3);
         assert!(build_manifest(&dir, "v1.3.0", "1.3.0", "", "o/r").is_err(), "a package of another version");
-        fs::remove_file(dir.join("boardcast-1.2.0-x86_64-linux.tar.gz")).unwrap();
+        fs::remove_file(dir.join("alcyo-1.2.0-x86_64-linux.tar.gz")).unwrap();
         assert!(build_manifest(&dir, "v1.2.0", "1.2.0", "", "o/r").is_err(), "no full package");
         fs::remove_dir_all(dir).unwrap();
     }

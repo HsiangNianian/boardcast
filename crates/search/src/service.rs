@@ -11,7 +11,7 @@ use crate::embed::{cut, Embedder};
 use crate::index::{fingerprint, Index};
 use crate::{rank, DIMS, FAMILY, MIN_SCORE, MODEL, WITHIN_BEST, WORD_WEIGHT};
 use anyhow::{bail, Context, Result};
-use boardcast_meetings::{Live, Store};
+use alcyo_meetings::{Live, Store};
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -381,7 +381,7 @@ mod tests {
             eprintln!("skipped: no search model or llama-server here");
             return;
         }
-        let data = std::env::temp_dir().join(format!("boardcast-search-service-{}", std::process::id()));
+        let data = std::env::temp_dir().join(format!("alcyo-search-service-{}", std::process::id()));
         let meetings = data.join("meetings/v2");
         std::fs::create_dir_all(&meetings).unwrap();
         let meeting = |id: &str, title: &str, lines: &[&str]| {

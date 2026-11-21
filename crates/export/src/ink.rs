@@ -1,14 +1,14 @@
 //! A board as filled shapes: the same layout and pen as on screen, written out as SVG or PNG.
 
 use anyhow::{Context, Result};
-use boardcast_board::board_layout::{Bounds, StableLayout};
-use boardcast_board::compose::{compose, Piece, Style, PAPER};
-use boardcast_board::glyphs::{Glyphs, Pt};
-use boardcast_board::board_layout::Layout;
-use boardcast_board::graph::{Clip, Graph};
-use boardcast_board::pen::{outline, Rng};
-use boardcast_board::sugiyama::first_diagram;
-use boardcast_meetings::PageImage;
+use alcyo_board::board_layout::{Bounds, StableLayout};
+use alcyo_board::compose::{compose, Piece, Style, PAPER};
+use alcyo_board::glyphs::{Glyphs, Pt};
+use alcyo_board::board_layout::Layout;
+use alcyo_board::graph::{Clip, Graph};
+use alcyo_board::pen::{outline, Rng};
+use alcyo_board::sugiyama::first_diagram;
+use alcyo_meetings::PageImage;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -250,7 +250,7 @@ pub(crate) fn fill_stroke(canvas: &mut Pixmap, outline: &[Pt], style: Style, at:
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use boardcast_board::graph::parse_ops;
+    use alcyo_board::graph::parse_ops;
 
     pub(crate) fn board(ops: &str) -> Drawn {
         let mut g = Graph::default();

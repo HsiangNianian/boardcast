@@ -1,12 +1,12 @@
 //! A whole meeting as a PDF: one page per board in vector ink, then the summary and transcript as
-//! real text, in the app's own Chinese, Japanese and Korean font (boardcast-fonts) so it reads the same
+//! real text, in the app's own Chinese, Japanese and Korean font (alcyo-fonts) so it reads the same
 //! from every computer; a character it lacks is looked for in the system's fonts. Fonts are embedded, cut down
 //! to the characters used.
 
 use crate::ink::{Drawn, Page};
 use crate::{Doc, Output};
 use anyhow::{anyhow, Result};
-use boardcast_board::compose::PAPER;
+use alcyo_board::compose::PAPER;
 use fontdb::{Database, Family, Query, Weight};
 use krilla::blend::BlendMode;
 use krilla::color::rgb;
@@ -90,7 +90,7 @@ impl Fonts {
     /// still has, and so what the summary and transcript are always written in.
     fn built_in() -> Self {
         let mut fonts = Self { db: Database::new(), faces: vec![], regular: vec![], bold: vec![], known: HashMap::new() };
-        for built in [&boardcast_fonts::CJK_REGULAR, &boardcast_fonts::CJK_BOLD] {
+        for built in [&alcyo_fonts::CJK_REGULAR, &alcyo_fonts::CJK_BOLD] {
             let data = Arc::new(built.bytes.to_vec());
             if let Some(font) = Font::new(data.clone().into(), 0) {
                 fonts.faces.push(Face { font, data, index: 0 });
@@ -235,7 +235,7 @@ fn clean(text: &str) -> String {
 fn rows_of(doc: &Doc) -> Vec<Row> {
     let (summary, transcript, note_prefix, colon) = if doc.english { ("Summary", "Transcript", "Edited: ", ": ") } else { ("摘要", "会议记录", "手动修改：", "：") };
     let board_name = |n: u64| if doc.english { format!("Board {n}") } else { format!("第 {n} 张板") };
-    let mut out = vec![Row { bold: true, ..Row::new(clean(&doc.title), 18.2) }, Row { color: MUTED, gap: 2.8, ..Row::new(format!("{} · Banshu", doc.began), 9.1) }];
+    let mut out = vec![Row { bold: true, ..Row::new(clean(&doc.title), 18.2) }, Row { color: MUTED, gap: 2.8, ..Row::new(format!("{} · Alcyo", doc.began), 9.1) }];
     if !doc.summary.trim().is_empty() {
         out.push(Row { bold: true, gap: 17.5, ..Row::new(summary, 13.3) });
         for raw in doc.summary.lines() {
@@ -427,7 +427,7 @@ pub fn pdf(doc: &Doc, boards: &[Drawn]) -> Result<Output> {
 
 fn pdf_with(doc: &Doc, boards: &[Drawn], mut fonts: Fonts) -> Result<Output> {
     let mut document = Document::new();
-    document.set_metadata(Metadata::new().title(doc.title.clone()).creator("Banshu".to_string()));
+    document.set_metadata(Metadata::new().title(doc.title.clone()).creator("Alcyo".to_string()));
     let settings = || PageSettings::from_wh(WIDTH, HEIGHT).ok_or_else(|| anyhow!("bad page size"));
     let shown: Vec<(usize, &Drawn)> = boards.iter().enumerate().filter(|(_, b)| !b.strokes.is_empty() || b.page.is_some()).collect();
     for (index, board) in &shown {
@@ -494,7 +494,7 @@ mod tests {
     use super::*;
     use crate::ink::tests::board;
     use crate::Said;
-    use boardcast_board::graph::Graph;
+    use alcyo_board::graph::Graph;
 
     fn doc(lines: usize) -> Doc {
         Doc {

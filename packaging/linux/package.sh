@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build the Linux packages: target/package/boardcast-<version>-<arch>-linux[-<variant>].tar.gz, one per
+# Build the Linux packages: target/package/alcyo-<version>-<arch>-linux[-<variant>].tar.gz, one per
 # variant in VARIANTS (default "all"; see packaging/models.sh). Each unpacks into a working app, and
 # install.sh inside puts it on the system.
 # Needs Rust, and network access the first time for models and llama-server.
@@ -10,26 +10,28 @@ cd "$root"
 . packaging/models.sh
 variants="${VARIANTS:-all}"
 
-cargo build --release -p boardcast-tools
+cargo build --release -p alcyo-tools
 for what in glyphs "llama linux-x64" voice search pdfium; do
-  target/release/boardcast-tools fetch $what
+  target/release/alcyo-tools fetch $what
 done
-cargo build --release -p boardcast-ui
+cargo build --release -p alcyo-ui
 
-version=$(target/release/boardcast --version | cut -d' ' -f2)
+version=$(target/release/alcyo --version | cut -d' ' -f2)
 glyphs=target/package/glyphs.pack
 mkdir -p target/package
-target/release/boardcast-tools pack-glyphs assets/hanzi "$glyphs"
+target/release/alcyo-tools pack-glyphs assets/hanzi "$glyphs"
 
 for variant in $variants; do
   [ "$variant" = none ] && { echo "skipping none: Linux has no system recognizer" >&2; continue; }
-  name="boardcast-$version-$(uname -m)-linux$(variant_suffix "$variant")"
+  name="alcyo-$version-$(uname -m)-linux$(variant_suffix "$variant")"
   out="target/package/$name"
   rm -rf "$out"
   lib="$out/lib/boardcast"
   mkdir -p "$out/bin" "$lib/voice/speaker" "$lib/pdfium" "$out/share/licenses/boardcast"
 
-  install -m755 target/release/boardcast "$out/bin/boardcast"
+  # bin/boardcast and lib/boardcast inside, as before the rename: that is all an updater from before it
+  # can install. install.sh and the updater put them in place as bin/alcyo and lib/alcyo.
+  install -m755 target/release/alcyo "$out/bin/boardcast"
   strip "$out/bin/boardcast"
 
   cp "$glyphs" "$lib/glyphs.pack"
@@ -47,8 +49,8 @@ for variant in $variants; do
   # The fonts built into the program (crates/fonts) go with their licenses.
   for f in OFL-DMSans.txt OFL-JetBrainsMono.txt OFL-NotoSansCJK.txt; do test -f "$out/share/licenses/boardcast/$f" || { echo "missing font license $f" >&2; exit 1; }; done
   cp target/pdfium/LICENSE "$out/share/licenses/boardcast/pdfium-LICENSE"
-  install -m644 packaging/icons/128x128@2x.png "$out/share/boardcast.png"
-  install -m644 packaging/linux/boardcast.desktop.in "$out/share/boardcast.desktop.in"
+  install -m644 packaging/icons/128x128@2x.png "$out/share/app.alcyo.board.png"
+  install -m644 packaging/linux/app.alcyo.board.desktop.in "$out/share/app.alcyo.board.desktop.in"
   install -m755 packaging/linux/install.sh "$out/install.sh"
   printf '%s\n' "$version" > "$out/VERSION"
 

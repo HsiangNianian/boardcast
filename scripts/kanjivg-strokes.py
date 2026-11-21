@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REV = "70a0b7ae0c18ceb5cb358274b029cce0234a43bc"
 SHA256 = "6131533e905365c1c0b0aa763eb24c53483e12874e15b654c94f07b7bfd36365"
 URL = f"https://codeload.github.com/KanjiVG/kanjivg/tar.gz/{REV}"
-# The characters hanzi-writer-data already has, from the same pinned package `boardcast-tools fetch glyphs` uses.
+# The characters hanzi-writer-data already has, from the same pinned package `alcyo-tools fetch glyphs` uses.
 HANZI = "https://registry.npmjs.org/hanzi-writer-data/-/hanzi-writer-data-2.0.1.tgz"
 HANZI_SHA512 = "nbQwM+MaryGoq7pBMIZLCd3lFq03nXuJuwku1+6UbjL58uU+9OULVcMkoNvNuJSoIV7f1bbPRfD4D/LQa5S7qg=="
 

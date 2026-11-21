@@ -38,7 +38,7 @@ impl Keeper {
         let (encoder, pre_skip) = encoder()?;
         let mut writer = PacketWriter::new(BufWriter::new(file));
         writer.write_packet(opus_head(pre_skip), SERIAL, PacketWriteEndInfo::EndPage, 0).context("writing the Opus header")?;
-        let vendor = b"Banshu";
+        let vendor = b"Alcyo";
         let mut tags = b"OpusTags".to_vec();
         tags.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
         tags.extend_from_slice(vendor);
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn heard_audio_is_kept_as_an_ogg_opus_file_of_its_length() {
-        let path = std::env::temp_dir().join(format!("boardcast-keep-{}.opus", std::process::id()));
+        let path = std::env::temp_dir().join(format!("alcyo-keep-{}.opus", std::process::id()));
         let mut keeper = Keeper::create(&path).unwrap();
         // Two and a bit seconds of a tone, in uneven pieces as a microphone sends them.
         let tone: Vec<f32> = (0..SAMPLE_RATE as usize * 2 + 100).map(|i| (i as f32 * 0.1).sin() * 0.3).collect();
@@ -234,8 +234,8 @@ mod tests {
         let error = |lag: i64| (middle..middle + 400).map(|i| (back[(i as i64 + lag) as usize] - tone[i]).abs()).sum::<f32>() / 400.0;
         let best = (-6_i64..=6).map(error).fold(f32::MAX, f32::min);
         assert!(best < 0.02, "mean error {best} at the best of a few samples' shift");
-        // BOARDCAST_KEEP_TEST leaves the file, to be checked with a real decoder.
-        if std::env::var_os("BOARDCAST_KEEP_TEST").is_none() {
+        // ALCYO_KEEP_TEST leaves the file, to be checked with a real decoder.
+        if std::env::var_os("ALCYO_KEEP_TEST").is_none() {
             let _ = std::fs::remove_file(&path);
         }
     }

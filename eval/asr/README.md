@@ -3,7 +3,7 @@
 Measures the app's own speech recognition, `crates/audio`, on fixed recordings in Chinese, Japanese and English. The tool is `crates/asr-eval`:
 
 ```sh
-cargo build --release -p boardcast-asr-eval
+cargo build --release -p alcyo-asr-eval
 target/release/asr-eval download . --suite quick           # fetch and verify the recordings into eval/asr/.data
 target/release/asr-eval run . --suite quick                # the app's hearing: speech detection, routed recognizers
 target/release/asr-eval run . --suite quick --engine sensevoice
@@ -13,7 +13,7 @@ target/release/asr-eval run . --only ja-fleurs-00,en-ami-00
 target/release/asr-eval compare eval/reports/asr/*/report.json
 ```
 
-The speech models are read from `resources/voice`, where `boardcast-tools fetch voice` puts them for the packages too. `download` checks every recording, cached or not, against its size and SHA-256 and replaces a missing or damaged one; nothing is skipped quietly. It also writes `eval/asr/.data/index.html`, a page to hear each recording beside its reference: open it from the folder, it needs no server and no script. The audio comes from the fixed [asr-fixtures-v1 Release](https://github.com/HsiangNianian/boardcast/releases/tag/asr-fixtures-v1); Release files are never replaced in place, so a change means a new version and new hashes.
+The speech models are read from `resources/voice`, where `alcyo-tools fetch voice` puts them for the packages too. `download` checks every recording, cached or not, against its size and SHA-256 and replaces a missing or damaged one; nothing is skipped quietly. It also writes `eval/asr/.data/index.html`, a page to hear each recording beside its reference: open it from the folder, it needs no server and no script. The audio comes from the fixed [asr-fixtures-v1 Release](https://github.com/HsiangNianian/boardcast/releases/tag/asr-fixtures-v1); Release files are never replaced in place, so a change means a new version and new hashes.
 
 `corpus.json` is the manifest for downloads, listening and scoring; `meetings.json` holds the long meetings. Source IDs, original intervals, licence links and reference quality travel with each sample. See [LICENSES.md](LICENSES.md) before redistributing audio or transcripts.
 
@@ -106,7 +106,7 @@ On the 9 meetings (2026-11-18, `slow` against `off`, each at its best threshold)
 
 The AMI recording alone went from 37% mixed sentences to 15%. Splitting alone, without a split piece following its
 slot, found 14 speakers in AMI: short pieces have unsteady voiceprints. Raising the threshold alone, without
-splitting, made it worse (9 / 4). `cargo run --release -p boardcast-audio --example turn-delay -- resources/voice
+splitting, made it worse (9 / 4). `cargo run --release -p alcyo-audio --example turn-delay -- resources/voice
 <recording.wav>` measures what waiting for the model costs: on AMI a line arrives 0.72 s after its sentence on
 average instead of 0.31 s (1.03 s instead of 0.52 s for nine in ten), and the model takes about half of real time
 on two threads of an i7-12700H.

@@ -3,8 +3,8 @@
 //! The reference is a list of `{ start, end, speaker }` in seconds, as in eval/asr/corpus.json.
 //! `SPEAKER_EVAL_EVERY_SENTENCE` lets any sentence start a new voice, to compare with the app's rule.
 
-use boardcast_audio::{Ear, Sentence, SAMPLE_RATE};
-use boardcast_board::speakers::{identify, identify_sentence, Voice};
+use alcyo_audio::{Ear, Sentence, SAMPLE_RATE};
+use alcyo_board::speakers::{identify, identify_sentence, Voice};
 use serde_json::Value;
 use sherpa_onnx::Wave;
 use std::collections::{BTreeMap, BTreeSet};

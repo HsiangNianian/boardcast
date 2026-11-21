@@ -4,13 +4,13 @@
 
 use crate::ink::{Page, Picture};
 use crate::replay_page;
-use boardcast_board::board_layout::StableLayout;
-use boardcast_board::compose::{compose, Style, PAPER};
-use boardcast_board::glyphs::Glyphs;
-use boardcast_board::graph::Graph;
-use boardcast_board::pen::{outline, Inked, Rng};
-use boardcast_board::steps::{apply_step, ink_only};
-use boardcast_board::sugiyama::first_diagram;
+use alcyo_board::board_layout::StableLayout;
+use alcyo_board::compose::{compose, Style, PAPER};
+use alcyo_board::glyphs::Glyphs;
+use alcyo_board::graph::Graph;
+use alcyo_board::pen::{outline, Inked, Rng};
+use alcyo_board::steps::{apply_step, ink_only};
+use alcyo_board::sugiyama::first_diagram;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
@@ -206,7 +206,7 @@ struct Frames<'a> {
     /// Each stroke's extent: left, top, right, bottom.
     bounds: Vec<[f64; 4]>,
     /// Each stroke's whole outline, worked out once, as most frames show most strokes finished.
-    whole: Vec<Vec<boardcast_board::glyphs::Pt>>,
+    whole: Vec<Vec<alcyo_board::glyphs::Pt>>,
 }
 
 impl<'a> Frames<'a> {
@@ -743,8 +743,8 @@ mod tests {
         let mut steps = vec![];
         for (i, ops) in ["T 「Release checklist」", "L n1 「Load testing」", "L n1 「Release notes」", "L n2 「Before launch」\nM n2 星标"].iter().enumerate() {
             let before = g.clone();
-            g.apply(&boardcast_board::graph::parse_ops(ops));
-            let d = boardcast_board::steps::diff(&before, &g).unwrap();
+            g.apply(&alcyo_board::graph::parse_ops(ops));
+            let d = alcyo_board::steps::diff(&before, &g).unwrap();
             steps.push(serde_json::json!({ "d": d, "t": i as f64 * 1000.0 }));
         }
         replay_page::Page { graph: g, memory: Value::Null, steps, image: None, sources: Default::default() }

@@ -76,7 +76,7 @@ fn pack_glyphs(mut args: impl Iterator<Item = String>) -> Result<()> {
         Some((other, _)) => anyhow::bail!("unknown flag {other}"),
         None => None,
     };
-    let count = boardcast_board::glyphs::write_pack_of(&dir, &out, only.as_ref())?;
+    let count = alcyo_board::glyphs::write_pack_of(&dir, &out, only.as_ref())?;
     println!("{count} characters in {}", out.display());
     Ok(())
 }
@@ -84,10 +84,10 @@ fn pack_glyphs(mut args: impl Iterator<Item = String>) -> Result<()> {
 fn download_model(mut args: impl Iterator<Item = String>) -> Result<()> {
     let id = args.next().context("model id")?;
     let dir = PathBuf::from(args.next().context("folder")?);
-    let model = boardcast_models::catalog().into_iter().find(|m| m.id == id).with_context(|| format!("no model {id}"))?;
+    let model = alcyo_models::catalog().into_iter().find(|m| m.id == id).with_context(|| format!("no model {id}"))?;
     let cancel = std::sync::atomic::AtomicBool::new(false);
     let mut last = 0;
-    let outcome = boardcast_models::download(&model, &dir, &cancel, &mut |p| {
+    let outcome = alcyo_models::download(&model, &dir, &cancel, &mut |p| {
         let percent = p.done * 100 / p.total.max(1);
         if percent != last {
             last = percent;
@@ -116,7 +116,7 @@ fn score_board(mut args: impl Iterator<Item = String>) -> Result<()> {
     // A file of cases holds a list; one case is an object.
     let case = case.as_array().and_then(|cases| cases.first().cloned()).unwrap_or(case);
     let gold: score::Gold = serde_json::from_value(case["gold"].clone()).context("the case's gold")?;
-    let graph: boardcast_board::graph::Graph = serde_json::from_value(read(&meeting)?["graph"].clone()).context("the meeting's graph")?;
+    let graph: alcyo_board::graph::Graph = serde_json::from_value(read(&meeting)?["graph"].clone()).context("the meeting's graph")?;
     println!("{:#?}", score::score(&graph, &gold));
     Ok(())
 }

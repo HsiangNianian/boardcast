@@ -7,7 +7,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-const LATEST: &str = "https://api.github.com/repos/HsiangNianian/boardcast/releases/latest";
+const LATEST: &str = "https://api.github.com/repos/HsiangNianian/alcyo/releases/latest";
 
 /// The latest release's packages, as file name and size in bytes.
 type Assets = Vec<(String, u64)>;
@@ -38,7 +38,7 @@ fn fetch_release() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
 }
 
 /// The latest release's packages: fresh from the cache, else fetched. Offline, the page goes without sizes,
-/// unless `BOARDCAST_REQUIRE_RELEASE` is set, as it is for the published site.
+/// unless `ALCYO_REQUIRE_RELEASE` is set, as it is for the published site.
 fn release_assets() -> Result<Assets, Box<dyn std::error::Error>> {
     let cache = cache_path();
     let fresh = fs::metadata(&cache)
@@ -58,14 +58,14 @@ fn release_assets() -> Result<Assets, Box<dyn std::error::Error>> {
         Ok(release) => {
             let _ = fs::write(&cache, release.to_string());
             let assets = parse_assets(&release);
-            if assets.is_empty() && env::var_os("BOARDCAST_REQUIRE_RELEASE").is_some() {
+            if assets.is_empty() && env::var_os("ALCYO_REQUIRE_RELEASE").is_some() {
                 return Err("the latest release lists no packages".into());
             }
             Ok(assets)
         }
-        Err(e) if env::var_os("BOARDCAST_REQUIRE_RELEASE").is_some() => Err(format!("reading the latest release: {e}").into()),
+        Err(e) if env::var_os("ALCYO_REQUIRE_RELEASE").is_some() => Err(format!("reading the latest release: {e}").into()),
         Err(e) => {
-            eprintln!("boardcast-site-gen: no download sizes, the latest release could not be read: {e}");
+            eprintln!("alcyo-site-gen: no download sizes, the latest release could not be read: {e}");
             Ok(Assets::new())
         }
     }
@@ -78,7 +78,8 @@ fn package_size(assets: &Assets, key: &str) -> Option<u64> {
     let ext = if system == "linux" { "tar.gz" } else { "zip" };
     let variant = if variant.is_empty() { String::new() } else { format!("-{variant}") };
     let ending = format!("-{system}{variant}.{ext}");
-    assets.iter().filter(|(name, _)| name.starts_with("boardcast-") && name.ends_with(&ending)).map(|&(_, size)| size).max()
+    // Packages are alcyo-…; releases from before the rename still have boardcast-….
+    assets.iter().filter(|(name, _)| (name.starts_with("alcyo-") || name.starts_with("boardcast-")) && name.ends_with(&ending)).map(|&(_, size)| size).max()
 }
 
 fn human_size(bytes: u64) -> String {
@@ -117,36 +118,36 @@ const PAGES: [Page; 5] = [
     Page {
         slug: "",
         label: "home",
-        title: "boardcast — talk, and the board draws itself",
+        title: "Alcyo — talk, and the board draws itself",
         description: "A whiteboard that writes down your meeting, stroke by stroke. Speech recognition and the board model run on your own computer.",
         content: include_str!("../pages/home.html"),
     },
     Page {
         slug: "demo",
         label: "web demo",
-        title: "boardcast — web demo",
-        description: "Sample meetings in English, replayed with the board engine the boardcast app runs, stroke by stroke.",
+        title: "Alcyo — web demo",
+        description: "Sample meetings in English, replayed with the board engine the Alcyo app runs, stroke by stroke.",
         content: include_str!("../pages/demo.html"),
     },
     Page {
         slug: "faq",
         label: "faq",
-        title: "FAQ — boardcast",
-        description: "Questions about boardcast: what it does, what it needs, which package to get, and where your meetings stay.",
+        title: "FAQ — Alcyo",
+        description: "Questions about Alcyo: what it does, what it needs, which package to get, and where your meetings stay.",
         content: include_str!("../pages/faq.html"),
     },
     Page {
         slug: "privacy",
         label: "privacy",
-        title: "Privacy — boardcast",
-        description: "What boardcast keeps, where, and the few times it uses the network.",
+        title: "Privacy — Alcyo",
+        description: "What Alcyo keeps, where, and the few times it uses the network.",
         content: include_str!("../pages/privacy.html"),
     },
     Page {
         slug: "terms",
         label: "terms",
-        title: "Terms — boardcast",
-        description: "The license boardcast is under, the licenses of the models and open-source work it is built on, and thanks to their authors.",
+        title: "Terms — Alcyo",
+        description: "The license Alcyo is under, the licenses of the models and open-source work it is built on, and thanks to their authors.",
         content: include_str!("../pages/terms.html"),
     },
 ];
@@ -214,14 +215,14 @@ fn footer(page: &Page) -> String {
         return String::new();
     }
     let home = root(page);
-    let releases = "https://github.com/HsiangNianian/boardcast/releases/latest";
+    let releases = "https://github.com/HsiangNianian/alcyo/releases/latest";
     let map = format!(
         r#"<footer class="sitemap">
   <a class="sitemap-brand" href="{home}">board<br>cast</a>
   <div><b>product</b><a href="{home}#story">talk &amp; draw</a><a href="{home}#story">circle</a><a href="{home}#story">replay</a><a href="{home}demo/">web demo</a></div>
   <div><b>get</b><a href="{home}#get">macos</a><a href="{home}#get">windows</a><a href="{home}#get">linux</a></div>
-  <div><b>latest</b><a href="{releases}">{}</a><a href="https://github.com/HsiangNianian/boardcast/blob/main/CHANGELOG.md">changelog</a></div>
-  <div><b>guide</b><a href="https://github.com/HsiangNianian/boardcast#get-started">start</a>{}</div>
+  <div><b>latest</b><a href="{releases}">{}</a><a href="https://github.com/HsiangNianian/alcyo/blob/main/CHANGELOG.md">changelog</a></div>
+  <div><b>guide</b><a href="https://github.com/HsiangNianian/alcyo#get-started">start</a>{}</div>
 </footer>"#,
         env!("CARGO_PKG_VERSION"),
         links(page, DOCUMENT_LINKS),
@@ -258,7 +259,7 @@ fn render(page: &Page, bundled_head: &str, bundled_body: &str, assets: &Assets) 
     };
     format!(
         r##"<!doctype html>
-<!-- Generated by boardcast-site-gen; edit crates/site-gen/pages and its shared Rust layout. -->
+<!-- Generated by alcyo-site-gen; edit crates/site-gen/pages and its shared Rust layout. -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">

@@ -1,10 +1,10 @@
 //! Wires the audio chain to the board agent on background threads, and reports to the UI over a channel.
 
-use boardcast_agent::{Backend, Guidance, Said, Session, Update};
+use alcyo_agent::{Backend, Guidance, Said, Session, Update};
 use anyhow::{bail, Result};
-use boardcast_audio::system::SystemSpeech;
-use boardcast_audio::{capture, play_wav, Ear, Language, Recognizers, Sentence, Sources, Warning};
-use boardcast_board::graph::Utterance;
+use alcyo_audio::system::SystemSpeech;
+use alcyo_audio::{capture, play_wav, Ear, Language, Recognizers, Sentence, Sources, Warning};
+use alcyo_board::graph::Utterance;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
@@ -20,7 +20,7 @@ pub enum Event {
     /// the meeting's voices, and passes it on to the model.
     Spoken { meeting: u64, sentence: Sentence },
     /// What is being said, while it is said (#291): shown until the sentence it belongs to arrives.
-    Draft { meeting: u64, draft: boardcast_audio::Draft },
+    Draft { meeting: u64, draft: alcyo_audio::Draft },
     Failed(String),
     /// What recognizes speech now, and why it isn't what was chosen, if it isn't.
     Hearing { with: String, note: Option<String> },
@@ -43,7 +43,7 @@ pub struct Speech {
 impl Speech {
     /// Apple's helper sits beside the app's executable in a Mac package.
     pub fn helper_path() -> Option<PathBuf> {
-        let helper = std::env::current_exe().ok()?.parent()?.join("boardcast-speech");
+        let helper = std::env::current_exe().ok()?.parent()?.join("alcyo-speech");
         helper.is_file().then_some(helper)
     }
 }
@@ -122,7 +122,7 @@ impl Pipeline {
                 Ok((ear, with, note)) => {
                     let _ = tx.send(Event::Hearing { with, note });
                     let (drafts, stamp) = (tx.clone(), stamp.clone());
-                    let draft_with = boardcast_audio::DraftWith::ByLanguage(voice_models.join(boardcast_audio::DRAFT_MODEL));
+                    let draft_with = alcyo_audio::DraftWith::ByLanguage(voice_models.join(alcyo_audio::DRAFT_MODEL));
                     Some(ear.drafts(draft_with, Box::new(move |draft| {
                         let _ = drafts.send(Event::Draft { meeting: stamp.load(Ordering::SeqCst), draft });
                     })))
@@ -250,7 +250,7 @@ impl Pipeline {
                 let (tee, heard) = channel::<Vec<f32>>();
                 let failed = tx.clone();
                 thread::spawn(move || {
-                    let mut keeper = match boardcast_audio::keep::Keeper::create(&path) {
+                    let mut keeper = match alcyo_audio::keep::Keeper::create(&path) {
                         Ok(k) => Some(k),
                         Err(e) => {
                             let _ = failed.send(Event::Failed(crate::ta!("the-meeting-s-audio-can", error = format!("{e:#}"))));

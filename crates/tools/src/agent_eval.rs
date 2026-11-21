@@ -3,7 +3,7 @@
 //!
 //!   agent-eval <root> <output.json> [--set dev|holdout|pointing|all] [--repeat N] [--label name] [--only id,id]
 //!                [<model>] [--harness commands|tools|tools-check] [--skill | --rules-only | --hints-only] [--workers N]
-//!                [--consolidate N]   rewrite the board every N lines and at the end (see boardcast_agent::consolidate)
+//!                [--consolidate N]   rewrite the board every N lines and at the end (see alcyo_agent::consolidate)
 //!                [--consolidate-prompt <file>]   consolidate with these instructions instead of skills/board-consolidate
 //!                [--consolidate-effort high|medium|low]   how hard a reasoning model thinks when consolidating
 //!                [--turns]           draw whole turns put back together from the lines, as the app does
@@ -20,12 +20,12 @@
 
 use crate::score::{f1, score, Gold};
 use anyhow::{bail, Context, Result};
-use boardcast_agent::consolidate::When;
-use boardcast_agent::{propose, Guidance, Provider, CONTEXT_LINES};
-use boardcast_board::board_layout::StableLayout;
-use boardcast_board::check::check_and_repair;
-use boardcast_board::glyphs::Glyphs;
-use boardcast_board::graph::{board_is_english, parse_ops, Graph, Utterance};
+use alcyo_agent::consolidate::When;
+use alcyo_agent::{propose, Guidance, Provider, CONTEXT_LINES};
+use alcyo_board::board_layout::StableLayout;
+use alcyo_board::check::check_and_repair;
+use alcyo_board::glyphs::Glyphs;
+use alcyo_board::graph::{board_is_english, parse_ops, Graph, Utterance};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use std::fmt::Write as _;
@@ -67,13 +67,13 @@ struct Turn {
 }
 
 /// A case's lines as the board is asked about them: each line alone, or, with `--turns`, put back together
-/// into whole turns (boardcast_agent::turns), each with the lines that went into it or were said during it.
+/// into whole turns (alcyo_agent::turns), each with the lines that went into it or were said during it.
 fn steps(case: &Case, turns: bool) -> Vec<(Option<Utterance>, Vec<Utterance>)> {
     if !turns {
         return case.turns.iter().map(|t| (Some(t.utterance()), vec![t.utterance()])).collect();
     }
     struct Timed(Utterance, Option<(f64, f64)>);
-    impl boardcast_agent::turns::Piece for Timed {
+    impl alcyo_agent::turns::Piece for Timed {
         fn utterance(&self) -> &Utterance {
             &self.0
         }
@@ -84,7 +84,7 @@ fn steps(case: &Case, turns: bool) -> Vec<(Option<Utterance>, Vec<Utterance>)> {
             !self.0.pointing.is_empty()
         }
     }
-    let mut assembler = boardcast_agent::turns::Assembler::default();
+    let mut assembler = alcyo_agent::turns::Assembler::default();
     let mut out = vec![];
     for t in &case.turns {
         out.extend(assembler.push(Timed(t.utterance(), t.start.zip(t.end))));
@@ -110,7 +110,7 @@ struct Options {
     consolidate_effort: String,
     /// The model that consolidates, when not the one drawing line by line.
     consolidator: Option<Provider>,
-    /// Draw whole turns put back together from the lines, as the app does (boardcast_agent::turns).
+    /// Draw whole turns put back together from the lines, as the app does (alcyo_agent::turns).
     turns: bool,
     /// How many earlier lines of the transcript the model reads with each turn.
     context: usize,
@@ -279,10 +279,10 @@ fn rewrite_scored(case: &Case, options: &Options, graph: &mut Graph, history: &[
 fn consolidate_case(options: &Options, graph: &mut Graph, history: &[Utterance], turns_log: &mut Vec<Value>, log: &mut String, errors: &mut usize, when: When) {
     let english = history.split_last().is_some_and(|(last, before)| board_is_english(before, last));
     let provider = options.consolidator.as_ref().unwrap_or(&options.provider);
-    match boardcast_agent::consolidate::consolidate(provider, graph, history, english, options.consolidate_prompt.as_deref(), &options.consolidate_effort, when) {
+    match alcyo_agent::consolidate::consolidate(provider, graph, history, english, options.consolidate_prompt.as_deref(), &options.consolidate_effort, when) {
         Ok(Some(done)) => {
-            let _ = writeln!(log, "= consolidated as {} ({} ms)\n{}", done.style.map_or("given instructions", boardcast_agent::consolidate::Style::name), done.ms, done.outline.trim());
-            turns_log.push(json!({ "consolidate": true, "outline": done.outline, "thinking": done.thinking, "ms": done.ms, "tokens_in": done.tokens_in, "tokens_out": done.tokens_out, "reasoning_tokens": done.reasoning_tokens, "style": done.style.map(boardcast_agent::consolidate::Style::name) }));
+            let _ = writeln!(log, "= consolidated as {} ({} ms)\n{}", done.style.map_or("given instructions", alcyo_agent::consolidate::Style::name), done.ms, done.outline.trim());
+            turns_log.push(json!({ "consolidate": true, "outline": done.outline, "thinking": done.thinking, "ms": done.ms, "tokens_in": done.tokens_in, "tokens_out": done.tokens_out, "reasoning_tokens": done.reasoning_tokens, "style": done.style.map(alcyo_agent::consolidate::Style::name) }));
             *graph = done.graph;
         }
         Ok(None) => {}
@@ -359,7 +359,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--label" => label = Some(args.next().context("label")?),
             "--harness" => {
                 let name = args.next().context("harness")?;
-                harness = Some(boardcast_agent::tools::Harness::parse(&name).with_context(|| format!("--harness is commands, tools or tools-check, not {name}"))?);
+                harness = Some(alcyo_agent::tools::Harness::parse(&name).with_context(|| format!("--harness is commands, tools or tools-check, not {name}"))?);
             }
             other => bail!("unknown flag {other}"),
         }
@@ -395,7 +395,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     if cases.is_empty() {
         bail!("no matching eval cases");
     }
-    let options = Options { guidance, provider, consolidate, consolidate_prompt, consolidate_effort, consolidator, turns, context: context.unwrap_or(if turns { boardcast_agent::TURN_CONTEXT_LINES } else { CONTEXT_LINES }) };
+    let options = Options { guidance, provider, consolidate, consolidate_prompt, consolidate_effort, consolidator, turns, context: context.unwrap_or(if turns { alcyo_agent::TURN_CONTEXT_LINES } else { CONTEXT_LINES }) };
 
     // One line first: a model that cannot be reached would otherwise score every case 0, which reads like a
     // result. It also puts the fixed prompt into the server's cache, so the first case's latency is typical.

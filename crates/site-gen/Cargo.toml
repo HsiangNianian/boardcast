@@ -1,5 +1,5 @@
 [package]
-name = "boardcast-site-gen"
+name = "alcyo-site-gen"
 description = "Build-time HTML pages and shared website layout"
 version.workspace = true
 edition.workspace = true

@@ -16,7 +16,7 @@
 //! The waiting itself, how long to hold a turn while its speaker may go on, belongs to the caller: the app
 //! counts quiet time on the clock, an evaluation the pauses in the recording.
 
-use boardcast_board::graph::Utterance;
+use alcyo_board::graph::Utterance;
 
 /// A pause, in seconds of the recording, past which the same speaker starts a new turn.
 pub const JOIN_GAP: f64 = 1.2;

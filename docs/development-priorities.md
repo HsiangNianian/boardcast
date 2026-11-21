@@ -14,17 +14,17 @@ Auto requires an available Apple locale for each of the three languages, preferr
 
 This integration targets **macOS 26+ desktop**. It queries `SpeechTranscriber.isAvailable`, `supportedLocales` and `installedLocales`, and checks `AssetInventory.status` again when starting a new analyzer. An Apple device alone does not guarantee support. The web app, including Safari on an iPad, cannot call this native API. There is no cloud or legacy-recognizer fallback.
 
-The system API and boardcast's integration have different support boundaries:
+The system API and Alcyo's integration have different support boundaries:
 
-| Environment | Apple SpeechAnalyzer | boardcast integration |
+| Environment | Apple SpeechAnalyzer | Alcyo integration |
 | --- | --- | --- |
 | macOS 26+ | Available on compatible hardware and languages | Included in the desktop app; detected at runtime |
 | Earlier macOS | This API does not exist | Use SenseVoice on supported desktop installations |
 | iPadOS 26+ | Available to native apps on compatible devices | An iPad native bridge and app integration are still needed |
-| Earlier iPadOS | This API does not exist | No Apple speech integration in boardcast |
+| Earlier iPadOS | This API does not exist | No Apple speech integration in Alcyo |
 | Browser, including iPad Safari | Cannot directly call the native Speech framework | No SpeechAnalyzer integration |
 
-Apple's older [`SFSpeechRecognizer`](https://developer.apple.com/documentation/speech/sfspeechrecognizer) could be integrated separately for earlier systems. Its on-device support varies by device and language; a local-only implementation must first check [`supportsOnDeviceRecognition`](https://developer.apple.com/documentation/speech/sfspeechrecognizer/supportsondevicerecognition) and explicitly require on-device recognition. It is not the same API/model as this experiment and is not currently wired into boardcast.
+Apple's older [`SFSpeechRecognizer`](https://developer.apple.com/documentation/speech/sfspeechrecognizer) could be integrated separately for earlier systems. Its on-device support varies by device and language; a local-only implementation must first check [`supportsOnDeviceRecognition`](https://developer.apple.com/documentation/speech/sfspeechrecognizer/supportsondevicerecognition) and explicitly require on-device recognition. It is not the same API/model as this experiment and is not currently wired into Alcyo.
 
 Rust retains microphone/device selection, mixing and 16 kHz PCM routing. On macOS 13+, the same native helper captures system audio with ScreenCaptureKit and feeds it into that shared path; both SenseVoice and Apple transcription accept system-only or microphone + system input. Capture starts only on an explicit recording request, requires Screen & System Audio Recording permission (Screen Recording on older macOS), and stops with recording or app exit. The app subscribes only to audio and does not save screen images. A bundled Swift helper converts to the system's supported audio format and supplies a continuous sequence to `SpeechAnalyzer` + `SpeechTranscriber`. Volatile text updates the live caption; only final text enters the transcript and board. Apple does its own segmentation. This route does not apply SenseVoice's VAD/retry policy and currently uses the selected speaker instead of CAM++ automatic speaker attribution. It does not report invented ASR timings or signal-quality metrics.
 
@@ -34,7 +34,7 @@ Build on macOS with **Xcode 26+**. `scripts/build-apple-speech.sh` is used by Ca
 
 Official API references: [SpeechTranscriber](https://developer.apple.com/documentation/speech/speechtranscriber), [SpeechAnalyzer](https://developer.apple.com/documentation/speech/speechanalyzer), [AssetInventory](https://developer.apple.com/documentation/speech/assetinventory).
 
-Validation on 2026-11-02: [Eval run 41401038026](https://github.com/HsiangNianian/boardcast/actions/runs/41401038026) built the macOS app and passed its Rust tests, native PCM self-test and capability query. The virtual Mac returned `isApple: true`, `available: false`, `reason: hardware`; no Apple transcription accuracy or live microphone behavior was measured there. Locally, 181 JavaScript tests and 32 Rust tests passed, including the real-audio SenseVoice regressions. UI checks used simulated availability/download states in an isolated Linux browser. An actual supported Mac is still needed to validate Apple model installation, live transcription and latency.
+Validation on 2026-11-02: [Eval run 41401038026](https://github.com/HsiangNianian/alcyo/actions/runs/41401038026) built the macOS app and passed its Rust tests, native PCM self-test and capability query. The virtual Mac returned `isApple: true`, `available: false`, `reason: hardware`; no Apple transcription accuracy or live microphone behavior was measured there. Locally, 181 JavaScript tests and 32 Rust tests passed, including the real-audio SenseVoice regressions. UI checks used simulated availability/download states in an isolated Linux browser. An actual supported Mac is still needed to validate Apple model installation, live transcription and latency.
 
 ## Evidence to retain before resuming model work
 

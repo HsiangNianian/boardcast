@@ -2,7 +2,7 @@
 //! Usage: asr-bench <voice-models> <cases.json> [rounds]
 //! Each recording is recognized `rounds` times (default 5) by each engine, after one untimed warm-up.
 
-use boardcast_audio::{is_english, load_parakeet, load_sense_voice, transcribe};
+use alcyo_audio::{is_english, load_parakeet, load_sense_voice, transcribe};
 use serde_json::Value;
 use sherpa_onnx::Wave;
 use std::path::Path;

@@ -12,7 +12,7 @@
 
 use crate::{Provider, Utterance};
 use anyhow::{bail, Result};
-use boardcast_board::graph::{Graph, Kind, Node, NodeData};
+use alcyo_board::graph::{Graph, Kind, Node, NodeData};
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 
@@ -518,7 +518,7 @@ pub fn consolidate(provider: &Provider, graph: &Graph, history: &[Utterance], en
 #[cfg(test)]
 mod tests {
     use super::*;
-    use boardcast_board::graph::parse_ops;
+    use alcyo_board::graph::parse_ops;
 
     #[test]
     fn an_outline_is_read_with_marks_and_speakers() {

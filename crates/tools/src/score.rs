@@ -2,7 +2,7 @@
 //! comparable. Names match loosely (aliases, one containing the other), since "login API" and "login
 //! service" look the same on a whiteboard.
 
-use boardcast_board::graph::{is_han, norm, Graph, Kind, Node};
+use alcyo_board::graph::{is_han, norm, Graph, Kind, Node};
 use serde::Deserialize;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -392,7 +392,7 @@ mod tests {
     fn a_crop_counts_when_it_overlaps_what_was_asked_for_by_half() {
         let mut g = Graph::default();
         g.extra.insert("underlay".into(), serde_json::json!({ "w": 600.0, "h": 800.0 }));
-        let clip = |x, y, w, h| boardcast_board::graph::Clip { src: String::new(), pw: 600.0, ph: 800.0, x, y, w, h };
+        let clip = |x, y, w, h| alcyo_board::graph::Clip { src: String::new(), pw: 600.0, ph: 800.0, x, y, w, h };
         g.add_clip("table", "", &clip(56.0, 106.0, 488.0, 90.0));
         g.add_clip("figure", "", &clip(56.0, 316.0, 488.0, 24.0));
         let gold = |crops: serde_json::Value| -> Gold { serde_json::from_value(serde_json::json!({ "crops": crops })).unwrap() };

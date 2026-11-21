@@ -6,7 +6,7 @@
 //! wrong, a few rounds at most, which is the reason-act-observe loop a tool harness makes possible.
 
 use anyhow::{Context, Result};
-use boardcast_board::graph::{parse_ops, Graph, Kind, Op, Ref};
+use alcyo_board::graph::{parse_ops, Graph, Kind, Op, Ref};
 use serde_json::{json, Value};
 
 /// How the board model answers.

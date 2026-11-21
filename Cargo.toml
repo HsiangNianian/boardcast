@@ -13,18 +13,18 @@ anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 # Field order is kept: the migration hash must match what JSON.stringify produces.
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
-boardcast-board = { path = "crates/board" }
-boardcast-audio = { path = "crates/audio" }
-boardcast-keep = { path = "crates/keep" }
-boardcast-share = { path = "crates/share" }
-boardcast-agent = { path = "crates/agent" }
-boardcast-meetings = { path = "crates/meetings" }
-boardcast-models = { path = "crates/models" }
-boardcast-export = { path = "crates/export" }
-boardcast-fonts = { path = "crates/fonts" }
-boardcast-import = { path = "crates/import" }
-boardcast-update = { path = "crates/update" }
-boardcast-search = { path = "crates/search" }
+alcyo-board = { path = "crates/board" }
+alcyo-audio = { path = "crates/audio" }
+alcyo-keep = { path = "crates/keep" }
+alcyo-share = { path = "crates/share" }
+alcyo-agent = { path = "crates/agent" }
+alcyo-meetings = { path = "crates/meetings" }
+alcyo-models = { path = "crates/models" }
+alcyo-export = { path = "crates/export" }
+alcyo-fonts = { path = "crates/fonts" }
+alcyo-import = { path = "crates/import" }
+alcyo-update = { path = "crates/update" }
+alcyo-search = { path = "crates/search" }
 
 [profile.dev]
 opt-level = 1
@@ -38,10 +38,10 @@ lto = "thin"
 codegen-units = 4
 
 # The website is downloaded by every visitor, so it is built for size.
-[profile.release.package.boardcast-site]
+[profile.release.package.alcyo-site]
 opt-level = "s"
 
-[profile.release.package.boardcast-demo]
+[profile.release.package.alcyo-demo]
 opt-level = "s"
 
 # Our fork of sherpa-onnx: 2.0.1 with Nemotron-3-Diarization (k2-fsa/sherpa-onnx#4032) and streaming speaker

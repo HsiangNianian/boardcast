@@ -11,7 +11,7 @@
 //! Coordinates are board coordinates: the page's top left is the origin and y goes down.
 
 use crate::regions::{js_round, utf16_len, Area};
-use boardcast_board::spans::{rotate_point, RegionRow, Seg};
+use alcyo_board::spans::{rotate_point, RegionRow, Seg};
 use fancy_regex::Regex as Fancy;
 use regex::Regex;
 use serde::Deserialize;

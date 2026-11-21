@@ -1,18 +1,18 @@
 //! The window: the board, the transcript, and an input that accepts Chinese through the IME.
 
-use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
-use boardcast_board::board_layout::{target_at, Bounds as BoardBounds, Rect, StableLayout};
-use boardcast_board::check::check;
-use boardcast_board::compose::{annotation_look, compose, ink_boxes, InkBox, Owner, Style};
-use boardcast_board::graph::{parse_ops, Annotation, Clip, Graph, Kind, Op, Ref, Utterance, ANNOTATION_TOOLS};
-use boardcast_agent::sound::Glossary;
-use boardcast_board::follow;
-use boardcast_board::sugiyama::first_diagram;
-use boardcast_agent::settings::Settings;
-use boardcast_audio::{Listen, Sources};
-use boardcast_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
-use boardcast_meetings::{Inbox, Tucked, default_dir, Info, Live, Store, ViewOnly};
-use boardcast_board::pen::{marker, outline, Inked, Rng};
+use alcyo_board::glyphs::{Glyphs, HanziSource, Pt};
+use alcyo_board::board_layout::{target_at, Bounds as BoardBounds, Rect, StableLayout};
+use alcyo_board::check::check;
+use alcyo_board::compose::{annotation_look, compose, ink_boxes, InkBox, Owner, Style};
+use alcyo_board::graph::{parse_ops, Annotation, Clip, Graph, Kind, Op, Ref, Utterance, ANNOTATION_TOOLS};
+use alcyo_agent::sound::Glossary;
+use alcyo_board::follow;
+use alcyo_board::sugiyama::first_diagram;
+use alcyo_agent::settings::Settings;
+use alcyo_audio::{Listen, Sources};
+use alcyo_agent::{propose, Backend, Guidance, LocalServer, Provider, Said, Update};
+use alcyo_meetings::{Inbox, Tucked, default_dir, Info, Live, Store, ViewOnly};
+use alcyo_board::pen::{marker, outline, Inked, Rng};
 use crate::i18n::t;
 use crate::ta;
 use crate::theme::{self, icon, pal, Type as _};
@@ -22,17 +22,17 @@ use gpui_kit::{AnimationExt as _, SpringAnimation};
 use crate::pipeline::{Event, Pipeline, Script, Speech};
 use crate::resources;
 use crate::shortcuts::{Action, Group, Keys, Shortcuts, ACTIONS, FIXED};
-use boardcast_models::{Model, Outcome, Progress};
-use boardcast_update::Release;
+use alcyo_models::{Model, Outcome, Progress};
+use alcyo_update::Release;
 use crate::raster::Layer;
 use anyhow::{Context as _, Result};
-use boardcast_agent::summary::{self, Block, Line, Step};
-use boardcast_agent::vision::VisionServer;
-use boardcast_export::Kind as ExportKind;
-use boardcast_import::pdf::NewPage;
-use boardcast_board::spans::{span_at, Unit};
-use boardcast_board::speakers::{by_of_edge, by_of_node, first_seen, initial, said_at};
-use boardcast_board::steps::{clock, replay_to, sound_times, steps_heard, Player};
+use alcyo_agent::summary::{self, Block, Line, Step};
+use alcyo_agent::vision::VisionServer;
+use alcyo_export::Kind as ExportKind;
+use alcyo_import::pdf::NewPage;
+use alcyo_board::spans::{span_at, Unit};
+use alcyo_board::speakers::{by_of_edge, by_of_node, first_seen, initial, said_at};
+use alcyo_board::steps::{clock, replay_to, sound_times, steps_heard, Player};
 use gpui_kit::base::input::{Textarea, TextareaState};
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
@@ -672,7 +672,7 @@ impl Ink {
                 self.pointed.push(t.id.clone());
             }
         }
-        let over = self.pointed.len().saturating_sub(boardcast_board::graph::MAX_POINTED);
+        let over = self.pointed.len().saturating_sub(alcyo_board::graph::MAX_POINTED);
         self.pointed.drain(..over);
         self.loops.push(shape);
     }
@@ -1213,8 +1213,8 @@ impl Panel {
 
 /// The meeting search worker, and what it has said.
 struct MeetingSearch {
-    jobs: std::sync::mpsc::Sender<boardcast_search::service::Job>,
-    events: Receiver<boardcast_search::service::Event>,
+    jobs: std::sync::mpsc::Sender<alcyo_search::service::Job>,
+    events: Receiver<alcyo_search::service::Event>,
     /// Meetings looked at in the current round of indexing, of how many.
     indexing: Option<(usize, usize)>,
     /// Most meetings had no index when search started, so this round builds them all and takes a while: the
@@ -1228,7 +1228,7 @@ struct MeetingSearch {
     ticket: u64,
     /// A question has been asked and its answer has not come back yet.
     asking: bool,
-    hits: Vec<boardcast_search::service::Found>,
+    hits: Vec<alcyo_search::service::Found>,
     /// Meetings saved since they were last indexed, with when. Each is indexed again a while after its last
     /// save, and never while listening.
     saved: HashMap<String, Instant>,
@@ -1291,7 +1291,7 @@ struct ImportPreview {
     pages: Vec<NewPage>,
     title: Option<String>,
     /// What goes in the transcript.
-    note: boardcast_meetings::Note,
+    note: alcyo_meetings::Note,
     /// What was left out or is worth knowing.
     details: Vec<String>,
     /// What the file is good for in the meeting, shown before choosing where it goes.
@@ -1338,7 +1338,7 @@ struct Replaying {
 
 /// A replay's sound, and where each of its steps falls in it.
 struct Sound {
-    player: boardcast_audio::play::Player,
+    player: alcyo_audio::play::Player,
     /// When each step happened, in seconds into the sound.
     times: Vec<f64>,
     /// How loud the sound is along its length, from 0 to 1, for the track.
@@ -1398,7 +1398,7 @@ type ReadSound = (Vec<f32>, Vec<(f64, f64)>, Vec<f32>);
 /// A meeting's kept sound read from its files and laid end to end, with each piece's start and length in ms,
 /// and how loud it is along its length.
 fn read_sound(files: Vec<(Option<PathBuf>, f64, f64)>) -> Result<ReadSound> {
-    let (samples, pieces) = boardcast_audio::keep::read_pieces(&files);
+    let (samples, pieces) = alcyo_audio::keep::read_pieces(&files);
     if samples.is_empty() {
         anyhow::bail!("the meeting's sound is empty");
     }
@@ -1569,8 +1569,8 @@ struct Workbench {
     recording_keys: Option<Action>,
     keys_note: Option<String>,
     /// The microphones, and the sound outputs that can be heard, as of opening Settings.
-    inputs: Vec<boardcast_audio::Input>,
-    outputs: Vec<boardcast_audio::Input>,
+    inputs: Vec<alcyo_audio::Input>,
+    outputs: Vec<alcyo_audio::Input>,
     /// The label being written for the selected thing on the board.
     label_input: Entity<InputState>,
     /// What the meeting list is narrowed to.
@@ -1592,7 +1592,7 @@ struct Workbench {
     /// Who is speaking now, as far as anyone knows: lines with no voiceprint and typed lines go to them.
     speaker: Option<String>,
     /// What is being said now, shown faint under the transcript until its sentence arrives (#291).
-    draft: Option<boardcast_audio::Draft>,
+    draft: Option<alcyo_audio::Draft>,
     /// The reader was at the newest line when the draft came, so the list keeps it in view.
     draft_follow: bool,
     /// When the draft last changed: one that heard only noise gets no sentence, so it goes after a while.
@@ -1750,7 +1750,7 @@ fn backend_from(settings: &Settings, local_only: bool, binaries: &std::path::Pat
     if settings.enabled && settings.is_complete() && !local_only {
         return Backend::Ready(Provider::Remote { base_url: settings.base_url.clone(), key: settings.api_key.clone(), model: settings.model.clone() });
     }
-    match boardcast_models::current(models) {
+    match alcyo_models::current(models) {
         Some(model) => Backend::ManagedLocal(Arc::new(LocalServer { binaries: binaries.to_path_buf(), model, shaders: Some(shader_dir(models)) })),
         None => Backend::NoModel,
     }
@@ -1877,12 +1877,12 @@ fn read_image(path: &std::path::Path, binaries: &std::path::Path, model: &std::p
     let _ = tx.send(ImportUpdate::Progress(t("import-starting-vision-image").to_string()));
     let shaders = model.parent().map(shader_dir);
     let server = VisionServer::start(binaries, model, projector, shaders.as_deref())?;
-    let imported = boardcast_import::image::import_image(&bytes, english, cancel, &mut |png| server.read(png), &mut |done, total| {
+    let imported = alcyo_import::image::import_image(&bytes, english, cancel, &mut |png| server.read(png), &mut |done, total| {
         let _ = tx.send(ImportUpdate::Progress(ta!("import-reading-image-block", name = name.clone(), done = done, total = total)));
     })?;
     let mut details = vec![ta!("import-regions-found", found = imported.found, read = imported.read)];
     if imported.capped {
-        details.push(ta!("import-regions-capped", limit = boardcast_import::image::MAX_AREAS));
+        details.push(ta!("import-regions-capped", limit = alcyo_import::image::MAX_AREAS));
     }
     if imported.read == 0 {
         details.push(t("import-no-text-recognized").to_string());
@@ -1903,10 +1903,10 @@ fn read_import(source: ImportSource, vision: Option<Vision>, library: &std::path
         }
         ImportSource::Arxiv(id) => {
             let _ = tx.send(ImportUpdate::Progress(ta!("import-downloading-arxiv", id = id.clone())));
-            (format!("arXiv {id}"), boardcast_import::arxiv::download(&id, cancel)?)
+            (format!("arXiv {id}"), alcyo_import::arxiv::download(&id, cancel)?)
         }
     };
-    let mut imported = boardcast_import::pdf::import_pdf(&bytes, library, english, cancel, &mut |done, total| {
+    let mut imported = alcyo_import::pdf::import_pdf(&bytes, library, english, cancel, &mut |done, total| {
         let _ = tx.send(ImportUpdate::Progress(ta!("import-reading-page", name = name.clone(), done = done, total = total)));
     })?;
     // Pages with no text layer are pictures of text: where the local model can see, it reads them, so they
@@ -1923,7 +1923,7 @@ fn read_import(source: ImportSource, vision: Option<Vision>, library: &std::path
             }
             let page = &mut imported.pages[i];
             let number = page.graph.extra.get("underlay").and_then(|u| u.get("no")).cloned();
-            let read = boardcast_import::image::import_image(&page.jpeg, english, cancel, &mut |png| server.read(png), &mut |done, total| {
+            let read = alcyo_import::image::import_image(&page.jpeg, english, cancel, &mut |png| server.read(png), &mut |done, total| {
                 let _ = tx.send(ImportUpdate::Progress(ta!("import-reading-scan-block", page = k + 1, pages = count, done = done, total = total)));
             })?;
             if read.read > 0 {
@@ -2017,7 +2017,7 @@ impl Workbench {
         self.typing.push(Typing { line, started: Instant::now(), animate, follow });
     }
 
-    fn session(&self) -> &boardcast_agent::Session {
+    fn session(&self) -> &alcyo_agent::Session {
         self.pipeline.session()
     }
 
@@ -2178,7 +2178,7 @@ impl Workbench {
                 heard.push(h.to_string());
             }
         }
-        let term = boardcast_agent::sound::Term { text: name, heard };
+        let term = alcyo_agent::sound::Term { text: name, heard };
         let mut glossary = self.glossary();
         match self.form.glossary_editing.take() {
             Some(i) if i < glossary.terms.len() => glossary.terms[i] = term,
@@ -2433,7 +2433,7 @@ impl Workbench {
                     self.panel = Panel::Settings;
                 }
                 // Rises at once and falls away gently, so the bar reads as speech rather than flicker.
-                Event::Level(peak) => self.level = boardcast_audio::loudness(peak).max(self.level * 0.9),
+                Event::Level(peak) => self.level = alcyo_audio::loudness(peak).max(self.level * 0.9),
                 Event::Heard { meeting, speaker, text, asr_ms } => {
                     if meeting == self.session().meeting() {
                         self.live.add_line(speaker.as_deref(), &text, asr_ms);
@@ -2842,9 +2842,9 @@ impl Workbench {
             .iter()
             .map(|n| {
                 let name = match n.kind {
-                    boardcast_share::Kind::WiFi => t("share-network-wifi").to_string(),
-                    boardcast_share::Kind::Wired => t("share-network-wired").to_string(),
-                    boardcast_share::Kind::Unknown => n.interface.clone(),
+                    alcyo_share::Kind::WiFi => t("share-network-wifi").to_string(),
+                    alcyo_share::Kind::Wired => t("share-network-wired").to_string(),
+                    alcyo_share::Kind::Unknown => n.interface.clone(),
                 };
                 (name, share.address(n))
             })
@@ -2990,7 +2990,7 @@ impl Workbench {
             cx.notify();
             return;
         }
-        let timeline = boardcast_board::steps::timeline(&self.live.board_steps());
+        let timeline = alcyo_board::steps::timeline(&self.live.board_steps());
         let steps: Vec<serde_json::Value> = timeline.iter().map(|(_, s)| s.clone()).collect();
         let total = steps.len();
         if total == 0 {
@@ -3037,7 +3037,7 @@ impl Workbench {
                 match read {
                     Ok((samples, pieces, peaks)) => {
                         let times = sound_times(&replay.steps, &pieces);
-                        let mut player = boardcast_audio::play::Player::new(samples);
+                        let mut player = alcyo_audio::play::Player::new(samples);
                         player.play();
                         replay.sound = Some(Sound { player, times, peaks: Rc::new(peaks) });
                     }
@@ -3080,7 +3080,7 @@ impl Workbench {
             // The sound plays on past the last step.
             replay.player.playing = playing;
         }
-        let (board, count) = boardcast_board::steps::board_at(&replay.timeline, replay.player.at);
+        let (board, count) = alcyo_board::steps::board_at(&replay.timeline, replay.player.at);
         let own: Vec<serde_json::Value> = replay.timeline.iter().filter(|(b, _)| *b == board).map(|(_, s)| s.clone()).collect();
         let graph = replay_to(&own, count);
         let turned = board != replay.shown;
@@ -3151,7 +3151,7 @@ impl Workbench {
         }
         let when = clock(replay.sound.as_ref().map_or_else(|| replay.player.elapsed_ms(&replay.steps), |s| s.player.at() * 1000.0));
         // The fork is of the board in view, from as far as that board had come.
-        let (board, at) = boardcast_board::steps::board_at(&replay.timeline, replay.player.at);
+        let (board, at) = alcyo_board::steps::board_at(&replay.timeline, replay.player.at);
         self.live.go_to_page(board);
         let memory = self.ink.borrow().board.snapshot();
         let (from, to) = (self.live.page() + 1, self.live.pages() + 1);
@@ -3170,30 +3170,30 @@ impl Workbench {
         if self.exporting.is_some() {
             return;
         }
-        let images: Vec<Option<boardcast_meetings::PageImage>> = self
+        let images: Vec<Option<alcyo_meetings::PageImage>> = self
             .live
             .board_images()
             .iter()
             .map(|r| {
                 r.as_ref().and_then(|r| match &self.store {
                     Some(store) => store.page_image(self.live.id(), r).ok(),
-                    None => boardcast_meetings::decode_data_url(r).ok(),
+                    None => alcyo_meetings::decode_data_url(r).ok(),
                 })
             })
             .collect();
         let (store, id) = (self.store.clone(), self.live.id().to_string());
         let asset = move |name: &str| match &store {
             Some(store) => store.page_image(&id, name).ok(),
-            None => boardcast_meetings::decode_data_url(name).ok(),
+            None => alcyo_meetings::decode_data_url(name).ok(),
         };
-        let mut frozen = boardcast_export::freeze(&self.live, !crate::i18n::chinese(), &crate::i18n::line_text, &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
+        let mut frozen = alcyo_export::freeze(&self.live, !crate::i18n::chinese(), &crate::i18n::line_text, &mut self.ink.borrow_mut().glyphs, self.hanzi.clone(), &images, &asset);
         // The video with sound needs it, and a replay page carries it when there is some.
         let sound = matches!(kind, ExportKind::LiveVideo | ExportKind::ReplayPage).then(|| self.sound_files()).filter(|f| !f.is_empty());
         let directory = self.export_dir.clone().unwrap_or_else(|| {
             let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map_or_else(|| self.data.clone(), PathBuf::from);
             Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)
         });
-        let answer = cx.prompt_for_new_path(&directory, Some(&boardcast_export::file_name(kind)));
+        let answer = cx.prompt_for_new_path(&directory, Some(&alcyo_export::file_name(kind)));
         self.exporting = Some(kind);
         self.exported = None;
         cx.spawn(async move |this, cx| {
@@ -3209,18 +3209,18 @@ impl Workbench {
                 let _ = this.update(cx, |this, cx| this.finish_export(None, cx));
                 return;
             };
-            let path = boardcast_export::with_extension(path, kind);
+            let path = alcyo_export::with_extension(path, kind);
             let target = path.clone();
             let written = cx
                 .background_executor()
                 .spawn(async move {
                     if let Some(files) = sound {
-                        let (samples, pieces) = boardcast_audio::keep::read_pieces(&files);
-                        let encoded = boardcast_audio::keep::encode(&samples)?;
-                        frozen.sound = Some(boardcast_export::Sound { pieces, head: encoded.head, pre_skip: encoded.pre_skip, packet_ms: boardcast_audio::keep::PACKET_MS, packets: encoded.packets });
+                        let (samples, pieces) = alcyo_audio::keep::read_pieces(&files);
+                        let encoded = alcyo_audio::keep::encode(&samples)?;
+                        frozen.sound = Some(alcyo_export::Sound { pieces, head: encoded.head, pre_skip: encoded.pre_skip, packet_ms: alcyo_audio::keep::PACKET_MS, packets: encoded.packets });
                     }
                     let output = frozen.render(kind)?;
-                    boardcast_export::write_file(&target, &output.bytes)?;
+                    alcyo_export::write_file(&target, &output.bytes)?;
                     anyhow::Ok(output.text_left_out)
                 })
                 .await;
@@ -3270,7 +3270,7 @@ impl Workbench {
         }
         let (tx, rx) = channel();
         std::thread::spawn(move || {
-            let _ = tx.send(UpdateEvent::Checked(boardcast_update::check().map_err(|e| format!("{e:#}"))));
+            let _ = tx.send(UpdateEvent::Checked(alcyo_update::check().map_err(|e| format!("{e:#}"))));
         });
         self.update_events = Some(rx);
         self.update = UpdateState::Checking;
@@ -3335,12 +3335,12 @@ impl Workbench {
         std::thread::spawn(move || {
             let cancel = AtomicBool::new(false);
             let progress = tx.clone();
-            let result = boardcast_update::fetch(&package, &dir, &cancel, &mut |p| {
+            let result = alcyo_update::fetch(&package, &dir, &cancel, &mut |p| {
                 let _ = progress.send(UpdateEvent::Progress(p));
             })
             .and_then(|archive| {
                 let archive = archive.context("the download was cancelled")?;
-                let installed = boardcast_update::install(&archive, &package, &prefix);
+                let installed = alcyo_update::install(&archive, &package, &prefix);
                 // Used or rejected, this package is finished with; a bad one must not be reused.
                 let _ = std::fs::remove_file(&archive);
                 installed
@@ -3359,7 +3359,7 @@ impl Workbench {
             cx.notify();
             return;
         }
-        match std::process::Command::new(prefix.join("bin/boardcast")).spawn() {
+        match std::process::Command::new(alcyo_update::program(&prefix)).spawn() {
             Ok(_) => cx.quit(),
             Err(e) => self.update = UpdateState::Failed(crate::ta!("could-not-start-the-new", error = format!("{e}"))),
         }
@@ -3381,17 +3381,17 @@ impl Workbench {
         self.download = None;
         match result {
             Ok(Outcome::Finished(_)) => {
-                if let Some(model) = boardcast_models::catalog().iter().find(|m| m.id == id) {
-                    if let Err(e) = boardcast_models::select(model, &self.models) {
+                if let Some(model) = alcyo_models::catalog().iter().find(|m| m.id == id) {
+                    if let Err(e) = alcyo_models::select(model, &self.models) {
                         self.notice = Some(format!("{e:#}"));
                     }
                 }
                 // A vision add-on is not a board model, so it leaves that choice alone.
-                if boardcast_models::catalog().iter().any(|m| m.id == id) {
+                if alcyo_models::catalog().iter().any(|m| m.id == id) {
                     self.needs_model = false;
                 }
                 self.form.note = Some(ta!("name-is-ready", name = label.to_string()));
-                if id == boardcast_models::embedding().id {
+                if id == alcyo_models::embedding().id {
                     self.start_search();
                 } else {
                     self.apply_backend();
@@ -3405,7 +3405,7 @@ impl Workbench {
     /// The meeting search model: the one that came with the app, or else one downloaded before it did (a
     /// checkout, or an install from before 0.29).
     fn embedding_file(&self) -> Option<PathBuf> {
-        let file = boardcast_models::embedding().file;
+        let file = alcyo_models::embedding().file;
         [self.search_dir.join(&file), self.models.join(&file)].into_iter().find(|path| path.is_file())
     }
 
@@ -3417,16 +3417,16 @@ impl Workbench {
         }
         let Some(model) = self.embedding_file() else { return };
         let binaries = self.binaries.clone();
-        let spawn: boardcast_search::service::Spawn = Box::new(move |args| boardcast_agent::spawn_tied({
-            let mut cmd = boardcast_agent::server_command(&binaries);
+        let spawn: alcyo_search::service::Spawn = Box::new(move |args| alcyo_agent::spawn_tied({
+            let mut cmd = alcyo_agent::server_command(&binaries);
             cmd.args(args).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
             cmd
         }));
-        let (jobs, events) = boardcast_search::service::start(data, model, spawn);
+        let (jobs, events) = alcyo_search::service::start(data, model, spawn);
         let all: Vec<String> = store.list().unwrap_or_default().into_iter().filter(|m| m.read_error.is_none()).map(|m| m.id).collect();
-        let missing = boardcast_search::service::unindexed(data, &all);
+        let missing = alcyo_search::service::unindexed(data, &all);
         let building = (missing > 0 && missing * 2 >= all.len()).then_some(all.len());
-        let _ = jobs.send(boardcast_search::service::Job::Index(all));
+        let _ = jobs.send(alcyo_search::service::Job::Index(all));
         self.search = Some(MeetingSearch { jobs, events, indexing: None, building, held: false, asked: String::new(), typed_at: None, ticket: 0, asking: false, hits: vec![], saved: HashMap::new(), error: None });
     }
 
@@ -3440,7 +3440,7 @@ impl Workbench {
             if self.embedding_file().is_some() {
                 self.start_search();
             } else {
-                self.start_download(boardcast_models::embedding(), cx);
+                self.start_download(alcyo_models::embedding(), cx);
             }
         } else {
             // Dropping the worker's channel stops it, and its model with it.
@@ -3450,7 +3450,7 @@ impl Workbench {
     }
 
     fn pump_search(&mut self, changed: &mut bool) {
-        use boardcast_search::service::{Event as SearchEvent, Job};
+        use alcyo_search::service::{Event as SearchEvent, Job};
         // While listening, the CPU is for hearing and the board; the meeting is read again once it stops.
         let listening = self.pipeline.listening();
         let library: Vec<String> = self.library.iter().filter(|m| m.read_error.is_none()).map(|m| m.id.clone()).collect();
@@ -3510,7 +3510,7 @@ impl Workbench {
         if !self.form.saved.meeting_search {
             return None;
         }
-        let model = boardcast_models::embedding();
+        let model = alcyo_models::embedding();
         if let Some(download) = self.download.as_ref().filter(|d| d.id == model.id) {
             let share = download.progress.as_ref().map_or(0.0, |p| p.done as f64 / p.total.max(1) as f64);
             return Some((ta!("downloading-the-model-percent", percent = (share * 100.0).round()), false));
@@ -3542,8 +3542,8 @@ impl Workbench {
     }
 
     /// Open a found passage: its meeting, at its line, its board or the summary.
-    fn open_found(&mut self, found: &boardcast_search::service::Found, cx: &mut Context<Self>) {
-        use boardcast_search::Source;
+    fn open_found(&mut self, found: &alcyo_search::service::Found, cx: &mut Context<Self>) {
+        use alcyo_search::Source;
         self.open_meeting(&found.meeting, cx);
         if self.live.id() != found.meeting {
             return;
@@ -3576,7 +3576,7 @@ impl Workbench {
         self.form.note = None;
         std::thread::spawn(move || {
             let progress = tx.clone();
-            let result = boardcast_models::download(&model, &dir, &flag, &mut |p| {
+            let result = alcyo_models::download(&model, &dir, &flag, &mut |p| {
                 let _ = progress.send(DownloadUpdate::Progress(p));
             });
             let _ = tx.send(DownloadUpdate::Finished(result.map_err(|e| format!("{e:#}"))));
@@ -3585,7 +3585,7 @@ impl Workbench {
     }
 
     fn use_model(&mut self, model: &Model, cx: &mut Context<Self>) {
-        match boardcast_models::select(model, &self.models) {
+        match alcyo_models::select(model, &self.models) {
             Ok(()) => {
                 self.form.remote = false;
                 self.form.saved.enabled = false;
@@ -3624,7 +3624,7 @@ impl Workbench {
         let id = self.live.id().to_string();
         let now = chrono::Local::now().timestamp_millis() as f64;
         let lines = self.live.lines.iter().filter(|l| !l["manual"].as_bool().unwrap_or(false)).count();
-        let entry = Info { id: id.clone(), title: self.live.title().to_string(), created_at: self.live.created_at().unwrap_or(now), updated_at: now, lines, pages: self.live.pages(), speakers: boardcast_meetings::speakers_of(&self.live.lines), read_error: None };
+        let entry = Info { id: id.clone(), title: self.live.title().to_string(), created_at: self.live.created_at().unwrap_or(now), updated_at: now, lines, pages: self.live.pages(), speakers: alcyo_meetings::speakers_of(&self.live.lines), read_error: None };
         self.library.retain(|m| m.id != id);
         self.library.insert(0, entry);
     }
@@ -4020,25 +4020,25 @@ impl Workbench {
 
     /// The local model and add-on that can read pictures, if both are here.
     fn vision(&self) -> Option<Vision> {
-        let model = boardcast_models::current(&self.models)?;
-        let add_on = boardcast_models::vision_for(&model.file_name()?.to_string_lossy())?;
-        boardcast_models::installed(&add_on, &self.models).then(|| Vision { binaries: self.binaries.clone(), model, projector: self.models.join(&add_on.file) })
+        let model = alcyo_models::current(&self.models)?;
+        let add_on = alcyo_models::vision_for(&model.file_name()?.to_string_lossy())?;
+        alcyo_models::installed(&add_on, &self.models).then(|| Vision { binaries: self.binaries.clone(), model, projector: self.models.join(&add_on.file) })
     }
 
     /// Reading an image takes a model on this device, whichever model draws the board.
     fn import_image_file(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        let Some(model) = boardcast_models::current(&self.models) else {
+        let Some(model) = alcyo_models::current(&self.models) else {
             self.import = ImportState::Failed(t("reading-text-in-an-image").to_string());
             cx.notify();
             return;
         };
         let file = model.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-        let Some(add_on) = boardcast_models::vision_for(&file) else {
+        let Some(add_on) = alcyo_models::vision_for(&file) else {
             self.import = ImportState::Failed(t("this-local-model-can-t").to_string());
             cx.notify();
             return;
         };
-        if boardcast_models::installed(&add_on, &self.models) {
+        if alcyo_models::installed(&add_on, &self.models) {
             let projector = self.models.join(&add_on.file);
             self.start_import(ImportSource::Image { path, binaries: self.binaries.clone(), model, projector }, cx);
         } else {
@@ -4049,7 +4049,7 @@ impl Workbench {
 
     fn import_arxiv(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let input = self.arxiv_input.read(cx).value().to_string();
-        match boardcast_import::arxiv::parse(&input) {
+        match alcyo_import::arxiv::parse(&input) {
             Some(id) => {
                 self.arxiv_input.update(cx, |state, cx| state.set_value("", window, cx));
                 self.start_import(ImportSource::Arxiv(id), cx);
@@ -4156,7 +4156,7 @@ impl Workbench {
         // showing its first page, which opens them.
         let blank = live.graph.underlay().is_none() && !live.graph.nodes.iter().any(|n| n.ink == "ink");
         let name = preview.title.clone().filter(|t| !t.trim().is_empty()).unwrap_or_else(|| preview.name.clone());
-        let doc = boardcast_meetings::new_id();
+        let doc = alcyo_meetings::new_id();
         let first = preview.pages.first().and_then(|p| p.graph.underlay()).zip(stored.first().cloned());
         let from = live.page();
         let carded = !fresh && !blank && first.is_some();
@@ -4191,7 +4191,7 @@ impl Workbench {
         self.ink.borrow_mut().page_src.clone_from(&reference);
         let read = reference.map(|r| match &self.store {
             Some(store) => store.page_image(self.live.id(), &r),
-            None => boardcast_meetings::decode_data_url(&r),
+            None => alcyo_meetings::decode_data_url(&r),
         });
         let picture = read.and_then(|image| match image.map_err(|e| format!("{e:#}")).and_then(|i| page_render_image(&i.bytes)) {
             Ok(picture) => Some(picture),
@@ -4256,7 +4256,7 @@ impl Workbench {
         }
         let clip = Clip { src, pw, ph, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
         let text = self.live.graph.text_in(&clip);
-        let english = boardcast_board::graph::is_english(self.live.graph.nodes.iter().map(|n| n.label.as_str()));
+        let english = alcyo_board::graph::is_english(self.live.graph.nodes.iter().map(|n| n.label.as_str()));
         let label = match text.chars().count() {
             0 => {
                 let page = self.live.graph.extra.get("underlay").and_then(|u| u.get("no")).and_then(serde_json::Value::as_u64);
@@ -4455,7 +4455,7 @@ impl Workbench {
         for src in wanted {
             let read = match &self.store {
                 Some(store) => store.page_image(self.live.id(), &src),
-                None => boardcast_meetings::decode_data_url(&src),
+                None => alcyo_meetings::decode_data_url(&src),
             };
             let picture = read.map_err(|e| format!("{e:#}")).and_then(|i| page_render_image(&i.bytes)).map(|(picture, _)| picture);
             if let Err(error) = &picture {
@@ -4765,7 +4765,7 @@ impl Workbench {
     /// Put the proxy setting to use and keep it. An address that cannot be used is kept as typed, with why,
     /// and the system's proxy is used meanwhile.
     fn apply_proxy(&mut self) {
-        use boardcast_models::net::{self, Proxy};
+        use alcyo_models::net::{self, Proxy};
         let saved = &self.form.saved;
         let (choice, address) = (saved.proxy.clone(), saved.proxy_url.clone());
         self.form.proxy_note = None;
@@ -4963,8 +4963,8 @@ impl Workbench {
         self.recording_keys = None;
         self.keys_note = None;
         if self.panel == Panel::Settings {
-            self.inputs = boardcast_audio::microphones();
-            self.outputs = boardcast_audio::computer_sounds();
+            self.inputs = alcyo_audio::microphones();
+            self.outputs = alcyo_audio::computer_sounds();
         }
         if self.panel == Panel::Library {
             if let Some(store) = &self.store {
@@ -5298,7 +5298,7 @@ impl Workbench {
             let from = line["speaker"].as_str().filter(|s| Some(*s) == self.speaker_chosen.as_deref())?.to_string();
             let said = line["text"].as_str().unwrap_or_default();
             let text: String = if said.chars().count() > 40 { said.chars().take(40).chain(['…']).collect() } else { said.to_string() };
-            let someone_new = boardcast_board::speakers::next_name(names.iter().map(String::as_str));
+            let someone_new = alcyo_board::speakers::next_name(names.iter().map(String::as_str));
             let others: Vec<(String, bool)> = names.iter().filter(|n| **n != from).map(|n| (n.clone(), false)).chain([(someone_new, true)]).collect();
             Some(
                 div()
@@ -5967,7 +5967,7 @@ impl Workbench {
                                 .child(div().h(px(2.)).w_full().bg(rgb(pal().line)).child(div().h_full().w(gpui_kit::relative(share)).bg(rgb(if held { pal().faint } else { pal().text })))),
                         )
                     })
-                    .child(fade(nav("side-settings", "settings", t("settings"), self.panel == Panel::Settings, Some(format!("v{}", boardcast_update::VERSION))).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))), "side-settings", self.panel == Panel::Settings)),
+                    .child(fade(nav("side-settings", "settings", t("settings"), self.panel == Panel::Settings, Some(format!("v{}", alcyo_update::VERSION))).on_click(cx.listener(|this, _, _, cx| this.toggle_panel(Panel::Settings, cx))), "side-settings", self.panel == Panel::Settings)),
             )
     }
 
@@ -5984,7 +5984,7 @@ impl Workbench {
                     Some(p) => format!("{} / {}", gigabytes(p.done), gigabytes(p.total)),
                     None => t("starting").to_string(),
                 });
-                let ready = boardcast_models::installed(add_on, &self.models);
+                let ready = alcyo_models::installed(add_on, &self.models);
                 panel
                     .child(div().text_ui().child(t("to-read-the-text-in")))
                     .child(hint(if downloading.is_some() { add_on.label } else { t("one-download-and-then-images") }))
@@ -7810,11 +7810,11 @@ impl Render for Workbench {
                     // What matches by meaning, under the meetings whose names do: first where things stand (the
                     // boards and summaries as the meetings left them), then what was said on the way.
                     .when_some(self.search.as_ref().filter(|s| !s.hits.is_empty() && !query.is_empty()).map(|s| s.hits.clone()), |d, hits| {
-                        let row = |i: usize, found: boardcast_search::service::Found, cx: &mut Context<Self>| {
+                        let row = |i: usize, found: alcyo_search::service::Found, cx: &mut Context<Self>| {
                             let place = match &found.source {
-                                boardcast_search::Source::Transcript { .. } => t("transcript"),
-                                boardcast_search::Source::Board { .. } => t("board-2"),
-                                boardcast_search::Source::Summary { .. } => t("summary"),
+                                alcyo_search::Source::Transcript { .. } => t("transcript"),
+                                alcyo_search::Source::Board { .. } => t("board-2"),
+                                alcyo_search::Source::Summary { .. } => t("summary"),
                             };
                             let snippet: String = found.text.split('\n').map(|l| l.trim()).collect::<Vec<_>>().join("  ").chars().take(180).collect();
                             let open = found.clone();
@@ -8019,8 +8019,8 @@ impl Render for Workbench {
             );
         let field = |label: &'static str, input: &Entity<InputState>| div().flex().flex_col().gap_1().child(div().text_small().text_color(rgb(pal().muted)).child(label)).child(Input::new(input));
         let local_only = self.live.local_only();
-        let current_model = boardcast_models::current(&self.models);
-        let recommended = boardcast_models::recommended(self.vram_mib);
+        let current_model = alcyo_models::current(&self.models);
+        let recommended = alcyo_models::recommended(self.vram_mib);
         let using_remote = self.form.saved.enabled && self.form.saved.is_complete();
         let progress_row = self.download.as_ref().map(|d| {
             let text = match &d.progress {
@@ -8037,8 +8037,8 @@ impl Render for Workbench {
             let fraction = d.progress.as_ref().map_or(0.0, |p| p.done as f32 / p.total.max(1) as f32);
             (text, fraction)
         });
-        let local_models = boardcast_models::catalog().into_iter().enumerate().map(|(i, model)| {
-            let installed = boardcast_models::installed(&model, &self.models);
+        let local_models = alcyo_models::catalog().into_iter().enumerate().map(|(i, model)| {
+            let installed = alcyo_models::installed(&model, &self.models);
             let active = !using_remote && current_model.as_ref().is_some_and(|p| p.ends_with(&model.file));
             let busy = self.download.is_some();
             let name = model.label.to_string();
@@ -8222,7 +8222,7 @@ impl Render for Workbench {
                 let listen = Listen::from_setting(&self.form.saved.listen);
                 // The devices of one kind as radios: the system's default first, then each connected one, then
                 // the chosen one if it is not connected now. A long list scrolls in its card.
-                let devices = |key: &'static str, connected: &[boardcast_audio::Input], chosen: String, default: &'static str, missing: &'static str, set: fn(&mut Settings, String)| {
+                let devices = |key: &'static str, connected: &[alcyo_audio::Input], chosen: String, default: &'static str, missing: &'static str, set: fn(&mut Settings, String)| {
                     let entries = std::iter::once((String::new(), default.to_string()))
                         .chain(connected.iter().map(|i| (i.id.clone(), i.name.clone())))
                         .chain((!chosen.is_empty() && !connected.iter().any(|i| i.id == chosen)).then(|| (chosen.clone(), missing.to_string())));
@@ -8560,8 +8560,8 @@ impl Render for Workbench {
                             .flex()
                             .flex_col()
                             .gap(px(2.))
-                            .child(div().text_title().font_weight(gpui_kit::FontWeight::SEMIBOLD).child("Banshu"))
-                            .child(div().font_family(theme::MONO).text_small().text_color(rgb(pal().muted)).child(ta!("version-number", version = boardcast_update::VERSION)))
+                            .child(div().text_title().font_weight(gpui_kit::FontWeight::SEMIBOLD).child("Alcyo"))
+                            .child(div().font_family(theme::MONO).text_small().text_color(rgb(pal().muted)).child(ta!("version-number", version = alcyo_update::VERSION)))
                             .when_some(update_hint, |d, hint| d.child(div().pt_1().text_small().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(hint))),
                     )
                     .child(update);
@@ -9398,7 +9398,7 @@ gpui_kit::actions!(boardcast, [Quit]);
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn app_menu(cx: &mut App) {
     cx.bind_keys([gpui_kit::KeyBinding::new("cmd-q", Quit, None)]);
-    cx.set_menus(vec![gpui_kit::Menu { name: "Banshu".into(), items: vec![gpui_kit::MenuItem::action(t("quit-boardcast"), Quit)], disabled: false }]);
+    cx.set_menus(vec![gpui_kit::Menu { name: "Alcyo".into(), items: vec![gpui_kit::MenuItem::action(t("quit-boardcast"), Quit)], disabled: false }]);
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
@@ -9468,15 +9468,20 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let models = data.join("models");
     let resources = resources::locate(&data);
     let update_data = data.clone();
-    let prefix = boardcast_update::installed_prefix();
+    let prefix = alcyo_update::installed_prefix();
+    // An install that an updater from before the rename brought here still has the old launcher entry,
+    // which no longer matches the window's app id.
+    if let Some(prefix) = &prefix {
+        alcyo_update::refresh_launcher(prefix, alcyo_update::VERSION);
+    }
     let scripted = case_or_measurement(&turns, &wav, &demo, synthetic);
     // Looking for updates waits a moment, so it never competes with starting up.
     let check_at = (prefix.is_some() && !scripted).then(|| Instant::now() + Duration::from_secs(8));
     let binaries = resources.binaries.clone();
     let settings = Settings::load();
-    let proxy_address = boardcast_models::net::with_login(&settings.proxy_url, &settings.proxy_user, &settings.proxy_password).unwrap_or_else(|_| settings.proxy_url.clone());
-    boardcast_models::net::set(match boardcast_models::net::Proxy::from_setting(&settings.proxy, &proxy_address) {
-        boardcast_models::net::Proxy::Custom(a) if boardcast_models::net::Proxy::check(&a).is_err() => boardcast_models::net::Proxy::System,
+    let proxy_address = alcyo_models::net::with_login(&settings.proxy_url, &settings.proxy_user, &settings.proxy_password).unwrap_or_else(|_| settings.proxy_url.clone());
+    alcyo_models::net::set(match alcyo_models::net::Proxy::from_setting(&settings.proxy, &proxy_address) {
+        alcyo_models::net::Proxy::Custom(a) if alcyo_models::net::Proxy::check(&a).is_err() => alcyo_models::net::Proxy::System,
         chosen => chosen,
     });
     let forced_backend = deepseek || llm.is_some();
@@ -9503,7 +9508,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     let speech = Speech { helper: Speech::helper_path(), system: settings.system_speech, language: settings.speech_language.clone() };
     let pipeline = Pipeline::start(backend, guidance, resources.voice, speech, Script { turns, wav });
     pipeline.session().set_glossary(Glossary::parse(&settings.glossary));
-    std::thread::spawn(boardcast_agent::sound::warm);
+    std::thread::spawn(alcyo_agent::sound::warm);
     // Everything slow happens away from the window, which has to appear straight away.
     let (startup, starting) = channel::<Startup>();
     let probe_binaries = binaries.clone();
@@ -9522,7 +9527,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             };
             // The sidebar lists the meetings from the first frame, and reading them all takes a moment.
             let (library, pinned) = meetings.as_ref().map_or((vec![], vec![]), |store| (store.list().unwrap_or_default(), store.pinned()));
-            let vram_mib = boardcast_agent::list_gpus(&probe_binaries).iter().filter(|g| g.discrete).map(|g| g.total_mib).max().unwrap_or(0);
+            let vram_mib = alcyo_agent::list_gpus(&probe_binaries).iter().filter(|g| g.discrete).map(|g| g.total_mib).max().unwrap_or(0);
             let mut state = Ink {
                 glyphs,
                 board: StableLayout::default(),
@@ -9619,15 +9624,15 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             window_bounds: Some(WindowBounds::Windowed(Bounds::new(point(px(0.), px(0.)), size(px(1360.), px(860.))))),
             // Under this, the board and the transcript beside it have no room left to be read.
             window_min_size: Some(size(px(720.), px(480.))),
-            app_id: Some("boardcast".into()),
+            app_id: Some("app.alcyo.board".into()),
             // On a Mac and on Windows the system bar goes, and ours takes its place with the window buttons in it:
             // the toolkit draws Windows' buttons itself, so keeping the system bar there showed both. Linux keeps
             // what the compositor draws, and the toolkit adds buttons only when the compositor leaves it to us.
             ..if cfg!(any(target_os = "macos", target_os = "windows")) {
                 let base = TitleBar::window_options();
-                WindowOptions { titlebar: base.titlebar.map(|t| gpui_kit::TitlebarOptions { title: Some("Banshu".into()), ..t }), ..base }
+                WindowOptions { titlebar: base.titlebar.map(|t| gpui_kit::TitlebarOptions { title: Some("Alcyo".into()), ..t }), ..base }
             } else {
-                WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some("Banshu".into()), ..Default::default() }), ..Default::default() }
+                WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some("Alcyo".into()), ..Default::default() }), ..Default::default() }
             }
         };
         // Closing the last window ends the app, which also stops the local model.

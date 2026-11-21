@@ -1,4 +1,4 @@
-# Banshu interface text: zh-Hant. Message IDs are shared by every language; English is the source.
+# Alcyo interface text: zh-Hant. Message IDs are shared by every language; English is the source.
 
 starting = 啟動中…
 loading-the-board-model = 正在載入板書模型…
@@ -366,7 +366,7 @@ drop-a-pdf-or-an = 把 PDF 或圖片拖進視窗，就能對著它討論。
 drag-to-move-the-map = 拖曳可以移動小地圖
 close-the-map = 收合小地圖
 take-out-of-the-inbox = 從收納欄拿走
-quit-boardcast = 結束 Banshu
+quit-boardcast = 結束 Alcyo
 type-a-line-for-the-board = 輸入一行，放上白板
 username-optional = 使用者名稱（選填）
 password-optional = 密碼（選填）

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install boardcast from this package, or remove it again.
+# Install Alcyo from this package, or remove it again.
 #
 #   ./install.sh                  # into ~/.local, no root needed
 #   ./install.sh --uninstall      # removes the app; your meetings and models stay
@@ -9,10 +9,16 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 PREFIX=${PREFIX:-"$HOME/.local"}
 BINDIR="$PREFIX/bin"
-LIBDIR="$PREFIX/lib/boardcast"
+LIBDIR="$PREFIX/lib/alcyo"
 APPDIR="$PREFIX/share/applications"
 ICONDIR="$PREFIX/share/icons/hicolor/256x256/apps"
-LICENSEDIR="$PREFIX/share/licenses/boardcast"
+LICENSEDIR="$PREFIX/share/licenses/alcyo"
+
+# What an install from before the rename left: the same app under its old name.
+remove_old() {
+    rm -f "$BINDIR/boardcast" "$APPDIR/boardcast.desktop" "$ICONDIR/boardcast.png"
+    rm -rf "$PREFIX/lib/boardcast" "$PREFIX/share/licenses/boardcast"
+}
 
 refresh() {
     if command -v update-desktop-database >/dev/null 2>&1; then
@@ -21,26 +27,31 @@ refresh() {
 }
 
 if [ "${1:-}" = "--uninstall" ]; then
-    rm -f "$BINDIR/boardcast" "$APPDIR/boardcast.desktop" "$ICONDIR/boardcast.png"
+    remove_old
+    rm -f "$BINDIR/alcyo" "$APPDIR/app.alcyo.board.desktop" "$ICONDIR/app.alcyo.board.png"
     rm -rf "$LIBDIR" "$LICENSEDIR"
     refresh
-    echo "Removed boardcast from $PREFIX. Your meetings and models were kept."
+    echo "Removed Alcyo from $PREFIX. Your meetings and models were kept."
     exit 0
 fi
 
 install -d "$BINDIR" "$APPDIR" "$ICONDIR" "$PREFIX/lib" "$LICENSEDIR"
-# Replace the resources whole, so nothing from an older version lingers.
+# Replace the resources whole, so nothing from an older version lingers. The package keeps them as
+# lib/boardcast and bin/boardcast, the names older updaters know; they are installed as alcyo.
+remove_old
 rm -rf "$LIBDIR"
 cp -r "$here/lib/boardcast" "$LIBDIR"
-install -m755 "$here/bin/boardcast" "$BINDIR/boardcast"
-install -m644 "$here/share/boardcast.png" "$ICONDIR/boardcast.png"
+install -m755 "$here/bin/boardcast" "$BINDIR/alcyo"
+# The old command keeps working.
+ln -s alcyo "$BINDIR/boardcast"
+install -m644 "$here/share/app.alcyo.board.png" "$ICONDIR/app.alcyo.board.png"
 cp "$here"/share/licenses/boardcast/* "$LICENSEDIR/"
-sed -e "s|@BINDIR@|$BINDIR|" -e "s|@VERSION@|$(cat "$here/VERSION")|" "$here/share/boardcast.desktop.in" > "$APPDIR/boardcast.desktop"
-chmod 644 "$APPDIR/boardcast.desktop"
+sed -e "s|@BINDIR@|$BINDIR|" -e "s|@VERSION@|$(cat "$here/VERSION")|" "$here/share/app.alcyo.board.desktop.in" > "$APPDIR/app.alcyo.board.desktop"
+chmod 644 "$APPDIR/app.alcyo.board.desktop"
 refresh
 
-"$BINDIR/boardcast" --self-check >/dev/null
-echo "Installed boardcast $(cat "$here/VERSION") to $PREFIX."
+"$BINDIR/alcyo" --self-check >/dev/null
+echo "Installed Alcyo $(cat "$here/VERSION") to $PREFIX."
 case ":$PATH:" in
     *":$BINDIR:"*) ;;
     *) echo "$BINDIR is not on your PATH. The app is in your launcher; to use the command, add it to PATH." ;;

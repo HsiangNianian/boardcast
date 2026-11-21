@@ -1,7 +1,7 @@
 //! Finding what ships with the app. An install keeps it in `<prefix>/lib/boardcast`, next to `bin/`, or a Mac app in `Contents/Resources/boardcast`,
 //! whichever folder the package was unpacked into. A checkout has them in `resources/`.
 
-use boardcast_board::glyphs::HanziSource;
+use alcyo_board::glyphs::HanziSource;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -19,14 +19,15 @@ pub struct Resources {
 }
 
 fn installed_dir() -> Option<PathBuf> {
-    if let Ok(dir) = std::env::var("BOARDCAST_RESOURCES") {
+    if let Ok(dir) = std::env::var("ALCYO_RESOURCES").or_else(|_| std::env::var("BOARDCAST_RESOURCES")) {
         return Some(PathBuf::from(dir));
     }
     // Canonical, so a symlink on PATH still leads back to the real install.
     let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
-    // <prefix>/bin/boardcast beside <prefix>/lib/boardcast, or inside an app on a Mac.
+    // <prefix>/bin/alcyo beside <prefix>/lib/alcyo, or inside an app on a Mac; installs from before the
+    // rename still say boardcast.
     let top = exe.parent()?.parent()?;
-    [top.join("lib/boardcast"), top.join("Resources/boardcast")].into_iter().find(|dir| dir.join("glyphs.pack").is_file())
+    ["lib/alcyo", "Resources/alcyo", "lib/boardcast", "Resources/boardcast"].into_iter().map(|d| top.join(d)).find(|dir| dir.join("glyphs.pack").is_file())
 }
 
 /// A boardcast checkout above this executable, as when running from `target/`.
@@ -63,7 +64,7 @@ impl Resources {
     /// Whether everything an install promises is present, as JSON for packaging checks.
     pub fn self_check(&self) -> (bool, String) {
         // Packages differ in their speech models; the variant says which ones this one promises.
-        let variant = self.voice.parent().map(boardcast_update::variant_of).unwrap_or_default();
+        let variant = self.voice.parent().map(alcyo_update::variant_of).unwrap_or_default();
         let model = |name: &'static str, file: &str| (name, self.voice.join(file));
         let sense_voice = [model("speech model", "sense-voice/model.int8.onnx"), model("speech tokens", "sense-voice/tokens.txt")];
         let english = [model("English speech model", "parakeet-en/encoder.int8.onnx")];
@@ -73,30 +74,30 @@ impl Resources {
             "en" => english.into(),
             "sensevoice" => sense_voice.into(),
             // "apple" is what the package without models was called first.
-            "none" | "apple" => vec![("Apple speech helper", std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join("boardcast-speech"))).unwrap_or_default())],
+            "none" | "apple" => vec![("Apple speech helper", std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join("alcyo-speech"))).unwrap_or_default())],
             _ => sense_voice.into_iter().chain(english).chain(japanese).chain([model("Chinese draft model", "draft-zh/encoder.int8.onnx")]).collect(),
         };
         let checks: Vec<(&str, PathBuf)> = [
             ("glyphs", self.hanzi_path().to_path_buf()),
-            ("llama-server", self.binaries.join(boardcast_agent::LLAMA_SERVER)),
+            ("llama-server", self.binaries.join(alcyo_agent::LLAMA_SERVER)),
             ("voice activity model", self.voice.join("silero_vad.onnx")),
             ("speaker model", self.voice.join("speaker/campplus_zh_en.onnx")),
             ("diarization model", self.voice.join("speaker/nemotron-3-diarization.int8.onnx")),
-            ("PDF library", boardcast_import::pdf::library_file(&self.pdfium)),
+            ("PDF library", alcyo_import::pdf::library_file(&self.pdfium)),
             // Every package carries it, the one without speech models too.
-            ("meeting search model", self.search.join(boardcast_models::embedding().file)),
+            ("meeting search model", self.search.join(alcyo_models::embedding().file)),
         ]
         .into_iter()
         .chain(speech)
         .collect();
         let mut rows: Vec<_> = checks.iter().map(|(name, path)| json!({ "name": name, "path": path, "ok": path.exists() })).collect();
         // Built into the program, so never missing as a file, but each must load and draw its languages.
-        let fonts = boardcast_fonts::check();
+        let fonts = alcyo_fonts::check();
         rows.extend(fonts.iter().map(|(name, problem)| json!({ "name": format!("font {name}"), "built in": true, "ok": problem.is_none(), "problem": problem })));
         let ok = checks.iter().all(|(_, path)| path.exists()) && fonts.iter().all(|(_, problem)| problem.is_none());
-        let gpus = boardcast_agent::list_gpus(&self.binaries);
+        let gpus = alcyo_agent::list_gpus(&self.binaries);
         let report = json!({
-            "version": boardcast_update::VERSION,
+            "version": alcyo_update::VERSION,
             "installed": self.installed,
             "variant": if variant.is_empty() { "all" } else { variant.as_str() },
             "ok": ok,

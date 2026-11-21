@@ -1,6 +1,6 @@
 //! The layout checker. `hard` issues are layout engine defects, repaired by laying the board out
 //! again. `soft` issues come from the board's content, and go back to the model as hints.
-//! `boardcast-tools check` runs it from the command line and exits non-zero on a hard defect.
+//! `alcyo-tools check` runs it from the command line and exits non-zero on a hard defect.
 
 use crate::board_layout::{overlaps, Layout, Rect, StableLayout, P};
 use crate::compose::compose;

@@ -58,10 +58,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           # The published page never goes out without its download sizes.
-          BOARDCAST_REQUIRE_RELEASE: '1'
+          ALCYO_REQUIRE_RELEASE: '1'
         # The demo is a page of its own under demo/, built after the site, which empties dist/ first.
         run: |
-          cargo test --locked -p boardcast-site-gen
+          cargo test --locked -p alcyo-site-gen
           trunk build --release
           trunk build demo/index.html --dist dist/demo --release
       - uses: actions/upload-pages-artifact@v4

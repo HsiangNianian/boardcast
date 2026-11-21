@@ -1,5 +1,5 @@
 [package]
-name = "boardcast-site"
+name = "alcyo-site"
 description = "The website interactions, compiled to WebAssembly"
 version.workspace = true
 edition.workspace = true

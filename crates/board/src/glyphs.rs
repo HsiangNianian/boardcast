@@ -47,7 +47,7 @@ const PUNCT: &[(char, &[&[Pt]], f32)] = &[
 pub enum HanziSource {
     /// One file holding them all, as an install ships them.
     Pack(PathBuf),
-    /// One JSON file per character, as `boardcast-tools fetch glyphs` generates them in a checkout.
+    /// One JSON file per character, as `alcyo-tools fetch glyphs` generates them in a checkout.
     Directory(PathBuf),
     /// A pack already in memory, as a web page carries a few characters of one.
     PackBytes(&'static [u8]),
@@ -95,7 +95,7 @@ impl Glyphs {
         Ok(Self { latin, cursive, punct, kana, source, hanzi: HashMap::new(), messy: 0.0 })
     }
 
-    /// A boardcast checkout with `assets/hanzi` generated.
+    /// An Alcyo checkout with `assets/hanzi` generated.
     pub fn from_checkout(root: &Path) -> Result<Self> {
         Self::load(HanziSource::Directory(root.join("assets/hanzi")))
     }
@@ -208,7 +208,7 @@ impl Pack {
     }
 }
 
-/// Build a pack from the folder `boardcast-tools fetch glyphs` generates. Returns how many characters it holds.
+/// Build a pack from the folder `alcyo-tools fetch glyphs` generates. Returns how many characters it holds.
 pub fn write_pack(dir: &Path, out: &Path) -> Result<usize> {
     write_pack_of(dir, out, None)
 }

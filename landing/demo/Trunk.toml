@@ -14,4 +14,4 @@ port = 1431
 [[hooks]]
 stage = "post_build"
 command = "cargo"
-command_arguments = ["run", "--quiet", "--locked", "--package", "boardcast-site-gen"]
+command_arguments = ["run", "--quiet", "--locked", "--package", "alcyo-site-gen"]

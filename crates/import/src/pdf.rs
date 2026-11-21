@@ -5,8 +5,8 @@
 use crate::paper::{analyze_page, BlockKind, PaperArea, PaperState, TextPiece};
 use crate::regions::{page_graph, utf16_len, Area};
 use anyhow::{anyhow, bail, Context, Result};
-use boardcast_board::graph::{parse_ops, Graph};
-use boardcast_board::spans::rotate_point;
+use alcyo_board::graph::{parse_ops, Graph};
+use alcyo_board::spans::rotate_point;
 use image::codecs::jpeg::JpegEncoder;
 use pdfium_render::prelude::*;
 use regex::Regex;
@@ -368,7 +368,7 @@ mod tests {
         let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target/pdfium"));
         let found = Pdfium::pdfium_platform_library_name_at_path(&dir).is_file();
         // CI fetches it, so there a missing library is a failure rather than a skipped test.
-        assert!(found || std::env::var_os("CI").is_none(), "run `boardcast-tools fetch pdfium` first");
+        assert!(found || std::env::var_os("CI").is_none(), "run `alcyo-tools fetch pdfium` first");
         found.then_some(dir)
     }
 
@@ -432,7 +432,7 @@ mod tests {
             let lines = vec![(100, 700, "Hello there, this line is near the top of the page.")];
             let imported = run(&pdf(612, 792, rotate, None, &[lines])).unwrap();
             let page = &imported.pages[0];
-            let block = page.graph.nodes.iter().find(|n| n.kind == boardcast_board::graph::Kind::Region).expect("a block of text");
+            let block = page.graph.nodes.iter().find(|n| n.kind == alcyo_board::graph::Kind::Region).expect("a block of text");
             assert!(block.label.starts_with("Hello"), "{}", block.label);
             let picture = image::load_from_memory(&page.jpeg).unwrap();
             let at = block.at().unwrap();
@@ -452,7 +452,7 @@ mod tests {
         }
         let imported = run(&pdf(612, 792, 0, None, &[vec![(100, 700, "alpha beta gamma delta epsilon zeta eta theta")]])).unwrap();
         let block = &imported.pages[0].graph.nodes[0];
-        let span = boardcast_board::spans::locate(&block.rows(), "gamma", "圈出", boardcast_board::spans::Unit::Word).unwrap();
+        let span = alcyo_board::spans::locate(&block.rows(), "gamma", "圈出", alcyo_board::spans::Unit::Word).unwrap();
         let picture = image::load_from_memory(&imported.pages[0].jpeg).unwrap();
         let b = &span.boxes[0];
         assert!(dark_inside(&picture, [b.x as f64, b.y as f64, b.w as f64, b.h as f64]) > 50);
@@ -469,7 +469,7 @@ mod tests {
         let imported = run(&pdf(612, 792, 0, None, &[lines])).unwrap();
         let block = &imported.pages[0].graph.nodes[0];
         assert!(block.extra["text"].as_str().unwrap().contains("automation of"), "{}", block.extra["text"]);
-        assert!(boardcast_board::spans::locate(&block.rows(), "automation", "圈出", boardcast_board::spans::Unit::Word).is_some());
+        assert!(alcyo_board::spans::locate(&block.rows(), "automation", "圈出", alcyo_board::spans::Unit::Word).is_some());
     }
 
     #[test]

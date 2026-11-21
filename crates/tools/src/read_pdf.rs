@@ -1,8 +1,8 @@
 //! How a PDF reads, page by page, to inspect on a real file: `read-pdf <pdfium-dir> <file.pdf> <out.json>`.
 
 use anyhow::{Context, Result};
-use boardcast_import::paper::{analyze_page, PaperState};
-use boardcast_import::pdf::read_text;
+use alcyo_import::paper::{analyze_page, PaperState};
+use alcyo_import::pdf::read_text;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 

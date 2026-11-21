@@ -1,4 +1,4 @@
-# Banshu interface text: es. Message IDs are shared by every language; English is the source.
+# Alcyo interface text: es. Message IDs are shared by every language; English is the source.
 
 starting = Iniciando…
 loading-the-board-model = Cargando el modelo de pizarra…
@@ -366,7 +366,7 @@ drop-a-pdf-or-an = Suelta un PDF o una imagen en cualquier parte para comentarlo
 drag-to-move-the-map = Arrastra para mover el mapa
 close-the-map = Cerrar el mapa
 take-out-of-the-inbox = Sacar de la bandeja
-quit-boardcast = Salir de Banshu
+quit-boardcast = Salir de Alcyo
 type-a-line-for-the-board = Escribe una línea para el tablero
 username-optional = Usuario (opcional)
 password-optional = Contraseña (opcional)

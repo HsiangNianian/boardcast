@@ -16,5 +16,5 @@ line-count = { $n ->
 - A literal brace is written `{"{"}`, and space at either end of a text `{" "}`.
 
 To improve a translation, edit its file. To add a language, copy `en.ftl` to `<code>.ftl`, translate it, and list it in
-`LANGUAGES` and `SOURCES` in `crates/ui/src/i18n.rs`. `cargo test -p boardcast-ui i18n` checks that every file reads,
+`LANGUAGES` and `SOURCES` in `crates/ui/src/i18n.rs`. `cargo test -p alcyo-ui i18n` checks that every file reads,
 uses only the variables English gives, and that every message the code names exists.

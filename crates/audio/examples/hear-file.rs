@@ -3,7 +3,7 @@
 //! The last says whether sentences are split where the speaker changes, and at which latency; each line
 //! shows its start, length and the diarization model's speaker slot in brackets.
 
-use boardcast_audio::{Ear, Latency, Sentence};
+use alcyo_audio::{Ear, Latency, Sentence};
 use sherpa_onnx::Wave;
 use std::path::Path;
 

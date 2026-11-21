@@ -97,7 +97,7 @@ pub fn write(video: Option<Video>, audio: Option<Audio>, duration: f64) -> Vec<u
     );
     let info = element(
         0x1549_A966,
-        &[uint(0x2A_D7B1, 1_000_000), text(0x4D80, "Banshu"), text(0x5741, "Banshu"), element(0x4489, &duration.to_be_bytes())].concat(),
+        &[uint(0x2A_D7B1, 1_000_000), text(0x4D80, "Alcyo"), text(0x5741, "Alcyo"), element(0x4489, &duration.to_be_bytes())].concat(),
     );
     let mut tracks = vec![];
     // Every block, as (when, which track, a key frame, its data), to be laid out in time order.

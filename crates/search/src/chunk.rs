@@ -1,6 +1,6 @@
 //! Cutting a meeting into passages that are each about one thing and short enough to embed well.
 
-use boardcast_board::graph::{Graph, Kind};
+use alcyo_board::graph::{Graph, Kind};
 use serde::{Deserialize, Serialize};
 
 /// Where a passage came from, so a hit can open the meeting at that place.
@@ -188,7 +188,7 @@ mod tests {
         let body = "Deep networks are hard to train. ".repeat(30);
         let mut extra = serde_json::Map::new();
         extra.insert("text".into(), serde_json::json!(body));
-        g.nodes.push(boardcast_board::graph::Ordered::new(boardcast_board::graph::NodeData {
+        g.nodes.push(alcyo_board::graph::Ordered::new(alcyo_board::graph::NodeData {
             id: "n1".into(), label: "Deep networks are…".into(), aliases: vec![], kind: Kind::Region, parent: None, group: None, marks: vec![], icon: None, ink: "ink".into(), extra,
         }));
         let parts = board(2, &g);
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn a_topic_carries_its_items() {
         let mut g = Graph::default();
-        g.apply(&boardcast_board::graph::parse_ops("T 「Release」\nL 「Release」 「Load testing」\nE 「API」 -> 「USER」 : 「auth」"));
+        g.apply(&alcyo_board::graph::parse_ops("T 「Release」\nL 「Release」 「Load testing」\nE 「API」 -> 「USER」 : 「auth」"));
         let parts = board(0, &g);
         assert!(parts.iter().any(|c| c.text.contains("Release") && c.text.contains("- Load testing")));
         assert!(parts.iter().any(|c| c.text.contains("API") && c.text.contains("→ auth → USER")));

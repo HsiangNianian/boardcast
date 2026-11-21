@@ -3,12 +3,12 @@
 
 use crate::i18n::t;
 use crate::theme::pal;
-use boardcast_board::glyphs::{Glyphs, Pt};
-use boardcast_board::pen::{ink, line, outline, place, Inked, Rng};
+use alcyo_board::glyphs::{Glyphs, Pt};
+use alcyo_board::pen::{ink, line, outline, place, Inked, Rng};
 use gpui_kit::{canvas, div, point, prelude::*, px, rgb, Background, Bounds, FillOptions, Hsla, IntoElement, PathBuilder, PathStyle, Pixels, Window};
 use std::time::{Duration, Instant};
 
-const WORD: &str = "Banshu";
+const WORD: &str = "Alcyo";
 const SIZE: f32 = 56.0;
 const INK: u32 = 0x1e_1e_1e;
 /// As long as the name takes to write, so it never flashes past half written.
@@ -146,7 +146,7 @@ pub fn splash(strokes: &[Inked], started: Instant, window: &mut Window) -> impl 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use boardcast_board::glyphs::HanziSource;
+    use alcyo_board::glyphs::HanziSource;
 
     /// The pen skips a letter it has no strokes for, which would quietly misspell the name.
     #[test]

@@ -3,7 +3,7 @@
 use crate::corpus::{self, Corpus};
 use crate::score::{error_rate, keyword_recall, recognition_failures, ErrorRate, Recall};
 use anyhow::{bail, ensure, Context, Result};
-use boardcast_audio::{load_sense_voice, transcribe, Ear, Engine, Recognizers, Sentence, SAMPLE_RATE};
+use alcyo_audio::{load_sense_voice, transcribe, Ear, Engine, Recognizers, Sentence, SAMPLE_RATE};
 use sherpa_onnx::OfflineRecognizer;
 use serde::Serialize;
 use serde_json::json;

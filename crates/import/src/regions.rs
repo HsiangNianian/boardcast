@@ -1,8 +1,8 @@
 //! An imported page as a board, ported from src/engine/regions.ts. The page's size is kept on the
 //! board, and each block of content becomes a node fixed in place.
 
-use boardcast_board::graph::{Graph, Kind, Node, NodeData, Ordered};
-use boardcast_board::spans::RegionRow;
+use alcyo_board::graph::{Graph, Kind, Node, NodeData, Ordered};
+use alcyo_board::spans::RegionRow;
 use serde_json::{json, Map};
 use std::collections::HashMap;
 

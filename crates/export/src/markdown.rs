@@ -2,8 +2,8 @@
 //! numbered lists, the flow chart becomes Mermaid, and the transcript follows. Draft ink is left out.
 
 use crate::Doc;
-use boardcast_board::board_layout::{is_diagram, is_head};
-use boardcast_board::graph::{Graph, Kind, Node};
+use alcyo_board::board_layout::{is_diagram, is_head};
+use alcyo_board::graph::{Graph, Kind, Node};
 use serde_json::Value;
 use std::collections::HashSet;
 
@@ -285,7 +285,7 @@ fn board(g: &Graph, h: &str, w: &Words, english: bool, out: &mut Vec<String>) {
 pub fn markdown(doc: &Doc, current: usize) -> String {
     let w = if doc.english { &EN } else { &ZH };
     let board_name = |n: u64| w.board.replace("{}", &n.to_string());
-    let mut out = vec![format!("# {}", text(&doc.title)), String::new(), format!("> {} · Banshu", doc.exported), String::new()];
+    let mut out = vec![format!("# {}", text(&doc.title)), String::new(), format!("> {} · Alcyo", doc.exported), String::new()];
     if !doc.summary.trim().is_empty() {
         out.extend([format!("## {}", w.summary), String::new(), doc.summary.trim().to_string(), String::new()]);
     }

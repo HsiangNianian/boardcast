@@ -100,10 +100,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # The window and audio crates need system libraries and native downloads, and have no tests yet.
-      - run: cargo run -q -p boardcast-tools -- fetch pdfium
-      - run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-export -p boardcast-import -p boardcast-update -p boardcast-tools -p boardcast-keep
+      - run: cargo run -q -p alcyo-tools -- fetch pdfium
+      - run: cargo test -p alcyo-board -p alcyo-agent -p alcyo-meetings -p alcyo-models -p alcyo-export -p alcyo-import -p alcyo-update -p alcyo-tools -p alcyo-keep
       - name: Check the recorded boards for layout defects
-        run: cargo run --release -p boardcast-tools -- check . --all-demos --tidy
+        run: cargo run --release -p alcyo-tools -- check . --all-demos --tidy
 
   package:
     name: linux package
@@ -136,20 +136,20 @@ jobs:
       # Its own target folder: the cache keeps compiled crates but not the speech library they were
       # built against, so rebuilding that crate in the restored folder cannot find it.
       - name: How speech is heard, with the packaged models
-        run: cargo test -p boardcast-audio
+        run: cargo test -p alcyo-audio
         env:
-          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
+          ALCYO_VOICE_DIR: ${{ github.workspace }}/resources/voice
           CARGO_TARGET_DIR: ${{ runner.temp }}/audio-tests
       - name: Install from the package and check again
         run: |
           mkdir unpacked
-          tar -xzf target/package/boardcast-*-linux.tar.gz -C unpacked
+          tar -xzf target/package/alcyo-*-linux.tar.gz -C unpacked
           PREFIX="$PWD/prefix" sh unpacked/*/install.sh
           rm -rf unpacked
           prefix/bin/boardcast --self-check
       - uses: actions/upload-artifact@v4
         with:
-          name: boardcast-linux
+          name: alcyo-linux
           path: target/package/*.tar.gz
           retention-days: 14
 
@@ -189,13 +189,13 @@ jobs:
         env:
           VARIANTS: all none
       - name: Core crates and speech, with the packaged models
-        run: cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-audio
+        run: cargo test -p alcyo-board -p alcyo-agent -p alcyo-meetings -p alcyo-models -p alcyo-audio
         env:
-          BOARDCAST_VOICE_DIR: ${{ github.workspace }}/resources/voice
+          ALCYO_VOICE_DIR: ${{ github.workspace }}/resources/voice
           CARGO_TARGET_DIR: ${{ runner.temp }}/macos-tests
       - uses: actions/upload-artifact@v4
         with:
-          name: boardcast-${{ matrix.runner }}
+          name: alcyo-${{ matrix.runner }}
           path: target/package/*.zip
           retention-days: 14
 
@@ -227,6 +227,6 @@ jobs:
           VARIANTS: all
       - uses: actions/upload-artifact@v4
         with:
-          name: boardcast-windows
+          name: alcyo-windows
           path: target/package/*.zip
           retention-days: 14

@@ -2,18 +2,19 @@
 //!
 //!   --llm <url>                  a llama-server (the default is the app's own port)
 //!   --deepseek                   DeepSeek, with the key from DEEPSEEK_API_KEY
-//!   --remote <url> --model <m>   any OpenAI-compatible service, with the key from BOARDCAST_API_KEY
+//!   --remote <url> --model <m>   any OpenAI-compatible service, with the key from ALCYO_API_KEY (or BOARDCAST_API_KEY)
 //!   --saved                      the remote model saved in the app's Settings
 //!
 //! A key is only ever read from the environment or the app's settings, held in memory, and never written into a
 //! report: the label that names a run in its report says which service and model it was, not how it got in.
 
 use anyhow::{bail, Context, Result};
-use boardcast_agent::settings::Settings;
-use boardcast_agent::Provider;
+use alcyo_agent::settings::Settings;
+use alcyo_agent::Provider;
 
 /// The environment variable that holds the key for `--remote`.
-const KEY_VAR: &str = "BOARDCAST_API_KEY";
+const KEY_VAR: &str = "ALCYO_API_KEY";
+const OLD_KEY_VAR: &str = "BOARDCAST_API_KEY";
 
 #[derive(Default)]
 pub struct ModelFlags {
@@ -56,7 +57,7 @@ impl ModelFlags {
         }
         if let Some(base_url) = self.remote {
             let model = self.model.context("--remote needs --model <name>")?;
-            let key = std::env::var(KEY_VAR).with_context(|| format!("--remote reads its key from {KEY_VAR}, which is not set"))?;
+            let key = std::env::var(KEY_VAR).or_else(|_| std::env::var(OLD_KEY_VAR)).with_context(|| format!("--remote reads its key from {KEY_VAR}, which is not set"))?;
             let label = label(&base_url, &model);
             return Ok(Some((Provider::Remote { base_url, key, model }, label)));
         }

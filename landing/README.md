@@ -1,4 +1,4 @@
-# boardcast website
+# Alcyo website
 
 A standalone static page, separate from the desktop app. It is English only. The page and its styles are here;
 what fills and animates them is Rust compiled to WebAssembly, in `crates/site`. [Trunk](https://trunkrs.dev) builds

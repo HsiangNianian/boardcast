@@ -1,10 +1,10 @@
-//! On Windows, put the app icon into boardcast.exe, so Explorer, the taskbar and the window title bar
+//! On Windows, put the app icon into alcyo.exe, so Explorer, the taskbar and the window title bar
 //! show it. Resource 1 is also the icon GPUI loads for its windows. The version resource gives the
-//! name Task Manager and the file's properties show, which otherwise fall back to "boardcast.exe".
+//! name Task Manager and the file's properties show, which otherwise fall back to "alcyo.exe".
 
 use std::{env, fs, path::PathBuf};
 
-const NAME: &str = "Banshu";
+const NAME: &str = "Alcyo";
 
 fn main() {
     let icon = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("../../packaging/icons/icon.ico");
@@ -41,7 +41,7 @@ BEGIN
       VALUE "ProductName", "{NAME}"
       VALUE "FileVersion", "{version}"
       VALUE "ProductVersion", "{version}"
-      VALUE "OriginalFilename", "boardcast.exe"
+      VALUE "OriginalFilename", "alcyo.exe"
     END
   END
   BLOCK "VarFileInfo"

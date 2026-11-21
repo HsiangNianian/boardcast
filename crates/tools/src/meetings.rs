@@ -2,7 +2,7 @@
 //! fields a save owns. It writes v2 copies, so point it at a copy of real data.
 
 use anyhow::{bail, Context, Result};
-use boardcast_meetings::{Live, Store};
+use alcyo_meetings::{Live, Store};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
@@ -22,7 +22,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         let loaded = store.load(&info.id)?.context("listed but not loadable")?;
         let before = Value::Object(loaded.raw.clone());
         let hash = match &loaded.origin {
-            boardcast_meetings::Origin::Legacy { source_hash } => Some(source_hash.clone()),
+            alcyo_meetings::Origin::Legacy { source_hash } => Some(source_hash.clone()),
             _ => None,
         };
         let mut live = Live::from_loaded(loaded);

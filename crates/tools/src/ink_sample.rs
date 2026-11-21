@@ -6,11 +6,11 @@
 //! `--messy`, all the texts are written at each messiness in turn, the neatest first.
 
 use anyhow::{bail, Context, Result};
-use boardcast_board::board_layout::Bounds;
-use boardcast_board::compose::handwriting;
-use boardcast_board::glyphs::Glyphs;
-use boardcast_board::pen::{outline, Rng};
-use boardcast_export::ink::{png, Drawn, Shape};
+use alcyo_board::board_layout::Bounds;
+use alcyo_board::compose::handwriting;
+use alcyo_board::glyphs::Glyphs;
+use alcyo_board::pen::{outline, Rng};
+use alcyo_export::ink::{png, Drawn, Shape};
 use std::path::PathBuf;
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {

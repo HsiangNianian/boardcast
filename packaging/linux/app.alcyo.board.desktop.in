@@ -1,14 +1,14 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Banshu
+Name=Alcyo
 GenericName=Live meeting whiteboard
 Comment=Talk, and the whiteboard draws itself
-Exec=@BINDIR@/boardcast
-Icon=boardcast
+Exec=@BINDIR@/alcyo
+Icon=app.alcyo.board
 Terminal=false
 Categories=Office;
 Keywords=meeting;whiteboard;transcription;notes;
 StartupNotify=true
-StartupWMClass=boardcast
+StartupWMClass=app.alcyo.board
 X-AppVersion=@VERSION@

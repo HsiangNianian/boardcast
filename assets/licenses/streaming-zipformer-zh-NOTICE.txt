@@ -6,5 +6,5 @@ Source: https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-int
         https://huggingface.co/yuekai/icefall-asr-multi-zh-hans-zipformer-large
 Training code: https://github.com/k2-fsa/icefall (Apache License 2.0)
 
-License: neither model page states a license for the weights. boardcast's maintainer has asked the
+License: neither model page states a license for the weights. Alcyo's maintainer has asked the
 authors for one; this notice will be replaced by the license they give.

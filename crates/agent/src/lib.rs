@@ -15,7 +15,7 @@ pub mod tools;
 pub mod vision;
 
 use anyhow::{anyhow, bail, Context, Result};
-use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message_within, Graph, Kind, Utterance};
+use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, user_message_within, Graph, Kind, Utterance};
 use boardcast_board::speakers::{attribute, rename_by};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};
@@ -548,8 +548,6 @@ fn propose_tools(provider: &Provider, graph: &Graph, prompt: Vec<Value>, harness
 /// meeting would otherwise take the rest and more, failing every line (#314). A character is a token or less
 /// for Qwen; models that spend more still fit, and one that does not is asked again with half.
 const LOCAL_PROMPT_CHARS: usize = 2000;
-/// The same for a remote model, whose context is large: a long meeting's board would only cost more.
-const REMOTE_PROMPT_CHARS: usize = 12_000;
 
 /// One model turn for one piece of a line.
 #[allow(clippy::too_many_arguments)]
@@ -563,8 +561,10 @@ fn propose_once(provider: &Provider, graph: &Graph, recent: &[Utterance], next: 
         messages[0]["content"] = json!(format!("{text}\n\n{SKILL_RULES}"));
     }
     let labels: Vec<&str> = graph.nodes.iter().map(|n| n.label.as_str()).collect();
+    // Only a local model's context is too small for a long meeting's board; a remote model sees all of it.
+    let local = provider.short_reply();
     let asked = |budget: usize| -> Vec<Value> {
-        let mut content = user_message_within(graph, recent, next, budget);
+        let mut content = if local { user_message_within(graph, recent, next, budget) } else { user_message(graph, recent, next) };
         if let Some(h) = hint.filter(|_| guidance.hint) {
             content = format!("{h}\n{content}");
         }
@@ -575,7 +575,7 @@ fn propose_once(provider: &Provider, graph: &Graph, recent: &[Utterance], next: 
         asked.push(json!({ "role": "user", "content": content }));
         asked
     };
-    let budget = if provider.short_reply() { LOCAL_PROMPT_CHARS } else { REMOTE_PROMPT_CHARS };
+    let budget = LOCAL_PROMPT_CHARS;
     if guidance.harness != tools::Harness::Commands {
         return propose_tools(provider, graph, asked(budget), guidance.harness);
     }

@@ -42,7 +42,7 @@ on:
         default: false
       model_url:
         description: Board evaluation GGUF URL
-        default: https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf
+        default: https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf
       label:
         description: Board evaluation model label
         default: qwen3.5-4b-q4km-cpu
@@ -57,8 +57,8 @@ concurrency:
 env:
   LLAMA_BUILD: b11954
   # Gate on the desktop's recommended model; other candidates can use workflow_dispatch inputs.
-  MODEL_URL: ${{ inputs.model_url || 'https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf' }}
-  LABEL: ${{ inputs.label || 'qwen3.5-4b-q4km-cpu' }}
+  MODEL_URL: ${{ inputs.model_url || 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf' }}
+  LABEL: ${{ inputs.label || 'qwen3-4b-2507-q4km-cpu' }}
 
 jobs:
   changes:

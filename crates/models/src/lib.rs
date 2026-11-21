@@ -58,6 +58,20 @@ fn sources(modelscope: &str, huggingface: &str) -> Vec<Source> {
 /// caveat, smallest first. Qwen's files and hashes are the older app's, so a model it downloaded is reused.
 pub fn catalog() -> Vec<Model> {
     vec![
+        // The board model by default since #306: on the dev set 0.735 item F1 against Qwen3.5-4B's 0.609, and
+        // 0.46 against 0.17 on a real meeting, as steady between passes, at the same speed. It reads no images.
+        Model {
+            id: "qwen3-4b-2507",
+            label: "Qwen3-4B",
+            file: "Qwen3-4B-Instruct-2507-Q4_K_M.gguf".into(),
+            size: 2_497_281_120,
+            sha256: "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597".into(),
+            vram_mib: 0,
+            note: None,
+            // Hugging Face pinned to the revision measured; ModelScope has no revisions, and the hash holds it.
+            sources: sources("unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/master/Qwen3-4B-Instruct-2507-Q4_K_M.gguf", "unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"),
+        },
+        // Kept for reading images: its vision add-on understands a picture, not only its text.
         Model {
             id: "qwen3.5-4b",
             label: "Qwen3.5-4B",
@@ -65,7 +79,7 @@ pub fn catalog() -> Vec<Model> {
             size: 2_740_937_888,
             sha256: "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4".into(),
             vram_mib: 0,
-            note: None,
+            note: Some(("Reads images with its vision add-on; draws boards less well than Qwen3-4B", "可以装看图插件读懂图片；画板书不如 Qwen3-4B")),
             sources: sources("unsloth/Qwen3.5-4B-GGUF/resolve/master/Qwen3.5-4B-Q4_K_M.gguf", "unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"),
         },
         Model {
@@ -530,8 +544,9 @@ mod tests {
 
     #[test]
     fn recommendations_follow_graphics_memory() {
-        assert_eq!(recommended(0), "qwen3.5-4b");
-        assert_eq!(recommended(4096), "qwen3.5-4b");
+        // Qwen3-4B draws the best boards of the small models (#306); Qwen3.5-4B is there for reading images.
+        assert_eq!(recommended(0), "qwen3-4b-2507");
+        assert_eq!(recommended(4096), "qwen3-4b-2507");
         assert_eq!(recommended(8192), "qwen3.5-9b");
     }
 
@@ -556,7 +571,8 @@ mod tests {
     #[test]
     fn only_models_that_can_see_have_a_vision_add_on() {
         let has = |id: &str| vision_for(&catalog().into_iter().find(|m| m.id == id).unwrap().file).is_some();
-        assert!(catalog().iter().all(|m| has(m.id)));
+        assert!(has("qwen3.5-4b") && has("qwen3.5-9b"));
+        assert!(!has("qwen3-4b-2507"), "Qwen3-4B reads no images");
     }
 
     #[test]

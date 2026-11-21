@@ -134,7 +134,8 @@ The app bundles llama.cpp's `llama-server` and runs it for you: Vulkan on Linux 
 
 | Model | Download | Notes |
 |---|---|---|
-| **Qwen3.5-4B · Q4_K_M** | about 2.7 GB | The default; works on laptops and integrated graphics. |
+| **Qwen3-4B (Instruct 2507) · Q4_K_M** | about 2.5 GB | The default; works on laptops and integrated graphics. Reads no images. |
+| **Qwen3.5-4B · Q4_K_M** | about 2.7 GB | Reads images with its vision add-on (about 670 MB); draws boards less well than Qwen3-4B. |
 | **Qwen3.5-9B · Q4_K_M** | about 5.7 GB | Larger; 6 GB of graphics memory or more is recommended. |
 
 Downloads can be paused and resumed, check free space and verify SHA-256, trying ModelScope, hf-mirror and Hugging Face in turn. The first start compiles shaders for your graphics card, which takes about half a minute, once.
@@ -226,7 +227,7 @@ target/release/asr-eval run . --suite quick        # the app's own hearing, scor
 target/release/asr-eval run . --suite meetings     # nine ~10-minute clips across industries; needs ffmpeg
 ```
 
-See [speech evaluation](eval/asr/README.md) for the configurations, reference quality and [dataset licenses](eval/asr/LICENSES.md). CI runs these in the [Eval](.github/workflows/eval.yml) workflow with Qwen3.5-4B. The model can omit content, connect the wrong items or misread emphasis, and recognition affects the result, so check important conclusions.
+See [speech evaluation](eval/asr/README.md) for the configurations, reference quality and [dataset licenses](eval/asr/LICENSES.md). CI runs these in the [Eval](.github/workflows/eval.yml) workflow with Qwen3-4B. The model can omit content, connect the wrong items or misread emphasis, and recognition affects the result, so check important conclusions.
 
 </details>
 

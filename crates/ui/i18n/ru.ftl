@@ -463,6 +463,7 @@ deleted-title = «{ $title }» удалено
 name-checking-what-was-downloaded = { $name } проверяет, что уже скачано…
 name-starting = { $name } запускается…
 saved-key-leave-empty = Сохранённый ключ: { $hint }. Оставьте пустым, чтобы сохранить его.
+key-in-file = Системная связка ключей не найдена, поэтому ключ хранится в зашифрованном файле.
 hearing-with-models = Распознавание с помощью { $models }
 always-the-same-keys = Всегда одинаково: { $keys }
 version-installed-restart = { $version } установлена. Ваша встреча продолжится, пока вы не перезапустите.

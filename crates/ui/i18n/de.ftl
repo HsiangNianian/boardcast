@@ -465,6 +465,7 @@ deleted-title = „{ $title }“ gelöscht
 name-checking-what-was-downloaded = { $name } prüft, was bereits heruntergeladen wurde…
 name-starting = { $name } startet…
 saved-key-leave-empty = Gespeicherter Schlüssel: { $hint }. Leer lassen, um ihn zu behalten.
+key-in-file = Kein Systemschlüsselbund gefunden, daher wird der Schlüssel in einer verschlüsselten Datei abgelegt.
 hearing-with-models = Hören mit { $models }
 always-the-same-keys = Immer gleich: { $keys }
 version-installed-restart = { $version } ist installiert. Deine Besprechung läuft weiter, bis du neu startest.

@@ -8188,6 +8188,8 @@ impl Render for Workbench {
                     .child(field(t("model"), &self.form.model))
                     .child(field(t("api-key"), &self.form.key))
                     .child(div().text_small().text_color(rgb(pal().faint)).child(match key_hint {
+                        // Said only where it is so: with no keychain, the key went to an encrypted file.
+                        Some(hint) if alcyo_agent::settings::Settings::secrets_in_file() => format!("{} {}", ta!("saved-key-leave-empty", hint = hint.to_string()), t("key-in-file")),
                         Some(hint) => ta!("saved-key-leave-empty", hint = hint.to_string()),
                         None => t("no-key-saved-it-is").to_string(),
                     }))

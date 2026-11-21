@@ -143,7 +143,7 @@ Downloads can be paused and resumed, check free space and verify SHA-256, trying
 - **Meeting search** finds what was said in any meeting from a question in your own words. It uses [EmbeddingGemma 300M](https://huggingface.co/google/embeddinggemma-300m), which comes with every package and runs on your computer, under the [Gemma Terms of Use](https://ai.google.dev/gemma/terms). It is on unless you turn it off in **Settings › General**; the first start builds an index of every meeting, which takes a while.
 - **Local by default**: audio is recognized on your computer and meetings stay there. No account or API key is needed.
 - **Remote by choice**: under **Remote**, enter an OpenAI-compatible address, model and key, or fill in DeepSeek with one click, then **Test** and **Save**. Lines, speaker names and board text go to that service; audio does not.
-- **Key storage**: the key is kept in `remote.json` in the settings folder, readable only by you, and never logged.
+- **Key storage**: the API key and the proxy password are kept in the system keychain (the macOS Keychain, the Windows Credential Manager, or GNOME Keyring / KWallet on Linux), never in the settings file, and never logged. On a Linux desktop without a keychain they go to `secrets.json` in the settings folder, readable only by you and encrypted with a key tied to this computer, so a copy of the file is useless elsewhere.
 
 | | Meetings and models | Settings (`remote.json`) |
 |---|---|---|

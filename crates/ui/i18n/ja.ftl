@@ -441,6 +441,7 @@ deleted-title = 「{ $title }」を削除しました
 name-checking-what-was-downloaded = { $name } がダウンロード済みの内容を確認中…
 name-starting = { $name } を開始中…
 saved-key-leave-empty = 保存済みのキー：{ $hint }。空のままにすると、そのまま使い続けます。
+key-in-file = システムのキーチェーンが見つからないため、キーは暗号化したファイルに保存しています。
 hearing-with-models = 認識に使用中：{ $models }
 always-the-same-keys = 常に固定：{ $keys }
 version-installed-restart = { $version } をインストールしました。再起動するまで、進行中の会議はそのまま続きます。

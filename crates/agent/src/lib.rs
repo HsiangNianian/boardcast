@@ -8,6 +8,7 @@
 
 pub mod consolidate;
 pub mod turns;
+pub mod secrets;
 pub mod settings;
 pub mod sound;
 pub mod summary;
@@ -55,7 +56,7 @@ fn prompts() -> Value {
 pub enum Provider {
     /// A llama-server: output is constrained by a grammar built from the current board.
     Local { base: String },
-    /// An OpenAI-compatible service. The key is held in memory and in `remote.json` only.
+    /// An OpenAI-compatible service. The key is held in memory and in the system keychain only (see [`secrets`]).
     Remote { base_url: String, key: String, model: String },
     /// A scripted reply, for testing what happens around a model turn.
     #[cfg(test)]

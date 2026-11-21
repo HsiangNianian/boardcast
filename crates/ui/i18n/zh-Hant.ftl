@@ -441,6 +441,7 @@ deleted-title = 已刪除「{ $title }」
 name-checking-what-was-downloaded = { $name } 正在檢查已下載的部分…
 name-starting = { $name } 正在開始…
 saved-key-leave-empty = 已儲存的 key：{ $hint }。留空則繼續使用。
+key-in-file = 沒有找到系統鑰匙圈，key 改存在加密檔案裡。
 hearing-with-models = 目前辨識：{ $models }
 always-the-same-keys = 固定不變：{ $keys }
 version-installed-restart = { $version } 已安裝。重新啟動之前，目前的會議不受影響。

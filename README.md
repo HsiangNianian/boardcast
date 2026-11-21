@@ -41,7 +41,7 @@ The desktop app is a native rewrite in Rust on [GPUI](crates/README.md). The ear
 
    Every package also carries the 334 MB model behind meeting search. Packages are built for macOS (Apple Silicon and Intel), Linux x64 and Windows x64.
 
-2. **macOS:** the app is signed only ad hoc, so open it with Control-click › Open the first time. **Linux:** unpack the archive and run `./install.sh` (into `~/.local`, no root needed; `--uninstall` removes it and keeps your data). Later versions then install themselves. **Windows:** unpack the archive and run `bin\alcyo.exe`; there is no installer, and it does not update itself yet.
+2. **macOS:** open the `.dmg` and drag Alcyo to Applications; it is signed and notarized, so it opens like any other app. Each package also comes as a `.zip` holding the same app. **Linux:** unpack the archive and run `./install.sh` (into `~/.local`, no root needed; `--uninstall` removes it and keeps your data). Later versions then install themselves. **Windows:** unpack the archive and run `bin\alcyo.exe`; there is no installer, and it does not update itself yet.
 3. On first launch, Settings opens on **Board model**: download a model that runs on this computer, or set up a remote one. Speech recognition is already included.
 4. Click **Start listening** (or press `Space`), or type a line in the transcript's input and press Enter.
 

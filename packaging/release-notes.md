@@ -13,5 +13,6 @@ Every package has the same app; they differ in the speech models inside.
 On a Mac, any package can also use Apple's recognizer instead, from Settings › Speech: SpeechAnalyzer on
 macOS 26, and the older recognizer before that.
 
-The Mac app is signed only ad hoc, so open it with Control-click › Open the first time.
+On a Mac, open the `.dmg` and drag Alcyo to Applications; the app is signed and notarized. Each Mac package also
+comes as a `.zip` holding the same app.
 On Linux, unpack the archive and run `install.sh`; later versions then install themselves.

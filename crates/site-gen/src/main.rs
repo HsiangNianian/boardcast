@@ -63,9 +63,13 @@ fn release_assets() -> Result<Assets, Box<dyn std::error::Error>> {
             }
             Ok(assets)
         }
-        Err(e) if env::var_os("ALCYO_REQUIRE_RELEASE").is_some() => Err(format!("reading the latest release: {e}").into()),
+        Err(e) if env::var_os("ALCYO_REQUIRE_RELEASE").is_some() => {
+            Err(format!("reading the latest release: {e}").into())
+        }
         Err(e) => {
-            eprintln!("alcyo-site-gen: no download sizes, the latest release could not be read: {e}");
+            eprintln!(
+                "alcyo-site-gen: no download sizes, the latest release could not be read: {e}"
+            );
             Ok(Assets::new())
         }
     }
@@ -75,11 +79,29 @@ fn release_assets() -> Result<Assets, Box<dyn std::error::Error>> {
 /// different processors of one system differ by a few megabytes, so the larger is shown.
 fn package_size(assets: &Assets, key: &str) -> Option<u64> {
     let (system, variant) = key.split_once('-').map_or((key, ""), |(s, v)| (s, v));
-    let ext = if system == "linux" { "tar.gz" } else { "zip" };
-    let variant = if variant.is_empty() { String::new() } else { format!("-{variant}") };
-    let ending = format!("-{system}{variant}.{ext}");
-    // Packages are alcyo-…; releases from before the rename still have boardcast-….
-    assets.iter().filter(|(name, _)| (name.starts_with("alcyo-") || name.starts_with("boardcast-")) && name.ends_with(&ending)).map(|&(_, size)| size).max()
+    // The Mac is offered as a disk image since 0.34.0; a release from before has only the zip.
+    let exts: &[&str] = match system {
+        "linux" => &["tar.gz"],
+        "macos" => &["dmg", "zip"],
+        _ => &["zip"],
+    };
+    let variant = if variant.is_empty() {
+        String::new()
+    } else {
+        format!("-{variant}")
+    };
+    exts.iter().find_map(|ext| {
+        let ending = format!("-{system}{variant}.{ext}");
+        // Packages are alcyo-…; releases from before the rename still have boardcast-….
+        assets
+            .iter()
+            .filter(|(name, _)| {
+                (name.starts_with("alcyo-") || name.starts_with("boardcast-"))
+                    && name.ends_with(&ending)
+            })
+            .map(|&(_, size)| size)
+            .max()
+    })
 }
 
 fn human_size(bytes: u64) -> String {
@@ -97,9 +119,15 @@ fn fill_sizes(content: &str, assets: &Assets) -> String {
     let mut rest = content;
     while let Some(start) = rest.find("{{ size:") {
         out.push_str(&rest[..start]);
-        let Some(len) = rest[start..].find(" }}") else { break };
+        let Some(len) = rest[start..].find(" }}") else {
+            break;
+        };
         let key = &rest[start + 8..start + len];
-        out.push_str(&package_size(assets, key).map(human_size).unwrap_or_default());
+        out.push_str(
+            &package_size(assets, key)
+                .map(human_size)
+                .unwrap_or_default(),
+        );
         rest = &rest[start + len + 3..];
     }
     out.push_str(rest);
@@ -239,7 +267,11 @@ fn dated(page: &Page, content: String) -> String {
     if matches!(page.slug, "" | "demo") {
         return content;
     }
-    content.replacen("</aside>", &format!(r#"<p class="updated label">updated {UPDATED}</p></aside>"#), 1)
+    content.replacen(
+        "</aside>",
+        &format!(r#"<p class="updated label">updated {UPDATED}</p></aside>"#),
+        1,
+    )
 }
 
 fn render(page: &Page, bundled_head: &str, bundled_body: &str, assets: &Assets) -> String {
@@ -287,7 +319,13 @@ fn render(page: &Page, bundled_head: &str, bundled_body: &str, assets: &Assets) 
         title = escape(page.title),
         footer = footer(page),
         description = escape(page.description),
-        content = dated(page, fill_sizes(&page.content.replace("{{ navigation }}", &navigation(page)), assets)),
+        content = dated(
+            page,
+            fill_sizes(
+                &page.content.replace("{{ navigation }}", &navigation(page)),
+                assets
+            )
+        ),
     )
 }
 
@@ -312,7 +350,12 @@ fn generate(staging: &Path, entry: &Path, assets: &Assets) -> io::Result<()> {
     let index = staging.join("index.html");
     let bundle = fs::read_to_string(&index)?;
     // Preserve hashed asset URLs, integrity attributes and Trunk's development reload script verbatim.
-    let html = render(page, contents(&bundle, "head")?, contents(&bundle, "body")?, assets);
+    let html = render(
+        page,
+        contents(&bundle, "head")?,
+        contents(&bundle, "body")?,
+        assets,
+    );
     fs::write(index, html)?;
     if page.slug.is_empty() {
         for page in &PAGES[2..] {
@@ -329,7 +372,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let entry = env::var("TRUNK_HTML_FILE")?;
     let entry = Path::new(&entry);
     // Only the home page shows the downloads.
-    let assets = if entry.ends_with("demo/index.html") { Assets::new() } else { release_assets()? };
+    let assets = if entry.ends_with("demo/index.html") {
+        Assets::new()
+    } else {
+        release_assets()?
+    };
     generate(Path::new(&staging), entry, &assets)?;
     Ok(())
 }
@@ -344,7 +391,10 @@ mod tests {
             let html = render(page, "", "", &Assets::new());
             assert!(html.contains(&format!("<title>{}</title>", escape(page.title))));
             assert!(html.contains("<h1>"));
-            assert_eq!(html.contains(r#"<footer class="sitemap">"#), matches!(page.slug, "" | "demo"));
+            assert_eq!(
+                html.contains(r#"<footer class="sitemap">"#),
+                matches!(page.slug, "" | "demo")
+            );
             assert_eq!(html.contains("phone-sitemap"), page.slug.is_empty());
             assert!(!html.contains("{{ ") && !html.contains("last updated"));
             assert_eq!(html.matches("<html lang=\"en\">").count(), 1);
@@ -357,7 +407,9 @@ mod tests {
             }
             if !matches!(page.slug, "" | "demo") {
                 assert!(!html.contains("type=\"module\""));
-                assert!(html.contains(&format!(r#"<p class="updated label">updated {UPDATED}</p></aside>"#)));
+                assert!(html.contains(&format!(
+                    r#"<p class="updated label">updated {UPDATED}</p></aside>"#
+                )));
             }
         }
         assert!(render(&PAGES[2], "", "", &Assets::new()).contains("<details open>"));
@@ -394,12 +446,24 @@ mod tests {
         let assets = parse_assets(&release);
         assert_eq!(package_size(&assets, "macos"), Some(847_000_000));
         assert_eq!(package_size(&assets, "macos-none"), Some(70_000_000));
+        let with_dmg: Assets = vec![
+            ("alcyo-0.34.0-arm64-macos.zip".into(), 845_000_000),
+            ("alcyo-0.34.0-arm64-macos.dmg".into(), 830_000_000),
+        ];
+        assert_eq!(
+            package_size(&with_dmg, "macos"),
+            Some(830_000_000),
+            "the disk image is what the page offers"
+        );
         assert_eq!(package_size(&assets, "linux"), Some(876_246_171));
         assert_eq!(package_size(&assets, "windows"), None);
         assert_eq!(human_size(876_246_171), "836 mb");
         assert_eq!(human_size(1_200_000_000), "1.1 gb");
         assert_eq!(
-            fill_sizes("<em>{{ size:linux }}</em><em>{{ size:windows-ja }}</em>", &assets),
+            fill_sizes(
+                "<em>{{ size:linux }}</em><em>{{ size:windows-ja }}</em>",
+                &assets
+            ),
             "<em>836 mb</em><em></em>"
         );
         let home = render(&PAGES[0], "", "", &assets);

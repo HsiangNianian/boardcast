@@ -1,6 +1,6 @@
 # The iPad plan
 
-iPad is boardcast's main target. No iPad is available for testing yet, so nothing here has been run on one. Each
+iPad is Alcyo's main target. No iPad is available for testing yet, so nothing here has been run on one. Each
 claim below is marked as checked in the source, or as a question for a real device.
 
 ## What already carries over

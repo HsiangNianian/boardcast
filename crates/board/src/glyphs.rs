@@ -95,7 +95,7 @@ impl Glyphs {
         Ok(Self { latin, cursive, punct, kana, source, hanzi: HashMap::new(), messy: 0.0 })
     }
 
-    /// A boardcast checkout with `assets/hanzi` generated.
+    /// An Alcyo checkout with `assets/hanzi` generated.
     pub fn from_checkout(root: &Path) -> Result<Self> {
         Self::load(HanziSource::Directory(root.join("assets/hanzi")))
     }

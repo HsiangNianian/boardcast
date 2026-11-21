@@ -27,7 +27,7 @@ while todo:
 groups = collections.defaultdict(list)
 for i in seen:
     p = packages[i]
-    if p["name"].startswith("boardcast"):
+    if p["name"].startswith("alcyo"):
         continue
     groups[(p.get("license") or "see its repository").replace("/", " OR ")].append(p)
 

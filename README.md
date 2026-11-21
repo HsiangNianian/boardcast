@@ -1,14 +1,14 @@
 <div align="center">
 
-# boardcast
+# Alcyo
 
 **Talk, and the whiteboard draws itself.**
 
 Local speech recognition · Live hand-drawn boards · Meeting replay and export
 
-[Website](https://hsiangnianian.github.io/boardcast/) · **[Download the desktop app](https://github.com/HsiangNianian/boardcast/releases/latest)** · [Changelog](CHANGELOG.md)
+[Website](https://hsiangnianian.github.io/alcyo/) · **[Download the desktop app](https://github.com/HsiangNianian/alcyo/releases/latest)** · [Changelog](CHANGELOG.md)
 
-[![Latest release](https://img.shields.io/github/v/release/HsiangNianian/boardcast?style=flat-square&color=c74432)](https://github.com/HsiangNianian/boardcast/releases/latest) [![Eval](https://github.com/HsiangNianian/boardcast/actions/workflows/eval.yml/badge.svg)](https://github.com/HsiangNianian/boardcast/actions/workflows/eval.yml) [![MIT](https://img.shields.io/badge/license-MIT-24292f?style=flat-square)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/HsiangNianian/alcyo?style=flat-square&color=c74432)](https://github.com/HsiangNianian/alcyo/releases/latest) [![Eval](https://github.com/HsiangNianian/alcyo/actions/workflows/eval.yml/badge.svg)](https://github.com/HsiangNianian/alcyo/actions/workflows/eval.yml) [![MIT](https://img.shields.io/badge/license-MIT-24292f?style=flat-square)](LICENSE)
 
 **English** · [中文](README.zh.md)
 
@@ -20,7 +20,7 @@ Local speech recognition · Live hand-drawn boards · Meeting replay and export
 </picture>
 <p align="center"><sub>A board from the previous app. The current app draws the same boards; the window around them looks different.</sub></p>
 
-boardcast turns a discussion into a growing whiteboard. Flows, notes, assignments, questions and rejected proposals are written, connected and crossed out as the conversation goes. Import a paper or a screenshot to discuss and mark up the source itself.
+Alcyo turns a discussion into a growing whiteboard. Flows, notes, assignments, questions and rejected proposals are written, connected and crossed out as the conversation goes. Import a paper or a screenshot to discuss and mark up the source itself.
 
 Speech recognition and the board model run on your computer by default. Once the models are downloaded, you can work offline. You can also connect an OpenAI-compatible API for a larger model.
 
@@ -30,7 +30,7 @@ The desktop app is a native rewrite in Rust on [GPUI](crates/README.md). The ear
 
 ## Get started
 
-1. Download a package from [Releases](https://github.com/HsiangNianian/boardcast/releases/latest). They hold the same app and differ in the speech models inside:
+1. Download a package from [Releases](https://github.com/HsiangNianian/alcyo/releases/latest). They hold the same app and differ in the speech models inside:
 
    | Package | Recognizes | Speech models |
    |---|---|---|
@@ -41,7 +41,7 @@ The desktop app is a native rewrite in Rust on [GPUI](crates/README.md). The ear
 
    Every package also carries the 334 MB model behind meeting search. Packages are built for macOS (Apple Silicon and Intel), Linux x64 and Windows x64.
 
-2. **macOS:** the app is signed only ad hoc, so open it with Control-click › Open the first time. **Linux:** unpack the archive and run `./install.sh` (into `~/.local`, no root needed; `--uninstall` removes it and keeps your data). Later versions then install themselves. **Windows:** unpack the archive and run `bin\boardcast.exe`; there is no installer, and it does not update itself yet.
+2. **macOS:** the app is signed only ad hoc, so open it with Control-click › Open the first time. **Linux:** unpack the archive and run `./install.sh` (into `~/.local`, no root needed; `--uninstall` removes it and keeps your data). Later versions then install themselves. **Windows:** unpack the archive and run `bin\alcyo.exe`; there is no installer, and it does not update itself yet.
 3. On first launch, Settings opens on **Board model**: download a model that runs on this computer, or set up a remote one. Speech recognition is already included.
 4. Click **Start listening** (or press `Space`), or type a line in the transcript's input and press Enter.
 
@@ -107,7 +107,7 @@ In **Settings › Speech › Listen to**, choose where the sound comes from: the
 
 ### Not in this app yet
 
-These were in the earlier app and have not been rebuilt yet: free editing and export with Excalidraw, the glossary and pronunciation correction ([#117](https://github.com/HsiangNianian/boardcast/issues/117)), a Windows package, a global microphone shortcut and the diagnostics bundle.
+These were in the earlier app and have not been rebuilt yet: free editing and export with Excalidraw, the glossary and pronunciation correction ([#117](https://github.com/HsiangNianian/alcyo/issues/117)), a Windows package, a global microphone shortcut and the diagnostics bundle.
 
 ## Shortcuts
 
@@ -150,25 +150,25 @@ Downloads can be paused and resumed, check free space and verify SHA-256, trying
 | Linux | `~/.local/share/app.alcyo.board/` | `~/.config/app.alcyo.board/` |
 | macOS | `~/Library/Application Support/app.alcyo.board/` | the same folder |
 
-`BOARDCAST_DATA` and `BOARDCAST_CONFIG` move them elsewhere.
+`ALCYO_DATA` and `ALCYO_CONFIG` move them elsewhere.
 
 ## Development and evaluation
 
 The desktop app is a Cargo workspace; [crates/README.md](crates/README.md) describes each crate. On Linux, install the packages the CI installs: `pkg-config libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-xcb-dev libxcb1-dev libvulkan-dev libasound2-dev libssl-dev libzstd-dev libfontconfig-dev libfreetype-dev` on Debian or Ubuntu.
 
 ```sh
-git clone https://github.com/HsiangNianian/boardcast.git
-cd boardcast
+git clone https://github.com/HsiangNianian/alcyo.git
+cd alcyo
 cargo run --release -p alcyo-ui     # the desktop app
 cargo test --workspace
-sh packaging/linux/package.sh           # target/package/boardcast-<version>-<arch>-linux.tar.gz
+sh packaging/linux/package.sh           # target/package/alcyo-<version>-<arch>-linux.tar.gz
 ```
 
 Everything is Rust, the website included: it is built with [Trunk](https://trunkrs.dev) (`cd landing && trunk serve`); see [landing/README.md](landing/README.md).
 
 ### Fonts
 
-No font needs installing to build or run the desktop app: the fonts it shows text in are built into the program ([crates/fonts](crates/fonts)), so the interface and exported PDFs look the same everywhere, and nothing goes missing on a computer without Chinese, Japanese or Korean fonts. `boardcast --self-check` reports whether each one loads and draws its languages.
+No font needs installing to build or run the desktop app: the fonts it shows text in are built into the program ([crates/fonts](crates/fonts)), so the interface and exported PDFs look the same everywhere, and nothing goes missing on a computer without Chinese, Japanese or Korean fonts. `alcyo --self-check` reports whether each one loads and draws its languages.
 
 | Font | Used for | Install for development? | In the release packages | License |
 | --- | --- | --- | --- | --- |
@@ -202,10 +202,10 @@ cargo run --release -p alcyo-tools -- agent-eval . board.json --llm http://127.0
 cargo run --release -p alcyo-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
 ```
 
-Or a remote model: any OpenAI-compatible service with `--remote <url> --model <name>` and the key in `BOARDCAST_API_KEY`, DeepSeek with `--deepseek` and `DEEPSEEK_API_KEY`, or the remote model saved in the app's Settings with `--saved`. `summary-eval` and `demo-record` take the same options. A report is named after the service and model, and no key is written to it; the output file records each case's input, cached and output tokens, for what a run costs.
+Or a remote model: any OpenAI-compatible service with `--remote <url> --model <name>` and the key in `ALCYO_API_KEY`, DeepSeek with `--deepseek` and `DEEPSEEK_API_KEY`, or the remote model saved in the app's Settings with `--saved`. `summary-eval` and `demo-record` take the same options. A report is named after the service and model, and no key is written to it; the output file records each case's input, cached and output tokens, for what a run costs.
 
 ```sh
-BOARDCAST_API_KEY=… cargo run --release -p alcyo-tools -- agent-eval . board.json --remote https://api.example.com/v1 --model some-model --set all --workers 4
+ALCYO_API_KEY=… cargo run --release -p alcyo-tools -- agent-eval . board.json --remote https://api.example.com/v1 --model some-model --set all --workers 4
 cargo run --release -p alcyo-tools -- agent-eval . board.json --saved --set all --repeat 3 --workers 4
 ```
 
@@ -240,6 +240,6 @@ Raise the workspace version, merge it, then push an annotated tag whose message 
 
 ## Contributing and license
 
-Report problems or discuss ideas in [Issues](https://github.com/HsiangNianian/boardcast/issues), or send a PR.
+Report problems or discuss ideas in [Issues](https://github.com/HsiangNianian/alcyo/issues), or send a PR.
 
 Code is licensed under [MIT](LICENSE). Chinese stroke data comes from [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data), derived from Make Me a Hanzi and Arphic fonts under the Arphic Public License; its license is distributed with the generated data. Japanese kana and supplementary kanji come from [KanjiVG](https://kanjivg.tagaini.net/) by Ulrich Apel, adapted into centerlines under [CC BY-SA 3.0](assets/licenses/kanjivg-CC-BY-SA-3.0.txt). Default English, accented Latin, Greek, Cyrillic and mathematical strokes are derived from Excalifont under the [SIL OFL](assets/licenses/handwritten-OFL.txt), with additional mathematical glyphs from the bundled Cascadia Code font under its [included license](assets/licenses/handwritten-cascadia.txt). Korean strokes are derived from [Xiaolai](https://github.com/lxgw/kose-font) by LXGW, itself derived from SetoFont by Nozomi Seto, under the [SIL OFL](assets/licenses/handwritten-xiaolai-OFL.txt). Joined-up English for a messy hand comes from the Hershey script font in [hersheytext](https://github.com/techninja/hersheytextjs), under [MIT](assets/licenses/hersheytext-MIT.txt). The desktop app has DM Sans, JetBrains Mono and Noto Sans CJK SC built in, all under the SIL OFL ([crates/fonts/files](crates/fonts/files)). The website uses DM Sans, JetBrains Mono and an unmodified Latin subset of Excalifont, all under the SIL OFL; see [landing/public/licenses](landing/public/licenses).

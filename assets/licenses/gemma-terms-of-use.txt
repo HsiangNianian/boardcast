@@ -1,6 +1,6 @@
 Gemma Terms of Use
 Source: https://ai.google.dev/gemma/terms (last modified April 1, 2026)
-EmbeddingGemma, which boardcast ships for meeting search, is listed in its Appendix.
+EmbeddingGemma, which Alcyo ships for meeting search, is listed in its Appendix.
 
 The terms below apply to Gemma models listed in the Appendix at bottom of this page. For Gemma 4 terms, see the Gemma 4 license.
 

@@ -7,7 +7,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-const LATEST: &str = "https://api.github.com/repos/HsiangNianian/boardcast/releases/latest";
+const LATEST: &str = "https://api.github.com/repos/HsiangNianian/alcyo/releases/latest";
 
 /// The latest release's packages, as file name and size in bytes.
 type Assets = Vec<(String, u64)>;
@@ -118,36 +118,36 @@ const PAGES: [Page; 5] = [
     Page {
         slug: "",
         label: "home",
-        title: "boardcast — talk, and the board draws itself",
+        title: "Alcyo — talk, and the board draws itself",
         description: "A whiteboard that writes down your meeting, stroke by stroke. Speech recognition and the board model run on your own computer.",
         content: include_str!("../pages/home.html"),
     },
     Page {
         slug: "demo",
         label: "web demo",
-        title: "boardcast — web demo",
-        description: "Sample meetings in English, replayed with the board engine the boardcast app runs, stroke by stroke.",
+        title: "Alcyo — web demo",
+        description: "Sample meetings in English, replayed with the board engine the Alcyo app runs, stroke by stroke.",
         content: include_str!("../pages/demo.html"),
     },
     Page {
         slug: "faq",
         label: "faq",
-        title: "FAQ — boardcast",
-        description: "Questions about boardcast: what it does, what it needs, which package to get, and where your meetings stay.",
+        title: "FAQ — Alcyo",
+        description: "Questions about Alcyo: what it does, what it needs, which package to get, and where your meetings stay.",
         content: include_str!("../pages/faq.html"),
     },
     Page {
         slug: "privacy",
         label: "privacy",
-        title: "Privacy — boardcast",
-        description: "What boardcast keeps, where, and the few times it uses the network.",
+        title: "Privacy — Alcyo",
+        description: "What Alcyo keeps, where, and the few times it uses the network.",
         content: include_str!("../pages/privacy.html"),
     },
     Page {
         slug: "terms",
         label: "terms",
-        title: "Terms — boardcast",
-        description: "The license boardcast is under, the licenses of the models and open-source work it is built on, and thanks to their authors.",
+        title: "Terms — Alcyo",
+        description: "The license Alcyo is under, the licenses of the models and open-source work it is built on, and thanks to their authors.",
         content: include_str!("../pages/terms.html"),
     },
 ];
@@ -215,14 +215,14 @@ fn footer(page: &Page) -> String {
         return String::new();
     }
     let home = root(page);
-    let releases = "https://github.com/HsiangNianian/boardcast/releases/latest";
+    let releases = "https://github.com/HsiangNianian/alcyo/releases/latest";
     let map = format!(
         r#"<footer class="sitemap">
   <a class="sitemap-brand" href="{home}">board<br>cast</a>
   <div><b>product</b><a href="{home}#story">talk &amp; draw</a><a href="{home}#story">circle</a><a href="{home}#story">replay</a><a href="{home}demo/">web demo</a></div>
   <div><b>get</b><a href="{home}#get">macos</a><a href="{home}#get">windows</a><a href="{home}#get">linux</a></div>
-  <div><b>latest</b><a href="{releases}">{}</a><a href="https://github.com/HsiangNianian/boardcast/blob/main/CHANGELOG.md">changelog</a></div>
-  <div><b>guide</b><a href="https://github.com/HsiangNianian/boardcast#get-started">start</a>{}</div>
+  <div><b>latest</b><a href="{releases}">{}</a><a href="https://github.com/HsiangNianian/alcyo/blob/main/CHANGELOG.md">changelog</a></div>
+  <div><b>guide</b><a href="https://github.com/HsiangNianian/alcyo#get-started">start</a>{}</div>
 </footer>"#,
         env!("CARGO_PKG_VERSION"),
         links(page, DOCUMENT_LINKS),

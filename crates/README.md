@@ -1,6 +1,6 @@
-# boardcast on GPUI
+# Alcyo on GPUI
 
-The native rewrite of boardcast. Its core is producing the board from speech and marking on it. Excalidraw free
+The native rewrite of Alcyo. Its core is producing the board from speech and marking on it. Excalidraw free
 editing is dropped. The earlier Tauri and TypeScript app has been removed (#150); what the Rust port was checked against
 is kept as frozen fixtures.
 
@@ -22,9 +22,9 @@ is kept as frozen fixtures.
 ## Install on Linux
 
 ```sh
-sh packaging/linux/package.sh     # target/package/boardcast-<version>-<arch>-linux.tar.gz
-tar -xzf boardcast-*-linux.tar.gz
-./boardcast-*-linux/install.sh    # into ~/.local, no root needed; --uninstall removes it and keeps your data
+sh packaging/linux/package.sh     # target/package/alcyo-<version>-<arch>-linux.tar.gz
+tar -xzf alcyo-*-linux.tar.gz
+./alcyo-*-linux/install.sh    # into ~/.local, no root needed; --uninstall removes it and keeps your data
 ```
 
 The package holds the app, the speech models, `llama-server` and the handwriting data. A board model is about 0.7 to 6 GB, so
@@ -32,7 +32,7 @@ the first launch offers to download one, or to use a remote model instead. It ru
 
 ## Updates
 
-An installed copy looks for a newer version shortly after starting, and Settings and `boardcast --update` do it on request.
+An installed copy looks for a newer version shortly after starting, and Settings and `alcyo --update` do it on request.
 It installs in the background and waits for you to restart, so a meeting is never interrupted, and a restart saves first.
 
 A package must carry a valid signature from the older app's update key, must contain a newer version, and must run its

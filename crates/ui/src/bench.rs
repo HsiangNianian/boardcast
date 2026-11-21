@@ -1,4 +1,4 @@
-//! Spike: can GPUI draw boardcast's handwriting? It writes a growing board and reports frame
+//! Spike: can GPUI draw Alcyo's handwriting? It writes a growing board and reports frame
 //! timing as JSON lines, so the limit comes from measurement rather than opinion.
 
 use anyhow::{Context as _, Result};
@@ -351,7 +351,7 @@ impl Render for View {
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let root = PathBuf::from(args.next().context("usage: spike <boardcast-root> <stroke|merged:N> <speed> <targets,..>")?);
+    let root = PathBuf::from(args.next().context("usage: spike <alcyo-root> <stroke|merged:N> <speed> <targets,..>")?);
     let batch = match args.next().as_deref() {
         Some("stroke") | None => Batch::Stroke,
         Some("raster") => Batch::Raster,

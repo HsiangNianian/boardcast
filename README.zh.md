@@ -1,14 +1,14 @@
 <div align="center">
 
-# boardcast
+# Alcyo
 
 **说话，板书自己长出来。**
 
 本地语音识别 · 实时手绘板书 · 会议回放与导出
 
-[官网](https://hsiangnianian.github.io/boardcast/) · **[下载桌面版](https://github.com/HsiangNianian/boardcast/releases/latest)** · [更新日志](CHANGELOG.md)
+[官网](https://hsiangnianian.github.io/alcyo/) · **[下载桌面版](https://github.com/HsiangNianian/alcyo/releases/latest)** · [更新日志](CHANGELOG.md)
 
-[![最新版本](https://img.shields.io/github/v/release/HsiangNianian/boardcast?style=flat-square&color=c74432)](https://github.com/HsiangNianian/boardcast/releases/latest) [![Eval](https://github.com/HsiangNianian/boardcast/actions/workflows/eval.yml/badge.svg)](https://github.com/HsiangNianian/boardcast/actions/workflows/eval.yml) [![MIT](https://img.shields.io/badge/license-MIT-24292f?style=flat-square)](LICENSE)
+[![最新版本](https://img.shields.io/github/v/release/HsiangNianian/alcyo?style=flat-square&color=c74432)](https://github.com/HsiangNianian/alcyo/releases/latest) [![Eval](https://github.com/HsiangNianian/alcyo/actions/workflows/eval.yml/badge.svg)](https://github.com/HsiangNianian/alcyo/actions/workflows/eval.yml) [![MIT](https://img.shields.io/badge/license-MIT-24292f?style=flat-square)](LICENSE)
 
 [English](README.md) · **中文**
 
@@ -20,7 +20,7 @@
 </picture>
 <p align="center"><sub>旧版应用里的一张板。现在的应用画出的板书一样，外面的窗口有所不同。</sub></p>
 
-boardcast 把讨论变成一张持续生长的白板：流程、要点、分工、问题和临时否掉的方案，都能随对话写上去、连起来、划掉。你也可以导入论文或截图，一边讨论，一边在原文上圈画。
+Alcyo 把讨论变成一张持续生长的白板：流程、要点、分工、问题和临时否掉的方案，都能随对话写上去、连起来、划掉。你也可以导入论文或截图，一边讨论，一边在原文上圈画。
 
 默认在本机完成语音识别和板书模型推理。模型下载好后可以离线开会；需要更大的模型时，也能连接 OpenAI 兼容接口。
 
@@ -30,7 +30,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
 ## 开始使用
 
-1. 从 [Releases](https://github.com/HsiangNianian/boardcast/releases/latest) 下载安装包。各个包里的应用相同，区别只在内置的语音模型：
+1. 从 [Releases](https://github.com/HsiangNianian/alcyo/releases/latest) 下载安装包。各个包里的应用相同，区别只在内置的语音模型：
 
    | 安装包 | 能识别 | 语音模型 |
    |---|---|---|
@@ -41,7 +41,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
    每个安装包还都带着会议搜索用的模型，约 334 MB。目前提供 macOS（Apple Silicon 和 Intel）、x64 的 Linux 和 x64 的 Windows 安装包。
 
-2. **macOS：** 应用只做了临时签名，第一次打开请按住 Control 点击 › 打开。**Linux：** 解压后运行 `./install.sh`（装到 `~/.local`，不需要 root；`--uninstall` 卸载并保留数据）。之后的版本会自动安装。**Windows：** 解压后运行 `bin\boardcast.exe`；没有安装程序，暂时也不会自动更新。
+2. **macOS：** 应用只做了临时签名，第一次打开请按住 Control 点击 › 打开。**Linux：** 解压后运行 `./install.sh`（装到 `~/.local`，不需要 root；`--uninstall` 卸载并保留数据）。之后的版本会自动安装。**Windows：** 解压后运行 `bin\alcyo.exe`；没有安装程序，暂时也不会自动更新。
 3. 第一次启动时，设置会停在**板书模型**：下载一个在本机运行的模型，或者设置远程模型。语音识别已经内置。
 4. 点**开始收音**（或按 `空格`），也可以在转写下方的输入框里打一句话，回车上板。
 
@@ -102,7 +102,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
 ### 现在的应用还没有
 
-下面这些旧版有，还没有在新版里重做：用 Excalidraw 自由编辑和导出、术语表与读音纠错（[#117](https://github.com/HsiangNianian/boardcast/issues/117)）、Windows 安装包、全局收音快捷键和诊断包。
+下面这些旧版有，还没有在新版里重做：用 Excalidraw 自由编辑和导出、术语表与读音纠错（[#117](https://github.com/HsiangNianian/alcyo/issues/117)）、Windows 安装包、全局收音快捷键和诊断包。
 
 ## 快捷键
 
@@ -145,25 +145,25 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 | Linux | `~/.local/share/app.alcyo.board/` | `~/.config/app.alcyo.board/` |
 | macOS | `~/Library/Application Support/app.alcyo.board/` | 同一个目录 |
 
-可以用 `BOARDCAST_DATA` 和 `BOARDCAST_CONFIG` 改到别处。
+可以用 `ALCYO_DATA` 和 `ALCYO_CONFIG` 改到别处。
 
 ## 开发与评测
 
 桌面版是一个 Cargo workspace，各 crate 的分工见 [crates/README.md](crates/README.md)。在 Linux 上请安装 CI 用到的这些包（Debian / Ubuntu）：`pkg-config libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-xcb-dev libxcb1-dev libvulkan-dev libasound2-dev libssl-dev libzstd-dev libfontconfig-dev libfreetype-dev`。
 
 ```sh
-git clone https://github.com/HsiangNianian/boardcast.git
-cd boardcast
+git clone https://github.com/HsiangNianian/alcyo.git
+cd alcyo
 cargo run --release -p alcyo-ui     # 桌面版
 cargo test --workspace
-sh packaging/linux/package.sh           # target/package/boardcast-<version>-<arch>-linux.tar.gz
+sh packaging/linux/package.sh           # target/package/alcyo-<version>-<arch>-linux.tar.gz
 ```
 
 全部代码都是 Rust，官网也一样：用 [Trunk](https://trunkrs.dev) 构建（`cd landing && trunk serve`），见 [landing/README.md](landing/README.md)。
 
 ### 字体
 
-构建和运行桌面版都不需要安装字体：显示文字用的字体都编进了程序（[crates/fonts](crates/fonts)），所以界面和导出的 PDF 在哪台电脑上都一样，没有中文、日文、韩文字体的电脑也不会缺字。`boardcast --self-check` 会检查每个字体能否加载、能否显示它负责的语言。
+构建和运行桌面版都不需要安装字体：显示文字用的字体都编进了程序（[crates/fonts](crates/fonts)），所以界面和导出的 PDF 在哪台电脑上都一样，没有中文、日文、韩文字体的电脑也不会缺字。`alcyo --self-check` 会检查每个字体能否加载、能否显示它负责的语言。
 
 | 字体 | 用途 | 开发时是否要安装 | 是否随发布包分发 | 许可证 |
 | --- | --- | --- | --- | --- |
@@ -219,6 +219,6 @@ target/release/asr-eval run . --suite meetings     # 9 段约 10 分钟、跨行
 
 ## 参与与许可
 
-在 [Issues](https://github.com/HsiangNianian/boardcast/issues) 里报告问题或讨论想法，也欢迎直接提 PR。
+在 [Issues](https://github.com/HsiangNianian/alcyo/issues) 里报告问题或讨论想法，也欢迎直接提 PR。
 
 代码使用 [MIT](LICENSE) 许可。中文笔画数据来自 [hanzi-writer-data](https://github.com/chanind/hanzi-writer-data)，源自 Make Me a Hanzi 和文鼎字体，采用 Arphic Public License，许可证随生成的数据一起分发。日文假名和补充汉字来自 Ulrich Apel 的 [KanjiVG](https://kanjivg.tagaini.net/)，改为中心线后以 [CC BY-SA 3.0](assets/licenses/kanjivg-CC-BY-SA-3.0.txt) 分发。默认的英文和数学符号笔画源自 Excalifont，采用 [SIL OFL](assets/licenses/handwritten-OFL.txt)；另有部分数学符号来自内置的 Cascadia Code 字体，见其[附带许可](assets/licenses/handwritten-cascadia.txt)。潦草时的英文连写来自 [hersheytext](https://github.com/techninja/hersheytextjs) 里的 Hershey 连写体，采用 [MIT](assets/licenses/hersheytext-MIT.txt)。桌面版内置 DM Sans、JetBrains Mono 和 Noto Sans CJK SC，均采用 SIL OFL（见 [crates/fonts/files](crates/fonts/files)）。官网使用 DM Sans、JetBrains Mono 和未修改的 Excalifont 拉丁子集，均采用 SIL OFL，见 [landing/public/licenses](landing/public/licenses)。

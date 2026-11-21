@@ -3,7 +3,7 @@
 # ImageMagick. The outputs are committed, so packaging never runs this.
 #   macos.svg  -> icon.icns              macOS bundle (Big Sur grid, with shadow)
 #   desktop.svg -> 128x128@2x.png         Linux hicolor 256x256
-#   desktop.svg -> icon.ico               Windows, embedded in boardcast.exe by crates/ui/build.rs
+#   desktop.svg -> icon.ico               Windows, embedded in alcyo.exe by crates/ui/build.rs
 #   ios.svg    -> ios-1024.png           App Store Connect, full bleed, no alpha
 #   favicon, desktop.svg, ios.svg -> landing/public/favicon.{svg,png}, apple-touch-icon.png   website
 set -eu

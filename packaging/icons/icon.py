@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the app icon as SVG: the Banshu mark on Apple's continuous-corner tile.
+"""Write the app icon as SVG: the Alcyo kingfisher on Apple's continuous-corner tile.
 
     icon.py macos    > macos.svg     Big Sur grid: 824 px tile on a 1024 canvas, with its drop shadow
     icon.py desktop  > desktop.svg   Linux and Windows: a larger tile, no shadow
@@ -11,13 +11,16 @@ make.sh turns these into icon.icns, the Linux PNG and icon.ico.
 import math
 import sys
 
-INK, CHALK, RED = "#1e1e1e", "#f3efe6", "#e8432a"
-# The mark, drawn on a 60-unit tile whose top-left corner sits at (2, 2); see promo/mockup/Brand.html.
-WAVE = "M12 33 C14.5 23 16.5 23 19 33 S23.5 44 26 33 S29.5 27 32 33 S35 37 38 34 C42 31.5 46 33.5 50 33"
-DOT = (52.5, 33, 4)
-# The mark spans x 9.7-56.5 and y 23-44 with its stroke, so it sits right of and below the tile's centre
-# (32, 32). Icons keep it inside Apple's grid: centred and scaled to about 80% of the tile.
-GLYPH = "translate(32 32) scale(0.8) translate(-33.1 -33.5)"
+INK, CHALK, TEAL, ORANGE = "#1e1e1e", "#f3efe6", "#0a7ea4", "#f07a2b"
+# The kingfisher, drawn on a 512 canvas as calligraphy: one stroke from the forked tail along the back into
+# the round head and out to the beak, a slim orange crescent for the breast with a hairline of paper between,
+# a wing and a long eye cut out of the body. The working files are in promo/mockup/halcy-final.
+BODY = "M48 430 C120 392 168 300 214 236 C240 182 280 134 334 132 C370 131 394 150 398 172 L480 194 L390 204 C374 226 348 244 316 262 C262 292 214 330 168 372 C134 402 102 426 70 448 L84 429 Z"
+BREAST = "M372 236 C350 274 300 318 246 352 C214 372 182 390 148 402 C196 404 252 386 298 352 C336 324 362 284 372 236 Z"
+CUTS = ("M150 372 C190 318 232 262 290 222 C246 270 206 320 168 370 Z",
+        "M318 176 C330 167 352 163 370 168 C354 175 336 179 318 176 Z")
+# The bird spans x 48-480, y 131-448 on that canvas. Icons centre it and scale it to about 74% of the tile.
+CENTRE, SPAN, FILL = (264, 289.5), 432, 0.74
 
 
 def squircle(x, y, size, radius, steps=48):
@@ -58,7 +61,6 @@ def svg(kind):
     else:
         sys.exit(f"unknown icon kind {kind!r}: macos, desktop or ios")
     off = (canvas - tile) / 2
-    scale = tile / 60
     shape = f'<rect width="{canvas}" height="{canvas}"' if radius == 0 else f'<path d="{squircle(off, off, tile, radius)}"'
     # The template's shadow, as a blurred copy of the tile underneath it: a filter on the tile itself
     # would also run over its gradient and band it.
@@ -66,17 +68,19 @@ def svg(kind):
     if shadow:
         under = ('<filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="10"/></filter>'
                  f'{shape} fill="#000" fill-opacity="0.3" transform="translate(0 10)" filter="url(#s)"/>\n')
-    # A dark tab strip is about the tile's own colour, so there the tab icon gets a faint chalk edge.
+    # A light tab strip is about the tile's own colour, so there the tab icon gets a faint ink edge.
     if kind == "favicon":
-        under += ("<style>@media (prefers-color-scheme: dark) "
-                  "{ .t { stroke: #f3efe6; stroke-opacity: 0.3; stroke-width: 40 } }</style>\n")
-    cx, cy, r = DOT
+        under += ("<style>@media (prefers-color-scheme: light) "
+                  "{ .t { stroke: #1e1e1e; stroke-opacity: 0.14; stroke-width: 24 } }</style>\n")
+    k = tile * FILL / SPAN
+    cuts = "".join(f'<path d="{c}" fill="#000"/>' for c in CUTS)
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {canvas} {canvas}" width="{canvas}" height="{canvas}">
-{under}<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2a29"/><stop offset="1" stop-color="{INK}"/></linearGradient>
+{under}<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f8f5ef"/><stop offset="1" stop-color="#ebe5d8"/></linearGradient>
+<mask id="m"><rect x="-100" y="-100" width="800" height="800" fill="#fff"/>{cuts}</mask>
 {shape} class="t" fill="url(#g)"/>
-<g transform="translate({off - 2 * scale:.3f} {off - 2 * scale:.3f}) scale({scale:.5f}) {GLYPH}">
-<path d="{WAVE}" fill="none" stroke="{CHALK}" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="{cx}" cy="{cy}" r="{r}" fill="{RED}"/>
+<g transform="translate({canvas / 2} {canvas / 2}) scale({k:.5f}) translate({-CENTRE[0]} {-CENTRE[1]})">
+<path d="{BODY}" fill="{TEAL}" mask="url(#m)"/>
+<path d="{BREAST}" fill="{ORANGE}"/>
 </g>
 </svg>
 """

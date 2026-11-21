@@ -38,7 +38,7 @@ impl Keeper {
         let (encoder, pre_skip) = encoder()?;
         let mut writer = PacketWriter::new(BufWriter::new(file));
         writer.write_packet(opus_head(pre_skip), SERIAL, PacketWriteEndInfo::EndPage, 0).context("writing the Opus header")?;
-        let vendor = b"Banshu";
+        let vendor = b"Alcyo";
         let mut tags = b"OpusTags".to_vec();
         tags.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
         tags.extend_from_slice(vendor);

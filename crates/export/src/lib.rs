@@ -293,9 +293,9 @@ impl Frozen {
     }
 }
 
-/// `banshu-20260102-0304.md`, as the older app names them.
+/// `alcyo-20260102-0304.md`.
 pub fn file_name(kind: Kind) -> String {
-    format!("banshu-{}.{}", chrono::Local::now().format("%Y%m%d-%H%M"), kind.extension())
+    format!("alcyo-{}.{}", chrono::Local::now().format("%Y%m%d-%H%M"), kind.extension())
 }
 
 /// A picker may hand back the name without the extension that was suggested.

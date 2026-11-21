@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build the Mac apps: target/package/boardcast-<version>-<arch>-macos[-<variant>].zip, holding Banshu.app,
+# Build the Mac apps: target/package/boardcast-<version>-<arch>-macos[-<variant>].zip, holding Alcyo.app,
 # one per variant in VARIANTS (default "all"; see packaging/models.sh). "none" carries no speech models
 # and recognizes with Apple's own SpeechAnalyzer, or SFSpeechRecognizer before macOS 26.
 # They are signed only ad hoc, which Apple silicon requires to run at all, so a downloaded copy has to
@@ -29,7 +29,7 @@ for variant in $variants; do
   name="boardcast-$version-$(uname -m)-macos$(variant_suffix "$variant")"
   out="target/package/$name"
   rm -rf "$out"
-  app="$out/Banshu.app/Contents"
+  app="$out/Alcyo.app/Contents"
   lib="$app/Resources/boardcast"
   mkdir -p "$app/MacOS" "$lib/voice/speaker" "$lib/pdfium" "$lib/licenses"
 
@@ -54,10 +54,10 @@ for variant in $variants; do
   for f in OFL-DMSans.txt OFL-JetBrainsMono.txt OFL-NotoSansCJK.txt; do test -f "$lib/licenses/$f" || { echo "missing font license $f" >&2; exit 1; }; done
   cp target/pdfium/LICENSE "$lib/licenses/pdfium-LICENSE"
 
-  codesign --force --deep --sign - "$out/Banshu.app"
+  codesign --force --deep --sign - "$out/Alcyo.app"
 
   "$app/MacOS/boardcast" --self-check
-  ditto -c -k --keepParent "$out/Banshu.app" "target/package/$name.zip"
+  ditto -c -k --keepParent "$out/Alcyo.app" "target/package/$name.zip"
   rm -rf "$out"
   ls -lh "target/package/$name.zip"
 done

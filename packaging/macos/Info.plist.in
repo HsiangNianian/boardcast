@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>Banshu</string>
+  <string>Alcyo</string>
   <key>CFBundleDisplayName</key>
-  <string>Banshu</string>
+  <string>Alcyo</string>
   <key>CFBundleIdentifier</key>
   <string>games.mmstudio.boardcast</string>
   <key>CFBundleExecutable</key>
@@ -23,10 +23,10 @@
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSAudioCaptureUsageDescription</key>
-  <string>When you choose to hear the device's sound, Banshu listens to what this Mac plays, such as the other side of an online meeting. The sound is recognized on this Mac and never uploaded.</string>
+  <string>When you choose to hear the device's sound, Alcyo listens to what this Mac plays, such as the other side of an online meeting. The sound is recognized on this Mac and never uploaded.</string>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Banshu listens to what is said in a meeting and turns it into a board. The sound is recognized on this Mac and never uploaded.</string>
+  <string>Alcyo listens to what is said in a meeting and turns it into a board. The sound is recognized on this Mac and never uploaded.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>When you choose Apple's speech recognition, Banshu uses it to turn what is said in a meeting into text, on this Mac when it can.</string>
+  <string>When you choose Apple's speech recognition, Alcyo uses it to turn what is said in a meeting into text, on this Mac when it can.</string>
 </dict>
 </plist>

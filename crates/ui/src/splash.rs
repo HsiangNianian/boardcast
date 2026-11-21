@@ -8,7 +8,7 @@ use boardcast_board::pen::{ink, line, outline, place, Inked, Rng};
 use gpui_kit::{canvas, div, point, prelude::*, px, rgb, Background, Bounds, FillOptions, Hsla, IntoElement, PathBuilder, PathStyle, Pixels, Window};
 use std::time::{Duration, Instant};
 
-const WORD: &str = "Banshu";
+const WORD: &str = "Alcyo";
 const SIZE: f32 = 56.0;
 const INK: u32 = 0x1e_1e_1e;
 /// As long as the name takes to write, so it never flashes past half written.

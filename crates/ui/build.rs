@@ -4,7 +4,7 @@
 
 use std::{env, fs, path::PathBuf};
 
-const NAME: &str = "Banshu";
+const NAME: &str = "Alcyo";
 
 fn main() {
     let icon = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("../../packaging/icons/icon.ico");

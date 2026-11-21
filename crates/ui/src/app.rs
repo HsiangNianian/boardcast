@@ -8560,7 +8560,7 @@ impl Render for Workbench {
                             .flex()
                             .flex_col()
                             .gap(px(2.))
-                            .child(div().text_title().font_weight(gpui_kit::FontWeight::SEMIBOLD).child("Banshu"))
+                            .child(div().text_title().font_weight(gpui_kit::FontWeight::SEMIBOLD).child("Alcyo"))
                             .child(div().font_family(theme::MONO).text_small().text_color(rgb(pal().muted)).child(ta!("version-number", version = boardcast_update::VERSION)))
                             .when_some(update_hint, |d, hint| d.child(div().pt_1().text_small().text_color(rgb(if failed { pal().danger } else { pal().muted })).child(hint))),
                     )
@@ -9398,7 +9398,7 @@ gpui_kit::actions!(boardcast, [Quit]);
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn app_menu(cx: &mut App) {
     cx.bind_keys([gpui_kit::KeyBinding::new("cmd-q", Quit, None)]);
-    cx.set_menus(vec![gpui_kit::Menu { name: "Banshu".into(), items: vec![gpui_kit::MenuItem::action(t("quit-boardcast"), Quit)], disabled: false }]);
+    cx.set_menus(vec![gpui_kit::Menu { name: "Alcyo".into(), items: vec![gpui_kit::MenuItem::action(t("quit-boardcast"), Quit)], disabled: false }]);
 }
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
@@ -9625,9 +9625,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             // what the compositor draws, and the toolkit adds buttons only when the compositor leaves it to us.
             ..if cfg!(any(target_os = "macos", target_os = "windows")) {
                 let base = TitleBar::window_options();
-                WindowOptions { titlebar: base.titlebar.map(|t| gpui_kit::TitlebarOptions { title: Some("Banshu".into()), ..t }), ..base }
+                WindowOptions { titlebar: base.titlebar.map(|t| gpui_kit::TitlebarOptions { title: Some("Alcyo".into()), ..t }), ..base }
             } else {
-                WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some("Banshu".into()), ..Default::default() }), ..Default::default() }
+                WindowOptions { titlebar: Some(gpui_kit::TitlebarOptions { title: Some("Alcyo".into()), ..Default::default() }), ..Default::default() }
             }
         };
         // Closing the last window ends the app, which also stops the local model.

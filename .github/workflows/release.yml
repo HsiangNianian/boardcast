@@ -230,7 +230,7 @@ jobs:
               notes="--notes-file notes.md --generate-notes"
             fi
             prerelease=$([ "$PRERELEASE" = true ] && echo --prerelease || true)
-            gh release create "$TAG" --draft $prerelease --verify-tag --title "Banshu $VERSION" $notes
+            gh release create "$TAG" --draft $prerelease --verify-tag --title "Alcyo $VERSION" $notes
           fi
           # A draft left by an attempt that stopped halfway is finished the same way.
           gh release upload "$TAG" $packages manifest.json --clobber

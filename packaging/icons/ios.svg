@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2a29"/><stop offset="1" stop-color="#1e1e1e"/></linearGradient>
+<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f8f5ef"/><stop offset="1" stop-color="#ebe5d8"/></linearGradient>
+<mask id="m"><rect x="-100" y="-100" width="800" height="800" fill="#fff"/><path d="M150 372 C190 318 232 262 290 222 C246 270 206 320 168 370 Z" fill="#000"/><path d="M318 176 C330 167 352 163 370 168 C354 175 336 179 318 176 Z" fill="#000"/></mask>
 <rect width="1024" height="1024" class="t" fill="url(#g)"/>
-<g transform="translate(-34.133 -34.133) scale(17.06667) translate(32 32) scale(0.8) translate(-33.1 -33.5)">
-<path d="M12 33 C14.5 23 16.5 23 19 33 S23.5 44 26 33 S29.5 27 32 33 S35 37 38 34 C42 31.5 46 33.5 50 33" fill="none" stroke="#f3efe6" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="52.5" cy="33" r="4" fill="#e8432a"/>
+<g transform="translate(512.0 512.0) scale(1.75407) translate(-264 -289.5)">
+<path d="M48 430 C120 392 168 300 214 236 C240 182 280 134 334 132 C370 131 394 150 398 172 L480 194 L390 204 C374 226 348 244 316 262 C262 292 214 330 168 372 C134 402 102 426 70 448 L84 429 Z" fill="#0a7ea4" mask="url(#m)"/>
+<path d="M372 236 C350 274 300 318 246 352 C214 372 182 390 148 402 C196 404 252 386 298 352 C336 324 362 284 372 236 Z" fill="#f07a2b"/>
 </g>
 </svg>

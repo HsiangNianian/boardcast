@@ -193,7 +193,7 @@ final class Legacy: Engine {
             SFSpeechRecognizer.requestAuthorization { done.resume(returning: $0) }
         }
         guard status == .authorized else {
-            throw Failure(message: "Speech recognition is not allowed. Turn it on for Banshu in System Settings › Privacy & Security › Speech Recognition.")
+            throw Failure(message: "Speech recognition is not allowed. Turn it on for Alcyo in System Settings › Privacy & Security › Speech Recognition.")
         }
         // The system's default recognizer stands in only when it hears the same language, such as en_US for an
         // English Mac set to a region Apple has no recognizer for; never one for another language.

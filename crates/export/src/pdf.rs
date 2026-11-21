@@ -235,7 +235,7 @@ fn clean(text: &str) -> String {
 fn rows_of(doc: &Doc) -> Vec<Row> {
     let (summary, transcript, note_prefix, colon) = if doc.english { ("Summary", "Transcript", "Edited: ", ": ") } else { ("摘要", "会议记录", "手动修改：", "：") };
     let board_name = |n: u64| if doc.english { format!("Board {n}") } else { format!("第 {n} 张板") };
-    let mut out = vec![Row { bold: true, ..Row::new(clean(&doc.title), 18.2) }, Row { color: MUTED, gap: 2.8, ..Row::new(format!("{} · Banshu", doc.began), 9.1) }];
+    let mut out = vec![Row { bold: true, ..Row::new(clean(&doc.title), 18.2) }, Row { color: MUTED, gap: 2.8, ..Row::new(format!("{} · Alcyo", doc.began), 9.1) }];
     if !doc.summary.trim().is_empty() {
         out.push(Row { bold: true, gap: 17.5, ..Row::new(summary, 13.3) });
         for raw in doc.summary.lines() {
@@ -427,7 +427,7 @@ pub fn pdf(doc: &Doc, boards: &[Drawn]) -> Result<Output> {
 
 fn pdf_with(doc: &Doc, boards: &[Drawn], mut fonts: Fonts) -> Result<Output> {
     let mut document = Document::new();
-    document.set_metadata(Metadata::new().title(doc.title.clone()).creator("Banshu".to_string()));
+    document.set_metadata(Metadata::new().title(doc.title.clone()).creator("Alcyo".to_string()));
     let settings = || PageSettings::from_wh(WIDTH, HEIGHT).ok_or_else(|| anyhow!("bad page size"));
     let shown: Vec<(usize, &Drawn)> = boards.iter().enumerate().filter(|(_, b)| !b.strokes.is_empty() || b.page.is_some()).collect();
     for (index, board) in &shown {

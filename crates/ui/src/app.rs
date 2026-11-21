@@ -8629,17 +8629,14 @@ impl Render for Workbench {
                     .into_any_element()
             }
         };
-        // Before there is a model, choosing one is the only thing to do here.
-        let tabs: Vec<(SettingsTab, &'static str, &'static str)> = [
+        // Every tab, with or without a board model: speech works without one, and can be set up first.
+        let tabs: Vec<(SettingsTab, &'static str, &'static str)> = vec![
             (SettingsTab::Model, "chip", t("board-model")),
             (SettingsTab::Speech, "mic", t("speech")),
             (SettingsTab::General, "settings", t("general")),
             (SettingsTab::Shortcuts, "keyboard", t("shortcuts")),
             (SettingsTab::About, "info", t("about")),
-        ]
-        .into_iter()
-        .filter(|(t, ..)| !self.needs_model || matches!(t, SettingsTab::Model | SettingsTab::General))
-        .collect();
+        ];
         // The title, the tabs and the page share one column, so their edges line up.
         let settings = div()
             .id("settings-page")

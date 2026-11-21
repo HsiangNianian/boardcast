@@ -68,3 +68,5 @@ for variant in $variants; do
   rm -rf "$out"
   ls -lh "target/package/$name.zip"
 done
+# With NOTARIZE=1 every disk image is with Apple by now; wait for them all and staple their tickets.
+notary_wait

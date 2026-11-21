@@ -63,21 +63,72 @@ make_dmg() {
   hdiutil create -quiet -volname Alcyo -srcfolder "$stage" -ov -format UDZO "$dmg"
   rm -rf "$stage"
   codesign --force --timestamp --sign "$identity" "$dmg"
-  if [ "${NOTARIZE:-0}" = 1 ]; then
-    key=$(mktemp -d)/AuthKey.p8
-    printf '%s' "$APPLE_API_KEY_P8" | base64 --decode > "$key"
-    xcrun notarytool submit "$dmg" --key "$key" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID" --wait --timeout 2h --output-format json > "$dmg.notary.json" || true
-    cat "$dmg.notary.json"
-    status=$(sed -n 's/.*"status" *: *"\([^"]*\)".*/\1/p' "$dmg.notary.json" | head -1)
-    if [ "$status" != Accepted ]; then
-      id=$(sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' "$dmg.notary.json" | head -1)
-      [ -z "$id" ] || xcrun notarytool log "$id" --key "$key" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID" || true
-      rm -f "$key"
-      echo "notarization of $dmg: ${status:-failed}" >&2
-      exit 1
-    fi
-    rm -f "$key" "$dmg.notary.json"
-    xcrun stapler staple "$dmg"
-    xcrun stapler validate "$dmg"
+  [ "${NOTARIZE:-0}" = 1 ] && notary_submit "$dmg"
+  return 0
+}
+
+# Notarizing: every disk image is sent to Apple as soon as it is made, and notary_wait then waits for all
+# of them together, so the packages wait in Apple's queue at the same time rather than one after another.
+# Each step retries, as a run of an hour or more meets the odd network outage on the runner.
+notary_pending=""
+notary_key=""
+
+notary() {
+  if [ -z "$notary_key" ]; then
+    notary_key=$(mktemp -d)/AuthKey.p8
+    printf '%s' "$APPLE_API_KEY_P8" | base64 --decode > "$notary_key"
   fi
+  xcrun notarytool "$@" --key "$notary_key" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID"
+}
+
+json_field() {
+  sed -n "s/.*\"$1\" *: *\"\([^\"]*\)\".*/\1/p" | head -1
+}
+
+notary_submit() {
+  submit_dmg=$1
+  for attempt in 1 2 3 4 5; do
+    submit_id=$(notary submit "$submit_dmg" --output-format json 2>/dev/null | json_field id || true)
+    [ -n "$submit_id" ] && break
+    echo "sending $submit_dmg to Apple failed (attempt $attempt), trying again" >&2
+    sleep 30
+  done
+  [ -n "$submit_id" ] || { echo "could not send $submit_dmg to Apple" >&2; exit 1; }
+  echo "sent $submit_dmg to Apple: $submit_id"
+  notary_pending="$notary_pending $submit_id=$submit_dmg"
+}
+
+# Wait for every disk image sent, at most three hours, then staple each ticket. A rejection prints Apple's
+# log and fails the build.
+notary_wait() {
+  [ -n "$notary_pending" ] || return 0
+  deadline=$(( $(date +%s) + 3 * 3600 ))
+  left=$notary_pending
+  while [ -n "$left" ]; do
+    [ "$(date +%s)" -lt "$deadline" ] || { echo "Apple did not finish notarizing within three hours:$left" >&2; exit 1; }
+    still=""
+    for entry in $left; do
+      wait_id=${entry%%=*} wait_dmg=${entry#*=}
+      # A failed check, from the network or Apple, is asked again next time round.
+      wait_status=$(notary info "$wait_id" --output-format json 2>/dev/null | json_field status || true)
+      case "$wait_status" in
+        Accepted)
+          echo "notarized $wait_dmg"
+          xcrun stapler staple "$wait_dmg"
+          xcrun stapler validate "$wait_dmg"
+          ;;
+        Invalid|Rejected)
+          notary log "$wait_id" || true
+          rm -f "$notary_key"
+          echo "notarization of $wait_dmg: $wait_status" >&2
+          exit 1
+          ;;
+        *) still="$still $entry" ;;
+      esac
+    done
+    left=$still
+    [ -z "$left" ] || sleep 30
+  done
+  rm -f "$notary_key"
+  notary_pending=""
 }

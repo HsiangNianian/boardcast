@@ -1,5 +1,4 @@
-//! The remote model's settings, in the same `remote.json` the older app uses, so a key saved there
-//! keeps working. The file is private to the user and the key is never logged.
+//! The remote model's settings, in `remote.json` in the app's settings folder. The file is private to the user and the key is never logged.
 
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
@@ -74,7 +73,7 @@ impl Default for Settings {
 }
 
 fn config_dir() -> Result<PathBuf> {
-    if let Ok(dir) = std::env::var("ALCYO_CONFIG").or_else(|_| std::env::var("BOARDCAST_CONFIG")) {
+    if let Ok(dir) = std::env::var("ALCYO_CONFIG") {
         return Ok(PathBuf::from(dir));
     }
     #[cfg(target_os = "macos")]
@@ -86,20 +85,7 @@ fn config_dir() -> Result<PathBuf> {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join(".config"),
     };
-    Ok(moved_in(&base))
-}
-
-/// The settings folder, after moving one left by a build that used the older name. On macOS and
-/// Windows it is the same folder as the data, which may already have moved; that is fine either way.
-fn moved_in(base: &std::path::Path) -> PathBuf {
-    let (old, new) = (base.join("games.mmstudio.boardcast"), base.join("app.alcyo.board"));
-    if new.exists() || !old.exists() {
-        return new;
-    }
-    match fs::rename(&old, &new) {
-        Ok(()) => new,
-        Err(_) => old,
-    }
+    Ok(base.join("app.alcyo.board"))
 }
 
 impl Settings {
@@ -245,7 +231,7 @@ mod tests {
     #[test]
     fn saved_settings_round_trip_with_private_permissions() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("boardcast-settings-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("alcyo-settings-{}", std::process::id()));
         std::env::set_var("ALCYO_CONFIG", &dir);
         let s = Settings { base_url: "https://x".into(), api_key: "sk-secret".into(), model: "m".into(), enabled: true, diarize: false, turn_pages: true, glossary: "鉴权; API = A P I".into(), templates: vec![("Sprint review".into(), vec!["Done".into(), "Next".into()])], system_speech: true, speech_language: "ja-JP".into(), interface_language: "zh".into(), appearance: "dark".into(), listen: "both".into(), input: "pulse:mic".into(), computer: "pulse:sink.monitor".into(), meeting_search: false, messy: 0.25, sidebar_hidden: true, minimap_hidden: true, minimap_at: Some((false, true, 24.0, 80.5)), folded_groups: vec!["earlier".into(), "pinned".into()], shortcuts: vec![("map".into(), "mod-shift-m".into()), ("tidy".into(), "mod-t".into())], proxy: "custom".into(), proxy_url: "socks5://127.0.0.1:7891".into(), proxy_user: "me".into(), proxy_password: "p@ss".into(), keep_audio: false, reduce_motion: true };
         s.save().unwrap();

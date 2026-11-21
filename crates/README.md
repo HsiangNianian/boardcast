@@ -59,7 +59,7 @@ cargo run -p alcyo-tools -- fetch pdfium   # the PDF library, into target/pdfium
 cargo test -p alcyo-board -p alcyo-agent -p alcyo-meetings -p alcyo-models -p alcyo-export -p alcyo-import
 ```
 
-Meetings are shared with the older app's data directory, and `ALCYO_DATA` and `ALCYO_CONFIG` (or the older `BOARDCAST_*` names) point elsewhere for
+Meetings live in the app's data folder, `app.alcyo.board`, and `ALCYO_DATA` and `ALCYO_CONFIG` point elsewhere for
 testing. To check a change to the file format against real data, work on a copy:
 
 ```sh

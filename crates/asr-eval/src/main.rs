@@ -32,7 +32,7 @@ fn main() -> Result<()> {
     if command == "compare" {
         return run::compare(&args.map(PathBuf::from).collect::<Vec<_>>());
     }
-    let root = PathBuf::from(args.next().context("the boardcast checkout")?);
+    let root = PathBuf::from(args.next().context("the repository root")?);
     let mut options = run::Options { suite: "quick".into(), engine: "routed".into(), vad: true, enhance: "none".into(), only: None, output: None };
     let mut reuse = false;
     let mut draft_with = alcyo_audio::DraftWith::Reread;

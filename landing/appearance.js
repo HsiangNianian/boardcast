@@ -1,6 +1,6 @@
 (() => {
   const system = matchMedia("(prefers-color-scheme: dark)");
-  const key = "boardcast-theme";
+  const key = "alcyo-theme";
   function storedTheme() {
     try {
       const value = sessionStorage.getItem(key);
@@ -21,9 +21,9 @@
     }
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
-    window.dispatchEvent(new Event("boardcast-theme-change"));
+    window.dispatchEvent(new Event("alcyo-theme-change"));
     // Keep the demo in the first page in sync even when browser storage is blocked.
-    for (const frame of document.querySelectorAll(".try iframe, iframe.hero-board")) frame.contentWindow?.dispatchEvent(new CustomEvent("boardcast-theme-choice", { detail: choice }));
+    for (const frame of document.querySelectorAll(".try iframe, iframe.hero-board")) frame.contentWindow?.dispatchEvent(new CustomEvent("alcyo-theme-choice", { detail: choice }));
   }
   update();
   document.addEventListener("DOMContentLoaded", () => {
@@ -41,7 +41,7 @@
     });
   });
   system.addEventListener("change", update);
-  window.addEventListener("boardcast-theme-choice", event => {
+  window.addEventListener("alcyo-theme-choice", event => {
     choice = event.detail === "light" || event.detail === "dark" ? event.detail : null;
     update();
   });

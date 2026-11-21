@@ -14,14 +14,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const MEETING_VERSION: u64 = 2;
 
-/// The app's folder name on every platform; the older builds used [`OLD_ID`].
+/// The app's folder name on every platform.
 pub const APP_ID: &str = "app.alcyo.board";
-pub const OLD_ID: &str = "games.mmstudio.boardcast";
 
-/// Where the app keeps its data, unless `ALCYO_DATA` (or the older `BOARDCAST_DATA`) says otherwise.
-/// A folder left by a build that still used [`OLD_ID`] is moved here the first time.
+/// Where the app keeps its data, unless `ALCYO_DATA` says otherwise.
 pub fn default_dir() -> Result<PathBuf> {
-    if let Ok(dir) = std::env::var("ALCYO_DATA").or_else(|_| std::env::var("BOARDCAST_DATA")) {
+    if let Ok(dir) = std::env::var("ALCYO_DATA") {
         return Ok(PathBuf::from(dir));
     }
     #[cfg(target_os = "macos")]
@@ -33,21 +31,7 @@ pub fn default_dir() -> Result<PathBuf> {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join(".local/share"),
     };
-    Ok(moved_in(&base, OLD_ID, APP_ID))
-}
-
-/// `base/new`, after moving `base/old` there if only the old folder exists. Both live in the same
-/// folder, so the move is a rename and takes no time however much is inside. If it cannot be moved,
-/// the old folder keeps being used, so nothing already there is ever lost from view.
-pub fn moved_in(base: &Path, old: &str, new: &str) -> PathBuf {
-    let (old, new) = (base.join(old), base.join(new));
-    if new.exists() || !old.exists() {
-        return new;
-    }
-    match fs::rename(&old, &new) {
-        Ok(()) => new,
-        Err(_) => old,
-    }
+    Ok(base.join(APP_ID))
 }
 
 /// Time plus a little randomness, using only characters that are safe in a file name.
@@ -541,7 +525,7 @@ mod image_tests {
     }
 
     fn temporary(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("boardcast-images-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("alcyo-images-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -608,7 +592,7 @@ mod tests {
 
     impl Dir {
         fn new() -> Self {
-            let path = std::env::temp_dir().join(format!("boardcast-store-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            let path = std::env::temp_dir().join(format!("alcyo-store-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
             fs::create_dir_all(&path).unwrap();
             Self(path)
         }
@@ -623,37 +607,6 @@ mod tests {
     fn meeting(id: &str) -> Map<String, Value> {
         let Value::Object(m) = json!({ "id": id, "title": "会", "createdAt": 1, "updatedAt": 2, "lines": [], "future": { "kept": true } }) else { unreachable!() };
         m
-    }
-
-    #[test]
-    fn the_older_folder_moves_to_the_new_name_once() {
-        let base = Dir::new();
-        fs::create_dir_all(base.0.join(OLD_ID).join("meetings")).unwrap();
-        fs::write(base.0.join(OLD_ID).join("meetings/a.json"), "{}").unwrap();
-        let dir = moved_in(&base.0, OLD_ID, APP_ID);
-        assert_eq!(dir, base.0.join(APP_ID));
-        assert!(dir.join("meetings/a.json").exists(), "what was there comes along");
-        assert!(!base.0.join(OLD_ID).exists());
-        // Run again: nothing left to move, the same folder.
-        assert_eq!(moved_in(&base.0, OLD_ID, APP_ID), dir);
-    }
-
-    #[test]
-    fn a_new_folder_is_never_overwritten_by_an_old_one() {
-        let base = Dir::new();
-        fs::create_dir_all(base.0.join(OLD_ID)).unwrap();
-        fs::create_dir_all(base.0.join(APP_ID)).unwrap();
-        fs::write(base.0.join(APP_ID).join("kept"), "new").unwrap();
-        assert_eq!(moved_in(&base.0, OLD_ID, APP_ID), base.0.join(APP_ID));
-        assert_eq!(fs::read_to_string(base.0.join(APP_ID).join("kept")).unwrap(), "new");
-        assert!(base.0.join(OLD_ID).exists(), "the old folder is left alone");
-    }
-
-    #[test]
-    fn with_no_folder_yet_the_new_name_is_used() {
-        let base = Dir::new();
-        assert_eq!(moved_in(&base.0, OLD_ID, APP_ID), base.0.join(APP_ID));
-        assert!(!base.0.join(APP_ID).exists(), "nothing is created just by asking");
     }
 
     #[test]
@@ -771,7 +724,7 @@ mod tests {
 
     #[test]
     fn an_older_meeting_is_shown_where_it_is_until_saved_again() {
-        let root = std::env::temp_dir().join(format!("boardcast-paths-{}", new_id()));
+        let root = std::env::temp_dir().join(format!("alcyo-paths-{}", new_id()));
         let store = Store::new(root.clone());
         std::fs::create_dir_all(root.join("meetings/v2")).unwrap();
         std::fs::write(root.join("meetings/old.json"), "{}").unwrap();

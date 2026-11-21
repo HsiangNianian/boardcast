@@ -1,6 +1,6 @@
 {
   "version": "asr-meetings-v2",
-  "baseUrl": "https://github.com/HsiangNianian/boardcast/releases/download/asr-meetings-v1",
+  "baseUrl": "https://github.com/HsiangNianian/alcyo/releases/download/asr-meetings-v1",
   "sources": {
     "aishell4": {
       "name": "AISHELL-4 · Beijing Shell Shell Technology",
@@ -29,10 +29,10 @@
       "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
     },
     "generated": {
-      "name": "boardcast silence control",
-      "url": "https://github.com/HsiangNianian/boardcast",
+      "name": "Alcyo silence control",
+      "url": "https://github.com/HsiangNianian/alcyo",
       "license": "MIT",
-      "licenseUrl": "https://github.com/HsiangNianian/boardcast/blob/main/LICENSE"
+      "licenseUrl": "https://github.com/HsiangNianian/alcyo/blob/main/LICENSE"
     }
   },
   "samples": [
@@ -3874,7 +3874,7 @@
       "scoring": "silence",
       "reference": [],
       "note": "Two seconds of generated zero PCM; expect no final transcript.",
-      "url": "https://github.com/HsiangNianian/boardcast/releases/download/asr-fixtures-v1/silence.wav"
+      "url": "https://github.com/HsiangNianian/alcyo/releases/download/asr-fixtures-v1/silence.wav"
     }
   ]
 }

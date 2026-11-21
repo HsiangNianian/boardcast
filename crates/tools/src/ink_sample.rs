@@ -14,7 +14,7 @@ use alcyo_export::ink::{png, Drawn, Shape};
 use std::path::PathBuf;
 
 pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
-    let root = PathBuf::from(args.next().context("boardcast root")?);
+    let root = PathBuf::from(args.next().context("the repository root")?);
     let out = PathBuf::from(args.next().context("output .png")?);
     let (mut size, mut messy, mut texts) = (40.0_f32, vec![], vec![]);
     while let Some(arg) = args.next() {

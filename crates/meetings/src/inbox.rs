@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn a_card_is_kept_with_its_picture_and_can_be_taken_out() {
-        let root = std::env::temp_dir().join(format!("boardcast-inbox-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("alcyo-inbox-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let inbox = Inbox::new(root.clone());
         assert!(inbox.cards().is_empty());

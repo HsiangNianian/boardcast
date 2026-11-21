@@ -14,12 +14,6 @@ APPDIR="$PREFIX/share/applications"
 ICONDIR="$PREFIX/share/icons/hicolor/256x256/apps"
 LICENSEDIR="$PREFIX/share/licenses/alcyo"
 
-# What an install from before the rename left: the same app under its old name.
-remove_old() {
-    rm -f "$BINDIR/boardcast" "$APPDIR/boardcast.desktop" "$ICONDIR/boardcast.png"
-    rm -rf "$PREFIX/lib/boardcast" "$PREFIX/share/licenses/boardcast"
-}
-
 refresh() {
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database "$APPDIR" >/dev/null 2>&1 || true
@@ -27,7 +21,6 @@ refresh() {
 }
 
 if [ "${1:-}" = "--uninstall" ]; then
-    remove_old
     rm -f "$BINDIR/alcyo" "$APPDIR/app.alcyo.board.desktop" "$ICONDIR/app.alcyo.board.png"
     rm -rf "$LIBDIR" "$LICENSEDIR"
     refresh
@@ -36,16 +29,12 @@ if [ "${1:-}" = "--uninstall" ]; then
 fi
 
 install -d "$BINDIR" "$APPDIR" "$ICONDIR" "$PREFIX/lib" "$LICENSEDIR"
-# Replace the resources whole, so nothing from an older version lingers. The package keeps them as
-# lib/boardcast and bin/boardcast, the names older updaters know; they are installed as alcyo.
-remove_old
+# Replace the resources whole, so nothing from an older version lingers.
 rm -rf "$LIBDIR"
-cp -r "$here/lib/boardcast" "$LIBDIR"
-install -m755 "$here/bin/boardcast" "$BINDIR/alcyo"
-# The old command keeps working.
-ln -s alcyo "$BINDIR/boardcast"
+cp -r "$here/lib/alcyo" "$LIBDIR"
+install -m755 "$here/bin/alcyo" "$BINDIR/alcyo"
 install -m644 "$here/share/app.alcyo.board.png" "$ICONDIR/app.alcyo.board.png"
-cp "$here"/share/licenses/boardcast/* "$LICENSEDIR/"
+cp "$here"/share/licenses/alcyo/* "$LICENSEDIR/"
 sed -e "s|@BINDIR@|$BINDIR|" -e "s|@VERSION@|$(cat "$here/VERSION")|" "$here/share/app.alcyo.board.desktop.in" > "$APPDIR/app.alcyo.board.desktop"
 chmod 644 "$APPDIR/app.alcyo.board.desktop"
 refresh

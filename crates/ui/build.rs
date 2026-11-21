@@ -18,7 +18,7 @@ fn main() {
     // which rc.exe does not take.
     let path = icon.display().to_string();
     let path = path.strip_prefix(r"\\?\").unwrap_or(&path).replace('\\', "\\\\");
-    let rc = PathBuf::from(env::var("OUT_DIR").unwrap()).join("boardcast.rc");
+    let rc = PathBuf::from(env::var("OUT_DIR").unwrap()).join("alcyo.rc");
     let version = env::var("CARGO_PKG_VERSION").unwrap();
     // FILEVERSION takes four numbers: 0.33.0 -> 0,33,0,0; anything after a '-' is dropped.
     let mut numbers: Vec<String> = version.split('-').next().unwrap().split('.').map(str::to_string).collect();

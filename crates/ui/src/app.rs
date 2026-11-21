@@ -3699,9 +3699,13 @@ impl Workbench {
         }
     }
 
-    fn apply_backend(&self) {
+    fn apply_backend(&mut self) {
         if !self.forced_backend {
-            self.session().set_backend(backend_from(&self.form.saved, self.live.local_only(), &self.binaries, &self.models));
+            let backend = backend_from(&self.form.saved, self.live.local_only(), &self.binaries, &self.models);
+            // The agent says Ready only when it starts, so a remote model saved later would leave the
+            // workbench waiting for a model it already has.
+            self.needs_model = matches!(backend, Backend::NoModel);
+            self.session().set_backend(backend);
         }
     }
 

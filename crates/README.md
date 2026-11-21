@@ -63,7 +63,7 @@ Meetings are shared with the older app's data directory, and `BOARDCAST_DATA` an
 testing. To check a change to the file format against real data, work on a copy:
 
 ```sh
-cp -r ~/.local/share/games.mmstudio.boardcast/meetings /tmp/copy/
+cp -r ~/.local/share/app.alcyo.board/meetings /tmp/copy/
 cargo run --release -p boardcast-tools -- meetings-check /tmp/copy
 ```
 

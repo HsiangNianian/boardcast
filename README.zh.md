@@ -142,8 +142,8 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
 | | 会议与模型 | 设置（`remote.json`） |
 |---|---|---|
-| Linux | `~/.local/share/games.mmstudio.boardcast/` | `~/.config/games.mmstudio.boardcast/` |
-| macOS | `~/Library/Application Support/games.mmstudio.boardcast/` | 同一个目录 |
+| Linux | `~/.local/share/app.alcyo.board/` | `~/.config/app.alcyo.board/` |
+| macOS | `~/Library/Application Support/app.alcyo.board/` | 同一个目录 |
 
 可以用 `BOARDCAST_DATA` 和 `BOARDCAST_CONFIG` 改到别处。
 

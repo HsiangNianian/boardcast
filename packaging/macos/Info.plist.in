@@ -7,7 +7,7 @@
   <key>CFBundleDisplayName</key>
   <string>Alcyo</string>
   <key>CFBundleIdentifier</key>
-  <string>games.mmstudio.boardcast</string>
+  <string>app.alcyo.board</string>
   <key>CFBundleExecutable</key>
   <string>boardcast</string>
   <key>CFBundleIconFile</key>

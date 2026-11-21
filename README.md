@@ -147,8 +147,8 @@ Downloads can be paused and resumed, check free space and verify SHA-256, trying
 
 | | Meetings and models | Settings (`remote.json`) |
 |---|---|---|
-| Linux | `~/.local/share/games.mmstudio.boardcast/` | `~/.config/games.mmstudio.boardcast/` |
-| macOS | `~/Library/Application Support/games.mmstudio.boardcast/` | the same folder |
+| Linux | `~/.local/share/app.alcyo.board/` | `~/.config/app.alcyo.board/` |
+| macOS | `~/Library/Application Support/app.alcyo.board/` | the same folder |
 
 `BOARDCAST_DATA` and `BOARDCAST_CONFIG` move them elsewhere.
 

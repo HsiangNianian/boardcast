@@ -74,7 +74,7 @@ impl Default for Settings {
 }
 
 fn config_dir() -> Result<PathBuf> {
-    if let Ok(dir) = std::env::var("BOARDCAST_CONFIG") {
+    if let Ok(dir) = std::env::var("ALCYO_CONFIG").or_else(|_| std::env::var("BOARDCAST_CONFIG")) {
         return Ok(PathBuf::from(dir));
     }
     #[cfg(target_os = "macos")]
@@ -86,7 +86,20 @@ fn config_dir() -> Result<PathBuf> {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => PathBuf::from(std::env::var("HOME").context("HOME is not set")?).join(".config"),
     };
-    Ok(base.join("games.mmstudio.boardcast"))
+    Ok(moved_in(&base))
+}
+
+/// The settings folder, after moving one left by a build that used the older name. On macOS and
+/// Windows it is the same folder as the data, which may already have moved; that is fine either way.
+fn moved_in(base: &std::path::Path) -> PathBuf {
+    let (old, new) = (base.join("games.mmstudio.boardcast"), base.join("app.alcyo.board"));
+    if new.exists() || !old.exists() {
+        return new;
+    }
+    match fs::rename(&old, &new) {
+        Ok(()) => new,
+        Err(_) => old,
+    }
 }
 
 impl Settings {

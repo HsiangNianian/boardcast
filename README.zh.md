@@ -129,7 +129,8 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 
 | 模型 | 下载大小 | 说明 |
 |---|---|---|
-| **Qwen3.5-4B · Q4_K_M** | 约 2.7 GB | 默认；笔记本和集成显卡都能用。 |
+| **Qwen3-4B（Instruct 2507）· Q4_K_M** | 约 2.5 GB | 默认；笔记本和集成显卡都能用。不能读图。 |
+| **Qwen3.5-4B · Q4_K_M** | 约 2.7 GB | 装上看图插件（约 670 MB）后能读懂图片；画板书不如 Qwen3-4B。 |
 | **Qwen3.5-9B · Q4_K_M** | 约 5.7 GB | 更大；建议 6 GB 以上显存。 |
 
 下载可以暂停和续传，会检查剩余空间并校验 SHA-256，依次尝试 ModelScope、hf-mirror 和 Hugging Face。第一次启动会为显卡编译着色器，大约半分钟，只需一次。
@@ -205,7 +206,7 @@ target/release/asr-eval run . --suite quick        # 用新版自己的识别流
 target/release/asr-eval run . --suite meetings     # 9 段约 10 分钟、跨行业的会议录音；需要 ffmpeg
 ```
 
-各配置、参考文本质量和[数据集许可](eval/asr/LICENSES.md)见[语音评测](eval/asr/README.md)。CI 在 [Eval](.github/workflows/eval.yml) 工作流里用 Qwen3.5-4B 运行这些评测。模型可能漏掉内容、连错对象或看错重点，识别质量也会影响结果，重要结论请再核对。
+各配置、参考文本质量和[数据集许可](eval/asr/LICENSES.md)见[语音评测](eval/asr/README.md)。CI 在 [Eval](.github/workflows/eval.yml) 工作流里用 Qwen3-4B 运行这些评测。模型可能漏掉内容、连错对象或看错重点，识别质量也会影响结果，重要结论请再核对。
 
 </details>
 

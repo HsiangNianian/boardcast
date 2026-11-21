@@ -75,10 +75,17 @@ fn release_assets() -> Result<Assets, Box<dyn std::error::Error>> {
 /// different processors of one system differ by a few megabytes, so the larger is shown.
 fn package_size(assets: &Assets, key: &str) -> Option<u64> {
     let (system, variant) = key.split_once('-').map_or((key, ""), |(s, v)| (s, v));
-    let ext = if system == "linux" { "tar.gz" } else { "zip" };
+    // The Mac is offered as a disk image since 0.34.0; a release from before has only the zip.
+    let exts: &[&str] = match system {
+        "linux" => &["tar.gz"],
+        "macos" => &["dmg", "zip"],
+        _ => &["zip"],
+    };
     let variant = if variant.is_empty() { String::new() } else { format!("-{variant}") };
-    let ending = format!("-{system}{variant}.{ext}");
-    assets.iter().filter(|(name, _)| name.starts_with("alcyo-") && name.ends_with(&ending)).map(|&(_, size)| size).max()
+    exts.iter().find_map(|ext| {
+        let ending = format!("-{system}{variant}.{ext}");
+        assets.iter().filter(|(name, _)| name.starts_with("alcyo-") && name.ends_with(&ending)).map(|&(_, size)| size).max()
+    })
 }
 
 fn human_size(bytes: u64) -> String {
@@ -393,6 +400,8 @@ mod tests {
         let assets = parse_assets(&release);
         assert_eq!(package_size(&assets, "macos"), Some(847_000_000));
         assert_eq!(package_size(&assets, "macos-none"), Some(70_000_000));
+        let with_dmg: Assets = vec![("alcyo-0.34.0-arm64-macos.zip".into(), 845_000_000), ("alcyo-0.34.0-arm64-macos.dmg".into(), 830_000_000)];
+        assert_eq!(package_size(&with_dmg, "macos"), Some(830_000_000), "the disk image is what the page offers");
         assert_eq!(package_size(&assets, "linux"), Some(876_246_171));
         assert_eq!(package_size(&assets, "windows"), None);
         assert_eq!(human_size(876_246_171), "836 mb");

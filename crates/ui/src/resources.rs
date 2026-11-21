@@ -1,4 +1,4 @@
-//! Finding what ships with the app. An install keeps it in `<prefix>/lib/boardcast`, next to `bin/`, or a Mac app in `Contents/Resources/boardcast`,
+//! Finding what ships with the app. An install keeps it in `<prefix>/lib/alcyo`, next to `bin/`, or a Mac app in `Contents/Resources/alcyo`,
 //! whichever folder the package was unpacked into. A checkout has them in `resources/`.
 
 use alcyo_board::glyphs::HanziSource;
@@ -19,18 +19,17 @@ pub struct Resources {
 }
 
 fn installed_dir() -> Option<PathBuf> {
-    if let Ok(dir) = std::env::var("ALCYO_RESOURCES").or_else(|_| std::env::var("BOARDCAST_RESOURCES")) {
+    if let Ok(dir) = std::env::var("ALCYO_RESOURCES") {
         return Some(PathBuf::from(dir));
     }
     // Canonical, so a symlink on PATH still leads back to the real install.
     let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
-    // <prefix>/bin/alcyo beside <prefix>/lib/alcyo, or inside an app on a Mac; installs from before the
-    // rename still say boardcast.
+    // <prefix>/bin/alcyo beside <prefix>/lib/alcyo, or inside an app on a Mac.
     let top = exe.parent()?.parent()?;
-    ["lib/alcyo", "Resources/alcyo", "lib/boardcast", "Resources/boardcast"].into_iter().map(|d| top.join(d)).find(|dir| dir.join("glyphs.pack").is_file())
+    ["lib/alcyo", "Resources/alcyo"].into_iter().map(|d| top.join(d)).find(|dir| dir.join("glyphs.pack").is_file())
 }
 
-/// A boardcast checkout above this executable, as when running from `target/`.
+/// A checkout of the repository above this executable, as when running from `target/`.
 fn checkout_dir() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
     exe.ancestors().find(|d| d.join("crates/ui/Cargo.toml").is_file()).map(Path::to_path_buf)

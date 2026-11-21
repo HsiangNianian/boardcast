@@ -104,7 +104,7 @@ fn host(mac: &str, windows: &str) -> Result<String> {
 
 fn voice() -> Result<()> {
     let out = root().join("resources");
-    let local = std::env::var_os("ALCYO_VOICE_DIR").or_else(|| std::env::var_os("BOARDCAST_VOICE_DIR")).map(PathBuf::from);
+    let local = std::env::var_os("ALCYO_VOICE_DIR").map(PathBuf::from);
     let mut fetched = 0;
     for file in voice_files::files() {
         let dest = out.join(file.name);

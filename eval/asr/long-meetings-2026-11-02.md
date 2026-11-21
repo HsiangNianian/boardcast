@@ -2,7 +2,7 @@
 
 Nine continuous excerpts, **90.14 minutes** of speech recordings, replace the short-utterance view with a longer meeting check. The suite contains **six actual business/public/research meetings and three recorded Chinese scenario meetings**. It is separate from the original quick/full regression pack.
 
-The [Eval run](https://github.com/HsiangNianian/boardcast/actions/runs/41389246416) compares six candidate models with VAD on and no external denoising, plus paired static/dynamic SenseVoice. Paraformer reports native decoder exceptions; Reazon aborts. These remain **failed candidates**, not successful empty recognition or zero-error scores. The workflow is therefore not an all-model pass.
+The [Eval run](https://github.com/HsiangNianian/alcyo/actions/runs/41389246416) compares six candidate models with VAD on and no external denoising, plus paired static/dynamic SenseVoice. Paraformer reports native decoder exceptions; Reazon aborts. These remain **failed candidates**, not successful empty recognition or zero-error scores. The workflow is therefore not an all-model pass.
 
 ## Data and reproduction
 
@@ -21,7 +21,7 @@ pnpm eval:asr:sweep --suite meetings --models sensevoice,paraformer-zh-en,reazon
 pnpm eval:asr --suite meetings --policy dynamic
 ```
 
-Listening to this suite needs Node.js 24+, curl and ffmpeg; inference also needs the desktop Rust build dependencies. The generated `eval/asr/.data/index.html` supports offline playback with the corresponding reference. Prepared WAVs total about 165 MiB, plus about 128 MiB of cached upstream MP3s. The [v2 data Release](https://github.com/HsiangNianian/boardcast/releases/tag/asr-meetings-v2) publishes the manifest and notice; its four redistributable WAVs come from the unchanged [v1 assets](https://github.com/HsiangNianian/boardcast/releases/tag/asr-meetings-v1). Other audio is fetched directly from the pinned publisher/source rather than mirrored. See [licenses and provenance](LICENSES.md).
+Listening to this suite needs Node.js 24+, curl and ffmpeg; inference also needs the desktop Rust build dependencies. The generated `eval/asr/.data/index.html` supports offline playback with the corresponding reference. Prepared WAVs total about 165 MiB, plus about 128 MiB of cached upstream MP3s. The [v2 data Release](https://github.com/HsiangNianian/alcyo/releases/tag/asr-meetings-v2) publishes the manifest and notice; its four redistributable WAVs come from the unchanged [v1 assets](https://github.com/HsiangNianian/alcyo/releases/tag/asr-meetings-v1). Other audio is fetched directly from the pinned publisher/source rather than mirrored. See [licenses and provenance](LICENSES.md).
 
 The earlier v1 CI attempt stopped before inference because ffmpeg versions wrote different encoder metadata. V2 strips that metadata; conversions from all five upstream MP3s were byte-identical with ffmpeg 6.0 and 9.0.1. The tables below use only the v2 run, not a mixture of failed preparation and successful inference.
 
@@ -100,7 +100,7 @@ No production recognition, routing or retry rule was changed to improve these be
 - Rust harness SHA-256: `aad83dc611f11d75ad0772b4ab1c7b45e72fdd5ff72dc1ca2e3c8c7666a3ff8c`.
 - Scorer SHA-256: `ea9d864e30e26ceae724fec68cdf62f54d250a984e4ed49d2aee83e6a49cbe83`.
 - Runtime: sherpa-onnx 2.0.1, CPU, two recognizer threads; exact exported-model checksums are in each report and [`models.json`](models.json). These test the pinned exports and current desktop segmentation, not every upstream runtime/model configuration.
-- Per-model `input.json`, `hypotheses.json`, scores, reference/hypothesis text and stderr are in the [Eval artifacts](https://github.com/HsiangNianian/boardcast/actions/runs/41389246416), retained for 30 days. An aborted candidate has input/logs but no scored hypothesis report.
+- Per-model `input.json`, `hypotheses.json`, scores, reference/hypothesis text and stderr are in the [Eval artifacts](https://github.com/HsiangNianian/alcyo/actions/runs/41389246416), retained for 30 days. An aborted candidate has input/logs but no scored hypothesis report.
 - Type checks, unit tests and web build passed in that run; the final local reporting changes passed 181 unit tests. Two native candidate failures remain explicitly recorded.
 
 Most domains have one recording. Chinese is recorded scenario speech rather than independently verified everyday business audio; Japanese minutes need a fresh human verbatim audit. The Japanese endpoint was located by a preliminary ASR pass, but its reference text comes entirely from the official minutes, never model-generated gold. There is no new long Chinese-English code-switching case; the existing short ASCEND controls remain. No new human listening audit, physical-microphone test, speaker-separation accuracy test or live UI latency measurement was performed. Larger Whisper/Qwen variants and the other short-sweep candidates have not yet been rerun on this long suite.

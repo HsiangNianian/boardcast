@@ -48,5 +48,5 @@ opt-level = "s"
 # diarization on top (#292). Its prebuilt libraries come from the same tag's release, checked against
 # .cargo/sherpa-onnx.sha256; see .cargo/config.toml. A new tag changes the tag here, the URL there, and that file.
 [patch.crates-io]
-sherpa-onnx = { git = "https://github.com/HsiangNianian/sherpa-onnx", tag = "boardcast-2.0.1-3" }
-sherpa-onnx-sys = { git = "https://github.com/HsiangNianian/sherpa-onnx", tag = "boardcast-2.0.1-3" }
+sherpa-onnx = { git = "https://github.com/HsiangNianian/sherpa-onnx", tag = "alcyo-2.0.1-3" }
+sherpa-onnx-sys = { git = "https://github.com/HsiangNianian/sherpa-onnx", tag = "alcyo-2.0.1-3" }

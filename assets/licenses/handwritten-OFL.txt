@@ -1,4 +1,4 @@
-Boardcast Handwritten: centerline data derived from Excalifont Regular.
+Alcyo Handwritten: centerline data derived from Excalifont Regular.
 Source: @excalidraw/excalidraw 0.18.1, fonts/Excalifont
 https://plus.excalidraw.com/excalifont
 

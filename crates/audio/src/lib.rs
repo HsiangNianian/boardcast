@@ -129,14 +129,14 @@ fn soft_break(loudness: &[f32]) -> Option<usize> {
     (run >= need).then_some(run / 2)
 }
 
-/// The latency the diarization model runs at; see [`Latency`]. `ALCYO_DIARIZATION` (once `BOARDCAST_DIARIZATION`) set to slow, medium,
+/// The latency the diarization model runs at; see [`Latency`]. `ALCYO_DIARIZATION` set to slow, medium,
 /// fast, long or off chooses another without building again: `long` halves the model's work for 0.35 s
 /// more on each line, for a slow machine.
 const LATENCY: Latency = Latency::Slow;
 
 /// The latency from `ALCYO_DIARIZATION`, or [`LATENCY`]; `None` when it is off.
 fn chosen_latency() -> Option<Latency> {
-    match std::env::var("ALCYO_DIARIZATION").or_else(|_| std::env::var("BOARDCAST_DIARIZATION")).ok().as_deref().map(str::trim) {
+    match std::env::var("ALCYO_DIARIZATION").ok().as_deref().map(str::trim) {
         Some("off") => None,
         Some("slow") => Some(Latency::Slow),
         Some("medium") => Some(Latency::Medium),
@@ -1150,7 +1150,7 @@ mod tests {
 
     /// Models and speech, from `ALCYO_VOICE_DIR`. CI runs these with the packaged models.
     fn models() -> Option<std::path::PathBuf> {
-        std::env::var_os("ALCYO_VOICE_DIR").or_else(|| std::env::var_os("BOARDCAST_VOICE_DIR")).map(std::path::PathBuf::from)
+        std::env::var_os("ALCYO_VOICE_DIR").map(std::path::PathBuf::from)
     }
 
     fn hear_all(ear: &mut Ear, samples: &[f32]) -> Vec<String> {

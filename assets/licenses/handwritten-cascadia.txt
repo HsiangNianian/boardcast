@@ -1,4 +1,4 @@
-Boardcast Handwritten: mathematical centerlines derived from Cascadia Code Regular.
+Alcyo Handwritten: mathematical centerlines derived from Cascadia Code Regular.
 Source: @excalidraw/excalidraw 0.18.1, fonts/Cascadia/CascadiaCode-Regular.woff2
 
 © 2020 Microsoft Corporation. All Rights Reserved.

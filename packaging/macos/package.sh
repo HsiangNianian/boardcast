@@ -2,15 +2,18 @@
 # Build the Mac apps: target/package/alcyo-<version>-<arch>-macos[-<variant>].zip, holding Alcyo.app,
 # one per variant in VARIANTS (default "all"; see packaging/models.sh). "none" carries no speech models
 # and recognizes with Apple's own SpeechAnalyzer, or SFSpeechRecognizer before macOS 26.
-# They are signed only ad hoc, which Apple silicon requires to run at all, so a downloaded copy has to
-# be opened with Control-click the first time.
+# With a Developer ID certificate they are signed with it, put in a disk image as well, and notarized with
+# NOTARIZE=1 (packaging/macos/sign.sh); without one they are signed ad hoc, which Apple silicon requires to
+# run at all, and a downloaded copy has to be opened with Control-click the first time.
 # Needs Rust, Xcode, and network access the first time for models and llama-server.
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
 . packaging/models.sh
+. packaging/macos/sign.sh
 variants="${VARIANTS:-all}"
+setup_signing
 
 cargo build --release -p alcyo-tools
 for what in glyphs "llama" voice search pdfium; do
@@ -54,10 +57,14 @@ for variant in $variants; do
   for f in OFL-DMSans.txt OFL-JetBrainsMono.txt OFL-NotoSansCJK.txt; do test -f "$lib/licenses/$f" || { echo "missing font license $f" >&2; exit 1; }; done
   cp target/pdfium/LICENSE "$lib/licenses/pdfium-LICENSE"
 
-  codesign --force --deep --sign - "$out/Alcyo.app"
+  sign_app "$out/Alcyo.app"
 
   "$app/MacOS/alcyo" --self-check
   ditto -c -k --keepParent "$out/Alcyo.app" "target/package/$name.zip"
+  if signed; then
+    make_dmg "$out/Alcyo.app" "target/package/$name.dmg"
+    ls -lh "target/package/$name.dmg"
+  fi
   rm -rf "$out"
   ls -lh "target/package/$name.zip"
 done

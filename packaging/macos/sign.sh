@@ -67,10 +67,12 @@ make_dmg() {
   return 0
 }
 
-# Notarizing: every disk image is sent to Apple as soon as it is made, and notary_wait then waits for all
-# of them together, so the packages wait in Apple's queue at the same time rather than one after another.
-# Each step retries, as a run of an hour or more meets the odd network outage on the runner.
-notary_pending=""
+# Notarizing: every disk image is sent to Apple as soon as it is made, and its submission noted in
+# target/package/notary-pending.txt. notary_wait then waits for all of them together, either at the end of
+# package.sh or later in a job of its own (notarize-wait.sh): Apple's queue has taken from minutes to
+# several hours, and the noted submissions let a later wait pick up where an earlier one stopped, without
+# building or sending anything again. Each step retries, as long waits meet the odd network outage.
+notary_list="$root/target/package/notary-pending.txt"
 notary_key=""
 
 notary() {
@@ -95,20 +97,24 @@ notary_submit() {
   done
   [ -n "$submit_id" ] || { echo "could not send $submit_dmg to Apple" >&2; exit 1; }
   echo "sent $submit_dmg to Apple: $submit_id"
-  notary_pending="$notary_pending $submit_id=$submit_dmg"
+  # By file name, so the list still holds wherever the images are unpacked again.
+  printf '%s %s\n' "$submit_id" "$(basename "$submit_dmg")" >> "$notary_list"
 }
 
-# Wait for every disk image sent, at most three hours, then staple each ticket. A rejection prints Apple's
-# log and fails the build.
+# Wait for every noted submission, at most NOTARY_HOURS (default 3), stapling each ticket as it comes and
+# moving that image to target/package/notarized/. A rejection prints Apple's log and fails.
 notary_wait() {
-  [ -n "$notary_pending" ] || return 0
-  deadline=$(( $(date +%s) + 3 * 3600 ))
-  left=$notary_pending
+  [ -s "$notary_list" ] || return 0
+  hours=${NOTARY_HOURS:-3}
+  deadline=$(( $(date +%s) + hours * 3600 ))
+  done_dir="$(dirname "$notary_list")/notarized"
+  mkdir -p "$done_dir"
+  left=$(awk '{ print $1 "=" $2 }' "$notary_list")
   while [ -n "$left" ]; do
-    [ "$(date +%s)" -lt "$deadline" ] || { echo "Apple did not finish notarizing within three hours:$left" >&2; exit 1; }
+    [ "$(date +%s)" -lt "$deadline" ] || { echo "Apple did not finish notarizing within $hours hours:" $left >&2; rm -f "$notary_key"; exit 1; }
     still=""
     for entry in $left; do
-      wait_id=${entry%%=*} wait_dmg=${entry#*=}
+      wait_id=${entry%%=*} wait_dmg="$(dirname "$notary_list")/${entry#*=}"
       # A failed check, from the network or Apple, is asked again next time round.
       wait_status=$(notary info "$wait_id" --output-format json 2>/dev/null | json_field status || true)
       case "$wait_status" in
@@ -116,6 +122,7 @@ notary_wait() {
           echo "notarized $wait_dmg"
           xcrun stapler staple "$wait_dmg"
           xcrun stapler validate "$wait_dmg"
+          mv "$wait_dmg" "$done_dir/"
           ;;
         Invalid|Rejected)
           notary log "$wait_id" || true
@@ -129,6 +136,5 @@ notary_wait() {
     left=$still
     [ -z "$left" ] || sleep 30
   done
-  rm -f "$notary_key"
-  notary_pending=""
+  rm -f "$notary_key" "$notary_list"
 }

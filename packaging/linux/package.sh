@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build the Linux packages: target/package/boardcast-<version>-<arch>-linux[-<variant>].tar.gz, one per
+# Build the Linux packages: target/package/alcyo-<version>-<arch>-linux[-<variant>].tar.gz, one per
 # variant in VARIANTS (default "all"; see packaging/models.sh). Each unpacks into a working app, and
 # install.sh inside puts it on the system.
 # Needs Rust, and network access the first time for models and llama-server.
@@ -16,20 +16,22 @@ for what in glyphs "llama linux-x64" voice search pdfium; do
 done
 cargo build --release -p boardcast-ui
 
-version=$(target/release/boardcast --version | cut -d' ' -f2)
+version=$(target/release/alcyo --version | cut -d' ' -f2)
 glyphs=target/package/glyphs.pack
 mkdir -p target/package
 target/release/boardcast-tools pack-glyphs assets/hanzi "$glyphs"
 
 for variant in $variants; do
   [ "$variant" = none ] && { echo "skipping none: Linux has no system recognizer" >&2; continue; }
-  name="boardcast-$version-$(uname -m)-linux$(variant_suffix "$variant")"
+  name="alcyo-$version-$(uname -m)-linux$(variant_suffix "$variant")"
   out="target/package/$name"
   rm -rf "$out"
   lib="$out/lib/boardcast"
   mkdir -p "$out/bin" "$lib/voice/speaker" "$lib/pdfium" "$out/share/licenses/boardcast"
 
-  install -m755 target/release/boardcast "$out/bin/boardcast"
+  # Still bin/boardcast and lib/boardcast inside: installs from before the rename can only update to a
+  # package laid out the way they expect. Their updater then learns the new layout for the next release.
+  install -m755 target/release/alcyo "$out/bin/boardcast"
   strip "$out/bin/boardcast"
 
   cp "$glyphs" "$lib/glyphs.pack"

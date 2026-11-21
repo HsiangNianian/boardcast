@@ -78,7 +78,8 @@ fn package_size(assets: &Assets, key: &str) -> Option<u64> {
     let ext = if system == "linux" { "tar.gz" } else { "zip" };
     let variant = if variant.is_empty() { String::new() } else { format!("-{variant}") };
     let ending = format!("-{system}{variant}.{ext}");
-    assets.iter().filter(|(name, _)| name.starts_with("boardcast-") && name.ends_with(&ending)).map(|&(_, size)| size).max()
+    // Packages are alcyo-…; releases from before the rename still have boardcast-….
+    assets.iter().filter(|(name, _)| (name.starts_with("alcyo-") || name.starts_with("boardcast-")) && name.ends_with(&ending)).map(|&(_, size)| size).max()
 }
 
 fn human_size(bytes: u64) -> String {

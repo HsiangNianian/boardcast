@@ -1,11 +1,11 @@
-//! boardcast on GPUI: talk, and the whiteboard draws itself.
-//!   boardcast [--open <id>] [--deepseek] [--llm <url>] [--skill]
-//!   boardcast --version | --self-check | --update
+//! Alcyo on GPUI: talk, and the whiteboard draws itself.
+//!   alcyo [--open <id>] [--deepseek] [--llm <url>] [--skill]
+//!   alcyo --version | --self-check | --update
 //! For development, with a checkout as <root>:
-//!   boardcast --root <root> [--case <id>] [--wav <path>] [--exit-when-done] [--demo <name>]
+//!   alcyo --root <root> [--case <id>] [--wav <path>] [--exit-when-done] [--demo <name>]
 //!             [--synthetic <chars>] [--zoom-test] [--zoom <k>]
 //!             [--panel library|summary|export|import|speakers|settings] [--replay]
-//!   boardcast bench <root> <stroke|merged:N|raster> <speed> <targets,..> [marks]
+//!   alcyo bench <root> <stroke|merged:N|raster> <speed> <targets,..> [marks]
 
 // No console window behind the app on Windows; the command-line flags attach to the one they were run from.
 #![cfg_attr(windows, windows_subsystem = "windows")]
@@ -35,7 +35,7 @@ fn main() -> Result<()> {
     }
     match args.peek().map(String::as_str) {
         Some("--version") => {
-            println!("boardcast {}", boardcast_update::VERSION);
+            println!("alcyo {}", boardcast_update::VERSION);
             Ok(())
         }
         Some("--update") => update(),
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
 fn update() -> Result<()> {
     let Some(prefix) = boardcast_update::installed_prefix() else { bail!("this copy was not installed from a package") };
     let Some(release) = boardcast_update::check()? else {
-        println!("boardcast {} is up to date", boardcast_update::VERSION);
+        println!("Alcyo {} is up to date", boardcast_update::VERSION);
         return Ok(());
     };
     println!("downloading {}", release.version);

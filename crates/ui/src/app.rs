@@ -3359,7 +3359,7 @@ impl Workbench {
             cx.notify();
             return;
         }
-        match std::process::Command::new(prefix.join("bin/boardcast")).spawn() {
+        match std::process::Command::new(boardcast_update::program(&prefix)).spawn() {
             Ok(_) => cx.quit(),
             Err(e) => self.update = UpdateState::Failed(crate::ta!("could-not-start-the-new", error = format!("{e}"))),
         }

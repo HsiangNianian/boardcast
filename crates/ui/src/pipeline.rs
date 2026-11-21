@@ -43,7 +43,7 @@ pub struct Speech {
 impl Speech {
     /// Apple's helper sits beside the app's executable in a Mac package.
     pub fn helper_path() -> Option<PathBuf> {
-        let helper = std::env::current_exe().ok()?.parent()?.join("boardcast-speech");
+        let helper = std::env::current_exe().ok()?.parent()?.join("alcyo-speech");
         helper.is_file().then_some(helper)
     }
 }

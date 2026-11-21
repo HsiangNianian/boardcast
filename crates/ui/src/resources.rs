@@ -19,14 +19,15 @@ pub struct Resources {
 }
 
 fn installed_dir() -> Option<PathBuf> {
-    if let Ok(dir) = std::env::var("BOARDCAST_RESOURCES") {
+    if let Ok(dir) = std::env::var("ALCYO_RESOURCES").or_else(|_| std::env::var("BOARDCAST_RESOURCES")) {
         return Some(PathBuf::from(dir));
     }
     // Canonical, so a symlink on PATH still leads back to the real install.
     let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
-    // <prefix>/bin/boardcast beside <prefix>/lib/boardcast, or inside an app on a Mac.
+    // <prefix>/bin/alcyo beside <prefix>/lib/alcyo, or inside an app on a Mac; installs from before the
+    // rename still say boardcast.
     let top = exe.parent()?.parent()?;
-    [top.join("lib/boardcast"), top.join("Resources/boardcast")].into_iter().find(|dir| dir.join("glyphs.pack").is_file())
+    ["lib/alcyo", "Resources/alcyo", "lib/boardcast", "Resources/boardcast"].into_iter().map(|d| top.join(d)).find(|dir| dir.join("glyphs.pack").is_file())
 }
 
 /// A boardcast checkout above this executable, as when running from `target/`.
@@ -73,7 +74,7 @@ impl Resources {
             "en" => english.into(),
             "sensevoice" => sense_voice.into(),
             // "apple" is what the package without models was called first.
-            "none" | "apple" => vec![("Apple speech helper", std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join("boardcast-speech"))).unwrap_or_default())],
+            "none" | "apple" => vec![("Apple speech helper", std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join("alcyo-speech"))).unwrap_or_default())],
             _ => sense_voice.into_iter().chain(english).chain(japanese).chain([model("Chinese draft model", "draft-zh/encoder.int8.onnx")]).collect(),
         };
         let checks: Vec<(&str, PathBuf)> = [

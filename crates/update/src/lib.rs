@@ -22,7 +22,12 @@ use std::process::Command;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-const MANIFEST_URL: &str = "https://github.com/HsiangNianian/boardcast/releases/latest/download/manifest.json";
+/// Builds from before the rename read the same manifest at the repository's old name, which GitHub
+/// redirects here.
+const MANIFEST_URL: &str = "https://github.com/HsiangNianian/alcyo/releases/latest/download/manifest.json";
+/// The program and its resources folder are named `alcyo`; installs from before the rename have `boardcast`.
+const NAME: &str = "alcyo";
+const OLD_NAME: &str = "boardcast";
 /// The older app's update key. A test build can name another at compile time, never at run time.
 const PUBLIC_KEY: &str = match option_env!("BOARDCAST_UPDATE_PUBKEY") {
     Some(key) => key,
@@ -94,7 +99,7 @@ pub fn check() -> Result<Option<Release>> {
         Err(ureq::Error::Status(404, _)) => return Ok(None),
         Err(e) => return Err(anyhow!("could not reach the update server: {e}")),
     };
-    let variant = installed_prefix().map(|prefix| variant_of(&prefix.join("lib/boardcast"))).unwrap_or_default();
+    let variant = installed_prefix().and_then(|prefix| lib_dir(&prefix)).map(|lib| variant_of(&lib)).unwrap_or_default();
     parse_manifest(&text, VERSION, &platform_key(&platform(), &variant))
 }
 
@@ -170,11 +175,23 @@ fn unpack(archive: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The folder an install lives in, if this program runs from one: `<prefix>/bin/boardcast`.
+/// The folder an install lives in, if this program runs from one: `<prefix>/bin/alcyo`, or
+/// `<prefix>/bin/boardcast` in an install from before the rename.
 pub fn installed_prefix() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
     let prefix = exe.parent()?.parent()?;
-    prefix.join("lib/boardcast/glyphs.pack").is_file().then(|| prefix.to_path_buf())
+    lib_dir(prefix).filter(|lib| lib.join("glyphs.pack").is_file()).map(|_| prefix.to_path_buf())
+}
+
+/// The resources folder of an install or an unpacked package, under either name.
+pub fn lib_dir(root: &Path) -> Option<PathBuf> {
+    [NAME, OLD_NAME].into_iter().map(|name| root.join("lib").join(name)).find(|dir| dir.is_dir())
+}
+
+/// The program of an install or an unpacked package, under either name.
+pub fn program(root: &Path) -> PathBuf {
+    let new = root.join("bin").join(NAME);
+    if new.exists() { new } else { root.join("bin").join(OLD_NAME) }
 }
 
 fn check_unpacked(staged: &Path, current: &str) -> Result<()> {
@@ -184,7 +201,7 @@ fn check_unpacked(staged: &Path, current: &str) -> Result<()> {
     if Version::parse(version).context("the package has a malformed version")? <= Version::parse(current)? {
         bail!("this package is version {version}, which is not newer than {current}");
     }
-    let output = Command::new(staged.join("bin/boardcast")).arg("--self-check").output().context("the new version could not run")?;
+    let output = Command::new(program(staged)).arg("--self-check").output().context("the new version could not run")?;
     let report: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
     if !output.status.success() || report["ok"] != true || report["version"] != version {
         bail!("the new version failed its self-check, so it was not installed");
@@ -192,31 +209,66 @@ fn check_unpacked(staged: &Path, current: &str) -> Result<()> {
     Ok(())
 }
 
-/// Replace the app and its resources, undoing the swap if any part of it fails.
+/// Replace the app and its resources, undoing the swap if any part of it fails. A package under the new
+/// name installed over one from before the rename leaves the old command behind as a link to the new one,
+/// so launchers and shells that still say `boardcast` keep working.
 fn swap(staged: &Path, prefix: &Path) -> Result<()> {
-    let (lib, old_lib) = (prefix.join("lib/boardcast"), prefix.join("lib/.boardcast-old"));
+    let name = if staged.join("lib").join(NAME).is_dir() { NAME } else { OLD_NAME };
+    let current = lib_dir(prefix).context("this install has no resources folder")?;
+    let (lib, old_lib) = (prefix.join("lib").join(name), prefix.join("lib/.update-old"));
     let _ = fs::remove_dir_all(&old_lib);
-    fs::rename(&lib, &old_lib).context("moving the current version aside")?;
+    fs::rename(&current, &old_lib).context("moving the current version aside")?;
     let replace = || -> Result<()> {
-        fs::rename(staged.join("lib/boardcast"), &lib)?;
+        fs::rename(staged.join("lib").join(name), &lib)?;
         // A rename over the running program is safe: it keeps running from the old file.
-        fs::rename(staged.join("bin/boardcast"), prefix.join("bin/boardcast"))?;
+        fs::rename(staged.join("bin").join(name), prefix.join("bin").join(name))?;
         Ok(())
     };
     if let Err(e) = replace() {
         let _ = fs::remove_dir_all(&lib);
-        fs::rename(&old_lib, &lib).context("restoring the previous version after a failed update")?;
+        fs::rename(&old_lib, &current).context("restoring the previous version after a failed update")?;
         return Err(e.context("the update failed and the previous version was restored"));
     }
     let _ = fs::remove_dir_all(&old_lib);
+    if name == NAME {
+        renamed(staged, prefix);
+    }
     // Licences follow the code; failing to refresh them must not undo a working update.
-    let licenses = prefix.join("share/licenses/boardcast");
-    if let (true, Ok(files)) = (licenses.is_dir(), fs::read_dir(staged.join("share/licenses/boardcast"))) {
-        for file in files.flatten() {
-            let _ = fs::copy(file.path(), licenses.join(file.file_name()));
+    let licenses = prefix.join("share/licenses").join(name);
+    let had_licenses = licenses.is_dir() || prefix.join("share/licenses").join(OLD_NAME).is_dir();
+    if had_licenses && fs::create_dir_all(&licenses).is_ok() {
+        if let Ok(files) = fs::read_dir(staged.join("share/licenses").join(name)) {
+            for file in files.flatten() {
+                let _ = fs::copy(file.path(), licenses.join(file.file_name()));
+            }
+        }
+        if name == NAME {
+            let _ = fs::remove_dir_all(prefix.join("share/licenses").join(OLD_NAME));
         }
     }
     Ok(())
+}
+
+/// After the first update under the new name: point the old command at the new program, and replace the
+/// launcher entry and icon that install.sh wrote under the old name. None of this may fail the update.
+fn renamed(staged: &Path, prefix: &Path) {
+    let old = prefix.join("bin").join(OLD_NAME);
+    let _ = fs::remove_file(&old);
+    #[cfg(unix)]
+    let _ = std::os::unix::fs::symlink(NAME, &old);
+    let apps = prefix.join("share/applications");
+    let template = staged.join("share/app.alcyo.board.desktop.in");
+    if let (true, Ok(text)) = (apps.join("boardcast.desktop").is_file(), fs::read_to_string(&template)) {
+        let version = fs::read_to_string(staged.join("VERSION")).unwrap_or_default();
+        let entry = text.replace("@BINDIR@", &prefix.join("bin").to_string_lossy()).replace("@VERSION@", version.trim());
+        if fs::write(apps.join("app.alcyo.board.desktop"), entry).is_ok() {
+            let _ = fs::remove_file(apps.join("boardcast.desktop"));
+        }
+    }
+    let icons = prefix.join("share/icons/hicolor/256x256/apps");
+    if icons.join("boardcast.png").is_file() && fs::copy(staged.join("share/app.alcyo.board.png"), icons.join("app.alcyo.board.png")).is_ok() {
+        let _ = fs::remove_file(icons.join("boardcast.png"));
+    }
 }
 
 /// Verify a downloaded package and install it over `prefix`. On failure the install is as it was.
@@ -227,7 +279,7 @@ pub fn install(archive: &Path, release: &Release, prefix: &Path) -> Result<()> {
 fn install_with(archive: &Path, signature: &str, key: &str, prefix: &Path, current: &str) -> Result<()> {
     verify(archive, signature, key)?;
     // Inside the prefix, so the swap is a rename on one disk, and this also proves it is writable.
-    let staged = prefix.join(".boardcast-update");
+    let staged = prefix.join(".alcyo-update");
     let _ = fs::remove_dir_all(&staged);
     fs::create_dir_all(&staged).with_context(|| format!("{} cannot be written to. Install the update the way this copy was installed.", prefix.display()))?;
     let result = unpack(archive, &staged).and_then(|()| check_unpacked(&staged, current)).and_then(|()| swap(&staged, prefix));
@@ -324,19 +376,30 @@ mod tests {
 
     /// A package like the real one, with a program that reports `reported` and whether it is healthy.
     fn package(dir: &Path, version: &str, reported: &str, healthy: bool) -> PathBuf {
+        package_named(dir, OLD_NAME, version, reported, healthy)
+    }
+
+    /// The same, with its program and resources under `name`; a package under the new name also carries
+    /// the launcher template and icon install.sh uses.
+    fn package_named(dir: &Path, name: &str, version: &str, reported: &str, healthy: bool) -> PathBuf {
         let root = dir.join("source");
         let _ = fs::remove_dir_all(&root);
+        let lib = root.join("lib").join(name);
         fs::create_dir_all(root.join("bin")).unwrap();
-        fs::create_dir_all(root.join("lib/boardcast/llama")).unwrap();
-        fs::create_dir_all(root.join("share/licenses/boardcast")).unwrap();
+        fs::create_dir_all(lib.join("llama")).unwrap();
+        fs::create_dir_all(root.join("share/licenses").join(name)).unwrap();
         fs::write(root.join("VERSION"), format!("{version}\n")).unwrap();
-        fs::write(root.join("lib/boardcast/glyphs.pack"), version).unwrap();
-        fs::write(root.join("lib/boardcast/llama/llama-server"), version).unwrap();
-        fs::write(root.join("share/licenses/boardcast/LICENSE"), version).unwrap();
+        fs::write(lib.join("glyphs.pack"), version).unwrap();
+        fs::write(lib.join("llama/llama-server"), version).unwrap();
+        fs::write(root.join("share/licenses").join(name).join("LICENSE"), version).unwrap();
+        if name == NAME {
+            fs::write(root.join("share/app.alcyo.board.desktop.in"), "Exec=@BINDIR@/alcyo\nX-Version=@VERSION@\n").unwrap();
+            fs::write(root.join("share/app.alcyo.board.png"), "icon").unwrap();
+        }
         let code = if healthy { 0 } else { 1 };
         let script = format!("#!/bin/sh\necho '{{\"ok\":{healthy},\"version\":\"{reported}\"}}'\nexit {code}\n");
-        fs::write(root.join("bin/boardcast"), script).unwrap();
-        fs::set_permissions(root.join("bin/boardcast"), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::write(root.join("bin").join(name), &script).unwrap();
+        fs::set_permissions(root.join("bin").join(name), fs::Permissions::from_mode(0o755)).unwrap();
         let path = dir.join("package.tar.gz");
         let mut tar = tar::Builder::new(GzEncoder::new(File::create(&path).unwrap(), Compression::fast()));
         tar.append_dir_all("boardcast-x", &root).unwrap();
@@ -358,11 +421,11 @@ mod tests {
     fn untouched(prefix: &Path) -> bool {
         fs::read_to_string(prefix.join("bin/boardcast")).unwrap() == "old program"
             && fs::read_to_string(prefix.join("lib/boardcast/glyphs.pack")).unwrap() == "old"
-            && !prefix.join(".boardcast-update").exists()
+            && !prefix.join(".alcyo-update").exists()
     }
 
     fn steps(archive: &Path, prefix: &Path, current: &str) -> Result<()> {
-        let staged = prefix.join(".boardcast-update");
+        let staged = prefix.join(".alcyo-update");
         fs::create_dir_all(&staged)?;
         let result = unpack(archive, &staged).and_then(|()| check_unpacked(&staged, current)).and_then(|()| swap(&staged, prefix));
         let _ = fs::remove_dir_all(&staged);
@@ -380,8 +443,48 @@ mod tests {
         assert!(prefix.join("lib/boardcast/llama/llama-server").is_file());
         assert!(!prefix.join("lib/boardcast/leftover").exists(), "old resources must not linger");
         assert_eq!(fs::read_to_string(prefix.join("share/licenses/boardcast/LICENSE")).unwrap(), "0.3.0");
-        assert!(!prefix.join(".boardcast-update").exists() && !prefix.join("lib/.boardcast-old").exists());
+        assert!(!prefix.join(".alcyo-update").exists() && !prefix.join("lib/.update-old").exists());
         assert!(fs::metadata(prefix.join("bin/boardcast")).unwrap().permissions().mode() & 0o111 != 0, "it must stay runnable");
+    }
+
+    #[test]
+    fn the_first_package_under_the_new_name_moves_an_old_install_over() {
+        let dir = Dir::new();
+        let prefix = installed(&dir.0);
+        let apps = prefix.join("share/applications");
+        let icons = prefix.join("share/icons/hicolor/256x256/apps");
+        fs::create_dir_all(&apps).unwrap();
+        fs::create_dir_all(&icons).unwrap();
+        fs::write(apps.join("boardcast.desktop"), "Exec=old").unwrap();
+        fs::write(icons.join("boardcast.png"), "old icon").unwrap();
+        let archive = package_named(&dir.0, NAME, "0.3.0", "0.3.0", true);
+        steps(&archive, &prefix, "0.2.0").unwrap();
+        assert!(fs::read_to_string(prefix.join("bin/alcyo")).unwrap().contains("0.3.0"));
+        assert_eq!(fs::read_to_string(prefix.join("lib/alcyo/glyphs.pack")).unwrap(), "0.3.0");
+        assert!(!prefix.join("lib/boardcast").exists(), "the old resources go");
+        assert_eq!(fs::read_link(prefix.join("bin/boardcast")).unwrap(), Path::new("alcyo"), "the old command still starts the app");
+        assert_eq!(program(&prefix), prefix.join("bin/alcyo"));
+        assert_eq!(lib_dir(&prefix), Some(prefix.join("lib/alcyo")));
+        let entry = fs::read_to_string(apps.join("app.alcyo.board.desktop")).unwrap();
+        assert!(entry.contains(&format!("Exec={}/alcyo", prefix.join("bin").display())) && entry.contains("X-Version=0.3.0"), "{entry}");
+        assert!(!apps.join("boardcast.desktop").exists());
+        assert!(icons.join("app.alcyo.board.png").is_file() && !icons.join("boardcast.png").exists());
+        assert_eq!(fs::read_to_string(prefix.join("share/licenses/alcyo/LICENSE")).unwrap(), "0.3.0");
+        assert!(!prefix.join("share/licenses/boardcast").exists());
+        assert!(!prefix.join(".alcyo-update").exists() && !prefix.join("lib/.update-old").exists());
+    }
+
+    #[test]
+    fn a_failed_move_to_the_new_name_restores_the_old_install() {
+        let dir = Dir::new();
+        let prefix = installed(&dir.0);
+        let staged = dir.0.join("staged");
+        fs::create_dir_all(staged.join("lib/alcyo")).unwrap();
+        fs::write(staged.join("lib/alcyo/glyphs.pack"), "new").unwrap();
+        // No staged program: the resources move, then the program cannot.
+        assert!(format!("{:#}", swap(&staged, &prefix).unwrap_err()).contains("restored"));
+        assert!(untouched(&prefix));
+        assert!(!prefix.join("lib/alcyo").exists());
     }
 
     #[test]

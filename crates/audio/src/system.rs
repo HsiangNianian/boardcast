@@ -1,4 +1,4 @@
-//! The system's own speech recognition, through a helper process: on a Mac, `boardcast-speech`, which uses
+//! The system's own speech recognition, through a helper process: on a Mac, `alcyo-speech`, which uses
 //! SpeechAnalyzer or, before macOS 26 or where it can't, SFSpeechRecognizer. Each sentence goes to it as a
 //! little-endian sample count and 16 kHz float32 samples; its text comes back as a line of JSON.
 
@@ -112,11 +112,11 @@ while True:
 
     fn fake_helper() -> Option<std::path::PathBuf> {
         Command::new("python3").arg("--version").output().ok()?;
-        let dir = std::env::temp_dir().join(format!("boardcast-speech-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("alcyo-speech-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).ok()?;
         let script = dir.join("fake.py");
         std::fs::write(&script, FAKE).ok()?;
-        let helper = dir.join("boardcast-speech");
+        let helper = dir.join("alcyo-speech");
         std::fs::write(&helper, format!("#!/bin/sh\nexec python3 -I {} \"$@\"\n", script.display())).ok()?;
         #[cfg(not(unix))]
         return None;
@@ -139,6 +139,6 @@ while True:
 
     #[test]
     fn a_missing_helper_is_an_error() {
-        assert!(SystemSpeech::start(Path::new("/nowhere/boardcast-speech"), "auto").is_err());
+        assert!(SystemSpeech::start(Path::new("/nowhere/alcyo-speech"), "auto").is_err());
     }
 }

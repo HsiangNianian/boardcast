@@ -9,7 +9,7 @@
   <key>CFBundleIdentifier</key>
   <string>app.alcyo.board</string>
   <key>CFBundleExecutable</key>
-  <string>boardcast</string>
+  <string>alcyo</string>
   <key>CFBundleIconFile</key>
   <string>icon</string>
   <key>CFBundlePackageType</key>

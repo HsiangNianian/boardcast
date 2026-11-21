@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build boardcast-speech, the helper that recognizes speech with Apple's SpeechAnalyzer or SFSpeechRecognizer.
+# Build alcyo-speech, the helper that recognizes speech with Apple's SpeechAnalyzer or SFSpeechRecognizer.
 # Usage: scripts/build-apple-speech.sh <output> [arm64|x86_64]
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)

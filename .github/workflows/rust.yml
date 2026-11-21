@@ -143,13 +143,13 @@ jobs:
       - name: Install from the package and check again
         run: |
           mkdir unpacked
-          tar -xzf target/package/boardcast-*-linux.tar.gz -C unpacked
+          tar -xzf target/package/alcyo-*-linux.tar.gz -C unpacked
           PREFIX="$PWD/prefix" sh unpacked/*/install.sh
           rm -rf unpacked
           prefix/bin/boardcast --self-check
       - uses: actions/upload-artifact@v4
         with:
-          name: boardcast-linux
+          name: alcyo-linux
           path: target/package/*.tar.gz
           retention-days: 14
 
@@ -195,7 +195,7 @@ jobs:
           CARGO_TARGET_DIR: ${{ runner.temp }}/macos-tests
       - uses: actions/upload-artifact@v4
         with:
-          name: boardcast-${{ matrix.runner }}
+          name: alcyo-${{ matrix.runner }}
           path: target/package/*.zip
           retention-days: 14
 
@@ -227,6 +227,6 @@ jobs:
           VARIANTS: all
       - uses: actions/upload-artifact@v4
         with:
-          name: boardcast-windows
+          name: alcyo-windows
           path: target/package/*.zip
           retention-days: 14

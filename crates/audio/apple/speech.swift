@@ -1,11 +1,11 @@
-// boardcast-speech: Apple's speech recognition for boardcast, one sentence at a time.
+// alcyo-speech: Apple's speech recognition for Alcyo, one sentence at a time.
 //
-//   boardcast-speech serve <locale|auto>
+//   alcyo-speech serve <locale|auto>
 //     Prints {"type":"ready","engine":"analyzer"|"legacy","locale":…} once it can recognize, or
 //     {"type":"error","message":…} and exits. Then, for each sentence, reads a little-endian UInt32
 //     sample count and that many 16 kHz mono float32 samples from stdin, and prints
 //     {"type":"text","text":…} or {"type":"error","message":…}. A count of 0, or the end of stdin, ends it.
-//   boardcast-speech self-test
+//   alcyo-speech self-test
 //     Checks the audio conversion, for the build.
 //
 // SpeechAnalyzer (macOS 26) is used when it supports the language and its model can be installed;
@@ -288,7 +288,7 @@ struct Main {
             switch args.first {
             case "self-test": try selfTest()
             case "serve" where args.count == 2: try await serve(args[1])
-            default: throw Failure(message: "Usage: boardcast-speech serve <locale|auto> | self-test")
+            default: throw Failure(message: "Usage: alcyo-speech serve <locale|auto> | self-test")
             }
         } catch {
             emit(["type": "error", "message": error.localizedDescription])

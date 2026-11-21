@@ -65,7 +65,7 @@ jobs:
           VARIANTS: ${{ env.LINUX_VARIANTS }}
       - id: version
         run: |
-          version=$(target/release/boardcast --version | cut -d' ' -f2)
+          version=$(target/release/alcyo --version | cut -d' ' -f2)
           [ "v$version" = "$TAG" ] || { echo "the tag $TAG is not the workspace version $version" >&2; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
           case "$version" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac >> "$GITHUB_OUTPUT"
@@ -104,7 +104,7 @@ jobs:
           name: linux-packages
           overwrite: true
           path: |
-            target/package/boardcast-*-linux*.tar.gz*
+            target/package/alcyo-*-linux*.tar.gz*
             target/package/manifest.json
             target/package/notes.txt
           retention-days: 3
@@ -144,7 +144,7 @@ jobs:
         with:
           name: macos-packages-${{ matrix.runner }}
           overwrite: true
-          path: target/package/boardcast-*-macos*.zip
+          path: target/package/alcyo-*-macos*.zip
           retention-days: 3
 
   windows:
@@ -173,7 +173,7 @@ jobs:
         with:
           name: windows-packages
           overwrite: true
-          path: target/package/boardcast-*-windows*.zip
+          path: target/package/alcyo-*-windows*.zip
           retention-days: 3
 
   # Once every build has finished, whichever way: Linux is what the updater installs, so without it there is
@@ -210,7 +210,7 @@ jobs:
         run: |
           mv packages/manifest.json manifest.json
           # Without a Mac or Windows build there are no zips, which is not an error here.
-          packages=$(ls packages/boardcast-*.tar.gz packages/boardcast-*.zip 2>/dev/null || true)
+          packages=$(ls packages/alcyo-*.tar.gz packages/alcyo-*.zip 2>/dev/null || true)
           state=$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null || echo none)
           if [ "$state" = false ]; then
             # Already out: this is a re-run after a build failed. Only what is not there yet is added, and

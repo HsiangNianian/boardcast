@@ -461,6 +461,7 @@ deleted-title = “{ $title }” excluído
 name-checking-what-was-downloaded = { $name } verificando o que já foi baixado…
 name-starting = { $name } iniciando…
 saved-key-leave-empty = Chave salva: { $hint }. Deixe em branco para mantê-la.
+key-in-file = Nenhum chaveiro do sistema foi encontrado, então a chave é guardada em um arquivo criptografado.
 hearing-with-models = Ouvindo com { $models }
 always-the-same-keys = Sempre igual: { $keys }
 version-installed-restart = { $version } está instalada. Sua reunião continua até você reiniciar.

@@ -1,4 +1,6 @@
-//! The remote model's settings, in `remote.json` in the app's settings folder. The file is private to the user and the key is never logged.
+//! The remote model's settings, in `remote.json` in the app's settings folder, except the API key and the
+//! proxy password, which are kept apart (see [`crate::secrets`]). The file is private to the user, and the
+//! key is never logged.
 
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
@@ -88,10 +90,28 @@ fn config_dir() -> Result<PathBuf> {
     Ok(base.join("app.alcyo.board"))
 }
 
+/// The names the secrets are kept under.
+const API_KEY: &str = "api-key";
+const PROXY_PASSWORD: &str = "proxy-password";
+
 impl Settings {
     /// A missing or damaged file means nothing is configured yet.
     pub fn load() -> Self {
-        config_dir().ok().and_then(|d| fs::read_to_string(d.join("remote.json")).ok()).map_or_else(Self::default, |text| Self::parse(&text))
+        let Ok(dir) = config_dir() else { return Self::default() };
+        let mut settings = fs::read_to_string(dir.join("remote.json")).map_or_else(|_| Self::default(), |text| Self::parse(&text));
+        // A file written before the secrets moved out still has them in the clear: keep them the new way,
+        // and write the file again without them.
+        let in_clear = !settings.api_key.is_empty() || !settings.proxy_password.is_empty();
+        if !in_clear || settings.save().is_err() {
+            settings.api_key = crate::secrets::load(&dir, API_KEY);
+            settings.proxy_password = crate::secrets::load(&dir, PROXY_PASSWORD);
+        }
+        settings
+    }
+
+    /// Whether the secrets had to go to the encrypted file, as there is no system keychain.
+    pub fn secrets_in_file() -> bool {
+        crate::secrets::kept() == crate::secrets::Kept::File
     }
 
     fn parse(text: &str) -> Self {
@@ -150,7 +170,7 @@ impl Settings {
     pub fn save(&self) -> Result<()> {
         let dir = config_dir()?;
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "apiKey": self.api_key, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "turnPages": self.turn_pages, "glossary": self.glossary, "templates": self.templates.iter().map(|(name, topics)| json!({ "name": name, "topics": topics })).collect::<Vec<_>>(), "systemSpeech": self.system_speech, "speechLanguage": self.speech_language, "interfaceLanguage": self.interface_language, "appearance": self.appearance, "listen": self.listen, "input": self.input, "computer": self.computer, "searchMeetings": self.meeting_search, "messy": self.messy, "sidebarHidden": self.sidebar_hidden, "minimapHidden": self.minimap_hidden, "minimapAt": self.minimap_at.map(|(right, bottom, x, y)| json!({ "right": right, "bottom": bottom, "x": x, "y": y })), "foldedGroups": self.folded_groups, "proxy": self.proxy, "proxyUrl": self.proxy_url, "proxyUser": self.proxy_user, "proxyPassword": self.proxy_password, "keepAudio": self.keep_audio, "reduceMotion": self.reduce_motion, "shortcuts": self.shortcuts.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>() }))?;
+        let text = serde_json::to_string_pretty(&json!({ "baseUrl": self.base_url, "model": self.model, "enabled": self.enabled, "diarize": self.diarize, "turnPages": self.turn_pages, "glossary": self.glossary, "templates": self.templates.iter().map(|(name, topics)| json!({ "name": name, "topics": topics })).collect::<Vec<_>>(), "systemSpeech": self.system_speech, "speechLanguage": self.speech_language, "interfaceLanguage": self.interface_language, "appearance": self.appearance, "listen": self.listen, "input": self.input, "computer": self.computer, "searchMeetings": self.meeting_search, "messy": self.messy, "sidebarHidden": self.sidebar_hidden, "minimapHidden": self.minimap_hidden, "minimapAt": self.minimap_at.map(|(right, bottom, x, y)| json!({ "right": right, "bottom": bottom, "x": x, "y": y })), "foldedGroups": self.folded_groups, "proxy": self.proxy, "proxyUrl": self.proxy_url, "proxyUser": self.proxy_user, "keepAudio": self.keep_audio, "reduceMotion": self.reduce_motion, "shortcuts": self.shortcuts.iter().map(|(k, v)| (k.clone(), json!(v))).collect::<serde_json::Map<_, _>>() }))?;
         let tmp = dir.join("remote.json.tmp");
         // Private from the first byte: the key must never sit in a file others can read.
         let _ = fs::remove_file(&tmp);
@@ -163,6 +183,8 @@ impl Settings {
         file.write_all(text.as_bytes())?;
         file.sync_all()?;
         fs::rename(&tmp, dir.join("remote.json")).context("saving the model settings")?;
+        crate::secrets::store(&dir, API_KEY, &self.api_key).context("saving the API key")?;
+        crate::secrets::store(&dir, PROXY_PASSWORD, &self.proxy_password).context("saving the proxy password")?;
         Ok(())
     }
 
@@ -237,6 +259,18 @@ mod tests {
         s.save().unwrap();
         assert_eq!(Settings::load(), s);
         assert_eq!(fs::metadata(dir.join("remote.json")).unwrap().permissions().mode() & 0o777, 0o600);
+        // The secrets are not in the settings file, nor in the clear anywhere.
+        let written = fs::read_to_string(dir.join("remote.json")).unwrap() + &fs::read_to_string(dir.join("secrets.json")).unwrap();
+        assert!(!written.contains("sk-secret") && !written.contains("p@ss"), "{written}");
+        assert!(Settings::secrets_in_file(), "tests have no keychain");
+        // A file from before, with the key in the clear: it is read, then kept apart and gone from the file.
+        fs::write(dir.join("remote.json"), r#"{"baseUrl":"https://y","apiKey":"sk-old-plain","model":"m2","proxyPassword":"old-pass"}"#).unwrap();
+        let old = Settings::load();
+        assert_eq!((old.api_key.as_str(), old.proxy_password.as_str(), old.model.as_str()), ("sk-old-plain", "old-pass", "m2"));
+        let written = fs::read_to_string(dir.join("remote.json")).unwrap();
+        assert!(!written.contains("sk-old-plain") && !written.contains("old-pass") && written.contains("m2"), "{written}");
+        assert!(!fs::read_to_string(dir.join("secrets.json")).unwrap().contains("sk-old-plain"));
+        assert_eq!(Settings::load().api_key, "sk-old-plain");
         std::env::remove_var("ALCYO_CONFIG");
         let _ = fs::remove_dir_all(dir);
     }

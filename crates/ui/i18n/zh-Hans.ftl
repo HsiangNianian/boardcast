@@ -440,6 +440,7 @@ deleted-title = 已删除「{ $title }」
 name-checking-what-was-downloaded = { $name } 正在检查已下载的部分…
 name-starting = { $name } 正在开始…
 saved-key-leave-empty = 已保存的 key：{ $hint }。留空则继续使用。
+key-in-file = 没有找到系统钥匙串，key 改存在加密文件里。
 hearing-with-models = 当前识别：{ $models }
 always-the-same-keys = 固定不变：{ $keys }
 version-installed-restart = { $version } 已安装。重启之前，当前会议不受影响。

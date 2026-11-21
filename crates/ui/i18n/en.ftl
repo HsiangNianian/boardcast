@@ -455,6 +455,7 @@ deleted-title = Deleted “{ $title }”
 name-checking-what-was-downloaded = { $name } checking what was already downloaded…
 name-starting = { $name } starting…
 saved-key-leave-empty = Saved key: { $hint }. Leave empty to keep it.
+key-in-file = No system keychain was found, so the key is kept in an encrypted file.
 hearing-with-models = Hearing with { $models }
 always-the-same-keys = Always the same: { $keys }
 version-installed-restart = { $version } is installed. Your meeting keeps running until you restart.

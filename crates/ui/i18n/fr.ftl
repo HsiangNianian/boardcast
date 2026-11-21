@@ -469,6 +469,7 @@ deleted-title = « { $title } » supprimé
 name-checking-what-was-downloaded = { $name } vérifie ce qui a déjà été téléchargé…
 name-starting = { $name } démarre…
 saved-key-leave-empty = Clé enregistrée : { $hint }. Laissez vide pour la conserver.
+key-in-file = Aucun trousseau système n’a été trouvé : la clé est conservée dans un fichier chiffré.
 hearing-with-models = Écoute avec { $models }
 always-the-same-keys = Toujours identique : { $keys }
 version-installed-restart = { $version } est installée. Votre réunion continue jusqu’à ce que vous redémarriez.

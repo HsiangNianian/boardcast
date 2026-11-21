@@ -469,6 +469,7 @@ deleted-title = Se eliminó «{ $title }»
 name-checking-what-was-downloaded = { $name } está comprobando lo que ya se descargó…
 name-starting = { $name } se está iniciando…
 saved-key-leave-empty = Clave guardada: { $hint }. Déjalo vacío para conservarla.
+key-in-file = No se encontró un llavero del sistema, así que la clave se guarda en un archivo cifrado.
 hearing-with-models = Escuchando con { $models }
 always-the-same-keys = Siempre igual: { $keys }
 version-installed-restart = { $version } está instalada. Tu reunión sigue en marcha hasta que reinicies.

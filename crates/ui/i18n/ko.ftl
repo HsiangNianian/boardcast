@@ -441,6 +441,7 @@ deleted-title = “{ $title }”을(를) 삭제했습니다
 name-checking-what-was-downloaded = { $name } 이미 다운로드한 부분 확인 중…
 name-starting = { $name } 시작 중…
 saved-key-leave-empty = 저장된 키: { $hint }. 비워 두면 그대로 사용합니다.
+key-in-file = 시스템 키체인을 찾지 못해 키를 암호화된 파일에 저장합니다.
 hearing-with-models = 현재 인식 모델: { $models }
 always-the-same-keys = 항상 동일: { $keys }
 version-installed-restart = { $version }이(가) 설치되었습니다. 다시 시작하기 전까지 진행 중인 회의는 그대로 유지됩니다.

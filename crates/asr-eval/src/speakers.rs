@@ -18,8 +18,8 @@
 
 use crate::corpus::{self, Corpus};
 use anyhow::{ensure, Context, Result};
-use boardcast_audio::{Ear, Latency, Recognizers, Sentence, SAMPLE_RATE};
-use boardcast_board::speakers::{identify_in_slot_at, Voice};
+use alcyo_audio::{Ear, Latency, Recognizers, Sentence, SAMPLE_RATE};
+use alcyo_board::speakers::{identify_in_slot_at, Voice};
 use serde::{Deserialize, Serialize};
 use sherpa_onnx::Wave;
 use std::collections::HashMap;

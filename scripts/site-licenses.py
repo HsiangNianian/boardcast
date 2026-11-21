@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SHIPPED = {"boardcast-ui", "boardcast-site", "boardcast-demo"}
+SHIPPED = {"alcyo-ui", "alcyo-site", "alcyo-demo"}
 
 meta = json.loads(subprocess.run(["cargo", "metadata", "--format-version", "1", "--locked"], cwd=ROOT, check=True, capture_output=True, text=True).stdout)
 packages = {p["id"]: p for p in meta["packages"]}

@@ -2,14 +2,14 @@
 //! fetched. Every step's ink is worked out here, so the file holds its own strokes and a small player.
 
 use crate::Doc;
-use boardcast_board::board_layout::StableLayout;
-use boardcast_board::compose::{compose, PAPER};
-use boardcast_board::glyphs::{Glyphs, Pt};
-use boardcast_board::graph::Graph;
-use boardcast_board::pen::{outline, Rng};
-use boardcast_board::steps::{apply_step, ink_only};
-use boardcast_board::sugiyama::first_diagram;
-use boardcast_meetings::PageImage;
+use alcyo_board::board_layout::StableLayout;
+use alcyo_board::compose::{compose, PAPER};
+use alcyo_board::glyphs::{Glyphs, Pt};
+use alcyo_board::graph::Graph;
+use alcyo_board::pen::{outline, Rng};
+use alcyo_board::steps::{apply_step, ink_only};
+use alcyo_board::sugiyama::first_diagram;
+use alcyo_meetings::PageImage;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -227,8 +227,8 @@ fn page_html(doc: &Doc, data: &Value) -> String {
 mod tests {
     use super::*;
     use crate::Said;
-    use boardcast_board::graph::parse_ops;
-    use boardcast_board::steps::diff;
+    use alcyo_board::graph::parse_ops;
+    use alcyo_board::steps::diff;
     use std::path::Path;
 
     fn glyphs() -> Glyphs {

@@ -104,7 +104,7 @@ fn host(mac: &str, windows: &str) -> Result<String> {
 
 fn voice() -> Result<()> {
     let out = root().join("resources");
-    let local = std::env::var_os("BOARDCAST_VOICE_DIR").map(PathBuf::from);
+    let local = std::env::var_os("ALCYO_VOICE_DIR").or_else(|| std::env::var_os("BOARDCAST_VOICE_DIR")).map(PathBuf::from);
     let mut fetched = 0;
     for file in voice_files::files() {
         let dest = out.join(file.name);
@@ -121,17 +121,17 @@ fn voice() -> Result<()> {
         }
         let mut sources = vec![];
         if let Some(path) = file.modelscope {
-            sources.push(boardcast_models::Source { name: "ModelScope".into(), url: format!("https://modelscope.cn/models/{path}"), direct: true });
+            sources.push(alcyo_models::Source { name: "ModelScope".into(), url: format!("https://modelscope.cn/models/{path}"), direct: true });
         }
         for (name, host) in [("hf-mirror", "https://hf-mirror.com"), ("Hugging Face", "https://huggingface.co")] {
             if let Some(path) = &file.huggingface {
-                sources.push(boardcast_models::Source { name: name.into(), url: format!("{host}/{path}"), direct: false });
+                sources.push(alcyo_models::Source { name: name.into(), url: format!("{host}/{path}"), direct: false });
             }
         }
         if let Some(url) = file.github {
-            sources.push(boardcast_models::Source { name: "GitHub".into(), url: url.into(), direct: false });
+            sources.push(alcyo_models::Source { name: "GitHub".into(), url: url.into(), direct: false });
         }
-        let model = boardcast_models::Model {
+        let model = alcyo_models::Model {
             id: file.name,
             label: file.name,
             file: dest.file_name().context("voice file name")?.to_string_lossy().into_owned(),
@@ -144,7 +144,7 @@ fn voice() -> Result<()> {
         println!("fetch: {}", file.name);
         let mut last = u64::MAX;
         let cancel = std::sync::atomic::AtomicBool::new(false);
-        boardcast_models::download(&model, dir, &cancel, &mut |p| {
+        alcyo_models::download(&model, dir, &cancel, &mut |p| {
             let tenth = p.done * 10 / p.total.max(1);
             if tenth != last {
                 last = tenth;
@@ -161,7 +161,7 @@ fn voice() -> Result<()> {
 /// The meeting search model, as the app downloads it, checked the same way. A model it no longer uses is
 /// cleared out, so a package never carries two.
 fn search() -> Result<()> {
-    let model = boardcast_models::embedding();
+    let model = alcyo_models::embedding();
     let dir = root().join("resources/search");
     let dest = dir.join(&model.file);
     if good(&dest, &model.sha256) {
@@ -171,7 +171,7 @@ fn search() -> Result<()> {
     println!("fetch: {}", model.file);
     let mut last = u64::MAX;
     let cancel = std::sync::atomic::AtomicBool::new(false);
-    boardcast_models::download(&model, &dir, &cancel, &mut |p| {
+    alcyo_models::download(&model, &dir, &cancel, &mut |p| {
         let tenth = p.done * 10 / p.total.max(1);
         if tenth != last {
             last = tenth;

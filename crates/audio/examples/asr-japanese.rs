@@ -4,7 +4,7 @@
 //! Usage: asr-japanese <voice-models> <reazonspeech-dir> <cases.json>
 //! `cases.json` lists `{ "id", "wav", "text", "long" }`; long recordings are cut into sentences first.
 
-use boardcast_audio::{load_sense_voice, transcribe, SAMPLE_RATE};
+use alcyo_audio::{load_sense_voice, transcribe, SAMPLE_RATE};
 use serde_json::Value;
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineTransducerModelConfig, SileroVadModelConfig, VadModelConfig, VoiceActivityDetector, Wave};
 use std::path::Path;

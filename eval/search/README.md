@@ -3,8 +3,8 @@
 How well search finds the passage a question is about, across all meetings at once.
 
 ```sh
-cargo build --release -p boardcast-tools
-target/release/boardcast-tools search-eval . <model.gguf> gemma|qwen3 --out eval/reports/search/<name>.json
+cargo build --release -p alcyo-tools
+target/release/alcyo-tools search-eval . <model.gguf> gemma|qwen3 --out eval/reports/search/<name>.json
 ```
 
 The models go in `eval/search/.models/` (not committed). The meetings are the speech evaluation's manual

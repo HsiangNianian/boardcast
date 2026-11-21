@@ -3,7 +3,7 @@
 //!   release-manifest <packages> <tag>    prints manifest.json for every Linux package in a folder
 //!
 //! The key is the older app's, in the form `tauri signer` wrote it: minisign's encrypted secret key,
-//! base64-encoded, in BOARDCAST_SIGNING_KEY with its password in BOARDCAST_SIGNING_KEY_PASSWORD.
+//! base64-encoded, in ALCYO_SIGNING_KEY with its password in ALCYO_SIGNING_KEY_PASSWORD.
 //! A signature is written the same way, so installs already out there accept it.
 
 use crate::fetch::hex;
@@ -21,8 +21,8 @@ fn decode_text(encoded: &str) -> Result<String> {
 }
 
 pub fn sign(files: impl Iterator<Item = String>) -> Result<()> {
-    let key = std::env::var("BOARDCAST_SIGNING_KEY").context("BOARDCAST_SIGNING_KEY is not set")?;
-    let password = std::env::var("BOARDCAST_SIGNING_KEY_PASSWORD").unwrap_or_default();
+    let key = std::env::var("ALCYO_SIGNING_KEY").context("ALCYO_SIGNING_KEY is not set")?;
+    let password = std::env::var("ALCYO_SIGNING_KEY_PASSWORD").unwrap_or_default();
     let key = secret_key(&key, &password)?;
     let mut any = false;
     for file in files {
@@ -135,10 +135,10 @@ mod tests {
         fs::write(&package, b"boardcast signing fixture\n").unwrap();
         let signed = signature(&key, &package).unwrap();
         assert!(decode_text(&signed).unwrap().contains("\tfile:payload.bin\n"));
-        boardcast_update::verify(&package, &signed, public.trim()).unwrap();
+        alcyo_update::verify(&package, &signed, public.trim()).unwrap();
 
         fs::write(&package, b"boardcast signing fixturE\n").unwrap();
-        assert!(boardcast_update::verify(&package, &signed, public.trim()).is_err());
+        assert!(alcyo_update::verify(&package, &signed, public.trim()).is_err());
         assert!(secret_key(&fs::read_to_string(format!("{FIXTURES}/tauri-test.key")).unwrap(), "wrong").is_err());
         fs::remove_dir_all(dir).unwrap();
     }

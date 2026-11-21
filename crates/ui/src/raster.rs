@@ -1,7 +1,7 @@
 //! Finished ink as textures. GPUI's path cost grows with total vertices however they are grouped,
 //! so strokes are rasterized once on the CPU and only touched tiles are uploaded again.
 
-use boardcast_board::glyphs::Pt;
+use alcyo_board::glyphs::Pt;
 use gpui_kit::{point, px, size, Bounds, Corners, Pixels, Point, RenderImage, Window};
 use image::{Frame, RgbaImage};
 use std::collections::HashMap;

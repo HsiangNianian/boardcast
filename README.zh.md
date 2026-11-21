@@ -154,7 +154,7 @@ boardcast 把讨论变成一张持续生长的白板：流程、要点、分工�
 ```sh
 git clone https://github.com/HsiangNianian/boardcast.git
 cd boardcast
-cargo run --release -p boardcast-ui     # 桌面版
+cargo run --release -p alcyo-ui     # 桌面版
 cargo test --workspace
 sh packaging/linux/package.sh           # target/package/boardcast-<version>-<arch>-linux.tar.gz
 ```
@@ -192,15 +192,15 @@ Noto Sans CJK SC 能显示所有汉字、假名和韩文，字形是简体中文
 先启动可用的 llama-server，然后运行：
 
 ```sh
-cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set dev --label my-model
-cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set holdout --label my-model
-cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
+cargo run --release -p alcyo-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set dev --label my-model
+cargo run --release -p alcyo-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set holdout --label my-model
+cargo run --release -p alcyo-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
 ```
 
 语音识别有自己的评测：
 
 ```sh
-cargo build --release -p boardcast-asr-eval
+cargo build --release -p alcyo-asr-eval
 target/release/asr-eval download . --suite quick   # 下载并校验录音，生成试听页面
 target/release/asr-eval run . --suite quick        # 用新版自己的识别流程跑，按语言打分
 target/release/asr-eval run . --suite meetings     # 9 段约 10 分钟、跨行业的会议录音；需要 ffmpeg

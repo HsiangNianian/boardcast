@@ -8,7 +8,7 @@
 //! eval/reports/summary.md.
 
 use anyhow::{bail, Context, Result};
-use boardcast_agent::summary::{summarize, Line};
+use alcyo_agent::summary::{summarize, Line};
 use serde::Deserialize;
 use std::fmt::Write as _;
 use std::path::PathBuf;

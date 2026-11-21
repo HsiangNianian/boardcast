@@ -11,8 +11,8 @@
 //! (model_flags.rs), and no key is ever written.
 
 use anyhow::{bail, Context, Result};
-use boardcast_agent::{propose, CONTEXT_LINES};
-use boardcast_board::graph::{parse_ops, Graph, Utterance};
+use alcyo_agent::{propose, CONTEXT_LINES};
+use alcyo_board::graph::{parse_ops, Graph, Utterance};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;

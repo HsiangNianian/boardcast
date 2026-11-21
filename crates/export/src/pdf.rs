@@ -1,12 +1,12 @@
 //! A whole meeting as a PDF: one page per board in vector ink, then the summary and transcript as
-//! real text, in the app's own Chinese, Japanese and Korean font (boardcast-fonts) so it reads the same
+//! real text, in the app's own Chinese, Japanese and Korean font (alcyo-fonts) so it reads the same
 //! from every computer; a character it lacks is looked for in the system's fonts. Fonts are embedded, cut down
 //! to the characters used.
 
 use crate::ink::{Drawn, Page};
 use crate::{Doc, Output};
 use anyhow::{anyhow, Result};
-use boardcast_board::compose::PAPER;
+use alcyo_board::compose::PAPER;
 use fontdb::{Database, Family, Query, Weight};
 use krilla::blend::BlendMode;
 use krilla::color::rgb;
@@ -90,7 +90,7 @@ impl Fonts {
     /// still has, and so what the summary and transcript are always written in.
     fn built_in() -> Self {
         let mut fonts = Self { db: Database::new(), faces: vec![], regular: vec![], bold: vec![], known: HashMap::new() };
-        for built in [&boardcast_fonts::CJK_REGULAR, &boardcast_fonts::CJK_BOLD] {
+        for built in [&alcyo_fonts::CJK_REGULAR, &alcyo_fonts::CJK_BOLD] {
             let data = Arc::new(built.bytes.to_vec());
             if let Some(font) = Font::new(data.clone().into(), 0) {
                 fonts.faces.push(Face { font, data, index: 0 });
@@ -494,7 +494,7 @@ mod tests {
     use super::*;
     use crate::ink::tests::board;
     use crate::Said;
-    use boardcast_board::graph::Graph;
+    use alcyo_board::graph::Graph;
 
     fn doc(lines: usize) -> Doc {
         Doc {

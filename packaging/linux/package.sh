@@ -10,16 +10,16 @@ cd "$root"
 . packaging/models.sh
 variants="${VARIANTS:-all}"
 
-cargo build --release -p boardcast-tools
+cargo build --release -p alcyo-tools
 for what in glyphs "llama linux-x64" voice search pdfium; do
-  target/release/boardcast-tools fetch $what
+  target/release/alcyo-tools fetch $what
 done
-cargo build --release -p boardcast-ui
+cargo build --release -p alcyo-ui
 
 version=$(target/release/alcyo --version | cut -d' ' -f2)
 glyphs=target/package/glyphs.pack
 mkdir -p target/package
-target/release/boardcast-tools pack-glyphs assets/hanzi "$glyphs"
+target/release/alcyo-tools pack-glyphs assets/hanzi "$glyphs"
 
 for variant in $variants; do
   [ "$variant" = none ] && { echo "skipping none: Linux has no system recognizer" >&2; continue; }

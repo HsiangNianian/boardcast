@@ -2,10 +2,10 @@
 //! lays the boards out for it on its own pen, so the board on screen never waits for viewers.
 
 use anyhow::Result;
-use boardcast_board::glyphs::{Glyphs, HanziSource};
-use boardcast_export::{replay_page, words_and_boards};
-use boardcast_meetings::{Live, PageImage, Store};
-use boardcast_share::Share;
+use alcyo_board::glyphs::{Glyphs, HanziSource};
+use alcyo_export::{replay_page, words_and_boards};
+use alcyo_meetings::{Live, PageImage, Store};
+use alcyo_share::Share;
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
@@ -16,7 +16,7 @@ const EVERY: Duration = Duration::from_millis(400);
 
 /// The meeting as it is now, for the thread to lay out.
 struct Now {
-    doc: boardcast_export::Doc,
+    doc: alcyo_export::Doc,
     pages: Vec<replay_page::Page>,
     current: usize,
 }
@@ -80,7 +80,7 @@ impl Sharing {
         let id = live.id().to_string();
         let read = |name: &str| match store {
             Some(store) => store.page_image(&id, name).ok(),
-            None => boardcast_meetings::decode_data_url(name).ok(),
+            None => alcyo_meetings::decode_data_url(name).ok(),
         };
         let refs = live.board_images();
         for name in refs.iter().flatten() {

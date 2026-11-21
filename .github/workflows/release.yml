@@ -83,21 +83,21 @@ jobs:
           for tag in "" gpui-latest; do
             rm -f published.json
             if gh release download $tag --pattern manifest.json --output published.json 2>/dev/null; then
-              target/release/boardcast-tools version-newer "$version" "$(jq -r .version published.json)"
+              target/release/alcyo-tools version-newer "$version" "$(jq -r .version published.json)"
             fi
           done
       - name: Sign
         # The older app's update key, so installs already out there accept the packages.
         env:
-          BOARDCAST_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          BOARDCAST_SIGNING_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: target/release/boardcast-tools sign target/package/boardcast-*-linux*.tar.gz
+          ALCYO_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          ALCYO_SIGNING_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: target/release/alcyo-tools sign target/package/boardcast-*-linux*.tar.gz
       # It lists Linux packages only, so it is written here, where the tools are built.
       - name: Write the manifest
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          NOTES=$(cat target/package/notes.txt) target/release/boardcast-tools release-manifest target/package "$TAG" > target/package/manifest.json
+          NOTES=$(cat target/package/notes.txt) target/release/alcyo-tools release-manifest target/package "$TAG" > target/package/manifest.json
           cat target/package/manifest.json
       - uses: actions/upload-artifact@v4
         with:

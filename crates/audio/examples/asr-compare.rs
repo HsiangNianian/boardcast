@@ -5,7 +5,7 @@
 //! `ENHANCE=gain` first brings each recording to the same loudness, and `ENHANCE=gtcrn:<model.onnx>`
 //! first runs GTCRN denoising, to see whether either helps quiet or noisy recordings.
 
-use boardcast_audio::{is_english, load_parakeet, load_sense_voice, transcribe};
+use alcyo_audio::{is_english, load_parakeet, load_sense_voice, transcribe};
 use serde_json::Value;
 use sherpa_onnx::Wave;
 use std::path::Path;
@@ -71,7 +71,7 @@ fn enhance(samples: &[f32]) -> Vec<f32> {
             let mut config = OfflineSpeechDenoiserConfig::default();
             config.model.gtcrn.model = Some(other["gtcrn:".len()..].to_string());
             let denoiser = OfflineSpeechDenoiser::create(&config).expect("GTCRN loads");
-            denoiser.run(samples, boardcast_audio::SAMPLE_RATE).samples
+            denoiser.run(samples, alcyo_audio::SAMPLE_RATE).samples
         }
         _ => samples.to_vec(),
     }

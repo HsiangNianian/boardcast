@@ -10,7 +10,7 @@
 //! Usage: turn-delay <voice-models> <recording.wav> [setting,setting...]
 //! The settings are off, slow, medium and fast; off, slow and medium unless given.
 
-use boardcast_audio::{Ear, Latency, Recognizers, Sentence, SAMPLE_RATE};
+use alcyo_audio::{Ear, Latency, Recognizers, Sentence, SAMPLE_RATE};
 use sherpa_onnx::Wave;
 use std::cell::Cell;
 use std::path::Path;

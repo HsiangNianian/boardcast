@@ -1,5 +1,5 @@
 [package]
-name = "boardcast-board"
+name = "alcyo-board"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

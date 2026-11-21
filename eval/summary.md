@@ -1,6 +1,6 @@
 # Summary checks
 
-`boardcast-tools summary-eval <root> [--llm <url> | --deepseek] [--repeat N]` writes a summary for each short
+`alcyo-tools summary-eval <root> [--llm <url> | --deepseek] [--repeat N]` writes a summary for each short
 meeting in `summary-cases.json` and checks how sure each section is (#68): a guess stays an open question,
 an answered question leaves them, a maybe-answer does not, a withdrawn plan is no decision, a lettered
 speaker owns nothing, and something done there and then is no to-do.

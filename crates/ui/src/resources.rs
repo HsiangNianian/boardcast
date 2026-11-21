@@ -1,7 +1,7 @@
 //! Finding what ships with the app. An install keeps it in `<prefix>/lib/boardcast`, next to `bin/`, or a Mac app in `Contents/Resources/boardcast`,
 //! whichever folder the package was unpacked into. A checkout has them in `resources/`.
 
-use boardcast_board::glyphs::HanziSource;
+use alcyo_board::glyphs::HanziSource;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -64,7 +64,7 @@ impl Resources {
     /// Whether everything an install promises is present, as JSON for packaging checks.
     pub fn self_check(&self) -> (bool, String) {
         // Packages differ in their speech models; the variant says which ones this one promises.
-        let variant = self.voice.parent().map(boardcast_update::variant_of).unwrap_or_default();
+        let variant = self.voice.parent().map(alcyo_update::variant_of).unwrap_or_default();
         let model = |name: &'static str, file: &str| (name, self.voice.join(file));
         let sense_voice = [model("speech model", "sense-voice/model.int8.onnx"), model("speech tokens", "sense-voice/tokens.txt")];
         let english = [model("English speech model", "parakeet-en/encoder.int8.onnx")];
@@ -79,25 +79,25 @@ impl Resources {
         };
         let checks: Vec<(&str, PathBuf)> = [
             ("glyphs", self.hanzi_path().to_path_buf()),
-            ("llama-server", self.binaries.join(boardcast_agent::LLAMA_SERVER)),
+            ("llama-server", self.binaries.join(alcyo_agent::LLAMA_SERVER)),
             ("voice activity model", self.voice.join("silero_vad.onnx")),
             ("speaker model", self.voice.join("speaker/campplus_zh_en.onnx")),
             ("diarization model", self.voice.join("speaker/nemotron-3-diarization.int8.onnx")),
-            ("PDF library", boardcast_import::pdf::library_file(&self.pdfium)),
+            ("PDF library", alcyo_import::pdf::library_file(&self.pdfium)),
             // Every package carries it, the one without speech models too.
-            ("meeting search model", self.search.join(boardcast_models::embedding().file)),
+            ("meeting search model", self.search.join(alcyo_models::embedding().file)),
         ]
         .into_iter()
         .chain(speech)
         .collect();
         let mut rows: Vec<_> = checks.iter().map(|(name, path)| json!({ "name": name, "path": path, "ok": path.exists() })).collect();
         // Built into the program, so never missing as a file, but each must load and draw its languages.
-        let fonts = boardcast_fonts::check();
+        let fonts = alcyo_fonts::check();
         rows.extend(fonts.iter().map(|(name, problem)| json!({ "name": format!("font {name}"), "built in": true, "ok": problem.is_none(), "problem": problem })));
         let ok = checks.iter().all(|(_, path)| path.exists()) && fonts.iter().all(|(_, problem)| problem.is_none());
-        let gpus = boardcast_agent::list_gpus(&self.binaries);
+        let gpus = alcyo_agent::list_gpus(&self.binaries);
         let report = json!({
-            "version": boardcast_update::VERSION,
+            "version": alcyo_update::VERSION,
             "installed": self.installed,
             "variant": if variant.is_empty() { "all" } else { variant.as_str() },
             "ok": ok,

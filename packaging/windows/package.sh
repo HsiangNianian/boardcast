@@ -10,16 +10,16 @@ cd "$root"
 . packaging/models.sh
 variants="${VARIANTS:-all}"
 
-cargo build --release -p boardcast-tools
+cargo build --release -p alcyo-tools
 for what in glyphs "llama windows-x64" voice search "pdfium win-x64"; do
-  target/release/boardcast-tools.exe fetch $what
+  target/release/alcyo-tools.exe fetch $what
 done
-cargo build --release -p boardcast-ui
+cargo build --release -p alcyo-ui
 
 version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
 glyphs=target/package/glyphs.pack
 mkdir -p target/package
-target/release/boardcast-tools.exe pack-glyphs assets/hanzi "$glyphs"
+target/release/alcyo-tools.exe pack-glyphs assets/hanzi "$glyphs"
 
 for variant in $variants; do
   [ "$variant" = none ] && { echo "skipping none: Windows has no system recognizer here" >&2; continue; }

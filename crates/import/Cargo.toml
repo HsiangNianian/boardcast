@@ -1,12 +1,12 @@
 [package]
-name = "boardcast-import"
+name = "alcyo-import"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-boardcast-board.workspace = true
+alcyo-board.workspace = true
 fancy-regex = "0.14"
 image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 pdfium-render = { version = "0.8", default-features = false, features = ["pdfium_latest", "thread_safe"] }

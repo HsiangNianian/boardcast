@@ -12,16 +12,16 @@ cd "$root"
 . packaging/models.sh
 variants="${VARIANTS:-all}"
 
-cargo build --release -p boardcast-tools
+cargo build --release -p alcyo-tools
 for what in glyphs "llama" voice search pdfium; do
-  target/release/boardcast-tools fetch $what
+  target/release/alcyo-tools fetch $what
 done
-cargo build --release -p boardcast-ui
+cargo build --release -p alcyo-ui
 
 version=$(target/release/alcyo --version | cut -d' ' -f2)
 mkdir -p target/package
 glyphs=target/package/glyphs.pack
-target/release/boardcast-tools pack-glyphs assets/hanzi "$glyphs"
+target/release/alcyo-tools pack-glyphs assets/hanzi "$glyphs"
 speech=target/package/alcyo-speech
 sh scripts/build-apple-speech.sh "$speech"
 

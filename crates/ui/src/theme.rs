@@ -2,7 +2,7 @@
 //! marked or recording, and square corners. The components come from the kit; this sets what they use.
 
 use gpui_kit::component::{Icon, Theme, ThemeMode};
-use boardcast_board::compose::PAPER;
+use alcyo_board::compose::PAPER;
 use gpui_kit::{px, rgb, App, AssetSource, Hsla, Result, SharedString, WindowAppearance};
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -321,7 +321,7 @@ pub fn icon(name: &str) -> Icon {
 
 /// The interface's fonts, built into the program (crates/fonts), registered once at start.
 pub fn load_fonts(cx: &mut App) {
-    let fonts = boardcast_fonts::ALL.iter().map(|f| Cow::Borrowed(f.bytes)).collect();
+    let fonts = alcyo_fonts::ALL.iter().map(|f| Cow::Borrowed(f.bytes)).collect();
     if let Err(e) = cx.text_system().add_fonts(fonts) {
         eprintln!("fonts: {e:#}");
     }
@@ -332,7 +332,7 @@ pub fn load_fonts(cx: &mut App) {
 /// such fonts. Set at the root, so text in the monospace font falls back the same way.
 pub fn interface_font() -> gpui_kit::Font {
     let mut font = gpui_kit::font(SANS);
-    font.fallbacks = Some(gpui_kit::FontFallbacks::from_fonts(vec![boardcast_fonts::CJK_FAMILY.to_string()]));
+    font.fallbacks = Some(gpui_kit::FontFallbacks::from_fonts(vec![alcyo_fonts::CJK_FAMILY.to_string()]));
     font
 }
 

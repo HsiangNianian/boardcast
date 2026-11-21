@@ -4,12 +4,12 @@
 //! Only the window around it is drawn here. landing/demo/index.html is the page.
 
 mod waves;
-use boardcast_board::board_layout::{Bounds, StableLayout};
-use boardcast_board::compose::{compose, Style};
-use boardcast_board::glyphs::{Glyphs, HanziSource, Pt};
-use boardcast_board::graph::{parse_ops, Graph, Kind};
-use boardcast_board::pen::{outline, Inked, Rng};
-use boardcast_board::sugiyama::first_diagram;
+use alcyo_board::board_layout::{Bounds, StableLayout};
+use alcyo_board::compose::{compose, Style};
+use alcyo_board::glyphs::{Glyphs, HanziSource, Pt};
+use alcyo_board::graph::{parse_ops, Graph, Kind};
+use alcyo_board::pen::{outline, Inked, Rng};
+use alcyo_board::sugiyama::first_diagram;
 use serde::Deserialize;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -191,7 +191,7 @@ impl Board {
         let _ = root.append_child(&under);
         let _ = root.append_child(&ink);
         // Only the characters the Chinese samples use, from hanzi-writer-data (Arphic Public License):
-        // `boardcast-tools pack-glyphs assets/hanzi crates/demo/zh-glyphs.pack --only-from assets/demos/en-office-plan.json
+        // `alcyo-tools pack-glyphs assets/hanzi crates/demo/zh-glyphs.pack --only-from assets/demos/en-office-plan.json
         // assets/demos/zh-phone-product.json`.
         let glyphs = Glyphs::load(HanziSource::PackBytes(include_bytes!("../zh-glyphs.pack"))).expect("the samples' strokes");
         let view = [0.0, 0.0, MIN_VIEW.0, MIN_VIEW.1];

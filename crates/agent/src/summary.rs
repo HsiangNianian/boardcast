@@ -4,7 +4,7 @@
 
 use crate::Provider;
 use anyhow::{anyhow, bail, Result};
-use boardcast_board::graph::{is_english, Graph, Kind};
+use alcyo_board::graph::{is_english, Graph, Kind};
 use regex::Regex;
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -525,7 +525,7 @@ mod tests {
     #[test]
     fn node_ids_in_a_reply_become_their_text() {
         let mut g = Graph::default();
-        g.apply(&boardcast_board::graph::parse_ops("T 「登录流程」\nL 「登录流程」 「短信验证」\nT 「Release checklist」"));
+        g.apply(&alcyo_board::graph::parse_ops("T 「登录流程」\nL 「登录流程」 「短信验证」\nT 「Release checklist」"));
         let boards = [g];
         assert_eq!(name_ids("- 确认 n2 的超时", &boards), "- 确认 短信验证 的超时");
         assert_eq!(name_ids("- n2（短信验证）要加限流", &boards), "- 短信验证要加限流");

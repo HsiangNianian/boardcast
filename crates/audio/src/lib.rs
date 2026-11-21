@@ -4,7 +4,7 @@
 //! It knows nothing about boards; callers receive each sentence through a callback.
 
 /// A meeting's audio kept as it is heard, and read back.
-pub use boardcast_keep as keep;
+pub use alcyo_keep as keep;
 pub mod play;
 use anyhow::{anyhow, Context, Result};
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig, OfflineTransducerModelConfig, SileroVadModelConfig, SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, VadModelConfig, VoiceActivityDetector, Wave};
@@ -22,7 +22,7 @@ mod drafts;
 pub use drafts::{Draft, DraftWith, MODEL as DRAFT_MODEL};
 pub use listen::{capture, computer_sounds, microphones, Input, Listen, Sources, Warning};
 
-pub const SAMPLE_RATE: i32 = boardcast_keep::SAMPLE_RATE;
+pub const SAMPLE_RATE: i32 = alcyo_keep::SAMPLE_RATE;
 const VAD_WINDOW: usize = 512;
 /// Same pause as the desktop app: this long a silence ends a sentence.
 const MIN_SILENCE: f32 = 0.45;
@@ -129,21 +129,21 @@ fn soft_break(loudness: &[f32]) -> Option<usize> {
     (run >= need).then_some(run / 2)
 }
 
-/// The latency the diarization model runs at; see [`Latency`]. `BOARDCAST_DIARIZATION` set to slow, medium,
+/// The latency the diarization model runs at; see [`Latency`]. `ALCYO_DIARIZATION` (once `BOARDCAST_DIARIZATION`) set to slow, medium,
 /// fast, long or off chooses another without building again: `long` halves the model's work for 0.35 s
 /// more on each line, for a slow machine.
 const LATENCY: Latency = Latency::Slow;
 
-/// The latency from `BOARDCAST_DIARIZATION`, or [`LATENCY`]; `None` when it is off.
+/// The latency from `ALCYO_DIARIZATION`, or [`LATENCY`]; `None` when it is off.
 fn chosen_latency() -> Option<Latency> {
-    match std::env::var("BOARDCAST_DIARIZATION").ok().as_deref().map(str::trim) {
+    match std::env::var("ALCYO_DIARIZATION").or_else(|_| std::env::var("BOARDCAST_DIARIZATION")).ok().as_deref().map(str::trim) {
         Some("off") => None,
         Some("slow") => Some(Latency::Slow),
         Some("medium") => Some(Latency::Medium),
         Some("fast") => Some(Latency::Fast),
         Some("long") => Some(Latency::Long),
         Some(other) if !other.is_empty() => {
-            eprintln!("BOARDCAST_DIARIZATION is slow, medium, fast, long or off, not {other}; using the default");
+            eprintln!("ALCYO_DIARIZATION is slow, medium, fast, long or off, not {other}; using the default");
             Some(LATENCY)
         }
         _ => Some(LATENCY),
@@ -1148,9 +1148,9 @@ mod tests {
         assert!(soft_break(&loud_room).is_some());
     }
 
-    /// Models and speech, from `BOARDCAST_VOICE_DIR`. CI runs these with the packaged models.
+    /// Models and speech, from `ALCYO_VOICE_DIR`. CI runs these with the packaged models.
     fn models() -> Option<std::path::PathBuf> {
-        std::env::var_os("BOARDCAST_VOICE_DIR").map(std::path::PathBuf::from)
+        std::env::var_os("ALCYO_VOICE_DIR").or_else(|| std::env::var_os("BOARDCAST_VOICE_DIR")).map(std::path::PathBuf::from)
     }
 
     fn hear_all(ear: &mut Ear, samples: &[f32]) -> Vec<String> {

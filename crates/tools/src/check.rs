@@ -1,12 +1,12 @@
 //! Checks recorded boards from the command line; a remaining hard defect makes the exit non-zero.
 
 use anyhow::{bail, Context, Result};
-use boardcast_board::board_layout::StableLayout;
-use boardcast_board::check::{check, check_and_repair, Report};
-use boardcast_board::compose::compose;
-use boardcast_board::glyphs::Glyphs;
-use boardcast_board::graph::{parse_ops, Graph};
-use boardcast_board::sugiyama::first_diagram;
+use alcyo_board::board_layout::StableLayout;
+use alcyo_board::check::{check, check_and_repair, Report};
+use alcyo_board::compose::compose;
+use alcyo_board::glyphs::Glyphs;
+use alcyo_board::graph::{parse_ops, Graph};
+use alcyo_board::sugiyama::first_diagram;
 use std::path::{Path, PathBuf};
 
 fn demo_lines(root: &Path, name: &str) -> Result<Vec<String>> {

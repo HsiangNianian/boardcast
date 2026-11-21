@@ -28,7 +28,7 @@ iPad, and only there.
 
 **Recommendation:** keep A on the desktop, because surviving a model crash matters during a meeting. Try B on iPad first,
 and fall back to C if it won't run there. The first step, which helps either way, is to put an engine interface in
-`boardcast-agent` so that `Backend::ManagedLocal` doesn't assume a child process. It would cover starting, reporting
+`alcyo-agent` so that `Backend::ManagedLocal` doesn't assume a child process. It would cover starting, reporting
 progress, asking and stopping.
 
 **Why not MLX first:** the board relies on GBNF grammar to force legal operations, and as far as we know MLX has no ready
@@ -56,7 +56,7 @@ These can be done before any device arrives.
 - **Pencil and finger:** the board needs to tell them apart, for example the pencil marks and the finger pans. Today's
   marks use a click and a toolbar.
 - **Panels:** a 340 px side panel over a board needs checking in portrait.
-- **Files:** Unix-only code remains in `boardcast-models` and `boardcast-agent`, and imports and exports assume paths. These
+- **Files:** Unix-only code remains in `alcyo-models` and `alcyo-agent`, and imports and exports assume paths. These
   need iPadOS's file picker and share sheet.
 - **Updates:** the App Store handles them, so the in-app updater stays out.
 - **Remote model:** it matters more here, as an iPad that can't fit the local model can still draw boards.
@@ -64,7 +64,7 @@ These can be done before any device arrives.
 ## Order
 
 1. Mac first, as it shakes out Apple builds and Metal, and it can be tested on a borrowed M5 Air.
-2. The engine interface in `boardcast-agent`, with no change in behavior.
+2. The engine interface in `alcyo-agent`, with no change in behavior.
 3. The interface items above, testable on a desktop window.
 4. A build for the iPad simulator in CI: first with the remote model only, then option B. A simulator can't answer the
    questions about memory, heat or the pencil.

@@ -125,7 +125,7 @@ pub fn vision_for(model_file: &str) -> Option<Model> {
 }
 
 /// What finds things in past meetings by what they mean: EmbeddingGemma 300M, never chosen as a board model.
-/// Every package carries it (`boardcast-tools fetch search`); a checkout without it downloads it when meeting
+/// Every package carries it (`alcyo-tools fetch search`); a checkout without it downloads it when meeting
 /// search is turned on. It is used and shipped under the Gemma Terms of Use (assets/licenses/gemma-*).
 pub fn embedding() -> Model {
     let file = "embeddinggemma-300M-Q8_0.gguf";
@@ -347,7 +347,7 @@ mod tests {
 
     impl Dir {
         fn new() -> Self {
-            let path = std::env::temp_dir().join(format!("boardcast-models-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            let path = std::env::temp_dir().join(format!("alcyo-models-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
             fs::create_dir_all(&path).unwrap();
             Self(path)
         }

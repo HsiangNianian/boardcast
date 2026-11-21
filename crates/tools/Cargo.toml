@@ -1,25 +1,25 @@
 [package]
-name = "boardcast-tools"
+name = "alcyo-tools"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "boardcast-tools"
+name = "alcyo-tools"
 path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
 base64 = "0.22"
-boardcast-agent.workspace = true
-boardcast-board.workspace = true
-boardcast-keep.workspace = true
-boardcast-export.workspace = true
-boardcast-import.workspace = true
-boardcast-meetings.workspace = true
-boardcast-models.workspace = true
-boardcast-search.workspace = true
+alcyo-agent.workspace = true
+alcyo-board.workspace = true
+alcyo-keep.workspace = true
+alcyo-export.workspace = true
+alcyo-import.workspace = true
+alcyo-meetings.workspace = true
+alcyo-models.workspace = true
+alcyo-search.workspace = true
 flate2 = "1"
 minisign = "0.7"
 semver = "1"
@@ -31,4 +31,4 @@ ureq = { version = "2", features = ["proxy-from-env"] }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
-boardcast-update.workspace = true
+alcyo-update.workspace = true

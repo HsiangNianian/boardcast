@@ -8,9 +8,9 @@
 //! embedded once, then each vector size and each weight for shared words is scored on the same vectors.
 
 use anyhow::{bail, Context, Result};
-use boardcast_search::chunk::{transcript, Said};
-use boardcast_search::embed::cut;
-use boardcast_search::{rank, Embedder, Family, Index};
+use alcyo_search::chunk::{transcript, Said};
+use alcyo_search::embed::cut;
+use alcyo_search::{rank, Embedder, Family, Index};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -162,7 +162,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     // Where to stop showing hits: the scores of right answers against the best score from meetings that
     // hold no answer, at the size and weight the app uses.
     {
-        let dims = boardcast_search::DIMS;
+        let dims = alcyo_search::DIMS;
         let indexes: Vec<(String, Index)> = passages.iter().map(|(id, chunks, vectors)| (id.clone(), Index::new(String::new(), dims, chunks.clone(), vectors.iter().map(|v| cut(v, dims)).collect()))).collect();
         let (mut right, mut elsewhere) = (vec![], vec![]);
         // Each query's best score, with its right answer's and the best unrelated one's.
@@ -170,7 +170,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         for (q, qv) in queries.iter().zip(&query_vectors) {
             let meeting = q["meeting"].as_str().unwrap_or_default();
             let gold: Vec<&str> = q["gold"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
-            let hits = rank(&indexes, &cut(qv, dims), q["q"].as_str().unwrap_or_default(), boardcast_search::WORD_WEIGHT, usize::MAX);
+            let hits = rank(&indexes, &cut(qv, dims), q["q"].as_str().unwrap_or_default(), alcyo_search::WORD_WEIGHT, usize::MAX);
             if let Some(h) = hits.iter().find(|h| h.meeting == meeting && gold.iter().any(|g| h.chunk.text.contains(g))) {
                 right.push(h.score);
             }

@@ -2,9 +2,9 @@
 //! It keeps the file's raw JSON and overwrites only the fields it owns.
 
 use crate::store::{new_id, Loaded, Origin};
-use boardcast_board::graph::{Graph, Kind};
-use boardcast_board::speakers::{identify_in_slot, move_sentence, raised_by, rename_by, rename_by_in_steps, rename_voice, Voice};
-use boardcast_board::steps::{diff, ink_only, replay};
+use alcyo_board::graph::{Graph, Kind};
+use alcyo_board::speakers::{identify_in_slot, move_sentence, raised_by, rename_by, rename_by_in_steps, rename_voice, Voice};
+use alcyo_board::steps::{diff, ink_only, replay};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -821,8 +821,8 @@ impl Default for Live {
 mod tests {
     use super::*;
     use crate::store::Store;
-    use boardcast_board::graph::parse_ops;
-    use boardcast_board::steps::replay;
+    use alcyo_board::graph::parse_ops;
+    use alcyo_board::steps::replay;
 
     fn with(graph: &Graph, ops: &str) -> Graph {
         let mut g = graph.clone();
@@ -839,7 +839,7 @@ mod tests {
     fn a_topic_moves_to_a_board_of_its_own() {
         let mut live = Live::new();
         let mut g = Graph::default();
-        g.apply(&boardcast_board::graph::parse_ops("T 「登录」\nL 「登录」 「短信验证」\nT 「支付」\nL 「支付」 「微信支付」\nL 「微信支付」 「回调」\nE 「短信验证」 -> 「微信支付」"));
+        g.apply(&alcyo_board::graph::parse_ops("T 「登录」\nL 「登录」 「短信验证」\nT 「支付」\nL 「支付」 「微信支付」\nL 「微信支付」 「回调」\nE 「短信验证」 -> 「微信支付」"));
         live.change_board(g, Value::Null);
         let pay = live.graph.nodes.iter().find(|n| n.label == "支付").unwrap().id.clone();
         assert!(live.split_topic(&pay, &Note::plain("新话题")));
@@ -1040,7 +1040,7 @@ mod tests {
     }
 
     fn said_by(graph: &Graph) -> Vec<Option<&str>> {
-        graph.nodes.iter().map(|n| boardcast_board::speakers::by_of_node(n)).collect()
+        graph.nodes.iter().map(|n| alcyo_board::speakers::by_of_node(n)).collect()
     }
 
     fn board_by(who: &str) -> Graph {

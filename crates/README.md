@@ -6,18 +6,18 @@ is kept as frozen fixtures.
 
 | Crate | Owns | Must not depend on |
 | --- | --- | --- |
-| `boardcast-board` | Board state, operations, layout, pen strokes, layout check | UI, audio, network |
-| `boardcast-audio` | Capture, VAD, speech recognition | UI, board |
-| `boardcast-agent` | Prompts, the layout skill, local and remote models, request queueing | UI, audio |
-| `boardcast-meetings` | Meeting files, the open meeting's state, undo, the replay record | UI, audio, network |
-| `boardcast-models` | The board models too large for the installer: the catalog and downloading | UI, audio, board |
-| `boardcast-export` | Writing a meeting out as Markdown, PNG, SVG, animated SVG, PDF or a replay page | UI, audio |
-| `boardcast-fonts` | The fonts built into the program (DM Sans, JetBrains Mono, Noto Sans CJK SC) and their check | Everything else |
-| `boardcast-import` | Turning PDFs and images into boards: reading a page's layout, its picture and arXiv | UI, audio |
-| `boardcast-update` | Finding, verifying and installing a new version | UI, audio, board |
-| `boardcast-ui` | The GPUI window, tiled ink rendering, wiring the chain together | |
-| `boardcast-tools` | `check` and `agent-eval` for CI and model evaluation | UI |
-| `boardcast-asr-eval` | `asr-eval`: the app's speech recognition measured on fixed recordings | UI, board |
+| `alcyo-board` | Board state, operations, layout, pen strokes, layout check | UI, audio, network |
+| `alcyo-audio` | Capture, VAD, speech recognition | UI, board |
+| `alcyo-agent` | Prompts, the layout skill, local and remote models, request queueing | UI, audio |
+| `alcyo-meetings` | Meeting files, the open meeting's state, undo, the replay record | UI, audio, network |
+| `alcyo-models` | The board models too large for the installer: the catalog and downloading | UI, audio, board |
+| `alcyo-export` | Writing a meeting out as Markdown, PNG, SVG, animated SVG, PDF or a replay page | UI, audio |
+| `alcyo-fonts` | The fonts built into the program (DM Sans, JetBrains Mono, Noto Sans CJK SC) and their check | Everything else |
+| `alcyo-import` | Turning PDFs and images into boards: reading a page's layout, its picture and arXiv | UI, audio |
+| `alcyo-update` | Finding, verifying and installing a new version | UI, audio, board |
+| `alcyo-ui` | The GPUI window, tiled ink rendering, wiring the chain together | |
+| `alcyo-tools` | `check` and `agent-eval` for CI and model evaluation | UI |
+| `alcyo-asr-eval` | `asr-eval`: the app's speech recognition measured on fixed recordings | UI, board |
 
 ## Install on Linux
 
@@ -46,28 +46,28 @@ builds and publishes every package. The older app's update channel never reads t
 
 ```sh
 export DEEPSEEK_API_KEY=...                                 # read from the environment, never stored
-cargo run --release -p boardcast-ui                         # the model chosen in Settings
-cargo run --release -p boardcast-ui -- --deepseek
-cargo run --release -p boardcast-ui -- --root . --case login-flow --deepseek
-cargo run --release -p boardcast-ui -- --root . --demo bs-mixed --llm http://127.0.0.1:1
-cargo run --release -p boardcast-ui -- --synthetic 5000 --zoom-test --llm http://127.0.0.1:1
-cargo run --release -p boardcast-ui -- --self-check         # what was found, and which graphics devices
-cargo run --release -p boardcast-tools -- check <root> --all-demos --tidy
-cargo run --release -p boardcast-tools -- export <root> meeting.json out.md out.png out.svg out.pdf
-cargo run --release -p boardcast-tools -- agent-eval <root> out.json --deepseek --set dev --workers 6 --rules-only
-cargo run -p boardcast-tools -- fetch pdfium   # the PDF library, into target/pdfium
-cargo test -p boardcast-board -p boardcast-agent -p boardcast-meetings -p boardcast-models -p boardcast-export -p boardcast-import
+cargo run --release -p alcyo-ui                         # the model chosen in Settings
+cargo run --release -p alcyo-ui -- --deepseek
+cargo run --release -p alcyo-ui -- --root . --case login-flow --deepseek
+cargo run --release -p alcyo-ui -- --root . --demo bs-mixed --llm http://127.0.0.1:1
+cargo run --release -p alcyo-ui -- --synthetic 5000 --zoom-test --llm http://127.0.0.1:1
+cargo run --release -p alcyo-ui -- --self-check         # what was found, and which graphics devices
+cargo run --release -p alcyo-tools -- check <root> --all-demos --tidy
+cargo run --release -p alcyo-tools -- export <root> meeting.json out.md out.png out.svg out.pdf
+cargo run --release -p alcyo-tools -- agent-eval <root> out.json --deepseek --set dev --workers 6 --rules-only
+cargo run -p alcyo-tools -- fetch pdfium   # the PDF library, into target/pdfium
+cargo test -p alcyo-board -p alcyo-agent -p alcyo-meetings -p alcyo-models -p alcyo-export -p alcyo-import
 ```
 
-Meetings are shared with the older app's data directory, and `BOARDCAST_DATA` and `BOARDCAST_CONFIG` point elsewhere for
+Meetings are shared with the older app's data directory, and `ALCYO_DATA` and `ALCYO_CONFIG` (or the older `BOARDCAST_*` names) point elsewhere for
 testing. To check a change to the file format against real data, work on a copy:
 
 ```sh
 cp -r ~/.local/share/app.alcyo.board/meetings /tmp/copy/
-cargo run --release -p boardcast-tools -- meetings-check /tmp/copy
+cargo run --release -p alcyo-tools -- meetings-check /tmp/copy
 ```
 
-A checkout runs with the resources in `resources/`, fetched by `boardcast-tools fetch llama` and `fetch voice`, and `assets/hanzi` from `fetch glyphs`.
+A checkout runs with the resources in `resources/`, fetched by `alcyo-tools fetch llama` and `fetch voice`, and `assets/hanzi` from `fetch glyphs`.
 
 `crates/board/fixtures/goldens.json` is what the TypeScript engine did with real recorded model replies, frozen when
 that engine was removed: the board crate's tests hold the Rust engine to it. `crates/agent/prompts.json`, the system
@@ -152,7 +152,7 @@ person keeps one name. These are two recordings, so the threshold was left alone
 renaming or merging in the speakers panel.
 
 ```sh
-cargo run --release -p boardcast-audio --example speaker-eval -- resources/voice <recording.wav> <reference.json>
+cargo run --release -p alcyo-audio --example speaker-eval -- resources/voice <recording.wav> <reference.json>
 ```
 
 | Recording | Voices found | Purity | Coverage |

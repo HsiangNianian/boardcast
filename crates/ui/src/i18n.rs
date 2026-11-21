@@ -172,9 +172,9 @@ macro_rules! ta {
 /// A note about a change made by hand, kept in the transcript: its text in English, which is what the meeting
 /// keeps as its text and what a model reads, and the message that shows it in the language of whoever looks.
 /// Built with `note!`.
-pub fn note(id: &str, args: serde_json::Map<String, serde_json::Value>) -> boardcast_meetings::Note {
+pub fn note(id: &str, args: serde_json::Map<String, serde_json::Value>) -> alcyo_meetings::Note {
     let text = format(ENGLISH, id, Some(&fluent_args(&args))).unwrap_or_else(|| id.to_string());
-    boardcast_meetings::Note { text, message: serde_json::json!({ "id": id, "args": args }) }
+    alcyo_meetings::Note { text, message: serde_json::json!({ "id": id, "args": args }) }
 }
 
 /// Values for a message from what a note keeps: numbers stay numbers, so a translation can choose its plural,

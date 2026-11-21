@@ -10,7 +10,7 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use base64::Engine;
-use boardcast_models::{download, Model, Outcome, Progress, Source};
+use alcyo_models::{download, Model, Outcome, Progress, Source};
 use flate2::read::GzDecoder;
 use minisign_verify::{PublicKey, Signature};
 use semver::Version;
@@ -29,13 +29,13 @@ const MANIFEST_URL: &str = "https://github.com/HsiangNianian/alcyo/releases/late
 const NAME: &str = "alcyo";
 const OLD_NAME: &str = "boardcast";
 /// The older app's update key. A test build can name another at compile time, never at run time.
-const PUBLIC_KEY: &str = match option_env!("BOARDCAST_UPDATE_PUBKEY") {
+const PUBLIC_KEY: &str = match option_env!("ALCYO_UPDATE_PUBKEY") {
     Some(key) => key,
     None => "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg3RUMzMzZGNzQ2NDA2OEEKUldTS0JtUjBielBzaHlNNkVTYmZXMkx5SHdXNndBWDhCSFJiSmJwcG5KdVhIbXcwNmFBaktzNVEK",
 };
 
 /// This build's version.
-pub const VERSION: &str = match option_env!("BOARDCAST_VERSION") {
+pub const VERSION: &str = match option_env!("ALCYO_VERSION") {
     Some(version) => version,
     None => env!("CARGO_PKG_VERSION"),
 };
@@ -88,10 +88,10 @@ fn parse_manifest(text: &str, current: &str, platform: &str) -> Result<Option<Re
     }))
 }
 
-/// Ask whether there is a newer release. `BOARDCAST_UPDATE_URL` points elsewhere for testing, which
+/// Ask whether there is a newer release. `ALCYO_UPDATE_URL` (or `BOARDCAST_UPDATE_URL`) points elsewhere for testing, which
 /// is safe because the signature check does not depend on where a package came from.
 pub fn check() -> Result<Option<Release>> {
-    let url = std::env::var("BOARDCAST_UPDATE_URL").unwrap_or_else(|_| MANIFEST_URL.to_string());
+    let url = std::env::var("ALCYO_UPDATE_URL").or_else(|_| std::env::var("BOARDCAST_UPDATE_URL")).unwrap_or_else(|_| MANIFEST_URL.to_string());
     let agent = ureq::AgentBuilder::new().try_proxy_from_env(true).timeout(Duration::from_secs(30)).build();
     let text = match agent.get(&url).call() {
         Ok(response) => response.into_string()?,
@@ -308,7 +308,7 @@ mod tests {
 
     impl Dir {
         fn new() -> Self {
-            let path = std::env::temp_dir().join(format!("boardcast-update-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            let path = std::env::temp_dir().join(format!("alcyo-update-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
             fs::create_dir_all(&path).unwrap();
             Self(path)
         }

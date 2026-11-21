@@ -4,7 +4,7 @@
 
 use crate::store::{mime_of, PageImage};
 use anyhow::{Context, Result};
-use boardcast_board::graph::Annotation;
+use alcyo_board::graph::Annotation;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;

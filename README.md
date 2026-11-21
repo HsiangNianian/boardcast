@@ -159,7 +159,7 @@ The desktop app is a Cargo workspace; [crates/README.md](crates/README.md) descr
 ```sh
 git clone https://github.com/HsiangNianian/boardcast.git
 cd boardcast
-cargo run --release -p boardcast-ui     # the desktop app
+cargo run --release -p alcyo-ui     # the desktop app
 cargo test --workspace
 sh packaging/linux/package.sh           # target/package/boardcast-<version>-<arch>-linux.tar.gz
 ```
@@ -197,16 +197,16 @@ Noto Sans CJK SC draws every Chinese character, kana and Hangul in Simplified Ch
 Start a working llama-server, then run:
 
 ```sh
-cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set dev --label my-model
-cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set holdout --label my-model
-cargo run --release -p boardcast-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
+cargo run --release -p alcyo-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set dev --label my-model
+cargo run --release -p alcyo-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set holdout --label my-model
+cargo run --release -p alcyo-tools -- agent-eval . board.json --llm http://127.0.0.1:8080 --set pointing --repeat 3 --label my-model
 ```
 
 Or a remote model: any OpenAI-compatible service with `--remote <url> --model <name>` and the key in `BOARDCAST_API_KEY`, DeepSeek with `--deepseek` and `DEEPSEEK_API_KEY`, or the remote model saved in the app's Settings with `--saved`. `summary-eval` and `demo-record` take the same options. A report is named after the service and model, and no key is written to it; the output file records each case's input, cached and output tokens, for what a run costs.
 
 ```sh
-BOARDCAST_API_KEY=… cargo run --release -p boardcast-tools -- agent-eval . board.json --remote https://api.example.com/v1 --model some-model --set all --workers 4
-cargo run --release -p boardcast-tools -- agent-eval . board.json --saved --set all --repeat 3 --workers 4
+BOARDCAST_API_KEY=… cargo run --release -p alcyo-tools -- agent-eval . board.json --remote https://api.example.com/v1 --model some-model --set all --workers 4
+cargo run --release -p alcyo-tools -- agent-eval . board.json --saved --set all --repeat 3 --workers 4
 ```
 
 The model is asked as the app asks it: a remote model with tool calls (one tool per board command, `crates/agent/src/tools.rs`), a local one with command lines held to a grammar. `--harness commands|tools|tools-check` asks it another way; `tools-check` also shows the model the board its calls drew and lets it correct them, for up to two more rounds.
@@ -214,14 +214,14 @@ The model is asked as the app asks it: a remote model with tool calls (one tool 
 Each run also writes a `.json` summary beside its Markdown report in `eval/reports/`. `eval-report` draws one or more of them side by side as a page to print: scores, latency, cost (with `--price <label>=<hit>,<miss>,<out>` per 1M tokens), the trend over a folder of earlier reports (`--history`), and every case. The Eval workflow does this on every board change and puts `board-eval.pdf` in its `eval-report` artifact; with a `DEEPSEEK_API_KEY` secret it also runs DeepSeek on the same cases, for comparison and cost.
 
 ```sh
-cargo run --release -p boardcast-tools -- eval-report . report.html --history old-reports/ eval/reports/*.json
+cargo run --release -p alcyo-tools -- eval-report . report.html --history old-reports/ eval/reports/*.json
 google-chrome --headless --print-to-pdf=report.pdf report.html
 ```
 
 Speech recognition has its own suites:
 
 ```sh
-cargo build --release -p boardcast-asr-eval
+cargo build --release -p alcyo-asr-eval
 target/release/asr-eval download . --suite quick   # fetch and verify the recordings, and write a listening page
 target/release/asr-eval run . --suite quick        # the app's own hearing, scored by language
 target/release/asr-eval run . --suite meetings     # nine ~10-minute clips across industries; needs ffmpeg

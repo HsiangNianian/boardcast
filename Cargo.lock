@@ -144,6 +144,266 @@ dependencies = [
 ]
 
 [[package]]
+name = "alcyo-agent"
+version = "0.33.0"
+dependencies = [
+ "alcyo-board",
+ "alcyo-models",
+ "anyhow",
+ "base64",
+ "flate2",
+ "libc",
+ "pinyin",
+ "regex",
+ "serde_json",
+ "ureq",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "alcyo-asr-eval"
+version = "0.33.0"
+dependencies = [
+ "alcyo-audio",
+ "alcyo-board",
+ "anyhow",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sherpa-onnx",
+ "unicode-normalization",
+ "ureq",
+]
+
+[[package]]
+name = "alcyo-audio"
+version = "0.33.0"
+dependencies = [
+ "alcyo-board",
+ "alcyo-keep",
+ "anyhow",
+ "cpal",
+ "serde_json",
+ "sherpa-onnx",
+]
+
+[[package]]
+name = "alcyo-board"
+version = "0.33.0"
+dependencies = [
+ "anyhow",
+ "icu_segmenter",
+ "serde",
+ "serde_json",
+ "unicode-normalization",
+ "unicode-script",
+]
+
+[[package]]
+name = "alcyo-demo"
+version = "0.33.0"
+dependencies = [
+ "alcyo-board",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "alcyo-export"
+version = "0.33.0"
+dependencies = [
+ "alcyo-board",
+ "alcyo-fonts",
+ "alcyo-meetings",
+ "anyhow",
+ "base64",
+ "chrono",
+ "fontdb",
+ "gif 0.14.2",
+ "image",
+ "krilla",
+ "rav1e",
+ "serde_json",
+ "tiny-skia",
+ "ttf-parser",
+]
+
+[[package]]
+name = "alcyo-fonts"
+version = "0.33.0"
+dependencies = [
+ "ttf-parser",
+]
+
+[[package]]
+name = "alcyo-import"
+version = "0.33.0"
+dependencies = [
+ "alcyo-board",
+ "anyhow",
+ "fancy-regex",
+ "image",
+ "pdfium-render",
+ "regex",
+ "serde",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
+name = "alcyo-keep"
+version = "0.33.0"
+dependencies = [
+ "anyhow",
+ "audiopus_sys",
+ "ogg",
+ "opus",
+]
+
+[[package]]
+name = "alcyo-meetings"
+version = "0.33.0"
+dependencies = [
+ "alcyo-board",
+ "anyhow",
+ "base64",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "alcyo-models"
+version = "0.33.0"
+dependencies = [
+ "anyhow",
+ "libc",
+ "sha2 0.10.9",
+ "ureq",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "alcyo-search"
+version = "0.33.0"
+dependencies = [
+ "alcyo-board",
+ "alcyo-meetings",
+ "anyhow",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ureq",
+]
+
+[[package]]
+name = "alcyo-share"
+version = "0.33.0"
+dependencies = [
+ "anyhow",
+ "getrandom 0.3.4",
+ "if-addrs",
+ "serde_json",
+]
+
+[[package]]
+name = "alcyo-site"
+version = "0.33.0"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "alcyo-site-gen"
+version = "0.33.0"
+dependencies = [
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
+name = "alcyo-tools"
+version = "0.33.0"
+dependencies = [
+ "alcyo-agent",
+ "alcyo-board",
+ "alcyo-export",
+ "alcyo-import",
+ "alcyo-keep",
+ "alcyo-meetings",
+ "alcyo-models",
+ "alcyo-search",
+ "alcyo-update",
+ "anyhow",
+ "base64",
+ "flate2",
+ "minisign",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tar",
+ "ureq",
+ "zip",
+]
+
+[[package]]
+name = "alcyo-ui"
+version = "0.33.0"
+dependencies = [
+ "alcyo-agent",
+ "alcyo-audio",
+ "alcyo-board",
+ "alcyo-export",
+ "alcyo-fonts",
+ "alcyo-import",
+ "alcyo-meetings",
+ "alcyo-models",
+ "alcyo-search",
+ "alcyo-share",
+ "alcyo-update",
+ "anyhow",
+ "chrono",
+ "embed-resource",
+ "fluent-bundle",
+ "gpui-kit",
+ "gpui-kit-assets",
+ "image",
+ "qrcode",
+ "serde",
+ "serde_json",
+ "sherpa-onnx",
+ "sys-locale",
+ "tiny-skia",
+ "unic-langid",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "alcyo-update"
+version = "0.33.0"
+dependencies = [
+ "alcyo-models",
+ "anyhow",
+ "base64",
+ "flate2",
+ "minisign-verify",
+ "semver",
+ "serde_json",
+ "tar",
+ "ureq",
+]
+
+[[package]]
 name = "aligned"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -710,266 +970,6 @@ dependencies = [
  "futures-io",
  "futures-lite",
  "piper",
-]
-
-[[package]]
-name = "boardcast-agent"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "base64",
- "boardcast-board",
- "boardcast-models",
- "flate2",
- "libc",
- "pinyin",
- "regex",
- "serde_json",
- "ureq",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "boardcast-asr-eval"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "boardcast-audio",
- "boardcast-board",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sherpa-onnx",
- "unicode-normalization",
- "ureq",
-]
-
-[[package]]
-name = "boardcast-audio"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "boardcast-board",
- "boardcast-keep",
- "cpal",
- "serde_json",
- "sherpa-onnx",
-]
-
-[[package]]
-name = "boardcast-board"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "icu_segmenter",
- "serde",
- "serde_json",
- "unicode-normalization",
- "unicode-script",
-]
-
-[[package]]
-name = "boardcast-demo"
-version = "0.33.0"
-dependencies = [
- "boardcast-board",
- "js-sys",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
-name = "boardcast-export"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "base64",
- "boardcast-board",
- "boardcast-fonts",
- "boardcast-meetings",
- "chrono",
- "fontdb",
- "gif 0.14.2",
- "image",
- "krilla",
- "rav1e",
- "serde_json",
- "tiny-skia",
- "ttf-parser",
-]
-
-[[package]]
-name = "boardcast-fonts"
-version = "0.33.0"
-dependencies = [
- "ttf-parser",
-]
-
-[[package]]
-name = "boardcast-import"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "boardcast-board",
- "fancy-regex",
- "image",
- "pdfium-render",
- "regex",
- "serde",
- "serde_json",
- "ureq",
-]
-
-[[package]]
-name = "boardcast-keep"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "audiopus_sys",
- "ogg",
- "opus",
-]
-
-[[package]]
-name = "boardcast-meetings"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "base64",
- "boardcast-board",
- "serde",
- "serde_json",
- "sha2 0.10.9",
-]
-
-[[package]]
-name = "boardcast-models"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "libc",
- "sha2 0.10.9",
- "ureq",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "boardcast-search"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "boardcast-board",
- "boardcast-meetings",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "ureq",
-]
-
-[[package]]
-name = "boardcast-share"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "getrandom 0.3.4",
- "if-addrs",
- "serde_json",
-]
-
-[[package]]
-name = "boardcast-site"
-version = "0.33.0"
-dependencies = [
- "js-sys",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
-name = "boardcast-site-gen"
-version = "0.33.0"
-dependencies = [
- "serde_json",
- "ureq",
-]
-
-[[package]]
-name = "boardcast-tools"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "base64",
- "boardcast-agent",
- "boardcast-board",
- "boardcast-export",
- "boardcast-import",
- "boardcast-keep",
- "boardcast-meetings",
- "boardcast-models",
- "boardcast-search",
- "boardcast-update",
- "flate2",
- "minisign",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tar",
- "ureq",
- "zip",
-]
-
-[[package]]
-name = "boardcast-ui"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "boardcast-agent",
- "boardcast-audio",
- "boardcast-board",
- "boardcast-export",
- "boardcast-fonts",
- "boardcast-import",
- "boardcast-meetings",
- "boardcast-models",
- "boardcast-search",
- "boardcast-share",
- "boardcast-update",
- "chrono",
- "embed-resource",
- "fluent-bundle",
- "gpui-kit",
- "gpui-kit-assets",
- "image",
- "qrcode",
- "serde",
- "serde_json",
- "sherpa-onnx",
- "sys-locale",
- "tiny-skia",
- "unic-langid",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "boardcast-update"
-version = "0.33.0"
-dependencies = [
- "anyhow",
- "base64",
- "boardcast-models",
- "flate2",
- "minisign-verify",
- "semver",
- "serde_json",
- "tar",
- "ureq",
 ]
 
 [[package]]

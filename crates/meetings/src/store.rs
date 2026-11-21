@@ -760,7 +760,7 @@ mod tests {
 
     #[test]
     fn kept_audio_has_a_place_beside_the_meeting_and_no_other_name() {
-        let store = Store::new(std::env::temp_dir().join("boardcast-audio-path"));
+        let store = Store::new(std::env::temp_dir().join("alcyo-audio-path"));
         let path = store.audio_path("m1", "audio-1763270000000.opus").unwrap();
         assert!(path.ends_with("m1/audio-1763270000000.opus"), "{}", path.display());
         for bad in ["audio-.opus", "audio-12.wav", "../audio-1.opus", "audio-1.opus/../x", "notes.opus"] {

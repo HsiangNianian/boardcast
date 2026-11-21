@@ -11,7 +11,7 @@
 use crate::corpus::{self, Corpus};
 use crate::score::error_rate;
 use anyhow::{bail, ensure, Context, Result};
-use boardcast_audio::{load_parakeet, load_reazon, Draft, DraftWith, Ear, Language, Recognizers, Sentence, SAMPLE_RATE};
+use alcyo_audio::{load_parakeet, load_reazon, Draft, DraftWith, Ear, Language, Recognizers, Sentence, SAMPLE_RATE};
 use sherpa_onnx::Wave;
 use std::collections::BTreeMap;
 use std::fmt::Write;

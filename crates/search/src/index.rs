@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn an_index_comes_back_as_it_was_saved() {
-        let dir = std::env::temp_dir().join(format!("boardcast-search-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("alcyo-search-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let chunks = vec![
             Chunk { source: Source::Transcript { first: 0, last: 2 }, text: "上线改到周二".into() },

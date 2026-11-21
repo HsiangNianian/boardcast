@@ -9,9 +9,9 @@ pub mod replay_page;
 mod webm;
 
 use anyhow::{bail, Context, Result};
-use boardcast_board::glyphs::{Glyphs, HanziSource};
-use boardcast_board::graph::Graph;
-use boardcast_meetings::{Live, PageImage, ViewOnly};
+use alcyo_board::glyphs::{Glyphs, HanziSource};
+use alcyo_board::graph::Graph;
+use alcyo_meetings::{Live, PageImage, ViewOnly};
 use chrono::TimeZone;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -40,7 +40,7 @@ impl Sound {
 
     /// Where each step falls in the sound, in ms.
     fn times_ms(&self, steps: &[Value]) -> Vec<f64> {
-        boardcast_board::steps::sound_times(steps, &self.pieces).into_iter().map(|s| s * 1000.0).collect()
+        alcyo_board::steps::sound_times(steps, &self.pieces).into_iter().map(|s| s * 1000.0).collect()
     }
 }
 
@@ -259,7 +259,7 @@ impl Frozen {
                     bail!("The board is empty.");
                 }
                 // The board in view follows the meeting from one to another.
-                let timeline = boardcast_board::steps::timeline(&replay_pages.iter().map(|p| p.steps.clone()).collect::<Vec<_>>());
+                let timeline = alcyo_board::steps::timeline(&replay_pages.iter().map(|p| p.steps.clone()).collect::<Vec<_>>());
                 let steps: Vec<Value> = timeline.iter().map(|(_, s)| s.clone()).collect();
                 let mut shown: Vec<(f64, usize)> = sound.times_ms(&steps).into_iter().zip(timeline.iter().map(|(b, _)| *b)).collect();
                 if shown.is_empty() {
@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn a_file_replaces_the_old_one_and_leaves_nothing_else() {
-        let dir = std::env::temp_dir().join(format!("boardcast-export-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("alcyo-export-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("out.md");
         write_file(&path, b"one").unwrap();

@@ -35,9 +35,9 @@ fn main() -> Result<()> {
     let root = PathBuf::from(args.next().context("the boardcast checkout")?);
     let mut options = run::Options { suite: "quick".into(), engine: "routed".into(), vad: true, enhance: "none".into(), only: None, output: None };
     let mut reuse = false;
-    let mut draft_with = boardcast_audio::DraftWith::Reread;
+    let mut draft_with = alcyo_audio::DraftWith::Reread;
     let mut variant = "all".to_string();
-    let mut turns = Some(boardcast_audio::Latency::Slow);
+    let mut turns = Some(alcyo_audio::Latency::Slow);
     while let Some(flag) = args.next() {
         let mut value = || args.next().with_context(|| format!("{flag} needs a value"));
         match flag.as_str() {

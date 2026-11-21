@@ -15,8 +15,8 @@ pub mod tools;
 pub mod vision;
 
 use anyhow::{anyhow, bail, Context, Result};
-use boardcast_board::graph::{board_is_english, grammar, parse_ops, user_message, user_message_within, Graph, Kind, Utterance};
-use boardcast_board::speakers::{attribute, rename_by};
+use alcyo_board::graph::{board_is_english, grammar, parse_ops, user_message, user_message_within, Graph, Kind, Utterance};
+use alcyo_board::speakers::{attribute, rename_by};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};
 #[cfg(target_os = "linux")]
@@ -885,7 +885,7 @@ fn wait_until_up(url: &str, child: &mut Child) -> Result<()> {
 /// A client for a URL: straight to this computer's own servers, and elsewhere through the proxy chosen in
 /// Settings. Each keeps its connections, so a remote model is not shaken hands with again for every line.
 fn http(url: &str) -> ureq::Agent {
-    use boardcast_models::net;
+    use alcyo_models::net;
     static LOCAL: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
     static REMOTE: Mutex<Option<(net::Proxy, ureq::Agent)>> = Mutex::new(None);
     if net::is_local(url) {
@@ -1273,14 +1273,14 @@ impl Session {
     }
 
     /// A change made by hand, such as rewriting or removing something, applies at once.
-    pub fn edit(&self, ops: &[boardcast_board::graph::Op]) -> Graph {
+    pub fn edit(&self, ops: &[alcyo_board::graph::Op]) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");
         graph.apply(ops);
         graph.clone()
     }
 
     /// Put a clip cut from the imported page on the board, and give back the board and the clip's id.
-    pub fn add_clip(&self, label: &str, text: &str, clip: &boardcast_board::graph::Clip) -> (Graph, String) {
+    pub fn add_clip(&self, label: &str, text: &str, clip: &alcyo_board::graph::Clip) -> (Graph, String) {
         let mut graph = self.graph.lock().expect("graph lock");
         let id = graph.add_clip(label, text, clip);
         (graph.clone(), id)
@@ -1294,21 +1294,21 @@ impl Session {
     }
 
     /// Draw by hand over a page or a clip.
-    pub fn annotate(&self, annotation: boardcast_board::graph::Annotation) -> Graph {
+    pub fn annotate(&self, annotation: alcyo_board::graph::Annotation) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");
         graph.annotate(annotation);
         graph.clone()
     }
 
     /// Put a card from the inbox on the board where it was dropped, and give back the board and its id.
-    pub fn add_card(&self, label: &str, text: &str, clip: &boardcast_board::graph::Clip, marks: &[String], drawn: &[boardcast_board::graph::Annotation], at: [f64; 2]) -> (Graph, String) {
+    pub fn add_card(&self, label: &str, text: &str, clip: &alcyo_board::graph::Clip, marks: &[String], drawn: &[alcyo_board::graph::Annotation], at: [f64; 2]) -> (Graph, String) {
         let mut graph = self.graph.lock().expect("graph lock");
         let id = graph.add_card(label, text, clip, marks, drawn, at);
         (graph.clone(), id)
     }
 
     /// Put an imported document's card on the board, and give back the board.
-    pub fn add_document_card(&self, name: &str, first_page: &boardcast_board::graph::Clip, doc: &str) -> Graph {
+    pub fn add_document_card(&self, name: &str, first_page: &alcyo_board::graph::Clip, doc: &str) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");
         graph.add_document_card(name, first_page, doc);
         graph.clone()
@@ -1322,7 +1322,7 @@ impl Session {
     }
 
     /// Mark a word or sentence of imported text by hand, or take the mark off.
-    pub fn toggle_span(&self, id: &str, span: boardcast_board::spans::Span) -> Graph {
+    pub fn toggle_span(&self, id: &str, span: alcyo_board::spans::Span) -> Graph {
         let mut graph = self.graph.lock().expect("graph lock");
         graph.toggle_span(id, span);
         graph.clone()
@@ -1446,7 +1446,7 @@ mod tests {
 
     #[test]
     fn a_discrete_card_fetches_the_model_itself() {
-        let server = LocalServer { binaries: "bin".into(), model: "m.gguf".into(), shaders: Some(std::env::temp_dir().join("boardcast-agent-shaders")) };
+        let server = LocalServer { binaries: "bin".into(), model: "m.gguf".into(), shaders: Some(std::env::temp_dir().join("alcyo-agent-shaders")) };
         assert!(llama_command(&server, None, false, 1, None).get_envs().any(|(k, v)| k == "__GL_SHADER_DISK_CACHE_PATH" && v.is_some()));
         let asks = |discrete| llama_command(&server, Some("Vulkan1"), discrete, 1, None).get_envs().any(|(k, _)| k == "GGML_VK_DISABLE_HOST_VISIBLE_VIDMEM");
         assert!(asks(true));
@@ -1598,7 +1598,7 @@ mod tests {
             Ok(String::new())
         }));
         let mut g = Graph::default();
-        g.apply(&boardcast_board::graph::parse_ops("T 「登录」\nL 「登录」 「鉴权」"));
+        g.apply(&alcyo_board::graph::parse_ops("T 「登录」\nL 「登录」 「鉴权」"));
         let line = Utterance { speaker: None, text: "把健全圈起来".into(), pointing: vec![] };
         propose_with(&provider, &g, &[], &line, Guidance::default(), None, &sound::Glossary::parse("OpenAI; API = A P I"), &[]).unwrap();
         let said = seen.lock().unwrap().clone();
@@ -1763,7 +1763,7 @@ mod tests {
         h.wait();
         let Update::Drawn { graph, lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("not drawn") };
         assert_eq!(lines[0].speaker.as_deref(), Some("李工"));
-        assert_eq!(boardcast_board::speakers::by_of_node(&graph.nodes[0]), Some("李工"));
+        assert_eq!(alcyo_board::speakers::by_of_node(&graph.nodes[0]), Some("李工"));
         release.send(()).unwrap();
         h.wait();
         let Update::Drawn { lines, .. } = h.updates.recv_timeout(Duration::from_secs(5)).unwrap() else { panic!("not drawn") };

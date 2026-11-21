@@ -2,8 +2,8 @@
 //! numbered lists, the flow chart becomes Mermaid, and the transcript follows. Draft ink is left out.
 
 use crate::Doc;
-use boardcast_board::board_layout::{is_diagram, is_head};
-use boardcast_board::graph::{Graph, Kind, Node};
+use alcyo_board::board_layout::{is_diagram, is_head};
+use alcyo_board::graph::{Graph, Kind, Node};
 use serde_json::Value;
 use std::collections::HashSet;
 
